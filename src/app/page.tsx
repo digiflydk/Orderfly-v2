@@ -1,8 +1,11 @@
-export default function Page() {
+
+import PublicHomePage from "./(public)/page";
+import PublicLayout from "./(public)/layout";
+
+export default function Root() {
   return (
-    <main className="p-6">
-      <h1 className="text-2xl font-semibold">It works ✅</h1>
-      <p>Base-projektet kører. Indsæt nu jeres eksisterende kode i /src.</p>
-    </main>
+    <PublicLayout>
+        <PublicHomePage />
+    </PublicLayout>
   );
 }
