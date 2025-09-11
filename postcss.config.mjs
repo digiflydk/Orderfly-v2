@@ -1,8 +1,2 @@
-/** @type {import('postcss-load-config').Config} */
-const config = {
-  plugins: {
-    tailwindcss: {},
-  },
-};
-
-export default config;
+# Tilladte origins i dev (localhost + Cloud Workstations URL)
+ALLOWED_DEV_ORIGINS=http://localhost:9103,https://9103-firebase-studio-1752880582684.cluster-ombtxv25tbd6yrjpp3lukp6zhc.cloudworkstations.dev
