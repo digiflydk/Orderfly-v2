@@ -1,16 +1,17 @@
 /** @type {import('next').NextConfig} */
 
-const allowedDevOrigins =
-  (process.env.ALLOWED_DEV_ORIGINS ?? '')
-    .split(',')
-    .map(s => s.trim())
-    .filter(Boolean);
+// Hent og split ALLOWED_DEV_ORIGINS fra .env.local
+const allowedDevOrigins = (process.env.ALLOWED_DEV_ORIGINS ?? '')
+  .split(',')
+  .map((s) => s.trim())
+  .filter(Boolean);
 
 const nextConfig = {
   reactStrictMode: true,
   experimental: {
-    allowedDevOrigins,
-    serverActions: { allowedOrigins: allowedDevOrigins }
+    serverActions: {
+      allowedOrigins: allowedDevOrigins,
+    },
   },
   serverExternalPackages: ['@opentelemetry/exporter-jaeger'],
   webpack: (config, { isServer, dev }) => {
@@ -24,7 +25,7 @@ const nextConfig = {
       config.externals.push({ handlebars: 'commonjs handlebars' });
     }
     return config;
-  }
+  },
 };
 
 module.exports = nextConfig;

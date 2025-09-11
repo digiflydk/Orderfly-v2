@@ -3,9 +3,9 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0 --port 9103",
+    "dev": "next dev --hostname 0.0.0.0 --port 9000",
     "build": "next build",
-    "start": "next start -p 9103",
+    "start": "next start -p 9000",
     "lint": "next lint",
     "typecheck": "tsc --noEmit"
   },

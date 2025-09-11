@@ -1,11 +1,8 @@
-
-import PublicHomePage from "./(public)/page";
-import PublicLayout from "./(public)/layout";
-
-export default function Root() {
+export default function Home() {
   return (
-    <PublicLayout>
-        <PublicHomePage />
-    </PublicLayout>
+    <main className="p-6">
+      <h1 className="text-2xl font-semibold">It works ✅</h1>
+      <p className="mt-2 text-sm text-gray-600">Baseline kører.</p>
+    </main>
   );
 }
