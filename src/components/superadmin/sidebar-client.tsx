@@ -12,7 +12,6 @@ import {
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
 } from '@/components/ui/sidebar'
 import { cn } from '@/lib/utils'
 import type { PlatformBrandingSettings } from '@/types'
@@ -157,15 +156,14 @@ export function SuperAdminSidebarClient({
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarTrigger />
       <SidebarContent className="bg-black text-white">
-        <div className="px-3 py-4 group-data-[collapsible=icon]:hidden">
-          <div className="flex items-center gap-3">
+        <div className="h-14 border-b border-white/10 px-3 py-2 group-data-[collapsible=icon]:px-2">
+          <div className="flex h-full items-center">
             <Image
               src={logoUrl}
               alt="OrderFly Logo"
-              width={144}
-              height={40}
+              width={132}
+              height={36}
               priority
               style={{ width: 'auto', height: 'auto' }}
               className="object-contain"
@@ -186,33 +184,29 @@ export function SuperAdminSidebarClient({
                 <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen ? 'rotate-180' : '')} />
               </button>
 
-              {isOpen && (
-                <SidebarGroupContent>
-                  <SidebarMenu>
-                    {group.items.map((item) => {
-                      const active = pathname === item.href
-                      return (
-                        <SidebarMenuItem key={item.href}>
-                          <SidebarMenuButton asChild>
-                            <Link
-                              href={item.href}
-                              className={cn(
-                                'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
-                                active
-                                  ? 'bg-white/10 text-white'
-                                  : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                              )}
-                            >
-                              <item.icon className={cn('h-4 w-4', active ? 'text-white' : 'text-gray-400')} />
-                              <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      )
-                    })}
-                  </SidebarMenu>
-                </SidebarGroupContent>
-              )}
+              <SidebarGroupContent className={cn(isOpen ? 'block' : 'hidden group-data-[collapsible=icon]:block')}>
+                <SidebarMenu>
+                  {group.items.map((item) => {
+                    const active = pathname === item.href
+                    return (
+                      <SidebarMenuItem key={item.href}>
+                        <SidebarMenuButton asChild>
+                          <Link
+                            href={item.href}
+                            className={cn(
+                              'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
+                              active ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                            )}
+                          >
+                            <item.icon className={cn('h-4 w-4', active ? 'text-white' : 'text-gray-400')} />
+                            <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )
+                  })}
+                </SidebarMenu>
+              </SidebarGroupContent>
             </SidebarGroup>
           )
         })}
