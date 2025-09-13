@@ -4,7 +4,7 @@ import { Suspense } from 'react'
 import { usePathname } from 'next/navigation'
 import * as S from '@/components/ui/sidebar'
 
-import { SuperAdminSidebar } from '@/components/superadmin/sidebar-client'
+import { SuperAdminSidebarClient } from '@/components/superadmin/sidebar-client'
 import { MobileHeader } from './mobile-header'
 import { PageLoader } from './page-loader'
 import type { PlatformBrandingSettings } from '@/types'
@@ -32,7 +32,7 @@ export function SuperAdminLayoutClient({ children, brandingSettings }: Props) {
         <div className="p-4 text-sm font-medium">
           {brandingSettings?.appName ?? 'Orderfly Studio'}
         </div>
-        <SuperAdminSidebar brandingSettings={brandingSettings ?? undefined} />
+        <SuperAdminSidebarClient brandingSettings={brandingSettings ?? undefined} />
       </S.Sidebar>
 
       <S.SidebarInset>
