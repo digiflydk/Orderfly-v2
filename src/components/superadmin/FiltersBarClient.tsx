@@ -1,21 +1,24 @@
 'use client'
 
-import FiltersBar from '@/components/superadmin/FiltersBar'
 import { useSAFilters } from '@/hooks/use-sa-filters'
+import type { SACommonFilters } from '@/types/superadmin'
+import { FiltersBar } from '@/components/superadmin/FiltersBar'
 
-export default function FiltersBarClient() {
-  const { filters, setFilters } = useSAFilters()
+type Props = {
+  brands: { id: string; name: string }[]
+  locations: { id: string; name: string; brandId: string }[]
+  initial: SACommonFilters
+}
+
+export default function FiltersBarClient({ brands, locations, initial }: Props) {
+  const { filters, setFilters } = useSAFilters(initial)
 
   return (
     <FiltersBar
-      onChange={(payload) => {
-        // map simpelt fra FiltersBar til SACommonFilters felter som URL'en bruger
-        setFilters({
-          // her binder vi bare søgetekst til brandId som demo — tilpas efter dit domæne
-          brandId: payload.query?.trim() ? payload.query.trim() : 'all',
-          // kunne også mappes til locationIds osv. hvis du har en rigtig multi-select
-        })
-      }}
+      value={filters}
+      brands={brands}
+      locations={locations}
+      onFilterChange={(next) => setFilters(next)}
     />
   )
 }
