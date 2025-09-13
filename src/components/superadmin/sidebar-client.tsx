@@ -57,10 +57,7 @@ export function SuperAdminSidebarClient({
     title: string
     items: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[]
   }[] = [
-    {
-      title: 'Core',
-      items: [{ href: '/superadmin', label: 'Dashboard', icon: Home }],
-    },
+    { title: 'Core', items: [{ href: '/superadmin', label: 'Dashboard', icon: Home }] },
     {
       title: 'Commerce',
       items: [
@@ -106,10 +103,7 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/feedback', label: 'Feedback', icon: MessageSquare },
       ],
     },
-    {
-      title: 'Insights',
-      items: [{ href: '/superadmin/analytics', label: 'Analytics', icon: BarChart3 }],
-    },
+    { title: 'Insights', items: [{ href: '/superadmin/analytics', label: 'Analytics', icon: BarChart3 }] },
     {
       title: 'Billing',
       items: [
@@ -143,8 +137,9 @@ export function SuperAdminSidebarClient({
             <Image
               src={logoUrl}
               alt="OrderFly Logo"
-              width={120}
+              width={140}
               height={40}
+              style={{ width: 'auto', height: 'auto' }}
               className="object-contain"
             />
             <div className="leading-tight">
