@@ -8,9 +8,9 @@ import { CookieConsent } from '@/components/cookie-consent';
 import { CartProvider } from '@/context/cart-context';
 import DeliveryMethodModal from '@/components/modals/DeliveryMethodModal';
 
-// VIGTIGT: Matcher dine faktiske filnavne (case sensitive)
-import { Header } from '@/components/layout/Header';
-import { Footer } from '@/components/layout/Footer';
+// Matcher dine faktiske filnavne (lowercase)
+import { Header } from '@/components/layout/header';
+import { Footer } from '@/components/layout/footer';
 
 export function BrandLayoutClient({
   children,
