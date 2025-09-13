@@ -30,13 +30,21 @@ export function SuperAdminLayoutClient({ children, brandingSettings }: Props) {
     <S.SidebarProvider>
       <S.Sidebar className="border-r">
         <div className="p-4 text-sm font-medium">
-          {brandingSettings?.appName ?? 'Orderfly Studio'}
+          {brandingSettings?.platformHeading ?? 'Orderfly Studio'}
         </div>
-        <SuperAdminSidebarClient brandingSettings={brandingSettings ?? undefined} />
+        <SuperAdminSidebarClient
+          brandingSettings={
+            brandingSettings ?? { platformHeading: 'Orderfly Studio' }
+          }
+        />
       </S.Sidebar>
 
       <S.SidebarInset>
-        <MobileHeader brandingSettings={brandingSettings ?? undefined} />
+        <MobileHeader
+          brandingSettings={
+            brandingSettings ?? { platformHeading: 'Orderfly Studio' }
+          }
+        />
         <main className="p-4 md:p-6 lg:p-8">
           <LayoutWithLoader>{children}</LayoutWithLoader>
         </main>
