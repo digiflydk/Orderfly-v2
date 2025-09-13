@@ -1,6 +1,6 @@
 'use client'
 
-import FiltersBarClient from '@/components/superadmin/FiltersBarClient'
+import { FiltersBar } from '@/components/superadmin/FiltersBar'
 
 export default function SuperadminHome() {
   return (
@@ -12,7 +12,7 @@ export default function SuperadminHome() {
         </p>
       </div>
 
-      <FiltersBarClient />
+      <FiltersBar />
 
       <section className="rounded-lg border p-4">
         <p className="text-sm text-muted-foreground">
