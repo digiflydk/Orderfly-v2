@@ -18,14 +18,10 @@ type Location = { id: string; name: string; brandId: string }
 
 type FiltersBarProps = {
   className?: string
-  /** Aktuelle filtre (kontrolleret) */
   filters?: SACommonFilters
-  /** Kald når filtre ændres */
   onChange?: (next: SACommonFilters) => void
-  /** Datakilder */
   brands?: Brand[]
   locations?: Location[]
-  /** Skjul locations-sektion */
   hideLocations?: boolean
 }
 
@@ -39,7 +35,6 @@ export function FiltersBar({
   locations = [],
   hideLocations = false,
 }: FiltersBarProps) {
-  // Sikker defaults
   const safeFilters: SACommonFilters = {
     dateFrom: filters?.dateFrom ?? todayStr(),
     dateTo: filters?.dateTo ?? todayStr(),
@@ -48,26 +43,6 @@ export function FiltersBar({
   }
 
   const [query, setQuery] = useState('')
-
-  // Brand-liste (med "All brands" først) og søgning
-  const visibleBrands = useMemo(() => {
-    const q = query.toLowerCase()
-    const filtered = q
-      ? brands.filter((b) => b.name?.toLowerCase().includes(q))
-      : brands
-    return filtered
-  }, [brands, query])
-
-  // Location-liste filtreret efter brand + søgning
-  const visibleLocations = useMemo(() => {
-    if (hideLocations) return []
-    const q = query.toLowerCase()
-    const list =
-      safeFilters.brandId === 'all'
-        ? locations
-        : locations.filter((l) => l.brandId === safeFilters.brandId)
-    return q ? list.filter((l) => l.name?.toLowerCase().includes(q)) : list
-  }, [locations, safeFilters.brandId, hideLocations, query])
 
   const emit = (partial: Partial<SACommonFilters>) => {
     const next: SACommonFilters = {
@@ -79,22 +54,71 @@ export function FiltersBar({
     onChange?.(next)
   }
 
+  const onDateFrom = (v: string) => {
+    // guard: from må ikke være efter to
+    const to = safeFilters.dateTo
+    emit({ dateFrom: v > to ? to : v })
+  }
+  const onDateTo = (v: string) => {
+    const from = safeFilters.dateFrom
+    emit({ dateTo: v < from ? from : v })
+  }
+
+  const visibleBrands = useMemo(() => {
+    const q = query.toLowerCase()
+    const filtered = q ? brands.filter(b => b.name?.toLowerCase().includes(q)) : brands
+    return filtered
+  }, [brands, query])
+
+  const visibleLocations = useMemo(() => {
+    if (hideLocations) return []
+    const q = query.toLowerCase()
+    const list =
+      safeFilters.brandId === 'all'
+        ? locations
+        : locations.filter(l => l.brandId === safeFilters.brandId)
+    return q ? list.filter(l => l.name?.toLowerCase().includes(q)) : list
+  }, [locations, safeFilters.brandId, hideLocations, query])
+
   const toggleLocation = (id: string) => {
     const current = safeFilters.locationIds ?? []
-    const next = current.includes(id)
-      ? current.filter((x) => x !== id)
-      : [...current, id]
+    const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id]
     emit({ locationIds: next.length ? next : undefined })
   }
 
   return (
     <div className={cn('w-full rounded-md border bg-card', className)}>
       <Command>
-        <CommandInput
-          placeholder="Search filters…"
-          value={query}
-          onValueChange={setQuery}
-        />
+        {/* Top row: søg + datoer */}
+        <div className="flex flex-col gap-2 border-b p-3 md:flex-row md:items-center md:justify-between">
+          <div className="md:max-w-sm">
+            <CommandInput
+              placeholder="Search filters…"
+              value={query}
+              onValueChange={setQuery}
+            />
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 text-sm">
+            <label className="text-muted-foreground">From</label>
+            <input
+              type="date"
+              className="h-9 rounded-md border bg-background px-2"
+              value={safeFilters.dateFrom}
+              max={safeFilters.dateTo}
+              onChange={(e) => onDateFrom(e.target.value)}
+            />
+            <label className="ml-2 text-muted-foreground">To</label>
+            <input
+              type="date"
+              className="h-9 rounded-md border bg-background px-2"
+              value={safeFilters.dateTo}
+              min={safeFilters.dateFrom}
+              onChange={(e) => onDateTo(e.target.value)}
+            />
+          </div>
+        </div>
+
         <CommandList>
           <CommandEmpty>Ingen matches…</CommandEmpty>
 
@@ -105,7 +129,6 @@ export function FiltersBar({
                 All brands
               </span>
             </CommandItem>
-
             {visibleBrands.map((b) => (
               <CommandItem key={b.id} onSelect={() => emit({ brandId: b.id })}>
                 <span className={cn(safeFilters.brandId === b.id && 'font-semibold')}>
@@ -114,9 +137,7 @@ export function FiltersBar({
               </CommandItem>
             ))}
             {!visibleBrands.length && (
-              <div className="px-3 py-2 text-sm text-muted-foreground">
-                Ingen brands
-              </div>
+              <div className="px-3 py-2 text-sm text-muted-foreground">Ingen brands</div>
             )}
           </CommandGroup>
 
