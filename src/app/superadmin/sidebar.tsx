@@ -1,9 +1,16 @@
+'use client'
 
+import { SuperAdminSidebarClient } from '@/components/superadmin/sidebar-client'
+import type { PlatformBrandingSettings } from '@/types'
 
-import { SuperAdminSidebarClient } from "@/components/superadmin/sidebar-client";
-import { PlatformBrandingSettings } from "@/types";
+export function SuperAdminSidebar({
+  brandingSettings,
+}: {
+  brandingSettings?: PlatformBrandingSettings
+}) {
+  return <SuperAdminSidebarClient brandingSettings={brandingSettings} />
+}
 
-// This is now a simple wrapper that receives props from the layout.
-export function SuperAdminSidebar({ brandingSettings }: { brandingSettings: PlatformBrandingSettings }) {
-  return <SuperAdminSidebarClient brandingSettings={brandingSettings} />;
+export default function Sidebar(props: { brandingSettings?: PlatformBrandingSettings }) {
+  return <SuperAdminSidebarClient brandingSettings={props?.brandingSettings} />
 }
