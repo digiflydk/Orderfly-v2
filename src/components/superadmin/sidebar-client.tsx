@@ -40,6 +40,7 @@ import {
   Settings,
   Code2,
   LayoutTemplate,
+  ChevronDown,
 } from 'lucide-react'
 
 export function SuperAdminSidebarClient({
@@ -51,14 +52,18 @@ export function SuperAdminSidebarClient({
 
   const platformName = brandingSettings?.platformName || 'OrderFly'
   const platformTagline = brandingSettings?.platformTagline || 'Sales platform built for restaurants'
-  const logoUrl = brandingSettings?.platformLogoUrl || 'https://i.postimg.cc/HxTMqLGV/Orderfly-Logo-white-F.png'
+  const logoUrl =
+    brandingSettings?.platformLogoUrl ||
+    'https://i.postimg.cc/HxTMqLGV/Orderfly-Logo-white-F.png'
 
   const groups: {
+    key: string
     title: string
     items: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[]
   }[] = [
-    { title: 'Core', items: [{ href: '/superadmin', label: 'Dashboard', icon: Home }] },
+    { key: 'core', title: 'Core', items: [{ href: '/superadmin', label: 'Dashboard', icon: Home }] },
     {
+      key: 'commerce',
       title: 'Commerce',
       items: [
         { href: '/superadmin/sales/orders', label: 'Sales & Orders', icon: ShoppingCart },
@@ -66,6 +71,7 @@ export function SuperAdminSidebarClient({
       ],
     },
     {
+      key: 'catalog',
       title: 'Catalog',
       items: [
         { href: '/superadmin/brands', label: 'Brands', icon: Building2 },
@@ -79,6 +85,7 @@ export function SuperAdminSidebarClient({
       ],
     },
     {
+      key: 'promotions',
       title: 'Promotions',
       items: [
         { href: '/superadmin/discounts', label: 'Discounts', icon: Tags },
@@ -90,6 +97,7 @@ export function SuperAdminSidebarClient({
       ],
     },
     {
+      key: 'people',
       title: 'People & Access',
       items: [
         { href: '/superadmin/roles', label: 'Roles', icon: ShieldCheck },
@@ -97,14 +105,16 @@ export function SuperAdminSidebarClient({
       ],
     },
     {
+      key: 'quality',
       title: 'Quality',
       items: [
         { href: '/superadmin/ui-validation', label: 'UI Validation', icon: LayoutTemplate },
         { href: '/superadmin/feedback', label: 'Feedback', icon: MessageSquare },
       ],
     },
-    { title: 'Insights', items: [{ href: '/superadmin/analytics', label: 'Analytics', icon: BarChart3 }] },
+    { key: 'insights', title: 'Insights', items: [{ href: '/superadmin/analytics', label: 'Analytics', icon: BarChart3 }] },
     {
+      key: 'billing',
       title: 'Billing',
       items: [
         { href: '/superadmin/billing', label: 'Billing', icon: CreditCard },
@@ -112,6 +122,7 @@ export function SuperAdminSidebarClient({
       ],
     },
     {
+      key: 'website',
       title: 'Website',
       items: [
         { href: '/superadmin/website', label: 'Website', icon: Globe },
@@ -120,6 +131,7 @@ export function SuperAdminSidebarClient({
       ],
     },
     {
+      key: 'system',
       title: 'System',
       items: [
         { href: '/superadmin/settings', label: 'Settings', icon: Settings },
@@ -128,10 +140,27 @@ export function SuperAdminSidebarClient({
     },
   ]
 
+  const [open, setOpen] = React.useState<Record<string, boolean>>({
+    core: true,
+    commerce: true,
+    catalog: true,
+    promotions: false,
+    people: false,
+    quality: false,
+    insights: false,
+    billing: false,
+    website: false,
+    system: true,
+  })
+
+  function toggle(key: string) {
+    setOpen((s) => ({ ...s, [key]: !s[key] }))
+  }
+
   return (
     <Sidebar collapsible="icon">
       <SidebarTrigger />
-      <SidebarContent>
+      <SidebarContent className="bg-black text-white">
         <div className="px-3 py-4 group-data-[collapsible=icon]:hidden">
           <div className="flex items-center gap-3">
             <Image
@@ -139,48 +168,60 @@ export function SuperAdminSidebarClient({
               alt="OrderFly Logo"
               width={140}
               height={40}
+              priority
               style={{ width: 'auto', height: 'auto' }}
               className="object-contain"
             />
             <div className="leading-tight">
               <div className="text-sm font-semibold">{platformName}</div>
-              <div className="text-xs text-muted-foreground">{platformTagline}</div>
+              <div className="text-xs text-gray-400">{platformTagline}</div>
             </div>
           </div>
         </div>
 
-        {groups.map((group) => (
-          <SidebarGroup key={group.title}>
-            <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground group-data-[collapsible=icon]:hidden">
-              {group.title}
-            </div>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                {group.items.map((item) => {
-                  const active = pathname === item.href
-                  return (
-                    <SidebarMenuItem key={item.href}>
-                      <SidebarMenuButton asChild>
-                        <Link
-                          href={item.href}
-                          className={cn(
-                            'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
-                            active
-                              ? 'bg-primary/10 text-primary'
-                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
-                          )}
-                        >
-                          <item.icon className={cn('h-4 w-4', active ? 'text-primary' : 'text-muted-foreground')} />
-                          <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  )
-                })}
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        ))}
+        {groups.map((group) => {
+          const isOpen = !!open[group.key]
+          return (
+            <SidebarGroup key={group.key}>
+              <button
+                type="button"
+                onClick={() => toggle(group.key)}
+                className="flex w-full items-center justify-between px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400 hover:text-white group-data-[collapsible=icon]:hidden"
+              >
+                <span>{group.title}</span>
+                <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen ? 'rotate-180' : '')} />
+              </button>
+
+              {isOpen && (
+                <SidebarGroupContent>
+                  <SidebarMenu>
+                    {group.items.map((item) => {
+                      const active = pathname === item.href
+                      return (
+                        <SidebarMenuItem key={item.href}>
+                          <SidebarMenuButton asChild>
+                            <Link
+                              href={item.href}
+                              className={cn(
+                                'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
+                                active
+                                  ? 'bg-white/10 text-white'
+                                  : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                              )}
+                            >
+                              <item.icon className={cn('h-4 w-4', active ? 'text-white' : 'text-gray-400')} />
+                              <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )
+                    })}
+                  </SidebarMenu>
+                </SidebarGroupContent>
+              )}
+            </SidebarGroup>
+          )
+        })}
       </SidebarContent>
     </Sidebar>
   )
