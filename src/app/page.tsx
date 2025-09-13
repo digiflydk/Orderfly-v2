@@ -1,29 +1,20 @@
-import { getFiltersData } from './_filters-data'
-import FiltersBarClient from '@/components/superadmin/FiltersBarClient'
-import FiltersDebugPanel from '@/components/superadmin/FiltersDebugPanel'
+'use client'
 
-export default async function SuperadminHome() {
-  const { brands, locations, initial } = await getFiltersData()
+import Link from 'next/link'
 
+export default function HomePage() {
   return (
-    <div className="p-4 md:p-6 lg:p-8 space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Superadmin</h1>
-        <p className="text-sm text-muted-foreground">
-          Brug filterbaren nedenfor for at filtrere data. Valg synces til URL’en.
-        </p>
-      </div>
-
-      <FiltersBarClient brands={brands} locations={locations} initial={initial} />
-
-      <section className="rounded-lg border p-4">
-        <p className="text-sm text-muted-foreground mb-3">
-          Her kan du vise din liste/indhold der reagerer på URL-filtrene.
-        </p>
-
-        {/* Midlertidigt debugpanel – fjern når du ikke længere har brug for det */}
-        <FiltersDebugPanel />
-      </section>
-    </div>
+    <main className="flex min-h-screen flex-col items-center justify-center p-8">
+      <h1 className="text-3xl font-bold mb-4">Velkommen til Orderfly Studio</h1>
+      <p className="text-muted-foreground mb-8">
+        Brug menuen eller gå direkte til SuperAdmin for at komme i gang.
+      </p>
+      <Link
+        href="/superadmin"
+        className="rounded-md bg-primary px-4 py-2 text-white hover:bg-primary/90"
+      >
+        Gå til SuperAdmin
+      </Link>
+    </main>
   )
 }
