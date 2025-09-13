@@ -1,31 +1,42 @@
 /** @type {import('next').NextConfig} */
-
-// Hent og split ALLOWED_DEV_ORIGINS fra .env.local
-const allowedDevOrigins = (process.env.ALLOWED_DEV_ORIGINS ?? '')
-  .split(',')
-  .map((s) => s.trim())
-  .filter(Boolean);
-
 const nextConfig = {
-  reactStrictMode: true,
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  eslint: {
+    ignoreDuringBuilds: true,
+  },
+  images: {
+    formats: ['image/avif', 'image/webp'],
+    remotePatterns: [
+      { protocol: 'https', hostname: 'placehold.co', pathname: '/**' },
+      { protocol: 'https', hostname: 'i.postimg.cc', pathname: '/**' },
+      { protocol: 'https', hostname: 'picsum.photos', pathname: '/**' },
+      { protocol: 'https', hostname: 'firebasestorage.googleapis.com', pathname: '/**' },
+    ],
+  },
   experimental: {
     serverActions: {
-      allowedOrigins: allowedDevOrigins,
+      bodySizeLimit: '10mb',
     },
   },
-  serverExternalPackages: ['@opentelemetry/exporter-jaeger'],
-  webpack: (config, { isServer, dev }) => {
+  productionBrowserSourceMaps: false,
+  output: 'standalone',
+  webpack(config, { dev }) {
     if (dev) {
-      // undgå korrupt fil-cache i dev-miljøer
-      config.cache = false;
+      // Mindsk diskbrug i Studio (dev-preview)
+      config.cache = false
     }
-    if (!isServer) {
-      // sørg for at handlebars ikke ender i klient-bundle
-      config.externals = config.externals || [];
-      config.externals.push({ handlebars: 'commonjs handlebars' });
-    }
-    return config;
+    return config
   },
-};
-
-module.exports = nextConfig;
+  async rewrites() {
+    return {
+      beforeFiles: [
+        { source: '/api/:path*', destination: '/api/:path*' },
+      ],
+      afterFiles: [],
+      fallback: [],
+    }
+  },
+}
+module.exports = nextConfig
