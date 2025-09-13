@@ -1,6 +1,5 @@
 'use client'
 
-import * as React from 'react'
 import { Suspense } from 'react'
 import { usePathname } from 'next/navigation'
 
@@ -10,9 +9,7 @@ import {
   SidebarInset,
 } from '@/components/ui/sidebar'
 
-// Sørg for at stien matcher din faktiske komponent
 import { SuperAdminSidebar } from '@/components/superadmin/sidebar-client'
-
 import { MobileHeader } from './mobile-header'
 import { PageLoader } from './page-loader'
 import type { PlatformBrandingSettings } from '@/types'
@@ -40,7 +37,6 @@ export function SuperAdminLayoutClient({
   return (
     <SidebarProvider>
       <Sidebar className="border-r">
-        {/* Simpelt logo / branding i venstre sidebar */}
         <div className="p-4 text-sm font-medium">
           {brandingSettings?.appName ?? 'Orderfly Studio'}
         </div>
