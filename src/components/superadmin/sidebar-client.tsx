@@ -163,15 +163,16 @@ export function SuperAdminSidebarClient({
       <SidebarContent className="bg-black text-white">
         <div className="px-3 py-4 group-data-[collapsible=icon]:hidden">
           <div className="flex items-center gap-3">
-            <Image
-              src={logoUrl}
-              alt="OrderFly Logo"
-              width={140}
-              height={40}
-              priority
-              style={{ width: 'auto', height: 'auto' }}
-              className="object-contain"
-            />
+            <div className="relative h-10 w-36 shrink-0">
+              <Image
+                src={logoUrl}
+                alt="OrderFly Logo"
+                fill
+                priority
+                sizes="(max-width: 1024px) 120px, 144px"
+                className="object-contain"
+              />
+            </div>
             <div className="leading-tight">
               <div className="text-sm font-semibold">{platformName}</div>
               <div className="text-xs text-gray-400">{platformTagline}</div>
