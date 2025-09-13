@@ -13,13 +13,19 @@ import {
 } from '@/components/ui/command'
 import type { SACommonFilters } from '@/types/superadmin'
 
+type Brand = { id: string; name: string }
 type Location = { id: string; name: string; brandId: string }
 
 type FiltersBarProps = {
   className?: string
+  /** Aktuelle filtre (kontrolleret) */
   filters?: SACommonFilters
+  /** Kald når filtre ændres */
   onChange?: (next: SACommonFilters) => void
+  /** Datakilder */
+  brands?: Brand[]
   locations?: Location[]
+  /** Skjul locations-sektion */
   hideLocations?: boolean
 }
 
@@ -29,10 +35,11 @@ export function FiltersBar({
   className,
   filters,
   onChange,
+  brands = [],
   locations = [],
   hideLocations = false,
 }: FiltersBarProps) {
-  // 🔒 Sikkerhed: lav et "safeFilters" objekt med defaults
+  // Sikker defaults
   const safeFilters: SACommonFilters = {
     dateFrom: filters?.dateFrom ?? todayStr(),
     dateTo: filters?.dateTo ?? todayStr(),
@@ -42,14 +49,25 @@ export function FiltersBar({
 
   const [query, setQuery] = useState('')
 
-  // Filtrer locations ift. brand
+  // Brand-liste (med "All brands" først) og søgning
+  const visibleBrands = useMemo(() => {
+    const q = query.toLowerCase()
+    const filtered = q
+      ? brands.filter((b) => b.name?.toLowerCase().includes(q))
+      : brands
+    return filtered
+  }, [brands, query])
+
+  // Location-liste filtreret efter brand + søgning
   const visibleLocations = useMemo(() => {
     if (hideLocations) return []
-    if (!locations?.length) return []
-    if (safeFilters.brandId === 'all') return locations
-    return locations.filter((l) => l.brandId === safeFilters.brandId)
-    // brug safeFilters.brandId i deps, ikke filters.brandId
-  }, [locations, safeFilters.brandId, hideLocations])
+    const q = query.toLowerCase()
+    const list =
+      safeFilters.brandId === 'all'
+        ? locations
+        : locations.filter((l) => l.brandId === safeFilters.brandId)
+    return q ? list.filter((l) => l.name?.toLowerCase().includes(q)) : list
+  }, [locations, safeFilters.brandId, hideLocations, query])
 
   const emit = (partial: Partial<SACommonFilters>) => {
     const next: SACommonFilters = {
@@ -63,43 +81,51 @@ export function FiltersBar({
 
   const toggleLocation = (id: string) => {
     const current = safeFilters.locationIds ?? []
-    const next = current.includes(id) ? current.filter((x) => x !== id) : [...current, id]
+    const next = current.includes(id)
+      ? current.filter((x) => x !== id)
+      : [...current, id]
     emit({ locationIds: next.length ? next : undefined })
   }
-
-  const onSearchChange = (val: string) => {
-    setQuery(val)
-    // hvis du vil binde søgning til noget i URL/filters, kan du udvide her
-  }
-
-  const normalizedQuery = query.toLowerCase()
 
   return (
     <div className={cn('w-full rounded-md border bg-card', className)}>
       <Command>
-        <CommandInput placeholder="Search filters…" value={query} onValueChange={onSearchChange} />
+        <CommandInput
+          placeholder="Search filters…"
+          value={query}
+          onValueChange={setQuery}
+        />
         <CommandList>
           <CommandEmpty>Ingen matches…</CommandEmpty>
 
-          {/* Eksempel-gruppe: Brand (dum liste – udskift med dine rigtige brands om lidt) */}
+          {/* Brand */}
           <CommandGroup heading="Brand">
-            {['all', 'brand-a', 'brand-b'].map((b) => (
-              <CommandItem key={b} onSelect={() => emit({ brandId: b })}>
-                <span className={cn(safeFilters.brandId === b && 'font-semibold')}>
-                  {b === 'all' ? 'All brands' : b}
+            <CommandItem onSelect={() => emit({ brandId: 'all' })}>
+              <span className={cn(safeFilters.brandId === 'all' && 'font-semibold')}>
+                All brands
+              </span>
+            </CommandItem>
+
+            {visibleBrands.map((b) => (
+              <CommandItem key={b.id} onSelect={() => emit({ brandId: b.id })}>
+                <span className={cn(safeFilters.brandId === b.id && 'font-semibold')}>
+                  {b.name ?? b.id}
                 </span>
               </CommandItem>
             ))}
+            {!visibleBrands.length && (
+              <div className="px-3 py-2 text-sm text-muted-foreground">
+                Ingen brands
+              </div>
+            )}
           </CommandGroup>
 
-          <CommandSeparator />
-
-          {/* Locations (filtreret efter brand + søgning) */}
+          {/* Locations */}
           {!hideLocations && (
-            <CommandGroup heading="Locations">
-              {visibleLocations
-                .filter((l) => l.name.toLowerCase().includes(normalizedQuery))
-                .map((l) => (
+            <>
+              <CommandSeparator />
+              <CommandGroup heading="Locations">
+                {visibleLocations.map((l) => (
                   <CommandItem key={l.id} onSelect={() => toggleLocation(l.id)}>
                     <span
                       className={cn(
@@ -110,12 +136,13 @@ export function FiltersBar({
                     </span>
                   </CommandItem>
                 ))}
-              {!visibleLocations.length && (
-                <div className="px-3 py-2 text-sm text-muted-foreground">
-                  Ingen locations for valgt brand
-                </div>
-              )}
-            </CommandGroup>
+                {!visibleLocations.length && (
+                  <div className="px-3 py-2 text-sm text-muted-foreground">
+                    Ingen locations for valgt brand
+                  </div>
+                )}
+              </CommandGroup>
+            </>
           )}
         </CommandList>
       </Command>
