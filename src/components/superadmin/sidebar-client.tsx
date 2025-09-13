@@ -143,7 +143,7 @@ export function SuperAdminSidebarClient({
                 alt="OrderFly Logo"
                 width={120}
                 height={40}
-                style={{ height: 'auto', width: 'auto' }}
+                className="object-contain"
               />
             ) : (
               <span className="text-sm font-medium">OrderFly</span>
