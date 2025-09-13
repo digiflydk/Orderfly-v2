@@ -1,8 +1,8 @@
-export default function Home() {
+export default function SuperadminHome() {
   return (
-    <main className="p-6">
-      <h1 className="text-2xl font-semibold">It works ✅</h1>
-      <p className="mt-2 text-sm text-gray-600">Baseline kører.</p>
-    </main>
+    <div className="space-y-2">
+      <h1 className="text-2xl font-semibold">Superadmin ✅</h1>
+      <p className="text-sm text-gray-600">Basen kører. Klar til indhold.</p>
+    </div>
   );
 }
