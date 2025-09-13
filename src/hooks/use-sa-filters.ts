@@ -3,7 +3,7 @@
 import { useMemo, useCallback } from 'react'
 import { usePathname, useRouter, useSearchParams } from 'next/navigation'
 import type { SACommonFilters } from '@/types/superadmin'
-import { toQuery, fromQuery } from '@/lib/query-utils' // brug den sti du lagde utils i
+import { toQuery, fromQuery } from '@/lib/query-utils' // ← din utils-fil
 
 export function useSAFilters(defaults?: Partial<SACommonFilters>) {
   const router = useRouter()
