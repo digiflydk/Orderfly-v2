@@ -2,12 +2,7 @@
 
 import { Suspense } from 'react'
 import { usePathname } from 'next/navigation'
-
-import {
-  SidebarProvider,
-  Sidebar,
-  SidebarInset,
-} from '@/components/ui/sidebar'
+import * as S from '@/components/ui/sidebar'
 
 import { SuperAdminSidebar } from '@/components/superadmin/sidebar-client'
 import { MobileHeader } from './mobile-header'
@@ -30,25 +25,22 @@ function LayoutWithLoader({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function SuperAdminLayoutClient({
-  children,
-  brandingSettings,
-}: Props) {
+export function SuperAdminLayoutClient({ children, brandingSettings }: Props) {
   return (
-    <SidebarProvider>
-      <Sidebar className="border-r">
+    <S.SidebarProvider>
+      <S.Sidebar className="border-r">
         <div className="p-4 text-sm font-medium">
           {brandingSettings?.appName ?? 'Orderfly Studio'}
         </div>
         <SuperAdminSidebar brandingSettings={brandingSettings ?? undefined} />
-      </Sidebar>
+      </S.Sidebar>
 
-      <SidebarInset>
+      <S.SidebarInset>
         <MobileHeader brandingSettings={brandingSettings ?? undefined} />
         <main className="p-4 md:p-6 lg:p-8">
           <LayoutWithLoader>{children}</LayoutWithLoader>
         </main>
-      </SidebarInset>
-    </SidebarProvider>
+      </S.SidebarInset>
+    </S.SidebarProvider>
   )
 }
