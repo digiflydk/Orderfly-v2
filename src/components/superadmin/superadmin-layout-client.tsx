@@ -1,55 +1,58 @@
-'use client';
+'use client'
 
-import * as React from 'react';
-import { Suspense } from 'react';
-import { usePathname } from 'next/navigation';
+import * as React from 'react'
+import { Suspense } from 'react'
+import { usePathname } from 'next/navigation'
 
-// KORREKTE alias-stier (brug "@/")
 import {
   SidebarProvider,
   Sidebar,
   SidebarInset,
-} from '@/components/ui/sidebar';
-import { SuperAdminSidebar } from '@/components/superadmin/sidebar-client';
-import { MobileHeader } from './mobile-header';
-import { PageLoader } from './page-loader';
-import type { PlatformBrandingSettings } from '@/types';
+} from '@/components/ui/sidebar'
+
+// Sørg for at stien matcher din faktiske komponent
+import { SuperAdminSidebar } from '@/components/superadmin/sidebar-client'
+
+import { MobileHeader } from './mobile-header'
+import { PageLoader } from './page-loader'
+import type { PlatformBrandingSettings } from '@/types'
 
 type Props = {
-  children: React.ReactNode;
-  brandingSettings: PlatformBrandingSettings | null;
-};
+  children: React.ReactNode
+  brandingSettings?: PlatformBrandingSettings | null
+}
 
-function LayoutWithLoader({ children }: Props) {
-  const pathname = usePathname();
+function LayoutWithLoader({ children }: { children: React.ReactNode }) {
+  const pathname = usePathname()
   return (
     <div className="relative">
       <Suspense fallback={<PageLoader />}>
         <div key={pathname}>{children}</div>
       </Suspense>
     </div>
-  );
+  )
 }
 
-export function SuperAdminLayoutClient({ children, brandingSettings }: Props) {
+export function SuperAdminLayoutClient({
+  children,
+  brandingSettings,
+}: Props) {
   return (
     <SidebarProvider>
       <Sidebar className="border-r">
-        {/* Logo / branding i venstre sidebar (meget simpelt) */}
+        {/* Simpelt logo / branding i venstre sidebar */}
         <div className="p-4 text-sm font-medium">
           {brandingSettings?.appName ?? 'Orderfly Studio'}
         </div>
-        <SuperAdminSidebar />
+        <SuperAdminSidebar brandingSettings={brandingSettings ?? undefined} />
       </Sidebar>
 
       <SidebarInset>
-        <MobileHeader brandingSettings={brandingSettings} />
-        <main className="p-4">
-          <LayoutWithLoader brandingSettings={brandingSettings}>
-            {children}
-          </LayoutWithLoader>
+        <MobileHeader brandingSettings={brandingSettings ?? undefined} />
+        <main className="p-4 md:p-6 lg:p-8">
+          <LayoutWithLoader>{children}</LayoutWithLoader>
         </main>
       </SidebarInset>
     </SidebarProvider>
-  );
+  )
 }
