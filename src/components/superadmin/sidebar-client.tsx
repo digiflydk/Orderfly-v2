@@ -48,7 +48,10 @@ export function SuperAdminSidebarClient({
   brandingSettings?: PlatformBrandingSettings
 }) {
   const pathname = usePathname()
-  const logoUrl = brandingSettings?.platformLogoUrl
+
+  const platformName = brandingSettings?.platformName || 'OrderFly'
+  const platformTagline = brandingSettings?.platformTagline || 'Sales platform built for restaurants'
+  const logoUrl = brandingSettings?.platformLogoUrl || 'https://i.postimg.cc/HxTMqLGV/Orderfly-Logo-white-F.png'
 
   const groups: {
     title: string
@@ -135,45 +138,54 @@ export function SuperAdminSidebarClient({
     <Sidebar collapsible="icon">
       <SidebarTrigger />
       <SidebarContent>
-        <SidebarGroup>
-          <div className="flex items-center gap-2 group-data-[collapsible=icon]:hidden px-3 py-4">
-            {logoUrl ? (
-              <Image
-                src={logoUrl}
-                alt="OrderFly Logo"
-                width={120}
-                height={40}
-                className="object-contain"
-              />
-            ) : (
-              <span className="text-sm font-medium">OrderFly</span>
-            )}
+        <div className="px-3 py-4 group-data-[collapsible=icon]:hidden">
+          <div className="flex items-center gap-3">
+            <Image
+              src={logoUrl}
+              alt="OrderFly Logo"
+              width={120}
+              height={40}
+              className="object-contain"
+            />
+            <div className="leading-tight">
+              <div className="text-sm font-semibold">{platformName}</div>
+              <div className="text-xs text-muted-foreground">{platformTagline}</div>
+            </div>
           </div>
-          {groups.map((group) => (
-            <SidebarGroup key={group.title}>
-              <SidebarGroupContent>
-                <SidebarMenu>
-                  {group.items.map((item) => (
+        </div>
+
+        {groups.map((group) => (
+          <SidebarGroup key={group.title}>
+            <div className="px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-muted-foreground group-data-[collapsible=icon]:hidden">
+              {group.title}
+            </div>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                {group.items.map((item) => {
+                  const active = pathname === item.href
+                  return (
                     <SidebarMenuItem key={item.href}>
                       <SidebarMenuButton asChild>
                         <Link
                           href={item.href}
                           className={cn(
-                            'flex items-center gap-2',
-                            pathname === item.href ? 'text-primary font-medium' : 'text-muted-foreground'
+                            'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
+                            active
+                              ? 'bg-primary/10 text-primary'
+                              : 'text-muted-foreground hover:bg-muted hover:text-foreground'
                           )}
                         >
-                          <item.icon className="h-4 w-4" />
-                          <span>{item.label}</span>
+                          <item.icon className={cn('h-4 w-4', active ? 'text-primary' : 'text-muted-foreground')} />
+                          <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                  ))}
-                </SidebarMenu>
-              </SidebarGroupContent>
-            </SidebarGroup>
-          ))}
-        </SidebarGroup>
+                  )
+                })}
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ))}
       </SidebarContent>
     </Sidebar>
   )
