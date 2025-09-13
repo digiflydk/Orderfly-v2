@@ -1,11 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  typescript: {
-    ignoreBuildErrors: true,
-  },
-  eslint: {
-    ignoreDuringBuilds: true,
-  },
+  typescript: { ignoreBuildErrors: true },
+  eslint: { ignoreDuringBuilds: true },
   images: {
     formats: ['image/avif', 'image/webp'],
     remotePatterns: [
@@ -15,25 +11,16 @@ const nextConfig = {
       { protocol: 'https', hostname: 'firebasestorage.googleapis.com', pathname: '/**' },
     ],
   },
-  experimental: {
-    serverActions: {
-      bodySizeLimit: '10mb',
-    },
-  },
+  experimental: { serverActions: { bodySizeLimit: '10mb' } },
   productionBrowserSourceMaps: false,
   output: 'standalone',
   webpack(config, { dev }) {
-    if (dev) {
-      // Mindsk diskbrug i Studio (dev-preview)
-      config.cache = false
-    }
+    if (dev) config.cache = false
     return config
   },
   async rewrites() {
     return {
-      beforeFiles: [
-        { source: '/api/:path*', destination: '/api/:path*' },
-      ],
+      beforeFiles: [{ source: '/api/:path*', destination: '/api/:path*' }],
       afterFiles: [],
       fallback: [],
     }
