@@ -1,5 +1,6 @@
 import { getFiltersData } from './_filters-data'
 import FiltersBarClient from '@/components/superadmin/FiltersBarClient'
+import FiltersDebugPanel from '@/components/superadmin/FiltersDebugPanel'
 
 export default async function SuperadminHome() {
   const { brands, locations, initial } = await getFiltersData()
@@ -16,9 +17,12 @@ export default async function SuperadminHome() {
       <FiltersBarClient brands={brands} locations={locations} initial={initial} />
 
       <section className="rounded-lg border p-4">
-        <p className="text-sm text-muted-foreground">
+        <p className="text-sm text-muted-foreground mb-3">
           Her kan du vise din liste/indhold der reagerer på URL-filtrene.
         </p>
+
+        {/* Midlertidigt debugpanel – fjern når du ikke længere har brug for det */}
+        <FiltersDebugPanel />
       </section>
     </div>
   )
