@@ -1,15 +1,15 @@
 'use client';
-import * as React from 'react';
-export default function RootError({ error, reset }: { error: Error & { digest?: string }, reset: () => void }) {
-  React.useEffect(() => { console.error('[root:error]', error?.stack || error); }, [error]);
+
+export default function GlobalError({ error, reset }: { error:any; reset:()=>void }) {
+  console.error('GlobalError caught:', error);
   return (
-    <main className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-xl font-semibold mb-3">Teknisk fejl</h1>
-      <details open className="mb-4"><summary>Fejldetaljer</summary>
-        <pre className="font-code whitespace-pre-wrap text-sm bg-black/5 p-3 rounded">{(error?.stack || String(error))}</pre>
-        {error?.digest ? <p className="text-xs mt-2">Digest: {error.digest}</p> : null}
-      </details>
-      <button onClick={() => reset()} className="px-4 py-2 rounded bg-black text-white">Prøv igen</button>
-    </main>
+    <html><body>
+      <div style={{maxWidth:640,margin:'40px auto',padding:16,fontFamily:'system-ui,sans-serif'}}>
+        <h1 style={{fontSize:20,fontWeight:600}}>Noget gik galt</h1>
+        <button onClick={()=>reset()} style={{marginTop:16,padding:'8px 12px',border:'1px solid #111',background:'#111',color:'#fff',borderRadius:6,cursor:'pointer'}}>
+          Prøv igen
+        </button>
+      </div>
+    </body></html>
   );
 }
