@@ -1,8 +1,9 @@
-'use client'
+import { getFiltersData } from './_filters-data'
+import FiltersBarClient from '@/components/superadmin/FiltersBarClient'
 
-import { FiltersBar } from '@/components/superadmin/FiltersBar'
+export default async function SuperadminHome() {
+  const { brands, locations, initial } = await getFiltersData()
 
-export default function SuperadminHome() {
   return (
     <div className="p-4 md:p-6 lg:p-8 space-y-6">
       <div>
@@ -12,7 +13,7 @@ export default function SuperadminHome() {
         </p>
       </div>
 
-      <FiltersBar />
+      <FiltersBarClient brands={brands} locations={locations} initial={initial} />
 
       <section className="rounded-lg border p-4">
         <p className="text-sm text-muted-foreground">
