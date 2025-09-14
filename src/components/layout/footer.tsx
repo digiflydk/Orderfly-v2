@@ -2,7 +2,7 @@ import Link from "next/link";
 import Image from "next/image";
 import type { Brand, Location } from "@/types";
 import type { FooterTheme } from "@/types/settings";
-import { Facebook, Instagram, Linkedin, LucideIcon, Twitter, Youtube } from 'lucide-react';
+import { Facebook, Instagram, Linkedin, LucideIcon, Twitter, Youtube } from "lucide-react";
 
 interface FooterProps {
   brand: Brand;
@@ -22,40 +22,46 @@ const socialIcons: Record<string, LucideIcon> = {
 
 export function Footer({ brand, location, version, onOpenCookieSettings, theme }: FooterProps) {
   const footerStyle: React.CSSProperties = {
-    backgroundColor: 'var(--of-footer-bg)',
-    color: 'var(--of-footer-text)',
+    backgroundColor: "var(--of-footer-bg)",
+    color: "var(--of-footer-text)",
   };
 
   const linkStyle = {
-    color: 'var(--of-footer-link)',
+    color: "var(--of-footer-link)",
   };
+
+  // Fallback logo (kan skiftes til dit eget)
+  const logoSrc =
+    theme?.logoUrl || brand.logoUrl || "/orderfly-fallback-logo.png";
 
   return (
     <footer className="w-full" style={footerStyle}>
       <div className="mx-auto max-w-[1140px] px-4 py-10 grid gap-8 md:grid-cols-12">
         <div className="md:col-span-4 space-y-4">
-          {(theme?.logoUrl || brand.logoUrl) && (
-            <Image 
-              src={theme?.logoUrl || brand.logoUrl!} 
-              alt={brand.name || "Logo"} 
-              width={140} 
-              height={40} 
+          <div className="relative w-[140px] h-[40px]">
+            <Image
+              src={logoSrc}
+              alt={brand.name || "Logo"}
+              fill
               className="object-contain"
               data-ai-hint="logo"
+              sizes="140px"
             />
+          </div>
+          {theme?.legalText && (
+            <p className="text-sm opacity-80">{theme.legalText}</p>
           )}
-          {theme?.legalText && <p className="text-sm opacity-80">{theme.legalText}</p>}
           {(theme?.socials?.length ?? 0) > 0 && (
             <div className="flex gap-4 pt-4">
               {theme!.socials!.map((s, i) => {
                 const Icon = socialIcons[s.kind];
                 return Icon ? (
-                  <a 
-                    key={i} 
+                  <a
+                    key={i}
                     href={s.href}
                     target="_blank"
                     rel="noopener noreferrer"
-                    aria-label={s.kind} 
+                    aria-label={s.kind}
                     className="transition-colors hover:opacity-80"
                     style={linkStyle}
                   >
@@ -88,8 +94,14 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
         ))}
       </div>
 
-      <div className="mx-auto max-w-[1140px] px-4 py-4 border-t" style={{ borderColor: 'var(--of-footer-link)' }}>
-        <div className="flex items-center justify-between text-xs" style={{ color: 'var(--of-footer-text)' }}>
+      <div
+        className="mx-auto max-w-[1140px] px-4 py-4 border-t"
+        style={{ borderColor: "var(--of-footer-link)" }}
+      >
+        <div
+          className="flex items-center justify-between text-xs"
+          style={{ color: "var(--of-footer-text)" }}
+        >
           <span>🌐 English</span>
           <div className="flex items-center gap-2">
             <span>{version}</span>
