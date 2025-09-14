@@ -1,4 +1,3 @@
-
 import { notFound } from 'next/navigation';
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 import { AnalyticsProvider } from '@/context/analytics-context';
@@ -8,17 +7,17 @@ import type { Location } from '@/types';
 import { getLocationBySlug } from '../superadmin/locations/actions';
 import DeliveryModalHost from './deliverymodalhost';
 import { BrandLayoutClient } from './layout-client';
-
+import { CartProvider } from '@/context/cart-context';
 
 export default async function BrandLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: { brandSlug: string, locationSlug?: string };
+  params: { brandSlug: string; locationSlug?: string };
 }) {
   const { brandSlug, locationSlug } = params;
-  
+
   const [brand, settings] = await Promise.all([
     getBrandBySlug(brandSlug),
     getGeneralSettings(),
@@ -27,10 +26,12 @@ export default async function BrandLayout({
   if (!brand) {
     notFound();
   }
-  
+
   // Location is optional at this level. Location-specific layouts will handle their own fetching.
-  const location: Location | null = locationSlug ? await getLocationBySlug(brand.id, locationSlug) : null;
-  
+  const location: Location | null = locationSlug
+    ? await getLocationBySlug(brand.id, locationSlug)
+    : null;
+
   const brandThemeStyle: React.CSSProperties = {
     '--primary': brand.appearances?.colors.primary,
     '--secondary': brand.appearances?.colors.secondary,
@@ -38,9 +39,9 @@ export default async function BrandLayout({
     '--foreground': brand.appearances?.colors.text,
     '--border': brand.appearances?.colors.border,
     '--primary-foreground': brand.appearances?.colors.buttonText,
-    fontFamily: brand.appearances?.typography.fontFamily
+    fontFamily: brand.appearances?.typography.fontFamily,
   } as React.CSSProperties;
-  
+
   const footerTheme = settings?.footer ?? {};
 
   const footerStyle: React.CSSProperties = {
@@ -49,20 +50,20 @@ export default async function BrandLayout({
     '--of-footer-link': footerTheme.linkColor ?? '#ffffff',
     '--of-footer-link-hover': footerTheme.linkHoverColor ?? '#d1d5db',
   } as React.CSSProperties;
-  
+
   return (
     <AnalyticsProvider>
-      <div
-        className="brand-theme"
-        style={{...brandThemeStyle, ...footerStyle}}
-      >
-        <BrandLayoutClient brand={brand} location={location} settings={settings}>
+      <CartProvider>
+        <div
+          className="brand-theme"
+          style={{ ...brandThemeStyle, ...footerStyle }}
+        >
+          <BrandLayoutClient brand={brand} location={location} settings={settings}>
             {children}
-        </BrandLayoutClient>
-        <DeliveryModalHost />
-      </div>
+          </BrandLayoutClient>
+          <DeliveryModalHost />
+        </div>
+      </CartProvider>
     </AnalyticsProvider>
   );
 }
-
-
