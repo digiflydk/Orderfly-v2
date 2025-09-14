@@ -1,6 +1,6 @@
 'use server';
 
-import { noStore } from 'next/cache';
+import { unstable_noStore as noStore } from 'next/cache';
 import type { WebsiteHeaderConfig } from "@/types/website";
 import { getGeneralSettings } from './settings';
 
@@ -20,13 +20,12 @@ function resolveLinkClass(input?: string): string {
     case 'secondary':
       return 'text-secondary hover:text-secondary/80';
     default:
-      // fallback til tidligere default
       return 'text-white hover:text-primary';
   }
 }
 
 export async function getWebsiteHeaderConfig(): Promise<WebsiteHeaderConfig> {
-  // Tving “no-store”, så vi ikke ser stale værdier efter CMS-gem
+  // Undgå stale data efter CMS-gem
   noStore();
 
   const data = await getGeneralSettings();
