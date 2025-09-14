@@ -268,32 +268,36 @@ export function SuperAdminSidebarClient({
                       )
                     }
 
-                    // Parent item med children (Website › Settings)
+                    // Parent med children (Website › Settings)
                     const key = `${group.key}:${item.label}`
                     const parentOpen = !!open[key]
                     const ParentIcon = item.icon ?? LayoutTemplate
 
                     return (
-                      <li key={item.label} className="list-none">
-                        <button
-                          type="button"
-                          onClick={() => toggle(key)}
-                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white group-data-[collapsible=icon]:hidden"
-                        >
-                          <ParentIcon className="h-4 w-4 text-gray-400" />
-                          <span>{item.label}</span>
-                          <ChevronDown
-                            className={cn('ml-auto h-4 w-4 transition-transform', parentOpen ? 'rotate-180' : '')}
-                          />
-                        </button>
+                      <>
+                        {/* Parent-knap som et SidebarMenuItem (li) */}
+                        <SidebarMenuItem key={`${item.label}-parent`}>
+                          <button
+                            type="button"
+                            onClick={() => toggle(key)}
+                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white group-data-[collapsible=icon]:hidden"
+                          >
+                            <ParentIcon className="h-4 w-4 text-gray-400" />
+                            <span>{item.label}</span>
+                            <ChevronDown
+                              className={cn('ml-auto h-4 w-4 transition-transform', parentOpen ? 'rotate-180' : '')}
+                            />
+                          </button>
+                        </SidebarMenuItem>
 
-                        <ul className={cn('ml-6 space-y-1 group-data-[collapsible=icon]:hidden', parentOpen ? 'mt-1' : 'hidden')}>
-                          {(item.children ?? []).map((child) => {
-                            const activeChild = isActive(pathname, child.href)
-                            const CIcon = child.icon ?? LayoutTemplate
-                            return (
-                              <li key={child.label} className="list-none">
-                                <SidebarMenuItem>
+                        {/* Child-links som et nyt SidebarMenu (ul) — ingen ekstra li-wraps */}
+                        {parentOpen && (
+                          <SidebarMenu key={`${item.label}-children`} className="ml-6 space-y-1 group-data-[collapsible=icon]:hidden">
+                            {(item.children ?? []).map((child) => {
+                              const activeChild = isActive(pathname, child.href)
+                              const CIcon = child.icon ?? LayoutTemplate
+                              return (
+                                <SidebarMenuItem key={child.label}>
                                   <SidebarMenuButton asChild>
                                     <Link
                                       href={child.href ?? '#'}
@@ -307,11 +311,11 @@ export function SuperAdminSidebarClient({
                                     </Link>
                                   </SidebarMenuButton>
                                 </SidebarMenuItem>
-                              </li>
-                            )
-                          })}
-                        </ul>
-                      </li>
+                              )
+                            })}
+                          </SidebarMenu>
+                        )}
+                      </>
                     )
                   })}
                 </SidebarMenu>
