@@ -274,9 +274,9 @@ export function SuperAdminSidebarClient({
                     const ParentIcon = item.icon ?? LayoutTemplate
 
                     return (
-                      <>
+                      <React.Fragment key={`${item.label}-group`}>
                         {/* Parent-knap som et SidebarMenuItem (li) */}
-                        <SidebarMenuItem key={`${item.label}-parent`}>
+                        <SidebarMenuItem>
                           <button
                             type="button"
                             onClick={() => toggle(key)}
@@ -290,14 +290,14 @@ export function SuperAdminSidebarClient({
                           </button>
                         </SidebarMenuItem>
 
-                        {/* Child-links som et nyt SidebarMenu (ul) — ingen ekstra li-wraps */}
+                        {/* Child-links som et nyt SidebarMenu (ul) */}
                         {parentOpen && (
                           <SidebarMenu key={`${item.label}-children`} className="ml-6 space-y-1 group-data-[collapsible=icon]:hidden">
                             {(item.children ?? []).map((child) => {
                               const activeChild = isActive(pathname, child.href)
                               const CIcon = child.icon ?? LayoutTemplate
                               return (
-                                <SidebarMenuItem key={child.label}>
+                                <SidebarMenuItem key={child.href ?? child.label}>
                                   <SidebarMenuButton asChild>
                                     <Link
                                       href={child.href ?? '#'}
@@ -315,7 +315,7 @@ export function SuperAdminSidebarClient({
                             })}
                           </SidebarMenu>
                         )}
-                      </>
+                      </React.Fragment>
                     )
                   })}
                 </SidebarMenu>
