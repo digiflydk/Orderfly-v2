@@ -181,7 +181,6 @@ export function SuperAdminSidebarClient({
   ]
 
   // Åbn relevante grupper/noder baseret på aktiv route
-  const pathname = usePathname()
   const [open, setOpen] = React.useState<Record<string, boolean>>(() => {
     const state: Record<string, boolean> = {
       core: true,
