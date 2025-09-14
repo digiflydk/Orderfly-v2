@@ -1,3 +1,4 @@
+// src/app/page.tsx
 export const dynamic = 'force-dynamic';
 
 import { Header } from '@/components/layout/header';
@@ -9,6 +10,7 @@ export default async function HomePage() {
 
   return (
     <div className="flex min-h-screen flex-col bg-[#f3f7fd]">
+      {/* Header med CMS-farver */}
       <Header linkClass={cfg.linkClass} />
 
       <main className="flex-1">
