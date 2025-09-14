@@ -36,11 +36,41 @@ import {
   CreditCard,
   Bookmark,
   Globe,
-  Settings,
+  Settings as SettingsIcon,
   Code2,
   LayoutTemplate,
   ChevronDown,
+  FileText,
+  Palette,
+  UserPlus,
+  SlidersHorizontal,
+  Sparkles,
+  Search,
+  Share2,
+  Activity,
+  Cookie,
 } from 'lucide-react'
+
+type MenuIcon = React.ComponentType<{ className?: string }>
+
+type Item = {
+  label: string
+  href?: string
+  icon?: MenuIcon
+  children?: Item[]
+}
+
+type Group = {
+  key: string
+  title: string
+  items: Item[]
+}
+
+function isActive(pathname: string, href?: string) {
+  if (!href) return false
+  if (href === '/') return pathname === '/'
+  return pathname === href || pathname.startsWith(href + '/')
+}
 
 export function SuperAdminSidebarClient({
   brandingSettings,
@@ -53,11 +83,7 @@ export function SuperAdminSidebarClient({
     brandingSettings?.platformLogoUrl ||
     'https://i.postimg.cc/HxTMqLGV/Orderfly-Logo-white-F.png'
 
-  const groups: {
-    key: string
-    title: string
-    items: { href: string; label: string; icon: React.ComponentType<{ className?: string }> }[]
-  }[] = [
+  const groups: Group[] = [
     { key: 'core', title: 'Core', items: [{ href: '/superadmin', label: 'Dashboard', icon: Home }] },
     {
       key: 'commerce',
@@ -118,36 +144,69 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/subscriptions', label: 'Subscriptions', icon: Bookmark },
       ],
     },
+
+    // WEBSITE — CMS til public forsiden [/]
     {
       key: 'website',
       title: 'Website',
       items: [
-        { href: '/superadmin/website', label: 'Website', icon: Globe },
-        { href: '/superadmin/website/pages/header', label: 'Header', icon: LayoutTemplate },
-        { href: '/superadmin/website/pages/footer', label: 'Footer', icon: LayoutTemplate },
+        { href: '/superadmin/website/content', label: 'Indhold', icon: FileText },
+        { href: '/superadmin/website/design', label: 'Design', icon: Palette },
+        { href: '/superadmin/website/leads', label: 'Customer Leads', icon: UserPlus },
+        { href: '/superadmin/website/customers', label: 'Kunder', icon: Users },
+        {
+          label: 'Settings',
+          icon: SettingsIcon,
+          children: [
+            { href: '/superadmin/website/settings/general', label: 'General', icon: SlidersHorizontal },
+            { href: '/superadmin/website/settings/ai-prompt', label: 'AI Prompt', icon: Sparkles },
+            { href: '/superadmin/website/settings/seo', label: 'SEO', icon: Search },
+            { href: '/superadmin/website/settings/social-share', label: 'Social Share', icon: Share2 },
+            { href: '/superadmin/website/settings/tracking', label: 'Tracking', icon: Activity },
+            { href: '/superadmin/website/settings/cookies', label: 'Cookies', icon: Cookie },
+            { href: '/superadmin/website/settings/business-listing', label: 'Business Listing', icon: Building2 },
+          ],
+        },
       ],
     },
+
     {
       key: 'system',
       title: 'System',
       items: [
-        { href: '/superadmin/settings', label: 'Settings', icon: Settings },
+        { href: '/superadmin/settings', label: 'Settings', icon: SettingsIcon },
         { href: '/superadmin/code-review', label: 'Code Review', icon: Code2 },
       ],
     },
   ]
 
-  const [open, setOpen] = React.useState<Record<string, boolean>>({
-    core: true,
-    commerce: true,
-    catalog: true,
-    promotions: false,
-    people: false,
-    quality: false,
-    insights: false,
-    billing: false,
-    website: false,
-    system: true,
+  // Åbn relevante grupper/noder baseret på aktiv route
+  const pathname = usePathname()
+  const [open, setOpen] = React.useState<Record<string, boolean>>(() => {
+    const state: Record<string, boolean> = {
+      core: true,
+      commerce: true,
+      catalog: true,
+      promotions: false,
+      people: false,
+      quality: false,
+      insights: false,
+      billing: false,
+      website: true,
+      system: true,
+    }
+    groups.forEach((g) => {
+      const groupHasActive =
+        g.items.some((i) => isActive(pathname, i.href)) ||
+        g.items.some((i) => (i.children ?? []).some((c) => isActive(pathname, c.href)))
+      if (groupHasActive) state[g.key] = true
+      g.items.forEach((i) => {
+        if ((i.children ?? []).some((c) => isActive(pathname, c.href))) {
+          state[`${g.key}:${i.label}`] = true
+        }
+      })
+    })
+    return state
   })
 
   function toggle(key: string) {
@@ -187,22 +246,73 @@ export function SuperAdminSidebarClient({
               <SidebarGroupContent className={cn(isOpen ? 'block' : 'hidden group-data-[collapsible=icon]:block')}>
                 <SidebarMenu>
                   {group.items.map((item) => {
-                    const active = pathname === item.href
+                    const hasChildren = (item.children ?? []).length > 0
+
+                    if (!hasChildren) {
+                      const active = isActive(pathname, item.href)
+                      const Icon = item.icon ?? LayoutTemplate
+                      return (
+                        <SidebarMenuItem key={item.label}>
+                          <SidebarMenuButton asChild>
+                            <Link
+                              href={item.href ?? '#'}
+                              className={cn(
+                                'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
+                                active ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                              )}
+                            >
+                              <Icon className={cn('h-4 w-4', active ? 'text-white' : 'text-gray-400')} />
+                              <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      )
+                    }
+
+                    // Parent item med children (Website › Settings)
+                    const key = `${group.key}:${item.label}`
+                    const parentOpen = !!open[key]
+                    const ParentIcon = item.icon ?? LayoutTemplate
+
                     return (
-                      <SidebarMenuItem key={item.href}>
-                        <SidebarMenuButton asChild>
-                          <Link
-                            href={item.href}
-                            className={cn(
-                              'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
-                              active ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'
-                            )}
-                          >
-                            <item.icon className={cn('h-4 w-4', active ? 'text-white' : 'text-gray-400')} />
-                            <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
+                      <li key={item.label} className="list-none">
+                        <button
+                          type="button"
+                          onClick={() => toggle(key)}
+                          className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white group-data-[collapsible=icon]:hidden"
+                        >
+                          <ParentIcon className="h-4 w-4 text-gray-400" />
+                          <span>{item.label}</span>
+                          <ChevronDown
+                            className={cn('ml-auto h-4 w-4 transition-transform', parentOpen ? 'rotate-180' : '')}
+                          />
+                        </button>
+
+                        <ul className={cn('ml-6 space-y-1 group-data-[collapsible=icon]:hidden', parentOpen ? 'mt-1' : 'hidden')}>
+                          {(item.children ?? []).map((child) => {
+                            const activeChild = isActive(pathname, child.href)
+                            const CIcon = child.icon ?? LayoutTemplate
+                            return (
+                              <li key={child.label} className="list-none">
+                                <SidebarMenuItem>
+                                  <SidebarMenuButton asChild>
+                                    <Link
+                                      href={child.href ?? '#'}
+                                      className={cn(
+                                        'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
+                                        activeChild ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                                      )}
+                                    >
+                                      <CIcon className={cn('h-4 w-4', activeChild ? 'text-white' : 'text-gray-400')} />
+                                      <span>{child.label}</span>
+                                    </Link>
+                                  </SidebarMenuButton>
+                                </SidebarMenuItem>
+                              </li>
+                            )
+                          })}
+                        </ul>
+                      </li>
                     )
                   })}
                 </SidebarMenu>
