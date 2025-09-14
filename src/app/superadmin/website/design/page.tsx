@@ -1,4 +1,3 @@
-
 "use client";
 import CmsLayout from '../_cmsLayout';
 import { useTheme, defaultTheme } from "@/context/ThemeContext";
@@ -11,7 +10,6 @@ import { useState, useEffect, useTransition } from "react";
 import { saveSettingsAction } from "@/app/superadmin/website/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
-
 
 function hslToHex(h: number, s: number, l: number) {
   l /= 100;
@@ -53,7 +51,6 @@ function hexToHsl(hex: string): { h: number, s: number, l: number } | null {
   return { h: Math.round(h * 360), s: Math.round(s * 100), l: Math.round(l * 100) };
 }
 
-
 function ColorPicker({ label, colorName }: { label: string; colorName: keyof ReturnType<typeof useTheme>['theme']['colors'] }) {
   const { theme, setThemeColor } = useTheme();
   const color = theme.colors[colorName];
@@ -76,7 +73,6 @@ function ColorPicker({ label, colorName }: { label: string; colorName: keyof Ret
     if(newHsl) {
         setThemeColor(colorName, newHsl);
     } else {
-        // If invalid hex, reset input to current valid color
         setHexInputValue(hslToHex(color.h, color.s, color.l));
     }
   }
@@ -87,7 +83,6 @@ function ColorPicker({ label, colorName }: { label: string; colorName: keyof Ret
         (e.target as HTMLInputElement).blur();
     }
   }
-
 
   return (
     <div className="space-y-4 p-4 border rounded-lg" style={{ backgroundColor: `hsl(${color.h}, ${color.s}%, ${color.l}%)` }}>
@@ -151,7 +146,7 @@ function FontSizeSlider({ label, sizeName }: { label: string; sizeName: keyof Re
     )
 }
 
-function CmsDashboardPageContent() {
+function CmsDesignPageContent() {
   const { theme, isLoaded, setTheme } = useTheme();
   const [isSaving, startSaving] = useTransition();
   const { toast } = useToast();
@@ -240,11 +235,10 @@ function CmsDashboardPageContent() {
   );
 }
 
-
-export default function CmsDashboardPage() {
+export default function WebsiteDesignPage() {
     return (
         <CmsLayout>
-            <CmsDashboardPageContent />
+            <CmsDesignPageContent />
         </CmsLayout>
     )
 }
