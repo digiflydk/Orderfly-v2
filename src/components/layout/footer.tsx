@@ -1,12 +1,8 @@
-
-
 import Link from "next/link";
 import Image from "next/image";
 import type { Brand, Location } from "@/types";
-import { Button } from "../ui/button";
 import type { FooterTheme } from "@/types/settings";
-import { Facebook, Instagram, Linkedin, LucideIcon, Shell, Tiktok, Twitter, Youtube } from 'lucide-react';
-import { cn } from "@/lib/utils";
+import { Facebook, Instagram, Linkedin, LucideIcon, Twitter, Youtube } from 'lucide-react';
 
 interface FooterProps {
   brand: Brand;
@@ -17,13 +13,12 @@ interface FooterProps {
 }
 
 const socialIcons: Record<string, LucideIcon> = {
-    facebook: Facebook,
-    instagram: Instagram,
-    tiktok: Tiktok,
-    x: Twitter,
-    youtube: Youtube,
-    linkedin: Linkedin,
-}
+  facebook: Facebook,
+  instagram: Instagram,
+  x: Twitter,
+  youtube: Youtube,
+  linkedin: Linkedin,
+};
 
 export function Footer({ brand, location, version, onOpenCookieSettings, theme }: FooterProps) {
   const footerStyle: React.CSSProperties = {
@@ -33,10 +28,6 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
 
   const linkStyle = {
     color: 'var(--of-footer-link)',
-  };
-
-  const linkHoverStyle = {
-    color: 'var(--of-footer-link-hover)',
   };
 
   return (
@@ -54,27 +45,27 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
             />
           )}
           {theme?.legalText && <p className="text-sm opacity-80">{theme.legalText}</p>}
-           {(theme?.socials?.length ?? 0) > 0 && (
-              <div className="flex gap-4 pt-4">
-                {theme!.socials!.map((s, i) => {
-                    const Icon = socialIcons[s.kind];
-                    return Icon ? (
-                        <a 
-                            key={i} 
-                            href={s.href}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            aria-label={s.kind} 
-                            className="transition-colors hover:opacity-80"
-                            style={linkStyle}
-                        >
-                            <Icon className="h-6 w-6" />
-                            <span className="sr-only">{s.kind}</span>
-                        </a>
-                    ) : null;
-                })}
-              </div>
-            )}
+          {(theme?.socials?.length ?? 0) > 0 && (
+            <div className="flex gap-4 pt-4">
+              {theme!.socials!.map((s, i) => {
+                const Icon = socialIcons[s.kind];
+                return Icon ? (
+                  <a 
+                    key={i} 
+                    href={s.href}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={s.kind} 
+                    className="transition-colors hover:opacity-80"
+                    style={linkStyle}
+                  >
+                    <Icon className="h-6 w-6" />
+                    <span className="sr-only">{s.kind}</span>
+                  </a>
+                ) : null;
+              })}
+            </div>
+          )}
         </div>
 
         {(theme?.columns ?? []).map((col, i) => (
@@ -97,16 +88,16 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
         ))}
       </div>
 
-       <div className="mx-auto max-w-[1140px] px-4 py-4 border-t" style={{ borderColor: 'var(--of-footer-link)'}}>
-          <div className="flex items-center justify-between text-xs" style={{color: 'var(--of-footer-text)'}}>
-            <span>🌐 English</span>
-            <div className="flex items-center gap-2">
-                <span>{version}</span>
-                <span className="opacity-50">·</span>
-                <span>Powered by OrderFly</span>
-            </div>
+      <div className="mx-auto max-w-[1140px] px-4 py-4 border-t" style={{ borderColor: 'var(--of-footer-link)' }}>
+        <div className="flex items-center justify-between text-xs" style={{ color: 'var(--of-footer-text)' }}>
+          <span>🌐 English</span>
+          <div className="flex items-center gap-2">
+            <span>{version}</span>
+            <span className="opacity-50">·</span>
+            <span>Powered by OrderFly</span>
           </div>
         </div>
+      </div>
     </footer>
   );
 }
