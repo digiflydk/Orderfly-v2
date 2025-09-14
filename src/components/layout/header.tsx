@@ -1,128 +1,59 @@
-
 'use client';
 
-import Link from "next/link";
-import Image from "next/image";
-import { useEffect, useState } from "react";
-import type { Brand, NavLink, GeneralSettings } from "@/types";
-import { cn } from "@/lib/utils";
-import { usePathname } from "next/navigation";
+import Image from 'next/image';
+import Link from 'next/link';
+import type { Brand } from '@/types';
+import { cn } from '@/lib/utils';
+import { useEffect, useState } from 'react';
 
-interface HeaderProps {
-  brand: Brand;
-  settings: GeneralSettings | null;
-}
+type Props = {
+  brand?: Brand;           // valgfri, så Header kan bruges på /
+  linkClass?: string;      // styres af Website CMS på /
+};
 
-const fallbackLinks: NavLink[] = [
-  { href: "/features", label: "Features" },
-  { href: "/pricing",  label: "Pricing" },
-  { href: "/contact",  label: "Contact" },
-];
-
-
-export function Header({ brand, settings }: HeaderProps) {
-  const [isScrolled, setIsScrolled] = useState(false);
-  const pathname = usePathname();
+export function Header({ brand, linkClass = 'text-white hover:text-primary' }: Props) {
+  const [scrolled, setScrolled] = useState(false);
 
   useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 50);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
+    const onScroll = () => setScrolled(window.scrollY > 10);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
   }, []);
-  
-  const isCms = pathname.startsWith('/superadmin/website');
-
-  if (isCms) {
-    return null;
-  }
-  
-  const getBackgroundColor = () => {
-    const scrolled = settings?.headerScrolledBackgroundColor;
-    const initial = settings?.headerInitialBackgroundColor;
-    const scrolledOpacity = (settings?.headerScrolledBackgroundOpacity ?? 95) / 100;
-    const initialOpacity = (settings?.headerInitialBackgroundOpacity ?? 0) / 100;
-
-    if (isScrolled) {
-      if(scrolled) {
-        return `hsla(${scrolled.h}, ${scrolled.s}%, ${scrolled.l}%, ${scrolledOpacity})`;
-      }
-      return 'hsl(var(--background))';
-    }
-    if (!isScrolled && initial) {
-       return `hsla(${initial.h}, ${initial.s}%, ${initial.l}%, ${initialOpacity})`;
-    }
-    return 'transparent';
-  };
-
-  const headerStyles: React.CSSProperties = {
-      position: settings?.headerIsSticky || pathname !== `/${brand.slug}` ? 'fixed' : 'absolute',
-      top: 0,
-      left: 0,
-      right: 0,
-      zIndex: 40,
-      transition: 'all 0.3s ease-in-out',
-      backgroundColor: getBackgroundColor(),
-      boxShadow: isScrolled ? '0 1px 2px 0 rgba(0, 0, 0, 0.05)' : 'none',
-      borderBottom: isScrolled ? '1px solid hsl(var(--border))' : 'none',
-      height: settings?.headerHeight ? `${settings.headerHeight}px` : '64px',
-  };
-  
-  const logoStyles: React.CSSProperties = {
-    width: settings?.headerLogoWidth ? `${settings.headerLogoWidth}px` : '96px',
-  };
-
-  const navLinkStyles: React.CSSProperties = {
-      fontSize: settings?.headerLinkSize ? `${settings.headerLinkSize}px` : undefined,
-  };
-  
-  const getLinkHref = (href: string) => {
-    if (href.startsWith('#') && pathname !== '/') {
-        return `/${href}`;
-    }
-    return href;
-  };
-  
-  const logoUrl = pathname === '/' ? settings?.logoUrl : brand.logoUrl;
-  const logoAlt = pathname === '/' ? (settings?.websiteTitle || 'OrderFly') : (brand.name || 'OrderFly');
-  const navLinks = settings?.headerNavLinks?.length ? settings.headerNavLinks : fallbackLinks;
 
   return (
     <header
       className={cn(
-        "w-full"
+        'top-0 z-40 w-full transition-colors',
+        scrolled ? 'bg-white/90 backdrop-blur border-b border-black/5' : 'bg-transparent'
       )}
-      style={headerStyles}
     >
-      <div className="mx-auto flex h-full max-w-[1140px] items-center justify-between px-4">
-        <Link href={`/${brand.slug}`} className="flex items-center">
-            <div className="relative h-full" style={logoStyles}>
-                <Image
-                    src={logoUrl || '/orderfly-logo-dark.svg'}
-                    alt={logoAlt}
-                    fill
-                    className="object-contain"
-                    data-ai-hint="logo"
-                />
-            </div>
+      <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-between px-4">
+        <Link href="/" className="flex items-center gap-2">
+          {brand?.logoUrl ? (
+            <Image
+              src={brand.logoUrl}
+              alt={brand.name || 'Logo'}
+              width={128}
+              height={36}
+              className="h-9 w-auto object-contain"
+              priority
+            />
+          ) : (
+            <span className="font-semibold">OrderFly</span>
+          )}
         </Link>
-        <nav className="hidden md:flex items-center space-x-6">
-            {navLinks.map((link: NavLink) => (
-                <Link 
-                    key={link.href} 
-                    href={getLinkHref(link.href)} 
-                    className={cn(
-                        "text-sm font-medium transition-colors", 
-                        isScrolled ? (settings?.headerLinkColor || 'text-foreground') : 'text-white',
-                        `hover:${settings?.headerLinkHoverColor || 'text-primary'}`
-                    )}
-                    style={navLinkStyles}
-                >
-                    {link.label}
-                </Link>
-            ))}
+
+        <nav className="hidden items-center gap-6 md:flex">
+          <Link href="/online-order" className={cn('text-sm', linkClass)}>Online ordre</Link>
+          <Link href="/pricing" className={cn('text-sm', linkClass)}>Priser</Link>
+          <Link href="/customers" className={cn('text-sm', linkClass)}>Kunder</Link>
+          <Link href="/contact" className={cn('text-sm', linkClass)}>Kontakt</Link>
         </nav>
+
+        <button className={cn('md:hidden text-sm', linkClass)} aria-label="Open menu">
+          Menu
+        </button>
       </div>
     </header>
   );
