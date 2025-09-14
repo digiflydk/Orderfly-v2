@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { getBrandBySlug } from '../superadmin/brands/actions';
 import { CartProvider } from '@/context/cart-context';
 import { AnalyticsProvider } from '@/context/analytics-context';
+import DeliveryMethodModal from '@/components/modals/DeliveryMethodModal';
 
 export default async function BrandLayout({
   children,
@@ -35,6 +36,7 @@ export default async function BrandLayout({
         >
           {children}
         </div>
+        <DeliveryMethodModal />
       </CartProvider>
     </AnalyticsProvider>
   );
