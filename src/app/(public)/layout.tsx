@@ -1,29 +1,30 @@
+export const dynamic = 'force-dynamic';
 
-import { PublicLayoutClient } from './PublicLayoutClient';
-import { getGeneralSettings } from "@/services/settings";
+import { getGeneralSettings } from '@/services/settings';
 import { getWebsiteHeaderConfig } from '@/services/website';
-import type { Brand, GeneralSettings } from "@/types";
+import type { Brand, GeneralSettings } from '@/types';
 import HeaderClient from '@/components/layout/HeaderClient';
 import FooterClient from '@/components/layout/FooterClient';
-import { cn } from '@/lib/utils';
-import { Footer } from '@/components/layout/footer';
-
 
 export default async function PublicLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
-    const [settings, headerConfig] = await Promise.all([
-        getGeneralSettings(),
-        getWebsiteHeaderConfig(),
-    ]);
-  
+  // Hent CMS-indstillinger + header-konfiguration parallelt
+  const [settings, headerConfig] = await Promise.all([
+    getGeneralSettings(),
+    getWebsiteHeaderConfig(),
+  ]);
+
+  // Mock brand til public-site (bruges af Header/Footers)
   const mockBrand: Brand = {
     id: 'public-page-brand',
     name: settings?.websiteTitle || 'OrderFly',
     slug: '',
-    logoUrl: settings?.logoUrl || '/orderfly-logo-dark.svg',
+    logoUrl:
+      settings?.logoUrl ||
+      '/orderfly-logo-dark.svg' /* fallback-logo fra /public */,
     companyName: '',
     ownerId: '',
     status: 'active',
@@ -35,9 +36,10 @@ export default async function PublicLayout({
     companyRegNo: '',
     foodCategories: [],
     locationsCount: 0,
-  }
+  };
 
-  const footerTheme = settings?.footer ?? {};
+  // Footer tema fra CMS (med sikre defaults)
+  const footerTheme = (settings as GeneralSettings | undefined)?.footer ?? {};
 
   const footerStyle: React.CSSProperties = {
     '--of-footer-bg': footerTheme.bgColor ?? '#0b0b0b',
@@ -46,13 +48,16 @@ export default async function PublicLayout({
     '--of-footer-link-hover': footerTheme.linkHoverColor ?? '#d1d5db',
   } as React.CSSProperties;
 
-
   return (
-    <div className="relative" style={footerStyle}>
+    <div className="flex min-h-screen flex-col bg-[#f3f7fd]" style={footerStyle}>
+      {/* Header med CMS-styret linkClass via headerConfig */}
       <HeaderClient brand={mockBrand} settings={settings} config={headerConfig} />
+
       <main className="flex-1">{children}</main>
+
+      {/* Skjul footer hvis isVisible === false i CMS */}
       {footerTheme.isVisible !== false && (
-          <FooterClient brand={mockBrand} theme={footerTheme} />
+        <FooterClient brand={mockBrand} theme={footerTheme} />
       )}
     </div>
   );
