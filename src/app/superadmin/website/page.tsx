@@ -1,10 +1,10 @@
-export default function WebsiteDashboardPage() {
+export default function Page() {
   return (
-    <div className="space-y-4">
-      <h2 className="text-lg font-medium">Oversigt</h2>
-      <p className="text-sm text-neutral-300">
-        Vælg et menupunkt i sidebaren (Indhold, Design, Leads, Kunder eller Settings).
+    <div className="w-full">
+      <h1 className="text-xl font-semibold">Website (Public /) — CMS</h1>
+      <p className="mt-2 text-sm text-muted-foreground">
+        Redigér indhold, design og indstillinger for den offentlige forside.
       </p>
     </div>
-  );
+  )
 }

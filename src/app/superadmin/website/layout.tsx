@@ -1,19 +1,15 @@
-export default function WebsiteLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+import type { ReactNode } from "react"
+import CmsHeader from "@/components/cms/CmsHeader"
+import Sidebar from "@/components/cms/Sidebar"
+
+export default function Layout({ children }: { children: ReactNode }) {
   return (
-    <div className="min-h-[calc(100vh-56px)] w-full bg-neutral-950 text-neutral-100">
-      <div className="mx-auto max-w-[1140px] px-4 py-6">
-        <header className="mb-6">
-          <h1 className="text-xl font-semibold">Website (Public /) — CMS</h1>
-          <p className="text-sm text-neutral-400">
-            Redigér indhold, design og indstillinger for den offentlige forside.
-          </p>
-        </header>
-        {children}
+    <div className="min-h-screen w-full bg-background">
+      <CmsHeader />
+      <div className="mx-auto flex w-full max-w-screen-2xl">
+        <Sidebar />
+        <main className="flex-1 p-4 md:p-6">{children}</main>
       </div>
     </div>
-  );
+  )
 }
