@@ -1,20 +1,30 @@
-
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { Header } from "./header";
 import type { WebsiteHeaderConfig } from "@/types/website";
 import type { GeneralSettings, Brand, NavLink } from "@/types";
-import { usePathname } from 'next/navigation';
+import { usePathname } from "next/navigation";
 
-function toHsla({ h, s, l, opacity }: { h:number; s:number; l:number; opacity:number }) {
+function toHsla({
+  h,
+  s,
+  l,
+  opacity,
+}: {
+  h: number;
+  s: number;
+  l: number;
+  opacity: number;
+}) {
   const a = Math.max(0, Math.min(1, opacity / 100));
   return `hsla(${h} ${s}% ${l}% / ${a})`;
 }
 
 const fallbackLinks: NavLink[] = [
-  { href: "/features", label: "Features" },
-  { href: "/pricing",  label: "Pricing" },
-  { href: "/contact",  label: "Contact" },
+  { href: "/#online-orders", label: "Online ordre" },
+  { href: "/#pricing", label: "Priser" },
+  { href: "/#customers", label: "Kunder" },
+  { href: "/#contact", label: "Kontakt" },
 ];
 
 export default function HeaderClient({
@@ -48,10 +58,18 @@ export default function HeaderClient({
   }, [config]);
 
   const isStickyActive = !!config.sticky && scrolled;
-  const navLinks = settings?.headerNavLinks?.length ? settings.headerNavLinks : fallbackLinks;
-  const isHomepage = pathname === '/';
+  const navLinks = settings?.headerNavLinks?.length
+    ? settings.headerNavLinks
+    : fallbackLinks;
+
+  const isHomepage = pathname === "/";
   const logoUrl = isHomepage ? settings?.logoUrl : brand?.logoUrl;
-  const logoAlt = isHomepage ? (settings?.websiteTitle || 'OrderFly') : (brand?.name || 'OrderFly');
+  const logoAlt = isHomepage
+    ? settings?.websiteTitle || "OrderFly"
+    : brand?.name || "OrderFly";
+
+  // <- VIGTIGT: farveklasse fra CMS
+  const linkClass = config.linkClass || "text-white hover:text-primary";
 
   return (
     <div style={vars} data-scrolled={scrolled ? "true" : "false"}>
@@ -61,7 +79,15 @@ export default function HeaderClient({
         className={isStickyActive ? "fixed top-0 left-0 right-0 z-[60]" : ""}
         style={isStickyActive ? { background: "var(--bg-scrolled)" } : undefined}
       >
-        <Header brand={brand} logoUrl={logoUrl} logoAlt={logoAlt} settings={settings} config={config} navLinks={navLinks} />
+        <Header
+          brand={brand}
+          logoUrl={logoUrl}
+          logoAlt={logoAlt}
+          settings={settings}
+          config={config}
+          navLinks={navLinks}
+          linkClass={linkClass} // <-- sendes videre
+        />
       </div>
 
       <style>{`

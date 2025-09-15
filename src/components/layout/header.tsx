@@ -1,60 +1,56 @@
-'use client';
+// src/app/page.tsx
+export const dynamic = 'force-dynamic';
 
-import Image from 'next/image';
-import Link from 'next/link';
+import { Header } from '@/components/layout/header';
+import { Footer } from '@/components/layout/footer';
+import { getGeneralSettings } from '@/services/settings';
+import { getWebsiteHeaderConfig } from '@/services/website';
 import type { Brand } from '@/types';
-import { cn } from '@/lib/utils';
-import { useEffect, useState } from 'react';
 
-type Props = {
-  brand?: Brand;           // valgfri, så Header kan bruges på /
-  linkClass?: string;      // styres af Website CMS på /
-};
+export default async function HomePage() {
+  // Hent CMS data
+  const [settings, headerCfg] = await Promise.all([
+    getGeneralSettings(),
+    getWebsiteHeaderConfig(),
+  ]);
 
-export function Header({ brand, linkClass = 'text-white hover:text-primary' }: Props) {
-  const [scrolled, setScrolled] = useState(false);
-
-  useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 10);
-    onScroll();
-    window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
-  }, []);
+  // Byg et "brand" til public forsiden, så Header kan vise logo fra CMS
+  const publicBrand: Brand = {
+    id: 'public',
+    name: settings?.websiteTitle || 'OrderFly',
+    slug: '',
+    logoUrl: settings?.logoUrl || '/orderfly-logo-dark.svg',
+    companyName: '',
+    ownerId: '',
+    status: 'active',
+    street: '',
+    zipCode: '',
+    city: '',
+    country: '',
+    currency: '',
+    companyRegNo: '',
+    foodCategories: [],
+    locationsCount: 0,
+  };
 
   return (
-    <header
-      className={cn(
-        'top-0 z-40 w-full transition-colors',
-        scrolled ? 'bg-white/90 backdrop-blur border-b border-black/5' : 'bg-transparent'
-      )}
-    >
-      <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-between px-4">
-        <Link href="/" className="flex items-center gap-2">
-          {brand?.logoUrl ? (
-            <Image
-              src={brand.logoUrl}
-              alt={brand.name || 'Logo'}
-              width={128}
-              height={36}
-              className="h-9 w-auto object-contain"
-              priority
-            />
-          ) : (
-            <span className="font-semibold">OrderFly</span>
-          )}
-        </Link>
+    <div className="flex min-h-screen flex-col bg-[#f3f7fd]">
+      {/* VIGTIGT: giv både brand (for logo) og linkClass (for link-farver) fra CMS */}
+      <Header brand={publicBrand} linkClass={headerCfg.linkClass} />
 
-        <nav className="hidden items-center gap-6 md:flex">
-          <Link href="/online-order" className={cn('text-sm', linkClass)}>Online ordre</Link>
-          <Link href="/pricing" className={cn('text-sm', linkClass)}>Priser</Link>
-          <Link href="/customers" className={cn('text-sm', linkClass)}>Kunder</Link>
-          <Link href="/contact" className={cn('text-sm', linkClass)}>Kontakt</Link>
-        </nav>
+      <main className="flex-1">
+        <section className="mx-auto max-w-[1140px] px-4 py-12">
+          <h1 className="text-4xl font-bold">Alt-i-en salgsplatform</h1>
+          <p className="mt-3 text-lg text-neutral-600">
+            Bygget til Take Away &amp; Horeca.
+          </p>
+        </section>
+      </main>
 
-        <button className={cn('md:hidden text-sm', linkClass)} aria-label="Open menu">
-          Menu
-        </button>
-      </div>
-    </header>
+      <Footer
+        brand={publicBrand}
+        version="Version 1.0.96 • OF-402"
+      />
+    </div>
   );
 }
