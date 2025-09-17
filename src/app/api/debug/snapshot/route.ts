@@ -1,6 +1,8 @@
+
 import { NextResponse } from "next/server";
 import { getDebugToken, DEBUG_ENABLED, isProd } from "@/config/debug";
-import { listCollection, getEnvInfo } from "@/services/debug";
+import { listCollection } from "@/services/debug.server";
+import { getEnvInfo } from "@/lib/env";
 
 export async function GET(request: Request) {
   if (!DEBUG_ENABLED) return new NextResponse("Disabled", { status: 403 });
@@ -16,12 +18,21 @@ export async function GET(request: Request) {
     return new NextResponse("Unauthorized", { status: 401 });
   }
   if (isProd()) {
-    // I prod må API kun bruges med eksplicit godkendelse. Returnér 403 by default.
     return new NextResponse("Forbidden in production", { status: 403 });
   }
+
   if (!path) {
-    return NextResponse.json({ ok: true, env: getEnvInfo() });
+    const env = getEnvInfo();
+    return NextResponse.json({ ok: true, env });
   }
-  const data = await listCollection({ path, pageSize: Number.isFinite(pageSize) ? pageSize : undefined, afterId, orderByCreatedAt });
-  return NextResponse.json({ env: getEnvInfo(), ...data });
+
+  const data = await listCollection({
+    path,
+    pageSize: Number.isFinite(pageSize) ? pageSize : undefined,
+    afterId,
+    orderByCreatedAt
+  });
+
+  const env = getEnvInfo();
+  return NextResponse.json({ env, ...data });
 }
