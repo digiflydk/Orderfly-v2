@@ -35,6 +35,7 @@ export type DebugListRequest = {
   afterId?: string | null;
   orderByCreatedAt?: boolean;
 };
+
 export type DebugListResponse = {
   ok: boolean;
   path: string;
