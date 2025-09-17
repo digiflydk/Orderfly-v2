@@ -1,13 +1,7 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import {
-  collectionGroup,
-  getDocs,
-  limit,
-  orderBy,
-  query
-} from 'firebase/firestore';
+import { collectionGroup, getDocs, limit, orderBy, query } from 'firebase/firestore';
 
 export type FeedbackQuestionVersion = {
   id: string;
@@ -16,13 +10,9 @@ export type FeedbackQuestionVersion = {
   description?: string | null;
   createdAt?: number | null;
   active?: boolean | null;
-  parentId?: string | null; // id for parent feedback/doc hvis relevant
+  parentId?: string | null;
 };
 
-/**
- * Henter alle question-dokumenter via collectionGroup('questions').
- * Sorterer efter createdAt (fallback til usorteret hvis feltet ikke findes).
- */
 export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionVersion[]> {
   const group = collectionGroup(db, 'questions');
 
@@ -35,8 +25,6 @@ export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionVer
         typeof data?.createdAt === 'number'
           ? data.createdAt
           : data?.createdAt?.toMillis?.() ?? null;
-
-      // d.ref.parent.parent peger på parent-dokumentet for subcollection
       const parentId = d.ref.parent?.parent?.id ?? null;
 
       return {
@@ -47,7 +35,7 @@ export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionVer
         createdAt,
         active: typeof data?.active === 'boolean' ? data.active : null,
         parentId,
-      } as FeedbackQuestionVersion;
+      };
     });
   }
 
@@ -60,7 +48,6 @@ export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionVer
         typeof data?.createdAt === 'number'
           ? data.createdAt
           : data?.createdAt?.toMillis?.() ?? null;
-
       const parentId = d.ref.parent?.parent?.id ?? null;
 
       return {
@@ -71,7 +58,7 @@ export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionVer
         createdAt,
         active: typeof data?.active === 'boolean' ? data.active : null,
         parentId,
-      } as FeedbackQuestionVersion;
+      };
     });
   }
 
