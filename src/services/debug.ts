@@ -1,62 +1,88 @@
-
 "use server"
 
 import { db } from "@/lib/firebase"
-import { collection, getDocs, limit, orderBy, query } from "firebase/firestore"
-import { DEBUG_COLLECTIONS, DEBUG_MAX_DOCS } from "@/config/debug"
+import { collection, getDocs, limit, orderBy, query, startAfter, doc, getDoc } from "firebase/firestore"
+import { DEBUG_COLLECTIONS, DEBUG_DEFAULT_PAGE_SIZE, DEBUG_MASK_FIELDS } from "@/config/debug"
 
-type CollSample = {
-  path: string
-  count: number
-  sample: any[]
-  orderedByCreatedAt: boolean
+function maskValue(v: any) {
+  if (typeof v === "string") return "•••";
+  if (typeof v === "number") return 0;
+  if (typeof v === "boolean") return false;
+  return null;
 }
-
-type DebugSnapshot = {
-  ok: boolean
-  env: {
-    nodeEnv: string
-    appVersion: string
-  }
-  firestore: {
-    collections: CollSample[]
-  }
-}
-
-async function fetchSample(path: string): Promise<CollSample> {
-  const col = collection(db, path)
-  let orderedByCreatedAt = true
-  let q = query(col, orderBy("createdAt", "desc"), limit(DEBUG_MAX_DOCS))
-  try {
-    const snap = await getDocs(q)
-    const sample: any[] = []
-    snap.forEach(d => sample.push({ id: d.id, ...d.data() }))
-    return { path, count: sample.length, sample, orderedByCreatedAt }
-  } catch {
-    orderedByCreatedAt = false
-    const q2 = query(col, limit(DEBUG_MAX_DOCS))
-    const snap2 = await getDocs(q2)
-    const sample2: any[] = []
-    snap2.forEach(d => sample2.push({ id: d.id, ...d.data() }))
-    return { path, count: sample2.length, sample: sample2, orderedByCreatedAt }
-  }
-}
-
-export async function getDebugSnapshotServer(): Promise<DebugSnapshot> {
-  const appVersion = process.env.NEXT_PUBLIC_APP_VERSION || ""
-  const nodeEnv = process.env.NODE_ENV || ""
-  const results: CollSample[] = []
-  for (const path of DEBUG_COLLECTIONS) {
-    try {
-      const data = await fetchSample(path)
-      results.push(data)
-    } catch {
-      results.push({ path, count: 0, sample: [], orderedByCreatedAt: false })
+function maskDoc(d: any): any {
+  if (!d || typeof d !== "object") return d;
+  const out: any = Array.isArray(d) ? [] : {};
+  for (const k of Object.keys(d)) {
+    const val = (d as any)[k];
+    const lower = k.toLowerCase();
+    const shouldMask = DEBUG_MASK_FIELDS.some(f => lower.includes(f.toLowerCase()));
+    if (shouldMask) {
+      out[k] = maskValue(val);
+    } else if (val && typeof val === "object" && !("toDate" in val) && !("seconds" in val && "nanoseconds" in val)) {
+      out[k] = maskDoc(val);
+    } else {
+      out[k] = val;
     }
   }
-  return {
-    ok: true,
-    env: { nodeEnv, appVersion },
-    firestore: { collections: results }
+  return out;
+}
+
+export type DebugListRequest = {
+  path: string;
+  pageSize?: number;
+  afterId?: string | null;
+  orderByCreatedAt?: boolean;
+};
+export type DebugListResponse = {
+  ok: boolean;
+  path: string;
+  items: any[];
+  nextCursor: string | null;
+  orderedByCreatedAt: boolean;
+};
+
+export async function listCollection(req: DebugListRequest): Promise<DebugListResponse> {
+  const path = req.path;
+  const pageSize = Math.min(req.pageSize || DEBUG_DEFAULT_PAGE_SIZE, 200);
+  if (!DEBUG_COLLECTIONS.includes(path)) {
+    return { ok: false, path, items: [], nextCursor: null, orderedByCreatedAt: false };
   }
+
+  const col = collection(db, path);
+  let qRef: any;
+  let ordered = true;
+
+  try {
+    if (req.orderByCreatedAt !== false) {
+      if (req.afterId) {
+        const afterDoc = await getDoc(doc(db, path, req.afterId));
+        qRef = query(col, orderBy("createdAt", "desc"), startAfter(afterDoc), limit(pageSize));
+      } else {
+        qRef = query(col, orderBy("createdAt", "desc"), limit(pageSize));
+      }
+    } else {
+      ordered = false;
+      qRef = query(col, limit(pageSize));
+    }
+  } catch {
+    ordered = false;
+    qRef = query(col, limit(pageSize));
+  }
+
+  const snap = await getDocs(qRef);
+  const itemsRaw: any[] = [];
+  snap.forEach(d => itemsRaw.push({ id: d.id, ...d.data() }));
+  const items = itemsRaw.map(maskDoc);
+  const nextCursor = itemsRaw.length ? itemsRaw[itemsRaw.length - 1].id : null;
+
+  return { ok: true, path, items, nextCursor, orderedByCreatedAt: ordered };
+}
+
+export type DebugEnv = { nodeEnv: string; appVersion: string };
+export function getEnvInfo(): DebugEnv {
+  return {
+    nodeEnv: process.env.NODE_ENV || "",
+    appVersion: process.env.NEXT_PUBLIC_APP_VERSION || ""
+  };
 }
