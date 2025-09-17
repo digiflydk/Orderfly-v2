@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 type Version = {
   id: string;
   name?: string | null;
@@ -17,11 +19,19 @@ export default function FeedbackQuestionsClientPage({
 }) {
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-xl font-semibold">Feedback Questions</h1>
-        <p className="text-sm text-muted-foreground">
-          Oversigt over alle spørgsmål (collectionGroup: questions).
-        </p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-xl font-semibold">Feedback Questions</h1>
+          <p className="text-sm text-muted-foreground">
+            Administrér spørgsmålsversioner til feedback.
+          </p>
+        </div>
+        <Link
+          href="/superadmin/feedback/questions/new"
+          className="rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90"
+        >
+          Opret spørgsmål
+        </Link>
       </div>
 
       <div className="rounded-xl border bg-card">
@@ -35,12 +45,13 @@ export default function FeedbackQuestionsClientPage({
                 <th className="px-4 py-3 font-medium">Label</th>
                 <th className="px-4 py-3 font-medium">Created</th>
                 <th className="px-4 py-3 font-medium">Active</th>
+                <th className="px-4 py-3 font-medium">Handling</th>
               </tr>
             </thead>
             <tbody>
               {!initialVersions || initialVersions.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-muted-foreground" colSpan={6}>
+                  <td className="px-4 py-6 text-muted-foreground" colSpan={7}>
                     Ingen questions fundet.
                   </td>
                 </tr>
@@ -56,6 +67,14 @@ export default function FeedbackQuestionsClientPage({
                     </td>
                     <td className="px-4 py-3">
                       {q.active === true ? "Yes" : q.active === false ? "No" : "-"}
+                    </td>
+                    <td className="px-4 py-3">
+                      <Link
+                        href={`/superadmin/feedback/questions/edit/${q.id}`}
+                        className="rounded-md border px-2 py-1 text-xs hover:bg-muted"
+                      >
+                        Rediger
+                      </Link>
                     </td>
                   </tr>
                 ))
