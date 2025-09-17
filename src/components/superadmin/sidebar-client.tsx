@@ -1,3 +1,4 @@
+
 'use client'
 
 import * as React from 'react'
@@ -132,7 +133,15 @@ export function SuperAdminSidebarClient({
       title: 'Quality',
       items: [
         { href: '/superadmin/ui-validation', label: 'UI Validation', icon: LayoutTemplate },
-        { href: '/superadmin/feedback', label: 'Feedback', icon: MessageSquare },
+        { 
+          label: 'Feedback', 
+          icon: MessageSquare,
+          children: [
+            { href: '/superadmin/feedback', label: 'Inbox'},
+            { href: '/superadmin/feedback/questions', label: 'Questions'},
+            { href: '/superadmin/feedback/settings', label: 'Settings'},
+          ]
+        },
       ],
     },
     { key: 'insights', title: 'Insights', items: [{ href: '/superadmin/analytics', label: 'Analytics', icon: BarChart3 }] },
