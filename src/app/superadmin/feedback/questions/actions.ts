@@ -2,7 +2,7 @@
 
 import { db } from '@/lib/firebase';
 import {
-  collection,
+  collectionGroup,
   getDocs,
   limit,
   orderBy,
@@ -14,20 +14,20 @@ export type FeedbackQuestionVersion = {
   name?: string | null;
   label?: string | null;
   description?: string | null;
-  createdAt?: number | null; // number eller Timestamp->millis
+  createdAt?: number | null;
   active?: boolean | null;
+  parentId?: string | null; // id for parent feedback/doc hvis relevant
 };
 
 /**
- * Henter versions-liste for feedback-spørgsmål.
- * Robust ift. skema: falder tilbage til usorteret fetch hvis 'createdAt' ikke findes.
- * Kilde: Firestore collection 'feedback/questions'
+ * Henter alle question-dokumenter via collectionGroup('questions').
+ * Sorterer efter createdAt (fallback til usorteret hvis feltet ikke findes).
  */
 export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionVersion[]> {
-  const col = collection(db, 'feedback/questions');
+  const group = collectionGroup(db, 'questions');
 
   async function fetchOrdered() {
-    const q = query(col, orderBy('createdAt', 'desc'), limit(200));
+    const q = query(group, orderBy('createdAt', 'desc'), limit(200));
     const snap = await getDocs(q);
     return snap.docs.map((d) => {
       const data: any = d.data() ?? {};
@@ -36,6 +36,9 @@ export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionVer
           ? data.createdAt
           : data?.createdAt?.toMillis?.() ?? null;
 
+      // d.ref.parent.parent peger på parent-dokumentet for subcollection
+      const parentId = d.ref.parent?.parent?.id ?? null;
+
       return {
         id: d.id,
         name: data?.name ?? null,
@@ -43,12 +46,13 @@ export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionVer
         description: data?.description ?? null,
         createdAt,
         active: typeof data?.active === 'boolean' ? data.active : null,
+        parentId,
       } as FeedbackQuestionVersion;
     });
   }
 
   async function fetchUnordered() {
-    const q = query(col, limit(200));
+    const q = query(group, limit(200));
     const snap = await getDocs(q);
     return snap.docs.map((d) => {
       const data: any = d.data() ?? {};
@@ -57,6 +61,8 @@ export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionVer
           ? data.createdAt
           : data?.createdAt?.toMillis?.() ?? null;
 
+      const parentId = d.ref.parent?.parent?.id ?? null;
+
       return {
         id: d.id,
         name: data?.name ?? null,
@@ -64,6 +70,7 @@ export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionVer
         description: data?.description ?? null,
         createdAt,
         active: typeof data?.active === 'boolean' ? data.active : null,
+        parentId,
       } as FeedbackQuestionVersion;
     });
   }
