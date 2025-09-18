@@ -1,4 +1,4 @@
-import { FeedbackQuestionVersionForm } from '@/components/superadmin/feedback-question-version-form';
+import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form';
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
 type Lang = { code: string; name: string };
@@ -7,7 +7,7 @@ function resolveSupportedLanguages(settings: any): Lang[] {
   const fromSettings: Lang[] | undefined =
     settings?.languageSettings?.supportedLanguages;
 
-  // Robust fallback: bevar originalt design, men undgå undefined.map
+  // Robust fallback (bevar original intention: mindst DA/EN)
   if (Array.isArray(fromSettings) && fromSettings.length > 0) {
     return fromSettings;
   }
@@ -18,7 +18,7 @@ function resolveSupportedLanguages(settings: any): Lang[] {
 }
 
 export default async function NewFeedbackQuestionVersionPage() {
-  // ORIGINAL LOGIK (fra backup): henter platform settings og injicerer i Form
+  // ORIGINALT FLOW: hent settings og injicér supportedLanguages i formularen
   const settings = await getPlatformSettings();
   const supportedLanguages = resolveSupportedLanguages(settings);
 
