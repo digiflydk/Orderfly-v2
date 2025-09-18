@@ -51,6 +51,7 @@ import {
   Activity,
   Cookie,
   Beaker,
+  Eye,
 } from 'lucide-react'
 
 type MenuIcon = React.ComponentType<{ className?: string }>
@@ -133,7 +134,6 @@ export function SuperAdminSidebarClient({
       key: 'quality',
       title: 'Quality',
       items: [
-        { href: '/superadmin/ui-validation', label: 'UI Validation', icon: LayoutTemplate },
         { 
           label: 'Feedback', 
           icon: MessageSquare,
@@ -143,7 +143,6 @@ export function SuperAdminSidebarClient({
             { href: '/superadmin/feedback/settings', label: 'Settings'},
           ]
         },
-        { href: '/superadmin/qa', label: 'QA', icon: Beaker },
       ],
     },
     { key: 'insights', title: 'Insights', items: [{ href: '/superadmin/analytics', label: 'Analytics', icon: BarChart3 }] },
@@ -187,6 +186,8 @@ export function SuperAdminSidebarClient({
       items: [
         { href: '/superadmin/settings', label: 'Settings', icon: SettingsIcon },
         { href: '/superadmin/code-review', label: 'Code Review', icon: Code2 },
+        { href: '/superadmin/qa', label: 'QA', icon: Beaker },
+        { href: '/superadmin/ui-validation', label: 'UI Validation', icon: Eye },
       ],
     },
   ]
@@ -338,3 +339,5 @@ export function SuperAdminSidebarClient({
     </Sidebar>
   )
 }
+
+    

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState } from 'react';
@@ -16,7 +15,7 @@ export default function FooterClient({ brand, location, theme }: { brand: Brand;
             <Footer
                 brand={brand}
                 location={location}
-                version="1.0.200 • OF-448"
+                version="1.0.198 • OFQ-002"
                 onOpenCookieSettings={() => setIsCookieModalOpen(true)}
                 theme={theme}
             />
@@ -24,3 +23,5 @@ export default function FooterClient({ brand, location, theme }: { brand: Brand;
         </>
     );
 }
+
+    
