@@ -1,3 +1,4 @@
+
 import type { QaStepTemplate } from './actions';
 
 // hver linje: Title | Criteria

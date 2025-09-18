@@ -1,3 +1,4 @@
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -5,22 +6,22 @@ import { db } from '@/lib/firebase';
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, orderBy, query, runTransaction
 } from 'firebase/firestore';
+import { QaStepTemplate, parseStepsInput, stringifySteps } from './qa-utils';
 
 export type QaStatus = 'Draft' | 'Ready' | 'Deprecated';
-
-export type QaStepTemplate = {
-  step: number;            // 1-based
-  title: string;           // fx "Menu vises"
-  criteria: string;        // acceptance pr step
-};
+export type QaContext = 'public' | 'superadmin';
 
 export type QaTestcase = {
   code: string;            // auto-genereret: OFQ-001, OFQ-002, ...
   title: string;
   acceptanceCriteria: string; // samlet beskrivelse for hele flowet
   status: QaStatus;
-  stepsTemplate: QaStepTemplate[]; // NY
-  proofUrl?: string;        // valgfrit (manuel dokumentation)
+  stepsTemplate: QaStepTemplate[];
+  // NYT:
+  context: QaContext;      // 'public' | 'superadmin'
+  startPath: string;       // fx "/esmeralda" eller "/sales/orders"
+  // Valgfrit:
+  proofUrl?: string;       // manuel dokumentation hvis ønsket
   createdAt: number;
   updatedAt: number;
 };
@@ -35,9 +36,7 @@ async function nextCode(): Promise<string> {
     tx.set(SEQ_DOC, { nextNumber: current + 1 }, { merge: true });
     return current;
   });
-  // format OFQ-XYZ padded til 3 cifre
-  const padded = num.toString().padStart(3, '0');
-  return `OFQ-${padded}`;
+  return `OFQ-${num.toString().padStart(3, '0')}`;
 }
 
 export async function listQa(): Promise<QaTestcase[]> {

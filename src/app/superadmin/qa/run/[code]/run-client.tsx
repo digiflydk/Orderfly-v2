@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState } from 'react';
@@ -22,7 +23,15 @@ export default function RunClient({ run }: { run: QaRun }) {
   return (
     <div className="p-6 space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-semibold">Run: {state.code}</h1>
+        <div>
+          <h1 className="text-2xl font-semibold">Run: {state.code}</h1>
+          <div className="text-sm text-gray-600 mt-1">
+            Context: <b>{state.context}</b> · Start Path: <code>{state.startPath}</code>
+          </div>
+          <div className="text-sm mt-1">
+            Start-URL: <a className="text-blue-600 underline" target="_blank" href={state.startUrl}>{state.startUrl}</a>
+          </div>
+        </div>
         <button className="rounded-md bg-black px-3 py-2 text-white" onClick={onFinish}>Markér run som færdigt</button>
       </div>
 
@@ -46,9 +55,7 @@ export default function RunClient({ run }: { run: QaRun }) {
                 <td className="p-2 font-medium">{s.title}</td>
                 <td className="p-2">{s.criteria}</td>
                 <td className="p-2">{s.status}</td>
-                <td className="p-2">
-                  {s.status === 'Failed' ? (s.errorNote ?? '—') : '—'}
-                </td>
+                <td className="p-2">{s.status === 'Failed' ? (s.errorNote ?? '—') : '—'}</td>
                 <td className="p-2">
                   {s.status === 'Failed' ? (s.proofUrl ? <a className="text-blue-600 underline" href={s.proofUrl} target="_blank">Åbn</a> : '—') : '—'}
                 </td>

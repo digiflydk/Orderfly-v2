@@ -1,7 +1,8 @@
+
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { createQa, type QaStatus } from '../actions';
+import { createQa, type QaStatus, type QaContext } from '../actions';
 import { parseStepsInput } from '../qa-utils';
 import { useState } from 'react';
 
@@ -11,6 +12,8 @@ export default function QaNewPage() {
   const [acc, setAcc] = useState('');
   const [status, setStatus] = useState<QaStatus>('Draft');
   const [proofUrl, setProofUrl] = useState('');
+  const [context, setContext] = useState<QaContext>('public');
+  const [startPath, setStartPath] = useState('/esmeralda');
   const [stepsRaw, setStepsRaw] = useState(
 `Menu vises | Menuen skal vise mindst 1 produkt
 Læg i kurv | Klik på 'Læg i kurv' viser varen i kurven
@@ -24,12 +27,18 @@ Gennemfør ordre | Bekræftelsesside vises med ordrenummer`
       setErr('Udfyld Title og Acceptance Criteria');
       return;
     }
+    if (!startPath.startsWith('/')) {
+      setErr('startPath skal starte med "/" (fx /esmeralda eller /sales/orders)');
+      return;
+    }
     const stepsTemplate = parseStepsInput(stepsRaw);
     const code = await createQa({
       title: title.trim(),
       acceptanceCriteria: acc.trim(),
       status,
       stepsTemplate,
+      context,
+      startPath: startPath.trim(),
       proofUrl: proofUrl || undefined,
     });
     router.push(`/superadmin/qa/${code}`);
@@ -46,17 +55,26 @@ Gennemfør ordre | Bekræftelsesside vises med ordrenummer`
       <label className="block text-sm font-medium">Acceptance Criteria (samlet)</label>
       <textarea className="mt-1 w-full rounded border p-2" rows={4} value={acc} onChange={e => setAcc(e.target.value)} />
 
-      <label className="block text-sm font-medium">Status</label>
-      <select className="mt-1 w-full rounded border p-2" value={status} onChange={e => setStatus(e.target.value as QaStatus)}>
-        <option>Draft</option><option>Ready</option><option>Deprecated</option>
-      </select>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium">Context</label>
+          <select className="mt-1 w-full rounded border p-2" value={context} onChange={e => setContext(e.target.value as QaContext)}>
+            <option value="public">public</option>
+            <option value="superadmin">superadmin</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium">Start Path</label>
+          <input className="mt-1 w-full rounded border p-2" value={startPath} onChange={e => setStartPath(e.target.value)} placeholder="/esmeralda eller /sales/orders" />
+        </div>
+      </div>
 
       <label className="block text-sm font-medium">Steps (én pr. linje: Title | Criteria)</label>
       <textarea className="mt-1 w-full rounded border p-2 font-mono" rows={8} value={stepsRaw} onChange={e => setStepsRaw(e.target.value)} />
 
       <label className="block text-sm font-medium">Proof URL (valgfrit)</label>
       <input className="mt-1 w-full rounded border p-2" value={proofUrl} onChange={e => setProofUrl(e.target.value)} placeholder="https://postimg.cc/..." />
-
+      
       <div className="pt-4">
         <button className="rounded bg-black px-4 py-2 text-white" onClick={onSave}>Opret testcase (kode genereres automatisk)</button>
       </div>

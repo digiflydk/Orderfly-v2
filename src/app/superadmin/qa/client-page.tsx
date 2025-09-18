@@ -1,3 +1,4 @@
+
 'use client';
 
 import Link from 'next/link';
@@ -35,7 +36,7 @@ export function QaClientPage({ initialItems }: { initialItems: QaTestcase[] }) {
                 <td className="p-2">{tc.status}</td>
                 <td className="p-2">
                   <Link className="underline" href={`/superadmin/qa/${tc.code}`}>Edit</Link>
-                  <Link className="ml-3 underline" href={`/superadmin/qa/run/${tc.code}`}>Run</Link> {/* NY */}
+                  <Link className="ml-3 underline" href={`/superadmin/qa/run/${tc.code}`}>Run</Link>
                 </td>
               </tr>
             ))}

@@ -1,8 +1,9 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { getQa, updateQa, type QaStatus, type QaTestcase } from '../actions';
+import { getQa, updateQa, type QaStatus, type QaContext, type QaTestcase } from '../actions';
 import { stringifySteps, parseStepsInput } from '../qa-utils';
 
 export default function QaEditPage() {
@@ -13,6 +14,9 @@ export default function QaEditPage() {
   const [acc, setAcc] = useState('');
   const [status, setStatus] = useState<QaStatus>('Draft');
   const [proofUrl, setProofUrl] = useState('');
+  const [context, setContext] = useState<QaContext>('public');
+  const [startPath, setStartPath] = useState('/');
+
   const [stepsRaw, setStepsRaw] = useState('');
 
   useEffect(() => {
@@ -24,6 +28,8 @@ export default function QaEditPage() {
         setAcc(t.acceptanceCriteria);
         setStatus(t.status);
         setProofUrl(t.proofUrl || '');
+        setContext(t.context);
+        setStartPath(t.startPath);
         setStepsRaw(stringifySteps(t.stepsTemplate));
       } else setItem(null);
     })();
@@ -31,11 +37,17 @@ export default function QaEditPage() {
 
   async function onSave() {
     if (!item) return;
+    if (!startPath.startsWith('/')) {
+      alert('startPath skal starte med "/"');
+      return;
+    }
     await updateQa(code, {
       title: title.trim(),
       acceptanceCriteria: acc.trim(),
       status,
       proofUrl: proofUrl || undefined,
+      context,
+      startPath: startPath.trim(),
       stepsTemplate: parseStepsInput(stepsRaw),
     });
     router.push('/superadmin/qa');
@@ -54,10 +66,19 @@ export default function QaEditPage() {
       <label className="block text-sm font-medium">Acceptance Criteria (samlet)</label>
       <textarea className="mt-1 w-full rounded border p-2" rows={4} value={acc} onChange={e => setAcc(e.target.value)} />
 
-      <label className="block text-sm font-medium">Status</label>
-      <select className="mt-1 w-full rounded border p-2" value={status} onChange={e => setStatus(e.target.value as QaStatus)}>
-        <option>Draft</option><option>Ready</option><option>Deprecated</option>
-      </select>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <label className="block text-sm font-medium">Context</label>
+          <select className="mt-1 w-full rounded border p-2" value={context} onChange={e => setContext(e.target.value as QaContext)}>
+            <option value="public">public</option>
+            <option value="superadmin">superadmin</option>
+          </select>
+        </div>
+        <div>
+          <label className="block text-sm font-medium">Start Path</label>
+          <input className="mt-1 w-full rounded border p-2" value={startPath} onChange={e => setStartPath(e.target.value)} />
+        </div>
+      </div>
 
       <label className="block text-sm font-medium">Steps (én pr. linje: Title | Criteria)</label>
       <textarea className="mt-1 w-full rounded border p-2 font-mono" rows={8} value={stepsRaw} onChange={e => setStepsRaw(e.target.value)} />
