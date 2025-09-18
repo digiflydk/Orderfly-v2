@@ -18,7 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '../ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
-// ---------------------- Schemas ----------------------
+/* ---------------------- Schemas ---------------------- */
 const questionOptionSchema = z.object({
   id: z.string(),
   label: z.string().min(1, "Option label cannot be empty."),
@@ -50,7 +50,7 @@ interface FeedbackQuestionVersionFormProps {
   supportedLanguages: LanguageSetting[];
 }
 
-export function FeedbackQuestionVersionForm({ version, supportedLanguages }: FeedbackQuestionVersionFormProps) {
+export default function FeedbackQuestionVersionForm({ version, supportedLanguages }: FeedbackQuestionVersionFormProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
 
@@ -91,18 +91,14 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
     formData.append('questions', JSON.stringify(data.questions));
 
     startTransition(async () => {
-      try {
-        const result = await createOrUpdateQuestionVersion(formData);
-        if (result && (result as any).ok) {
-          const id = (result as any).id as string;
-          window.location.href = `/superadmin/feedback/questions/edit/${id}`;
-          return;
-        }
+      const result = await createOrUpdateQuestionVersion(formData);
+      console.debug('[OF-477] result from action:', result);
+      if (result && (result as any).ok) {
+        const id = (result as any).id as string;
+        window.location.href = `/superadmin/feedback/questions/edit/${id}`;
+      } else {
         const errorMsg = (result as any)?.error ?? 'Failed to save question version';
         toast({ title: 'Kunne ikke gemme', description: errorMsg, variant: 'destructive' });
-      } catch (err: any) {
-        console.error('[OF-476] unexpected submit error:', err);
-        toast({ title: 'Uventet fejl', description: err?.message ?? 'Noget gik galt', variant: 'destructive' });
       }
     });
   };
@@ -113,7 +109,7 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
   return (
     <Form {...form}>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
-        {/* Header actions */}
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
@@ -342,5 +338,3 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
     </Form>
   );
 }
-
-export default FeedbackQuestionVersionForm;
