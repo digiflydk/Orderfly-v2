@@ -50,6 +50,7 @@ import {
   Share2,
   Activity,
   Cookie,
+  Beaker,
 } from 'lucide-react'
 
 type MenuIcon = React.ComponentType<{ className?: string }>
@@ -142,6 +143,7 @@ export function SuperAdminSidebarClient({
             { href: '/superadmin/feedback/settings', label: 'Settings'},
           ]
         },
+        { href: '/superadmin/qa', label: 'QA', icon: Beaker },
       ],
     },
     { key: 'insights', title: 'Insights', items: [{ href: '/superadmin/analytics', label: 'Analytics', icon: BarChart3 }] },
@@ -159,7 +161,7 @@ export function SuperAdminSidebarClient({
       key: 'website',
       title: 'Website',
       items: [
-        { href: '/superadmin/website/content', label: 'Indhold', icon: FileText },
+        { href: '/superadmin/website/pages', label: 'Indhold', icon: FileText },
         { href: '/superadmin/website/design', label: 'Design', icon: Palette },
         { href: '/superadmin/website/leads', label: 'Customer Leads', icon: UserPlus },
         { href: '/superadmin/website/customers', label: 'Kunder', icon: Users },
@@ -168,11 +170,11 @@ export function SuperAdminSidebarClient({
           icon: SettingsIcon,
           children: [
             { href: '/superadmin/website/settings/general', label: 'General', icon: SlidersHorizontal },
-            { href: '/superadmin/website/settings/ai-prompt', label: 'AI Prompt', icon: Sparkles },
+            { href: '/superadmin/website/settings/ai', label: 'AI Prompt', icon: Sparkles },
             { href: '/superadmin/website/settings/seo', label: 'SEO', icon: Search },
-            { href: '/superadmin/website/settings/social-share', label: 'Social Share', icon: Share2 },
+            { href: '/superadmin/website/settings/social', label: 'Social Share', icon: Share2 },
             { href: '/superadmin/website/settings/tracking', label: 'Tracking', icon: Activity },
-            { href: '/superadmin/website/settings/cookies', label: 'Cookies', icon: Cookie },
+            { href: '/superadmin/website/settings/cookie-texts', label: 'Cookies', icon: Cookie },
             { href: '/superadmin/website/settings/business-listing', label: 'Business Listing', icon: Building2 },
           ],
         },
