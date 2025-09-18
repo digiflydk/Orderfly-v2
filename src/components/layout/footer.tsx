@@ -1,3 +1,4 @@
+
 import Link from "next/link";
 import Image from "next/image";
 import type { Brand, Location } from "@/types";
@@ -92,7 +93,7 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
         <div className="flex items-center justify-between text-xs" style={{ color: 'var(--of-footer-text)' }}>
           <span>🌐 English</span>
           <div className="flex items-center gap-2">
-            <span>1.0.220 • OF-452</span>
+            <span>1.0.206 • OFQ-009</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>

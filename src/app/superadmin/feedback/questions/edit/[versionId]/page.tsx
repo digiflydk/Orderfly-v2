@@ -1,17 +1,14 @@
-
-import dynamic from "next/dynamic";
-import { createOrUpdateQuestionVersion, getQuestionVersionById } from "@/app/superadmin/feedback/actions";
-
-const FeedbackQuestionVersionForm = dynamic(
-  () =>
-    import("@/components/superadmin/feedback-question-version-form").then((m: any) => m.default ?? m.FeedbackQuestionVersionForm),
-  { ssr: false }
-);
+import { getQuestionVersionById } from '@/app/superadmin/feedback/actions';
+import { EditFormClient } from './edit-form-client';
 
 type Params = { versionId: string };
 
-export default async function EditFeedbackQuestionVersionPage({ params }: { params: Params }) {
-  const versionId = decodeURIComponent(params.versionId || "");
+export default async function EditFeedbackQuestionVersionPage({
+  params,
+}: {
+  params: Params;
+}) {
+  const versionId = decodeURIComponent(params.versionId || '');
   const initial = await getQuestionVersionById(versionId);
 
   return (
@@ -22,7 +19,7 @@ export default async function EditFeedbackQuestionVersionPage({ params }: { para
           <p className="text-sm text-muted-foreground">ID: {versionId}</p>
         </div>
       </div>
-      <FeedbackQuestionVersionForm mode="edit" id={versionId} initialData={initial ?? undefined} action={createOrUpdateQuestionVersion} />
+      <EditFormClient versionId={versionId} initialData={initial ?? undefined} />
     </div>
   );
 }
