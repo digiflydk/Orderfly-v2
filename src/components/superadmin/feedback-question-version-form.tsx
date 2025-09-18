@@ -331,3 +331,4 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
     </Form>
   );
 }
+export default FeedbackQuestionVersionForm;
