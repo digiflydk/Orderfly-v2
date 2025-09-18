@@ -4,6 +4,7 @@
 
 import { redirect } from 'next/navigation';
 import { db } from '@/lib/firebase';
+import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
 import {
   addDoc,
   collection,
@@ -15,7 +16,6 @@ import {
   limit,
   orderBy,
   query,
-  serverTimestamp,
   setDoc,
   updateDoc,
   where,
@@ -133,7 +133,7 @@ type Question = {
 };
 
 type VersionPayload = {
-  id?: string; // ved edit kan id komme med (docId)
+  id?: string; // ved edit er dette docId
   versionLabel: string;
   isActive: boolean;
   language: string;
@@ -144,17 +144,8 @@ type VersionPayload = {
 };
 
 // ---------- action ----------
-/**
- * createOrUpdateQuestionVersion
- *
- * - Gemmer i Firestore collection: feedbackQuestionsVersion (singular)
- * - Ved CREATE: addDoc + merge felt { id: <docId> }
- * - Ved EDIT: setDoc(merge:true) på docId
- * - Redirecter efter success til /superadmin/feedback/questions/edit/<docId>
- * - Logger docPath og payload (for enkel debug i logs)
- */
 export async function createOrUpdateQuestionVersion(formData: FormData) {
-  // Parse FormData -> typed payload
+  // Parse
   const id = (formData.get("id") as string) || undefined;
   const versionLabel = String(formData.get("versionLabel") || "").trim();
   const isActive = formData.get("isActive") === "on";
@@ -171,48 +162,51 @@ export async function createOrUpdateQuestionVersion(formData: FormData) {
   try {
     const q = formData.get("questions") as string;
     questions = q ? (JSON.parse(q) as Question[]) : [];
-  } catch {
-    questions = [];
+  } catch (e) {
+    console.error("[createOrUpdateQuestionVersion] JSON parse error:", e);
+    throw new Error("Invalid questions payload");
   }
 
-  const payload: VersionPayload = {
-    id, // kun ved edit; ved create sætter vi id efter addDoc
+  const base: Omit<VersionPayload, "id"> = {
     versionLabel,
     isActive,
     language,
     orderTypes,
     questions,
+    createdAt: serverTimestamp(),
     updatedAt: serverTimestamp(),
   };
 
-  const col = collection(db, "feedbackQuestionsVersion"); // <— din collection (singular)
+  try {
+    const col = adminDb.collection("feedbackQuestionsVersion"); // jf. jeres DB
 
-  if (id) {
-    // EDIT: skriv til én bestemt docId
-    const ref = doc(col, id);
-    // DEBUG log
-    console.log("[createOrUpdateQuestionVersion] UPDATE", {
-      docPath: `feedbackQuestionsVersion/${id}`,
-      payload,
-    });
-    await setDoc(ref, { ...payload, createdAt: serverTimestamp() }, { merge: true });
-    redirect(`/superadmin/feedback/questions/edit/${id}`);
-  } else {
-    // CREATE: nyt dokument
-    const ref = await addDoc(col, {
-      ...payload,
-      createdAt: serverTimestamp(),
-    });
-    // Gem docId som felt 'id' (så vi også kan slå op på feltet)
-    await setDoc(ref, { id: ref.id }, { merge: true });
+    if (id) {
+      // EDIT
+      const ref = col.doc(id);
+      console.log("[createOrUpdateQuestionVersion] UPDATE", { docPath: `feedbackQuestionsVersion/${id}` });
+      await ref.set({ id, ...base }, { merge: true });
+      redirect(`/superadmin/feedback/questions/edit/${id}`);
+      return; // defensive
+    } else {
+      // CREATE
+      const ref = await col.add({ ...base });
+      await ref.set({ id: ref.id }, { merge: true });
 
-    // DEBUG log
-    console.log("[createOrUpdateQuestionVersion] CREATE", {
-      docPath: `feedbackQuestionsVersion/${ref.id}`,
-      payload: { ...payload, id: ref.id },
-    });
+      console.log("[createOrUpdateQuestionVersion] CREATE", {
+        docPath: `feedbackQuestionsVersion/${ref.id}`,
+      });
 
-    redirect(`/superadmin/feedback/questions/edit/${ref.id}`);
+      redirect(`/superadmin/feedback/questions/edit/${ref.id}`);
+      return;
+    }
+  } catch (e: any) {
+    // Log ALT server-side, men kast en pæn fejl til klienten
+    console.error("[createOrUpdateQuestionVersion] Firestore error:", {
+      message: e?.message,
+      code: e?.code,
+      stack: e?.stack,
+    });
+    throw new Error(e?.message || "Failed to save question version");
   }
 }
 

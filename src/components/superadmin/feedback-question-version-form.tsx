@@ -97,9 +97,14 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
     startTransition(async () => {
       try {
         await createOrUpdateQuestionVersion(formData);
-        // redirect håndteres af server action (forventet original adfærd)
-      } catch (e: any) {
-        toast({ title: "Save failed", description: e?.message ?? "Unknown error", variant: "destructive" });
+        // redirect håndteres af server action
+      } catch (err: any) {
+        console.error("[Form submit] action error:", err);
+        toast({
+          title: "Kunne ikke gemme",
+          description: err?.message ?? "Uventet fejl",
+          variant: "destructive",
+        });
       }
     });
   };
