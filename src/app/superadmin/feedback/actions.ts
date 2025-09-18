@@ -120,6 +120,104 @@ export async function sendFeedbackRequestEmail(orderId: string) {
 
 // --- Feedback Questions ---
 
+// ---------- types ----------
+type QuestionOption = { id: string; label: string };
+type Question = {
+  questionId: string;
+  label: string;
+  type: "stars" | "nps" | "text" | "tags" | "multiple_options";
+  isRequired: boolean;
+  options?: QuestionOption[];
+  minSelection?: number;
+  maxSelection?: number;
+};
+
+type VersionPayload = {
+  id?: string; // ved edit kan id komme med (docId)
+  versionLabel: string;
+  isActive: boolean;
+  language: string;
+  orderTypes: ("pickup" | "delivery")[];
+  questions: Question[];
+  createdAt?: any;
+  updatedAt?: any;
+};
+
+// ---------- action ----------
+/**
+ * createOrUpdateQuestionVersion
+ *
+ * - Gemmer i Firestore collection: feedbackQuestionsVersion (singular)
+ * - Ved CREATE: addDoc + merge felt { id: <docId> }
+ * - Ved EDIT: setDoc(merge:true) på docId
+ * - Redirecter efter success til /superadmin/feedback/questions/edit/<docId>
+ * - Logger docPath og payload (for enkel debug i logs)
+ */
+export async function createOrUpdateQuestionVersion(formData: FormData) {
+  // Parse FormData -> typed payload
+  const id = (formData.get("id") as string) || undefined;
+  const versionLabel = String(formData.get("versionLabel") || "").trim();
+  const isActive = formData.get("isActive") === "on";
+  const language = String(formData.get("language") || "da").trim();
+
+  const orderTypes: ("pickup" | "delivery")[] = [];
+  for (const [k, v] of formData.entries()) {
+    if (k === "orderTypes" && typeof v === "string") {
+      if (v === "pickup" || v === "delivery") orderTypes.push(v);
+    }
+  }
+
+  let questions: Question[] = [];
+  try {
+    const q = formData.get("questions") as string;
+    questions = q ? (JSON.parse(q) as Question[]) : [];
+  } catch {
+    questions = [];
+  }
+
+  const payload: VersionPayload = {
+    id, // kun ved edit; ved create sætter vi id efter addDoc
+    versionLabel,
+    isActive,
+    language,
+    orderTypes,
+    questions,
+    updatedAt: serverTimestamp(),
+  };
+
+  const col = collection(db, "feedbackQuestionsVersion"); // <— din collection (singular)
+
+  if (id) {
+    // EDIT: skriv til én bestemt docId
+    const ref = doc(col, id);
+    // DEBUG log
+    console.log("[createOrUpdateQuestionVersion] UPDATE", {
+      docPath: `feedbackQuestionsVersion/${id}`,
+      payload,
+    });
+    await setDoc(ref, { ...payload, createdAt: serverTimestamp() }, { merge: true });
+    redirect(`/superadmin/feedback/questions/edit/${id}`);
+  } else {
+    // CREATE: nyt dokument
+    const ref = await addDoc(col, {
+      ...payload,
+      createdAt: serverTimestamp(),
+    });
+    // Gem docId som felt 'id' (så vi også kan slå op på feltet)
+    await setDoc(ref, { id: ref.id }, { merge: true });
+
+    // DEBUG log
+    console.log("[createOrUpdateQuestionVersion] CREATE", {
+      docPath: `feedbackQuestionsVersion/${ref.id}`,
+      payload: { ...payload, id: ref.id },
+    });
+
+    redirect(`/superadmin/feedback/questions/edit/${ref.id}`);
+  }
+}
+
+
+
 function questionsParent() {
   return collection(db, 'feedbackConfig', 'default', 'questions');
 }
@@ -205,52 +303,6 @@ export async function getQuestionVersionById(id: string): Promise<QuestionVersio
     };
   }
   return null;
-}
-
-export async function createOrUpdateQuestionVersion(formData: FormData) {
-  const id = (formData.get('id') ?? '').toString().trim() || null;
-
-  const label = (formData.get('label') ?? formData.get('name') ?? '').toString().trim() || null;
-  const name = (formData.get('name') ?? '').toString().trim() || null;
-  const description = (formData.get('description') ?? '').toString().trim() || null;
-  const language = (formData.get('language') ?? '').toString().trim() || null;
-  const active = parseBoolean(formData.get('active'));
-
-  const orderTypesRaw = formData.getAll('orderTypes');
-  const orderTypes: string[] | null = orderTypesRaw && orderTypesRaw.length
-    ? orderTypesRaw.map(v => String(v)).filter(Boolean)
-    : null;
-
-  const questionsJson = parseJson(formData.get('questions'));
-  const fields = parseJson(formData.get('fields'));
-
-  const now = Date.now();
-  const payload: any = {
-    label,
-    name,
-    description,
-    language,
-    active,
-    orderTypes,
-    questions: Array.isArray(questionsJson) ? questionsJson : undefined,
-    fields: fields !== undefined ? fields : undefined,
-    updatedAt: now,
-  };
-
-  Object.keys(payload).forEach(k => (payload as any)[k] === undefined && delete (payload as any)[k]);
-
-  if (id) {
-    const ref = doc(db, 'feedbackConfig', 'default', 'questions', id);
-    await updateDoc(ref, payload);
-  } else {
-    await addDoc(questionsParent(), {
-      ...payload,
-      createdAt: now,
-      createdAtServer: serverTimestamp(),
-    });
-  }
-
-  redirect('/superadmin/feedback/questions');
 }
 
 
