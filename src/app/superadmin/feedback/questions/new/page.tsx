@@ -1,4 +1,4 @@
-import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form';
+import { FeedbackQuestionVersionForm } from '@/components/superadmin/feedback-question-version-form';
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
 type Lang = { code: string; name: string };
@@ -18,7 +18,7 @@ function resolveSupportedLanguages(settings: any): Lang[] {
 }
 
 export default async function NewFeedbackQuestionVersionPage() {
-  // ORIGINALT FLOW: hent settings og injicér supportedLanguages i formularen
+  // ORIGINAL LOGIK (fra backup): henter platform settings og injicerer i Form
   const settings = await getPlatformSettings();
   const supportedLanguages = resolveSupportedLanguages(settings);
 

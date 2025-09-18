@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { FeedbackQuestionsVersion } from '@/types';
-import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form';
+import { FeedbackQuestionVersionForm } from '@/components/superadmin/feedback-question-version-form';
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
 type Lang = { code: string; name: string };
@@ -35,9 +35,12 @@ async function getQuestionVersionById(id: string): Promise<FeedbackQuestionsVers
   return null;
 }
 
-type PageProps = { params: { versionId: string } };
+type PageProps = {
+  params: { versionId: string };
+};
 
 export default async function EditFeedbackQuestionVersionPage({ params }: PageProps) {
+  // ORIGINALT MØNSTER: hent version + settings i parallel
   const [version, settings] = await Promise.all([
     getQuestionVersionById(params.versionId),
     getPlatformSettings(),
