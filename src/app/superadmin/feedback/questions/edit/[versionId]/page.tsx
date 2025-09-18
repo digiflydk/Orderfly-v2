@@ -1,11 +1,12 @@
+
 export const runtime = "nodejs";
 
-import { notFound } from "next/navigation";
-import { db } from "@/lib/firebase";
-import { doc, getDoc, collection, query, where, getDocs } from "firebase/firestore";
-import type { FeedbackQuestionsVersion } from "@/types";
-import FeedbackQuestionVersionForm from "@/components/superadmin/feedback-question-version-form";
-import { getPlatformSettings } from "@/app/superadmin/settings/actions";
+import { notFound } from 'next/navigation';
+import { db } from '@/lib/firebase';
+import { doc, getDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import type { FeedbackQuestionsVersion } from '@/types';
+import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form';
+import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
 type Lang = { code: string; name: string };
 
@@ -13,8 +14,8 @@ function resolveSupportedLanguages(settings: any): Lang[] {
   const from = settings?.languageSettings?.supportedLanguages;
   if (Array.isArray(from) && from.length > 0) return from as Lang[];
   return [
-    { code: "da", name: "Danish" },
-    { code: "en", name: "English" },
+    { code: 'da', name: 'Danish' },
+    { code: 'en', name: 'English' },
   ];
 }
 

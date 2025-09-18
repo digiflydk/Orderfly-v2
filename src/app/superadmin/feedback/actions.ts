@@ -173,22 +173,29 @@ export async function createOrUpdateQuestionVersion(formData: FormData): Promise
       updatedAt: adminFieldValue.serverTimestamp(),
     };
 
-    const col = adminDb.collection("feedbackQuestionsVersion"); // din collection
+    const col = adminDb.collection("feedbackQuestionsVersion"); // jf. jeres DB
 
     if (id) {
+      // EDIT
       const ref = col.doc(id);
       console.log("[createOrUpdateQuestionVersion] UPDATE", { docPath: `feedbackQuestionsVersion/${id}` });
       await ref.set({ id, ...base }, { merge: true });
       // returnér OK til UI — UI laver client-side redirect
       return { ok: true, id };
     } else {
+      // CREATE
       const ref = await col.add({ ...base });
       await ref.set({ id: ref.id }, { merge: true });
-      console.log("[createOrUpdateQuestionVersion] CREATE", { docPath: `feedbackQuestionsVersion/${ref.id}` });
+
+      console.log("[createOrUpdateQuestionVersion] CREATE", {
+        docPath: `feedbackQuestionsVersion/${ref.id}`,
+      });
+
       return { ok: true, id: ref.id };
     }
   } catch (e: any) {
-    console.error("[createOrUpdateQuestionVersion] Firestore/Admin error:", {
+    // Log ALT server-side, men kast en pæn fejl til klienten
+    console.error("[createOrUpdateQuestionVersion] Firestore error:", {
       message: e?.message,
       code: e?.code,
       stack: e?.stack,

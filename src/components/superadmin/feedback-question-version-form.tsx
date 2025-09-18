@@ -47,14 +47,13 @@ type VersionFormValues = z.infer<typeof feedbackQuestionVersionSchema>;
 
 interface FeedbackQuestionVersionFormProps {
   version?: FeedbackQuestionsVersion;
-  supportedLanguages: LanguageSetting[]; // forventes injiceret fra siderne
+  supportedLanguages: LanguageSetting[];
 }
 
 export function FeedbackQuestionVersionForm({ version, supportedLanguages }: FeedbackQuestionVersionFormProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
 
-  // ⚠️ Robust sprog-fallback (vigtigt for at undgå undefined.map)
   const safeSupportedLanguages = useMemo<LanguageSetting[]>(() => {
     if (Array.isArray(supportedLanguages) && supportedLanguages.length > 0) return supportedLanguages;
     return [
@@ -72,6 +71,7 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
       orderTypes: ['pickup', 'delivery'],
       questions: [],
     },
+    mode: 'onSubmit',
   });
 
   const { control, handleSubmit, watch } = form;
@@ -93,24 +93,16 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
     startTransition(async () => {
       try {
         const result = await createOrUpdateQuestionVersion(formData);
-        if (result.ok) {
-          // client-side redirect sikrer ingen RSC/POST issues
-          window.location.href = `/superadmin/feedback/questions/edit/${result.id}`;
+        if (result && (result as any).ok) {
+          const id = (result as any).id as string;
+          window.location.href = `/superadmin/feedback/questions/edit/${id}`;
           return;
         }
-        // fejl fra action
-        toast({
-          title: "Kunne ikke gemme",
-          description: result.error,
-          variant: "destructive",
-        });
+        const errorMsg = (result as any)?.error ?? 'Failed to save question version';
+        toast({ title: 'Kunne ikke gemme', description: errorMsg, variant: 'destructive' });
       } catch (err: any) {
-        console.error("[Form submit] unexpected error:", err);
-        toast({
-          title: "Uventet fejl",
-          description: err?.message ?? "Noget gik galt",
-          variant: "destructive",
-        });
+        console.error('[OF-476] unexpected submit error:', err);
+        toast({ title: 'Uventet fejl', description: err?.message ?? 'Noget gik galt', variant: 'destructive' });
       }
     });
   };
@@ -120,7 +112,7 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
 
   return (
     <Form {...form}>
-      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+      <form onSubmit={handleSubmit(onSubmit)} className="space-y-6" noValidate>
         {/* Header actions */}
         <div className="flex items-center justify-between">
           <div>
@@ -128,7 +120,7 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
             <p className="text-muted-foreground">{description}</p>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" asChild>
+            <Button type="button" variant="outline" asChild disabled={isPending}>
               <Link href="/superadmin/feedback/questions">Cancel</Link>
             </Button>
             <Button type="submit" disabled={isPending}>
@@ -155,9 +147,7 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
                 <FormItem>
                   <FormLabel>Language</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl>
-                      <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
-                    </FormControl>
+                    <FormControl><SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger></FormControl>
                     <SelectContent>
                       {safeSupportedLanguages.map(lang => (
                         <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
@@ -353,5 +343,4 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
   );
 }
 
-// Gør import robust i siderne (både named og default virker)
 export default FeedbackQuestionVersionForm;
