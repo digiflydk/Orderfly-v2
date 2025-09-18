@@ -1,9 +1,9 @@
 
-import { FeedbackQuestionVersionForm } from "@/components/superadmin/feedback-question-version-form";
+import FeedbackQuestionVersionForm from "@/components/superadmin/feedback-question-version-form";
 import {
+  createOrUpdateQuestionVersion,
   getQuestionVersionById,
 } from "@/app/superadmin/feedback/actions";
-import { getPlatformSettings } from "@/app/superadmin/settings/actions";
 
 type Params = { versionId: string };
 
@@ -13,10 +13,7 @@ export default async function EditFeedbackQuestionVersionPage({
   params: Params;
 }) {
   const versionId = decodeURIComponent(params.versionId || "");
-  const [initialData, settings] = await Promise.all([
-    getQuestionVersionById(versionId),
-    getPlatformSettings()
-  ]);
+  const initial = await getQuestionVersionById(versionId);
 
   return (
     <div className="space-y-6">
@@ -28,8 +25,10 @@ export default async function EditFeedbackQuestionVersionPage({
       </div>
 
       <FeedbackQuestionVersionForm
-        version={initialData ?? undefined}
-        supportedLanguages={settings.languageSettings.supportedLanguages}
+        mode="edit"
+        id={versionId}
+        initialData={initial ?? undefined}
+        action={createOrUpdateQuestionVersion}
       />
     </div>
   );

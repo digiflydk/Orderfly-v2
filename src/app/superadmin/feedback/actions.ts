@@ -1,25 +1,29 @@
 
 'use server';
 
-import { redirect } from 'next/navigation';
+import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
 import {
   addDoc,
   collection,
+  collectionGroup,
   doc,
+  documentId,
   getDoc,
   getDocs,
+  limit,
+  query,
   serverTimestamp,
   setDoc,
   Timestamp,
   updateDoc,
   where,
-  query,
   writeBatch,
 } from 'firebase/firestore';
 import type { Feedback, FeedbackQuestionsVersion, OrderDetail } from '@/types';
 import { getOrderById } from '@/app/checkout/order-actions';
 import { z } from 'zod';
+import { redirect } from 'next/navigation';
 
 // --- Feedback Entries ---
 
@@ -123,101 +127,151 @@ function questionsParentPath() {
   return collection(db, 'feedbackConfig', 'default', 'questions');
 }
 
-export async function getQuestionVersionById(id: string): Promise<QuestionVersion | null> {
-  if (!id) return null;
-  const ref = doc(db, 'feedbackConfig', 'default', 'questions', id);
-  const snap = await getDoc(ref);
-  if (!snap.exists()) return null;
-  const data: any = snap.data() ?? {};
-  return {
-    id,
-    name: data?.name ?? null,
-    label: data?.label ?? null,
-    description: data?.description ?? null,
-    active: typeof data?.active === 'boolean' ? data.active : null,
-    createdAt:
-      typeof data?.createdAt === 'number'
-        ? data.createdAt
-        : data?.createdAt?.toMillis?.() ?? null,
-    updatedAt:
-      typeof data?.updatedAt === 'number'
-        ? data.updatedAt
-        : data?.updatedAt?.toMillis?.() ?? null,
-    fields: data?.fields,
-  };
+type QuestionVersion = {
+  id?: string;
+  // Almene felter (bevidst brede for at matche eksisterende form)
+  label?: string | null;
+  name?: string | null;
+  description?: string | null;
+  language?: string | null;
+  active?: boolean | null;
+  orderTypes?: string[] | null;
+  questions?: any[] | null;
+  fields?: any;
+  createdAt?: number | null;
+  updatedAt?: number | null;
+  // Meta
+  parentId?: string | null;
+};
+
+function toMillis(v: any): number | null {
+  if (typeof v === 'number') return v;
+  if (v && typeof v.toMillis === 'function') return (v as any).toMillis();
+  if (v instanceof Timestamp) return v.toMillis();
+  return null;
 }
 
+function parseBoolean(input: FormDataEntryValue | null): boolean | null {
+  if (input === null || input === undefined) return null;
+  const s = String(input).toLowerCase().trim();
+  if (['true', '1', 'on', 'yes'].includes(s)) return true;
+  if (['false', '0', 'off', 'no'].includes(s)) return false;
+  return null;
+}
 
-const questionOptionSchema = z.object({
-    id: z.string(),
-    label: z.string().min(1, "Option label cannot be empty."),
-});
-
-const questionSchema = z.object({
-  questionId: z.string().min(1),
-  label: z.string().min(3, "Label must be at least 3 characters."),
-  type: z.enum(['stars', 'nps', 'text', 'tags', 'multiple_options']),
-  isRequired: z.boolean(),
-  options: z.array(questionOptionSchema).optional(),
-  minSelection: z.coerce.number().optional(),
-  maxSelection: z.coerce.number().optional(),
-});
-
-const feedbackQuestionVersionSchema = z.object({
-  id: z.string().optional(),
-  versionLabel: z.string().min(1, "Version label is required."),
-  isActive: z.boolean().default(false),
-  language: z.string().min(2, "Language code is required."),
-  orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
-  questions: z.array(questionSchema).min(1, "At least one question is required."),
-});
+function parseJson(input: FormDataEntryValue | null): any {
+  if (input == null) return undefined;
+  try {
+    return JSON.parse(String(input));
+  } catch {
+    return undefined;
+  }
+}
 
 /**
- * Server action: create/update question version.
+ * Robust loader:
+ * 1) Prøv: feedbackConfig/default/questions/{id}
+ * 2) Fallback: collectionGroup('questions') hvor __name__ == id
+ */
+export async function getQuestionVersionById(id: string): Promise<QuestionVersion | null> {
+  if (!id) return null;
+
+  // 1) Primær sti
+  const ref = doc(db, 'feedbackConfig', 'default', 'questions', id);
+  const snap = await getDoc(ref);
+  if (snap.exists()) {
+    const d: any = snap.data() ?? {};
+    return {
+      id,
+      label: d.label ?? d.name ?? null,
+      name: d.name ?? null,
+      description: d.description ?? null,
+      language: d.language ?? null,
+      active: typeof d.active === 'boolean' ? d.active : null,
+      orderTypes: Array.isArray(d.orderTypes) ? d.orderTypes : null,
+      questions: Array.isArray(d.questions) ? d.questions : null,
+      fields: d.fields,
+      createdAt: toMillis(d.createdAt),
+      updatedAt: toMillis(d.updatedAt),
+      parentId: 'feedbackConfig/default',
+    };
+  }
+
+  // 2) Fallback via collectionGroup
+  const g = collectionGroup(db, 'questions');
+  const q = query(g, where(documentId(), '==', id), limit(1));
+  const groupSnap = await getDocs(q);
+  if (!groupSnap.empty) {
+    const docSnap = groupSnap.docs[0];
+    const d: any = docSnap.data() ?? {};
+    return {
+      id: docSnap.id,
+      label: d.label ?? d.name ?? null,
+      name: d.name ?? null,
+      description: d.description ?? null,
+      language: d.language ?? null,
+      active: typeof d.active === 'boolean' ? d.active : null,
+      orderTypes: Array.isArray(d.orderTypes) ? d.orderTypes : null,
+      questions: Array.isArray(d.questions) ? d.questions : null,
+      fields: d.fields,
+      createdAt: toMillis(d.createdAt),
+      updatedAt: toMillis(d.updatedAt),
+      parentId: docSnap.ref.parent?.parent?.id ?? null,
+    };
+  }
+
+  return null;
+}
+
+/**
+ * Opret eller opdater question version.
+ * (Bevarer bredt felt-set for at matche eksisterende form.)
  */
 export async function createOrUpdateQuestionVersion(formData: FormData) {
-    const rawData = {
-        id: formData.get('id') as string || undefined,
-        versionLabel: formData.get('versionLabel'),
-        isActive: formData.get('isActive') === 'on',
-        language: formData.get('language'),
-        orderTypes: formData.getAll('orderTypes'),
-        questions: JSON.parse(formData.get('questions') as string || '[]'),
-    };
+  const id = (formData.get('id') ?? '').toString().trim() || null;
 
-    const validatedFields = feedbackQuestionVersionSchema.safeParse(rawData);
-    if (!validatedFields.success) {
-        return { message: "Validation failed", error: true, errors: validatedFields.error.flatten().fieldErrors };
-    }
-    
-    const { id, ...versionData } = validatedFields.data;
-    const batch = writeBatch(db);
+  const label = (formData.get('label') ?? formData.get('name') ?? '').toString().trim() || null;
+  const name = (formData.get('name') ?? '').toString().trim() || null;
+  const description = (formData.get('description') ?? '').toString().trim() || null;
+  const language = (formData.get('language') ?? '').toString().trim() || null;
+  const active = parseBoolean(formData.get('active'));
 
-    // If making this version active, ensure no other version for the same language/orderType combo is active
-    if (versionData.isActive) {
-        for (const orderType of versionData.orderTypes) {
-            const q = query(
-                collection(db, 'feedbackQuestionsVersion'), 
-                where('language', '==', versionData.language),
-                where('isActive', '==', true),
-                where('orderTypes', 'array-contains', orderType)
-            );
-            const activeSnapshot = await getDocs(q);
-            activeSnapshot.forEach(doc => {
-                if (doc.id !== id) {
-                    batch.update(doc.ref, { isActive: false });
-                }
-            });
-        }
-    }
-    
-    const docRef = id ? doc(db, 'feedbackQuestionsVersion', id) : doc(collection(db, 'feedbackQuestionsVersion'));
-    batch.set(docRef, { ...versionData, id: docRef.id }, { merge: true });
+  const orderTypesRaw = formData.getAll('orderTypes');
+  const orderTypes: string[] | null = orderTypesRaw && orderTypesRaw.length
+    ? orderTypesRaw.map(v => String(v)).filter(Boolean)
+    : null;
 
-    await batch.commit();
+  const questionsJson = parseJson(formData.get('questions'));
+  const fields = parseJson(formData.get('fields'));
 
-    revalidatePath('/superadmin/feedback/questions');
-    redirect('/superadmin/feedback/questions');
+  const now = Date.now();
+  const payload: any = {
+    label,
+    name,
+    description,
+    language,
+    active,
+    orderTypes,
+    questions: Array.isArray(questionsJson) ? questionsJson : undefined,
+    fields: fields !== undefined ? fields : undefined,
+    updatedAt: now,
+  };
+
+  // Ryd undefined så vi ikke skriver tomme felter utilsigtet
+  Object.keys(payload).forEach(k => payload[k] === undefined && delete (payload as any)[k]);
+
+  if (id) {
+    const ref = doc(db, 'feedbackConfig', 'default', 'questions', id);
+    await updateDoc(ref, payload);
+  } else {
+    await addDoc(questionsParentPath(), {
+      ...payload,
+      createdAt: now,
+      createdAtServer: serverTimestamp(),
+    });
+  }
+
+  redirect('/superadmin/feedback/questions');
 }
 
 
@@ -309,14 +363,3 @@ export async function submitFeedbackAction(prevState: any, formData: FormData) {
     
     redirect('/feedback/thank-you');
 }
-
-type QuestionVersion = {
-  id?: string;
-  name?: string | null;
-  label?: string | null;
-  description?: string | null;
-  active?: boolean | null;
-  createdAt?: number | null;
-  updatedAt?: number | null;
-  fields?: any;
-};
