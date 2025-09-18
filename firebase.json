@@ -9,6 +9,16 @@
     ],
     "frameworksBackend": {
       "region": "us-central1"
-    }
+    },
+    "rewrites": [
+      {
+        "source": "**",
+        "function": {
+          "functionId": "ssrstudio",
+          "region": "us-central1",
+          "pinTag": true
+        }
+      }
+    ]
   }
 }
