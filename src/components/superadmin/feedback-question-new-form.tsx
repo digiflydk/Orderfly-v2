@@ -336,7 +336,7 @@ export default function FeedbackQuestionNewForm() {
 
         <div className="flex justify-end gap-2">
           <Button type="submit" disabled={saving}>
-            {saving ? "Gemmer..." : "Opret spørgsmål"}
+            {saving ? "Opretter..." : "Opret spørgsmål"}
           </Button>
         </div>
       </form>

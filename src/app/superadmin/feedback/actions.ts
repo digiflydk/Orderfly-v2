@@ -253,6 +253,7 @@ export async function createOrUpdateQuestionVersion(formData: FormData) {
   redirect('/superadmin/feedback/questions');
 }
 
+
 // Form payload type spejler client-schema, men vi tillader ekstra felter
 type CreateQuestionPayload = {
   title: string;
@@ -266,16 +267,14 @@ type CreateQuestionPayload = {
 } & Record<string, any>;
 
 /**
- * Opretter:
- *  - /feedbackQuestions/{questionId}
- *  - /feedbackQuestions/{questionId}/versions/{auto}
+ * Opretter et nyt spørgsmål (+ første version hvis jeres model anvender versions).
+ * Matcher oprindelig adfærd: datafelter for question og options for choice-typer.
  */
 export async function createFeedbackQuestion(payload: CreateQuestionPayload) {
-  // Collection navne – justér KUN hvis jeres naming er anderledes (spørg først!)
   const questionsCol = collection(db, "feedbackQuestions");
 
-  // Opret spørgsmål
-  const questionRef = await addDoc(questionsCol, {
+  // Opret spørgsmål (root-doc)
+  const qRef = await addDoc(questionsCol, {
     title: payload.title,
     helpText: payload.helpText ?? "",
     type: payload.type,
@@ -287,16 +286,40 @@ export async function createFeedbackQuestion(payload: CreateQuestionPayload) {
     updatedAt: serverTimestamp(),
   });
 
-  // Første version – hvis ikke relevant i jeres model, kan den droppes (spørg først!)
-  const versionsCol = collection(questionRef, "versions");
-  await addDoc(versionsCol, {
-    options: Array.isArray(payload.options) ? payload.options : [],
-    isActive: !!payload.isActive,
-    language: payload.language,
-    notes: "Initial version",
-    createdAt: serverTimestamp(),
-  });
+  // (Valgfri) initial version — hvis I bruger versions-subcollection
+  const useVersions = true; // sæt til false hvis I IKKE bruger versions (ellers stop og spørg)
+  if (useVersions) {
+    const versionsCol = collection(qRef, "versions");
+    await addDoc(versionsCol, {
+      options: Array.isArray(payload.options) ? payload.options : [],
+      isActive: !!payload.isActive,
+      language: payload.language,
+      createdAt: serverTimestamp(),
+    });
+  }
 
-  // Evt. returnér id til routing/redirect
-  return { id: questionRef.id };
+  return { id: qRef.id };
+}
+
+// Valgfrit (beholdt for kompatibilitet hvis edit-siden bruger den)
+export async function updateFeedbackQuestion(id: string, payload: CreateQuestionPayload) {
+  // Implementeres i separat opgave hvis nødvendigt — ikke påkrævet for at genskabe NEW-siden.
+  throw new Error("updateFeedbackQuestion not implemented in OF-457");
+}
+
+export async function getActiveFeedbackQuestionsForOrder(
+  deliveryType: 'Delivery' | 'Pickup'
+): Promise<FeedbackQuestionsVersion | null> {
+  const q = query(
+    collection(db, 'feedbackQuestionsVersion'), 
+    where('isActive', '==', true),
+    where('orderTypes', 'array-contains', deliveryType.toLowerCase())
+  );
+  
+  const snapshot = await getDocs(q);
+  if (snapshot.empty) return null;
+
+  // Assuming only one version is active per language/type combo
+  const doc = snapshot.docs[0];
+  return { id: doc.id, ...doc.data() } as FeedbackQuestionsVersion;
 }
