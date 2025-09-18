@@ -10,44 +10,40 @@ export default function QaEditPage() {
   const { code } = useParams<{ code: string }>();
   const router = useRouter();
   const [item, setItem] = useState<QaTestcase | null>(null);
+
   const [title, setTitle] = useState('');
   const [acc, setAcc] = useState('');
   const [status, setStatus] = useState<QaStatus>('Draft');
-  const [proofUrl, setProofUrl] = useState('');
   const [context, setContext] = useState<QaContext>('public');
-  const [startPath, setStartPath] = useState('/');
-
+  const [startPath, setStartPath] = useState('/esmeralda');
+  const [proofUrl, setProofUrl] = useState('');
   const [stepsRaw, setStepsRaw] = useState('');
 
   useEffect(() => {
     (async () => {
       const t = await getQa(code);
-      if (t) {
-        setItem(t);
-        setTitle(t.title);
-        setAcc(t.acceptanceCriteria);
-        setStatus(t.status);
-        setProofUrl(t.proofUrl || '');
-        setContext(t.context);
-        setStartPath(t.startPath);
-        setStepsRaw(stringifySteps(t.stepsTemplate));
-      } else setItem(null);
+      if (!t) return setItem(null);
+      setItem(t);
+      setTitle(t.title);
+      setAcc(t.acceptanceCriteria);
+      setStatus(t.status);
+      setContext(t.context);
+      setStartPath(t.startPath);
+      setProofUrl(t.proofUrl ?? '');
+      setStepsRaw(stringifySteps(t.stepsTemplate));
     })();
   }, [code]);
 
   async function onSave() {
     if (!item) return;
-    if (!startPath.startsWith('/')) {
-      alert('startPath skal starte med "/"');
-      return;
-    }
+    if (!startPath.startsWith('/')) return alert('Start Path skal starte med "/"');
     await updateQa(code, {
       title: title.trim(),
       acceptanceCriteria: acc.trim(),
       status,
-      proofUrl: proofUrl || undefined,
       context,
       startPath: startPath.trim(),
+      proofUrl: proofUrl || undefined,
       stepsTemplate: parseStepsInput(stepsRaw),
     });
     router.push('/superadmin/qa');

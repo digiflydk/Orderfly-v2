@@ -2,18 +2,19 @@
 'use client';
 
 import { useRouter } from 'next/navigation';
-import { createQa, type QaStatus, type QaContext } from '../actions';
+import { createQa } from '../actions';
 import { parseStepsInput } from '../qa-utils';
 import { useState } from 'react';
+import type { QaStatus, QaContext } from '../actions';
 
 export default function QaNewPage() {
   const router = useRouter();
   const [title, setTitle] = useState('');
   const [acc, setAcc] = useState('');
   const [status, setStatus] = useState<QaStatus>('Draft');
-  const [proofUrl, setProofUrl] = useState('');
   const [context, setContext] = useState<QaContext>('public');
-  const [startPath, setStartPath] = useState('/esmeralda');
+  const [startPath, setStartPath] = useState('/esmeralda'); // default
+  const [proofUrl, setProofUrl] = useState('');
   const [stepsRaw, setStepsRaw] = useState(
 `Menu vises | Menuen skal vise mindst 1 produkt
 Læg i kurv | Klik på 'Læg i kurv' viser varen i kurven
@@ -23,20 +24,15 @@ Gennemfør ordre | Bekræftelsesside vises med ordrenummer`
   const [err, setErr] = useState<string | null>(null);
 
   async function onSave() {
-    if (!title.trim() || !acc.trim()) {
-      setErr('Udfyld Title og Acceptance Criteria');
-      return;
-    }
-    if (!startPath.startsWith('/')) {
-      setErr('startPath skal starte med "/" (fx /esmeralda eller /sales/orders)');
-      return;
-    }
-    const stepsTemplate = parseStepsInput(stepsRaw);
+    setErr(null);
+    if (!title.trim() || !acc.trim()) return setErr('Udfyld Title og Acceptance Criteria');
+    if (!startPath.startsWith('/')) return setErr('Start Path skal starte med "/"');
+
     const code = await createQa({
       title: title.trim(),
       acceptanceCriteria: acc.trim(),
       status,
-      stepsTemplate,
+      stepsTemplate: parseStepsInput(stepsRaw),
       context,
       startPath: startPath.trim(),
       proofUrl: proofUrl || undefined,
@@ -74,9 +70,9 @@ Gennemfør ordre | Bekræftelsesside vises med ordrenummer`
 
       <label className="block text-sm font-medium">Proof URL (valgfrit)</label>
       <input className="mt-1 w-full rounded border p-2" value={proofUrl} onChange={e => setProofUrl(e.target.value)} placeholder="https://postimg.cc/..." />
-      
+
       <div className="pt-4">
-        <button className="rounded bg-black px-4 py-2 text-white" onClick={onSave}>Opret testcase (kode genereres automatisk)</button>
+        <button className="rounded bg-black px-4 py-2 text-white" onClick={onSave}>Opret testcase (kode genereres)</button>
       </div>
     </div>
   );

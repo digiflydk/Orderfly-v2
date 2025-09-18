@@ -15,15 +15,14 @@ export type RunStep = QaStepTemplate & {
 };
 
 export type QaRun = {
-  runId: string;       // fx `${code}-${Date.now()}`
-  code: string;        // testcase code
+  runId: string;
+  code: string;
   startedAt: number;
   finishedAt?: number;
   steps: RunStep[];
-  // NYT (for tydelighed i run):
   context: QaContext;
   startPath: string;
-  startUrl: string;    // beregnet
+  startUrl: string;
 };
 
 function buildRunId(code: string) {
@@ -33,30 +32,25 @@ function buildRunId(code: string) {
 function computeStartUrl(context: QaContext, startPath: string): string {
   const basePublic = 'https://www.shopium.dk';
   const baseAdmin  = 'https://www.shopium.dk/superadmin';
-  const base = context === 'public' ? basePublic : baseAdmin;
-  // Sørg for at path starter med "/"
   const normalized = startPath.startsWith('/') ? startPath : `/${startPath}`;
-  // Undgå dobbelte /superadmin/superadmin
   if (context === 'superadmin' && normalized.startsWith('/superadmin')) {
-    return `${base}${normalized.replace('/superadmin', '')}`;
+    return `${baseAdmin}${normalized.replace('/superadmin','')}`;
   }
-  return `${base}${normalized}`;
+  return `${context === 'public' ? basePublic : baseAdmin}${normalized}`;
 }
 
 export async function createRunFromTestcase(tc: QaTestcase): Promise<string> {
   const runId = buildRunId(tc.code);
   const steps: RunStep[] = tc.stepsTemplate.map(s => ({ ...s, status: 'Pending' }));
-  const startUrl = computeStartUrl(tc.context, tc.startPath);
-  const run = {
+  const run: QaRun = {
     runId,
     code: tc.code,
     startedAt: Date.now(),
     steps,
     context: tc.context,
     startPath: tc.startPath,
-    startUrl,
-  } satisfies QaRun;
-
+    startUrl: computeStartUrl(tc.context, tc.startPath),
+  };
   await setDoc(doc(db, 'qaRuns', runId), run);
   return runId;
 }

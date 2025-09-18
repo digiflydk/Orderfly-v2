@@ -6,22 +6,21 @@ import { db } from '@/lib/firebase';
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, orderBy, query, runTransaction
 } from 'firebase/firestore';
-import { QaStepTemplate, parseStepsInput, stringifySteps } from './qa-utils';
+import { type QaStepTemplate } from '@/app/superadmin/qa/qa-utils';
 
 export type QaStatus = 'Draft' | 'Ready' | 'Deprecated';
 export type QaContext = 'public' | 'superadmin';
 
+
 export type QaTestcase = {
-  code: string;            // auto-genereret: OFQ-001, OFQ-002, ...
+  code: string;                   // auto: OFQ-001, OFQ-002, ...
   title: string;
-  acceptanceCriteria: string; // samlet beskrivelse for hele flowet
+  acceptanceCriteria: string;
   status: QaStatus;
   stepsTemplate: QaStepTemplate[];
-  // NYT:
-  context: QaContext;      // 'public' | 'superadmin'
-  startPath: string;       // fx "/esmeralda" eller "/sales/orders"
-  // Valgfrit:
-  proofUrl?: string;       // manuel dokumentation hvis ønsket
+  context: QaContext;
+  startPath: string;              // fx "/esmeralda" eller "/sales/orders"
+  proofUrl?: string;
   createdAt: number;
   updatedAt: number;
 };
@@ -36,11 +35,11 @@ async function nextCode(): Promise<string> {
     tx.set(SEQ_DOC, { nextNumber: current + 1 }, { merge: true });
     return current;
   });
-  return `OFQ-${num.toString().padStart(3, '0')}`;
+  return `OFQ-${String(num).padStart(3, '0')}`;
 }
 
 export async function listQa(): Promise<QaTestcase[]> {
-  const q = query(collection(db, COLL), orderBy('code'));
+  const q = query(collection(db, COLL), orderBy('createdAt', 'desc'));
   const snap = await getDocs(q);
   return snap.docs.map(d => d.data() as QaTestcase);
 }
@@ -51,8 +50,8 @@ export async function getQa(code: string): Promise<QaTestcase | null> {
   return snap.exists() ? (snap.data() as QaTestcase) : null;
 }
 
-// input uden code (auto genereres)
-export async function createQa(input: Omit<QaTestcase, 'code'|'createdAt'|'updatedAt'>) {
+// create uden "code" — genereres automatisk
+export async function createQa(input: Omit<QaTestcase,'code'|'createdAt'|'updatedAt'>) {
   const now = Date.now();
   const code = await nextCode();
   const payload: QaTestcase = { ...input, code, createdAt: now, updatedAt: now };

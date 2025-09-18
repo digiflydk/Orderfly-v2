@@ -1,5 +1,9 @@
 
-import type { QaStepTemplate } from './actions';
+export type QaStepTemplate = {
+  step: number;            // 1-based
+  title: string;           // fx "Menu vises"
+  criteria: string;        // acceptance pr step
+};
 
 // hver linje: Title | Criteria
 // tomme linjer ignoreres. step nummereres automatisk 1..N
