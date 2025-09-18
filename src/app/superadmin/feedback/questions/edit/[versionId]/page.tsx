@@ -1,14 +1,10 @@
-import { getQuestionVersionById } from '@/app/superadmin/feedback/actions';
-import { EditFormClient } from './edit-form-client';
+import { createOrUpdateQuestionVersion, getQuestionVersionById } from "@/app/superadmin/feedback/actions";
+import ClientFormBridge from "./ClientFormBridge";
 
 type Params = { versionId: string };
 
-export default async function EditFeedbackQuestionVersionPage({
-  params,
-}: {
-  params: Params;
-}) {
-  const versionId = decodeURIComponent(params.versionId || '');
+export default async function EditFeedbackQuestionVersionPage({ params }: { params: Params }) {
+  const versionId = decodeURIComponent(params.versionId || "");
   const initial = await getQuestionVersionById(versionId);
 
   return (
@@ -19,7 +15,13 @@ export default async function EditFeedbackQuestionVersionPage({
           <p className="text-sm text-muted-foreground">ID: {versionId}</p>
         </div>
       </div>
-      <EditFormClient versionId={versionId} initialData={initial ?? undefined} />
+
+      <ClientFormBridge
+        mode="edit"
+        id={versionId}
+        initialData={initial ?? undefined}
+        action={createOrUpdateQuestionVersion}
+      />
     </div>
   );
 }
