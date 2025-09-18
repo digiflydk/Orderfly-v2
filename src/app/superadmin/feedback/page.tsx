@@ -1,25 +1,23 @@
-import { getFeedbackEntries } from './actions';
 
-function formatDate(ts: number | null) {
-  if (!ts) return '-';
+import { getFeedbackEntries } from "./actions";
+
+function fmt(ts: number | null) {
+  if (!ts) return "-";
   try {
-    const d = new Date(ts);
-    return d.toLocaleString('da-DK');
+    return new Date(ts).toLocaleString("da-DK");
   } catch {
-    return '-';
+    return "-";
   }
 }
 
 export default async function FeedbackPage() {
   const feedback = await getFeedbackEntries();
-
   return (
     <div className="space-y-6">
       <div>
         <h1 className="text-xl font-semibold">Feedback</h1>
-        <p className="text-sm text-muted-foreground">Indsamlet kundefeedback knyttet til ordrer og versioner.</p>
+        <p className="text-sm text-muted-foreground">Indsamlet kundefeedback.</p>
       </div>
-
       <div className="rounded-xl border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -44,15 +42,15 @@ export default async function FeedbackPage() {
               ) : (
                 feedback.map((f) => (
                   <tr key={f.id} className="border-t">
-                    <td className="px-4 py-3">{formatDate(f.createdAt ?? null)}</td>
-                    <td className="px-4 py-3">{f.rating ?? '-'}</td>
-                    <td className="px-4 py-3">{f.comment ?? '-'}</td>
-                    <td className="px-4 py-3">{f.brandId ?? '-'}</td>
-                    <td className="px-4 py-3">{f.locationId ?? '-'}</td>
-                    <td className="px-4 py-3">{f.customerId ?? '-'}</td>
-                    <td className="px-4 py-3">{f.orderId ?? '-'}</td>
-                    <td className="px-4 py-3">{f.version ?? '-'}</td>
-                    <td className="px-4 py-3">{String(f.visible ?? '-')}</td>
+                    <td className="px-4 py-3">{fmt(f.createdAt)}</td>
+                    <td className="px-4 py-3">{f.rating ?? "-"}</td>
+                    <td className="px-4 py-3">{f.comment ?? "-"}</td>
+                    <td className="px-4 py-3">{f.brandId ?? "-"}</td>
+                    <td className="px-4 py-3">{f.locationId ?? "-"}</td>
+                    <td className="px-4 py-3">{f.customerId ?? "-"}</td>
+                    <td className="px-4 py-3">{f.orderId ?? "-"}</td>
+                    <td className="px-4 py-3">{f.version ?? "-"}</td>
+                    <td className="px-4 py-3">{f.visible === true ? "true" : f.visible === false ? "false" : "-"}</td>
                   </tr>
                 ))
               )}

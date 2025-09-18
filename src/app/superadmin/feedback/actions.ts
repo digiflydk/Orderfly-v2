@@ -12,6 +12,7 @@ import {
   getDoc,
   getDocs,
   limit,
+  orderBy,
   query,
   serverTimestamp,
   setDoc,
@@ -19,13 +20,69 @@ import {
   where,
 } from 'firebase/firestore';
 
-function questionsParentPath() {
+export type FeedbackEntry = {
+  id: string;
+  createdAt: number | null;
+  rating?: number | null;
+  comment?: string | null;
+  brandId?: string | null;
+  locationId?: string | null;
+  customerId?: string | null;
+  orderId?: string | null;
+  version?: string | null;
+  visible?: boolean | null;
+};
+
+export async function getFeedbackEntries(): Promise<FeedbackEntry[]> {
+  const col = collection(db, 'feedback');
+  try {
+    const q = query(col, orderBy('createdAt', 'desc'));
+    const snap = await getDocs(q);
+    const items: FeedbackEntry[] = [];
+    snap.forEach((d) => {
+      const x: any = d.data() ?? {};
+      items.push({
+        id: d.id,
+        createdAt: typeof x.createdAt === 'number' ? x.createdAt : x?.createdAt?.toMillis?.() ?? null,
+        rating: x?.rating ?? null,
+        comment: x?.comment ?? null,
+        brandId: x?.brandId ?? null,
+        locationId: x?.locationId ?? null,
+        customerId: x?.customerId ?? null,
+        orderId: x?.orderId ?? null,
+        version: x?.version ?? null,
+        visible: typeof x?.visible === 'boolean' ? x.visible : null,
+      });
+    });
+    return items;
+  } catch {
+    const snap = await getDocs(col);
+    const items: FeedbackEntry[] = [];
+    snap.forEach((d) => {
+      const x: any = d.data() ?? {};
+      items.push({
+        id: d.id,
+        createdAt: typeof x.createdAt === 'number' ? x.createdAt : x?.createdAt?.toMillis?.() ?? null,
+        rating: x?.rating ?? null,
+        comment: x?.comment ?? null,
+        brandId: x?.brandId ?? null,
+        locationId: x?.locationId ?? null,
+        customerId: x?.customerId ?? null,
+        orderId: x?.orderId ?? null,
+        version: x?.version ?? null,
+        visible: typeof x?.visible === 'boolean' ? x.visible : null,
+      });
+    });
+    return items;
+  }
+}
+
+function questionsParent() {
   return collection(db, 'feedbackConfig', 'default', 'questions');
 }
 
 type QuestionVersion = {
   id?: string;
-  // Almene felter (bevidst brede for at matche eksisterende form)
   label?: string | null;
   name?: string | null;
   description?: string | null;
@@ -36,7 +93,6 @@ type QuestionVersion = {
   fields?: any;
   createdAt?: number | null;
   updatedAt?: number | null;
-  // Meta
   parentId?: string | null;
 };
 
@@ -46,32 +102,25 @@ function toMillis(v: any): number | null {
   return null;
 }
 
-function parseBoolean(input: FormDataEntryValue | null): boolean | null {
-  if (input === null || input === undefined) return null;
-  const s = String(input).toLowerCase().trim();
+function parseBoolean(v: FormDataEntryValue | null): boolean | null {
+  if (v === null || v === undefined) return null;
+  const s = String(v).toLowerCase().trim();
   if (['true', '1', 'on', 'yes'].includes(s)) return true;
   if (['false', '0', 'off', 'no'].includes(s)) return false;
   return null;
 }
 
-function parseJson(input: FormDataEntryValue | null): any {
-  if (input == null) return undefined;
+function parseJson(v: FormDataEntryValue | null): any {
+  if (v == null) return undefined;
   try {
-    return JSON.parse(String(input));
+    return JSON.parse(String(v));
   } catch {
     return undefined;
   }
 }
 
-/**
- * Robust loader:
- * 1) Prøv: feedbackConfig/default/questions/{id}
- * 2) Fallback: collectionGroup('questions') hvor __name__ == id
- */
 export async function getQuestionVersionById(id: string): Promise<QuestionVersion | null> {
   if (!id) return null;
-
-  // 1) Primær sti
   const ref = doc(db, 'feedbackConfig', 'default', 'questions', id);
   const snap = await getDoc(ref);
   if (snap.exists()) {
@@ -91,16 +140,14 @@ export async function getQuestionVersionById(id: string): Promise<QuestionVersio
       parentId: 'feedbackConfig/default',
     };
   }
-
-  // 2) Fallback via collectionGroup
   const g = collectionGroup(db, 'questions');
   const q = query(g, where(documentId(), '==', id), limit(1));
-  const groupSnap = await getDocs(q);
-  if (!groupSnap.empty) {
-    const docSnap = groupSnap.docs[0];
-    const d: any = docSnap.data() ?? {};
+  const gr = await getDocs(q);
+  if (!gr.empty) {
+    const ds = gr.docs[0];
+    const d: any = ds.data() ?? {};
     return {
-      id: docSnap.id,
+      id: ds.id,
       label: d.label ?? d.name ?? null,
       name: d.name ?? null,
       description: d.description ?? null,
@@ -111,34 +158,23 @@ export async function getQuestionVersionById(id: string): Promise<QuestionVersio
       fields: d.fields,
       createdAt: toMillis(d.createdAt),
       updatedAt: toMillis(d.updatedAt),
-      parentId: docSnap.ref.parent?.parent?.id ?? null,
+      parentId: ds.ref.parent?.parent?.id ?? null,
     };
   }
-
   return null;
 }
 
-/**
- * Opret eller opdater question version.
- * (Bevarer bredt felt-set for at matche eksisterende form.)
- */
 export async function createOrUpdateQuestionVersion(formData: FormData) {
   const id = (formData.get('id') ?? '').toString().trim() || null;
-
   const label = (formData.get('label') ?? formData.get('name') ?? '').toString().trim() || null;
   const name = (formData.get('name') ?? '').toString().trim() || null;
   const description = (formData.get('description') ?? '').toString().trim() || null;
   const language = (formData.get('language') ?? '').toString().trim() || null;
   const active = parseBoolean(formData.get('active'));
-
   const orderTypesRaw = formData.getAll('orderTypes');
-  const orderTypes: string[] | null = orderTypesRaw && orderTypesRaw.length
-    ? orderTypesRaw.map(v => String(v)).filter(Boolean)
-    : null;
-
+  const orderTypes: string[] | null = orderTypesRaw && orderTypesRaw.length ? orderTypesRaw.map((v) => String(v)).filter(Boolean) : null;
   const questionsJson = parseJson(formData.get('questions'));
   const fields = parseJson(formData.get('fields'));
-
   const now = Date.now();
   const payload: any = {
     label,
@@ -151,20 +187,12 @@ export async function createOrUpdateQuestionVersion(formData: FormData) {
     fields: fields !== undefined ? fields : undefined,
     updatedAt: now,
   };
-
-  // Ryd undefined så vi ikke skriver tomme felter utilsigtet
-  Object.keys(payload).forEach(k => payload[k] === undefined && delete (payload as any)[k]);
-
+  Object.keys(payload).forEach((k) => (payload as any)[k] === undefined && delete (payload as any)[k]);
   if (id) {
     const ref = doc(db, 'feedbackConfig', 'default', 'questions', id);
     await updateDoc(ref, payload);
   } else {
-    await addDoc(questionsParentPath(), {
-      ...payload,
-      createdAt: now,
-      createdAtServer: serverTimestamp(),
-    });
+    await addDoc(questionsParent(), { ...payload, createdAt: now, createdAtServer: serverTimestamp() });
   }
-
   redirect('/superadmin/feedback/questions');
 }
