@@ -1,5 +1,3 @@
-// src/app/superadmin/feedback/questions/new/page.tsx
-import React from "react";
 import { FeedbackQuestionVersionForm } from '@/components/superadmin/feedback-question-version-form';
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
