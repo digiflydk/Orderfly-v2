@@ -1,9 +1,16 @@
-import { createOrUpdateQuestionVersion, getQuestionVersionById } from "@/app/superadmin/feedback/actions";
+import {
+  createOrUpdateQuestionVersion,
+  getQuestionVersionById,
+} from "@/app/superadmin/feedback/actions";
 import ClientFormBridge from "./ClientFormBridge";
 
 type Params = { versionId: string };
 
-export default async function EditFeedbackQuestionVersionPage({ params }: { params: Params }) {
+export default async function EditFeedbackQuestionVersionPage({
+  params,
+}: {
+  params: Params;
+}) {
   const versionId = decodeURIComponent(params.versionId || "");
   const initial = await getQuestionVersionById(versionId);
 

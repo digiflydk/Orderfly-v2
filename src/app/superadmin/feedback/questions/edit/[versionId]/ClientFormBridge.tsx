@@ -1,14 +1,11 @@
 "use client";
 
-import dynamic from "next/dynamic";
+import * as FormModule from "@/components/superadmin/feedback-question-version-form";
 
-const InnerForm = dynamic(
-  () =>
-    import("@/components/superadmin/feedback-question-version-form").then(
-      (m: any) => m.default ?? m.FeedbackQuestionVersionForm
-    ),
-  { ssr: false }
-);
+const InnerForm =
+  // fallback til både default- og named-export
+  (FormModule as any).default ??
+  (FormModule as any).FeedbackQuestionVersionForm;
 
 type Props = {
   mode: "edit" | "create";
@@ -18,5 +15,15 @@ type Props = {
 };
 
 export default function ClientFormBridge(props: Props) {
-  return <InnerForm {...props} />;
+  const Comp: any = InnerForm;
+  // Maks kompatibilitet: giv data under flere prop-navne
+  const { initialData, ...rest } = props;
+  const pass = {
+    ...rest,
+    initialData,
+    version: initialData,
+    data: initialData,
+    defaultValues: initialData,
+  };
+  return <Comp {...pass} />;
 }
