@@ -15,7 +15,7 @@ export default function FooterClient({ brand, location, theme }: { brand: Brand;
             <Footer
                 brand={brand}
                 location={location}
-                version="1.0.198 • OFQ-002"
+                version="1.0.216 • OF-448"
                 onOpenCookieSettings={() => setIsCookieModalOpen(true)}
                 theme={theme}
             />
