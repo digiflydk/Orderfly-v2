@@ -2,27 +2,13 @@
 
 'use server';
 
-import { redirect } from 'next/navigation';
-import { db } from '@/lib/firebase';
-import { adminDb, serverTimestamp } from "@/lib/firebase-admin";
-import {
-  addDoc,
-  collection,
-  collectionGroup,
-  doc,
-  documentId,
-  getDoc,
-  getDocs,
-  limit,
-  orderBy,
-  query,
-  setDoc,
-  updateDoc,
-  where,
-  writeBatch
-} from 'firebase/firestore';
-import type { Feedback, FeedbackQuestionsVersion, OrderDetail } from '@/types';
+import "server-only";
+import { redirect } from "next/navigation";
+import { adminDb, adminFieldValue } from "@/lib/firebase-admin";
 import { getOrderById } from '@/app/checkout/order-actions';
+import { db } from '@/lib/firebase';
+import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, getDoc, Timestamp, where, writeBatch } from 'firebase/firestore';
+import type { Feedback, FeedbackQuestionsVersion, OrderDetail } from '@/types';
 
 
 export async function getFeedbackEntries(): Promise<Feedback[]> {
@@ -143,74 +129,73 @@ type VersionPayload = {
   updatedAt?: any;
 };
 
+/** RESULT TYPE FOR UI */
+type ActionOk = { ok: true; id: string };
+type ActionErr = { ok: false; error: string };
+type ActionResult = ActionOk | ActionErr;
+
+
 // ---------- action ----------
-export async function createOrUpdateQuestionVersion(formData: FormData) {
-  // Parse
-  const id = (formData.get("id") as string) || undefined;
-  const versionLabel = String(formData.get("versionLabel") || "").trim();
-  const isActive = formData.get("isActive") === "on";
-  const language = String(formData.get("language") || "da").trim();
+export async function createOrUpdateQuestionVersion(formData: FormData): Promise<ActionResult> {
+  try {
+    const id = (formData.get("id") as string) || undefined;
+    const versionLabel = String(formData.get("versionLabel") || "").trim();
+    const isActive = formData.get("isActive") === "on";
+    const language = String(formData.get("language") || "da").trim();
 
-  const orderTypes: ("pickup" | "delivery")[] = [];
-  for (const [k, v] of formData.entries()) {
-    if (k === "orderTypes" && typeof v === "string") {
-      if (v === "pickup" || v === "delivery") orderTypes.push(v);
+    const orderTypes: ("pickup" | "delivery")[] = [];
+    for (const [k, v] of formData.entries()) {
+      if (k === "orderTypes" && typeof v === "string") {
+        if (v === "pickup" || v === "delivery") orderTypes.push(v);
+      }
     }
-  }
 
-  let questions: Question[] = [];
-  try {
-    const q = formData.get("questions") as string;
-    questions = q ? (JSON.parse(q) as Question[]) : [];
-  } catch (e) {
-    console.error("[createOrUpdateQuestionVersion] JSON parse error:", e);
-    throw new Error("Invalid questions payload");
-  }
+    let questions: Question[] = [];
+    try {
+      const q = formData.get("questions") as string;
+      questions = q ? (JSON.parse(q) as Question[]) : [];
+    } catch (e) {
+      console.error("[createOrUpdateQuestionVersion] JSON parse error:", e);
+      return { ok: false, error: "Invalid questions payload" };
+    }
 
-  const base: Omit<VersionPayload, "id"> = {
-    versionLabel,
-    isActive,
-    language,
-    orderTypes,
-    questions,
-    createdAt: serverTimestamp(),
-    updatedAt: serverTimestamp(),
-  };
+    if (!versionLabel) return { ok: false, error: "Version label is required" };
+    if (!Array.isArray(orderTypes) || orderTypes.length === 0)
+      return { ok: false, error: "Select at least one order type" };
 
-  try {
-    const col = adminDb.collection("feedbackQuestionsVersion"); // jf. jeres DB
+    const base: Omit<VersionPayload, "id"> = {
+      versionLabel,
+      isActive,
+      language,
+      orderTypes,
+      questions,
+      createdAt: adminFieldValue.serverTimestamp(),
+      updatedAt: adminFieldValue.serverTimestamp(),
+    };
+
+    const col = adminDb.collection("feedbackQuestionsVersion"); // din collection
 
     if (id) {
-      // EDIT
       const ref = col.doc(id);
       console.log("[createOrUpdateQuestionVersion] UPDATE", { docPath: `feedbackQuestionsVersion/${id}` });
       await ref.set({ id, ...base }, { merge: true });
-      redirect(`/superadmin/feedback/questions/edit/${id}`);
-      return; // defensive
+      // returnér OK til UI — UI laver client-side redirect
+      return { ok: true, id };
     } else {
-      // CREATE
       const ref = await col.add({ ...base });
       await ref.set({ id: ref.id }, { merge: true });
-
-      console.log("[createOrUpdateQuestionVersion] CREATE", {
-        docPath: `feedbackQuestionsVersion/${ref.id}`,
-      });
-
-      redirect(`/superadmin/feedback/questions/edit/${ref.id}`);
-      return;
+      console.log("[createOrUpdateQuestionVersion] CREATE", { docPath: `feedbackQuestionsVersion/${ref.id}` });
+      return { ok: true, id: ref.id };
     }
   } catch (e: any) {
-    // Log ALT server-side, men kast en pæn fejl til klienten
-    console.error("[createOrUpdateQuestionVersion] Firestore error:", {
+    console.error("[createOrUpdateQuestionVersion] Firestore/Admin error:", {
       message: e?.message,
       code: e?.code,
       stack: e?.stack,
     });
-    throw new Error(e?.message || "Failed to save question version");
+    return { ok: false, error: e?.message || "Failed to save question version" };
   }
 }
-
-
 
 function questionsParent() {
   return collection(db, 'feedbackConfig', 'default', 'questions');

@@ -56,9 +56,7 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
 
   // ⚠️ Robust sprog-fallback (vigtigt for at undgå undefined.map)
   const safeSupportedLanguages = useMemo<LanguageSetting[]>(() => {
-    if (Array.isArray(supportedLanguages) && supportedLanguages.length > 0) {
-      return supportedLanguages;
-    }
+    if (Array.isArray(supportedLanguages) && supportedLanguages.length > 0) return supportedLanguages;
     return [
       { code: 'da', name: 'Danish' } as LanguageSetting,
       { code: 'en', name: 'English' } as LanguageSetting,
@@ -80,9 +78,7 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
   const { fields, append, remove } = useFieldArray({ control, name: "questions" });
 
   useEffect(() => {
-    if (version) {
-      form.reset(version);
-    }
+    if (version) form.reset(version);
   }, [version, form]);
 
   const onSubmit = (data: VersionFormValues) => {
@@ -96,13 +92,23 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
 
     startTransition(async () => {
       try {
-        await createOrUpdateQuestionVersion(formData);
-        // redirect håndteres af server action
-      } catch (err: any) {
-        console.error("[Form submit] action error:", err);
+        const result = await createOrUpdateQuestionVersion(formData);
+        if (result.ok) {
+          // client-side redirect sikrer ingen RSC/POST issues
+          window.location.href = `/superadmin/feedback/questions/edit/${result.id}`;
+          return;
+        }
+        // fejl fra action
         toast({
           title: "Kunne ikke gemme",
-          description: err?.message ?? "Uventet fejl",
+          description: result.error,
+          variant: "destructive",
+        });
+      } catch (err: any) {
+        console.error("[Form submit] unexpected error:", err);
+        toast({
+          title: "Uventet fejl",
+          description: err?.message ?? "Noget gik galt",
           variant: "destructive",
         });
       }
