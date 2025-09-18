@@ -1,4 +1,4 @@
-import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form';
+import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form'; // ✅ default import
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
 type Lang = { code: string; name: string };

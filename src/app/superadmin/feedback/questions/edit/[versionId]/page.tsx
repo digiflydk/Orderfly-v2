@@ -2,7 +2,7 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { FeedbackQuestionsVersion } from '@/types';
-import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form';
+import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form'; // ✅ default import
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
 type Lang = { code: string; name: string };
@@ -18,7 +18,7 @@ function resolveSupportedLanguages(settings: any): Lang[] {
 }
 
 async function getQuestionVersionById(id: string): Promise<FeedbackQuestionsVersion | null> {
-  const ref = doc(db, 'feedbackQuestionsVersion', id);
+  const ref = doc(db, 'feedbackQuestionsVersion', id); // <— matcher backup; ret kun hvis jeres collection hedder noget andet
   const snap = await getDoc(ref);
   if (snap.exists()) {
     const data = snap.data();
@@ -35,7 +35,9 @@ export default async function EditFeedbackQuestionVersionPage({ params }: PagePr
     getPlatformSettings(),
   ]);
 
-  if (!version) notFound();
+  if (!version) {
+    notFound();
+  }
 
   const supportedLanguages = resolveSupportedLanguages(settings);
 

@@ -18,6 +18,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Switch } from '../ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 
+// ---------------------- Schemas ----------------------
 const questionOptionSchema = z.object({
   id: z.string(),
   label: z.string().min(1, "Option label cannot be empty."),
@@ -46,7 +47,7 @@ type VersionFormValues = z.infer<typeof feedbackQuestionVersionSchema>;
 
 interface FeedbackQuestionVersionFormProps {
   version?: FeedbackQuestionsVersion;
-  supportedLanguages: LanguageSetting[]; // forventes fra siderne
+  supportedLanguages: LanguageSetting[]; // forventes injiceret fra siderne
 }
 
 export function FeedbackQuestionVersionForm({ version, supportedLanguages }: FeedbackQuestionVersionFormProps) {
@@ -94,8 +95,12 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
     formData.append('questions', JSON.stringify(data.questions));
 
     startTransition(async () => {
-      await createOrUpdateQuestionVersion(formData);
-      // redirect håndteres af server action
+      try {
+        await createOrUpdateQuestionVersion(formData);
+        // redirect håndteres af server action (forventet original adfærd)
+      } catch (e: any) {
+        toast({ title: "Save failed", description: e?.message ?? "Unknown error", variant: "destructive" });
+      }
     });
   };
 
@@ -105,6 +110,7 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
   return (
     <Form {...form}>
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+        {/* Header actions */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
@@ -121,6 +127,7 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left: Version details */}
           <Card className="lg:col-span-1 h-fit">
             <CardHeader>
               <CardTitle>Version Details</CardTitle>
@@ -137,7 +144,9 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
                 <FormItem>
                   <FormLabel>Language</FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
-                    <FormControl><SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger></FormControl>
+                    <FormControl>
+                      <SelectTrigger><SelectValue placeholder="Select language" /></SelectTrigger>
+                    </FormControl>
                     <SelectContent>
                       {safeSupportedLanguages.map(lang => (
                         <SelectItem key={lang.code} value={lang.code}>{lang.name}</SelectItem>
@@ -210,6 +219,7 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
             </CardContent>
           </Card>
 
+          {/* Right: Questions builder */}
           <Card className="lg:col-span-2">
             <CardHeader>
               <CardTitle>Questions</CardTitle>
@@ -331,4 +341,6 @@ export function FeedbackQuestionVersionForm({ version, supportedLanguages }: Fee
     </Form>
   );
 }
+
+// Gør import robust i siderne (både named og default virker)
 export default FeedbackQuestionVersionForm;
