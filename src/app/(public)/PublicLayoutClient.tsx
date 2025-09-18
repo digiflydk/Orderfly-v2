@@ -26,7 +26,7 @@ export function PublicLayoutClient({
       {children}
       <Footer 
         brand={brand} 
-        version="1.0.214 • OF-446"
+        version="1.0.215 • OF-447"
         onOpenCookieSettings={() => setIsCookieModalOpen(true)}
       />
       <CookieConsent brandId={brand.id} isModalOpen={isCookieModalOpen} setIsModalOpen={setIsCookieModalOpen} />
