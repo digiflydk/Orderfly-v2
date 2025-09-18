@@ -67,7 +67,7 @@ export async function createOrUpdateDiscount(
         assignedToCustomerId: formData.get('assignedToCustomerId') || undefined,
         firstTimeCustomerOnly: formData.has('firstTimeCustomerOnly'),
         allowStacking: formData.has('allowStacking'),
-        activeTimeSlots: JSON.parse(formData.get('activeTimeSlots') as string || '[]'),
+        activeTimeSlots: JSON.parse((formData.get('activeTimeSlots') as string | null) || '[]'),
     };
     
     if (id) (rawData as any).id = id;
@@ -211,3 +211,4 @@ export async function getDiscountByCode(code: string, brandId: string): Promise<
     updatedAt: data.updatedAt.toDate(),
   } as Discount;
 }
+

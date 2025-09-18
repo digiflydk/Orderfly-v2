@@ -101,8 +101,8 @@ export async function createOrUpdateCombo(
     const endDate = formData.get('endDate');
     if (endDate) rawData.endDate = endDate as string;
     
-    const productGroupsJSON = formData.get('productGroups') as string;
-    if (productGroupsJSON) {
+    const productGroupsJSON = formData.get('productGroups');
+    if (typeof productGroupsJSON === 'string' && productGroupsJSON.trim() !== '') {
         let parsedGroups = JSON.parse(productGroupsJSON);
         rawData.productGroups = parsedGroups.map((group: any) => ({
             ...group,
@@ -113,8 +113,8 @@ export async function createOrUpdateCombo(
         rawData.productGroups = [];
     }
 
-    const activeTimeSlotsJSON = formData.get('activeTimeSlots') as string;
-    if (activeTimeSlotsJSON && activeTimeSlotsJSON.trim() !== '') {
+    const activeTimeSlotsJSON = formData.get('activeTimeSlots');
+    if (typeof activeTimeSlotsJSON === 'string' && activeTimeSlotsJSON.trim() !== '') {
         rawData.activeTimeSlots = JSON.parse(activeTimeSlotsJSON);
     } else {
         rawData.activeTimeSlots = [];

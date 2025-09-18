@@ -108,15 +108,15 @@ export async function createOrUpdateUpsell(
     const endDateString = formData.get('endDate') as string | null;
     if (endDateString) rawData.endDate = new Date(endDateString);
     
-    const activeTimeSlotsJSON = formData.get('activeTimeSlots') as string;
-    if (activeTimeSlotsJSON && activeTimeSlotsJSON.trim() !== '') {
+    const activeTimeSlotsJSON = formData.get('activeTimeSlots');
+    if (typeof activeTimeSlotsJSON === 'string' && activeTimeSlotsJSON.trim() !== '') {
         rawData.activeTimeSlots = JSON.parse(activeTimeSlotsJSON);
     } else {
         rawData.activeTimeSlots = [];
     }
 
-    const triggerConditionsJSON = formData.get('triggerConditions') as string;
-    if (triggerConditionsJSON && triggerConditionsJSON.trim() !== '') {
+    const triggerConditionsJSON = formData.get('triggerConditions');
+    if (typeof triggerConditionsJSON === 'string' && triggerConditionsJSON.trim() !== '') {
         rawData.triggerConditions = JSON.parse(triggerConditionsJSON);
     } else {
         rawData.triggerConditions = [];

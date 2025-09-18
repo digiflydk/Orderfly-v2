@@ -1,4 +1,3 @@
-
 import FeedbackQuestionVersionForm from "@/components/superadmin/feedback-question-version-form";
 import {
   createOrUpdateQuestionVersion,
@@ -7,7 +6,7 @@ import {
 
 type Params = { versionId: string };
 
-export default async function EditFeedbackQuestionVersionPage({
+export default async function EditQuestionVersionPage({
   params,
 }: {
   params: Params;
