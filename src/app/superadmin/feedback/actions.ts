@@ -1,49 +1,115 @@
 
 'use server';
 
+import { redirect } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { collection, getDocs, orderBy, query } from 'firebase/firestore';
+import {
+  addDoc,
+  collection,
+  doc,
+  getDoc,
+  serverTimestamp,
+  setDoc,
+  Timestamp,
+  updateDoc,
+} from 'firebase/firestore';
 
-export type FeedbackEntry = {
-  id: string;
-  createdAt: number | null;
-  rating?: number | null;
-  comment?: string | null;
-  brandId?: string | null;
-  locationId?: string | null;
-  customerId?: string | null;
-  orderId?: string | null;
-  version?: string | null;
-  visible?: boolean | null;
+/**
+ * Storage design:
+ * Vi placerer versions-dokumenter som subcollection:
+ *   feedbackConfig/default/questions/{versionId}
+ * Det gør, at vores listevisning via collectionGroup('questions') kan finde dem.
+ */
+function questionsParentPath() {
+  return collection(db, 'feedbackConfig', 'default', 'questions');
+}
+
+function toMillis(v: any): number | null {
+  if (typeof v === 'number') return v;
+  if (v && typeof (v as any).toMillis === 'function') return (v as any).toMillis();
+  if (v instanceof Timestamp) return v.toMillis();
+  return null;
+}
+
+type QuestionVersionPayload = {
+  name?: string | null;
+  label?: string | null;
+  description?: string | null;
+  active?: boolean | null;
+  createdAt?: number | null;
+  updatedAt?: number | null;
+  fields?: any;
 };
 
-export async function getFeedbackEntries(): Promise<FeedbackEntry[]> {
-  const col = collection(db, 'feedback');
-  const q = query(col, orderBy('createdAt', 'desc'));
-  const snap = await getDocs(q);
+function parseBoolean(input: FormDataEntryValue | null): boolean | null {
+  if (input === null || input === undefined) return null;
+  const s = String(input).toLowerCase().trim();
+  if (['true', '1', 'on', 'yes'].includes(s)) return true;
+  if (['false', '0', 'off', 'no'].includes(s)) return false;
+  return null;
+}
 
-  const items: FeedbackEntry[] = [];
-  snap.forEach((doc) => {
-    const d = doc.data() as any;
+function parseJson(input: FormDataEntryValue | null): any {
+  if (input == null) return undefined;
+  try {
+    return JSON.parse(String(input));
+  } catch {
+    return undefined;
+  }
+}
 
-    const createdAt: number | null =
-      typeof d?.createdAt === 'number'
-        ? d.createdAt
-        : (d?.createdAt?.toMillis?.() ?? null);
+/**
+ * Server action: create/update question version.
+ * Forventer form fields (alle valgfrie):
+ * - id (ved update)
+ * - name, label, description
+ * - active (true/false/1/0/on/off)
+ * - fields (JSON string – valgfrit skema for spørgsmål)
+ * Efter succes: redirect til /superadmin/feedback/questions
+ */
+export async function createOrUpdateQuestionVersion(formData: FormData) {
+  const id = (formData.get('id') ?? '').toString().trim() || null;
+  const name = (formData.get('name') ?? '').toString().trim() || null;
+  const label = (formData.get('label') ?? '').toString().trim() || null;
+  const description = (formData.get('description') ?? '').toString().trim() || null;
+  const active = parseBoolean(formData.get('active'));
+  const fields = parseJson(formData.get('fields'));
 
-    items.push({
-      id: doc.id,
-      createdAt,
-      rating: d?.rating ?? null,
-      comment: d?.comment ?? null,
-      brandId: d?.brandId ?? null,
-      locationId: d?.locationId ?? null,
-      customerId: d?.customerId ?? null,
-      orderId: d?.orderId ?? null,
-      version: d?.version ?? null,
-      visible: typeof d?.visible === 'boolean' ? d.visible : null,
-    });
-  });
+  const now = Date.now();
 
-  return items;
+  const payload: QuestionVersionPayload = {
+    name: name || null,
+    label: label || null,
+    description: description || null,
+    active,
+    updatedAt: now,
+  };
+  if (fields !== undefined) {
+    (payload as any).fields = fields;
+  }
+
+  const parent = questionsParentPath();
+
+  if (id) {
+    const ref = doc(db, 'feedbackConfig', 'default', 'questions', id);
+    const snap = await getDoc(ref);
+    if (snap.exists()) {
+      await updateDoc(ref, {
+        ...payload,
+      } as any);
+    } else {
+      await setDoc(ref, {
+        ...payload,
+        createdAt: now,
+      } as any);
+    }
+  } else {
+    await addDoc(parent, {
+      ...payload,
+      createdAt: now,
+      createdAtServer: serverTimestamp(),
+    } as any);
+  }
+
+  redirect('/superadmin/feedback/questions');
 }
