@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { redirect } from 'next/navigation';
@@ -18,64 +19,106 @@ import {
   setDoc,
   updateDoc,
   where,
+  writeBatch
 } from 'firebase/firestore';
+import type { Feedback, FeedbackQuestionsVersion, OrderDetail } from '@/types';
+import { getOrderById } from '@/app/checkout/order-actions';
 
-export type FeedbackEntry = {
-  id: string;
-  createdAt: number | null;
-  rating?: number | null;
-  comment?: string | null;
-  brandId?: string | null;
-  locationId?: string | null;
-  customerId?: string | null;
-  orderId?: string | null;
-  version?: string | null;
-  visible?: boolean | null;
-};
 
-export async function getFeedbackEntries(): Promise<FeedbackEntry[]> {
-  const col = collection(db, 'feedback');
-  try {
-    const q = query(col, orderBy('createdAt', 'desc'));
-    const snap = await getDocs(q);
-    const items: FeedbackEntry[] = [];
-    snap.forEach((d) => {
-      const x: any = d.data() ?? {};
-      items.push({
-        id: d.id,
-        createdAt: typeof x.createdAt === 'number' ? x.createdAt : x?.createdAt?.toMillis?.() ?? null,
-        rating: x?.rating ?? null,
-        comment: x?.comment ?? null,
-        brandId: x?.brandId ?? null,
-        locationId: x?.locationId ?? null,
-        customerId: x?.customerId ?? null,
-        orderId: x?.orderId ?? null,
-        version: x?.version ?? null,
-        visible: typeof x?.visible === 'boolean' ? x.visible : null,
-      });
+export async function getFeedbackEntries(): Promise<Feedback[]> {
+    const q = query(collection(db, 'feedback'), orderBy('receivedAt', 'desc'));
+    const querySnapshot = await getDocs(q);
+    const feedbackEntries = querySnapshot.docs.map(doc => {
+        const data = doc.data();
+        return {
+            ...data,
+            id: doc.id,
+            receivedAt: (data.receivedAt as any).toDate(),
+        } as Feedback;
     });
-    return items;
-  } catch {
-    const snap = await getDocs(col);
-    const items: FeedbackEntry[] = [];
-    snap.forEach((d) => {
-      const x: any = d.data() ?? {};
-      items.push({
-        id: d.id,
-        createdAt: typeof x.createdAt === 'number' ? x.createdAt : x?.createdAt?.toMillis?.() ?? null,
-        rating: x?.rating ?? null,
-        comment: x?.comment ?? null,
-        brandId: x?.brandId ?? null,
-        locationId: x?.locationId ?? null,
-        customerId: x?.customerId ?? null,
-        orderId: x?.orderId ?? null,
-        version: x?.version ?? null,
-        visible: typeof x?.visible === 'boolean' ? x.visible : null,
-      });
-    });
-    return items;
-  }
+    return feedbackEntries;
 }
+
+export async function getFeedbackById(id: string): Promise<Feedback | null> {
+    const docRef = doc(db, 'feedback', id);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
+        const data = docSnap.data();
+        return { 
+            id: docSnap.id, 
+            ...data,
+            receivedAt: (data.receivedAt as any).toDate(),
+        } as Feedback;
+    }
+    return null;
+}
+
+export async function updateFeedback(feedbackId: string, data: Partial<Pick<Feedback, 'showPublicly' | 'maskCustomerName' | 'internalNote'>>) {
+    try {
+        const feedbackRef = doc(db, 'feedback', feedbackId);
+        await setDoc(feedbackRef, data, { merge: true });
+        revalidatePath(`/superadmin/feedback`);
+        revalidatePath(`/superadmin/feedback/${feedbackId}`);
+        return { message: "Feedback updated successfully.", error: false };
+    } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+        return { message: `Failed to update feedback: ${errorMessage}`, error: true };
+    }
+}
+
+export async function deleteFeedback(id: string) {
+    try {
+        await deleteDoc(doc(db, "feedback", id));
+        revalidatePath("/superadmin/feedback");
+        return { message: "Feedback deleted successfully.", error: false };
+    } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+        return { message: `Failed to delete feedback: ${errorMessage}`, error: true };
+    }
+}
+
+export async function sendFeedbackRequestEmail(orderId: string) {
+    console.log(`[Action] Attempting to send feedback email for order: ${orderId}`);
+    try {
+        const order = await getOrderById(orderId);
+        if (!order) {
+            console.error(`Order with ID ${orderId} not found.`);
+            return { error: 'Order not found.' };
+        }
+        
+        const feedbackLink = `http://localhost:9002/feedback?orderId=${order.id}&customerId=${order.customerDetails.id}`;
+
+        const email = {
+            to: order.customerContact,
+            from: 'feedback@orderfly.app',
+            subject: `How was your order from ${order.brandName}?`,
+            htmlBody: `
+                <h1>Hi ${order.customerName},</h1>
+                <p>Thanks for your recent order from ${order.brandName}!</p>
+                <p>We'd love to get your feedback on order #${order.id}.</p>
+                <a href="${feedbackLink}">Give Feedback</a>
+                <p>Thanks,</p>
+                <p>The ${order.brandName} Team</p>
+            `
+        };
+
+        console.log("--- SIMULATING EMAIL ---");
+        console.log(`To: ${email.to}`);
+        console.log(`Subject: ${email.subject}`);
+        console.log("Body:", email.htmlBody);
+        console.log("------------------------");
+        
+        revalidatePath(`/superadmin/sales/orders/${orderId}`);
+        return { success: true, message: `Simulated sending feedback email to ${email.to}. Check console for link.` };
+
+    } catch (e) {
+        const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+        console.error(`Failed to send feedback email for order ${orderId}:`, e);
+        return { error: errorMessage };
+    }
+}
+
+// --- Feedback Questions ---
 
 function questionsParent() {
   return collection(db, 'feedbackConfig', 'default', 'questions');
@@ -166,15 +209,21 @@ export async function getQuestionVersionById(id: string): Promise<QuestionVersio
 
 export async function createOrUpdateQuestionVersion(formData: FormData) {
   const id = (formData.get('id') ?? '').toString().trim() || null;
+
   const label = (formData.get('label') ?? formData.get('name') ?? '').toString().trim() || null;
   const name = (formData.get('name') ?? '').toString().trim() || null;
   const description = (formData.get('description') ?? '').toString().trim() || null;
   const language = (formData.get('language') ?? '').toString().trim() || null;
   const active = parseBoolean(formData.get('active'));
+
   const orderTypesRaw = formData.getAll('orderTypes');
-  const orderTypes: string[] | null = orderTypesRaw && orderTypesRaw.length ? orderTypesRaw.map((v) => String(v)).filter(Boolean) : null;
+  const orderTypes: string[] | null = orderTypesRaw && orderTypesRaw.length
+    ? orderTypesRaw.map(v => String(v)).filter(Boolean)
+    : null;
+
   const questionsJson = parseJson(formData.get('questions'));
   const fields = parseJson(formData.get('fields'));
+
   const now = Date.now();
   const payload: any = {
     label,
@@ -187,12 +236,67 @@ export async function createOrUpdateQuestionVersion(formData: FormData) {
     fields: fields !== undefined ? fields : undefined,
     updatedAt: now,
   };
-  Object.keys(payload).forEach((k) => (payload as any)[k] === undefined && delete (payload as any)[k]);
+
+  Object.keys(payload).forEach(k => (payload as any)[k] === undefined && delete (payload as any)[k]);
+
   if (id) {
     const ref = doc(db, 'feedbackConfig', 'default', 'questions', id);
     await updateDoc(ref, payload);
   } else {
-    await addDoc(questionsParent(), { ...payload, createdAt: now, createdAtServer: serverTimestamp() });
+    await addDoc(questionsParent(), {
+      ...payload,
+      createdAt: now,
+      createdAtServer: serverTimestamp(),
+    });
   }
+
   redirect('/superadmin/feedback/questions');
+}
+
+// Form payload type spejler client-schema, men vi tillader ekstra felter
+type CreateQuestionPayload = {
+  title: string;
+  helpText?: string;
+  type: string;
+  required: boolean;
+  category?: string;
+  language: string;
+  isActive: boolean;
+  options: { id: string; label: string; value: string }[];
+} & Record<string, any>;
+
+/**
+ * Opretter:
+ *  - /feedbackQuestions/{questionId}
+ *  - /feedbackQuestions/{questionId}/versions/{auto}
+ */
+export async function createFeedbackQuestion(payload: CreateQuestionPayload) {
+  // Collection navne – justér KUN hvis jeres naming er anderledes (spørg først!)
+  const questionsCol = collection(db, "feedbackQuestions");
+
+  // Opret spørgsmål
+  const questionRef = await addDoc(questionsCol, {
+    title: payload.title,
+    helpText: payload.helpText ?? "",
+    type: payload.type,
+    required: !!payload.required,
+    category: payload.category ?? "",
+    language: payload.language,
+    isActive: !!payload.isActive,
+    createdAt: serverTimestamp(),
+    updatedAt: serverTimestamp(),
+  });
+
+  // Første version – hvis ikke relevant i jeres model, kan den droppes (spørg først!)
+  const versionsCol = collection(questionRef, "versions");
+  await addDoc(versionsCol, {
+    options: Array.isArray(payload.options) ? payload.options : [],
+    isActive: !!payload.isActive,
+    language: payload.language,
+    notes: "Initial version",
+    createdAt: serverTimestamp(),
+  });
+
+  // Evt. returnér id til routing/redirect
+  return { id: questionRef.id };
 }
