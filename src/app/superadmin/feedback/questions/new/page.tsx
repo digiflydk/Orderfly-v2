@@ -1,20 +1,32 @@
 // src/app/superadmin/feedback/questions/new/page.tsx
 import React from "react";
-import FeedbackQuestionNewForm from "@/components/superadmin/feedback-question-new-form";
+import { FeedbackQuestionVersionForm } from '@/components/superadmin/feedback-question-version-form';
+import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
-export const metadata = {
-  title: "New Feedback Question",
-};
+type Lang = { code: string; name: string };
 
-export default async function Page() {
-  // Server Component – ingen direkte form-state her.
+function resolveSupportedLanguages(settings: any): Lang[] {
+  const fromSettings: Lang[] | undefined =
+    settings?.languageSettings?.supportedLanguages;
+
+  // Robust fallback: bevar originalt design, men undgå undefined.map
+  if (Array.isArray(fromSettings) && fromSettings.length > 0) {
+    return fromSettings;
+  }
+  return [
+    { code: 'da', name: 'Danish' },
+    { code: 'en', name: 'English' },
+  ];
+}
+
+export default async function NewFeedbackQuestionVersionPage() {
+  // ORIGINAL LOGIK (fra backup): henter platform settings og injicerer i Form
+  const settings = await getPlatformSettings();
+  const supportedLanguages = resolveSupportedLanguages(settings);
+
   return (
-    <div className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-semibold mb-4">Create Feedback Question</h1>
-      <p className="text-sm text-muted-foreground mb-6">
-        Opret et nyt spørgsmål inkl. type, svarmuligheder, hjælpetekst, sprog og status.
-      </p>
-      <FeedbackQuestionNewForm />
-    </div>
+    <FeedbackQuestionVersionForm
+      supportedLanguages={supportedLanguages}
+    />
   );
 }
