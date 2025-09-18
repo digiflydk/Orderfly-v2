@@ -12,12 +12,7 @@ export function QaClientPage({ initialItems }: { initialItems: QaTestcase[] }) {
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-semibold">QA · Testcases</h1>
         <div className="flex gap-2">
-          <button
-            onClick={() => alert('Run all (stub) – implementeres i OFQ-002')}
-            className="rounded-md border px-3 py-2"
-          >
-            Kør alle (stub)
-          </button>
+          <button onClick={() => alert('Run all (stub) – kommer i næste opgave')} className="rounded-md border px-3 py-2">Kør alle (stub)</button>
           <Link href="/superadmin/qa/new" className="rounded-md bg-black px-3 py-2 text-white">Ny testcase</Link>
         </div>
       </div>
@@ -29,7 +24,6 @@ export function QaClientPage({ initialItems }: { initialItems: QaTestcase[] }) {
               <th className="p-2 text-left">Code</th>
               <th className="p-2 text-left">Title</th>
               <th className="p-2 text-left">Status</th>
-              <th className="p-2 text-left">Proof URL</th>
               <th className="p-2 text-left">Actions</th>
             </tr>
           </thead>
@@ -40,22 +34,12 @@ export function QaClientPage({ initialItems }: { initialItems: QaTestcase[] }) {
                 <td className="p-2">{tc.title}</td>
                 <td className="p-2">{tc.status}</td>
                 <td className="p-2">
-                  {tc.proofUrl ? <a href={tc.proofUrl} target="_blank" className="text-blue-600 underline">Se</a> : '—'}
-                </td>
-                <td className="p-2">
-                  <Link className="underline" href={`/superadmin/qa/${tc.code}`}>Redigér</Link>
-                  <button
-                    className="ml-3 underline"
-                    onClick={() => alert(`Kør ${tc.code} (stub) – implementeres i OFQ-002`)}
-                  >
-                    Kør (stub)
-                  </button>
+                  <Link className="underline" href={`/superadmin/qa/${tc.code}`}>Edit</Link>
+                  <Link className="ml-3 underline" href={`/superadmin/qa/run/${tc.code}`}>Run</Link> {/* NY */}
                 </td>
               </tr>
             ))}
-            {items.length === 0 && (
-              <tr><td colSpan={5} className="p-2">Ingen testcases endnu.</td></tr>
-            )}
+            {items.length === 0 && <tr><td className="p-2" colSpan={4}>Ingen testcases endnu.</td></tr>}
           </tbody>
         </table>
       </div>

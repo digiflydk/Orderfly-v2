@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { getQa, updateQa, type QaStatus, type QaTestcase } from '../actions';
+import { stringifySteps, parseStepsInput } from '../qa-utils';
 
 export default function QaEditPage() {
   const { code } = useParams<{ code: string }>();
@@ -12,6 +13,7 @@ export default function QaEditPage() {
   const [acc, setAcc] = useState('');
   const [status, setStatus] = useState<QaStatus>('Draft');
   const [proofUrl, setProofUrl] = useState('');
+  const [stepsRaw, setStepsRaw] = useState('');
 
   useEffect(() => {
     (async () => {
@@ -22,9 +24,8 @@ export default function QaEditPage() {
         setAcc(t.acceptanceCriteria);
         setStatus(t.status);
         setProofUrl(t.proofUrl || '');
-      } else {
-        setItem(null);
-      }
+        setStepsRaw(stringifySteps(t.stepsTemplate));
+      } else setItem(null);
     })();
   }, [code]);
 
@@ -35,6 +36,7 @@ export default function QaEditPage() {
       acceptanceCriteria: acc.trim(),
       status,
       proofUrl: proofUrl || undefined,
+      stepsTemplate: parseStepsInput(stepsRaw),
     });
     router.push('/superadmin/qa');
   }
@@ -49,15 +51,18 @@ export default function QaEditPage() {
       <label className="block text-sm font-medium">Title</label>
       <input className="mt-1 w-full rounded border p-2" value={title} onChange={e => setTitle(e.target.value)} />
 
-      <label className="block text-sm font-medium">Acceptance Criteria</label>
-      <textarea className="mt-1 w-full rounded border p-2" rows={5} value={acc} onChange={e => setAcc(e.target.value)} />
+      <label className="block text-sm font-medium">Acceptance Criteria (samlet)</label>
+      <textarea className="mt-1 w-full rounded border p-2" rows={4} value={acc} onChange={e => setAcc(e.target.value)} />
 
       <label className="block text-sm font-medium">Status</label>
       <select className="mt-1 w-full rounded border p-2" value={status} onChange={e => setStatus(e.target.value as QaStatus)}>
         <option>Draft</option><option>Ready</option><option>Deprecated</option>
       </select>
 
-      <label className="block text-sm font-medium">Proof URL</label>
+      <label className="block text-sm font-medium">Steps (én pr. linje: Title | Criteria)</label>
+      <textarea className="mt-1 w-full rounded border p-2 font-mono" rows={8} value={stepsRaw} onChange={e => setStepsRaw(e.target.value)} />
+
+      <label className="block text-sm font-medium">Proof URL (valgfrit)</label>
       <input className="mt-1 w-full rounded border p-2" value={proofUrl} onChange={e => setProofUrl(e.target.value)} />
 
       <div className="pt-4">
