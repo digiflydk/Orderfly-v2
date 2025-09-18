@@ -1,4 +1,3 @@
-
 {
   "hosting": {
     "source": ".",
@@ -13,11 +12,7 @@
     "rewrites": [
       {
         "source": "**",
-        "function": {
-          "functionId": "ssrstudio",
-          "region": "us-central1",
-          "pinTag": true
-        }
+        "appHostingBackend": "studio"
       }
     ]
   }
