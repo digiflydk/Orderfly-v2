@@ -1,4 +1,8 @@
+// src/lib/openapi/zod.ts
+import "@/lib/openapi/bootstrap"; // <- VIGTIGT: aktiver .openapi() globalt
+
 import { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
+// Importér jeres schemas her, fx:
 import {
   QuestionOptionSchema,
   QuestionSchema,
@@ -7,7 +11,7 @@ import {
 
 export const registry = new OpenAPIRegistry();
 
-// Registrer alle feedback-relaterede schemas
+// Hvis I vil have navngivne components i spec:
 registry.register("QuestionOption", QuestionOptionSchema);
 registry.register("Question", QuestionSchema);
 registry.register("FeedbackQuestionsVersion", FeedbackQuestionsVersionSchema);

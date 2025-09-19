@@ -16,6 +16,14 @@ const nextConfig = {
   output: 'standalone',
   webpack(config, { dev }) {
     if (dev) config.cache = false
+
+    // Undgå "require.extensions is not supported by webpack" warnings fra handlebars/dotprompt
+    config.ignoreWarnings = [
+      ...(config.ignoreWarnings || []),
+      /require\.extensions is not supported by webpack/i,
+      /Critical dependency: the request of a dependency is an expression/i,
+    ];
+
     return config
   },
   async rewrites() {
