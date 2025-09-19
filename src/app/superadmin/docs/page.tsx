@@ -1,31 +1,53 @@
-import fs from "fs";
-import path from "path";
-import MarkdownViewer from "@/components/superadmin/docs/MarkdownViewer";
-
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-export const fetchCache = "default-no-store";
 
-export default async function DocsPage() {
-  const docsDir = path.join(process.cwd(), "docs");
+import "server-only";
+import Link from "next/link";
 
-  const files = fs.readdirSync(docsDir).filter(f => f.endsWith(".md"));
+async function fetchList() {
+  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ""}/api/docs/list`, { cache: "no-store" });
+  if (!res.ok) throw new Error("Failed to load file list");
+  return res.json() as Promise<{ ok: boolean; files: string[] }>;
+}
 
-  const docs = files.map(filename => {
-    const fullPath = path.join(docsDir, filename);
-    const content = fs.readFileSync(fullPath, "utf-8");
-    return { filename, content };
-  });
+export default async function DocumentationAdminPage() {
+  const { files } = await fetchList();
 
   return (
-    <div className="p-8 space-y-12">
-      <h1 className="text-3xl font-bold mb-6">📚 Project Documentation</h1>
-      {docs.map(doc => (
-        <div key={doc.filename} className="border-b pb-8">
-          <h2 className="text-xl font-semibold mb-4">{doc.filename}</h2>
-          <MarkdownViewer content={doc.content} />
-        </div>
-      ))}
+    <div className="mx-auto max-w-4xl px-4 py-8 space-y-6">
+      <h1 className="text-2xl font-semibold">Dokumentation</h1>
+
+      <div className="flex items-center gap-3">
+        <Link
+          href="/api/docs/bundle"
+          className="inline-flex items-center rounded-md border px-4 py-2 text-sm hover:bg-muted"
+          prefetch={false}
+        >
+          Download samlet bundle (.md)
+        </Link>
+      </div>
+
+      <div className="space-y-2">
+        <h2 className="text-lg font-medium mt-6">Enkeltfiler</h2>
+        <ul className="list-disc pl-6 space-y-1">
+          {files.map((name) => (
+            <li key={name} className="flex items-center gap-3">
+              <span className="font-mono text-sm">{name}</span>
+              <Link
+                href={`/api/docs/download?name=${encodeURIComponent(name)}`}
+                className="text-primary hover:underline text-sm"
+                prefetch={false}
+              >
+                Download
+              </Link>
+            </li>
+          ))}
+        </ul>
+      </div>
+
+      <p className="text-xs text-muted-foreground mt-8">
+        Alle filer hentes fra <code>/docs</code> mappen i repo’et. Kun whitelisted navne kan downloades.
+      </p>
     </div>
   );
 }
