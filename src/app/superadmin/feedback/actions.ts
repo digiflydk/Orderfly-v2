@@ -3,7 +3,7 @@
 
 import "server-only";
 import { revalidatePath } from "next/cache";
-import { adminDb, adminFieldValue } from "@/lib/firebase-admin";
+import { getAdminDb, getAdminFieldValue } from "@/lib/firebase-admin";
 import type { Feedback, FeedbackQuestionsVersion, OrderDetail, LanguageSetting } from '@/types';
 import { doc, getDoc, getDocs, collection, query, where, Timestamp, writeBatch, deleteDoc, orderBy, setDoc, addDoc } from "firebase/firestore";
 import { db } from "@/lib/firebase";
@@ -39,6 +39,8 @@ type VersionPayload = {
 
 /** createOrUpdateQuestionVersion — NO-THROW variant */
 export async function createOrUpdateQuestionVersion(formData: FormData): Promise<ActionResult> {
+  const adminDb = getAdminDb();
+  const adminFieldValue = getAdminFieldValue();
   try {
     const id = (formData.get("id") as string) || undefined;
     const versionLabel = String(formData.get("versionLabel") || "").trim();

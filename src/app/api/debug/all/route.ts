@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,7 +8,7 @@ export const fetchCache = "default-no-store";
 
 async function getDocSafe(path: string) {
   try {
-    const snap = await adminDb.doc(path).get();
+    const snap = await getAdminDb().doc(path).get();
     return {
       ok: true,
       exists: snap.exists,
@@ -23,6 +23,7 @@ async function getDocSafe(path: string) {
 export async function GET() {
   const started = Date.now();
   try {
+    const adminDb = getAdminDb();
     // Core settings we rely on across the app (tilpas/udvid efter behov)
     const settingsGeneral = await getDocSafe("settings/general");
     const cmsHeader       = await getDocSafe("cms/pages/header/header");

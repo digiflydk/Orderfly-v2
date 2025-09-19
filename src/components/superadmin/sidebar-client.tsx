@@ -185,6 +185,7 @@ export function SuperAdminSidebarClient({
       title: 'System',
       items: [
         { href: '/superadmin/settings', label: 'Settings', icon: SettingsIcon },
+        { href: '/superadmin/docs', label: 'Documentation', icon: FileText },
         { href: '/superadmin/code-review', label: 'Code Review', icon: Code2 },
         { href: '/superadmin/qa', label: 'QA', icon: Beaker },
         { href: '/superadmin/ui-validation', label: 'UI Validation', icon: Eye },
@@ -339,5 +340,3 @@ export function SuperAdminSidebarClient({
     </Sidebar>
   )
 }
-
-    

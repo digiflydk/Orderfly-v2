@@ -1,6 +1,6 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { adminDb } from "@/lib/firebase-admin";
+import { getAdminDb } from "@/lib/firebase-admin";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,6 +8,7 @@ export const fetchCache = "default-no-store";
 
 export async function GET() {
   try {
+    const adminDb = getAdminDb();
     const qs = await adminDb
       .collection("feedbackQuestionsVersion")
       .orderBy("updatedAt", "desc")

@@ -55,11 +55,13 @@
     "react-day-picker": "^8.10.1",
     "react-dom": "18.3.1",
     "react-hook-form": "^7.62.0",
+    "react-markdown": "^9.0.1",
+    "remark-gfm": "^4.0.0",
     "server-only": "0.0.1",
     "stripe": "^18.5.0",
     "tailwind-merge": "^2.5.4",
-    "zod": "^3.25.76",
-    "zod-to-openapi": "^3.0.0"
+    "zod": "^3.22.4",
+    "zod-to-openapi": "latest"
   },
   "devDependencies": {
     "@opentelemetry/exporter-jaeger": "^1.18.1",
