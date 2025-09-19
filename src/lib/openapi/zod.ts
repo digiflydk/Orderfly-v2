@@ -1,4 +1,4 @@
-import { OpenAPIRegistry } from "zod-to-openapi";
+import { OpenAPIRegistry } from "@asteasolutions/zod-to-openapi";
 import {
   QuestionOptionSchema,
   QuestionSchema,

@@ -1,7 +1,7 @@
 // src/lib/openapi/spec.ts
 import "server-only";
 import { registry } from "@/lib/openapi/zod";
-import { OpenApiGeneratorV31 } from "zod-to-openapi";
+import { OpenApiGeneratorV31 } from "@asteasolutions/zod-to-openapi";
 
 export function buildOpenApiSpec(baseUrl?: string) {
   const servers = baseUrl ? [{ url: baseUrl }] : [{ url: "/" }];
@@ -15,48 +15,29 @@ export function buildOpenApiSpec(baseUrl?: string) {
       title: "Orderfly API",
       version: "1.0.0",
       description:
-        "Officiel API-dokumentation for Orderfly platformen. Alle schemas stammer fra Zod (single source of truth).",
+        "Officiel API-dokumentation for Orderfly platformen. Schemas genereres fra Zod.",
     },
     servers,
     paths: {
       "/api/debug/all": {
         get: {
           summary: "System health / scoped debug",
-          description:
-            "Returnerer samlet systemstatus. Brug `?scope=feedback` (eller andre scopes) for specifik del.",
           parameters: [
             {
               name: "scope",
               in: "query",
               required: false,
               schema: { type: "string" },
-              description: "Begræns output til specifikt modul (fx feedback, menu, orders)",
+              description:
+                "Begræns output til specifikt modul (fx feedback, menu, orders)",
             },
           ],
-          responses: {
-            "200": {
-              description: "OK",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      ok: { type: "boolean" },
-                      data: { type: "object" },
-                    },
-                  },
-                },
-              },
-            },
-          },
+          responses: { "200": { description: "OK" } },
           tags: ["debug"],
         },
       },
     },
-    tags: [
-      { name: "debug", description: "Drift/QA endpoints" },
-      { name: "feedback", description: "Feedback / spørgeskemaer" },
-    ],
+    tags: [{ name: "debug", description: "Drift/QA endpoints" }],
     components: components.components,
   };
 }
