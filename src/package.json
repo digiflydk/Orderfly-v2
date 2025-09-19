@@ -59,7 +59,7 @@
     "stripe": "^18.5.0",
     "tailwind-merge": "^2.5.4",
     "zod": "^3.25.76",
-    "zod-to-openapi": "^3.0.1"
+    "zod-to-openapi": "^3.0.0"
   },
   "devDependencies": {
     "@opentelemetry/exporter-jaeger": "^1.18.1",
