@@ -3,10 +3,14 @@ export const dynamic = "force-dynamic";
 
 import "server-only";
 import Link from "next/link";
+import { getBaseUrl } from "@/lib/http/base-url";
 
 async function fetchList() {
-  const res = await fetch(`${process.env.NEXT_PUBLIC_BASE_URL ?? ""}/api/docs/list`, { cache: "no-store" });
-  if (!res.ok) throw new Error("Failed to load file list");
+  const base = getBaseUrl();
+  const res = await fetch(`${base}/api/docs/list`, { cache: "no-store" });
+  if (!res.ok) {
+    throw new Error(`Failed to load file list (${res.status})`);
+  }
   return res.json() as Promise<{ ok: boolean; files: string[] }>;
 }
 
@@ -17,13 +21,21 @@ export default async function DocumentationAdminPage() {
     <div className="mx-auto max-w-4xl px-4 py-8 space-y-6">
       <h1 className="text-2xl font-semibold">Dokumentation</h1>
 
-      <div className="flex items-center gap-3">
+      <div className="flex flex-wrap items-center gap-3">
         <Link
           href="/api/docs/bundle"
           className="inline-flex items-center rounded-md border px-4 py-2 text-sm hover:bg-muted"
           prefetch={false}
         >
           Download samlet bundle (.md)
+        </Link>
+
+        <Link
+          href="/api/docs/debug-export"
+          className="inline-flex items-center rounded-md border px-4 py-2 text-sm hover:bg-muted"
+          prefetch={false}
+        >
+          Download debug (JSON)
         </Link>
       </div>
 
@@ -46,7 +58,7 @@ export default async function DocumentationAdminPage() {
       </div>
 
       <p className="text-xs text-muted-foreground mt-8">
-        Alle filer hentes fra <code>/docs</code> mappen i repo’et. Kun whitelisted navne kan downloades.
+        Filer læses fra <code>/docs</code>. Kun whitelisted navne kan hentes.
       </p>
     </div>
   );
