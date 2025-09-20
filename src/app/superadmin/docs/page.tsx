@@ -3,19 +3,10 @@ export const dynamic = "force-dynamic";
 
 import "server-only";
 import Link from "next/link";
-import { getBaseUrl } from "@/lib/http/base-url";
-
-async function fetchList() {
-  const base = getBaseUrl();
-  const res = await fetch(`${base}/api/docs/list`, { cache: "no-store" });
-  if (!res.ok) {
-    throw new Error(`Failed to load file list (${res.status})`);
-  }
-  return res.json() as Promise<{ ok: boolean; files: string[] }>;
-}
+import { DOC_WHITELIST } from "@/lib/docs/whitelist";
 
 export default async function DocumentationAdminPage() {
-  const { files } = await fetchList();
+  const files = DOC_WHITELIST;
 
   return (
     <div className="mx-auto max-w-4xl px-4 py-8 space-y-6">
@@ -31,7 +22,7 @@ export default async function DocumentationAdminPage() {
         </Link>
 
         <Link
-          href="/api/docs/debug-export"
+          href="/api/debug/snapshot"
           className="inline-flex items-center rounded-md border px-4 py-2 text-sm hover:bg-muted"
           prefetch={false}
         >
@@ -58,7 +49,7 @@ export default async function DocumentationAdminPage() {
       </div>
 
       <p className="text-xs text-muted-foreground mt-8">
-        Filer læses fra <code>/docs</code>. Kun whitelisted navne kan hentes.
+        Filer hentes fra <code>/docs</code> i repoet (whitelistet).
       </p>
     </div>
   );
