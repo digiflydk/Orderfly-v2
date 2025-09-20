@@ -1,64 +1,31 @@
 import "server-only";
 import { NextResponse } from "next/server";
-import { getAdminDb } from "@/lib/firebase-admin";
+import { buildAllDebugPayload } from "@/lib/debug/all";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const fetchCache = "default-no-store";
 
-async function getDocSafe(path: string) {
-  try {
-    const snap = await getAdminDb().doc(path).get();
-    return {
-      ok: true,
-      exists: snap.exists,
-      path,
-      raw: snap.exists ? snap.data() : null,
-    };
-  } catch (e: any) {
-    return { ok: false, exists: false, path, raw: null, error: e?.message || String(e) };
-  }
-}
-
-export async function GET() {
+export async function GET(request: Request) {
   const started = Date.now();
-  try {
-    const adminDb = getAdminDb();
-    // Core settings we rely on across the app (tilpas/udvid efter behov)
-    const settingsGeneral = await getDocSafe("settings/general");
-    const cmsHeader       = await getDocSafe("cms/pages/header/header");
-    const cmsHome         = await getDocSafe("cms/pages/home/home");
-    const cmsFooter       = await getDocSafe("cms/pages/footer/footer");
+  const url = new URL(request.url);
+  const scope = url.searchParams.get("scope");
 
-    // Feedback stats (Orderfly-specific)
-    let feedback = {
-      ok: true,
-      collection: "feedbackQuestionsVersion",
-      count: 0,
-      latest: [] as any[],
-      error: null as string | null,
-    };
-    try {
-      const qs = await adminDb.collection("feedbackQuestionsVersion").orderBy("updatedAt", "desc").limit(5).get();
-      feedback.count = (await adminDb.collection("feedbackQuestionsVersion").limit(1).get()).size
-        // Note: Firestore count() aggregations kan tilføjes senere; for nu en simpel size for første page.
-      feedback.latest = qs.docs.map(d => ({ id: d.id, ...d.data() }));
-    } catch (e: any) {
-      feedback.ok = false;
-      feedback.error = e?.message || String(e);
+  try {
+    const fullPayload = await buildAllDebugPayload();
+    let data;
+
+    if (scope && scope in fullPayload) {
+      data = { [scope]: (fullPayload as any)[scope] };
+    } else {
+      data = fullPayload;
     }
 
     const payload = {
       ok: true,
       timestamp: new Date().toISOString(),
       elapsedMs: Date.now() - started,
-      data: {
-        settingsGeneral,
-        cmsHeader,
-        cmsHome,
-        cmsFooter,
-        feedback,
-      },
+      data,
     };
     return NextResponse.json(payload, { status: 200 });
   } catch (e: any) {
