@@ -1,3 +1,5 @@
+export const runtime = "nodejs";
+
 // src/app/(public)/layout.tsx
 import { ReactNode } from "react";
 import { getGeneralSettings } from "@/services/settings";

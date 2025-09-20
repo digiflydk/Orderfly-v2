@@ -3,11 +3,12 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "dev": "next dev --hostname 0.0.0.0 --port 9010",
+    "prebuild": "node scripts/check-parallel-routes.mjs",
+    "dev": "next dev",
     "build": "next build",
-    "start": "next start -p 9010",
+    "start": "next start",
     "lint": "next lint",
-    "typecheck": "tsc --noEmit"
+    "postbuild": "node scripts/check-next-manifests.mjs"
   },
   "dependencies": {
     "@asteasolutions/zod-to-openapi": "7.3.4",
