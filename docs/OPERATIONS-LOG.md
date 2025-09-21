@@ -17,3 +17,10 @@
 ## Nøgleversioner
 - Next.js: 15.x
 - Timezone: Europe/Copenhagen
+
+## Procesregel: Godkendelse før ændringer
+
+- Hvis der er **tvil eller uklarhed**, SKAL AI/udvikler spørge PM (Omair) **før ændringer** foretages.  
+- Der må **IKKE ændres eller slettes** noget, som allerede er godkendt eller er en etableret del af projektet, uden eksplicit tilladelse.  
+- Kun ændringer med **eksplicit godkendelse** fra PM må implementeres.  
+- Denne regel gælder både for kode, dokumentation, struktur og konfiguration.
