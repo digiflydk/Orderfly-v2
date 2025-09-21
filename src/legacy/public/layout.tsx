@@ -1,35 +1,32 @@
 "use client";
-
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
+import { ReactNode } from "react";
 import { getGeneralSettings } from "@/services/settings";
 import { getWebsiteHeaderConfig } from "@/services/website";
 import type { Brand } from "@/types";
 import HeaderClient from "@/components/layout/HeaderClient";
 import FooterClient from "@/components/layout/FooterClient";
-import { PublicLayoutClient } from "@/app/(public)/PublicLayoutClient";
 
-// This is the correct, stable version of the component.
-// It wraps the main content and uses a client component to manage its children.
-export default function LegacyPublicLayout({ children }: { children: React.ReactNode }) {
+export default function PublicLayout({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Awaited<ReturnType<typeof getGeneralSettings>> | null>(null);
   const [headerConfig, setHeaderConfig] = useState<Awaited<ReturnType<typeof getWebsiteHeaderConfig>> | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
-    async function fetchData() {
-      const [s, h] = await Promise.all([
-        getGeneralSettings(),
-        getWebsiteHeaderConfig(),
-      ]);
-      setSettings(s);
-      setHeaderConfig(h);
-      setIsLoading(false);
-    }
-    fetchData();
+    Promise.all([
+      getGeneralSettings(),
+      getWebsiteHeaderConfig(),
+    ]).then(([settingsData, headerConfigData]) => {
+      setSettings(settingsData);
+      setHeaderConfig(headerConfigData);
+    })
   }, []);
+  
+  if (!settings || !headerConfig) {
+      return <div>Loading...</div>;
+  }
 
-  // Mock brand for the public homepage – uses CMS logo if available
+  // Mock brand til public siden – bruger CMS logo hvis tilgængeligt
   const publicBrand: Brand = {
     id: "public-page-brand",
     name: settings?.websiteTitle || "OrderFly",
@@ -48,13 +45,24 @@ export default function LegacyPublicLayout({ children }: { children: React.React
     locationsCount: 0,
   };
 
-  if (isLoading || !headerConfig) {
-    return <div>Loading...</div>;
-  }
-  
+  const footerTheme = settings?.footer ?? {};
+  const footerStyle: React.CSSProperties = {
+    "--of-footer-bg": footerTheme.bgColor ?? "#0b0b0b",
+    "--of-footer-text": footerTheme.textColor ?? "#e5e7eb",
+    "--of-footer-link": footerTheme.linkColor ?? "#ffffff",
+    "--of-footer-link-hover": footerTheme.linkHoverColor ?? "#d1d5db",
+  } as React.CSSProperties;
+
   return (
-    <PublicLayoutClient brand={publicBrand} settings={settings} headerConfig={headerConfig}>
-      {children}
-    </PublicLayoutClient>
+    <div className="relative" style={footerStyle}>
+      {/* Header bruger CMS-styret linkClass og logo */}
+      <HeaderClient brand={publicBrand} settings={settings} config={headerConfig} />
+      
+      <main className="flex-1">{children}</main>
+
+      {footerTheme.isVisible !== false && (
+        <FooterClient brand={publicBrand} theme={footerTheme} />
+      )}
+    </div>
   );
 }

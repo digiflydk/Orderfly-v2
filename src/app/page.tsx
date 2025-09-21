@@ -11,7 +11,7 @@ import { getGeneralSettings } from "@/services/settings";
 export default async function Home() {
   try {
     const settings = await getGeneralSettings();
-    return <LegacyPublicPage settings={settings} />;
+    return <LegacyPublicPage />;
   } catch (e: any) {
     console.error("[OF-524] Home render failed:", e?.message || e, e?.stack || "");
     return (
