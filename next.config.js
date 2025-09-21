@@ -1,7 +1,7 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
-    serverActions: true,
+    serverActions: {},
   },
   images: {
     // Tillad eksterne billeder fra de domæner vi bruger i projektet
