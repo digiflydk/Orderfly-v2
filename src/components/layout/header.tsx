@@ -2,17 +2,25 @@
 
 import Image from 'next/image';
 import Link from 'next/link';
-import type { Brand } from '@/types';
+import type { Brand, GeneralSettings, NavLink } from '@/types';
+import type { WebsiteHeaderConfig } from '@/types/website';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
+import SiteLogo from '../common/SiteLogo';
 
 type Props = {
-  brand?: Brand;           // valgfri, så Header kan bruges på /
-  linkClass?: string;      // styres af Website CMS på /
+  brand?: Brand | null;
+  settings?: GeneralSettings | null;
+  config?: WebsiteHeaderConfig | null;
+  navLinks?: NavLink[];
+  linkClass?: string;
+  logoUrl?: string | null;
+  logoAlt?: string;
 };
 
-export function Header({ brand, linkClass = 'text-white hover:text-primary' }: Props) {
+export function Header({ brand, settings, config, navLinks, linkClass, logoUrl, logoAlt }: Props) {
   const [scrolled, setScrolled] = useState(false);
+  const effectiveNavLinks = navLinks || settings?.headerNavLinks || [];
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -20,38 +28,38 @@ export function Header({ brand, linkClass = 'text-white hover:text-primary' }: P
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => window.removeEventListener('scroll', onScroll);
   }, []);
+  
+  const finalLogoUrl = logoUrl || brand?.logoUrl;
+  const finalLogoAlt = logoAlt || brand?.name || "Orderfly Logo";
+  const finalLinkClass = linkClass || 'text-white hover:text-primary';
 
   return (
-    <header
-      className={cn(
-        'top-0 z-40 w-full transition-colors',
-        scrolled ? 'bg-white/90 backdrop-blur border-b border-black/5' : 'bg-transparent'
-      )}
-    >
+    <header data-header>
       <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
-          {brand?.logoUrl ? (
+          {finalLogoUrl ? (
             <Image
-              src={brand.logoUrl}
-              alt={brand.name || 'Logo'}
+              src={finalLogoUrl}
+              alt={finalLogoAlt}
               width={128}
               height={36}
               className="h-9 w-auto object-contain"
               priority
             />
           ) : (
-            <span className="font-semibold">OrderFly</span>
+            <SiteLogo />
           )}
         </Link>
 
         <nav className="hidden items-center gap-6 md:flex">
-          <Link href="/online-order" className={cn('text-sm', linkClass)}>Online ordre</Link>
-          <Link href="/pricing" className={cn('text-sm', linkClass)}>Priser</Link>
-          <Link href="/customers" className={cn('text-sm', linkClass)}>Kunder</Link>
-          <Link href="/contact" className={cn('text-sm', linkClass)}>Kontakt</Link>
+          {effectiveNavLinks.map(link => (
+            <Link key={link.label} href={link.href} className={cn('text-sm', finalLinkClass)}>
+              {link.label}
+            </Link>
+          ))}
         </nav>
 
-        <button className={cn('md:hidden text-sm', linkClass)} aria-label="Open menu">
+        <button className={cn('md:hidden text-sm', finalLinkClass)} aria-label="Open menu">
           Menu
         </button>
       </div>

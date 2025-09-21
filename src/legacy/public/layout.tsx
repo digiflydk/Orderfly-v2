@@ -1,51 +1,60 @@
-
-// This file is now obsolete and the content has been moved to /docs/archive/public-root/layout.tsx
-// It will be removed in a future step.
 "use client";
 
-import { useState } from 'react';
-import { Footer } from "@/components/layout/footer";
-import { CookieConsent } from '@/components/cookie-consent';
-import type { Brand, GeneralSettings } from '@/types';
-import type { WebsiteHeaderConfig } from '@/types/website';
-import HeaderClient from '@/components/layout/HeaderClient';
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
+import { getGeneralSettings } from "@/services/settings";
+import { getWebsiteHeaderConfig } from "@/services/website";
+import type { Brand } from "@/types";
+import HeaderClient from "@/components/layout/HeaderClient";
+import FooterClient from "@/components/layout/FooterClient";
+import { PublicLayoutClient } from "@/app/(public)/PublicLayoutClient";
 
-export default function LegacyPublicLayout({
-  children,
-  brand,
-  settings,
-  headerConfig,
-}: {
-  children: React.ReactNode;
-  brand: Brand;
-  settings: GeneralSettings | null;
-  headerConfig: WebsiteHeaderConfig;
-}) {
-  const [isCookieModalOpen, setIsCookieModalOpen] = useState(false);
+// This is the correct, stable version of the component.
+// It wraps the main content and uses a client component to manage its children.
+export default function LegacyPublicLayout({ children }: { children: React.ReactNode }) {
+  const [settings, setSettings] = useState<Awaited<ReturnType<typeof getGeneralSettings>> | null>(null);
+  const [headerConfig, setHeaderConfig] = useState<Awaited<ReturnType<typeof getWebsiteHeaderConfig>> | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
 
-  const footerTheme = settings?.footer ?? {};
-  const footerStyle: React.CSSProperties = {
-    "--of-footer-bg": footerTheme.bgColor ?? "#0b0b0b",
-    "--of-footer-text": footerTheme.textColor ?? "#e5e7eb",
-    "--of-footer-link": footerTheme.linkColor ?? "#ffffff",
-    "--of-footer-link-hover": footerTheme.linkHoverColor ?? "#d1d5db",
-  } as React.CSSProperties;
+  useEffect(() => {
+    async function fetchData() {
+      const [s, h] = await Promise.all([
+        getGeneralSettings(),
+        getWebsiteHeaderConfig(),
+      ]);
+      setSettings(s);
+      setHeaderConfig(h);
+      setIsLoading(false);
+    }
+    fetchData();
+  }, []);
 
+  // Mock brand for the public homepage – uses CMS logo if available
+  const publicBrand: Brand = {
+    id: "public-page-brand",
+    name: settings?.websiteTitle || "OrderFly",
+    slug: "",
+    logoUrl: settings?.logoUrl || "/orderfly-logo-dark.svg",
+    companyName: "",
+    ownerId: "",
+    status: "active",
+    street: "",
+    zipCode: "",
+    city: "",
+    country: "",
+    currency: "",
+    companyRegNo: "",
+    foodCategories: [],
+    locationsCount: 0,
+  };
+
+  if (isLoading || !headerConfig) {
+    return <div>Loading...</div>;
+  }
+  
   return (
-    <div className="relative" style={footerStyle}>
-      <HeaderClient brand={brand} settings={settings} config={headerConfig} />
-      
-      <main className="flex-1">{children}</main>
-
-      {footerTheme.isVisible !== false && (
-        <Footer
-          brand={brand}
-          version="1.0.223 • OF-523"
-          onOpenCookieSettings={() => setIsCookieModalOpen(true)}
-          theme={footerTheme}
-        />
-      )}
-      <CookieConsent brandId={brand.id} isModalOpen={isCookieModalOpen} setIsModalOpen={setIsCookieModalOpen} />
-    </div>
+    <PublicLayoutClient brand={publicBrand} settings={settings} headerConfig={headerConfig}>
+      {children}
+    </PublicLayoutClient>
   );
 }

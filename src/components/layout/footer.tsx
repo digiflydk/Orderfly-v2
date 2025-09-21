@@ -5,6 +5,7 @@ import Image from "next/image";
 import type { Brand, Location } from "@/types";
 import type { FooterTheme } from "@/types/settings";
 import { Facebook, Instagram, Linkedin, LucideIcon, Twitter, Youtube } from 'lucide-react';
+import SiteLogo from "../common/SiteLogo";
 
 interface FooterProps {
   brand?: Brand | null;
@@ -32,20 +33,11 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
     color: 'var(--of-footer-link)',
   };
 
-  const logoUrl = theme?.logoUrl || brand?.logoUrl || "/images/fallback-logo.png";
-
   return (
     <footer className="w-full" style={footerStyle}>
       <div className="mx-auto max-w-[1140px] px-4 py-10 grid gap-8 md:grid-cols-12">
         <div className="md:col-span-4 space-y-4">
-          <Image 
-            src={logoUrl}
-            alt={brand?.name || "Orderfly Logo"} 
-            width={140} 
-            height={40} 
-            className="object-contain"
-            data-ai-hint="logo"
-          />
+          <SiteLogo priority={false} />
           {theme?.legalText && <p className="text-sm opacity-80">{theme.legalText}</p>}
           {(theme?.socials ?? []).length > 0 && (
             <div className="flex gap-4 pt-4">
@@ -94,7 +86,7 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
         <div className="flex items-center justify-between text-xs" style={{ color: 'var(--of-footer-text)' }}>
           <span>🌐 English</span>
           <div className="flex items-center gap-2">
-            <span>1.0.224 • OF-524</span>
+            <span>1.0.225 • OF-525</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>
