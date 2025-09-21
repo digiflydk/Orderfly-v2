@@ -1,10 +1,15 @@
-import PublicHomePage from "./(public)/page";
-import PublicLayout from "./(public)/layout";
+import './globals.css';
+import type { Metadata } from 'next';
 
-export default function Root() {
+export const metadata: Metadata = {
+  title: 'Orderfly Studio',
+  description: 'Dev baseline',
+};
+
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
-    <PublicLayout>
-      <PublicHomePage />
-    </PublicLayout>
+    <html lang="da">
+      <body>{children}</body>
+    </html>
   );
 }
