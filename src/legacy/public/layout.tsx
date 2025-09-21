@@ -1,6 +1,7 @@
+
 "use client";
-import { useEffect, useState } from "react";
-import { useRouter } from "next/navigation";
+import { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { ReactNode } from "react";
 import { getGeneralSettings } from "@/services/settings";
 import { getWebsiteHeaderConfig } from "@/services/website";
@@ -8,22 +9,22 @@ import type { Brand } from "@/types";
 import HeaderClient from "@/components/layout/HeaderClient";
 import FooterClient from "@/components/layout/FooterClient";
 
-export default function PublicLayout({ children }: { children: ReactNode }) {
+export default function LegacyPublicLayout({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<Awaited<ReturnType<typeof getGeneralSettings>> | null>(null);
   const [headerConfig, setHeaderConfig] = useState<Awaited<ReturnType<typeof getWebsiteHeaderConfig>> | null>(null);
 
   useEffect(() => {
     Promise.all([
-      getGeneralSettings(),
-      getWebsiteHeaderConfig(),
-    ]).then(([settingsData, headerConfigData]) => {
-      setSettings(settingsData);
-      setHeaderConfig(headerConfigData);
-    })
+        getGeneralSettings(),
+        getWebsiteHeaderConfig(),
+    ]).then(([s, h]) => {
+        setSettings(s);
+        setHeaderConfig(h);
+    });
   }, []);
-  
+
   if (!settings || !headerConfig) {
-      return <div>Loading...</div>;
+      return <div>Loading...</div>; // Or a proper skeleton loader
   }
 
   // Mock brand til public siden – bruger CMS logo hvis tilgængeligt

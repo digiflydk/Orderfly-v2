@@ -1,5 +1,6 @@
+
 "use client";
-import { Suspense, useEffect, useState } from "react";
+import { Suspense, useState, useEffect } from "react";
 import HeroSection from "@/components/sections/hero";
 import FeatureSection from "@/components/sections/feature";
 import ServicesSection from "@/components/sections/services";
@@ -9,7 +10,7 @@ import AboutSection from "@/components/sections/about";
 import CustomersSection from "@/components/sections/customers";
 import ContactSection from "@/components/sections/contact";
 import { getGeneralSettings } from "@/services/settings";
-import type { GeneralSettings } from "@/types";
+import type { GeneralSettings } from '@/types';
 
 type SectionKey =
   | "feature"
@@ -30,15 +31,15 @@ const DEFAULT_ORDER: SectionKey[] = [
   "contact",
 ];
 
-export default function PublicHomePage() {
+export default function LegacyPublicPage() {
   const [settings, setSettings] = useState<GeneralSettings | null>(null);
 
   useEffect(() => {
-    getGeneralSettings().then(setSettings);
+      getGeneralSettings().then(setSettings);
   }, []);
 
   if (!settings) {
-    return <div className="mx-auto max-w-[1140px] px-4 py-12">Loading page...</div>;
+    return <div className="mx-auto max-w-[1140px] px-4 py-12">Loading page content...</div>;
   }
 
   // Sikre defaults, samt filtrér ukendte nøgler fra CMS
