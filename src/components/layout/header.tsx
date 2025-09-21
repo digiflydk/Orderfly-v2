@@ -38,14 +38,16 @@ export function Header({ brand, settings, config, navLinks, linkClass, logoUrl, 
       <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
           {finalLogoUrl ? (
-            <Image
-              src={finalLogoUrl}
-              alt={finalLogoAlt}
-              width={128}
-              height={36}
-              className="h-9 w-auto object-contain"
-              priority
-            />
+            <div className="relative h-9 flex items-center" style={{ width: config?.logoWidthPx ? `${config.logoWidthPx}px` : 'auto' }}>
+                <Image
+                  src={finalLogoUrl}
+                  alt={finalLogoAlt}
+                  width={164}
+                  height={36}
+                  style={{ width: '100%', height: 'auto' }}
+                  priority
+                />
+            </div>
           ) : (
             <SiteLogo />
           )}

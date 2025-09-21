@@ -1,8 +1,10 @@
 
+
 'use client';
 
 import Image from 'next/image';
 import { OrderFlyLogo } from '@/components/icons';
+import SiteLogo from './common/SiteLogo';
 
 interface LogoProps {
   logoUrl?: string | null;
@@ -17,7 +19,7 @@ export default function Logo({ logoUrl, logoAlt }: LogoProps) {
           src={logoUrl}
           alt={logoAlt || 'Company Logo'}
           fill
-          className="object-contain"
+          style={{ objectFit: 'contain' }}
           data-ai-hint="logo"
         />
       </div>
@@ -25,11 +27,6 @@ export default function Logo({ logoUrl, logoAlt }: LogoProps) {
   }
 
   return (
-    <>
-      <OrderFlyLogo className="size-8 text-white" />
-      <span className="font-semibold text-xl text-white">
-        OrderFly
-      </span>
-    </>
+    <SiteLogo />
   );
 }
