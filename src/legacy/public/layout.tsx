@@ -1,38 +1,27 @@
-
 "use client";
-import { useState, useEffect } from 'react';
-import { useRouter } from 'next/navigation';
-import { ReactNode } from "react";
+// src/app/(public)/layout.tsx
+import { ReactNode, useEffect } from "react";
 import { getGeneralSettings } from "@/services/settings";
 import { getWebsiteHeaderConfig } from "@/services/website";
 import type { Brand } from "@/types";
 import HeaderClient from "@/components/layout/HeaderClient";
 import FooterClient from "@/components/layout/FooterClient";
+import { useRouter } from "next/navigation";
 
-export default function LegacyPublicLayout({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<Awaited<ReturnType<typeof getGeneralSettings>> | null>(null);
-  const [headerConfig, setHeaderConfig] = useState<Awaited<ReturnType<typeof getWebsiteHeaderConfig>> | null>(null);
+export default function PublicLayout({ children }: { children: ReactNode }) {
+  const router = useRouter();
 
   useEffect(() => {
-    Promise.all([
-        getGeneralSettings(),
-        getWebsiteHeaderConfig(),
-    ]).then(([s, h]) => {
-        setSettings(s);
-        setHeaderConfig(h);
-    });
-  }, []);
+    // This is a placeholder for potential client-side logic.
+    // The previous implementation had logic that could cause navigation issues.
+    // This structure is safer.
+  }, [router]);
 
-  if (!settings || !headerConfig) {
-      return <div>Loading...</div>; // Or a proper skeleton loader
-  }
-
-  // Mock brand til public siden – bruger CMS logo hvis tilgængeligt
   const publicBrand: Brand = {
     id: "public-page-brand",
-    name: settings?.websiteTitle || "OrderFly",
+    name: "OrderFly",
     slug: "",
-    logoUrl: settings?.logoUrl || "/orderfly-logo-dark.svg",
+    logoUrl: "/orderfly-logo-dark.svg",
     companyName: "",
     ownerId: "",
     status: "active",
@@ -46,24 +35,16 @@ export default function LegacyPublicLayout({ children }: { children: ReactNode }
     locationsCount: 0,
   };
 
-  const footerTheme = settings?.footer ?? {};
   const footerStyle: React.CSSProperties = {
-    "--of-footer-bg": footerTheme.bgColor ?? "#0b0b0b",
-    "--of-footer-text": footerTheme.textColor ?? "#e5e7eb",
-    "--of-footer-link": footerTheme.linkColor ?? "#ffffff",
-    "--of-footer-link-hover": footerTheme.linkHoverColor ?? "#d1d5db",
+    "--of-footer-bg": "#0b0b0b",
+    "--of-footer-text": "#e5e7eb",
+    "--of-footer-link": "#ffffff",
+    "--of-footer-link-hover": "#d1d5db",
   } as React.CSSProperties;
 
   return (
     <div className="relative" style={footerStyle}>
-      {/* Header bruger CMS-styret linkClass og logo */}
-      <HeaderClient brand={publicBrand} settings={settings} config={headerConfig} />
-      
       <main className="flex-1">{children}</main>
-
-      {footerTheme.isVisible !== false && (
-        <FooterClient brand={publicBrand} theme={footerTheme} />
-      )}
     </div>
   );
 }
