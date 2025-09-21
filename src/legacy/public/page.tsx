@@ -1,7 +1,6 @@
+"use client";
 
-export const dynamic = 'force-dynamic';
-
-import { Suspense } from "react";
+import { Suspense, useEffect, useState } from "react";
 import HeroSection from "@/components/sections/hero";
 import FeatureSection from "@/components/sections/feature";
 import ServicesSection from "@/components/sections/services";
@@ -31,8 +30,12 @@ const DEFAULT_ORDER: SectionKey[] = [
   "contact",
 ];
 
-export default async function PublicHomePage() {
-  const settings = await getGeneralSettings();
+export default function LegacyPublicPage() {
+  const [settings, setSettings] = useState<Awaited<ReturnType<typeof getGeneralSettings>> | null>(null);
+  
+  useEffect(() => {
+    getGeneralSettings().then(setSettings);
+  }, []);
 
   // Sikre defaults, samt filtrér ukendte nøgler fra CMS
   const sectionOrder: SectionKey[] = (settings?.homePageSectionOrder as SectionKey[] | undefined)
@@ -50,6 +53,10 @@ export default async function PublicHomePage() {
     customers: visibility.customers !== false ? <CustomersSection settings={settings} /> : null,
     contact: visibility.contact !== false ? <ContactSection settings={settings} /> : null,
   };
+  
+  if (!settings) {
+    return <div className="mx-auto max-w-[1140px] px-4 py-12">Loading page...</div>;
+  }
 
   return (
     <Suspense fallback={<div className="mx-auto max-w-[1140px] px-4 py-12">Loading page...</div>}>
