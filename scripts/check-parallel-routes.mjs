@@ -1,5 +1,3 @@
-
-#!/usr/bin/env node
 /**
  * Detect parallel/duplicate routes in Next.js App Router.
  * We normalize route keys by stripping ANY leading route groups "(group)/".
@@ -13,7 +11,7 @@ import path from "node:path";
 const ROOT = process.cwd();
 const APP_DIR = path.join(ROOT, "src", "app");
 
-// Filnavne der repræsenterer ruter/layouts
+// Files that define routes/layouts we care about
 const PAGE_FILES = new Set(["page.tsx", "page.ts", "route.ts", "layout.tsx", "layout.ts"]);
 
 function walk(dir) {
@@ -31,25 +29,14 @@ function toAppRel(abs) {
   return abs.replace(APP_DIR + path.sep, "").split(path.sep).join("/");
 }
 
-/**
- * Strip ANY number of leading "(group)/" segments.
- * Example:
- *   "(public)/page.tsx"       -> "page.tsx"
- *   "(grpA)/(grpB)/layout.tsx -> "layout.tsx"
- *   "about/page.tsx"          -> "about/page.tsx" (unchanged)
- */
+/** Strip ANY number of leading "(group)/" segments */
 function stripLeadingGroups(p) {
   let out = p;
-  // fjern gentagne "(...)/" i starten
   while (out.startsWith("(")) {
     const idx = out.indexOf(")/");
     if (idx === -1) break;
-    // kun hvis det er i starten (leading group)
-    if (out.slice(0, idx + 2).startsWith("(")) {
-      out = out.slice(idx + 2);
-    } else {
-      break;
-    }
+    if (out.slice(0, idx + 2).startsWith("(")) out = out.slice(idx + 2);
+    else break;
   }
   return out;
 }
@@ -58,13 +45,7 @@ function normalizeRouteKey(appRelPath) {
   const parts = appRelPath.split("/");
   const file = parts[parts.length - 1];
   if (!PAGE_FILES.has(file)) return null;
-
-  // Ignorér ALLE indledende route-groups
-  const withoutGroups = stripLeadingGroups(appRelPath);
-
-  // Vi holder hele stien inkl. undermapper (fx "account/page.tsx"),
-  // men nu uden leading groups, så "/(public)/page.tsx" kolliderer med "/page.tsx".
-  return withoutGroups;
+  return stripLeadingGroups(appRelPath);
 }
 
 function main() {
@@ -88,9 +69,7 @@ function main() {
     }
 
     for (const [norm, arr] of seen.entries()) {
-      if (arr.length > 1) {
-        collisions.push({ route: norm, files: arr });
-      }
+      if (arr.length > 1) collisions.push({ route: norm, files: arr });
     }
 
     if (collisions.length > 0) {
