@@ -1,21 +1,10 @@
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
-export const fetchCache = "default-no-store";
+import PublicHomePage from "./(public)/page";
+import PublicLayout from "./(public)/layout";
 
-import "./globals.css";
-import type { ReactNode } from "react";
-
-export const metadata = {
-  title: "Orderfly",
-  description: "Orderfly platform",
-};
-
-export default function RootLayout({ children }: { children: ReactNode }) {
+export default function Root() {
   return (
-    <html lang="da">
-      <body suppressHydrationWarning>
-        {children}
-      </body>
-    </html>
+    <PublicLayout>
+      <PublicHomePage />
+    </PublicLayout>
   );
 }
