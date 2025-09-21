@@ -1,6 +1,9 @@
+
+// This file is now obsolete and the content has been moved to /docs/archive/public-root/page.tsx
+// It will be removed in a future step.
 "use client";
 
-import { Suspense, useEffect, useState } from "react";
+import { Suspense } from "react";
 import HeroSection from "@/components/sections/hero";
 import FeatureSection from "@/components/sections/feature";
 import ServicesSection from "@/components/sections/services";
@@ -9,7 +12,7 @@ import CasesSection from "@/components/sections/cases";
 import AboutSection from "@/components/sections/about";
 import CustomersSection from "@/components/sections/customers";
 import ContactSection from "@/components/sections/contact";
-import { getGeneralSettings } from "@/services/settings";
+import type { GeneralSettings } from "@/types";
 
 type SectionKey =
   | "feature"
@@ -30,14 +33,8 @@ const DEFAULT_ORDER: SectionKey[] = [
   "contact",
 ];
 
-export default function LegacyPublicPage() {
-  const [settings, setSettings] = useState<Awaited<ReturnType<typeof getGeneralSettings>> | null>(null);
-  
-  useEffect(() => {
-    getGeneralSettings().then(setSettings);
-  }, []);
+export default function LegacyPublicPage({ settings }: { settings: GeneralSettings | null }) {
 
-  // Sikre defaults, samt filtrér ukendte nøgler fra CMS
   const sectionOrder: SectionKey[] = (settings?.homePageSectionOrder as SectionKey[] | undefined)
     ?.filter((k): k is SectionKey => DEFAULT_ORDER.includes(k))
     ?? DEFAULT_ORDER;
@@ -53,10 +50,6 @@ export default function LegacyPublicPage() {
     customers: visibility.customers !== false ? <CustomersSection settings={settings} /> : null,
     contact: visibility.contact !== false ? <ContactSection settings={settings} /> : null,
   };
-  
-  if (!settings) {
-    return <div className="mx-auto max-w-[1140px] px-4 py-12">Loading page...</div>;
-  }
 
   return (
     <Suspense fallback={<div className="mx-auto max-w-[1140px] px-4 py-12">Loading page...</div>}>

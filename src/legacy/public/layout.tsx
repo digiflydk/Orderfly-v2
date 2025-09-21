@@ -1,46 +1,27 @@
+
+// This file is now obsolete and the content has been moved to /docs/archive/public-root/layout.tsx
+// It will be removed in a future step.
 "use client";
 
-// src/app/(public)/layout.tsx
-import { ReactNode, useState } from "react";
-import { getGeneralSettings } from "@/services/settings";
-import { getWebsiteHeaderConfig } from "@/services/website";
-import type { Brand } from "@/types";
-import HeaderClient from "@/components/layout/HeaderClient";
-import FooterClient from "@/components/layout/FooterClient";
-import { Toaster } from "@/components/ui/toaster";
+import { useState } from 'react';
+import { Footer } from "@/components/layout/footer";
+import { CookieConsent } from '@/components/cookie-consent';
+import type { Brand, GeneralSettings } from '@/types';
+import type { WebsiteHeaderConfig } from '@/types/website';
+import HeaderClient from '@/components/layout/HeaderClient';
 
-export default function LegacyPublicLayout({ children }: { children: ReactNode }) {
-  const [settings, setSettings] = useState<Awaited<ReturnType<typeof getGeneralSettings>> | null>(null);
-  const [headerConfig, setHeaderConfig] = useState<Awaited<ReturnType<typeof getWebsiteHeaderConfig>> | null>(null);
-
-  useState(() => {
-    Promise.all([
-      getGeneralSettings(),
-      getWebsiteHeaderConfig(),
-    ]).then(([settings, headerConfig]) => {
-      setSettings(settings);
-      setHeaderConfig(headerConfig);
-    });
-  });
-
-  // Mock brand til public siden – bruger CMS logo hvis tilgængeligt
-  const publicBrand: Brand = {
-    id: "public-page-brand",
-    name: settings?.websiteTitle || "OrderFly",
-    slug: "",
-    logoUrl: settings?.logoUrl || "/orderfly-logo-dark.svg",
-    companyName: "",
-    ownerId: "",
-    status: "active",
-    street: "",
-    zipCode: "",
-    city: "",
-    country: "",
-    currency: "",
-    companyRegNo: "",
-    foodCategories: [],
-    locationsCount: 0,
-  };
+export default function LegacyPublicLayout({
+  children,
+  brand,
+  settings,
+  headerConfig,
+}: {
+  children: React.ReactNode;
+  brand: Brand;
+  settings: GeneralSettings | null;
+  headerConfig: WebsiteHeaderConfig;
+}) {
+  const [isCookieModalOpen, setIsCookieModalOpen] = useState(false);
 
   const footerTheme = settings?.footer ?? {};
   const footerStyle: React.CSSProperties = {
@@ -52,16 +33,19 @@ export default function LegacyPublicLayout({ children }: { children: ReactNode }
 
   return (
     <div className="relative" style={footerStyle}>
-      {headerConfig && (
-        <HeaderClient brand={publicBrand} settings={settings} config={headerConfig} />
-      )}
+      <HeaderClient brand={brand} settings={settings} config={headerConfig} />
       
       <main className="flex-1">{children}</main>
 
       {footerTheme.isVisible !== false && (
-        <FooterClient brand={publicBrand} theme={footerTheme} />
+        <Footer
+          brand={brand}
+          version="1.0.223 • OF-523"
+          onOpenCookieSettings={() => setIsCookieModalOpen(true)}
+          theme={footerTheme}
+        />
       )}
-      <Toaster />
+      <CookieConsent brandId={brand.id} isModalOpen={isCookieModalOpen} setIsModalOpen={setIsCookieModalOpen} />
     </div>
   );
 }

@@ -1,9 +1,10 @@
+
 #!/usr/bin/env node
 /**
- * Check for parallel/duplicate routes that resolve to the same path in Next.js App Router.
- * We “normalize” route paths by removing the optional route group “(public)/”.
- * If duplicates exist (e.g. /(public)/[brandSlug]/page.tsx and /[brandSlug]/page.tsx),
- * we fail the build with a clear error message.
+ * Detect parallel/duplicate routes in Next.js App Router.
+ * We normalize route keys by stripping ANY leading route groups "(group)/".
+ * If multiple files normalize to the same key (e.g. /(public)/page.tsx and /page.tsx),
+ * we fail the build with a clear error.
  */
 
 import { readdirSync, statSync } from "node:fs";
@@ -12,47 +13,62 @@ import path from "node:path";
 const ROOT = process.cwd();
 const APP_DIR = path.join(ROOT, "src", "app");
 
-// file extensions that represent route “pages” (add more if needed)
+// Filnavne der repræsenterer ruter/layouts
 const PAGE_FILES = new Set(["page.tsx", "page.ts", "route.ts", "layout.tsx", "layout.ts"]);
 
-/** Recursively collect route files under src/app */
 function walk(dir) {
   const out = [];
   for (const name of readdirSync(dir)) {
     const full = path.join(dir, name);
     const st = statSync(full);
-    if (st.isDirectory()) {
-      out.push(...walk(full));
+    if (st.isDirectory()) out.push(...walk(full));
+    else out.push(full);
+  }
+  return out;
+}
+
+function toAppRel(abs) {
+  return abs.replace(APP_DIR + path.sep, "").split(path.sep).join("/");
+}
+
+/**
+ * Strip ANY number of leading "(group)/" segments.
+ * Example:
+ *   "(public)/page.tsx"       -> "page.tsx"
+ *   "(grpA)/(grpB)/layout.tsx -> "layout.tsx"
+ *   "about/page.tsx"          -> "about/page.tsx" (unchanged)
+ */
+function stripLeadingGroups(p) {
+  let out = p;
+  // fjern gentagne "(...)/" i starten
+  while (out.startsWith("(")) {
+    const idx = out.indexOf(")/");
+    if (idx === -1) break;
+    // kun hvis det er i starten (leading group)
+    if (out.slice(0, idx + 2).startsWith("(")) {
+      out = out.slice(idx + 2);
     } else {
-      out.push(full);
+      break;
     }
   }
   return out;
 }
 
-/** Convert absolute file path to app-relative, POSIX-like path */
-function toAppRel(abs) {
-  return abs.replace(APP_DIR + path.sep, "").split(path.sep).join("/");
-}
-
-/** Normalize route key by stripping an initial “(public)/” group if present */
 function normalizeRouteKey(appRelPath) {
-  // we only care about files that define a route or layout
   const parts = appRelPath.split("/");
   const file = parts[parts.length - 1];
   if (!PAGE_FILES.has(file)) return null;
 
-  // drop route group "(public)" from the first segment if present
-  let normalized = appRelPath;
-  if (normalized.startsWith("(public)/")) {
-    normalized = normalized.replace(/^\(public\)\//, "");
-  }
-  return normalized;
+  // Ignorér ALLE indledende route-groups
+  const withoutGroups = stripLeadingGroups(appRelPath);
+
+  // Vi holder hele stien inkl. undermapper (fx "account/page.tsx"),
+  // men nu uden leading groups, så "/(public)/page.tsx" kolliderer med "/page.tsx".
+  return withoutGroups;
 }
 
 function main() {
   try {
-    // if src/app doesn’t exist, nothing to check
     try {
       statSync(APP_DIR);
     } catch {
@@ -67,18 +83,11 @@ function main() {
     for (const rel of files) {
       const norm = normalizeRouteKey(rel);
       if (!norm) continue;
-
-      if (!seen.has(norm)) {
-        seen.set(norm, [rel]);
-      } else {
-        const arr = seen.get(norm);
-        arr.push(rel);
-        seen.set(norm, arr);
-      }
+      if (!seen.has(norm)) seen.set(norm, [rel]);
+      else seen.get(norm).push(rel);
     }
 
     for (const [norm, arr] of seen.entries()) {
-      // A collision exists if more than 1 physical file normalizes to the same route key
       if (arr.length > 1) {
         collisions.push({ route: norm, files: arr });
       }
@@ -90,7 +99,7 @@ function main() {
         console.error(`  Route: /${c.route}`);
         for (const f of c.files) console.error(`    - src/app/${f}`);
       }
-      console.error("\nFix: Remove one of the duplicates so only a single file maps to each route path.");
+      console.error("\nFix: Keep only ONE physical file per normalized route key. Move archive files outside src/app/.");
       process.exit(1);
     }
 
