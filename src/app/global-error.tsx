@@ -1,19 +1,29 @@
-'use client';
-import * as React from 'react';
 
-export default function GlobalError({ error, reset }: { error: Error & { digest?: string }; reset: () => void }) {
-  React.useEffect(() => {
-    console.error('[global:error]', error?.stack || error);
+"use client";
+
+import { useEffect } from "react";
+
+export default function GlobalError({ error, reset }: { error: Error & { digest?: string }, reset: () => void }) {
+  useEffect(() => {
+    // Client-side log (kommer med i browser console)
+    console.error("[OF-521] GlobalError:", error?.message, error?.stack);
+    // Her kan vi evt. kalde en log-endpoint, hvis det ønskes senere
   }, [error]);
-  
+
   return (
     <html>
       <body>
-        <main style={{ padding: 24 }}>
-          <h1 style={{ fontSize: 20, fontWeight: 600, marginBottom: 8 }}>Global fejl</h1>
-          <pre style={{ fontFamily: 'monospace', whiteSpace: 'pre-wrap', background: '#f4f4f5', padding: 12, borderRadius: 8 }}>{(error?.stack || String(error))}</pre>
-          {error?.digest ? <p style={{ fontSize: '12px', marginTop: '8px' }}>Digest: {error.digest}</p> : null}
-          <button onClick={() => reset()} style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, background: 'black', color: 'white', cursor: 'pointer' }}>Prøv igen</button>
+        <main className="mx-auto max-w-3xl p-6">
+          <h1 className="text-2xl font-semibold">Der gik noget galt</h1>
+          <p className="text-muted-foreground mt-2">
+            Prøv igen. Hvis problemet fortsætter, kontakt support.
+          </p>
+          <button
+            className="mt-4 rounded border px-3 py-1"
+            onClick={() => reset()}
+          >
+            Prøv igen
+          </button>
         </main>
       </body>
     </html>

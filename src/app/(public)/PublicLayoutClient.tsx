@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState } from 'react';
@@ -26,7 +25,7 @@ export function PublicLayoutClient({
       {children}
       <Footer 
         brand={brand} 
-        version="1.0.215 • OF-447"
+        version="1.0.221 • OF-521"
         onOpenCookieSettings={() => setIsCookieModalOpen(true)}
       />
       <CookieConsent brandId={brand.id} isModalOpen={isCookieModalOpen} setIsModalOpen={setIsCookieModalOpen} />

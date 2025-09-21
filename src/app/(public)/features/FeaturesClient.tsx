@@ -9,6 +9,7 @@ import type { Brand } from '@/types';
 import { Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 const features = [
   {
