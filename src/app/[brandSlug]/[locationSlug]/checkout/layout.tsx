@@ -1,28 +1,17 @@
+// Server component (ingen "use client" her medmindre I bruger hooks der kræver det)
+export const runtime = "nodejs";
 
-
-import { getBrandBySlug } from "@/app/superadmin/brands/actions";
-import { notFound } from "next/navigation";
-
-export default async function CheckoutLayout({
-  children,
-  params,
-}: {
+type LayoutProps = {
   children: React.ReactNode;
-  params: { brandSlug: string };
-}) {
-  const brand = await getBrandBySlug(params.brandSlug);
+  params: {
+    brandSlug: string;
+    locationSlug: string;
+  };
+};
 
-  if (!brand) {
-    notFound();
-  }
+export default function CheckoutLayout({ children /*, params*/ }: LayoutProps) {
+  // Hvis I skal bruge brandSlug/locationSlug, destrukturer dem:
+  // const { brandSlug, locationSlug } = params;
 
-  // The header is now handled by the parent BrandLayoutClient,
-  // so this layout just passes children through.
-  return (
-    <div className="flex flex-col min-h-screen">
-      <main className="w-full mx-auto flex-1">
-        {children}
-      </main>
-    </div>
-  );
+  return <>{children}</>;
 }
