@@ -1,10 +1,14 @@
-import PublicHomePage from "./(public)/page";
-import PublicLayout from "./(public)/layout";
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
+export const fetchCache = "default-no-store";
 
-export default function Root() {
+import PublicLayout from "@/legacy/public/layout";
+import PublicPage from "@/legacy/public/page";
+
+export default async function Home() {
   return (
     <PublicLayout>
-      <PublicHomePage />
+      <PublicPage />
     </PublicLayout>
   );
 }
