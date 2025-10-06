@@ -3,7 +3,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "prebuild": "node scripts/check-parallel-routes.mjs",
+    "prebuild": "node scripts/check-parallel-routes.mjs && node scripts/assert-no-layoutprops.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
