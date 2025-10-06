@@ -1,17 +1,11 @@
-// Server component (ingen "use client" her medmindre I bruger hooks der kræver det)
+import type { ReactNode } from "react";
 export const runtime = "nodejs";
 
-type LayoutProps = {
-  children: React.ReactNode;
-  params: {
-    brandSlug: string;
-    locationSlug: string;
-  };
+type Props = {
+  children: ReactNode;
+  params?: any; // Gør param-typen fleksibel (Next genererer forskelligt)
 };
 
-export default function CheckoutLayout({ children /*, params*/ }: LayoutProps) {
-  // Hvis I skal bruge brandSlug/locationSlug, destrukturer dem:
-  // const { brandSlug, locationSlug } = params;
-
+export default function Layout({ children }: Props) {
   return <>{children}</>;
 }
