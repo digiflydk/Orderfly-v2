@@ -264,7 +264,7 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
     // Then, find all categories linked to those locations
     // Firestore 'array-contains-any' can query up to 10 values at a time.
     // If a brand has more than 10 locations, we need to do multiple queries.
-    const categoryPromises: Promise<any>[] = [];
+    const categoryPromises: any[] = [];
     for (let i = 0; i < locationIds.length; i += 10) {
         const chunk = locationIds.slice(i, i + 10);
         const categoriesQuery = query(collection(db, 'categories'), where('locationIds', 'array-contains-any', chunk));
