@@ -1,10 +1,14 @@
 
+'use client';
+
 import Link from "next/link";
 import Image from "next/image";
 import type { Brand, Location } from "@/types";
 import type { FooterTheme } from "@/types/settings";
 import { Facebook, Instagram, Linkedin, LucideIcon, Twitter, Youtube } from 'lucide-react';
 import SiteLogo from "../common/SiteLogo";
+import { useState } from "react";
+import { CookieConsent } from "../cookie-consent";
 
 interface FooterProps {
   brand?: Brand | null;
@@ -85,7 +89,7 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
         <div className="flex items-center justify-between text-xs" style={{ color: 'var(--of-footer-text)' }}>
           <span>🌐 English</span>
           <div className="flex items-center gap-2">
-            <span>1.0.225 • OF-525</span>
+            <span>1.0.226 • OF-526</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>

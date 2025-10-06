@@ -3,7 +3,7 @@ import { readFileSync, readdirSync, statSync } from "fs";
 import { join } from "path";
 
 const root = "src/app";
-let hits = [];
+const hits = [];
 
 function walk(dir) {
   for (const entry of readdirSync(dir)) {
@@ -13,17 +13,16 @@ function walk(dir) {
     else if (/\.(ts|tsx|mts|cts|js|jsx)$/.test(p)) {
       const txt = readFileSync(p, "utf8");
       if (/\bLayoutProps\b/.test(txt)) hits.push(p);
+      if (/export\s+default\s+function\s+Layout\s*\(\s*\{\s*children/i.test(txt)) hits.push(p); // forbyd destrukturering
+      if (/:\s*Promise<\s*any\s*>/.test(txt)) hits.push(p); // forbyd Promise<any>-params
     }
   }
 }
-
-try {
-  walk(root);
-} catch {}
+try { walk(root); } catch {}
 
 if (hits.length) {
-  console.error("✖ assert-no-layoutprops: 'LayoutProps' found in:", hits);
+  console.error("✖ Guard: forbidden patterns found in:", hits);
   process.exit(1);
 } else {
-  console.log("✔ assert-no-layoutprops: OK (no 'LayoutProps' in src/app)");
+  console.log("✔ Guard: OK (no forbidden patterns in src/app layouts)");
 }
