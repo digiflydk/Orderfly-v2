@@ -2,7 +2,7 @@
 import type { AppTypes } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Suspense } from 'react';
-import { getFunnelDataForSuperAdmin } from './actions';
+import { getFunnelDataForSuperAdmin } from "@/app/superadmin/analytics/cust-funnel/actions";
 import { AnalyticsDashboardClient } from '@/components/superadmin/analytics-dashboard-client';
 import { getBrands } from '../../brands/actions';
 import { getAllLocations } from '../../locations/actions';
@@ -48,7 +48,7 @@ async function AnalyticsData({ searchParams }: { searchParams: { [key: string]: 
   );
 }
 
-export default async function Page({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function CustomerFunnelPage({ params, searchParams }: AppTypes.AsyncPageProps) {
   const routeParams = await resolveParams(params);
   const query = await resolveSearchParams(searchParams);
 
