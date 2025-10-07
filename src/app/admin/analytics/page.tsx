@@ -1,4 +1,5 @@
 
+
 import type { AppTypes } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Suspense } from 'react';
@@ -55,16 +56,18 @@ export default async function BrandAnalyticsPage({ params, searchParams }: AppTy
   const query = await resolveSearchParams(searchParams);
 
   return (
-    <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Analytics Dashboard</h1>
-        <p className="text-muted-foreground">
-          Track the customer journey and key metrics for your brand.
-        </p>
-      </div>
-      <Suspense fallback={<p>Loading dashboard...</p>}>
-        <AnalyticsData searchParams={query} />
-      </Suspense>
-    </div>
+    <Suspense>
+        <div className="space-y-6">
+        <div>
+            <h1 className="text-2xl font-bold tracking-tight">Analytics Dashboard</h1>
+            <p className="text-muted-foreground">
+            Track the customer journey and key metrics for your brand.
+            </p>
+        </div>
+        <Suspense fallback={<p>Loading dashboard...</p>}>
+            <AnalyticsData searchParams={query} />
+        </Suspense>
+        </div>
+    </Suspense>
   );
 }
