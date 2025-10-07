@@ -89,7 +89,7 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
         <div className="flex items-center justify-between text-xs" style={{ color: 'var(--of-footer-text)' }}>
           <span>🌐 English</span>
           <div className="flex items-center gap-2">
-            <span>1.0.199 • OF-383</span>
+            <span>1.0.207 • OF-391</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>
