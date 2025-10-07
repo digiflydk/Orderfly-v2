@@ -1,10 +1,9 @@
 #!/usr/bin/env node
 /**
- * OF-537 codemod:
- *  - Finder pages/layouts under src/app/** der bruger PageProps eller .next/types
- *  - Skifter funktionssignatur til async (props: any)
- *  - Indfører defensiv læsning af params/searchParams med Promise.resolve
- *  - Bevarer alt eksisterende JSX/logic uændret
+ * OF-538 codemod (stronger):
+ * - Removes ANY import (incl. "import type") that mentions PageProps/LayoutProps or ".next/types/"
+ * - Rewrites default export function signature to `async function X(props: any)` or `async function (props: any)`
+ * - Injects defensive params/searchParams resolution if those identifiers appear in file
  */
 import { readFileSync, writeFileSync } from "fs";
 import { globby } from "globby";
@@ -16,52 +15,45 @@ const GLOBS = [
   "src/app/**/layout.tsx",
 ];
 
-const TARGET_FILES = [
-  "src/app/[brandSlug]/page.tsx",
-  "src/app/[brandSlug]/checkout/page.tsx",
-  "src/app/[brandSlug]/checkout/confirmation/page.tsx",
-  "src/app/[brandSlug]/[locationSlug]/page.tsx",
-  "src/app/[brandSlug]/[locationSlug]/checkout/page.tsx",
-  "src/app/[brandSlug]/[locationSlug]/checkout/layout.tsx",
-  "src/app/admin/analytics/page.tsx",
-];
-
+// If you want to target only the four files, you can list them here.
+// We keep it repo-wide but safe (regex-based).
 function needsChange(src) {
-  return (
-    /PageProps|LayoutProps/.test(src) ||
-    /from\s+["']\.next\/types\//.test(src)
-  );
+  return /PageProps|LayoutProps|\.next\/types\//.test(src);
 }
 
-function applyPatch(src, isLayout) {
-  // Fjern explicit imports af PageProps/LayoutProps og .next/types
-  src = src
-    .replace(/import\s*{[^}]*\b(PageProps|LayoutProps)\b[^}]*}\s*from\s*["'][^"']+["'];?\s*\n?/g, "")
-    .replace(/import\s*["']\.next\/types\/[^"']+["'];?\s*\n?/g, "")
-    .replace(/import\s*{[^}]*}\s*from\s*["']\.next\/types\/[^"']+["'];?\s*\n?/g, "");
+function stripTypeImports(src) {
+  // remove any import or import type line that mentions PageProps/LayoutProps OR .next/types
+  return src
+    .replace(/^\s*import\s+type\s+{[^}]*\b(PageProps|LayoutProps)\b[^}]*}\s+from\s+["'][^"']+["'];?\s*$/gm, "")
+    .replace(/^\s*import\s+{[^}]*\b(PageProps|LayoutProps)\b[^}]*}\s+from\s+["'][^"']+["'];?\s*$/gm, "")
+    .replace(/^\s*import\s+type\s+["']\.next\/types\/[^"']+["'];?\s*$/gm, "")
+    .replace(/^\s*import\s+{[^}]*}\s+from\s+["']\.next\/types\/[^"']+["'];?\s*$/gm, "")
+    .replace(/^\s*import\s+["']\.next\/types\/[^"']+["'];?\s*$/gm, "");
+}
 
-  // Skift default export signature
-  // case 1: export default function Name({ ... }: PageProps) { ... }
+function normalizeSignature(src) {
+  // Common signatures → async with props:any
+  // named fn with destructuring + type
   src = src.replace(
     /export\s+default\s+async?\s*function\s+([A-Za-z0-9_]+)\s*\(\s*\{[^)]*\}\s*:\s*(PageProps|LayoutProps)\s*\)/,
     "export default async function $1(props: any)"
   );
-  // case 2: export default function ({ ... }: PageProps) { ... }
+  // anon fn with destructuring + type
   src = src.replace(
     /export\s+default\s+async?\s*function\s*\(\s*\{[^)]*\}\s*:\s*(PageProps|LayoutProps)\s*\)/,
     "export default async function (props: any)"
   );
-  // case 3: export default function Name(props: PageProps) { ... }
+  // named fn (props: PageProps)
   src = src.replace(
     /export\s+default\s+async?\s*function\s+([A-Za-z0-9_]+)\s*\(\s*props\s*:\s*(PageProps|LayoutProps)\s*\)/,
     "export default async function $1(props: any)"
   );
-  // case 4: export default function (props: PageProps) { ... }
+  // anon fn (props: PageProps)
   src = src.replace(
     /export\s+default\s+async?\s*function\s*\(\s*props\s*:\s*(PageProps|LayoutProps)\s*\)/,
     "export default async function (props: any)"
   );
-  // case 5: hvis den ikke er async endnu
+  // non-async variants → make them async
   src = src.replace(
     /export\s+default\s+function\s+([A-Za-z0-9_]+)\s*\(\s*(?:props\s*:\s*(?:PageProps|LayoutProps)|\{[^)]*\}\s*:\s*(?:PageProps|LayoutProps))\s*\)/,
     "export default async function $1(props: any)"
@@ -71,50 +63,54 @@ function applyPatch(src, isLayout) {
     "export default async function (props: any)"
   );
 
-  // Indsprøjt defensiv read af params/searchParams hvis de bruges i filen
-  const usesParams = /\bparams\b/.test(src);
-  const usesSearch = /\bsearchParams\b/.test(src);
+  // Also catch inline annotations on separate lines like:
+  // const Page = (props: PageProps) => { ... }
+  src = src.replace(
+    /(\bconst\s+[A-Za-z0-9_]+\s*=\s*\()props\s*:\s*(PageProps|LayoutProps)(\)\s*=>)/,
+    "$1props: any$3"
+  );
 
-  if (usesParams || usesSearch) {
-    const marker = "export default async function";
-    const idx = src.indexOf(marker);
-    if (idx !== -1) {
-      const braceIdx = src.indexOf("{", idx);
-      if (braceIdx !== -1) {
-        const inject =
-`  // OF-537: defensive props handling (Next may pass Promise<any>)
-  const rawParams = (props && typeof props === "object") ? (props as any).params : undefined;
-  const rawSearch = (props && typeof props === "object") ? (props as any).searchParams : undefined;
-  const params = await Promise.resolve(rawParams ?? {});
-  const searchParams = await Promise.resolve(rawSearch ?? {});\n`;
-        src = src.slice(0, braceIdx + 1) + "\n" + inject + src.slice(braceIdx + 1);
-      }
-    }
-  }
-
-  // Done
   return src;
 }
 
+function injectDefensiveAccess(src) {
+  // only inject if these identifiers are used somewhere in the file
+  const usesParams = /\bparams\b/.test(src);
+  const usesSearch = /\bsearchParams\b/.test(src);
+  if (!usesParams && !usesSearch) return src;
+
+  const marker = "export default async function";
+  const idx = src.indexOf(marker);
+  if (idx === -1) return src;
+  const braceIdx = src.indexOf("{", idx);
+  if (braceIdx === -1) return src;
+
+  const inject = `
+  // OF-538: defensive props handling (Next may pass Promise<any>)
+  const rawParams = (props && typeof props === "object") ? (props as any).params : undefined;
+  const rawSearch = (props && typeof props === "object") ? (props as any).searchParams : undefined;
+  const params = await Promise.resolve(rawParams ?? {});
+  const searchParams = await Promise.resolve(rawSearch ?? {});
+`;
+  return src.slice(0, braceIdx + 1) + inject + src.slice(braceIdx + 1);
+}
+
 (async () => {
-  const all = await globby(GLOBS);
+  const files = await globby(GLOBS);
   let changed = 0;
 
-  for (const rel of all) {
-    // kun vores målfiler + enhver der matcher needsChange()
-    if (!TARGET_FILES.includes(rel)) {
-      // spring over filer der ikke indeholder PageProps-mønster
-      const raw = readFileSync(path.join(ROOT, rel), "utf8");
-      if (!needsChange(raw)) continue;
-    }
+  for (const rel of files) {
     const full = path.join(ROOT, rel);
-    const src = readFileSync(full, "utf8");
+    let src = readFileSync(full, "utf8");
     if (!needsChange(src)) continue;
 
-    const isLayout = /\/layout\.tsx$/.test(rel);
-    const next = applyPatch(src, isLayout);
-    if (next !== src) {
-      writeFileSync(full, next, "utf8");
+    const before = src;
+    src = stripTypeImports(src);
+    src = normalizeSignature(src);
+    src = injectDefensiveAccess(src);
+
+    if (src !== before) {
+      writeFileSync(full, src, "utf8");
       console.log("✔ patched", rel);
       changed++;
     }
