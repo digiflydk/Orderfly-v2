@@ -13,17 +13,19 @@ for (const file of pages) {
   const isClient = /^\s*["']use client["'];?/m.test(head);
   if (isClient) continue;
 
-  // Heuristik: bruger siden route-props?
+  // Heuristik: bruger siden params/search?
   const usesParams = /\b[^.\s]params\b|\brouteParams\b/.test(src);
   const usesSearch = /\bsearchParams\b|\bquery\b/.test(src);
 
   const ensureTypeImport = () => {
-    if (!/from\s+["']@\/types\/next-async-props["']/.test(src))
+    if (!/from\s+["']@\/types\/next-async-props["']/.test(src)) {
       src = `import type { AppTypes } from "@/types/next-async-props";\n` + src;
+    }
   };
   const ensureHelpersImport = () => {
-    if (!/from\s+["']@\/lib\/next\/resolve-props["']/.test(src))
+    if (!/from\s+["']@\/lib\/next\/resolve-props["']/.test(src)) {
       src = `import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";\n` + src;
+    }
   };
 
   // Default export signatur
@@ -32,7 +34,7 @@ for (const file of pages) {
     ensureHelpersImport();
     // Gør signaturen ensartet
     src = src.replace(
-      /export\s+default\s+async\s+function\s+([A-Za-z0-9_]+)\s*\([^)]*\)\s*\{/m,
+      /export\s+default\s+async\s+function\s+([A-Za-z0-9_]+)\s*\(\s*[^)]*\)\s*\{\s*/m,
       (_, name) =>
         `export default async function ${name}({ params, searchParams }: AppTypes.AsyncPageProps) {\n  const routeParams = await resolveParams(params);\n  const query = await resolveSearchParams(searchParams);\n`
     );
@@ -43,22 +45,10 @@ for (const file of pages) {
       (_, name) => `export default async function ${name}()`
     );
     // Ryd ubrugte imports
-    src = src.replace(
-      /import\s*{\s*resolveParams\s*,\s*resolveSearchParams\s*}\s*from\s*["']@\/lib\/next\/resolve-props["'];?\n?/g,
-      ""
-    );
-    src = src.replace(
-      /import\s*{\s*resolveParams\s*}\s*from\s*["']@\/lib\/next\/resolve-props["'];?\n?/g,
-      ""
-    );
-    src = src.replace(
-      /import\s*{\s*resolveSearchParams\s*}\s*from\s*["']@\/lib\/next\/resolve-props["'];?\n?/g,
-      ""
-    );
-    src = src.replace(
-      /import\s+type\s*{\s*AppTypes\s*}\s*from\s*["']@\/types\/next-async-props["'];?\n?/g,
-      ""
-    );
+    src = src.replace(/import\s*{\s*resolveParams\s*,\s*resolveSearchParams\s*}\s*from\s*["']@\/lib\/next\/resolve-props["'];?\n?/g, "");
+    src = src.replace(/import\s*{\s*resolveParams\s*}\s*from\s*["']@\/lib\/next\/resolve-props["'];?\n?/g, "");
+    src = src.replace(/import\s*{\s*resolveSearchParams\s*}\s*from\s*["']@\/lib\/next\/resolve-props["'];?\n?/g, "");
+    src = src.replace(/import\s+type\s*{\s*AppTypes\s*}\s*from\s*["']@\/types\/next-async-props["'];?\n?/g, "");
   }
 
   // generateMetadata
@@ -69,7 +59,7 @@ for (const file of pages) {
       /export\s+async\s+function\s+generateMetadata\s*\([^)]*\)/m,
       () => `export async function generateMetadata({ params }: AppTypes.AsyncPageProps)`
     );
-    if (!/resolveParams\s*\(\s*params\s*\)/.test(src)) {
+    if (!/const\s+routeParams\s*=\s*await\s+resolveParams\(\s*params\s*\)/.test(src)) {
       src = src.replace(
         /export\s+async\s+function\s+generateMetadata[^{]+\{\s*/m,
         (m) => `${m}  const routeParams = await resolveParams(params);\n`
