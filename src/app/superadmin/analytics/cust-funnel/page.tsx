@@ -48,7 +48,7 @@ async function AnalyticsData({ searchParams }: { searchParams: { [key: string]: 
   );
 }
 
-export default async function CustomerFunnelPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function Page({ params, searchParams }: AppTypes.AsyncPageProps) {
   const routeParams = await resolveParams(params);
   const query = await resolveSearchParams(searchParams);
 

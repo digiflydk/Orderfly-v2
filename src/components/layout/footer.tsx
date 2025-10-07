@@ -6,7 +6,7 @@ import Image from "next/image";
 import type { Brand, Location } from "@/types";
 import type { FooterTheme } from "@/types/settings";
 import { Facebook, Instagram, Linkedin, LucideIcon, Twitter, Youtube } from 'lucide-react';
-import SiteLogo from "@/components/common/SiteLogo";
+import SiteLogo from "../common/SiteLogo";
 import { useState } from "react";
 import { CookieConsent } from "../cookie-consent";
 

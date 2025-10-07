@@ -7,11 +7,11 @@ import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
 
-export default async function BrandCheckoutRootPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function Page({ params, searchParams }: AppTypes.AsyncPageProps) {
   const routeParams = await resolveParams(params);
   const query = await resolveSearchParams(searchParams);
-
-  const brandSlug = routeParams.brandSlug;
+  
+  const { brandSlug } = routeParams;
 
   if (!brandSlug) {
     notFound();

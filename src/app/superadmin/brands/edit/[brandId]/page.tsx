@@ -8,7 +8,7 @@ import { getUsers } from '@/app/superadmin/users/actions';
 import { notFound } from 'next/navigation';
 import { getFoodCategories } from '@/app/superadmin/food-categories/actions';
 
-export default async function EditBrandPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function Page({ params, searchParams }: AppTypes.AsyncPageProps) {
     const routeParams = await resolveParams(params);
     const query = await resolveSearchParams(searchParams);
 

@@ -8,7 +8,7 @@ import { FeedbackFormClient } from './form-client';
 
 export const revalidate = 0;
 
-export default async function FeedbackPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function Page({ params, searchParams }: AppTypes.AsyncPageProps) {
   const routeParams = await resolveParams(params);
   const query = await resolveSearchParams(searchParams);
 
