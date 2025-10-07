@@ -5,37 +5,31 @@ type Params = { brandSlug: string };
 type Query = Record<string, string | string[] | undefined>;
 
 type AsyncPageProps = {
-  // Next 15 build-wrapper kan give disse som Promise i typerne
-  params: Promise<Params> | Params;
-  searchParams?: Promise<Query> | Query;
+  params: Promise<Params>; // vigtig: Promise, ingen union
+  searchParams?: Promise<Query>; // vigtig: Promise eller undefined
 };
 
 export async function generateMetadata({ params }: AsyncPageProps) {
-  // håndter både Promise og plain object
-  const routeParams = await Promise.resolve(params);
+  const routeParams = await params;
   const { brandSlug } = routeParams;
   return {
     title: `Brand • ${brandSlug}`,
   };
 }
 
-export default async function BrandPage({
-  params,
-  searchParams,
-}: AsyncPageProps) {
-  // normaliser til plain objects
-  const routeParams = await Promise.resolve(params);
-  const query = await Promise.resolve(searchParams ?? {});
+export default async function BrandPage({ params, searchParams }: AsyncPageProps) {
+  const routeParams = await params;
+  const query = (await searchParams) ?? {};
   const { brandSlug } = routeParams;
 
-  // eksempel på brug af query:
+  // eksempel: læs evt. filter fra query
   // const someFilter = typeof query.filter === "string" ? query.filter : undefined;
 
   return (
     <Suspense>
       <div>
         <h1>{brandSlug}</h1>
-        {/* TODO: Insert brand content */}
+        {/* TODO: Indhold for brand */}
       </div>
     </Suspense>
   );
