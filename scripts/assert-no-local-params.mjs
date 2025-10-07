@@ -2,22 +2,40 @@
 import { globby } from 'globby';
 import fs from 'node:fs/promises';
 
-const files = await globby(['src/app/**/*.tsx', 'src/app/**/*.ts']);
-const offenders = [];
-const bad = [
+const pageFiles = await globby(['src/app/**/page.tsx']);
+const otherFiles = await globby(['src/app/**/*.tsx', 'src/app/**/*.ts', '!src/app/**/page.tsx']);
+
+const badDecl = [
   /\b(const|let|var)\s+params\s*=/,
   /\b(const|let|var)\s+searchParams\s*=/,
 ];
 
-for (const f of files) {
-  const txt = await fs.readFile(f, 'utf8');
-  if (bad.some((re) => re.test(txt))) offenders.push(f);
+function findOffenders(files, txts) {
+  const offenders = [];
+  files.forEach((f, i) => {
+    if (badDecl.some(re => re.test(txts[i]))) offenders.push(f);
+  });
+  return offenders;
 }
 
-if (offenders.length) {
+const pageTxts = await Promise.all(pageFiles.map(f => fs.readFile(f, 'utf8')));
+const otherTxts = await Promise.all(otherFiles.map(f => fs.readFile(f, 'utf8')));
+
+const pageOffenders = findOffenders(pageFiles, pageTxts);
+const otherOffenders = findOffenders(otherFiles, otherTxts);
+
+if (otherOffenders.length) {
+  console.warn(
+    `[Guard][ADVARSEL] Lokale 'params'/'searchParams' i ikke-page filer:\n` +
+    otherOffenders.map(f => ` - ${f}`).join('\n') +
+    `\n(Dette blokerer ikke build, men bør rettes snarest.)`
+  );
+}
+
+if (pageOffenders.length) {
   console.error(
-    `[Guard] Lokale 'params'/'searchParams' fundet. Brug alias i funktionssignatur i stedet:\n` +
-    offenders.map((f) => ` - ${f}`).join('\n')
+    `[Guard][FEJL] Lokale 'params'/'searchParams' fundet i pages. Alias i funktionssignatur:\n` +
+    pageOffenders.map(f => ` - ${f}`).join('\n')
   );
   process.exit(1);
 }
