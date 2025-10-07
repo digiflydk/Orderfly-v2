@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import type { FunnelFilters, FunnelOutput } from '@/types';
@@ -22,4 +21,10 @@ export async function getFunnelDataForBrand(
   const mockUser = { role: 'brand_admin', brandIds: [brandId] };
   // @ts-ignore
   return getFunnelData(finalFilters, mockUser);
+}
+
+
+export async function getAnalyticsOverview() {
+  // TODO: erstat med rigtig implementation
+  return { ok: true };
 }

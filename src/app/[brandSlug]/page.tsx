@@ -1,4 +1,5 @@
 
+
 // src/app/[brandSlug]/page.tsx
 import type { AppTypes } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
@@ -8,7 +9,7 @@ import type { Brand, Location } from "@/types";
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
 import { getLocationsForBrand } from "@/app/superadmin/locations/actions";
 import { notFound } from "next/navigation";
-import { BrandLayoutClient } from "./layout-client";
+import { BrandLayoutClient } from "@/app/[brandSlug]/layout-client";
 
 interface BrandPageData {
   brand: Brand;
