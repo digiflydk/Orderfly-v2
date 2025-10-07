@@ -8,57 +8,78 @@ for (const f of files) {
   let s = await fs.readFile(f, "utf8");
   const o = s;
 
-  // Skip client components
-  const head = s.slice(0, 200);
-  const isClient = /^\s*["']use client["'];?/m.test(head);
-  if (isClient) continue;
-
-  // Beskyt funktionssignatur og imports ved at markere deres linjer
+  const lines = s.split("\n");
   const protectedLines = new Set();
-  s.split("\n").forEach((line, idx) => {
+
+  // Beskyt imports og default export signaturen
+  lines.forEach((line, idx) => {
     if (
-      /export\s+default\s+async\s+function\s+[A-Za-z0-9_]+\s*\(/.test(line) ||
-      /^\s*import\s/.test(line)
+      /^\s*import\s/.test(line) ||
+      /export\s+default\s+async\s+function\s+[A-Za-z0-9_]+\s*\(/.test(line)
     ) protectedLines.add(idx);
   });
 
-  const lines = s.split("\n");
-
-  // Hjælpefunktion: sikker erstatning på linjen, hvis ikke beskyttet
-  function replaceLine(i, re, rep) {
-    if (!protectedLines.has(i)) lines[i] = lines[i].replace(re, rep);
+  function mapLines(mapper) {
+    for (let i = 0; i < lines.length; i++) lines[i] = mapper(lines[i], i);
   }
 
-  // 1) Destrukturering: const { params, searchParams } = ...
-  for (let i = 0; i < lines.length; i++) {
-    replaceLine(i, /\bconst\s*{\s*([^}]*?)\s*}\s*=\s*(.+);?/, (m, inner, rhs) => {
-      let changed = inner;
-      changed = changed.replace(/\bparams\b/g, "routeParamsLocal");
-      changed = changed.replace(/\bsearchParams\b/g, "queryLocal");
-      if (changed !== inner) return `const { ${changed} } = ${rhs};`;
-      return m;
+  // 1) Lokale destruktureringer
+  mapLines((ln, i) => {
+    if (protectedLines.has(i)) return ln;
+    return ln.replace(/\b(const|let|var)\s*{\s*([^}]+)\s*}\s*=\s*(.+);?/, (m, kw, inner, rhs) => {
+      let changed = inner.replace(/\bparams\b/g, "routeParamsLocal")
+                         .replace(/\bsearchParams\b/g, "queryLocal");
+      return `${kw} { ${changed} } = ${rhs};`;
     });
-  }
+  });
 
-  // 2) Enkelt-deklarationer: const/let/var params = ...
-  for (let i = 0; i < lines.length; i++) {
-    replaceLine(i, /\b(const|let|var)\s+params\b/, (m, kw) => `${kw} routeParamsLocal`);
-    replaceLine(i, /\b(const|let|var)\s+searchParams\b/, (m, kw) => `${kw} queryLocal`);
-  }
+  // 2) Lokale deklarationer
+  mapLines((ln, i) => {
+    if (protectedLines.has(i)) return ln;
+    return ln
+      .replace(/\b(const|let|var)\s+params\b/g, (_m, kw) => `${kw} routeParamsLocal`)
+      .replace(/\b(const|let|var)\s+searchParams\b/g, (_m, kw) => `${kw} queryLocal`);
+  });
 
-  // 3) Efter omdøbning i deklarationer: erstat sikre, hele-ords brug i resten af filen
-  //   (vi undgår at ændre signatur/imports via protectedLines)
-  const body = lines.map((ln, i) =>
-    protectedLines.has(i)
-      ? ln
-      : ln
+  // 3) Lokale funktionsparametre (ikke default export)
+  mapLines((ln, i) => {
+    if (protectedLines.has(i)) return ln;
+    // function foo(params, searchParams) { ... }
+    ln = ln.replace(
+      /function\s+[A-Za-z0-9_]+\s*\(\s*([^)]*?)\s*\)/,
+      (m, inner) => {
+        const out = inner
           .replace(/\bparams\b/g, "routeParamsLocal")
-          .replace(/\bsearchParams\b/g, "queryLocal")
-  );
-  const result = body.join("\n");
+          .replace(/\bsearchParams\b/g, "queryLocal");
+        if (out !== inner) return m.replace(inner, out);
+        return m;
+      }
+    );
+    // (params, searchParams) => …
+    ln = ln.replace(
+      /\(\s*([^)]*?)\s*\)\s*=>/,
+      (m, inner) => {
+        const out = inner
+          .replace(/\bparams\b/g, "routeParamsLocal")
+          .replace(/\bsearchParams\b/g, "queryLocal");
+        if (out !== inner) return m.replace(inner, out);
+        return m;
+      }
+    );
+    return ln;
+  });
 
-  if (result !== o) {
-    await fs.writeFile(f, result, "utf8");
+  // 4) Erstat øvrig brug i ikke-beskyttede linjer
+  mapLines((ln, i) => {
+    if (protectedLines.has(i)) return ln;
+    return ln
+      .replace(/\bparams\b/g, "routeParamsLocal")
+      .replace(/\bsearchParams\b/g, "queryLocal");
+  });
+
+  const out = lines.join("\n");
+  if (out !== o) {
+    await fs.writeFile(f, out, "utf8");
     console.log(`[RenameLocal] ${f}`);
   }
 }
