@@ -1,9 +1,9 @@
 
+import type { AppTypes } from "@/types/next-async-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import type { AppTypes } from "@/types/next-async-props";
-import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { FiltersBar } from '@/components/superadmin/FiltersBar';
