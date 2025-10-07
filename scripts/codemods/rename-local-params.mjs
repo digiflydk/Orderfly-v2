@@ -26,6 +26,7 @@ for (const f of files) {
   // 1) Lokale destruktureringer
   mapLines((ln, i) => {
     if (protectedLines.has(i)) return ln;
+    if (/resolveParams\(|resolveSearchParams\(/.test(ln)) return ln; // skip
     return ln.replace(/\b(const|let|var)\s*{\s*([^}]+)\s*}\s*=\s*(.+);?/, (m, kw, inner, rhs) => {
       let changed = inner.replace(/\bparams\b/g, "routeParamsLocal")
                          .replace(/\bsearchParams\b/g, "queryLocal");
@@ -36,6 +37,7 @@ for (const f of files) {
   // 2) Lokale deklarationer
   mapLines((ln, i) => {
     if (protectedLines.has(i)) return ln;
+    if (/resolveParams\(|resolveSearchParams\(/.test(ln)) return ln; // skip
     return ln
       .replace(/\b(const|let|var)\s+params\b/g, (_m, kw) => `${kw} routeParamsLocal`)
       .replace(/\b(const|let|var)\s+searchParams\b/g, (_m, kw) => `${kw} queryLocal`);
@@ -44,6 +46,7 @@ for (const f of files) {
   // 3) Lokale funktionsparametre (ikke default export)
   mapLines((ln, i) => {
     if (protectedLines.has(i)) return ln;
+    if (/resolveParams\(|resolveSearchParams\(/.test(ln)) return ln; // skip
     // function foo(params, searchParams) { ... }
     ln = ln.replace(
       /function\s+[A-Za-z0-9_]+\s*\(\s*([^)]*?)\s*\)/,
@@ -72,6 +75,7 @@ for (const f of files) {
   // 4) Erstat øvrig brug i ikke-beskyttede linjer
   mapLines((ln, i) => {
     if (protectedLines.has(i)) return ln;
+    if (/resolveParams\(|resolveSearchParams\(/.test(ln)) return ln; // skip
     return ln
       .replace(/\bparams\b/g, "routeParamsLocal")
       .replace(/\bsearchParams\b/g, "queryLocal");

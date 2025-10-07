@@ -1,3 +1,4 @@
+
 import { globby } from "globby";
 import fs from "node:fs/promises";
 
@@ -10,11 +11,9 @@ for (const file of pages) {
   // Skip client components
   const head = src.slice(0, 200);
   const isClient = /^\s*["']use client["'];?/m.test(head);
-  if (isClient) {
-    continue; // vi rører ikke client pages
-  }
+  if (isClient) continue;
 
-  // Heuristik: bruger siden params/search?
+  // Heuristik: bruger siden route-props?
   const usesParams = /\b[^.\s]params\b|\brouteParams\b/.test(src);
   const usesSearch = /\bsearchParams\b|\bquery\b/.test(src);
 
@@ -33,18 +32,10 @@ for (const file of pages) {
     ensureHelpersImport();
     // Gør signaturen ensartet
     src = src.replace(
-      /export\s+default\s+async\s+function\s+([A-Za-z0-9_]+)\s*\([^)]*\)/m,
+      /export\s+default\s+async\s+function\s+([A-Za-z0-9_]+)\s*\([^)]*\)\s*\{/m,
       (_, name) =>
-        `export default async function ${name}({ params, searchParams }: AppTypes.AsyncPageProps)`
+        `export default async function ${name}({ params, searchParams }: AppTypes.AsyncPageProps) {\n  const routeParams = await resolveParams(params);\n  const query = await resolveSearchParams(searchParams);\n`
     );
-    // Indsæt resolve-linjer i starten af body hvis de mangler
-    if (!/const\s+routeParams\s*=\s*await\s+resolveParams\(\s*params\s*\)/.test(src)) {
-      src = src.replace(
-        /export\s+default\s+async\s+function[^{]+\{\s*/m,
-        (m) =>
-          `${m}  const routeParams = await resolveParams(params);\n  const query = await resolveSearchParams(searchParams);\n`
-      );
-    }
   } else {
     // Ingen route-props: fjern evt. argumenter
     src = src.replace(
