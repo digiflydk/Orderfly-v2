@@ -48,7 +48,10 @@ async function AnalyticsData({ searchParams }: { searchParams: { [key: string]: 
 }
 
 
-export default async function BrandAnalyticsPage({ searchParams }: { searchParams: FunnelFilters }) {
+export default async function BrandAnalyticsPage(props: any) {
+  const rawSearchParams = props && typeof props === "object" ? (props as any).searchParams : undefined;
+  const searchParams = await Promise.resolve(rawSearchParams ?? {});
+
   return (
     <div className="space-y-6">
       <div>
