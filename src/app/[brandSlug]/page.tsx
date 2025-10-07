@@ -1,4 +1,3 @@
-
 // src/app/[brandSlug]/page.tsx
 import { Suspense } from "react";
 import type { AppTypes } from "@/types/next-async-props"; // d.ts namespace reference
