@@ -7,12 +7,13 @@ import { getLocationsForBrand } from "../superadmin/locations/actions";
 import { notFound } from "next/navigation";
 import { BrandLayoutClient } from "./layout-client";
 
-interface PageProps {
-  brand: Brand;
-  locations: Location[];
+// OF-544: restore valid interface name (avoid forbidden framework types)
+interface BrandPageData {
+  brand: any;
+  locations: any[];
 }
 
-function BrandPageComponent({ brand, locations }: PageProps) {
+function BrandPageComponent({ brand, locations }: BrandPageData) {
   const locationsWithBrandSlug = locations.map(location => ({...location, brandSlug: brand.slug}));
   
   return (
