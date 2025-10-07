@@ -16,9 +16,6 @@ export default async function BrandPage({
   const query = await resolveSearchParams(searchParams);
   const { brandSlug } = routeParams;
 
-  // eksempel: læs evt. filter fra query
-  // const someFilter = typeof query.filter === "string" ? query.filter : undefined;
-
   return (
     <Suspense>
       <div>

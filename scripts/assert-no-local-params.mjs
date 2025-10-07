@@ -3,7 +3,6 @@ import { globby } from 'globby';
 import fs from 'node:fs/promises';
 
 const files = await globby(['src/app/**/*.tsx', 'src/app/**/*.ts']);
-
 const offenders = [];
 const bad = [
   /\b(const|let|var)\s+params\s*=/,

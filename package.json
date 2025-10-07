@@ -4,7 +4,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "prebuild": "node scripts/check-parallel-routes.mjs && node scripts/codemods/hard-nuke-pageprops.mjs && node scripts/codemods/strip-layoutprops.mjs && node scripts/codemods/decouple-pageprops.mjs && node scripts/codemods/nuke-pageprops-imports.mjs && node scripts/assert-no-layoutprops.mjs && node scripts/assert-no-pageprops.mjs && node scripts/assert-no-local-params.mjs",
+    "prebuild": "node scripts/check-parallel-routes.mjs && node scripts/codemods/hard-nuke-pageprops.mjs && node scripts/codemods/strip-layoutprops.mjs && node scripts/codemods/decouple-pageprops.mjs && node scripts/codemods/nuke-pageprops-imports.mjs && node scripts/assert-no-layoutprops.mjs && node scripts/assert-no-pageprops.mjs && node scripts/normalize-next-props.mjs && node scripts/assert-no-local-params.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
