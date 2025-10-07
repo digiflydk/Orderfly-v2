@@ -4,13 +4,20 @@ import { CheckoutClient } from "@/components/checkout/checkout-client";
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
 import { getActiveLocationBySlug } from "@/app/superadmin/locations/actions";
 
-export default async function CheckoutPage({
-  params,
-}: { params: { brandSlug: string; locationSlug: string } }) {
-  const brand = await getBrandBySlug(params.brandSlug);
+export default async function CheckoutPage(props: any) {
+  // Defensively read params to avoid type conflicts with Next.js generated types.
+  const params = (props && typeof props === "object" ? (props as any).params : undefined) || {};
+  const brandSlug = typeof params.brandSlug === "string" ? params.brandSlug : undefined;
+  const locationSlug = typeof params.locationSlug === "string" ? params.locationSlug : undefined;
+
+  if (!brandSlug || !locationSlug) {
+    notFound();
+  }
+
+  const brand = await getBrandBySlug(brandSlug);
   if (!brand) notFound();
 
-  const location = await getActiveLocationBySlug(brand.id, params.locationSlug);
+  const location = await getActiveLocationBySlug(brand.id, locationSlug);
   if (!location) {
     redirect(`/${brand.slug}`);
   }
