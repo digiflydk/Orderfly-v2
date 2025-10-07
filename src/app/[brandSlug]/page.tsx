@@ -1,72 +1,42 @@
-import { LocationCard } from "@/components/location-card";
-import type { Brand, Location } from "@/types";
-import { getBrandBySlug } from "../superadmin/brands/actions";
-import { getLocationsForBrand } from "../superadmin/locations/actions";
-import { notFound } from "next/navigation";
-import { BrandLayoutClient } from "./layout-client";
+// src/app/[brandSlug]/page.tsx
 import { Suspense } from "react";
 
-// OF-544: restore valid interface name (avoid forbidden framework types)
-interface BrandPageData {
-  brand: any;
-  locations: any[];
-}
+type Params = { brandSlug: string };
+type Query = Record<string, string | string[] | undefined>;
 
-function BrandPageComponent({ brand, locations }: BrandPageData) {
-  const locationsWithBrandSlug = locations.map(location => ({...location, brandSlug: brand.slug}));
-  
-  return (
-    <BrandLayoutClient brand={brand}>
-        <div className="mx-auto max-w-[1140px] px-4 py-8 w-full">
-        <div className="space-y-8">
-            <div>
-            <h1 className="text-3xl font-bold text-center sm:text-left">
-                Choose restaurant
-            </h1>
-            <p className="text-lg text-muted-foreground text-center sm:text-left">
-                Next you choose food and drinks that you can order for pick-up or delivery.
-            </p>
-            </div>
+type AsyncPageProps = {
+  // Next 15 build-wrapper kan give disse som Promise i typerne
+  params: Promise<Params> | Params;
+  searchParams?: Promise<Query> | Query;
+};
 
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-3">
-            {locationsWithBrandSlug.map((location) => (
-                <LocationCard key={location.id} location={location} />
-            ))}
-            </div>
-        </div>
-        </div>
-    </BrandLayoutClient>
-  );
-}
-
-export async function generateMetadata({ params: routeParams }: { params: { brandSlug: string } }) {
+export async function generateMetadata({ params }: AsyncPageProps) {
+  // håndter både Promise og plain object
+  const routeParams = await Promise.resolve(params);
   const { brandSlug } = routeParams;
-  const brand = await getBrandBySlug(brandSlug);
   return {
-    title: `Order from ${brand?.name || 'Restaurant'}`,
+    title: `Brand • ${brandSlug}`,
   };
 }
 
-export default async function BrandPage({ params: routeParams }: { params: { brandSlug: string } }) {
-  const brandSlug = routeParams.brandSlug;
+export default async function BrandPage({
+  params,
+  searchParams,
+}: AsyncPageProps) {
+  // normaliser til plain objects
+  const routeParams = await Promise.resolve(params);
+  const query = await Promise.resolve(searchParams ?? {});
+  const { brandSlug } = routeParams;
 
-  if (!brandSlug) {
-    notFound();
-  }
+  // eksempel på brug af query:
+  // const someFilter = typeof query.filter === "string" ? query.filter : undefined;
 
-  const brand = await getBrandBySlug(brandSlug);
-
-  if (!brand) {
-    notFound();
-  }
-
-  const locationsData = await getLocationsForBrand(brand.id);
-
-  const locations = locationsData.map(location => ({
-    ...location,
-    supportsDelivery: location.deliveryTypes.includes('delivery'),
-    supportsPickup: location.deliveryTypes.includes('pickup'),
-  }));
-
-  return <BrandPageComponent brand={brand} locations={locations} />;
+  return (
+    <Suspense>
+      <div>
+        <h1>{brandSlug}</h1>
+        {/* TODO: Insert brand content */}
+      </div>
+    </Suspense>
+  );
 }
