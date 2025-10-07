@@ -42,7 +42,6 @@ function BrandPageComponent({ brand, locations }: BrandPageData) {
   );
 }
 
-
 export async function generateMetadata({ params }: AppTypes.AsyncPageProps) {
   const routeParams = await resolveParams(params);
   return { title: `Brand • ${routeParams.brandSlug}` };

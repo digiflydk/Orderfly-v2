@@ -1,19 +1,17 @@
 
+import type { AppTypes } from "@/types/next-async-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { redirect, notFound } from "next/navigation";
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
 import { cookies } from "next/headers";
 
 export const runtime = "nodejs";
 
-export default async function BrandCheckoutRootPage(props: any) {
-  // OF-537: defensive props handling (Next may pass Promise<any>)
-  const rawParams = (props && typeof props === "object") ? (props as any).params : undefined;
-  const rawSearch = (props && typeof props === "object") ? (props as any).searchParams : undefined;
-  const params = await Promise.resolve(rawParams ?? {});
-  const searchParams = await Promise.resolve(rawSearch ?? {});
+export default async function BrandCheckoutRootPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+  const routeParams = await resolveParams(params);
+  const query = await resolveSearchParams(searchParams);
 
-  const brandSlug =
-    typeof params.brandSlug === "string" ? params.brandSlug : undefined;
+  const brandSlug = routeParams.brandSlug;
 
   if (!brandSlug) {
     notFound();

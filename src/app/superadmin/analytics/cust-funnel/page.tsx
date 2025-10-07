@@ -1,5 +1,6 @@
 
-
+import type { AppTypes } from "@/types/next-async-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Suspense } from 'react';
 import { getFunnelDataForSuperAdmin } from './actions';
 import { AnalyticsDashboardClient } from '@/components/superadmin/analytics-dashboard-client';
@@ -15,6 +16,7 @@ async function AnalyticsData({ searchParams }: { searchParams: { [key: string]: 
     getAllLocations()
   ]);
 
+  // Explicitly create a plain object from searchParams
   const plainSearchParams: { [key: string]: string } = {};
   for (const key in searchParams) {
     const value = searchParams[key];
@@ -46,7 +48,10 @@ async function AnalyticsData({ searchParams }: { searchParams: { [key: string]: 
   );
 }
 
-export default async function CustomerFunnelPage({ searchParams }: { searchParams: FunnelFilters }) {
+export default async function CustomerFunnelPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+  const routeParams = await resolveParams(params);
+  const query = await resolveSearchParams(searchParams);
+
   return (
     <div className="space-y-6">
       <div>
@@ -56,7 +61,7 @@ export default async function CustomerFunnelPage({ searchParams }: { searchParam
         </p>
       </div>
       <Suspense fallback={<p>Loading dashboard...</p>}>
-        <AnalyticsData searchParams={searchParams} />
+        <AnalyticsData searchParams={query} />
       </Suspense>
     </div>
   );
