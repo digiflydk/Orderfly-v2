@@ -1,5 +1,4 @@
 
-
 import { notFound } from 'next/navigation';
 import { MenuClient } from "./menu-client";
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
@@ -11,9 +10,17 @@ import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/
 import { HeroBanner } from '@/components/layout/hero-banner';
 import type { ProductForMenu, Location } from '@/types';
 
-export default async function MenuPage({ params }: { params: { brandSlug: string; locationSlug: string } }) {
-  const brandSlug = params.brandSlug;
-  const locationSlug = params.locationSlug;
+export const runtime = "nodejs";
+
+export default async function BrandLocationPage(props: any) {
+  // Læs params defensivt uden at binde til Next’s genererede typer
+  const params = (props && typeof props === "object" ? (props as any).params : undefined) || {};
+  const brandSlug = typeof params.brandSlug === "string" ? params.brandSlug : undefined;
+  const locationSlug = typeof params.locationSlug === "string" ? params.locationSlug : undefined;
+
+  if (!brandSlug || !locationSlug) {
+    notFound();
+  }
 
   const brand = await getBrandBySlug(brandSlug);
   if (!brand) {
