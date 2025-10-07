@@ -1,4 +1,7 @@
-
+// __OF542_INIT__
+// __OF541_PARAMS_INIT__
+import type { AppTypes } from "@/types/next-async-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 export const runtime = "nodejs";
 
 import { notFound } from 'next/navigation';
@@ -36,9 +39,10 @@ async function getByIdField(id: string) {
   return { id: d.id, ...(d.data() as any) } as FeedbackQuestionsVersion;
 }
 
-type PageProps = { params: { versionId: string } };
+export default async function EditFeedbackQuestionVersionPage(props: any){
+  const params = await Promise.resolve((props as any)?.params ?? {});
+  const searchParams = await Promise.resolve((props as any)?.searchParams ?? {});
 
-export default async function EditFeedbackQuestionVersionPage({ params }: PageProps) {
   const normalizedId = normalizeId(params.versionId);
   const [version, settings] = await Promise.all([
     (async () => (await getByDocId(normalizedId)) ?? (await getByIdField(normalizedId)))(),

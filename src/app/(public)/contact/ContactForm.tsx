@@ -46,11 +46,11 @@ function ContactFormInner() {
   const [state, formAction] = useActionState(sendContactMessage, initialState);
   const { toast } = useToast();
   const formRef = useRef<HTMLFormElement>(null);
-  const searchParams = useSearchParams();
+  const urlSearchParams = useSearchParams();
 
   const subject = useMemo(() => {
-    return searchParams.get('subject') || '';
-  }, [searchParams]);
+    return urlSearchParams.get('subject') || '';
+  }, [urlSearchParams]);
 
   useEffect(() => {
     if (state.message && (!state.errors || Object.keys(state.errors).length === 0)) {

@@ -1,4 +1,6 @@
 
+import type { AppTypes } from "@/types/next-async-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Suspense } from 'react';
 import { getFunnelDataForBrand } from './actions';
 import { AnalyticsDashboardClient } from '@/components/superadmin/analytics-dashboard-client';
@@ -48,12 +50,9 @@ async function AnalyticsData({ searchParams }: { searchParams: { [key: string]: 
 }
 
 
-export default async function BrandAnalyticsPage(props: any) {
-  // OF-537: defensive props handling (Next may pass Promise<any>)
-  const rawParams = (props && typeof props === "object") ? (props as any).params : undefined;
-  const rawSearch = (props && typeof props === "object") ? (props as any).searchParams : undefined;
-  const params = await Promise.resolve(rawParams ?? {});
-  const searchParams = await Promise.resolve(rawSearch ?? {});
+export default async function BrandAnalyticsPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+  const routeParams = await resolveParams(params);
+  const query = await resolveSearchParams(searchParams);
 
   return (
     <div className="space-y-6">
@@ -64,7 +63,7 @@ export default async function BrandAnalyticsPage(props: any) {
         </p>
       </div>
       <Suspense fallback={<p>Loading dashboard...</p>}>
-        <AnalyticsData searchParams={searchParams} />
+        <AnalyticsData searchParams={query} />
       </Suspense>
     </div>
   );

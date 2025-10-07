@@ -3,7 +3,8 @@
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-
+import type { AppTypes } from "@/types/next-async-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { FiltersBar } from '@/components/superadmin/FiltersBar';
@@ -13,18 +14,20 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DollarSign, ShoppingCart, Users, Activity, Clock, Store, Percent, Tag, Package, BarChart3, MessageSquareQuote, Cookie, UserCheck, MapPin } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
-export default async function SuperadminDashboardPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+export default async function SuperadminDashboardPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+  const routeParams = await resolveParams(params);
+  const query = await resolveSearchParams(searchParams);
   
-  if (!searchParams.from || !searchParams.to) {
+  if (!query.from || !query.to) {
     const today = new Date().toISOString().slice(0, 10);
     redirect(`/superadmin/dashboard?from=${today}&to=${today}`);
   }
 
   const filters: SACommonFilters = {
-    dateFrom: (searchParams.from as string),
-    dateTo: (searchParams.to as string),
-    brandId: (searchParams.brand as string) || 'all',
-    locationIds: searchParams.loc ? (Array.isArray(searchParams.loc) ? searchParams.loc : [searchParams.loc as string]) : [],
+    dateFrom: (query.from as string),
+    dateTo: (query.to as string),
+    brandId: (query.brand as string) || 'all',
+    locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc as string]) : [],
   };
 
   const { kpis, totalActiveBrands, totalActiveLocations } = await getSalesDashboardData(filters);

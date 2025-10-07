@@ -1,4 +1,6 @@
 
+import type { AppTypes } from "@/types/next-async-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, ShoppingCart, Users, Activity, Percent, Ban, Truck, Store, Tags, Banknote, Clock } from "lucide-react";
 import type { OrderSummary } from "@/types";
@@ -12,17 +14,20 @@ import { redirect } from "next/navigation";
 
 export const revalidate = 0; // Force dynamic rendering
 
-export default async function SalesDashboardPage({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
-    if (!searchParams.from || !searchParams.to) {
+export default async function SalesDashboardPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+    const routeParams = await resolveParams(params);
+    const query = await resolveSearchParams(searchParams);
+
+    if (!query.from || !query.to) {
         const today = new Date().toISOString().slice(0, 10);
         redirect(`/superadmin/sales/dashboard?from=${today}&to=${today}`);
     }
 
     const filters: SACommonFilters = {
-        dateFrom: (searchParams.from as string),
-        dateTo: (searchParams.to as string),
-        brandId: (searchParams.brand as string) || 'all',
-        locationIds: searchParams.loc ? (Array.isArray(searchParams.loc) ? searchParams.loc : [searchParams.loc]) : [],
+        dateFrom: (query.from as string),
+        dateTo: (query.to as string),
+        brandId: (query.brand as string) || 'all',
+        locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc]) : [],
     };
 
     const { kpis: kpiData } = await getSalesDashboardData(filters);
