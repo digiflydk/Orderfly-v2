@@ -1,11 +1,10 @@
-
-
 import { LocationCard } from "@/components/location-card";
 import type { Brand, Location } from "@/types";
 import { getBrandBySlug } from "../superadmin/brands/actions";
 import { getLocationsForBrand } from "../superadmin/locations/actions";
 import { notFound } from "next/navigation";
 import { BrandLayoutClient } from "./layout-client";
+import { Suspense } from "react";
 
 // OF-544: restore valid interface name (avoid forbidden framework types)
 interface BrandPageData {
@@ -40,15 +39,16 @@ function BrandPageComponent({ brand, locations }: BrandPageData) {
   );
 }
 
+export async function generateMetadata({ params: routeParams }: { params: { brandSlug: string } }) {
+  const { brandSlug } = routeParams;
+  const brand = await getBrandBySlug(brandSlug);
+  return {
+    title: `Order from ${brand?.name || 'Restaurant'}`,
+  };
+}
 
-export default async function BrandPage(props: any) {
-  // OF-537: defensive props handling (Next may pass Promise<any>)
-  const rawParams = (props && typeof props === "object") ? (props as any).params : undefined;
-  const rawSearch = (props && typeof props === "object") ? (props as any).searchParams : undefined;
-  const params = await Promise.resolve(rawParams ?? {});
-  const searchParams = await Promise.resolve(rawSearch ?? {});
-
-  const brandSlug = typeof params.brandSlug === "string" ? params.brandSlug : undefined;
+export default async function BrandPage({ params: routeParams }: { params: { brandSlug: string } }) {
+  const brandSlug = routeParams.brandSlug;
 
   if (!brandSlug) {
     notFound();
