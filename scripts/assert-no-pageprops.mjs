@@ -1,26 +1,33 @@
 
-#!/usr/bin/env node
 import { globby } from 'globby';
 import fs from 'node:fs/promises';
 
-const files = await globby(['src/app/**/*.tsx', 'src/app/**/*.ts']);
-const offenders = [];
+async function main() {
+  const files = await globby(['src/app/**/*.tsx', 'src/app/**/*.ts']);
+  const offenders = [];
 
-for (const f of files) {
-  const txt = await fs.readFile(f, 'utf8');
-  // Skip client components
-  if (txt.trim().startsWith("'use client'")) continue;
-  
-  // Use a more generic regex to catch PageProps/LayoutProps
-  if (/\b(PageProps|LayoutProps)\b/.test(txt)) {
-    offenders.push(f);
+  for (const file of files) {
+    const content = await fs.readFile(file, 'utf8');
+    if (/^\s*["']use client["']/.test(content.slice(0, 200))) {
+      continue;
+    }
+    if (/\b(PageProps|LayoutProps)\b/.test(content)) {
+      offenders.push(file);
+    }
   }
+
+  if (offenders.length > 0) {
+    console.error(
+      `[Guard][FEJL] Forbidden PageProps/LayoutProps usage found in the following files:\n` +
+      offenders.map((f) => ` - ${f}`).join('\n')
+    );
+    process.exit(1);
+  }
+
+  console.log('[Guard] No forbidden PageProps/LayoutProps usage found. OK.');
 }
 
-if (offenders.length) {
-  console.error(
-    `[Guard] Forbidden PageProps/LayoutProps usage found in server components:\n` +
-      offenders.map((f) => ` - ${f}`).join('\n')
-  );
+main().catch((err) => {
+  console.error(err);
   process.exit(1);
-}
+});

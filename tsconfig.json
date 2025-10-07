@@ -1,3 +1,4 @@
+
 {
   "compilerOptions": {
     "target": "ES2022",
@@ -16,7 +17,6 @@
     "plugins": [{ "name": "next" }],
     "baseUrl": ".",
     "paths": { "@/*": ["src/*"] },
-    "types": ["node"],
     "typeRoots": ["./node_modules/@types", "./src/types"]
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "next.config.js"],

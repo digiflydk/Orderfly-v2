@@ -2,14 +2,16 @@
 import { globby } from 'globby';
 import fs from 'node:fs/promises';
 
-const pageFiles = await globby([
-  "src/app/**/page.tsx",
-  "src/app/superadmin/**/page.tsx",
-]);
+const files = await globby(['src/app/**/page.tsx']);
 
-for (const f of pageFiles) {
+for (const f of files) {
   let src = await fs.readFile(f, 'utf8');
   let changed = false;
+
+  const isClient = /^\s*["']use client["'];?/m.test(src.slice(0, 200));
+  if (isClient) {
+    continue;
+  }
 
   // Import helpers
   if (!src.includes('resolve-props')) {
