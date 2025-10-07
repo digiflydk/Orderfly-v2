@@ -1,4 +1,14 @@
-// Proxy for case/sti-stabilitet.
-// Ret gerne target til jeres rigtige komponent, fx "./site-logo" eller "./Logo".
-export { default } from "./site-logo";
-export * from "./site-logo";
+
+import * as React from "react";
+
+type Props = React.HTMLAttributes<HTMLSpanElement> & {
+  text?: string;
+};
+
+export default function SiteLogo({ text = "SiteLogo", className, ...rest }: Props) {
+  return (
+    <span className={className} {...rest}>
+      {text}
+    </span>
+  );
+}
