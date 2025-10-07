@@ -4,7 +4,7 @@
   "private": true,
   "version": "1.0.0",
   "scripts": {
-    "prebuild": "node scripts/check-parallel-routes.mjs && node scripts/codemods/fix-imports-and-logo.mjs && node scripts/codemods/fix-page-default-export.mjs && node scripts/codemods/fix-syntax-artifacts.mjs && node scripts/assert-page-signature.mjs",
+    "prebuild": "node scripts/codemods/fix-logo-import.mjs && node scripts/codemods/force-page-signature.mjs && node scripts/assert-no-routeparams-in-signature.mjs",
     "dev": "next dev",
     "build": "next build",
     "start": "next start",

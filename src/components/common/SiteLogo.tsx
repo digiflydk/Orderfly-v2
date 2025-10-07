@@ -1,4 +1,3 @@
-
 import * as React from "react";
 
 type Props = React.HTMLAttributes<HTMLSpanElement> & { text?: string };
