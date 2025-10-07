@@ -4,9 +4,16 @@ import { CheckoutClient } from "@/components/checkout/checkout-client";
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
 import { getActiveLocationBySlug } from "@/app/superadmin/locations/actions";
 
+export const runtime = "nodejs";
+
 export default async function CheckoutPage(props: any) {
+  // OF-537: defensive props handling (Next may pass Promise<any>)
+  const rawParams = (props && typeof props === "object") ? (props as any).params : undefined;
+  const rawSearch = (props && typeof props === "object") ? (props as any).searchParams : undefined;
+  const params = await Promise.resolve(rawParams ?? {});
+  const searchParams = await Promise.resolve(rawSearch ?? {});
+
   // Defensively read params to avoid type conflicts with Next.js generated types.
-  const params = (props && typeof props === "object" ? (props as any).params : undefined) || {};
   const brandSlug = typeof params.brandSlug === "string" ? params.brandSlug : undefined;
   const locationSlug = typeof params.locationSlug === "string" ? params.locationSlug : undefined;
 

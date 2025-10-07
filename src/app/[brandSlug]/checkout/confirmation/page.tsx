@@ -3,11 +3,15 @@ import { redirect, notFound } from 'next/navigation';
 import { getOrderById, getOrderByCheckoutSessionId } from '@/app/checkout/order-actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
 
-export default async function LegacyConfirmationPage(props: any) {
-  // Defensive reads — undgå PageProps-typen (der i App Hosting kan være Promise<any>)
-  const params = (props && typeof props === "object" ? (props as any).params : undefined) || {};
-  const searchParams = (props && typeof props === "object" ? (props as any).searchParams : undefined) || {};
-  
+export const runtime = "nodejs";
+
+export default async function CheckoutConfirmationPage(props: any) {
+  // OF-537: defensive props handling (Next may pass Promise<any>)
+  const rawParams = (props && typeof props === "object") ? (props as any).params : undefined;
+  const rawSearch = (props && typeof props === "object") ? (props as any).searchParams : undefined;
+  const params = await Promise.resolve(rawParams ?? {});
+  const searchParams = await Promise.resolve(rawSearch ?? {});
+
   const brandSlug = typeof params.brandSlug === "string" ? params.brandSlug : undefined;
   const sessionId = typeof searchParams.session_id === "string" ? searchParams.session_id : undefined;
   const orderId = typeof searchParams.order_id === "string" ? searchParams.order_id : undefined;

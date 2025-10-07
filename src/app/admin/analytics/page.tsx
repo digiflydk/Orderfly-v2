@@ -49,8 +49,11 @@ async function AnalyticsData({ searchParams }: { searchParams: { [key: string]: 
 
 
 export default async function BrandAnalyticsPage(props: any) {
-  const rawSearchParams = props && typeof props === "object" ? (props as any).searchParams : undefined;
-  const searchParams = await Promise.resolve(rawSearchParams ?? {});
+  // OF-537: defensive props handling (Next may pass Promise<any>)
+  const rawParams = (props && typeof props === "object") ? (props as any).params : undefined;
+  const rawSearch = (props && typeof props === "object") ? (props as any).searchParams : undefined;
+  const params = await Promise.resolve(rawParams ?? {});
+  const searchParams = await Promise.resolve(rawSearch ?? {});
 
   return (
     <div className="space-y-6">

@@ -13,8 +13,12 @@ import type { ProductForMenu, Location } from '@/types';
 export const runtime = "nodejs";
 
 export default async function BrandLocationPage(props: any) {
-  // Læs params defensivt uden at binde til Next’s genererede typer
-  const params = (props && typeof props === "object" ? (props as any).params : undefined) || {};
+  // OF-537: defensive props handling (Next may pass Promise<any>)
+  const rawParams = (props && typeof props === "object") ? (props as any).params : undefined;
+  const rawSearch = (props && typeof props === "object") ? (props as any).searchParams : undefined;
+  const params = await Promise.resolve(rawParams ?? {});
+  const searchParams = await Promise.resolve(rawSearch ?? {});
+
   const brandSlug = typeof params.brandSlug === "string" ? params.brandSlug : undefined;
   const locationSlug = typeof params.locationSlug === "string" ? params.locationSlug : undefined;
 

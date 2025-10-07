@@ -1,4 +1,5 @@
 
+
 import { LocationCard } from "@/components/location-card";
 import type { Brand, Location } from "@/types";
 import { getBrandBySlug } from "../superadmin/brands/actions";
@@ -40,7 +41,12 @@ function BrandPageComponent({ brand, locations }: PageProps) {
 
 
 export default async function BrandPage(props: any) {
-  const params = (props && typeof props === "object" ? (props as any).params : undefined) || {};
+  // OF-537: defensive props handling (Next may pass Promise<any>)
+  const rawParams = (props && typeof props === "object") ? (props as any).params : undefined;
+  const rawSearch = (props && typeof props === "object") ? (props as any).searchParams : undefined;
+  const params = await Promise.resolve(rawParams ?? {});
+  const searchParams = await Promise.resolve(rawSearch ?? {});
+
   const brandSlug = typeof params.brandSlug === "string" ? params.brandSlug : undefined;
 
   if (!brandSlug) {
