@@ -1,4 +1,3 @@
-
 // src/app/api/ops/catalog/ensure-menu/route.ts
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
@@ -58,7 +57,7 @@ export async function POST(req: Request) {
   let categoryId: string | null = null;
   const catQ = await db.collection("categories")
     .where("brandId", "==", brandId)
-    .where("categoryName", "==", menuCategoryName)
+    .where("name", "==", menuCategoryName)
     .limit(1)
     .get();
 
@@ -72,8 +71,8 @@ export async function POST(req: Request) {
       const ref = db.collection("categories").doc();
       await ref.set({
         brandId,
-        categoryName: menuCategoryName,
-        sortOrder: 1,
+        name: menuCategoryName,
+        order: 1,
         createdAt: new Date(),
         updatedAt: new Date(),
       });
@@ -174,4 +173,82 @@ export async function POST(req: Request) {
   });
 }
 
-    
+export async function GET(req: Request) {
+  // Browser-venlig helper: dry-run via query (ingen writes)
+  const url = new URL(req.url);
+  const brandSlug = url.searchParams.get("brandSlug")?.trim();
+  const menuCategoryName = url.searchParams.get("name")?.trim() || "Menu";
+
+  if (!brandSlug) {
+    return NextResponse.json(
+      {
+        ok: false,
+        error: "Missing brandSlug",
+        usage: {
+          dryRun: `/api/ops/catalog/ensure-menu?brandSlug=<slug>&name=Menu`,
+          post: {
+            url: `/api/ops/catalog/ensure-menu`,
+            headers: { "x-debug-token": "$DEBUG_TOKEN", "Content-Type": "application/json" },
+            body: { brandSlug: "<slug>", dryRun: false },
+          },
+        },
+      },
+      { status: 400 }
+    );
+  }
+
+  // Ring samme logik som POST – men tvangsdry-run (ingen writes)
+  try {
+    const db = getAdminDb();
+
+    // find brandId
+    let brandId: string | null = null;
+    const bySlug = await db.collection("brands").where("slug", "==", brandSlug).limit(1).get();
+    if (!bySlug.empty) brandId = bySlug.docs[0].id;
+    if (!brandId) {
+      const byId = await db.collection("brands").doc(brandSlug).get();
+      if (byId.exists) brandId = byId.id;
+    }
+    if (!brandId) {
+      return NextResponse.json({ ok: false, error: "Brand not found", brandSlug }, { status: 404 });
+    }
+
+    const catQ = await db
+      .collection("categories")
+      .where("brandId", "==", brandId)
+      .where("name", "==", menuCategoryName)
+      .limit(1)
+      .get();
+
+    const productsSnap = await db.collection("products").where("brandId", "==", brandId).get();
+
+    // counts
+    const allCats = await db.collection("categories").where("brandId", "==", brandId).get();
+    const validCatIds = new Set(allCats.docs.map((d) => d.id));
+    const products = productsSnap.docs.map((d) => ({ id: d.id, data: d.data() as any }));
+    const withoutCategory = products.filter((p) => !p.data.categoryId);
+    const withInvalid = products.filter((p) => p.data.categoryId && !validCatIds.has(String(p.data.categoryId)));
+    const needSort = products.filter((p) => typeof p.data.sortOrder !== "number");
+
+    return NextResponse.json({
+      ok: true,
+      dryRun: true,
+      brandId,
+      category: catQ.empty ? "(vil blive oprettet ved POST)" : catQ.docs[0].id,
+      stats: {
+        productsTotal: products.length,
+        withoutCategory: withoutCategory.length,
+        withInvalidCategory: withInvalid.length,
+        missingSortOrder: needSort.length,
+      },
+      howToCommit: {
+        method: "POST",
+        url: "/api/ops/catalog/ensure-menu",
+        headers: { "Content-Type": "application/json", "x-debug-token": "$DEBUG_TOKEN" },
+        body: { brandSlug, dryRun: false },
+      },
+    });
+  } catch (e: any) {
+    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
+  }
+}
