@@ -1,7 +1,8 @@
+
 // src/components/catalog/product-card.tsx
 "use client";
 
-import { getDisplayName, getDisplayPrice, formatDKK } from "@/lib/data/catalog";
+import { getDisplayName, getDisplayPrice, formatDKK } from "@/lib/catalog-display";
 
 export default function ProductCard({ product }: { product: any }) {
   const name = getDisplayName(product);

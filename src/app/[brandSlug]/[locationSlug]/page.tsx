@@ -1,11 +1,11 @@
+
 // src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
-import { getCatalogCounts, getMenuForRender } from "@/lib/data/catalog";
+import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
 import ProductCard from "@/components/catalog/product-card";
 
-// 🔧 NYT: normaliser legacy/new probe shape
 function normalizeProbe(raw: any) {
   if (!raw || typeof raw !== "object") {
     return {
@@ -16,11 +16,9 @@ function normalizeProbe(raw: any) {
       ok: false,
     };
   }
-
   const brand = raw.brand ?? null;
   const location = raw.location ?? null;
 
-  // Hvis ny struktur (har flags), brug den:
   if (raw.flags) {
     return {
       ...raw,
@@ -36,7 +34,6 @@ function normalizeProbe(raw: any) {
     };
   }
 
-  // Legacy struktur (intet flags-felt) -> afled flags her:
   const hasBrand = !!brand?.id;
   const hasLocation = !!location?.id;
   const hasBrandIdField = typeof location?.brandId === "string" && !!location?.brandId;
@@ -49,13 +46,7 @@ function normalizeProbe(raw: any) {
   if (hasLocation && !hasBrandIdField) hints.link = "location.brandId mangler (tilføj brandId).";
   else if (hasLocation && hasBrand && !brandMatchesLocation) hints.link = `location.brandId matcher ikke brand.id (${location.brandId} ≠ ${brand.id}).`;
 
-  return {
-    brand,
-    location,
-    ok: hasBrand && hasLocation && brandMatchesLocation,
-    flags: { hasBrand, hasLocation, hasBrandIdField, brandMatchesLocation },
-    hints,
-  };
+  return { brand, location, ok: hasBrand && hasLocation && brandMatchesLocation, flags: { hasBrand, hasLocation, hasBrandIdField, brandMatchesLocation }, hints };
 }
 
 export default async function Page({
@@ -69,11 +60,9 @@ export default async function Page({
   const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
 
   try {
-    // HENT & NORMALISÉR
     const rawProbe = await getBrandAndLocation(brandSlug, locationSlug);
     const probe = normalizeProbe(rawProbe);
 
-    // --- uændret logik nedenfor, men bruger nu probe.flags/probe.hints sikkert ---
     if (!probe.flags.hasBrand || !probe.flags.hasLocation) {
       return (
         <EmptyState
@@ -99,7 +88,6 @@ export default async function Page({
     const counts = await getCatalogCounts({ brandId: probe.brand!.id });
     const menu = await getMenuForRender({ brandId: probe.brand!.id });
 
-    // SAFE MODE (diagnose)
     if (safe) {
       return (
         <div className="mx-auto max-w-3xl p-4">
@@ -137,7 +125,6 @@ export default async function Page({
       return <EmptyState title="Menu er ikke sat op endnu" hint="Der er ingen aktive produkter." details={`counts=${JSON.stringify(counts)}`} />;
     }
 
-    // NORMAL MODE
     return (
       <div className="mx-auto max-w-4xl p-4">
         {menu.categories.map((cat) => (
