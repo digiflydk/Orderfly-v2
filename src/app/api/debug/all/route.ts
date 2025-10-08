@@ -1,3 +1,4 @@
+
 // src/app/api/debug/all/route.ts
 import "server-only";
 export const runtime = "nodejs";
@@ -6,10 +7,18 @@ export const fetchCache = "default-no-store";
 
 import { NextResponse } from "next/server";
 import { buildAllDebugPayload } from "@/lib/debug/all";
+import { adminHealthProbe } from "@/lib/firebase-admin";
 
 export async function GET() {
   try {
+    const adminHealth = await adminHealthProbe();
     const data = await buildAllDebugPayload();
+    
+    // Inject adminHealth into the meta object
+    if (data && (data as any).meta) {
+      (data as any).meta.adminHealth = adminHealth;
+    }
+
     return NextResponse.json(
       {
         ok: true,
