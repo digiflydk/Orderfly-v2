@@ -4,36 +4,27 @@ import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { logDiag } from "@/lib/log";
 import { getCatalogCounts, getMenuForRender } from "@/lib/data/catalog";
 
-export default async function Page({ params }: { params: { brandSlug: string; locationSlug: string } }) {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: { brandSlug: string; locationSlug: string };
+  searchParams: { [key: string]: string | string[] | undefined };
+}) {
   const { brandSlug, locationSlug } = params;
+  const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
 
-  let probe: Awaited<ReturnType<typeof getBrandAndLocation>>;
   try {
-    probe = await getBrandAndLocation(brandSlug, locationSlug);
-  } catch (e: any) {
-    // Serverlog – vigtig for vores fejlsøgning
-    await logDiag({
-      scope: "brand-page",
-      message: "Loader-kast under getBrandAndLocation",
-      details: { brandSlug, locationSlug, error: String(e?.message ?? e) },
-    });
+    // 1) Load brand+location robust
+    const probe = await getBrandAndLocation(brandSlug, locationSlug);
 
-    const isMissingServiceAccount = /FIREBASE_SERVICE_ACCOUNT is missing/i.test(e?.message);
-
-    // Render venlig fejl (error boundary er fallback – men vi håndterer selv pænere UI)
-    return (
-      <EmptyState
-        title={isMissingServiceAccount ? "Server Configuration Error" : "Noget gik galt på brand-siden"}
-        hint={isMissingServiceAccount ? "The FIREBASE_SERVICE_ACCOUNT environment variable is not set. The server cannot connect to the database." : "Fejl opstod under indlæsning af data."}
-        details={
-          isMissingServiceAccount 
-          ? `To fix this, set the FIREBASE_SERVICE_ACCOUNT environment variable in your hosting environment. See .env.local.example for format.`
-          : (process.env.NEXT_PUBLIC_ENABLE_ENV_DEBUG
-            ? `brand=${brandSlug} location=${locationSlug}\n` + String(e?.message ?? e)
-            : undefined)
-        }
-        actions={
-          <>
+    if (!probe.flags.hasBrand || !probe.flags.hasLocation) {
+      return (
+        <EmptyState
+          title="Butik ikke konfigureret"
+          hint={probe.hints.missing || "Mangler brand eller location-data."}
+          details={`brandSlug=${brandSlug}\nlocationSlug=${locationSlug}`}
+          actions={
             <a
               className="px-4 py-2 rounded bg-black text-white"
               href={`/api/diag/brand-location?brandSlug=${brandSlug}&locationSlug=${locationSlug}`}
@@ -41,55 +32,68 @@ export default async function Page({ params }: { params: { brandSlug: string; lo
             >
               Åbn diagnose
             </a>
-            <a className="px-4 py-2 rounded border" href="/">
-              Til forsiden
+          }
+        />
+      );
+    }
+
+    if (!probe.flags.hasBrandIdField || !probe.flags.brandMatchesLocation) {
+      return (
+        <EmptyState
+          title="Butik er ikke linket korrekt"
+          hint={probe.hints.link || "Location er ikke linket til brandet."}
+          details={`brand.id=${probe.brand?.id}\nlocation.id=${probe.location?.id}\nlocation.brandId=${probe.location?.brandId ?? "(mangler)"}`}
+          actions={
+            <a
+              className="px-4 py-2 rounded bg-black text-white"
+              href={`/api/diag/brand-location?brandSlug=${brandSlug}&locationSlug=${locationSlug}`}
+              target="_blank"
+            >
+              Åbn diagnose
             </a>
-          </>
-        }
-      />
-    );
-  }
-  
+          }
+        />
+      );
+    }
 
-  if (!probe.flags.hasBrand || !probe.flags.hasLocation) {
-    return (
-      <EmptyState
-        title="Ingen data for denne butik endnu"
-        hint={probe.hints.missing || "Mangler brand eller location-data."}
-        actions={
-          <a
-            className="px-4 py-2 rounded bg-black text-white"
-            href={`/api/diag/brand-location?brandSlug=${brandSlug}&locationSlug=${locationSlug}`}
-            target="_blank"
-          >
-            Åbn diagnose
-          </a>
-        }
-      />
-    );
-  }
-  
+    // 2) SAFE MODE: kortslut alt pynt og vis ren data
+    if (safe) {
+      const counts = await getCatalogCounts({ brandId: probe.brand!.id });
+      const menu = await getMenuForRender({ brandId: probe.brand!.id });
 
-  if (!probe.flags.hasBrandIdField || !probe.flags.brandMatchesLocation) {
-    return (
-      <EmptyState
-        title="Butik er ikke linket korrekt"
-        hint={probe.hints.link || "Location er ikke linket til brandet."}
-        actions={
-          <a
-            className="px-4 py-2 rounded bg-black text-white"
-            href={`/api/diag/brand-location?brandSlug=${brandSlug}&locationSlug=${locationSlug}`}
-            target="_blank"
-          >
-            Åbn diagnose
-          </a>
-        }
-      />
-    );
-  }
+      return (
+        <div className="mx-auto max-w-3xl p-4">
+          <h1 className="text-2xl font-bold mb-4">
+            Safe Mode – {probe.brand?.name ?? brandSlug} / {probe.location?.name ?? locationSlug}
+          </h1>
+          <pre className="text-xs bg-black/5 p-3 rounded mb-4">
+            {JSON.stringify({ counts, fallbackUsed: menu.fallbackUsed }, null, 2)}
+          </pre>
 
-  // MENU-LOAD (ny try/catch)
-  try {
+          {menu.categories.map((cat) => (
+            <section key={cat.id} className="mb-6">
+              <h2 className="font-semibold">{cat.name}</h2>
+              <ul className="list-disc ml-5 mt-2">
+                {(menu.productsByCategory[cat.id] ?? []).map((p: any) => (
+                  <li key={p.id}>
+                    {p.name}
+                    {"price" in p ? ` — ${p.price} kr` : ""}
+                  </li>
+                ))}
+              </ul>
+            </section>
+          ))}
+
+          {menu.fallbackUsed ? (
+            <p className="text-sm opacity-70 mt-4">
+              Viser fallback “Menu”, fordi ingen kategorier fandtes.
+            </p>
+          ) : null}
+        </div>
+      );
+    }
+
+    // 3) Normal path (som tidligere – enkel, men uden pynt der kan kaste)
     const counts = await getCatalogCounts({ brandId: probe.brand!.id });
     const menu = await getMenuForRender({ brandId: probe.brand!.id });
 
@@ -97,17 +101,8 @@ export default async function Page({ params }: { params: { brandSlug: string; lo
       return (
         <EmptyState
           title="Menu er ikke sat op endnu"
-          hint="Der er ingen aktive produkter for dette brand."
+          hint="Der er ingen aktive produkter."
           details={`counts=${JSON.stringify(counts)}`}
-          actions={
-            <a
-              className="px-4 py-2 rounded bg-black text-white"
-              href={`/api/diag/catalog?brandSlug=${brandSlug}`}
-              target="_blank"
-            >
-              Åbn katalog-diagnose
-            </a>
-          }
         />
       );
     }
@@ -128,23 +123,39 @@ export default async function Page({ params }: { params: { brandSlug: string; lo
           </section>
         ))}
         {menu.fallbackUsed ? (
-          <p className="text-sm opacity-70">Viser fallback “Menu”, fordi ingen kategorier fandtes. Opret kategorier i Superadmin for fuld visning.</p>
+          <p className="text-sm opacity-70">
+            Viser fallback “Menu”, fordi ingen kategorier fandtes. Opret kategorier i Superadmin for fuld visning.
+          </p>
         ) : null}
       </div>
     );
   } catch (e: any) {
-    // log og vis venlig fejl – i praksis ser vi ofte index-fejl her
+    // Global catch – hvad end der kaster i denne route, log det og vis pæn fejl
     await logDiag({
       scope: "brand-page",
-      message: "Menu load failure (catalog)",
-      details: { brandId: probe.brand?.id, error: String(e?.message ?? e) },
+      message: "Top-level render failure",
+      details: {
+        brandSlug,
+        locationSlug,
+        error: String(e?.message ?? e),
+        stack: e?.stack ?? null,
+      },
     });
+
     return (
       <EmptyState
-        title="Menu kunne ikke indlæses"
-        hint="Der skete en fejl under hentning af produkter/kategorier."
-        details={process.env.NEXT_PUBLIC_ENABLE_ENV_DEBUG ? String(e?.message ?? e) : undefined}
-        actions={<a className="px-4 py-2 rounded bg-black text-white" href={`/api/diag/catalog?brandSlug=${brandSlug}`} target="_blank">Åbn katalog-diagnose</a>}
+        title="Noget gik galt på brand-siden"
+        hint="Der opstod en fejl under renderingen."
+        details={process.env.NEXT_PUBLIC_ENABLE_ENV_DEBUG ? String(e?.stack ?? e) : undefined}
+        actions={
+          <a
+            className="px-4 py-2 rounded bg-black text-white"
+            href={`/api/debug/diag-logs?scope=brand-page`}
+            target="_blank"
+          >
+            Åbn logs
+          </a>
+        }
       />
     );
   }
