@@ -98,3 +98,5 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
     </footer>
   );
 }
+
+    
