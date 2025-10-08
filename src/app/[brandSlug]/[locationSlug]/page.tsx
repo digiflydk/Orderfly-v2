@@ -1,8 +1,64 @@
+
 // src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { logDiag } from "@/lib/log";
 import { getCatalogCounts, getMenuForRender } from "@/lib/data/catalog";
+import type { AppTypes } from "@/types/next-async-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
+
+// 🔧 NYT: normaliser legacy/new probe shape
+function normalizeProbe(raw: any) {
+  if (!raw || typeof raw !== "object") {
+    return {
+      brand: null,
+      location: null,
+      flags: { hasBrand: false, hasLocation: false, hasBrandIdField: false, brandMatchesLocation: false },
+      hints: { missing: "Mangler brand og location." },
+      ok: false,
+    };
+  }
+
+  const brand = raw.brand ?? null;
+  const location = raw.location ?? null;
+
+  // Hvis ny struktur (har flags), brug den:
+  if (raw.flags) {
+    return {
+      ...raw,
+      brand,
+      location,
+      flags: {
+        hasBrand: !!raw.flags.hasBrand,
+        hasLocation: !!raw.flags.hasLocation,
+        hasBrandIdField: !!raw.flags.hasBrandIdField,
+        brandMatchesLocation: !!raw.flags.brandMatchesLocation,
+      },
+      hints: raw.hints ?? {},
+    };
+  }
+
+  // Legacy struktur (intet flags-felt) -> afled flags her:
+  const hasBrand = !!brand?.id;
+  const hasLocation = !!location?.id;
+  const hasBrandIdField = typeof location?.brandId === "string" && !!location?.brandId;
+  const brandMatchesLocation = hasBrand && hasLocation ? (hasBrandIdField ? location.brandId === brand.id : true) : false;
+
+  const hints: any = {};
+  if (!hasBrand && !hasLocation) hints.missing = "Mangler både brand og location.";
+  else if (!hasBrand) hints.missing = "Mangler brand.";
+  else if (!hasLocation) hints.missing = "Mangler location.";
+  if (hasLocation && !hasBrandIdField) hints.link = "location.brandId mangler (tilføj brandId).";
+  else if (hasLocation && hasBrand && !brandMatchesLocation) hints.link = `location.brandId matcher ikke brand.id (${location.brandId} ≠ ${brand.id}).`;
+
+  return {
+    brand,
+    location,
+    ok: hasBrand && hasLocation && brandMatchesLocation,
+    flags: { hasBrand, hasLocation, hasBrandIdField, brandMatchesLocation },
+    hints,
+  };
+}
 
 export default async function Page({
   params,
@@ -15,9 +71,11 @@ export default async function Page({
   const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
 
   try {
-    // 1) Load brand+location robust
-    const probe = await getBrandAndLocation(brandSlug, locationSlug);
+    // HENT & NORMALISÉR
+    const rawProbe = await getBrandAndLocation(brandSlug, locationSlug);
+    const probe = normalizeProbe(rawProbe);
 
+    // --- uændret logik nedenfor, men bruger nu probe.flags/probe.hints sikkert ---
     if (!probe.flags.hasBrand || !probe.flags.hasLocation) {
       return (
         <EmptyState
@@ -56,7 +114,7 @@ export default async function Page({
       );
     }
 
-    // 2) SAFE MODE: kortslut alt pynt og vis ren data
+    // SAFE MODE (som i OF-560)
     if (safe) {
       const counts = await getCatalogCounts({ brandId: probe.brand!.id });
       const menu = await getMenuForRender({ brandId: probe.brand!.id });
@@ -69,42 +127,29 @@ export default async function Page({
           <pre className="text-xs bg-black/5 p-3 rounded mb-4">
             {JSON.stringify({ counts, fallbackUsed: menu.fallbackUsed }, null, 2)}
           </pre>
-
           {menu.categories.map((cat) => (
             <section key={cat.id} className="mb-6">
               <h2 className="font-semibold">{cat.name}</h2>
               <ul className="list-disc ml-5 mt-2">
                 {(menu.productsByCategory[cat.id] ?? []).map((p: any) => (
-                  <li key={p.id}>
-                    {p.name}
-                    {"price" in p ? ` — ${p.price} kr` : ""}
-                  </li>
+                  <li key={p.id}>{p.name}{"price" in p ? ` — ${p.price} kr` : ""}</li>
                 ))}
               </ul>
             </section>
           ))}
-
           {menu.fallbackUsed ? (
-            <p className="text-sm opacity-70 mt-4">
-              Viser fallback “Menu”, fordi ingen kategorier fandtes.
-            </p>
+            <p className="text-sm opacity-70 mt-4">Viser fallback “Menu”, fordi ingen kategorier fandtes.</p>
           ) : null}
         </div>
       );
     }
 
-    // 3) Normal path (som tidligere – enkel, men uden pynt der kan kaste)
+    // NORMAL PATH (som i OF-557/OF-555)
     const counts = await getCatalogCounts({ brandId: probe.brand!.id });
     const menu = await getMenuForRender({ brandId: probe.brand!.id });
 
     if (counts.products === 0) {
-      return (
-        <EmptyState
-          title="Menu er ikke sat op endnu"
-          hint="Der er ingen aktive produkter."
-          details={`counts=${JSON.stringify(counts)}`}
-        />
-      );
+      return <EmptyState title="Menu er ikke sat op endnu" hint="Der er ingen aktive produkter." details={`counts=${JSON.stringify(counts)}`} />;
     }
 
     return (
@@ -122,24 +167,14 @@ export default async function Page({
             </div>
           </section>
         ))}
-        {menu.fallbackUsed ? (
-          <p className="text-sm opacity-70">
-            Viser fallback “Menu”, fordi ingen kategorier fandtes. Opret kategorier i Superadmin for fuld visning.
-          </p>
-        ) : null}
+        {menu.fallbackUsed ? <p className="text-sm opacity-70">Viser fallback “Menu”, fordi ingen kategorier fandtes. Opret kategorier i Superadmin for fuld visning.</p> : null}
       </div>
     );
   } catch (e: any) {
-    // Global catch – hvad end der kaster i denne route, log det og vis pæn fejl
     await logDiag({
       scope: "brand-page",
-      message: "Top-level render failure",
-      details: {
-        brandSlug,
-        locationSlug,
-        error: String(e?.message ?? e),
-        stack: e?.stack ?? null,
-      },
+      message: "Top-level render failure (post-normalize)",
+      details: { brandSlug, locationSlug, error: String(e?.message ?? e), stack: e?.stack ?? null },
     });
 
     return (
@@ -148,11 +183,7 @@ export default async function Page({
         hint="Der opstod en fejl under renderingen."
         details={process.env.NEXT_PUBLIC_ENABLE_ENV_DEBUG ? String(e?.stack ?? e) : undefined}
         actions={
-          <a
-            className="px-4 py-2 rounded bg-black text-white"
-            href={`/api/debug/diag-logs?scope=brand-page`}
-            target="_blank"
-          >
+          <a className="px-4 py-2 rounded bg-black text-white" href={`/api/debug/diag-logs?scope=brand-page`} target="_blank">
             Åbn logs
           </a>
         }
