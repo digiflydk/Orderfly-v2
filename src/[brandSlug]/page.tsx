@@ -5,7 +5,7 @@ import type { Brand, Location } from "@/types";
 import { getBrandBySlug } from "../superadmin/brands/actions";
 import { getLocationsForBrand } from "../superadmin/locations/actions";
 import { notFound } from "next/navigation";
-import { BrandLayoutClient } from "./layout-client";
+import { BrandLayoutClient } from "@/components/layout/BrandLayoutClient";
 
 interface PageProps {
   brand: Brand;
@@ -40,8 +40,9 @@ function BrandPageComponent({ brand, locations }: PageProps) {
 }
 
 
-export default async function BrandPage({ params }: { params: { brandSlug: string } }) {
-  const brand = await getBrandBySlug(params.brandSlug);
+export default async function BrandPage({ params }: { params: Promise<{ brandSlug: string }> }) {
+  const { brandSlug } = await params;
+  const brand = await getBrandBySlug(brandSlug);
 
   if (!brand) {
     notFound();

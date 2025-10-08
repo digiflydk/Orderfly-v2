@@ -8,7 +8,7 @@ import type { Brand, Location } from "@/types";
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
 import { getLocationsForBrand } from "@/app/superadmin/locations/actions";
 import { notFound } from "next/navigation";
-import { BrandLayoutClient } from "@/app/[brandSlug]/layout-client";
+import { BrandLayoutClient } from "@/components/layout/BrandLayoutClient";
 
 interface BrandPageData {
   brand: Brand;

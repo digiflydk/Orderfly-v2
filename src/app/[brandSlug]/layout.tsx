@@ -6,7 +6,7 @@ import { getGeneralSettings } from '@/services/settings';
 import type { Location } from '@/types';
 import { getLocationBySlug } from '../superadmin/locations/actions';
 import DeliveryModalHost from './deliverymodalhost';
-import { BrandLayoutClient } from './layout-client';
+import { BrandLayoutClient } from '@/components/layout/BrandLayoutClient';
 import { CartProvider } from '@/context/cart-context';
 
 export default async function BrandLayout({
@@ -14,9 +14,9 @@ export default async function BrandLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { brandSlug: string; locationSlug?: string };
+  params: Promise<{ brandSlug: string; locationSlug?: string }>;
 }) {
-  const { brandSlug, locationSlug } = params;
+  const { brandSlug, locationSlug } = await params;
 
   const [brand, settings] = await Promise.all([
     getBrandBySlug(brandSlug),
