@@ -1,26 +1,83 @@
 
 // src/lib/catalog-display.ts
-// ⚠️ Ingen imports fra firebase-admin eller server-only filer her.
+// Client-safe helpers (ingen firebase-admin imports)
+
+function valStr(x: any): string | null {
+  return typeof x === "string" && x.trim() ? x.trim() : null;
+}
+
+function getByPath(obj: any, path: string): any {
+  try {
+    return path.split(".").reduce((acc, k) => (acc == null ? acc : acc[k]), obj);
+  } catch {
+    return undefined;
+  }
+}
+
+function pickFirstString(obj: any, paths: string[]): string | null {
+  for (const p of paths) {
+    const v = getByPath(obj, p);
+    const s = valStr(v);
+    if (s) return s;
+  }
+  return null;
+}
 
 export function getDisplayName(p: any): string {
-  return (
-    (typeof p?.name === "string" && p.name) ||
-    (typeof p?.title === "string" && p.title) ||
-    (typeof p?.label === "string" && p.label) ||
-    ""
-  );
+  // Kandidatfelter (flest → færrest)
+  const s =
+    pickFirstString(p, [
+      "name",
+      "title",
+      "label",
+      "displayName",
+      "display.name",
+      "productName",
+      "info.name",
+      "content.name",
+      "i18n.da.name",
+      "i18n.en.name",
+      "translations.da.name",
+      "translations.name",
+      "locale.da.name",
+      "da.name",
+    ]) ||
+    // heuristik: første string-felt der ligner et navn
+    Object.entries(p || {})
+      .map(([k, v]) => (typeof v === "string" && v.length >= 2 && v.length <= 80 ? v : null))
+      .find(Boolean) ||
+    "";
+  return s;
+}
+
+export function getDisplayDescription(p: any): string {
+  const s =
+    pickFirstString(p, [
+      "description",
+      "desc",
+      "text",
+      "display.description",
+      "i18n.da.description",
+      "translations.da.description",
+    ]) || "";
+  return s;
 }
 
 export function getDisplayPrice(p: any): number | null {
   if (typeof p?.price === "number") return p.price;
   if (typeof p?.amount === "number") return p.amount;
-  if (typeof p?.price === "string" && p.price.trim() !== "" && !isNaN(Number(p.price))) return Number(p.price);
-  if (typeof p?.amount === "string" && p.amount.trim() !== "" && !isNaN(Number(p.amount))) return Number(p.amount);
+  if (valStr(p?.price) && !isNaN(Number(p.price))) return Number(p.price);
+  if (valStr(p?.amount) && !isNaN(Number(p.amount))) return Number(p.amount);
   return null;
 }
 
 export function formatDKK(value: number | null): string {
   if (value == null) return "";
-  try { return new Intl.NumberFormat("da-DK", { style:"currency", currency:"DKK", maximumFractionDigits: 0 }).format(value); }
-  catch { return `${Math.round(value)} kr`; }
+  try {
+    return new Intl.NumberFormat("da-DK", { style: "currency", currency: "DKK", maximumFractionDigits: 0 }).format(
+      value
+    );
+  } catch {
+    return `${Math.round(value)} kr`;
+  }
 }
