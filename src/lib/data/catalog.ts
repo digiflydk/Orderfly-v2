@@ -50,50 +50,50 @@ export async function getMenuForRender(params: {
   brandId: string;
 }) {
   const db = getAdminDb();
-  // 1) Hent kategorier
-  const catsSnap = await db.collection("categories")
+  // 1) Hent alle kategorier for brand (ingen where på isActive/visibility her)
+  const catsSnap = await db
+    .collection("categories")
     .where("brandId", "==", params.brandId)
-    .orderBy("sortOrder", "asc")
     .get();
 
   const categories = catsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
 
-  // 2) Hvis ingen kategorier → Fallback: virtuelt "Menu" med alle aktive produkter
+  // 2) Hent ALLE produkter for brand (KUN brandId-filter → ingen composite index krævet)
+  const prodsSnap = await db
+    .collection("products")
+    .where("brandId", "==", params.brandId)
+    .get();
+
+  // Filtrér/sortér i memory for at undgå Firestore index-krav
+  const allProducts = prodsSnap.docs
+    .map(d => ({ id: d.id, ...(d.data() as any) }))
+    .filter(p => p.isActive !== false); // default: vis hvis ikke eksplicit deaktiveret
+  const sortByOrder = (a: any, b: any) => {
+    const ao = typeof a.order === "number" ? a.order : 999999;
+    const bo = typeof b.order === "number" ? b.order : 999999;
+    return ao - bo;
+  };
+  allProducts.sort(sortByOrder);
+  categories.sort(sortByOrder);
+
+  // 3) Fallback: ingen kategorier ⇒ virtuel "Menu" med alle produkter
   if (categories.length === 0) {
-    const productsSnap = await db.collection("products")
-      .where("brandId", "==", params.brandId)
-      .where("isActive", "==", true)
-      .orderBy("sortOrder", "asc")
-      .get();
-
-    const products = productsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-
-    const virtualCategory = {
-      id: "__virtual_menu__",
-      categoryName: "Menu",
-      order: 1,
-      isVirtual: true,
-    };
-
     return {
-      categories: [virtualCategory],
-      productsByCategory: {
-        [virtualCategory.id]: products,
-      },
+      categories: [{ id: "__virtual_menu__", name: "Menu", order: 1, isVirtual: true }],
+      productsByCategory: { __virtual_menu__: allProducts },
       fallbackUsed: true as const,
     };
   }
 
-  // 3) Normal path → produkter pr. kategori
+  // 4) Normal path: bucketér produkter pr. kategoriId
   const productsByCategory: Record<string, any[]> = {};
-  for (const c of categories) {
-    const ps = await db.collection("products")
-      .where("brandId", "==", params.brandId)
-      .where("categoryId", "==", c.id)
-      .where("isActive", "==", true)
-      .orderBy("sortOrder", "asc")
-      .get();
-    productsByCategory[c.id] = ps.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
+  for (const c of categories) productsByCategory[c.id] = [];
+  for (const p of allProducts) {
+    const cid = p.categoryId && productsByCategory[p.categoryId] ? p.categoryId : categories[0].id;
+    productsByCategory[cid].push(p);
+  }
+  for (const cid of Object.keys(productsByCategory)) {
+    productsByCategory[cid].sort(sortByOrder);
   }
 
   return { categories, productsByCategory, fallbackUsed: false as const };
