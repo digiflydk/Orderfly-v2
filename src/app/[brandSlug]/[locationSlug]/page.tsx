@@ -1,7 +1,13 @@
+
 // src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { logDiag } from "@/lib/log";
+import { getCatalogCounts, getMenuForRender } from "@/lib/data/catalog";
+import { MenuClient } from './menu-client';
+import { HeroBanner } from '@/components/layout/hero-banner';
+import { notFound } from "next/navigation";
+import type { ProductForMenu, Location } from '@/types';
 
 export default async function Page({ params }: { params: { brandSlug: string; locationSlug: string } }) {
   const { brandSlug, locationSlug } = params as { brandSlug: string; locationSlug: string };
@@ -93,5 +99,47 @@ export default async function Page({ params }: { params: { brandSlug: string; lo
     );
   }
 
-  // ... her fortsætter din normale rendering af siden (menu, produkter, osv.)
+  // --- Catalog check ---
+  const counts = await getCatalogCounts({ brandId: probe.brand.id });
+
+  if (counts.categories === 0 || counts.products === 0) {
+    return (
+      <EmptyState
+        title="Menu er ikke sat op endnu"
+        hint="Der er ingen kategorier og/eller produkter for dette brand."
+        details={`counts=${JSON.stringify(counts)}\nTip: Tjek /api/diag/catalog?brandSlug=${brandSlug}`}
+        actions={
+          <a
+            className="px-4 py-2 rounded bg-black text-white"
+            href={`/api/diag/catalog?brandSlug=${brandSlug}`}
+            target="_blank"
+          >
+            Åbn katalog-diagnose
+          </a>
+        }
+      />
+    );
+  }
+
+  // Happy path
+  const { categories, productsByCategory } = await getMenuForRender({ brandId: probe.brand.id });
+  const allProducts = Object.values(productsByCategory).flat();
+
+  // Your existing rendering logic. If MenuClient expects flat arrays, we provide them.
+  return (
+    <>
+      <div className="space-y-6 pt-6">
+        <HeroBanner location={probe.location as Location} />
+        
+        <MenuClient 
+            brand={probe.brand as any}
+            location={probe.location as any}
+            initialCategories={categories}
+            initialProducts={allProducts as ProductForMenu[]}
+            initialActiveCombos={[]} // Assuming combos are fetched in client or not implemented yet
+            initialActiveStandardDiscounts={[]} // Assuming discounts are fetched in client
+        />
+      </div>
+    </>
+  );
 }
