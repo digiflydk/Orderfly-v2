@@ -4,7 +4,7 @@ import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { getOrders } from "@/lib/superadmin/getOrders";
 import { getBrands } from "@/app/superadmin/brands/actions";
 import { getAllLocations } from "@/app/superadmin/locations/actions";
-import { OrdersClientPage, type ClientOrderSummary } from "./client-page";
+import { OrdersClientPage, type ClientOrderSummary } from "@/sales/orders/client-page";
 import type { OrderSummary } from "@/types";
 import { fromQuery } from "@/lib/utils/url";
 import { SACommonFilters } from "@/types/superadmin";
@@ -37,28 +37,13 @@ export default async function OrdersPage({ params, searchParams }: AppTypes.Asyn
     const serializedOrders: ClientOrderSummary[] = orders.map(order => ({
         ...order,
         createdAt: order.createdAt.toISOString(),
-        paidAt: order.paidAt?.toISOString(),
-        updatedAt: order.updatedAt?.toISOString(),
     }));
-    
-    const handleFilterChange = async (newFilters: SACommonFilters) => {
-        'use server';
-        const params = new URLSearchParams({
-            from: newFilters.dateFrom,
-            to: newFilters.dateTo,
-            brand: newFilters.brandId || 'all',
-            loc: newFilters.locationIds?.join(',') || '',
-        });
-        redirect(`/superadmin/sales/orders?${params.toString()}`);
-    }
 
     return (
         <OrdersClientPage 
             initialOrders={serializedOrders}
             brands={brands}
             locations={locations}
-            initialFilters={filters}
-            onFilterChange={handleFilterChange as any}
         />
     );
 }
