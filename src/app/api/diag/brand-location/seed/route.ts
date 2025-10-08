@@ -1,4 +1,3 @@
-
 // src/app/api/diag/brand-location/seed/route.ts
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";

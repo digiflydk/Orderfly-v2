@@ -1,4 +1,3 @@
-
 // src/app/api/diag/catalog/route.ts
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";

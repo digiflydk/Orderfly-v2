@@ -1,4 +1,3 @@
-
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 
@@ -14,40 +13,66 @@ export async function POST(req: Request) {
   }
 
   const db = getAdminDb();
+  const { brandSlug = "esmeralda", categoryName = "Menu" } = await req.json().catch(() => ({}));
 
-  // find brand "esmeralda"
-  let brandRef = null as any;
-  const b = await db.collection("brands").where("slug", "==", "esmeralda").limit(1).get();
-  brandRef = b.empty ? db.collection("brands").doc() : b.docs[0].ref;
-  if (b.empty) {
-    await brandRef.set({ slug: "esmeralda", name: "ESMERALDA", createdAt: new Date(), updatedAt: new Date() });
+  // find brand
+  let brandId: string | null = null;
+  const b = await db.collection("brands").where("slug", "==", brandSlug).limit(1).get();
+  if (!b.empty) brandId = b.docs[0].id;
+  if (!brandId) {
+    const bd = await db.collection("brands").doc(brandSlug).get();
+    if (bd.exists) brandId = bd.id;
+  }
+  if (!brandId) {
+    return NextResponse.json({ ok: false, error: `Brand not found for slug=${brandSlug}` }, { status: 404 });
   }
 
-  // create one category
-  const catRef = db.collection("categories").doc();
-  await catRef.set({
-    brandId: brandRef.id,
-    categoryName: "Signature Pizzas", // Use categoryName to match schema
-    sortOrder: 1, // Use sortOrder instead of order
-    isActive: true,
-    locationIds: [], // Assume global for brand for now
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  // ensure category exists
+  let catId: string | null = null;
+  const catQ = await db.collection("categories")
+    .where("brandId", "==", brandId)
+    .where("categoryName", "==", categoryName)
+    .limit(1).get();
 
-  // create one product in that category
-  const prodRef = db.collection("products").doc();
-  await prodRef.set({
-    brandId: brandRef.id,
-    categoryId: catRef.id,
-    productName: "Margherita", // Use productName
-    price: 79,
-    sortOrder: 1, // use sortOrder
-    isActive: true,
-    locationIds: [], // Assume global for brand for now
-    createdAt: new Date(),
-    updatedAt: new Date(),
-  });
+  if (!catQ.empty) {
+    catId = catQ.docs[0].id;
+  } else {
+    const ref = db.collection("categories").doc();
+    await ref.set({
+      brandId,
+      categoryName: categoryName,
+      sortOrder: 1,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
+    catId = ref.id;
+  }
 
-  return NextResponse.json({ ok: true, brandId: brandRef.id, categoryId: catRef.id, productId: prodRef.id });
+  // assign categoryId to products that miss it
+  const prods = await db.collection("products")
+    .where("brandId", "==", brandId)
+    .get();
+
+  let updated = 0;
+  const batch = db.batch();
+  for (const doc of prods.docs) {
+    const data = doc.data() as any;
+    if (!data.categoryId) {
+      batch.update(doc.ref, {
+        categoryId: catId,
+        updatedAt: new Date(),
+      });
+      updated++;
+    }
+  }
+  if (updated > 0) {
+    await batch.commit();
+  }
+
+  return NextResponse.json({
+    ok: true,
+    brandId,
+    categoryId: catId,
+    productsUpdated: updated,
+  });
 }

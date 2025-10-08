@@ -1,4 +1,3 @@
-
 // src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
@@ -101,14 +100,15 @@ export default async function Page({ params }: { params: { brandSlug: string; lo
 
   // --- Catalog check ---
   const counts = await getCatalogCounts({ brandId: probe.brand.id });
+  const menu = await getMenuForRender({ brandId: probe.brand.id });
 
-  if (counts.categories === 0 || counts.products === 0) {
+  if (counts.products === 0) {
     return (
       <EmptyState
         title="Menu er ikke sat op endnu"
-        hint="Der er ingen kategorier og/eller produkter for dette brand."
-        details={`counts=${JSON.stringify(counts)}\nTip: Tjek /api/diag/catalog?brandSlug=${brandSlug}`}
-        actions={
+        hint="Der er ingen aktive produkter for dette brand."
+        details={`counts=${JSON.stringify(counts)}`}
+         actions={
           <a
             className="px-4 py-2 rounded bg-black text-white"
             href={`/api/diag/catalog?brandSlug=${brandSlug}`}
@@ -121,25 +121,27 @@ export default async function Page({ params }: { params: { brandSlug: string; lo
     );
   }
 
-  // Happy path
-  const { categories, productsByCategory } = await getMenuForRender({ brandId: probe.brand.id });
-  const allProducts = Object.values(productsByCategory).flat();
+  const allProducts = Object.values(menu.productsByCategory).flat();
 
-  // Your existing rendering logic. If MenuClient expects flat arrays, we provide them.
+  // Happy path
   return (
-    <>
-      <div className="space-y-6 pt-6">
-        <HeroBanner location={probe.location as Location} />
-        
-        <MenuClient 
-            brand={probe.brand as any}
-            location={probe.location as any}
-            initialCategories={categories}
-            initialProducts={allProducts as ProductForMenu[]}
-            initialActiveCombos={[]} // Assuming combos are fetched in client or not implemented yet
-            initialActiveStandardDiscounts={[]} // Assuming discounts are fetched in client
-        />
-      </div>
-    </>
+    <div className="mx-auto max-w-4xl p-4">
+        {menu.categories.map(cat => (
+        <section key={cat.id} className="mb-8">
+            <h2 className="text-xl font-semibold mb-3">{cat.name}</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {(menu.productsByCategory[cat.id] || []).map((p: any) => (
+                <div key={p.id} className="rounded border p-4">
+                <div className="font-medium">{p.name}</div>
+                {"price" in p ? <div className="opacity-80 mt-1">{p.price} kr</div> : null}
+                </div>
+            ))}
+            </div>
+        </section>
+        ))}
+        {menu.fallbackUsed ? (
+        <p className="text-sm opacity-70">Viser fallback “Menu”, fordi ingen kategorier fandtes. Opret kategorier i Superadmin for fuld visning.</p>
+        ) : null}
+    </div>
   );
 }
