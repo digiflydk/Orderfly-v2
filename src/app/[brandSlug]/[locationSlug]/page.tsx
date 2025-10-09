@@ -1,43 +1,65 @@
 
+// src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
+import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
 import ProductGrid from "@/components/catalog/product-grid";
-import { getAdminDb } from "@/lib/firebase-admin";
 
-async function getBrandAndLocation(brandSlug:string, locationSlug:string){
-  const db = getAdminDb();
-  let brand: any=null, location:any=null;
+function normalizeProbe(raw: any) {
+  if (!raw || typeof raw !== "object") {
+    return {
+      brand: null,
+      location: null,
+      flags: { hasBrand: false, hasLocation: false, hasBrandIdField: false, brandMatchesLocation: false },
+      hints: { missing: "Mangler brand og location." },
+      ok: false,
+    };
+  }
+  const brand = raw.brand ?? null;
+  const location = raw.location ?? null;
 
-  const bq = await db.collection("brands").where("slug","==",brandSlug).limit(1).get();
-  if(!bq.empty) brand = { id:bq.docs[0].id, ...bq.docs[0].data() };
-  if(!brand){ const d=await db.collection("brands").doc(brandSlug).get(); if(d.exists) brand = { id:d.id, ...d.data() }; }
+  if (raw.flags) {
+    return {
+      ...raw,
+      brand,
+      location,
+      flags: {
+        hasBrand: !!raw.flags.hasBrand,
+        hasLocation: !!raw.flags.hasLocation,
+        hasBrandIdField: !!raw.flags.hasBrandIdField,
+        brandMatchesLocation: !!raw.flags.brandMatchesLocation,
+      },
+      hints: raw.hints ?? {},
+    };
+  }
 
-  const lq = await db.collection("locations").where("slug","==",locationSlug).limit(1).get();
-  if(!lq.empty) location = { id:lq.docs[0].id, ...lq.docs[0].data() };
-  if(!location){ const d=await db.collection("locations").doc(locationSlug).get(); if(d.exists) location = { id:d.id, ...d.data() }; }
+  const hasBrand = !!brand?.id;
+  const hasLocation = !!location?.id;
+  const hasBrandIdField = typeof location?.brandId === "string" && !!location?.brandId;
+  const brandMatchesLocation = hasBrand && hasLocation ? (hasBrandIdField ? location.brandId === brand.id : true) : false;
 
-  return { brand, location };
+  const hints: any = {};
+  if (!hasBrand && !hasLocation) hints.missing = "Mangler både brand og location.";
+  else if (!hasBrand) hints.missing = "Mangler brand.";
+  else if (!hasLocation) hints.missing = "Mangler location.";
+  if (hasLocation && !hasBrandIdField) hints.link = "location.brandId mangler (tilføj brandId).";
+  else if (hasLocation && hasBrand && !brandMatchesLocation) hints.link = `location.brandId matcher ikke brand.id (${location.brandId} ≠ ${brand.id}).`;
+
+  return { brand, location, ok: hasBrand && hasLocation && brandMatchesLocation, flags: { hasBrand, hasLocation, hasBrandIdField, brandMatchesLocation }, hints };
 }
 
-function normalizeProbe(raw:any){
-  const brand = raw?.brand ?? null; const location = raw?.location ?? null;
-  const hasBrand = !!brand?.id; const hasLocation = !!location?.id;
-  const hasBrandIdField = typeof location?.brandId==="string" && !!location.brandId;
-  const brandMatchesLocation = hasBrand && hasLocation ? (hasBrandIdField ? location.brandId===brand.id : true) : false;
-  const hints:any = {};
-  if(!hasBrand && !hasLocation) hints.missing="Mangler både brand og location.";
-  else if(!hasBrand) hints.missing="Mangler brand."; else if(!hasLocation) hints.missing="Mangler location.";
-  if(hasLocation && !hasBrandIdField) hints.link="location.brandId mangler (tilføj brandId).";
-  else if(hasLocation && hasBrand && !brandMatchesLocation) hints.link=`location.brandId matcher ikke brand.id (${location.brandId} ≠ ${brand.id}).`;
-  return { brand, location, flags:{hasBrand,hasLocation,hasBrandIdField,brandMatchesLocation}, hints };
-}
-
-export default async function Page({ params, searchParams }:{ params:{brandSlug:string; locationSlug:string}; searchParams:any }) {
+export default async function Page({
+  params,
+  searchParams,
+}: {
+  params: { brandSlug: string; locationSlug: string };
+  searchParams: { [key: string]: string | string[] | undefined };
+}) {
   const { brandSlug, locationSlug } = params;
   const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
 
-  try{
+  try {
     const raw = await getBrandAndLocation(brandSlug, locationSlug);
     const probe = normalizeProbe(raw);
 
@@ -67,6 +89,16 @@ export default async function Page({ params, searchParams }:{ params:{brandSlug:
           ))}
           {menu.fallbackUsed ? <p className="text-sm opacity-70 mt-4">Viser fallback “Menu”, fordi ingen kategorier fandtes.</p> : null}
         </div>
+      );
+    }
+
+    if (counts.products === 0) {
+      return (
+        <EmptyState
+          title="Menu er ikke sat op endnu"
+          hint="Der er ingen aktive produkter."
+          details={`counts=${JSON.stringify(counts)}`}
+        />
       );
     }
 
