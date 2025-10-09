@@ -1,7 +1,4 @@
 
-// src/lib/catalog-display.ts
-// Client-safe helpers (ingen firebase-admin imports)
-
 function valStr(x: any): string | null {
   return typeof x === "string" && x.trim() ? x.trim() : null;
 }
@@ -24,7 +21,6 @@ function pickFirstString(obj: any, paths: string[]): string | null {
 }
 
 export function getDisplayName(p: any): string {
-  // Kandidatfelter (flest → færrest)
   const s =
     pickFirstString(p, [
       "name",
@@ -42,9 +38,8 @@ export function getDisplayName(p: any): string {
       "locale.da.name",
       "da.name",
     ]) ||
-    // heuristik: første string-felt der ligner et navn
-    Object.entries(p || {})
-      .map(([k, v]) => (typeof v === "string" && v.length >= 2 && v.length <= 80 ? v : null))
+    Object.values(p || {})
+      .map((v) => (typeof v === "string" && v.length >= 2 && v.length <= 80 ? v : null))
       .find(Boolean) ||
     "";
   return s;

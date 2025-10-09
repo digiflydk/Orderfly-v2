@@ -1,3 +1,4 @@
+
 "use client";
 
 import { getDisplayName, getDisplayPrice, getDisplayDescription, formatDKK } from "@/lib/catalog-display";

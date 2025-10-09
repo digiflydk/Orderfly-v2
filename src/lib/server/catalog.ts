@@ -1,75 +1,43 @@
 
-// src/lib/server/catalog.ts
 import "server-only";
 import { getAdminDb } from "@/lib/firebase-admin";
 
 export type CatalogCounts = {
-  categories: number;
-  products: number;
-  toppings?: number;
-  comboMenus?: number;
-  discounts?: number;
+  categories: number; products: number; toppings?: number; comboMenus?: number; discounts?: number;
 };
 
-export async function getCatalogCounts(params: { brandId: string; }) : Promise<CatalogCounts> {
-  const db = getAdminDb();
-  const { brandId } = params;
-
-  const [catSnap, prodSnap] = await Promise.all([
-    db.collection("categories").where("brandId", "==", brandId).count().get(),
-    db.collection("products").where("brandId", "==", brandId).count().get(),
+export async function getCatalogCounts(params: { brandId: string }): Promise<CatalogCounts> {
+  const db = getAdminDb(); const { brandId } = params;
+  const [cats, prods] = await Promise.all([
+    db.collection("categories").where("brandId","==",brandId).count().get(),
+    db.collection("products").where("brandId","==",brandId).count().get(),
   ]);
-
-  let toppings = 0, comboMenus = 0, discounts = 0;
-  try { const s = await db.collection("toppings").where("brandId","==",brandId).count().get(); toppings = s.data().count; } catch {}
-  try { const s = await db.collection("comboMenus").where("brandId","==",brandId).count().get(); comboMenus = s.data().count; } catch {}
-  try { const s = await db.collection("discounts").where("brandId","==",brandId).count().get(); discounts = s.data().count; } catch {}
-
-  return { categories: catSnap.data().count, products: prodSnap.data().count, toppings, comboMenus, discounts };
+  let toppings=0, comboMenus=0, discounts=0;
+  try { toppings = (await db.collection("toppings").where("brandId","==",brandId).count().get()).data().count; } catch {}
+  try { comboMenus = (await db.collection("comboMenus").where("brandId","==",brandId).count().get()).data().count; } catch {}
+  try { discounts = (await db.collection("discounts").where("brandId","==",brandId).count().get()).data().count; } catch {}
+  return { categories: cats.data().count, products: prods.data().count, toppings, comboMenus, discounts };
 }
 
 export async function getMenuForRender(params: { brandId: string }) {
   const db = getAdminDb();
+  const catsSnap = await db.collection("categories").where("brandId","==",params.brandId).get();
+  const categories = catsSnap.docs.map(d => ({ id:d.id, ...(d.data() as any) }));
+  const prodsSnap = await db.collection("products").where("brandId","==",params.brandId).get();
+  const allProducts = prodsSnap.docs.map(d => ({ id:d.id, ...(d.data() as any) })).filter(p => p.isActive !== false);
+  const sortByOrder = (a:any,b:any)=>((typeof a.order==="number"?a.order:999999)-(typeof b.order==="number"?b.order:999999));
+  categories.sort(sortByOrder); allProducts.sort(sortByOrder);
 
-  // 1) Hent alle kategorier for brand (ingen where på isActive/visibility her)
-  const catsSnap = await db.collection("categories")
-    .where("brandId", "==", params.brandId)
-    .get();
-
-  const categories = catsSnap.docs.map(d => ({ id: d.id, ...(d.data() as any) }));
-
-  // 2) Hent ALLE produkter for brand (KUN brandId-filter → ingen composite index krævet)
-  const prodsSnap = await db.collection("products")
-    .where("brandId", "==", params.brandId)
-    .get();
-
-  // Filtrér/sortér i memory for at undgå Firestore index-krav
-  const allProducts = prodsSnap.docs
-    .map(d => ({ id: d.id, ...(d.data() as any) }))
-    .filter(p => p.isActive !== false); // default: vis hvis ikke eksplicit deaktiveret
-  const sortByOrder = (a:any,b:any) => ((typeof a.order==="number"?a.order:999999) - (typeof b.order==="number"?b.order:999999));
-  allProducts.sort(sortByOrder);
-  categories.sort(sortByOrder);
-
-  // 3) Fallback: ingen kategorier ⇒ virtuel "Menu" med alle produkter
-  if (categories.length === 0) {
-    return {
-      categories: [{ id: "__virtual_menu__", name: "Menu", order: 1, isVirtual: true }],
-      productsByCategory: { __virtual_menu__: allProducts },
-      fallbackUsed: true as const,
-    };
+  if (categories.length===0){
+    return { categories:[{id:"__virtual_menu__",name:"Menu",order:1,isVirtual:true}],
+             productsByCategory:{ "__virtual_menu__": allProducts }, fallbackUsed:true as const };
   }
-
-  // 4) Normal path: bucketér produkter pr. kategoriId
-  const productsByCategory: Record<string, any[]> = {};
-  for (const c of categories) productsByCategory[c.id] = [];
-  for (const p of allProducts) {
+  const productsByCategory: Record<string,any[]> = {};
+  for(const c of categories) productsByCategory[c.id]=[];
+  for(const p of allProducts){
     const cid = p.categoryId && productsByCategory[p.categoryId] ? p.categoryId : categories[0].id;
     productsByCategory[cid].push(p);
   }
-  for (const cid of Object.keys(productsByCategory)) {
-    productsByCategory[cid].sort(sortByOrder);
-  }
-
-  return { categories, productsByCategory, fallbackUsed: false as const };
+  for(const id of Object.keys(productsByCategory)) productsByCategory[id].sort(sortByOrder);
+  return { categories, productsByCategory, fallbackUsed:false as const };
 }

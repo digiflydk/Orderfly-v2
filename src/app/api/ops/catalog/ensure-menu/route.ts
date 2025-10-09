@@ -1,254 +1,75 @@
-// src/app/api/ops/catalog/ensure-menu/route.ts
+
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
+export const dynamic="force-dynamic"; export const runtime="nodejs"; export const fetchCache="default-no-store";
 
-export const dynamic = "force-dynamic";
-export const runtime = "nodejs";
-export const fetchCache = "default-no-store";
+/* ---------- POST (commit) ---------- */
+export async function POST(req:Request){
+  const token=process.env.DEBUG_TOKEN, hdr=(req.headers.get("x-debug-token")||"").trim();
+  if(!token || hdr!==token) return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});
+  const body = await req.json().catch(()=>({}));
+  const brandSlug = String(body.brandSlug||"").trim();
+  const dryRun = body.dryRun !== false;
+  const reassignIfInvalid = body.reassignIfInvalid !== false;
+  const setSortOrder = body.setSortOrder !== false;
+  if(!brandSlug) return NextResponse.json({ok:false,error:"brandSlug is required"},{status:400});
+  try{
+    const db=getAdminDb();
+    // brandId
+    let brandId:string|null=null;
+    const bySlug=await db.collection("brands").where("slug","==",brandSlug).limit(1).get();
+    if(!bySlug.empty) brandId=bySlug.docs[0].id;
+    if(!brandId){ const d=await db.collection("brands").doc(brandSlug).get(); if(d.exists) brandId=d.id; }
+    if(!brandId) return NextResponse.json({ok:false,error:"Brand not found"},{status:404});
 
-/**
- * POST /api/ops/catalog/ensure-menu
- * Headers: x-debug-token: <DEBUG_TOKEN>
- * Body:
- *  {
- *    "brandSlug": "esmeralda",         // påkrævet
- *    "menuCategoryName": "Menu",       // valgfri, default "Menu"
- *    "dryRun": true,                   // default true (første kald skal være dry-run)
- *    "reassignIfInvalid": true,        // tildel også hvis categoryId peger på ikke-eksisterende kategori
- *    "setSortOrder": true              // sæt sortOrder sekventielt hvis mangler
- *  }
- *
- * Response: { ok, brandId, categoryId, stats, dryRun, tookMs }
- */
-export async function POST(req: Request) {
-  const started = Date.now();
-  const token = process.env.DEBUG_TOKEN;
-  const hdr = (req.headers.get("x-debug-token") || "").trim();
-  if (!token || hdr !== token) {
-    return NextResponse.json({ ok: false, error: "Unauthorized" }, { status: 401 });
-  }
+    // ensure category "Menu"
+    const name="Menu";
+    const catQ=await db.collection("categories").where("brandId","==",brandId).where("name","==",name).limit(1).get();
+    let categoryId = catQ.empty ? "DRY_RUN_CATEGORY_ID" : catQ.docs[0].id;
 
-  const body = await req.json().catch(() => ({}));
-  const brandSlug: string = String(body.brandSlug || "").trim();
-  const menuCategoryName: string = String(body.menuCategoryName || "Menu").trim();
-  const dryRun: boolean = body.dryRun !== false; // default true
-  const reassignIfInvalid: boolean = body.reassignIfInvalid !== false; // default true
-  const setSortOrder: boolean = body.setSortOrder !== false; // default true
+    const allCats=await db.collection("categories").where("brandId","==",brandId).get();
+    const validIds=new Set(allCats.docs.map(d=>d.id));
+    const prodsSnap=await db.collection("products").where("brandId","==",brandId).get();
+    const products=prodsSnap.docs.map(d=>({id:d.id,ref:d.ref,data:d.data() as any}));
+    const withoutCategory=products.filter(p=>!p.data.categoryId);
+    const withInvalid=reassignIfInvalid?products.filter(p=>p.data.categoryId && !validIds.has(String(p.data.categoryId))):[];
+    const needSort=setSortOrder?products.filter(p=>typeof p.data.sortOrder!=="number"):[];
 
-  if (!brandSlug) {
-    return NextResponse.json({ ok: false, error: "brandSlug is required" }, { status: 400 });
-  }
-
-  const db = getAdminDb();
-
-  // 1) Find brandId via slug eller docId
-  let brandId: string | null = null;
-  const bySlug = await db.collection("brands").where("slug", "==", brandSlug).limit(1).get();
-  if (!bySlug.empty) brandId = bySlug.docs[0].id;
-  if (!brandId) {
-    const byId = await db.collection("brands").doc(brandSlug).get();
-    if (byId.exists) brandId = byId.id;
-  }
-  if (!brandId) {
-    return NextResponse.json({ ok: false, error: "Brand not found for slug", brandSlug }, { status: 404 });
-  }
-
-  // 2) Ensure Menu category exists for brand
-  let categoryId: string | null = null;
-  const catQ = await db.collection("categories")
-    .where("brandId", "==", brandId)
-    .where("name", "==", menuCategoryName)
-    .limit(1)
-    .get();
-
-  if (!catQ.empty) {
-    categoryId = catQ.docs[0].id;
-  } else {
-    if (dryRun) {
-      // do not create in dry-run, just simulate id
-      categoryId = "DRY_RUN_CATEGORY_ID";
-    } else {
-      const ref = db.collection("categories").doc();
-      await ref.set({
-        brandId,
-        name: menuCategoryName,
-        order: 1,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-      categoryId = ref.id;
-    }
-  }
-
-  // 3) Read all categories for validity map (avoid composite indexes by post-filtering)
-  const allCatsSnap = await db.collection("categories").where("brandId", "==", brandId).get();
-  const validCategoryIds = new Set(allCatsSnap.docs.map(d => d.id));
-
-  // 4) Fetch ALL products for brand (no composite indexes)
-  const prodsSnap = await db.collection("products").where("brandId", "==", brandId).get();
-
-  // Partition products
-  const products = prodsSnap.docs.map(d => ({ id: d.id, ref: d.ref, data: d.data() as any }));
-  const withoutCategory = products.filter(p => !p.data.categoryId);
-  const withInvalidCategory = reassignIfInvalid
-    ? products.filter(p => p.data.categoryId && !validCategoryIds.has(String(p.data.categoryId)))
-    : [];
-
-  // Optionally: set sequential sortOrder for those missing it (keep others)
-  const needSortOrder = setSortOrder ? products.filter(p => typeof p.data.sortOrder !== "number") : [];
-
-  // 5) Apply mutations in batches of 450
-  const BATCH_LIMIT = 450;
-  let updated = 0;
-  let createdCategory = catQ.empty ? 1 : 0;
-  let updatedSort = 0;
-
-  if (!dryRun) {
-    // (A) Assign category for withoutCategory
-    for (let i = 0; i < withoutCategory.length; i += BATCH_LIMIT) {
-      const slice = withoutCategory.slice(i, i + BATCH_LIMIT);
-      const batch = db.batch();
-      for (const p of slice) {
-        batch.update(p.ref, { categoryId, updatedAt: new Date() });
-      }
-      await batch.commit();
-      updated += slice.length;
-    }
-
-    // (B) Reassign invalid categoryId if asked
-    if (withInvalidCategory.length) {
-      for (let i = 0; i < withInvalidCategory.length; i += BATCH_LIMIT) {
-        const slice = withInvalidCategory.slice(i, i + BATCH_LIMIT);
-        const batch = db.batch();
-        for (const p of slice) {
-          batch.update(p.ref, { categoryId, updatedAt: new Date() });
-        }
-        await batch.commit();
-        updated += slice.length;
+    let createdCategory=0, updated=0, updatedSort=0;
+    if(!dryRun){
+      if(catQ.empty){ const ref=db.collection("categories").doc(); await ref.set({brandId,name,order:1,createdAt:new Date(),updatedAt:new Date()}); categoryId=ref.id; createdCategory=1; }
+      const B=450;
+      for(let i=0;i<withoutCategory.length;i+=B){ const s=withoutCategory.slice(i,i+B); const b=db.batch(); s.forEach(p=>b.update(p.ref,{categoryId,updatedAt:new Date()})); await b.commit(); updated+=s.length; }
+      if(withInvalid.length){ for(let i=0;i<withInvalid.length;i+=B){ const s=withInvalid.slice(i,i+B); const b=db.batch(); s.forEach(p=>b.update(p.ref,{categoryId,updatedAt:new Date()})); await b.commit(); updated+=s.length; } }
+      if(needSort.length){ const sorted=[...products].sort((a,b)=>((typeof a.data.sortOrder==="number"?a.data.sortOrder:999999)-(typeof b.data.sortOrder==="number"?b.data.sortOrder:999999)) || String(a.id).localeCompare(String(b.id)));
+        let i=1; for(let j=0;j<sorted.length;j+=B){ const s=sorted.slice(j,j+B); const b=db.batch(); s.forEach(p=>{ if(typeof p.data.sortOrder!=="number"){ b.update(p.ref,{sortOrder:i,updatedAt:new Date()}); updatedSort++; } i++; }); await b.commit(); }
       }
     }
 
-    // (C) Set sortOrder if missing (simple deterministic sequence by product id)
-    if (needSortOrder.length) {
-      // stable order: by existing sortOrder->id
-      const sorted = [...products].sort((a, b) => {
-        const ao = typeof a.data.sortOrder === "number" ? a.data.sortOrder : 999999;
-        const bo = typeof b.data.sortOrder === "number" ? b.data.sortOrder : 999999;
-        if (ao !== bo) return ao - bo;
-        return String(a.id).localeCompare(String(b.id));
-      });
-
-      let i = 1;
-      for (let j = 0; j < sorted.length; j += BATCH_LIMIT) {
-        const slice = sorted.slice(j, j + BATCH_LIMIT);
-        const batch = db.batch();
-        for (const p of slice) {
-          if (typeof p.data.sortOrder !== "number") {
-            batch.update(p.ref, { sortOrder: i, updatedAt: new Date() });
-            updatedSort++;
-          }
-          i++;
-        }
-        await batch.commit();
-      }
-    }
-  }
-
-  const tookMs = Date.now() - started;
-  return NextResponse.json({
-    ok: true,
-    brandId,
-    categoryId,
-    dryRun,
-    stats: {
-      createdCategory,
-      productsTotal: products.length,
-      withoutCategory: withoutCategory.length,
-      withInvalidCategory: withInvalidCategory.length,
-      updatedProducts: updated,
-      setSortOrder: setSortOrder ? needSortOrder.length : 0,
-      updatedSortOrder: updatedSort,
-    },
-    tookMs,
-  });
+    return NextResponse.json({ok:true,brandId,categoryId,dryRun,stats:{createdCategory,productsTotal:products.length,withoutCategory:withoutCategory.length,withInvalidCategory:withInvalid.length,updatedProducts:updated,setSortOrder:needSort.length,updatedSortOrder:updatedSort}});
+  }catch(e:any){ return NextResponse.json({ok:false,error:String(e?.message??e)},{status:500}); }
 }
 
-export async function GET(req: Request) {
-  // Browser-venlig helper: dry-run via query (ingen writes)
-  const url = new URL(req.url);
-  const brandSlug = url.searchParams.get("brandSlug")?.trim();
-  const menuCategoryName = url.searchParams.get("name")?.trim() || "Menu";
-
-  if (!brandSlug) {
-    return NextResponse.json(
-      {
-        ok: false,
-        error: "Missing brandSlug",
-        usage: {
-          dryRun: `/api/ops/catalog/ensure-menu?brandSlug=<slug>&name=Menu`,
-          post: {
-            url: `/api/ops/catalog/ensure-menu`,
-            headers: { "x-debug-token": "$DEBUG_TOKEN", "Content-Type": "application/json" },
-            body: { brandSlug: "<slug>", dryRun: false },
-          },
-        },
-      },
-      { status: 400 }
-    );
-  }
-
-  // Ring samme logik som POST – men tvangsdry-run (ingen writes)
-  try {
-    const db = getAdminDb();
-
-    // find brandId
-    let brandId: string | null = null;
-    const bySlug = await db.collection("brands").where("slug", "==", brandSlug).limit(1).get();
-    if (!bySlug.empty) brandId = bySlug.docs[0].id;
-    if (!brandId) {
-      const byId = await db.collection("brands").doc(brandSlug).get();
-      if (byId.exists) brandId = byId.id;
-    }
-    if (!brandId) {
-      return NextResponse.json({ ok: false, error: "Brand not found", brandSlug }, { status: 404 });
-    }
-
-    const catQ = await db
-      .collection("categories")
-      .where("brandId", "==", brandId)
-      .where("name", "==", menuCategoryName)
-      .limit(1)
-      .get();
-
-    const productsSnap = await db.collection("products").where("brandId", "==", brandId).get();
-
-    // counts
-    const allCats = await db.collection("categories").where("brandId", "==", brandId).get();
-    const validCatIds = new Set(allCats.docs.map((d) => d.id));
-    const products = productsSnap.docs.map((d) => ({ id: d.id, data: d.data() as any }));
-    const withoutCategory = products.filter((p) => !p.data.categoryId);
-    const withInvalid = products.filter((p) => p.data.categoryId && !validCatIds.has(String(p.data.categoryId)));
-    const needSort = products.filter((p) => typeof p.data.sortOrder !== "number");
-
-    return NextResponse.json({
-      ok: true,
-      dryRun: true,
-      brandId,
-      category: catQ.empty ? "(vil blive oprettet ved POST)" : catQ.docs[0].id,
-      stats: {
-        productsTotal: products.length,
-        withoutCategory: withoutCategory.length,
-        withInvalidCategory: withInvalid.length,
-        missingSortOrder: needSort.length,
-      },
-      howToCommit: {
-        method: "POST",
-        url: "/api/ops/catalog/ensure-menu",
-        headers: { "Content-Type": "application/json", "x-debug-token": "$DEBUG_TOKEN" },
-        body: { brandSlug, dryRun: false },
-      },
-    });
-  } catch (e: any) {
-    return NextResponse.json({ ok: false, error: String(e?.message ?? e) }, { status: 500 });
-  }
+/* ---------- GET (dry-run/preview) ---------- */
+export async function GET(req:Request){
+  const url=new URL(req.url); const brandSlug=url.searchParams.get("brandSlug")?.trim();
+  if(!brandSlug) return NextResponse.json({ok:false,error:"Missing brandSlug",usage:{dryRun:"/api/ops/catalog/ensure-menu?brandSlug=<slug>",post:{url:"/api/ops/catalog/ensure-menu",headers:{"x-debug-token":"$DEBUG_TOKEN","Content-Type":"application/json"},body:{brandSlug:"<slug>",dryRun:false}}}},{status:400});
+  try{
+    const db=getAdminDb();
+    let brandId:string|null=null;
+    const bySlug=await db.collection("brands").where("slug","==",brandSlug).limit(1).get();
+    if(!bySlug.empty) brandId=bySlug.docs[0].id;
+    if(!brandId){ const d=await db.collection("brands").doc(brandSlug).get(); if(d.exists) brandId=d.id; }
+    if(!brandId) return NextResponse.json({ok:false,error:"Brand not found",brandSlug},{status:404});
+    const name="Menu";
+    const catQ=await db.collection("categories").where("brandId","==",brandId).where("name","==",name).limit(1).get();
+    const allCats=await db.collection("categories").where("brandId","==",brandId).get();
+    const validIds=new Set(allCats.docs.map(d=>d.id));
+    const prodsSnap=await db.collection("products").where("brandId","==",brandId).get();
+    const products=prodsSnap.docs.map(d=>({id:d.id,data:d.data() as any}));
+    const withoutCategory=products.filter(p=>!p.data.categoryId);
+    const withInvalid=products.filter(p=>p.data.categoryId && !validIds.has(String(p.data.categoryId)));
+    const needSort=products.filter(p=>typeof p.data.sortOrder!=="number");
+    return NextResponse.json({ok:true,dryRun:true,brandId,category:catQ.empty?"(vil blive oprettet ved POST)":catQ.docs[0].id,stats:{productsTotal:products.length,withoutCategory:withoutCategory.length,withInvalidCategory:withInvalid.length,missingSortOrder:needSort.length},howToCommit:{method:"POST",url:"/api/ops/catalog/ensure-menu",headers:{"Content-Type":"application/json","x-debug-token":"$DEBUG_TOKEN"},body:{brandSlug,dryRun:false}}});
+  }catch(e:any){ return NextResponse.json({ok:false,error:String(e?.message??e)},{status:500}); }
 }
