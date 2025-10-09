@@ -3,8 +3,7 @@ import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
-import ProductCard from "@/components/catalog/product-card";
-import CategoryTabs from "@/components/catalog/category-tabs";
+import ProductGrid from "@/components/catalog/product-grid";
 import type { AppTypes } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 
@@ -121,38 +120,22 @@ export default async function Page({
       );
     }
 
-    if (counts.products === 0) {
-      return <EmptyState title="Menu er ikke sat op endnu" hint="Der er ingen aktive produkter." details={`counts=${JSON.stringify(counts)}`} />;
-    }
-    
-    const allProducts = Object.values(menu.productsByCategory).flat();
-    const categoriesWithCounts = menu.categories.map((c: any) => ({
-        ...c,
-        productCount: menu.productsByCategory[c.id]?.length || 0,
-    }));
-
-
     return (
-        <div className="max-w-4xl mx-auto px-4 pb-10">
-            <h1 className="text-2xl font-bold my-4">{probe.brand?.name}</h1>
-            <CategoryTabs
-                categories={categoriesWithCounts}
-                activeId={categoriesWithCounts[0]?.id}
-                onSelect={(id) => {
-                // future: filter products client-side
-                }}
-            />
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {allProducts.map((p: any) => (
-                <ProductCard key={p.id} product={p} />
-                ))}
-            </div>
-        </div>
+      <div className="mx-auto max-w-5xl p-4">
+        <header className="mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold">
+            {probe.brand?.name ?? brandSlug}
+          </h1>
+          <p className="opacity-70">{probe.location?.name ?? locationSlug}</p>
+        </header>
+
+        <ProductGrid menu={menu} />
+      </div>
     );
   } catch (e: any) {
     await logDiag({
       scope: "brand-page",
-      message: "Top-level render failure (post-normalize)",
+      message: "Top-level render failure (wrapper)",
       details: {
         brandSlug,
         locationSlug,
