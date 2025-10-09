@@ -1,4 +1,9 @@
-# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+# ------------------------------------------------------------
+# ORDERFLY PROJECT - MASTER .GITIGNORE
+# ------------------------------------------------------------
+# See https://help.github.com/articles/ignoring-files/
+# for more about ignoring files.
+# ------------------------------------------------------------
 
 # dependencies
 /node_modules
@@ -24,11 +29,13 @@
 .DS_Store
 *.pem
 
-# debug
+# debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
+firebase-debug.log
+firestore-debug.log
 
 # vercel
 .vercel
@@ -37,9 +44,69 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# generated
 .genkit/*
-.env*
+
+# environment files
+.env
+.env.*
+!.env.example
 
 # firebase
-firebase-debug.log
-firestore-debug.log
+.firebase/
+.firebaserc.local
+
+# --- LOCAL ENVIRONMENT / SYSTEM FILES ---
+.bash_history
+.bash_logout
+.bashrc
+.gitconfig
+.androidsdkroot/
+.android/
+.idea/
+.vscode/
+*.local
+*.backup
+*.lock
+*.log
+*.cache
+*.swp
+*.tmp
+*.bak
+
+# macOS metadata
+*.DS_Store
+.AppleDouble
+.LSOverride
+
+# linux / system
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+
+# ignore potential uploads / exports
+uploads/
+exports/
+
+# ------------------------------------------------------------
+# CLOUD WORKSTATIONS / DEV CONTAINERS
+# ------------------------------------------------------------
+.codess-cloudworkstations/
+.coder/
+.cache/
+.config/
+.local/
+.npm/
+.nvm/
+.android/
+.androidsdkroot/
+.idea/
+.vscode/
+workspace/
+User/History/
+User/History/**
+User/**
+.history/
+.history/**
+/home/user/.android/
+.cloud/
