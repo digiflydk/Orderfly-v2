@@ -1,10 +1,12 @@
-
 // src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
 import ProductCard from "@/components/catalog/product-card";
+import CategoryTabs from "@/components/catalog/category-tabs";
+import type { AppTypes } from "@/types/next-async-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 
 function normalizeProbe(raw: any) {
   if (!raw || typeof raw !== "object") {
@@ -52,12 +54,10 @@ function normalizeProbe(raw: any) {
 export default async function Page({
   params,
   searchParams,
-}: {
-  params: { brandSlug: string; locationSlug: string };
-  searchParams: { [key: string]: string | string[] | undefined };
-}) {
-  const { brandSlug, locationSlug } = params;
-  const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
+}: AppTypes.AsyncPageProps) {
+  const { brandSlug, locationSlug } = await resolveParams(params);
+  const query = await resolveSearchParams(searchParams);
+  const safe = String(query?.safe ?? "").toLowerCase() === "1";
 
   try {
     const rawProbe = await getBrandAndLocation(brandSlug, locationSlug);
@@ -124,21 +124,30 @@ export default async function Page({
     if (counts.products === 0) {
       return <EmptyState title="Menu er ikke sat op endnu" hint="Der er ingen aktive produkter." details={`counts=${JSON.stringify(counts)}`} />;
     }
+    
+    const allProducts = Object.values(menu.productsByCategory).flat();
+    const categoriesWithCounts = menu.categories.map((c: any) => ({
+        ...c,
+        productCount: menu.productsByCategory[c.id]?.length || 0,
+    }));
+
 
     return (
-      <div className="mx-auto max-w-4xl p-4">
-        {menu.categories.map((cat) => (
-          <section key={cat.id} className="mb-8">
-            <h2 className="text-xl font-semibold mb-3">{cat.name}</h2>
+        <div className="max-w-4xl mx-auto px-4 pb-10">
+            <h1 className="text-2xl font-bold my-4">{probe.brand?.name}</h1>
+            <CategoryTabs
+                categories={categoriesWithCounts}
+                activeId={categoriesWithCounts[0]?.id}
+                onSelect={(id) => {
+                // future: filter products client-side
+                }}
+            />
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              {(menu.productsByCategory[cat.id] ?? []).map((p: any) => (
+                {allProducts.map((p: any) => (
                 <ProductCard key={p.id} product={p} />
-              ))}
+                ))}
             </div>
-          </section>
-        ))}
-        {menu.fallbackUsed ? <p className="text-sm opacity-70">Viser fallback “Menu”, fordi ingen kategorier fandtes. Opret kategorier i Superadmin for fuld visning.</p> : null}
-      </div>
+        </div>
     );
   } catch (e: any) {
     await logDiag({

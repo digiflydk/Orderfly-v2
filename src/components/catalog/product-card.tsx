@@ -1,5 +1,4 @@
-
-// src/components/catalog/product-card.tsx
+>// src/components/catalog/product-card.tsx
 "use client";
 
 import { getDisplayName, getDisplayPrice, getDisplayDescription, formatDKK } from "@/lib/catalog-display";
@@ -10,10 +9,19 @@ export default function ProductCard({ product }: { product: any }) {
   const desc = getDisplayDescription(product);
 
   return (
-    <div className="rounded border p-4">
-      <div className="font-medium">{name || <span className="opacity-60 italic">Uden navn</span>}</div>
-      {desc ? <div className="text-sm opacity-70 mt-1">{desc}</div> : null}
-      {price !== null ? <div className="opacity-80 mt-2">{formatDKK(price)}</div> : null}
+    <div className="relative border rounded-lg p-3 bg-white shadow-sm hover:shadow-md transition">
+      <div className="absolute top-2 right-2 flex items-center gap-1">
+        <span className="text-xs bg-gray-800 text-white px-2 py-0.5 rounded">
+          {product.price} kr
+        </span>
+        <button className="text-xs bg-black text-white rounded-full w-5 h-5 flex items-center justify-center hover:bg-gray-800">
+          +
+        </button>
+      </div>
+      <h3 className="font-semibold text-gray-900">{name || <span className="opacity-60 italic">Uden navn</span>}</h3>
+      {desc ? (
+        <p className="text-xs text-gray-500 mt-1">{desc}</p>
+      ) : null}
     </div>
   );
 }
