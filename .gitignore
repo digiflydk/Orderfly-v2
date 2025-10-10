@@ -1,11 +1,3 @@
-# ------------------------------------------------------------
-# ORDERFLY PROJECT - MASTER .GITIGNORE
-# ------------------------------------------------------------
-# See https://help.github.com/articles/ignoring-files/
-# for more about ignoring files.
-# ------------------------------------------------------------
-
-# dependencies
 /node_modules
 /.pnp
 .pnp.*
@@ -14,55 +6,42 @@
 !.yarn/plugins
 !.yarn/releases
 !.yarn/versions
-
-# testing
 /coverage
-
-# next.js
 /.next/
 /out/
-
-# production
 /build
-
-# misc
 .DS_Store
 *.pem
-
-# debug logs
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 .pnpm-debug.log*
 firebase-debug.log
 firestore-debug.log
-
-# vercel
 .vercel
-
-# typescript
 *.tsbuildinfo
 next-env.d.ts
-
-# generated
 .genkit/*
-
-# environment files
 .env
 .env.*
 !.env.example
-
-# firebase
 .firebase/
 .firebaserc.local
-
-# --- LOCAL ENVIRONMENT / SYSTEM FILES ---
+/.idx/
+/.codeoss-cloudworkstations
+/.androidsdkroot
+/.npm
+/.cache
+/.config
+/.local
 .bash_history
 .bash_logout
 .bashrc
 .gitconfig
-.androidsdkroot/
-.android/
+.idea/
+.vscode/
+*.local
+.gitconfig
 .idea/
 .vscode/
 *.local
@@ -73,40 +52,3 @@ next-env.d.ts
 *.swp
 *.tmp
 *.bak
-
-# macOS metadata
-*.DS_Store
-.AppleDouble
-.LSOverride
-
-# linux / system
-Thumbs.db
-ehthumbs.db
-Desktop.ini
-
-# ignore potential uploads / exports
-uploads/
-exports/
-
-# ------------------------------------------------------------
-# CLOUD WORKSTATIONS / DEV CONTAINERS
-# ------------------------------------------------------------
-.codess-cloudworkstations/
-.coder/
-.cache/
-.config/
-.local/
-.npm/
-.nvm/
-.android/
-.androidsdkroot/
-.idea/
-.vscode/
-workspace/
-User/History/
-User/History/**
-User/**
-.history/
-.history/**
-/home/user/.android/
-.cloud/
