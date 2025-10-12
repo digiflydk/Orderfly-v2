@@ -1,16 +1,6 @@
-run = "npm run dev"
-entrypoint = "package.json"
-
-[nix]
-channel = "stable-23_11"
-packages = ["nodejs-18_x", "nodePackages.npm"]
-
-[[ports]]
-localPort = 5000
-externalPort = 80
-<<<<<<< HEAD
-
+modules = ["nodejs-20", "web", "nix"]
 [agent]
 expertMode = true
-=======
->>>>>>> 75f2e5b (OF-158 — M3 “Preview Shell” (index + header + menu-list + feature-flag))
+
+[nix]
+channel = "stable-25_05"
