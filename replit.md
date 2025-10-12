@@ -4,6 +4,16 @@ This is a multi-tenant restaurant ordering platform built with Next.js 15, Fireb
 
 The platform supports both pickup and delivery ordering, dynamic pricing, combo meals, discount management, customer loyalty programs, and integrated payment processing through Stripe. It includes analytics tracking, feedback collection, and cookie consent management.
 
+# Recent Changes
+
+**October 12, 2025 - OF-158: M3 Preview Feature**
+- Implemented M3 preview routes in `src/app/m3/` with Next.js 15 async params compatibility
+- Added feature flag system (`NEXT_PUBLIC_M3_PREVIEW=true`) to enable/disable M3 preview
+- Created mock menu structure for testing (Esmeralda Pizza Amager location)
+- Routes: `/m3` (index), `/m3/[brandSlug]/[locationSlug]` (location-specific)
+- New components: `MenuList` (client component for menu items display)
+- New files: `src/lib/feature-flags.ts`, `src/app/m3/_data/mock.ts`, `src/app/m3/_components/MenuList.tsx`
+
 # User Preferences
 
 Preferred communication style: Simple, everyday language.
