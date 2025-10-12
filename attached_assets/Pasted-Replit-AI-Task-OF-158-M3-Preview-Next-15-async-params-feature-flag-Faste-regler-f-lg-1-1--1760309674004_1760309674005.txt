@@ -1,0 +1,226 @@
+Replit AI — Task: OF-158 M3 Preview (Next 15, async params, feature flag)
+
+Faste regler (følg 1:1):
+
+Foretag kun de beskrevne ændringer. Hvis noget er uklart, stop.
+
+Efter implementering: giv kort status og vis at DoD er opfyldt.
+
+Mål:
+
+(Gen)opret M3 preview-ruter i src/app for Next.js 15.
+
+Brug feature-flag NEXT_PUBLIC_M3_PREVIEW=true.
+
+Vis mock menu for route /m3/esmeralda/esmeralda-pizza-amager.
+
+Sikr Node 18 i Replit med Nix (ingen “segmentation fault”).
+
+Ændringer:
+
+Sæt Replit Node 18 via .replit
+Opret/overskriv filen .replit i projektroden med dette indhold:
+
+run = "npm run dev"
+entrypoint = "package.json"
+
+[nix]
+channel = "stable-23_11"
+packages = ["nodejs-18_x", "nodePackages.npm"]
+
+
+Opret .env.local i projektroden med:
+
+NEXT_PUBLIC_M3_PREVIEW=true
+
+
+Opret feature-flag helper
+src/lib/feature-flags.ts
+
+export function isM3Enabled() {
+  return process.env.NEXT_PUBLIC_M3_PREVIEW === "true";
+}
+
+
+Opret mock data
+src/app/m3/_data/mock.ts
+
+export type M3MenuItem = {
+  id: string;
+  name: string;
+  description?: string;
+  priceDkk: number;
+};
+
+export type M3Menu = {
+  brandSlug: string;
+  locationSlug: string;
+  items: M3MenuItem[];
+};
+
+export const mockMenu: M3Menu = {
+  brandSlug: "esmeralda",
+  locationSlug: "esmeralda-pizza-amager",
+  items: [
+    { id: "1", name: "Margherita (V)", description: "Tomat, mozzarella, oregano", priceDkk: 89 },
+    { id: "2", name: "Hawaii", description: "Tomat, mozzarella, skinke, ananas", priceDkk: 99 },
+    { id: "3", name: "Pepperoni", description: "Tomat, mozzarella, pepperoni", priceDkk: 99 }
+  ],
+};
+
+
+Opret lille UI-komponent til liste
+src/app/m3/_components/MenuList.tsx
+
+"use client";
+import type { M3MenuItem } from "../_data/mock";
+
+export default function MenuList({ items }: { items: M3MenuItem[] }) {
+  return (
+    <ul className="divide-y divide-neutral-200 border border-neutral-200 rounded">
+      {items.map((item) => (
+        <li key={item.id} className="p-3 flex items-center justify-between">
+          <div>
+            <div className="font-medium">{item.name}</div>
+            {item.description && (
+              <div className="text-sm text-neutral-600">{item.description}</div>
+            )}
+          </div>
+          <div className="font-semibold tabular-nums">{item.priceDkk} kr.</div>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+
+Layout for M3-sektionen
+src/app/m3/layout.tsx
+
+import type { ReactNode } from "react";
+export const runtime = "nodejs";
+export default function M3Layout({ children }: { children: ReactNode }) {
+  return <div className="p-8 max-w-3xl mx-auto">{children}</div>;
+}
+
+
+Index-side for /m3
+src/app/m3/page.tsx
+
+import Link from "next/link";
+import { isM3Enabled } from "@/lib/feature-flags";
+
+export const runtime = "nodejs";
+
+export default function M3IndexPage() {
+  if (!isM3Enabled()) {
+    return (
+      <main className="space-y-2">
+        <h1 className="text-2xl font-semibold">M3 disabled</h1>
+        <p>Sæt <code>NEXT_PUBLIC_M3_PREVIEW=true</code> i env for at aktivere preview.</p>
+      </main>
+    );
+  }
+
+  return (
+    <main className="space-y-4">
+      <h1 className="text-2xl font-semibold">M3 (Preview)</h1>
+      <p>Dette er en placeholder for M3-frontend.</p>
+
+      <div>
+        <p className="mb-2">Eksempel-route:</p>
+        <Link
+          href="/m3/esmeralda/esmeralda-pizza-amager"
+          className="inline-block rounded bg-black text-white px-3 py-2"
+        >
+          Åbn Esmeralda – Amager (mock)
+        </Link>
+      </div>
+    </main>
+  );
+}
+
+
+Location-side for /m3/[brandSlug]/[locationSlug] (Next 15 async params)
+src/app/m3/[brandSlug]/[locationSlug]/page.tsx
+
+import { notFound } from "next/navigation";
+import { isM3Enabled } from "@/lib/feature-flags";
+import { mockMenu } from "@/app/m3/_data/mock";
+import MenuList from "@/app/m3/_components/MenuList";
+
+type Props = {
+  params: Promise<{ brandSlug: string; locationSlug: string }>;
+};
+
+export const runtime = "nodejs";
+
+export default async function M3LocationPage({ params }: Props) {
+  const { brandSlug, locationSlug } = await params;
+
+  if (!isM3Enabled()) {
+    notFound();
+  }
+
+  if (brandSlug !== mockMenu.brandSlug || locationSlug !== mockMenu.locationSlug) {
+    notFound();
+  }
+
+  return (
+    <main className="space-y-6">
+      <header className="space-y-1">
+        <h1 className="text-2xl font-semibold">M3 (Preview)</h1>
+        <p className="text-sm text-neutral-600">
+          {brandSlug} / {locationSlug}
+        </p>
+      </header>
+
+      <section className="space-y-3">
+        <h2 className="text-xl font-medium">Menu (mock)</h2>
+        <MenuList items={mockMenu.items} />
+      </section>
+    </main>
+  );
+}
+
+
+Rebuild & start dev
+Kør i Shell:
+
+# Rebuild Nix env hvis Replit spørger; ellers:
+rm -rf node_modules .next
+npm ci
+npm run dev
+
+
+Verificér:
+
+/m3 viser “M3 (Preview)” + link.
+
+/m3/esmeralda/esmeralda-pizza-amager viser mock menu.
+
+Commit & push
+
+git add .replit .env.local \
+  src/lib/feature-flags.ts \
+  src/app/m3/layout.tsx \
+  src/app/m3/page.tsx \
+  src/app/m3/_data/mock.ts \
+  src/app/m3/_components/MenuList.tsx \
+  src/app/m3/[brandSlug]/[locationSlug]/page.tsx
+
+git commit -m "OF-158: Reintroduce M3 preview (Next 15 async params, feature flag, mock menu, Node 18 via Nix)"
+git push
+
+
+Definition of Done (DoD):
+
+App kører på Node 18 (ingen “segmentation fault”).
+
+/m3 loader (viser M3 preview-index).
+
+/m3/esmeralda/esmeralda-pizza-amager loader og viser mock menu.
+
+Slår man NEXT_PUBLIC_M3_PREVIEW fra, er /m3 “disabled” og location-route giver 404.
+
+Ingen andre routes/legacy flows påvirkes.
