@@ -1,6 +1,10 @@
-modules = ["nodejs-20", "web", "nix"]
-[agent]
-expertMode = true
+run = "npm run dev"
+entrypoint = "package.json"
 
 [nix]
-channel = "stable-25_05"
+channel = "stable-23_11"
+packages = ["nodejs-18_x", "nodePackages.npm"]
+
+[[ports]]
+localPort = 5000
+externalPort = 80
