@@ -5,10 +5,12 @@ import { CTADeck } from "./_components/CTADeck";
 import { MenuGrid } from "./_components/MenuGrid";
 import { PromoBanner } from "./_components/PromoBanner";
 import { FooterCTA } from "./_components/FooterCTA";
+import { Header } from "@/components/layout/header";
+import { getBrandBySlug } from "@/app/superadmin/brands/actions";
 
 export const runtime = "nodejs";
 
-export default function M3IndexPage() {
+export default async function M3IndexPage() {
   if (!isM3Enabled()) {
     return (
       <main className="space-y-2 p-6 text-center">
@@ -21,8 +23,12 @@ export default function M3IndexPage() {
     );
   }
 
+  // Fetch a mock brand to pass to the header for styling purposes
+  const brand = await getBrandBySlug('brand-gourmet');
+
   return (
     <main>
+      <Header brand={brand} settings={null} />
       <Hero />
       <CTADeck />
       <MenuGrid />
