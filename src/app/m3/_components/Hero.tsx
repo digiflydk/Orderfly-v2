@@ -17,8 +17,8 @@ export function Hero() {
         <div className="absolute inset-0 bg-gradient-to-r from-black/70 via-black/50 to-transparent" />
 
         <div className="relative h-full flex items-center p-8 md:p-12">
-          <div className="max-w-xl text-white">
-            <div className="inline-block bg-primary text-primary-foreground px-4 py-2 rounded text-xs mb-6 uppercase font-bold tracking-wider">
+          <div className="max-w-xl text-m3-white">
+            <div className="inline-block bg-m3-purple text-m3-white px-4 py-2 rounded text-xs mb-6 uppercase font-bold tracking-wider">
               {heroContent.badge}
             </div>
             <h1 className="text-4xl sm:text-5xl lg:text-6xl font-bold uppercase leading-tight mb-6">
@@ -29,7 +29,7 @@ export function Hero() {
             </p>
             <Button
               size="lg"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground font-bold uppercase tracking-wide transition-all"
+              className="bg-m3-purple hover:bg-m3-purple/90 text-m3-white font-bold uppercase tracking-wide transition-all"
             >
               {heroContent.ctaText}
             </Button>

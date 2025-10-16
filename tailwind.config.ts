@@ -10,11 +10,15 @@ const config: Config = {
   theme: {
     extend: {
       fontFamily: {
-        body: ['Inter', 'sans-serif'],
-        headline: ['Inter', 'sans-serif'],
-        code: ['Source Code Pro', 'monospace'],
+        sans: ['"Poppins"', 'sans-serif'],
       },
       colors: {
+        m3: {
+          purple: '#A45CFF',
+          dark: '#1A1A1A',
+          gray: '#F3F3F3',
+          white: '#FFFFFF',
+        },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
         ring: "hsl(var(--ring))",
@@ -50,6 +54,8 @@ const config: Config = {
         },
       },
       borderRadius: {
+        '2xl': '24px',
+        xl: '16px',
         lg: "var(--radius)",
         md: "calc(var(--radius) - 2px)",
         sm: "calc(var(--radius) - 4px)",

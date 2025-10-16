@@ -28,7 +28,7 @@ function CTAFullWidthCard({
           {title}
         </h3>
         <p className="text-sm mb-4 max-w-md opacity-80">{description}</p>
-        <Button className="bg-secondary hover:bg-secondary/90 text-black rounded-md px-8 py-3 text-xs uppercase font-bold tracking-wide transition-colors">
+        <Button className="bg-m3-purple hover:bg-m3-purple/90 text-m3-dark rounded-md px-8 py-3 text-xs uppercase font-bold tracking-wide transition-colors">
           {ctaText}
         </Button>
       </div>
