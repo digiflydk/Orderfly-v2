@@ -9,15 +9,16 @@ const config: Config = {
   ],
   theme: {
     extend: {
-      fontFamily: {
-        sans: ['"Poppins"', 'sans-serif'],
-      },
       colors: {
         m3: {
+          orange: '#E94F26',
+          orangeLight: '#FF7A29',
           purple: '#A45CFF',
-          dark: '#1A1A1A',
-          gray: '#F3F3F3',
+          cream: '#FFF7EF',
+          dark: '#2D2D2D',
+          black: '#000000',
           white: '#FFFFFF',
+          gray: '#F3F3F3',
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",
@@ -52,6 +53,9 @@ const config: Config = {
           DEFAULT: "hsl(var(--warning))",
           foreground: "hsl(var(--warning-foreground))",
         },
+      },
+      fontFamily: {
+        sans: ['"Poppins"', 'sans-serif'],
       },
       borderRadius: {
         '2xl': '24px',
