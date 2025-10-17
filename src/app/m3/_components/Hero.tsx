@@ -29,7 +29,7 @@ export function Hero() {
             </p>
             <Button
               size="lg"
-              className="bg-m3-purple hover:bg-m3-purple/90 text-m3-white font-bold uppercase tracking-wide transition-all"
+              className="bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] font-bold uppercase tracking-wide transition-all"
             >
               {heroContent.ctaText}
             </Button>

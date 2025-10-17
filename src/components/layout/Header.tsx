@@ -34,7 +34,7 @@ export default function Header() {
           <Link href="#" className="text-sm font-semibold hover:text-m3-orange transition-colors">Kontakt</Link>
         </nav>
         <div className="flex items-center gap-4">
-          <Button className="hidden md:flex bg-m3-orange hover:bg-m3-orange/90 text-m3-dark rounded-full font-bold uppercase text-sm px-8 py-3 transition-colors">
+          <Button className="hidden md:flex bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] rounded-full font-bold uppercase text-sm px-8 py-3 transition-colors">
             Bestil her
           </Button>
           <button
@@ -55,7 +55,7 @@ export default function Header() {
             <Link href="#" className="text-xl font-semibold hover:text-m3-orange transition-colors" onClick={() => setIsMenuOpen(false)}>Rewards</Link>
             <Link href="#" className="text-xl font-semibold hover:text-m3-orange transition-colors" onClick={() => setIsMenuOpen(false)}>Kontakt</Link>
           </nav>
-          <Button className="bg-m3-orange hover:bg-m3-orange/90 text-m3-dark rounded-full font-bold uppercase text-sm px-8 py-3 transition-colors mt-8">
+          <Button className="bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] rounded-full font-bold uppercase text-sm px-8 py-3 transition-colors mt-8">
             Bestil her
           </Button>
         </div>

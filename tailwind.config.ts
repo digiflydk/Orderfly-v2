@@ -19,6 +19,8 @@ const config: Config = {
           black: '#000000',
           white: '#FFFFFF',
           gray: '#F3F3F3',
+          button: '#FF7A29',
+          buttonHover: '#E96F20',
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

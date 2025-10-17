@@ -21,7 +21,7 @@ export function PromoBanner() {
           <p className="text-base mb-6 max-w-md leading-relaxed opacity-90">
             {promoBannerContent.description}
           </p>
-          <Button className="bg-m3-purple hover:bg-m3-purple/90 text-m3-white rounded-md px-8 py-3 text-xs uppercase font-bold tracking-wide transition-colors">
+          <Button className="bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] rounded-md px-8 py-3 text-xs uppercase font-bold tracking-wide transition-colors">
             {promoBannerContent.ctaText}
           </Button>
         </div>

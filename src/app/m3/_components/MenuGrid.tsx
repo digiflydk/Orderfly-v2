@@ -32,7 +32,7 @@ function PizzaCard({
           <span className="text-xl font-bold">{price} kr</span>
           <Button
             size="sm"
-            className="bg-m3-purple hover:bg-m3-purple/90 text-m3-white rounded-md px-6 py-2 text-xs uppercase font-bold tracking-wide transition-colors"
+            className="bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] rounded-md px-6 py-2 text-xs uppercase font-bold tracking-wide transition-colors"
           >
             Vælg
           </Button>
@@ -59,7 +59,7 @@ export function MenuGrid() {
         ))}
       </div>
       <div className="text-center mt-12">
-        <Button size="lg" className="bg-m3-purple hover:bg-m3-purple/90 text-m3-white uppercase font-bold tracking-wide transition-colors">
+        <Button size="lg" className="bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] uppercase font-bold tracking-wide transition-colors">
           {menuGridContent.ctaText}
         </Button>
       </div>
