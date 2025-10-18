@@ -39,7 +39,7 @@ export default function Header({ onOrderClick }: HeaderProps) {
           <Link href="#" className="text-sm font-semibold hover:text-m3-orange transition-colors">Kontakt</Link>
         </nav>
         <div className="flex items-center gap-4">
-          <Button 
+          <Button
             onClick={onOrderClick}
             className="hidden md:flex bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] rounded-full font-bold uppercase text-sm px-8 py-3 transition-colors">
             Bestil her
