@@ -18,9 +18,9 @@ export default function StickyOrderChoice() {
           border-t border-neutral-200
         "
       >
-        <div className="flex flex-col items-center gap-3 text-center">
+        <div className="flex flex-col items-center gap-2 text-center">
           {/* Heading over buttons */}
-          <p className="text-base font-bold text-m3-dark uppercase tracking-wide">
+          <p className="text-sm font-bold text-m3-dark uppercase tracking-wide">
             Bestil her
           </p>
 
@@ -30,8 +30,8 @@ export default function StickyOrderChoice() {
                 className={[
                   "h-12 rounded-lg text-sm font-bold uppercase transition",
                   mode === "delivery"
-                    ? "bg-m3-orange text-m3-dark"
-                    : "bg-m3-white text-m3-dark border border-neutral-300"
+                    ? "bg-[#FF7A29] text-[#2D2D2D]"
+                    : "bg-white text-m3-dark border border-neutral-300"
                 ].join(" ")}
                 aria-pressed={mode === "delivery"}
               >
@@ -43,8 +43,8 @@ export default function StickyOrderChoice() {
                 className={[
                   "h-12 rounded-lg text-sm font-bold uppercase transition",
                   mode === "pickup"
-                    ? "bg-m3-orange text-m3-dark"
-                    : "bg-m3-white text-m3-dark border border-neutral-300"
+                    ? "bg-[#FF7A29] text-[#2D2D2D]"
+                    : "bg-white text-m3-dark border border-neutral-300"
                 ].join(" ")}
                 aria-pressed={mode === "pickup"}
               >
