@@ -1,4 +1,4 @@
-run = "npm run dev"
+run = "npm run start"
 entrypoint = "package.json"
 modules = ["nodejs-20"]
 
@@ -39,3 +39,5 @@ outputType = "webview"
 
 [deployment]
 deploymentTarget = "cloudrun"
+build = ["sh", "-c", "npm run build"]
+run = ["sh", "-c", "npm run start"]
