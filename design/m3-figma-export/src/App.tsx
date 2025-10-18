@@ -7,7 +7,7 @@ import { MenuPage } from "./components/MenuPage";
 import { Button } from "./components/ui/button";
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { useState, useEffect } from "react";
-import { motion, AnimatePresence } from "motion/react";
+import { motion, AnimatePresence } from "framer-motion";
 
 export default function App() {
   const [currentSlide, setCurrentSlide] = useState(0);

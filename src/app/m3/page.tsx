@@ -3,6 +3,13 @@ import { MobileHeader } from "./_components/MobileHeader";
 import { MobileHero } from "./_components/MobileHero";
 import { MobileCardGrid } from "./_components/MobileCardGrid";
 import StickyOrderChoice from "./_components/StickyOrderChoice";
+import { Hero } from "./_components/Hero";
+import { CTADeck } from "./_components/CTADeck";
+import { MenuGrid } from "./_components/MenuGrid";
+import { PromoBanner } from "./_components/PromoBanner";
+import { FooterCTA } from "./_components/FooterCTA";
+import Header from "@/components/layout/Header";
+import Footer from "@/components/layout/Footer";
 
 export const runtime = "nodejs";
 
@@ -20,13 +27,28 @@ export default async function M3IndexPage() {
   }
 
   return (
-    <main className="bg-[#FFF7EF] min-h-dvh">
-      <MobileHeader />
-      <MobileHero />
-      <div className="px-3 py-4">
-        <MobileCardGrid />
+    <>
+      <div className="md:hidden">
+        <main className="bg-m3-cream min-h-dvh">
+          <MobileHeader />
+          <MobileHero />
+          <div className="px-3 py-4">
+            <MobileCardGrid />
+          </div>
+          <StickyOrderChoice />
+        </main>
       </div>
-      <StickyOrderChoice />
-    </main>
+      <div className="hidden md:block bg-m3-cream">
+        <Header />
+        <main>
+          <Hero />
+          <CTADeck />
+          <MenuGrid />
+          <PromoBanner />
+          <FooterCTA />
+        </main>
+        <Footer />
+      </div>
+    </>
   );
 }
