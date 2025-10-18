@@ -1,58 +1,28 @@
 "use client";
-import { useState } from "react";
+
+import { Button } from "@/components/ui/button";
 
 export default function StickyOrderChoice() {
-  const [mode, setMode] = useState<"delivery" | "pickup">("delivery");
+  // The state for delivery/pickup mode is no longer needed here,
+  // but we keep the component structure in case a modal needs to be triggered.
+  const handleOrderClick = () => {
+    // Logic to open an order modal would go here.
+    console.log("Bestil her clicked");
+  };
 
   return (
     <>
       {/* Spacer so content is not hidden behind the sticky bar */}
-      <div className="h-28 md:hidden" aria-hidden />
+      <div className="h-20 md:hidden" aria-hidden="true" />
 
-      <div
-        className="
-          fixed left-0 right-0 bottom-0 z-50 md:hidden
-          bg-[#FFF8F0]
-          pt-3 pb-[max(env(safe-area-inset-bottom),12px)]
-          px-4
-          border-t border-neutral-200
-        "
-      >
-        <div className="flex flex-col items-center gap-2 text-center">
-          {/* Heading over buttons */}
-          <p className="text-sm font-bold text-m3-dark uppercase tracking-wide">
-            Bestil her
-          </p>
-
-          <div className="w-full grid grid-cols-2 gap-3">
-              <button
-                onClick={() => setMode("delivery")}
-                className={[
-                  "h-12 rounded-lg text-sm font-bold uppercase transition",
-                  mode === "delivery"
-                    ? "bg-[#FF7A29] text-[#2D2D2D]"
-                    : "bg-white text-m3-dark border border-neutral-300"
-                ].join(" ")}
-                aria-pressed={mode === "delivery"}
-              >
-                Leverer
-              </button>
-              
-              <button
-                onClick={() => setMode("pickup")}
-                className={[
-                  "h-12 rounded-lg text-sm font-bold uppercase transition",
-                  mode === "pickup"
-                    ? "bg-[#FF7A29] text-[#2D2D2D]"
-                    : "bg-white text-m3-dark border border-neutral-300"
-                ].join(" ")}
-                aria-pressed={mode === "pickup"}
-              >
-                Afhenter
-              </button>
-
-          </div>
-        </div>
+      <div className="fixed bottom-0 left-0 right-0 z-50 bg-m3-cream p-3 md:hidden">
+        <Button
+          size="lg"
+          className="w-full h-14 bg-m3-orange text-m3-dark hover:bg-m3-orange/90 font-bold uppercase text-base"
+          onClick={handleOrderClick}
+        >
+          Bestil her
+        </Button>
       </div>
     </>
   );
