@@ -19,7 +19,7 @@ export default function StickyOrderChoice() {
           className="w-full h-14 bg-m3-orange text-m3-dark hover:bg-m3-orange/90 font-bold uppercase text-base rounded-lg"
           onClick={handleOrderClick}
         >
-          Bestil her
+          BESTIL HER
         </Button>
       </div>
     </>
