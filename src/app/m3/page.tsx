@@ -11,7 +11,7 @@ import { CTADeck } from "./_components/CTADeck";
 import { MenuGrid } from "./_components/MenuGrid";
 import { PromoBanner } from "./_components/PromoBanner";
 import { FooterCTA } from "./_components/FooterCTA";
-import Header from "@/components/layout/Header";
+import Header from "./_components/Header";
 import Footer from "@/components/layout/Footer";
 import { OrderModal } from './_components/OrderModal';
 import { useRouter } from 'next/navigation';
