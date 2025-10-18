@@ -1,13 +1,8 @@
 import { isM3Enabled } from "@/lib/feature-flags";
-import { Hero } from "./_components/Hero";
-import { CTADeck } from "./_components/CTADeck";
-import { MenuGrid } from "./_components/MenuGrid";
-import { PromoBanner } from "./_components/PromoBanner";
-import { FooterCTA } from "./_components/FooterCTA";
 import { MobileHeader } from "./_components/MobileHeader";
 import { MobileHero } from "./_components/MobileHero";
 import { MobileCardGrid } from "./_components/MobileCardGrid";
-import { StickyOrderChoice } from "./_components/StickyOrderChoice";
+import StickyOrderChoice from "./_components/StickyOrderChoice";
 
 export const runtime = "nodejs";
 
@@ -25,27 +20,13 @@ export default async function M3IndexPage() {
   }
 
   return (
-    <>
-      {/* Mobile Layout */}
-      <div className="md:hidden">
-        <MobileHeader />
-        <main className="pb-24">
-          <MobileHero />
-          <MobileCardGrid />
-        </main>
-        <StickyOrderChoice />
+    <main className="bg-[#FFF7EF] min-h-dvh">
+      <MobileHeader />
+      <MobileHero />
+      <div className="px-3 py-4">
+        <MobileCardGrid />
       </div>
-
-      {/* Desktop Layout */}
-      <div className="hidden md:block">
-        <main>
-          <Hero />
-          <CTADeck />
-          <MenuGrid />
-          <PromoBanner />
-          <FooterCTA />
-        </main>
-      </div>
-    </>
+      <StickyOrderChoice />
+    </main>
   );
 }

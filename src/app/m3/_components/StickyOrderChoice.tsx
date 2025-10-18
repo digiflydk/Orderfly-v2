@@ -1,38 +1,58 @@
 "use client";
-
 import { useState } from "react";
-import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
 
-type Choice = "delivery" | "pickup";
-
-export function StickyOrderChoice() {
-  const [choice, setChoice] = useState<Choice>("delivery");
+export default function StickyOrderChoice() {
+  const [mode, setMode] = useState<"delivery" | "pickup">("delivery");
 
   return (
-    <div className="fixed bottom-3 inset-x-3 z-50 h-16 bg-m3-dark rounded-full p-1.5 flex items-center shadow-lg">
-      <Button
-        onClick={() => setChoice("delivery")}
-        className={cn(
-          "flex-1 h-full rounded-full transition-all duration-300",
-          choice === "delivery"
-            ? "bg-m3-orange text-m3-dark"
-            : "bg-transparent text-white"
-        )}
+    <>
+      {/* Spacer so content is not hidden behind the sticky bar */}
+      <div className="h-20 md:hidden" aria-hidden />
+
+      <div
+        className="
+          fixed left-0 right-0 bottom-0 z-50 md:hidden
+          pb-[max(env(safe-area-inset-bottom),12px)]
+          px-3
+        "
       >
-        Delivery
-      </Button>
-      <Button
-        onClick={() => setChoice("pickup")}
-        className={cn(
-          "flex-1 h-full rounded-full transition-all duration-300",
-          choice === "pickup"
-            ? "bg-m3-orange text-m3-dark"
-            : "bg-transparent text-white"
-        )}
-      >
-        Pick up
-      </Button>
-    </div>
+        <div className="flex flex-col items-center gap-2 text-center">
+          {/* Heading over buttons */}
+          <p className="text-sm font-semibold text-white/90">
+            Start your order
+          </p>
+
+          <div className="w-full rounded-full bg-[#2D2D2D] p-1 shadow-xl">
+            <div className="grid grid-cols-2 gap-1">
+              <button
+                onClick={() => setMode("delivery")}
+                className={[
+                  "h-12 rounded-full text-sm font-bold uppercase transition",
+                  mode === "delivery"
+                    ? "bg-[#FF7A29] text-[#2D2D2D]"
+                    : "bg-transparent text-white"
+                ].join(" ")}
+                aria-pressed={mode === "delivery"}
+              >
+                Delivery
+              </button>
+
+              <button
+                onClick={() => setMode("pickup")}
+                className={[
+                  "h-12 rounded-full text-sm font-bold uppercase transition",
+                  mode === "pickup"
+                    ? "bg-[#FF7A29] text-[#2D2D2D]"
+                    : "bg-transparent text-white"
+                ].join(" ")}
+                aria-pressed={mode === "pickup"}
+              >
+                Pick up
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </>
   );
 }
