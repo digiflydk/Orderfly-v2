@@ -1,3 +1,6 @@
+
+'use client';
+import { useState } from 'react';
 import { isM3Enabled } from "@/lib/feature-flags";
 import { MobileHeader } from "./_components/MobileHeader";
 import { MobileHero } from "./_components/MobileHero";
@@ -10,10 +13,13 @@ import { PromoBanner } from "./_components/PromoBanner";
 import { FooterCTA } from "./_components/FooterCTA";
 import Header from "@/components/layout/Header";
 import Footer from "@/components/layout/Footer";
+import { OrderModal } from './_components/OrderModal';
+import { useRouter } from 'next/navigation';
 
-export const runtime = "nodejs";
+export default function M3IndexPage() {
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const router = useRouter();
 
-export default async function M3IndexPage() {
   if (!isM3Enabled()) {
     return (
       <main className="space-y-2 p-6 text-center">
@@ -26,8 +32,20 @@ export default async function M3IndexPage() {
     );
   }
 
+  const handleNavigateToMenu = () => {
+    setOrderModalOpen(true);
+  };
+  
+  const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
+    console.log(`Selected delivery method: ${method}`);
+    // Here you would typically navigate to the menu with the selected method
+    // For now, we can just log it.
+    // Example navigation: router.push('/m3/esmeralda/esmeralda-pizza-amager?deliveryMethod=' + method);
+  };
+
   return (
     <>
+      {/* Mobile View */}
       <div className="md:hidden">
         <main className="bg-m3-cream min-h-dvh">
           <MobileHeader />
@@ -35,13 +53,15 @@ export default async function M3IndexPage() {
           <div className="px-3 py-4">
             <MobileCardGrid />
           </div>
-          <StickyOrderChoice />
+          <StickyOrderChoice onOrderClick={handleNavigateToMenu} />
         </main>
       </div>
+      
+      {/* Desktop View */}
       <div className="hidden md:block bg-m3-cream">
-        <Header />
+        <Header onOrderClick={handleNavigateToMenu}/>
         <main>
-          <Hero />
+          <Hero onOrderClick={handleNavigateToMenu} />
           <CTADeck />
           <MenuGrid />
           <PromoBanner />
@@ -49,6 +69,12 @@ export default async function M3IndexPage() {
         </main>
         <Footer />
       </div>
+
+      <OrderModal 
+        open={orderModalOpen}
+        onOpenChange={setOrderModalOpen}
+        onDeliveryMethodSelected={handleDeliveryMethodSelected}
+      />
     </>
   );
 }

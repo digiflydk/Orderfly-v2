@@ -1,3 +1,4 @@
+
 "use client";
 
 import { useState, useEffect } from "react";
@@ -36,7 +37,11 @@ const heroSlides = [
   },
 ];
 
-export function Hero() {
+interface HeroProps {
+  onOrderClick: () => void;
+}
+
+export function Hero({ onOrderClick }: HeroProps) {
   const [currentSlide, setCurrentSlide] = useState(0);
 
   const nextSlide = () => {
@@ -90,6 +95,7 @@ export function Hero() {
               {slide.description}
             </p>
             <Button
+              onClick={onOrderClick}
               size="lg"
               className="bg-m3-orange hover:bg-m3-orange/90 text-[#2D2D2D] font-bold uppercase tracking-wide transition-all px-10"
             >
