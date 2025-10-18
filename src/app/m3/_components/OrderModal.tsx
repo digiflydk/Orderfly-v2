@@ -1,8 +1,8 @@
 
 'use client';
 
-import { Drawer, DrawerContent } from "@/components/ui/drawer";
-import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { ShoppingBag, Truck } from "lucide-react";
 
@@ -26,14 +26,14 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected }: Ord
   };
 
   const content = (
-    <div className="bg-m3-cream p-6 rounded-t-lg">
-      <div className="text-center mb-6">
-        <h2 className="text-xl font-bold uppercase text-m3-dark">Vælg leveringsmetode</h2>
-        <p className="text-sm text-neutral-600">
+    <>
+      <DialogHeader className="text-center p-6 pb-4">
+        <DialogTitle className="text-xl font-bold uppercase text-m3-dark">Vælg leveringsmetode</DialogTitle>
+        <DialogDescription className="text-sm text-neutral-600">
           Vælg om du vil hente din pizza eller få den leveret
-        </p>
-      </div>
-      <div className="grid grid-cols-1 gap-4">
+        </DialogDescription>
+      </DialogHeader>
+      <div className="grid grid-cols-1 gap-4 px-6 pb-6">
         <button
           onClick={handleDelivery}
           className="relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden"
@@ -69,13 +69,13 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected }: Ord
           </div>
         </button>
       </div>
-    </div>
+    </>
   );
 
   if (isMobile) {
     return (
       <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="p-0 border-none bg-transparent">
+        <DrawerContent className="p-0 border-none bg-m3-cream rounded-t-lg">
             {content}
         </DrawerContent>
       </Drawer>
@@ -84,7 +84,7 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected }: Ord
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 border-none bg-transparent max-w-sm">
+      <DialogContent className="p-0 border-none bg-m3-cream max-w-sm rounded-lg">
         {content}
       </DialogContent>
     </Dialog>
