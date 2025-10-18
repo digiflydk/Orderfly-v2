@@ -7,7 +7,7 @@ export default function Footer() {
       <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-16 grid grid-cols-1 md:grid-cols-4 gap-12">
         <div className="md:col-span-1 space-y-4">
           <Image src="https://i.postimg.cc/PqYpW1s1/logo.png" alt="M3 Pizza" width={90} height={45} data-ai-hint="logo" />
-          <p className="text-sm text-neutral-400">
+          <p className="text-sm text-neutral-300">
             Den bedste pizzaoplevelse i Danmark – byg din egen eller vælg en af vores signaturmenuer.
           </p>
         </div>
@@ -37,7 +37,7 @@ export default function Footer() {
         </div>
       </div>
       <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-6 border-t border-neutral-700 text-center">
-        <p className="text-xs text-neutral-400">&copy; 2025 M3 Pizza. Alle rettigheder forbeholdes. • 1.0.220 • OF-386</p>
+        <p className="text-xs text-neutral-400">© 2025 M3 Pizza. Alle rettigheder forbeholdes. • 1.0.221 • OF-387</p>
         <div className="flex justify-center gap-4 mt-2">
             <Link href="#" className="text-xs text-neutral-400 hover:text-m3-orange transition-colors">Privatlivspolitik</Link>
             <Link href="#" className="text-xs text-neutral-400 hover:text-m3-orange transition-colors">Cookiepolitik</Link>

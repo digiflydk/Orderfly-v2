@@ -11,14 +11,11 @@ const config: Config = {
     extend: {
       colors: {
         m3: {
-          orange: '#E94F26',
-          orangeLight: '#FF7A29',
-          purple: '#A45CFF',
-          cream: '#FFF7EF',
-          dark: '#2D2D2D',
-          black: '#000000',
-          white: '#FFFFFF',
-          gray: '#F3F3F3',
+          orange: "#FF7A29",
+          dark: "#2D2D2D",
+          cream: "#FFF7EF",
+          white: "#FFFFFF",
+          gray: "#F3F3F3",
           button: '#FF7A29',
           buttonHover: '#E96F20',
         },
@@ -57,7 +54,7 @@ const config: Config = {
         },
       },
       fontFamily: {
-        sans: ['"Poppins"', 'sans-serif'],
+        sans: ['"Inter"', 'sans-serif'],
       },
       borderRadius: {
         '2xl': '24px',
