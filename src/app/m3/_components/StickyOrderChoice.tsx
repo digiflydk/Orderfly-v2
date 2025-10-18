@@ -7,18 +7,19 @@ export default function StickyOrderChoice() {
   return (
     <>
       {/* Spacer so content is not hidden behind the sticky bar */}
-      <div className="h-20 md:hidden" aria-hidden />
+      <div className="h-24 md:hidden" aria-hidden />
 
       <div
         className="
           fixed left-0 right-0 bottom-0 z-50 md:hidden
-          pb-[max(env(safe-area-inset-bottom),12px)]
+          bg-[#1A1A1A]
+          pt-3 pb-[max(env(safe-area-inset-bottom),12px)]
           px-3
         "
       >
         <div className="flex flex-col items-center gap-2 text-center">
           {/* Heading over buttons */}
-          <p className="text-sm font-semibold text-white/90">
+          <p className="text-sm font-bold text-white/90">
             Start your order
           </p>
 
@@ -29,7 +30,7 @@ export default function StickyOrderChoice() {
                 className={[
                   "h-12 rounded-full text-sm font-bold uppercase transition",
                   mode === "delivery"
-                    ? "bg-[#FF7A29] text-[#2D2D2D]"
+                    ? "bg-m3-button text-m3-dark"
                     : "bg-transparent text-white"
                 ].join(" ")}
                 aria-pressed={mode === "delivery"}
@@ -42,7 +43,7 @@ export default function StickyOrderChoice() {
                 className={[
                   "h-12 rounded-full text-sm font-bold uppercase transition",
                   mode === "pickup"
-                    ? "bg-[#FF7A29] text-[#2D2D2D]"
+                    ? "bg-m3-button text-m3-dark"
                     : "bg-transparent text-white"
                 ].join(" ")}
                 aria-pressed={mode === "pickup"}
