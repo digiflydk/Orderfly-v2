@@ -150,7 +150,7 @@ export async function createStripeCheckoutSessionAction(
     }
     const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
 
-    const origin = getOrigin();
+    const origin = await getOrigin();
     
     const [brand, location] = await Promise.all([
         getBrandById(brandId),
