@@ -9,3 +9,4 @@ export default function BrandError({ error, reset }: { error:any; reset:()=>void
     </div>
   </div>);
 }
+
