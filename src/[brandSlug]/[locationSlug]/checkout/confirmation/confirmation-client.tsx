@@ -16,8 +16,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 
 // Define the shape of the order prop for the client component
-type ClientOrderDetail = Omit<OrderDetail, 'createdAt'> & {
+type ClientOrderDetail = Omit<OrderDetail, 'createdAt' | 'paidAt'> & {
   createdAt: string; // createdAt is now a string
+  paidAt?: string; // paidAt is now a string or undefined
 };
 
 
