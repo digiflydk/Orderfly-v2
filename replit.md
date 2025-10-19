@@ -6,6 +6,16 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 
 # Recent Changes
 
+**October 19, 2025 - Production Build Fixes (Phase 4 - Final)**
+- Fixed all remaining Next.js 15 async compatibility issues
+- Updated `src/[brandSlug]/checkout/page.tsx` to await cookies() and use async params
+- Fixed `src/[brandSlug]/layout.tsx` import path and async params
+- Updated `src/lib/http/base-url.ts` to await headers() call
+- Fixed `src/lib/resolve-active-location.ts` to await cookies() call
+- Configured deployment to use Node 20 via deployment config, package.json engines, .nvmrc
+- **Manual step required**: `.replit` file line 7 still has `nodejs-18_x` - needs manual change to `nodejs-20` for production deployments
+- All TypeScript async/await patterns now Next.js 15 compatible
+
 **October 19, 2025 - Production Build Fixes (Phase 3 - Complete)**
 - Fixed all 20 superadmin dynamic route pages to use Next.js 15 async params pattern
 - Updated categories, code-review, combos, customers, discounts, feedback, locations, products, QA, roles, settings, standard-discounts, toppings, upsells pages
