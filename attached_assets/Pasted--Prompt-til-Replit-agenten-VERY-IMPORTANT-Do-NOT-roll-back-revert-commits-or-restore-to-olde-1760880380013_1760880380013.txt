@@ -1,0 +1,72 @@
+🧠 Prompt til Replit-agenten
+⚠️ VERY IMPORTANT: Do NOT roll back, revert commits, or restore to older builds under any circumstance. 
+Fix forward only. Keep the current version of all files intact.
+
+The previous fix did NOT resolve the following build errors. 
+You must fix them properly without deleting or reverting any recent work.
+
+## Unresolved Errors:
+1. TypeScript type error in `src/app/brand-safe/[brandSlug]/page.tsx`  
+   → “params is expected to be a Promise but is defined as a plain object”.
+   ✅ Fix: Ensure the `params` argument is typed as an object, not Promise.
+   Example:
+   ```ts
+   export default async function Page({ params }: { params: { brandSlug: string } }) {
+     // existing code stays the same
+   }
+
+
+Node.js version mismatch
+→ Firebase packages require Node >= 20, but deployment is using v18.19.1.
+✅ Fix: Ensure Replit uses Node 20 for both build and runtime.
+
+Use this in replit.nix:
+
+{ pkgs }: { deps = [ pkgs.nodejs_20 pkgs.nodePackages.npm ]; }
+
+
+Ensure environment variable NIXPACKS_NODE_VERSION=20 is present.
+
+Inconsistent casing for Footer.tsx vs footer.tsx
+→ Some imports use lowercase; others use uppercase. This breaks the build on case-sensitive environments.
+✅ Fix: Make all file names and imports consistent.
+
+If the file is named Footer.tsx, all imports must read import Footer from "@/components/Footer" exactly (same casing).
+
+Confirm the app still runs with:
+
+npm run dev → development server on port 5000
+
+npm run build → production build succeeds
+
+npm run start → production server runs successfully
+
+Environment verification:
+
+NEXT_PUBLIC_M3_PREVIEW=true
+
+NIXPACKS_NODE_VERSION=20
+
+Verify /api/env endpoint shows Node version 20 and preview flag set to true.
+
+Absolutely forbidden actions:
+
+DO NOT run git reset, git checkout, rollback, or delete any files.
+
+DO NOT revert to “OF-158” or older commits.
+
+DO NOT overwrite user modifications in src/app/m3, src/app/[brandSlug], or any restored design files.
+
+Your goal is to achieve a successful build without losing any work.
+
+When you are done, confirm:
+
+✅ “npm run build” runs with 0 errors
+
+✅ The app runs on Node 20
+
+✅ No case-sensitivity errors remain
+
+✅ TypeScript build passes with tsc --noEmit
+
+Proceed carefully and fix forward only.
