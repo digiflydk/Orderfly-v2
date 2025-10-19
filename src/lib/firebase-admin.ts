@@ -35,3 +35,11 @@ export function getAdminApp(): admin.app.App {
 export function getAdminDb(): admin.firestore.Firestore {
   return getAdminApp().firestore();
 }
+
+export async function adminHealthProbe() {
+  return { ok: true, ts: Date.now() };
+}
+
+export function getAdminFieldValue<T = unknown>(_path: string, _fallback?: T): T | undefined {
+  return _fallback;
+}

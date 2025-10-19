@@ -10,6 +10,14 @@ packages = ["nodejs-18_x", "nodePackages.npm"]
 localPort = 5000
 externalPort = 80
 
+[[ports]]
+localPort = 35329
+externalPort = 3001
+
+[[ports]]
+localPort = 42323
+externalPort = 3000
+
 [agent]
 expertMode = true
 
