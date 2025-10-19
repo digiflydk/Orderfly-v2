@@ -4,13 +4,19 @@ import { CheckoutClient } from "@/components/checkout/checkout-client";
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
 import { getActiveLocationBySlug } from "@/app/superadmin/locations/actions";
 
-export default async function CheckoutPage({
-  params,
-}: { params: { brandSlug: string; locationSlug: string } }) {
-  const brand = await getBrandBySlug(params.brandSlug);
+export const runtime = "nodejs";
+
+type PageProps = {
+  params: Promise<{ brandSlug: string; locationSlug: string }>;
+};
+
+export default async function CheckoutPage({ params }: PageProps) {
+  const { brandSlug, locationSlug } = await params;
+  
+  const brand = await getBrandBySlug(brandSlug);
   if (!brand) notFound();
 
-  const location = await getActiveLocationBySlug(brand.id, params.locationSlug);
+  const location = await getActiveLocationBySlug(brand.id, locationSlug);
   if (!location) {
     redirect(`/${brand.slug}`);
   }

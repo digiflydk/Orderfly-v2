@@ -1,0 +1,147 @@
+Perfekt—her er en færdig prompt, du kan copy/paste direkte ind i Replit Chat (Agent).
+Den dækker alle kendte fejl fra jeres projekt og beder agenten om at fikse fremad (uden rollback), så build går grønt.
+
+
+---
+
+🔧 Replit-Agent Prompt (copy/paste alt nedenfor)
+
+⚠️ VERY IMPORTANT: Do NOT roll back, reset, or revert the repo/branch/commit under ANY circumstance. 
+Fix forward only. Do not delete new code. Do not checkout older commits. 
+
+Goal: Make a successful production build and run for this Next.js 15.5.0 app on Replit, fixing ALL current issues without rollback.
+
+## 0) Environment & commands (Publishing)
+- Ensure Publishing uses:
+  - Build command: `npm run build`
+  - Run command:   `npm run start`
+- Add env variable: `NIXPACKS_NODE_VERSION=20`
+- Add env variable: `NEXT_PUBLIC_M3_PREVIEW=true`
+- If code references Firebase/Stripe client envs, ensure `NEXT_PUBLIC_FIREBASE_*` / `STRIPE_*` exist (or temporarily guard their usage so the build doesn't crash).
+
+## 1) Node 20
+- Build and runtime MUST use Node 20.
+- If needed, create `replit.nix`:
+
+{ pkgs }: { deps = [ pkgs.nodejs_20 pkgs.nodePackages.npm ]; }
+
+## 2) package.json scripts (never run codemods here on Replit)
+- Make pre/post build NO-OP to avoid MODULE_NOT_FOUND in scripts/codemods:
+
+"scripts": { "prebuild": "echo skip prebuild on Replit", "dev": "next dev -p 5000 -H 0.0.0.0", "build": "next build", "start": "next start -p 5000 -H 0.0.0.0", "lint": "next lint", "postbuild": "echo skip postbuild on Replit", "typecheck": "tsc --noEmit" }, "engines": { "node": "20.x" }
+
+## 3) Missing dependency errors
+- If imports exist, install packages:
+- `npm i framer-motion`
+- (Also install any other “Module not found” dependencies the build logs mention.)
+
+## 4) Next.js App Router types fix (params must be an object)
+- Edit file: `src/app/[brandSlug]/[locationSlug]/page.tsx`
+- Ensure signature uses an object, not Promise:
+```ts
+export const runtime = "nodejs";
+type PageProps = {
+  params: { brandSlug: string; locationSlug: string };
+  searchParams?: Record<string, string | string[] | undefined>;
+};
+export default async function Page({ params, searchParams }: PageProps) {
+  // keep existing logic…
+}
+
+5) Provide minimal stubs for missing exports (so build doesn’t crash)
+
+Create these files if imports exist anywhere (do NOT delete importing code):
+
+src/lib/analytics/actions.ts
+
+export type FunnelFilters = { from?: string; to?: string; channel?: string };
+export type FunnelPoint = { ts: number; orders: number; revenue: number };
+export type FunnelData = { brandId: string; totals: { orders: number; revenue: number }; series: FunnelPoint[] };
+export async function getFunnelDataForBrand(brandId: string, _filters?: FunnelFilters): Promise<FunnelData> {
+  return { brandId, totals: { orders: 0, revenue: 0 }, series: [] };
+}
+
+Bridge files (so both import paths work):
+
+src/app/admin/analytics/actions.ts
+
+export * from "@/lib/analytics/actions";
+
+src/admin/analytics/actions.ts
+
+export * from "@/lib/analytics/actions";
+
+
+Admin utils (if referenced):
+
+src/lib/admin/health.ts
+
+export async function adminHealthProbe() { return { ok: true, ts: Date.now() }; }
+
+src/lib/admin/fields.ts
+
+export function getAdminFieldValue<T = unknown>(_path: string, _fallback?: T): T | undefined { return _fallback; }
+
+
+
+6) Root redirect and M3 preview
+
+Ensure / redirects to /m3:
+
+// src/app/page.tsx
+import { redirect } from "next/navigation";
+export const runtime = "nodejs";
+export default function Root() { redirect("/m3"); }
+
+NEXT_PUBLIC_M3_PREVIEW=true must be present so /m3 renders.
+
+
+7) Health checks for debugging (optional but helpful)
+
+src/app/api/ok/route.ts
+
+export async function GET(){ return new Response("ok"); }
+
+src/app/api/env/route.ts
+
+export async function GET(){
+  const safe = { NODE: process.version, PREVIEW: process.env.NEXT_PUBLIC_M3_PREVIEW ?? "(unset)" };
+  return new Response(JSON.stringify(safe,null,2), { headers:{ "content-type":"application/json"}});
+}
+
+
+8) Build & run locally in Shell (no rollback)
+
+Run:
+
+rm -rf .next node_modules
+npm ci
+npm run build
+npm run start
+
+Open app; if any runtime error appears, fix forward (add stub/missing dep/env guard). Do NOT remove new code and do NOT revert commits.
+
+
+9) Publishing (final)
+
+Build: npm run build
+
+Run:   npm run start
+
+Env:   ensure NIXPACKS_NODE_VERSION=20 + NEXT_PUBLIC_M3_PREVIEW=true (+ any client envs you actually use).
+
+Confirm no 500 “Internal Server Error”. /api/ok should return 200 and /api/env should show PREVIEW is set.
+
+
+Deliverables:
+
+Successful production build and run on port 5000, no rollback performed.
+
+List any files you changed and why.
+
+
+---
+
+Hvis agenten stadig forsøger at rulle tilbage, send samme prompt igen (det plejer at “låse” adfærden).  
+Når build er grøn, kør en hurtig manueltjek: åbne `/m3`, `/api/ok`, `/api/env`.
+

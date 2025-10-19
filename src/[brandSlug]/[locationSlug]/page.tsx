@@ -11,9 +11,15 @@ import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/
 import { HeroBanner } from '@/components/layout/hero-banner';
 import type { ProductForMenu, Location } from '@/types';
 
-export default async function MenuPage({ params }: { params: { brandSlug: string; locationSlug: string } }) {
-  const brandSlug = params.brandSlug;
-  const locationSlug = params.locationSlug;
+export const runtime = "nodejs";
+
+type PageProps = {
+  params: Promise<{ brandSlug: string; locationSlug: string }>;
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function MenuPage({ params }: PageProps) {
+  const { brandSlug, locationSlug } = await params;
 
   const brand = await getBrandBySlug(brandSlug);
   if (!brand) {
