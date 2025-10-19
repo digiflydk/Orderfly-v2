@@ -6,6 +6,15 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 
 # Recent Changes
 
+**October 19, 2025 - Production Build Fixes (Phase 3 - Complete)**
+- Fixed all 20 superadmin dynamic route pages to use Next.js 15 async params pattern
+- Updated categories, code-review, combos, customers, discounts, feedback, locations, products, QA, roles, settings, standard-discounts, toppings, upsells pages
+- Fixed `src/lib/url.ts` to await `headers()` (Next.js 15 now returns Promise for headers)
+- Updated checkout actions to await `getOrigin()` calls
+- Added `.nvmrc` file with Node 20 specification
+- Excluded `design/` folder from TypeScript compilation in `tsconfig.json`
+- All Next.js 15 compatibility issues resolved - build ready for deployment
+
 **October 19, 2025 - Production Build Fixes (Phase 2)**
 - Fixed async params in `src/app/brand-safe/[brandSlug]/page.tsx` - converted to async function with Promise params
 - Resolved Footer.tsx casing conflict by renaming `Footer.tsx` → `M3Footer.tsx` for M3-specific footer
