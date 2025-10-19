@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -262,4 +263,65 @@ export async function getProductsByIds(productIds: string[]): Promise<ProductFor
     }
     
     return finalProducts;
+}
+
+export async function duplicateProducts({
+  productIds,
+  targetBrandId,
+  targetLocationIds,
+}: {
+  productIds: string[];
+  targetBrandId: string;
+  targetLocationIds: string[];
+}): Promise<{ success: boolean; message: string }> {
+  if (!productIds || productIds.length === 0) {
+    return { success: false, message: 'No products selected for duplication.' };
+  }
+  if (!targetBrandId) {
+    return { success: false, message: 'Target brand must be selected.' };
+  }
+
+  try {
+    const productsToDuplicate: Product[] = [];
+    // Firestore 'in' query is limited to 30 items, so we might need to batch this
+    for (let i = 0; i < productIds.length; i += 30) {
+      const chunk = productIds.slice(i, i + 30);
+      const q = query(collection(db, 'products'), where(documentId(), 'in', chunk));
+      const snapshot = await getDocs(q);
+      snapshot.forEach(doc => {
+        productsToDuplicate.push({ id: doc.id, ...doc.data() } as Product);
+      });
+    }
+
+    if (productsToDuplicate.length === 0) {
+      return { success: false, message: 'Could not find the selected products to duplicate.' };
+    }
+
+    const batch = writeBatch(db);
+    let duplicatedCount = 0;
+
+    for (const product of productsToDuplicate) {
+      const newProductId = doc(collection(db, 'products')).id;
+      const { id, ...originalData } = product; // Exclude original ID
+      
+      const newProductData = {
+        ...originalData,
+        id: newProductId,
+        brandId: targetBrandId,
+        locationIds: targetLocationIds,
+        productName: `${product.productName} (Copy)`,
+        sortOrder: 9999, // Place duplicated items at the end
+      };
+      
+      batch.set(doc(db, 'products', newProductId), newProductData);
+      duplicatedCount++;
+    }
+
+    await batch.commit();
+    revalidatePath('/superadmin/products');
+    return { success: true, message: `${duplicatedCount} products duplicated successfully.` };
+  } catch (e: any) {
+    console.error('Failed to duplicate products:', e);
+    return { success: false, message: `An error occurred: ${e.message}` };
+  }
 }

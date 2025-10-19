@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useTransition, useEffect } from 'react';
@@ -27,8 +28,8 @@ import { CSS } from '@dnd-kit/utilities';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { PlusCircle, MoreHorizontal, Edit, Trash2, Search, X, GripVertical } from "lucide-react";
-import type { Product, Brand, Category } from '@/types';
+import { PlusCircle, MoreHorizontal, Edit, Trash2, Search, X, GripVertical, Copy } from "lucide-react";
+import type { Product, Brand, Category, Location } from '@/types';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,7 +45,6 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
-  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { deleteProduct, updateProductSortOrder } from './actions';
 import { useToast } from '@/hooks/use-toast';
@@ -52,6 +52,9 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ProductDuplicationDialog } from '@/components/superadmin/product-duplication-dialog';
+import { getAllLocations } from '@/app/superadmin/locations/actions';
 
 type ProductWithDetails = Product & { brandName: string, categoryName: string };
 
@@ -60,7 +63,7 @@ interface ProductsClientPageProps {
     brands: Brand[];
 }
 
-function SortableProductRow({ product }: { product: ProductWithDetails }) {
+function SortableProductRow({ product, selected, onSelectChange }: { product: ProductWithDetails, selected: boolean, onSelectChange: (checked: boolean) => void }) {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: product.id });
     
     const style = {
@@ -69,15 +72,28 @@ function SortableProductRow({ product }: { product: ProductWithDetails }) {
     };
 
     const confirmDelete = () => {
-        // A bit of a trick to open a dialog from here
         const button = document.getElementById(`delete-btn-${product.id}`);
         button?.click();
     };
 
+    const handleDuplicate = () => {
+        const button = document.getElementById(`duplicate-btn-${product.id}`);
+        button?.click();
+    }
+
     return (
-        <TableRow ref={setNodeRef} style={style} {...attributes} {...listeners} className="cursor-grab active:cursor-grabbing">
+        <TableRow ref={setNodeRef} style={style} {...attributes} data-state={selected ? 'selected' : undefined}>
             <TableCell className="w-12 pl-4">
-                <GripVertical className="h-5 w-5 text-muted-foreground" />
+                <div {...listeners} className="p-2 cursor-grab active:cursor-grabbing">
+                    <GripVertical className="h-5 w-5 text-muted-foreground" />
+                </div>
+            </TableCell>
+             <TableCell className="w-12">
+                <Checkbox
+                    checked={selected}
+                    onCheckedChange={onSelectChange}
+                    aria-label="Select product"
+                />
             </TableCell>
             <TableCell>
                 <Image 
@@ -114,6 +130,10 @@ function SortableProductRow({ product }: { product: ProductWithDetails }) {
                             Edit
                         </Link>
                     </DropdownMenuItem>
+                     <DropdownMenuItem onSelect={handleDuplicate}>
+                        <Copy className="mr-2 h-4 w-4" />
+                        Duplicate
+                    </DropdownMenuItem>
                     <DropdownMenuItem onSelect={(e) => e.preventDefault()} onClick={confirmDelete} className="text-destructive">
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete
@@ -135,10 +155,14 @@ export function ProductsClientPage({ initialProducts, brands }: ProductsClientPa
   const [isClient, setIsClient] = useState(false);
   
   const [orderedProducts, setOrderedProducts] = useState(initialProducts);
+  const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
+  const [isDuplicationDialogOpen, setIsDuplicationDialogOpen] = useState(false);
+  const [allLocations, setAllLocations] = useState<Location[]>([]);
 
   useEffect(() => {
     setIsClient(true);
     setOrderedProducts(initialProducts);
+    getAllLocations().then(setAllLocations);
   }, [initialProducts]);
 
 
@@ -201,6 +225,31 @@ export function ProductsClientPage({ initialProducts, brands }: ProductsClientPa
   }
 
   const isFiltered = searchQuery !== '' || brandFilter !== 'all';
+  
+  const handleSelectAll = (checked: boolean) => {
+      setSelectedProductIds(checked ? filteredProducts.map(p => p.id) : []);
+  }
+
+  const handleOpenDuplicateDialog = (productId?: string) => {
+    if (productId) {
+      setSelectedProductIds([productId]);
+    }
+    if (selectedProductIds.length > 0 || productId) {
+      setIsDuplicationDialogOpen(true);
+    } else {
+        toast({
+            variant: "destructive",
+            title: "No Products Selected",
+            description: "Please select at least one product to duplicate.",
+        })
+    }
+  };
+  
+  const onDuplicationSuccess = () => {
+      setSelectedProductIds([]);
+      router.refresh();
+  }
+
 
   return (
     <>
@@ -212,12 +261,18 @@ export function ProductsClientPage({ initialProducts, brands }: ProductsClientPa
                     Create, view, and manage all products across all brands. Drag and drop to reorder.
                 </p>
                 </div>
-                <Button asChild>
-                    <Link href="/superadmin/products/new">
-                        <PlusCircle className="mr-2" />
-                        Add New Product
-                    </Link>
-                </Button>
+                <div className="flex items-center gap-2">
+                    <Button onClick={() => handleOpenDuplicateDialog()} disabled={selectedProductIds.length === 0} variant="outline">
+                        <Copy className="mr-2 h-4 w-4" />
+                        Duplicate ({selectedProductIds.length})
+                    </Button>
+                    <Button asChild>
+                        <Link href="/superadmin/products/new">
+                            <PlusCircle className="mr-2" />
+                            Add New Product
+                        </Link>
+                    </Button>
+                </div>
             </div>
 
             <div className="flex items-center gap-4">
@@ -255,6 +310,13 @@ export function ProductsClientPage({ initialProducts, brands }: ProductsClientPa
                         <TableHeader>
                         <TableRow>
                             <TableHead className="w-[60px]"></TableHead>
+                            <TableHead className="w-12">
+                                <Checkbox
+                                    checked={selectedProductIds.length > 0 && selectedProductIds.length === filteredProducts.length}
+                                    onCheckedChange={handleSelectAll}
+                                    aria-label="Select all"
+                                />
+                            </TableHead>
                             <TableHead className="w-[80px]">Image</TableHead>
                             <TableHead>Product Name</TableHead>
                             <TableHead>Brand</TableHead>
@@ -269,11 +331,16 @@ export function ProductsClientPage({ initialProducts, brands }: ProductsClientPa
                             <SortableContext items={filteredProducts.map(p => p.id)} strategy={verticalListSortingStrategy}>
                                 <TableBody>
                                 {filteredProducts.map((product) => (
-                                    <SortableProductRow key={product.id} product={product} />
+                                    <SortableProductRow 
+                                      key={product.id} 
+                                      product={product}
+                                      selected={selectedProductIds.includes(product.id)}
+                                      onSelectChange={(checked) => setSelectedProductIds(prev => checked ? [...prev, product.id] : prev.filter(id => id !== product.id))}
+                                    />
                                 ))}
                                 {filteredProducts.length === 0 && (
                                     <TableRow>
-                                        <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
+                                        <TableCell colSpan={10} className="h-24 text-center text-muted-foreground">
                                             No products found.
                                         </TableCell>
                                     </TableRow>
@@ -285,6 +352,7 @@ export function ProductsClientPage({ initialProducts, brands }: ProductsClientPa
                                 {initialProducts.map((product) => (
                                     <TableRow key={product.id}>
                                         <TableCell className="w-12 pl-4"><GripVertical className="h-5 w-5 text-muted-foreground" /></TableCell>
+                                        <TableCell className="w-12"><Checkbox /></TableCell>
                                         <TableCell>
                                             <Image src={product.imageUrl || 'https://placehold.co/64x64.png'} alt={product.productName} width={48} height={48} className="rounded-md object-cover" data-ai-hint="delicious food"/>
                                         </TableCell>
@@ -307,25 +375,36 @@ export function ProductsClientPage({ initialProducts, brands }: ProductsClientPa
             </Card>
             
             {initialProducts.map(product => (
-                <AlertDialog key={`alert-${product.id}`}>
-                    <AlertDialogTrigger asChild>
-                        <Button id={`delete-btn-${product.id}`} className="hidden">Delete</Button>
-                    </AlertDialogTrigger>
-                    <AlertDialogContent>
-                        <AlertDialogHeader>
-                        <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
-                        <AlertDialogDescription>
-                            This action cannot be undone. This will permanently delete this product.
-                        </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                        <AlertDialogCancel>Cancel</AlertDialogCancel>
-                        <AlertDialogAction onClick={() => handleDelete(product.id)}>Continue</AlertDialogAction>
-                        </AlertDialogFooter>
-                    </AlertDialogContent>
-                </AlertDialog>
+                <div key={`actions-${product.id}`}>
+                    <AlertDialog>
+                        <AlertDialogTrigger asChild>
+                            <button id={`delete-btn-${product.id}`} className="hidden">Delete Trigger</button>
+                        </AlertDialogTrigger>
+                        <AlertDialogContent>
+                            <AlertDialogHeader>
+                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogDescription>
+                                This action cannot be undone. This will permanently delete this product.
+                            </AlertDialogDescription>
+                            </AlertDialogHeader>
+                            <AlertDialogFooter>
+                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogAction onClick={() => handleDelete(product.id)}>Continue</AlertDialogAction>
+                            </AlertDialogFooter>
+                        </AlertDialogContent>
+                    </AlertDialog>
+                    <button id={`duplicate-btn-${product.id}`} className="hidden" onClick={() => handleOpenDuplicateDialog(product.id)}>Duplicate Trigger</button>
+                </div>
             ))}
         </div>
+        <ProductDuplicationDialog
+            isOpen={isDuplicationDialogOpen}
+            setIsOpen={setIsDuplicationDialogOpen}
+            productIds={selectedProductIds}
+            brands={brands}
+            locations={allLocations}
+            onSuccess={onDuplicationSuccess}
+        />
     </>
   );
 }
