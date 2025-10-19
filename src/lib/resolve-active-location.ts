@@ -7,7 +7,8 @@ import type { Location } from "@/types";
  * @deprecated This function is overly complex and has been replaced by a simpler lookup in the checkout page.
  */
 export async function resolveActiveLocation(brandId: string): Promise<Location | null> {
-  const raw = cookies().get("of_location")?.value;
+  const cookieStore = await cookies();
+  const raw = cookieStore.get("of_location")?.value;
   if (!raw) return null;
 
   // This is a robust way to handle the cookie value, whether it's a simple slug or a full JSON object.

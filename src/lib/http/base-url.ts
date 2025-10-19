@@ -4,8 +4,8 @@ import { headers } from "next/headers";
  * Returnér en absolut base-URL fra nuværende request.
  * Fungerer på Firebase/Vercel/Node lokalt.
  */
-export function getBaseUrl(): string {
-  const h = headers();
+export async function getBaseUrl(): Promise<string> {
+  const h = await headers();
   const host = h.get("x-forwarded-host") ?? h.get("host");
   const proto = h.get("x-forwarded-proto") ?? "http";
 

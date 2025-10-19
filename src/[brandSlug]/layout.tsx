@@ -1,5 +1,5 @@
 import { notFound } from 'next/navigation';
-import { getBrandBySlug } from '../superadmin/brands/actions';
+import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 import { CartProvider } from '@/context/cart-context';
 import { AnalyticsProvider } from '@/context/analytics-context';
 import DeliveryMethodModal from '@/components/modals/DeliveryMethodModal';
@@ -9,9 +9,9 @@ export default async function BrandLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { brandSlug: string };
+  params: Promise<{ brandSlug: string }>;
 }) {
-  const brandSlug = params.brandSlug;
+  const { brandSlug } = await params;
   const brand = await getBrandBySlug(brandSlug);
 
   if (!brand) {
