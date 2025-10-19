@@ -6,7 +6,15 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 
 # Recent Changes
 
-**October 19, 2025 - Production Build Fixes**
+**October 19, 2025 - Production Build Fixes (Phase 2)**
+- Fixed async params in `src/app/brand-safe/[brandSlug]/page.tsx` - converted to async function with Promise params
+- Resolved Footer.tsx casing conflict by renaming `Footer.tsx` → `M3Footer.tsx` for M3-specific footer
+- All imports now use consistent casing: main footer uses `@/components/layout/footer` (lowercase)
+- Updated `src/app/m3/page.tsx` to import from `M3Footer` instead of `Footer`
+- Node 20 configuration verified in `replit.nix` and `NIXPACKS_NODE_VERSION` environment variable
+- Dev server running successfully with all routes compiling cleanly
+
+**October 19, 2025 - Production Build Fixes (Phase 1)**
 - Fixed Next.js 15 async params compatibility across all dynamic route pages
 - Updated page components to use `Promise<{ params }>` pattern: `src/[brandSlug]/[locationSlug]/page.tsx`, checkout pages, confirmation pages
 - Added health check endpoints: `/api/ok` and `/api/env` for deployment monitoring
