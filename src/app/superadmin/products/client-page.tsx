@@ -45,6 +45,7 @@ import {
   AlertDialogFooter,
   AlertDialogHeader,
   AlertDialogTitle,
+  AlertDialogTrigger,
 } from "@/components/ui/alert-dialog";
 import { deleteProduct, updateProductSortOrder } from './actions';
 import { useToast } from '@/hooks/use-toast';
