@@ -6,6 +6,15 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 
 # Recent Changes
 
+**October 19, 2025 - Production Build Fixes**
+- Fixed Next.js 15 async params compatibility across all dynamic route pages
+- Updated page components to use `Promise<{ params }>` pattern: `src/[brandSlug]/[locationSlug]/page.tsx`, checkout pages, confirmation pages
+- Added health check endpoints: `/api/ok` and `/api/env` for deployment monitoring
+- Created stub functions in `src/lib/firebase-admin.ts`: `adminHealthProbe()`, `getAdminFieldValue()`
+- Fixed analytics bridge exports in `src/app/admin/analytics/actions.ts`
+- Configured deployment settings for autoscale deployment with Node 20
+- Environment variables verified: `NEXT_PUBLIC_M3_PREVIEW=true`, `NIXPACKS_NODE_VERSION=20`
+
 **October 12, 2025 - OF-158: M3 Preview Feature**
 - Implemented M3 preview routes in `src/app/m3/` with Next.js 15 async params compatibility
 - Added feature flag system (`NEXT_PUBLIC_M3_PREVIEW=true`) to enable/disable M3 preview
