@@ -15,22 +15,10 @@ export type InputProps = Omit<
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, value, defaultValue, ...props }, ref) => {
     const isControlled = value !== undefined;
-    const normalizedValue =
-      value === null
-        ? ""
-        : typeof value === "number"
-        ? Number.isNaN(value)
-          ? ""
-          : value
-        : value;
-    const normalizedDefault =
-      defaultValue === null
-        ? ""
-        : typeof defaultValue === "number"
-        ? Number.isNaN(defaultValue)
-          ? ""
-          : defaultValue
-        : defaultValue;
+    
+    // Ensure value/defaultValue is never null or undefined to prevent uncontrolled -> controlled switch
+    const normalizedValue = value ?? '';
+    const normalizedDefaultValue = defaultValue ?? '';
 
     return (
       <input
@@ -41,8 +29,8 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
           className
         )}
         {...(isControlled
-          ? { value: normalizedValue as any }
-          : { defaultValue: normalizedDefault as any })}
+          ? { value: normalizedValue }
+          : { defaultValue: normalizedDefaultValue })}
         {...props}
       />
     );
