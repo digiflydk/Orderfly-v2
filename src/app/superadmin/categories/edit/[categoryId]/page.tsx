@@ -5,13 +5,15 @@ import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { CategoryFormPage } from '@/components/superadmin/category-form-page';
 
-export default async function EditCategoryPage({ params }: { params: { categoryId: string } }) {
-    if (!params.categoryId) {
+export default async function EditCategoryPage({ params }: { params: Promise<{ categoryId: string }> }) {
+    const { categoryId } = await params;
+    
+    if (!categoryId) {
         notFound();
     }
 
     const [category, locations, brands] = await Promise.all([
-        getCategoryById(params.categoryId),
+        getCategoryById(categoryId),
         getAllLocations(),
         getBrands()
     ]);

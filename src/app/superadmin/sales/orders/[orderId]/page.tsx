@@ -53,8 +53,9 @@ function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType, la
     )
 }
 
-export default async function OrderDetailPage({ params }: { params: { orderId: string } }) {
-    const order = await getOrderDetails(params.orderId);
+export default async function OrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
+    const { orderId } = await params;
+    const order = await getOrderDetails(orderId);
 
     if (!order) {
         notFound();

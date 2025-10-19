@@ -30,8 +30,9 @@ function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType, la
     )
 }
 
-export default async function CodeReviewDetailPage({ params }: { params: { reviewId: string } }) {
-    const review = getReviewDetails(params.reviewId);
+export default async function CodeReviewDetailPage({ params }: { params: Promise<{ reviewId: string }> }) {
+    const { reviewId } = await params;
+    const review = getReviewDetails(reviewId);
 
     if (!review) {
         notFound();

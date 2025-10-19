@@ -10,8 +10,10 @@ import { getToppingGroups } from '@/app/superadmin/toppings/actions';
 import { getAllergens } from '@/app/superadmin/allergens/actions';
 import type { Product, Brand, Location, Category, ToppingGroup, Allergen } from '@/types';
 
-export default async function EditProductPage({ params }: { params: { productId: string } }) {
-    if (!params.productId) {
+export default async function EditProductPage({ params }: { params: Promise<{ productId: string }> }) {
+    const { productId } = await params;
+    
+    if (!productId) {
         notFound();
     }
 
@@ -23,7 +25,7 @@ export default async function EditProductPage({ params }: { params: { productId:
         toppingGroups,
         allergens,
     ] = await Promise.all([
-        getProductById(params.productId),
+        getProductById(productId),
         getBrands(),
         getAllLocations(),
         getCategories(),

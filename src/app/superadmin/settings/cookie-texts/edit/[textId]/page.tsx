@@ -7,12 +7,14 @@ import { CookieTextsFormPage } from '../../form-page';
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
 
-export default async function EditCookieTextsPage({ params }: { params: { textId: string } }) {
-    if (!params.textId) {
+export default async function EditCookieTextsPage({ params }: { params: Promise<{ textId: string }> }) {
+    const { textId } = await params;
+    
+    if (!textId) {
         notFound();
     }
     const [textSet, brands, settings] = await Promise.all([
-        getCookieTextById(params.textId),
+        getCookieTextById(textId),
         getBrands(),
         getPlatformSettings(),
     ]);

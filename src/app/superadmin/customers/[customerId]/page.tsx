@@ -42,12 +42,14 @@ const RatingStars = ({ rating }: { rating: number }) => (
     </div>
   );
 
-export default async function CustomerDetailPage({ params }: { params: { customerId: string } }) {
-    if (!params.customerId) {
+export default async function CustomerDetailPage({ params }: { params: Promise<{ customerId: string }> }) {
+    const { customerId } = await params;
+    
+    if (!customerId) {
         return notFound();
     }
     
-    const details = await getCustomerDetails(params.customerId);
+    const details = await getCustomerDetails(customerId);
 
     if (!details) {
         notFound();

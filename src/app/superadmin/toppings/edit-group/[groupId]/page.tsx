@@ -5,13 +5,15 @@ import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { ToppingGroupFormPage } from '@/components/superadmin/topping-group-form-page';
 
-export default async function EditToppingGroupPage({ params }: { params: { groupId: string } }) {
-    if (!params.groupId) {
+export default async function EditToppingGroupPage({ params }: { params: Promise<{ groupId: string }> }) {
+    const { groupId } = await params;
+    
+    if (!groupId) {
         notFound();
     }
 
     const [group, locations, brands] = await Promise.all([
-        getToppingGroupById(params.groupId),
+        getToppingGroupById(groupId),
         getAllLocations(),
         getBrands()
     ]);

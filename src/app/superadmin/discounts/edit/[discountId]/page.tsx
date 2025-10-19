@@ -7,9 +7,10 @@ import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { DiscountFormPage } from '@/components/superadmin/discount-form-page';
 import { getUsers } from '@/app/superadmin/users/actions';
 
-export default async function EditDiscountPage({ params }: { params: { discountId: string } }) {
+export default async function EditDiscountPage({ params }: { params: Promise<{ discountId: string }> }) {
+    const { discountId } = await params;
     const [discount, brands, locations, users] = await Promise.all([
-        getDiscountById(params.discountId),
+        getDiscountById(discountId),
         getBrands(),
         getAllLocations(),
         getUsers(),

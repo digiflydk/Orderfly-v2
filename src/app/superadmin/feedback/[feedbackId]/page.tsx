@@ -18,12 +18,14 @@ async function getCustomerName(customerId: string): Promise<string> {
     return 'Unknown Customer';
 }
 
-export default async function FeedbackDetailPage({ params }: { params: { feedbackId: string } }) {
-    if (!params.feedbackId) {
+export default async function FeedbackDetailPage({ params }: { params: Promise<{ feedbackId: string }> }) {
+    const { feedbackId } = await params;
+    
+    if (!feedbackId) {
         notFound();
     }
     
-    const feedback = await getFeedbackById(params.feedbackId);
+    const feedback = await getFeedbackById(feedbackId);
 
     if (!feedback) {
         notFound();

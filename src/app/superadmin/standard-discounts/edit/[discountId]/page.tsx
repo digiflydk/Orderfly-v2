@@ -8,7 +8,9 @@ import { StandardDiscountFormPage } from '@/components/superadmin/standard-disco
 import { getProducts } from '@/app/superadmin/products/actions';
 import { getCategories } from '@/app/superadmin/categories/actions';
 
-export default async function EditStandardDiscountPage({ params: { discountId } }: { params: { discountId: string } }) {
+export default async function EditStandardDiscountPage({ params }: { params: Promise<{ discountId: string }> }) {
+    const { discountId } = await params;
+    
     if (!discountId) {
         notFound();
     }

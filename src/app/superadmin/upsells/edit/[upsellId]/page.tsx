@@ -8,9 +8,10 @@ import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { getProducts } from '@/app/superadmin/products/actions';
 import { getCategories } from '@/app/superadmin/categories/actions';
 
-export default async function EditUpsellPage({ params }: { params: { upsellId: string } }) {
+export default async function EditUpsellPage({ params }: { params: Promise<{ upsellId: string }> }) {
+    const { upsellId } = await params;
     const [upsell, brands, locations, products, categories] = await Promise.all([
-        getUpsellById(params.upsellId),
+        getUpsellById(upsellId),
         getBrands(),
         getAllLocations(),
         getProducts(),

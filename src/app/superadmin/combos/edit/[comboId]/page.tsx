@@ -6,9 +6,10 @@ import { getBrands } from '@/app/superadmin/brands/actions';
 import { ComboFormPage } from '@/components/superadmin/combo-form-page';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 
-export default async function EditComboPage({ params }: { params: { comboId: string } }) {
+export default async function EditComboPage({ params }: { params: Promise<{ comboId: string }> }) {
+    const { comboId } = await params;
     const [combo, brands, locations] = await Promise.all([
-        getComboById(params.comboId),
+        getComboById(comboId),
         getBrands(),
         getAllLocations()
     ]);

@@ -7,13 +7,15 @@ import { ToppingFormPage } from '@/components/superadmin/topping-form';
 import { getBrands } from '@/app/superadmin/brands/actions';
 
 
-export default async function EditToppingPage({ params }: { params: { toppingId: string } }) {
-    if (!params.toppingId) {
+export default async function EditToppingPage({ params }: { params: Promise<{ toppingId: string }> }) {
+    const { toppingId } = await params;
+    
+    if (!toppingId) {
         notFound();
     }
 
     const [topping, locations, allGroups, brands] = await Promise.all([
-        getToppingById(params.toppingId),
+        getToppingById(toppingId),
         getAllLocations(),
         getToppingGroups(),
         getBrands()
