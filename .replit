@@ -4,7 +4,7 @@ modules = ["nodejs-20"]
 
 [nix]
 channel = "stable-23_11"
-packages = ["nodejs-18_x", "nodePackages.npm"]
+packages = ["nodejs-20", "nodePackages.npm"]
 
 [[ports]]
 localPort = 5000
