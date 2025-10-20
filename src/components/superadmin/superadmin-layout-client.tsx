@@ -1,3 +1,4 @@
+
 'use client'
 
 import { Suspense } from 'react'
@@ -39,7 +40,8 @@ export function SuperAdminLayoutClient({ children, brandingSettings }: Props) {
         />
       </S.Sidebar>
 
-      <S.SidebarInset>
+      {/* The bg-background class here is the key fix */}
+      <S.SidebarInset className="bg-background">
         <MobileHeader
           brandingSettings={
             brandingSettings ?? { platformHeading: 'Orderfly Studio' }
