@@ -1,7 +1,9 @@
+
 import { notFound } from 'next/navigation';
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 import { CartProvider } from '@/context/cart-context';
 import { AnalyticsProvider } from '@/context/analytics-context';
+import DeliveryModalHost from './deliverymodalhost';
 
 export default async function BrandLayout({
   children,
@@ -35,6 +37,7 @@ export default async function BrandLayout({
         >
           {children}
         </div>
+        <DeliveryModalHost />
       </CartProvider>
     </AnalyticsProvider>
   );

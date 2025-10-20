@@ -7,7 +7,6 @@ import type { Brand, Category, ComboMenu, Location, Product, StandardDiscount, T
 import { useCart } from '@/context/cart-context';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { getActiveCombosForLocation } from '@/app/superadmin/combos/actions';
-import { DeliveryMethodDialog } from '@/components/checkout/delivery-method-dialog';
 import { DesktopCart } from '@/components/cart/desktop-cart';
 import { CategoryNav } from '@/components/layout/category-nav';
 import { MobileFloatingCart } from '@/components/cart/mobile-floating-cart';
@@ -19,6 +18,7 @@ import { TimeSelector } from '@/components/checkout/time-selector';
 import { getProductsByIds } from '@/app/superadmin/products/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalytics } from '@/context/analytics-context';
+import { openDeliveryModal } from '@/components/modals/DeliveryMethodModal';
 
 interface MenuClientProps {
     brand: Brand;
@@ -35,7 +35,6 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
     const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
     
     const [isLoading, setIsLoading] = useState(true);
-    const [isDeliveryDialogOpen, setIsDeliveryDialogOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState<string>('offers');
     const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
     const [activeStandardDiscounts, setActiveStandardDiscounts] = useState<StandardDiscount[]>(initialActiveStandardDiscounts);
@@ -83,10 +82,10 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
         if (typeof window !== 'undefined') {
             const savedDeliveryMethod = localStorage.getItem('deliveryMethod');
             if (!savedDeliveryMethod) {
-                setIsDeliveryDialogOpen(true);
+                openDeliveryModal({ brandSlug: brand.slug, locationSlug: location.slug });
             }
         }
-    }, []);
+    }, [brand.slug, location.slug]);
 
     useEffect(() => {
         if (isLoading) return; // Don't run observer until everything is loaded
@@ -118,8 +117,6 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
 
     return (
         <>
-            <DeliveryMethodDialog isOpen={isDeliveryDialogOpen} setIsOpen={setIsDeliveryDialogOpen} />
-
             <div className="container mx-auto max-w-[1140px] px-4">
                 <div className="lg:hidden pb-4">
                    <TimeSelector timeSlots={timeSlots} />

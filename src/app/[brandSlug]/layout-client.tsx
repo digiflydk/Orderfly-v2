@@ -1,3 +1,4 @@
+
 'use client';
 
 import { usePathname } from 'next/navigation';
@@ -8,7 +9,7 @@ import { Footer } from '@/components/layout/footer';
 import { MenuHeader } from '@/components/layout/menu-header';
 import { CookieConsent } from '@/components/cookie-consent';
 import { CartProvider } from '@/context/cart-context';
-import DeliveryMethodModal from '@/components/modals/DeliveryMethodModal';
+import DeliveryModalHost from './deliverymodalhost';
 
 export function BrandLayoutClient({
   children,
@@ -61,7 +62,7 @@ export function BrandLayoutClient({
           isModalOpen={isCookieModalOpen}
           setIsModalOpen={setIsCookieModalOpen}
         />
-        <DeliveryMethodModal />
+        <DeliveryModalHost />
       </div>
     </CartProvider>
   );
