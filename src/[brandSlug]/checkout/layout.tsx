@@ -10,9 +10,10 @@ export default async function LegacyCheckoutLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { brandSlug: string };
+  params: Promise<{ brandSlug: string }>;
 }) {
-  const brand = await getBrandBySlug(params.brandSlug);
+  const { brandSlug } = await params;
+  const brand = await getBrandBySlug(brandSlug);
 
   if (!brand) {
     notFound();

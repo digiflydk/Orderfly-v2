@@ -1,6 +1,10 @@
 // NEUTRAL LAYOUT – INGEN IMPORTS, INGEN TYPER, INGEN DESTRUKTURERING
 export const runtime = "nodejs";
 
-export default function Layout(props: any) {
+export default async function Layout(props: {
+  children: React.ReactNode;
+  params: Promise<{ brandSlug: string; locationSlug: string }>;
+}) {
+  await props.params;
   return <>{props?.children}</>;
 }
