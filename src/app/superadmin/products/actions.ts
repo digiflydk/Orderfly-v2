@@ -200,8 +200,13 @@ export async function getProductsForLocation(locationId: string): Promise<Produc
 }
 
 
-export async function getProducts(): Promise<Product[]> {
-    const q = query(collection(db, 'products'), orderBy('sortOrder', 'asc'));
+export async function getProducts(brandId?: string): Promise<Product[]> {
+    let q;
+    if (brandId) {
+        q = query(collection(db, 'products'), where('brandId', '==', brandId), orderBy('sortOrder', 'asc'));
+    } else {
+        q = query(collection(db, 'products'), orderBy('sortOrder', 'asc'));
+    }
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
 }
@@ -215,14 +220,17 @@ export async function getProductById(productId: string): Promise<Product | null>
     return null;
 }
 
-export async function getProductsByIds(productIds: string[]): Promise<ProductForMenu[]> {
+export async function getProductsByIds(productIds: string[], brandId?: string): Promise<ProductForMenu[]> {
     if (!productIds || productIds.length === 0) return [];
     
     // Firestore 'in' queries are limited to 30 items in the array.
     const productPromises: Promise<Product[]>[] = [];
     for (let i = 0; i < productIds.length; i += 30) {
         const chunk = productIds.slice(i, i + 30);
-        const q = query(collection(db, 'products'), where(documentId(), 'in', chunk));
+        let q = query(collection(db, 'products'), where(documentId(), 'in', chunk));
+        if (brandId) {
+            q = query(q, where('brandId', '==', brandId));
+        }
         const p = getDocs(q).then(snapshot => snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
         productPromises.push(p);
     }

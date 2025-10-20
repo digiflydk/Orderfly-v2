@@ -119,10 +119,15 @@ export async function getCategoriesForLocation(locationId: string): Promise<Cate
     return categories.sort((a, b) => (a.sortOrder || 999) - (b.sortOrder || 999));
 }
 
-export async function getCategories(): Promise<Category[]> {
-  const q = query(collection(db, 'categories'), orderBy('categoryName', 'asc'));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Category[];
+export async function getCategories(brandId?: string): Promise<Category[]> {
+    let q;
+    if (brandId) {
+        q = query(collection(db, 'categories'), where('brandId', '==', brandId), orderBy('categoryName', 'asc'));
+    } else {
+        q = query(collection(db, 'categories'), orderBy('categoryName', 'asc'));
+    }
+    const querySnapshot = await getDocs(q);
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Category[];
 }
 
 export async function getCategoryById(id: string): Promise<Category | null> {

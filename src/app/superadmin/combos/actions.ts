@@ -5,7 +5,7 @@
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, Timestamp, getDoc, documentId } from 'firebase/firestore';
-import type { ComboMenu, Product, Category } from '@/types';
+import type { ComboMenu, Product, Category, ProductForMenu } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { getProductsByIds } from '../products/actions';
@@ -142,7 +142,7 @@ export async function createOrUpdateCombo(
         return { message: "Cannot fetch more than 30 products for a combo.", error: true };
     }
     
-    const products = await getProductsByIds(allProductIds);
+    const products = await getProductsByIds(allProductIds, comboData.brandId);
 
     if(products.some(p => p.brandId !== comboData.brandId)) {
       return { message: "Error: All selected products must belong to the selected brand.", error: true };
@@ -245,43 +245,20 @@ export async function getComboById(comboId: string): Promise<ComboMenu | null> {
 
 export async function getProductsForBrand(brandId: string): Promise<Product[]> {
   if (!brandId) return [];
-  const q = query(collection(db, 'products'), where('brandId', '==', brandId));
+  const q = query(collection(db, 'products'), where('brandId', '==', brandId), orderBy('sortOrder', 'asc'));
   const querySnapshot = await getDocs(q);
-  const products = querySnapshot.docs.map(doc => doc.data() as Product);
-  // Sort in memory to avoid needing a composite index for sorting
-  return products.sort((a, b) => (a.sortOrder || 999) - (b.sortOrder || 999));
+  return querySnapshot.docs.map(doc => doc.data() as Product);
 }
 
 export async function getCategoriesForBrand(brandId: string): Promise<Category[]> {
     if (!brandId) return [];
     
-    // First, find all locations for the brand
-    const locationsQuery = query(collection(db, 'locations'), where('brandId', '==', brandId));
-    const locationsSnapshot = await getDocs(locationsQuery);
-    if (locationsSnapshot.empty) return [];
-    const locationIds = locationsSnapshot.docs.map(doc => doc.id);
+    const q = query(collection(db, 'categories'), where('brandId', '==', brandId));
+    const categorySnapshots = await getDocs(q);
 
-    // Then, find all categories linked to those locations
-    // Firestore 'array-contains-any' can query up to 10 values at a time.
-    // If a brand has more than 10 locations, we need to do multiple queries.
-    const categoryPromises: any[] = [];
-    for (let i = 0; i < locationIds.length; i += 10) {
-        const chunk = locationIds.slice(i, i + 10);
-        const categoriesQuery = query(collection(db, 'categories'), where('locationIds', 'array-contains-any', chunk));
-        categoryPromises.push(getDocs(categoriesQuery));
-    }
-    
-    const categorySnapshots = await Promise.all(categoryPromises);
     const categories: Category[] = [];
-    const categoryIds = new Set<string>();
-
-    categorySnapshots.forEach(snapshot => {
-        snapshot.forEach(doc => {
-            if (!categoryIds.has(doc.id)) {
-                categories.push({ id: doc.id, ...doc.data() } as Category);
-                categoryIds.add(doc.id);
-            }
-        });
+    categorySnapshots.forEach(doc => {
+        categories.push({ id: doc.id, ...doc.data() } as Category);
     });
 
     return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
@@ -329,5 +306,3 @@ export async function getActiveCombosForLocation(locationId: string): Promise<Co
 
     return activeNowCombos;
 }
-
-    
