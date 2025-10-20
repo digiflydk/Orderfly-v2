@@ -317,7 +317,7 @@ export async function duplicateProducts({
         id: newProductId,
         brandId: targetBrandId,
         locationIds: targetLocationIds,
-        productName: `${product.productName} (Copy)`,
+        productName: product.productName, // Do not add "(Copy)"
         sortOrder: 9999, // Place duplicated items at the end
       };
       
