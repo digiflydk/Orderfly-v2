@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import type { Location } from '@/types';
@@ -73,7 +72,7 @@ export function HeroBanner({ location }: HeroBannerProps) {
   }, [location.openingHours, location.allowPreOrder]);
 
   return (
-    <div className="relative h-72 lg:h-[332px] w-full overflow-hidden lg:rounded-lg lg:max-w-[1140px] lg:mx-auto lg:px-6 pt-12 pb-6">
+    <div className="hidden lg:block relative h-72 lg:h-[332px] w-full overflow-hidden lg:rounded-lg lg:max-w-[1140px] lg:mx-auto lg:px-6 pt-12 pb-6">
       <Image
         src={location.imageUrl || 'https://placehold.co/1200x400.png'}
         alt={location.name}
