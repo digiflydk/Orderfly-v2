@@ -299,7 +299,7 @@ export function CheckoutClient({ location }: CheckoutClientProps) {
 
            const paymentDetails: Omit<PaymentDetails, 'paymentRefId'> = {
                 subtotal, deliveryFee, bagFee, adminFee, vatAmount,
-                discountTotal: finalDiscount?.amount ?? 0,
+                discountTotal: itemDiscount + (cartDiscount?.amount ?? 0),
                 itemDiscountTotal: itemDiscount,
                 cartDiscountTotal: cartDiscount?.amount ?? 0,
                 cartDiscountName: cartDiscount?.name,
