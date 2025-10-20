@@ -1,5 +1,6 @@
 
-"use server";
+
+'use server';
 
 import "server-only";
 import { revalidatePath } from "next/cache";
@@ -217,4 +218,10 @@ export async function getActiveFeedbackQuestionsForOrder(
 
   const doc = snapshot.docs[0];
   return { id: doc.id, ...doc.data() } as FeedbackQuestionsVersion;
+}
+
+export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionsVersion[]> {
+    const q = query(collection(db, 'feedbackQuestionsVersion'), orderBy('versionLabel', 'desc'));
+    const snapshot = await getDocs(q);
+    return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedbackQuestionsVersion));
 }
