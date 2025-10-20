@@ -265,7 +265,7 @@ export type ProductForMenu = Pick<Product,
  */
 export type Category = {
   id: string;
-  brandId?: string;
+  brandId: string; // The primary brand this category is associated with
   locationIds: string[];
   categoryName: string;
   description?: string;

@@ -11,6 +11,7 @@ import { redirect } from 'next/navigation';
 
 const categorySchema = z.object({
   id: z.string().optional(),
+  brandId: z.string().min(1, 'A primary brand must be selected.'),
   locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
   categoryName: z.string().min(2, { message: 'Category name must be at least 2 characters.' }),
   description: z.string().optional(),
@@ -30,11 +31,9 @@ export async function createOrUpdateCategory(
 ): Promise<FormState> {
   const rawData: Record<string, any> = Object.fromEntries(formData.entries());
   
-  // Ensure locationIds is always an array
   const locationIds = formData.getAll('locationIds');
   rawData.locationIds = Array.isArray(locationIds) ? locationIds : [locationIds].filter(Boolean);
 
-  // Manually handle boolean for 'isActive'
   rawData.isActive = formData.has('isActive');
 
   const validatedFields = categorySchema.safeParse(rawData);
@@ -51,22 +50,10 @@ export async function createOrUpdateCategory(
   }
 
   const { id, ...categoryData } = validatedFields.data;
-  
-  let brandId: string | undefined;
-  if (categoryData.locationIds.length > 0) {
-      const firstLocationDoc = await getDoc(doc(db, 'locations', categoryData.locationIds[0]));
-      if(firstLocationDoc.exists()) {
-          brandId = (firstLocationDoc.data() as Location).brandId;
-      }
-  }
-
-  if (!brandId) {
-      return { message: 'Could not determine brand from selected locations.', error: true };
-  }
 
   try {
     const categoryRef = id ? doc(db, 'categories', id) : doc(collection(db, 'categories'));
-    await setDoc(categoryRef, { ...categoryData, id: categoryRef.id, brandId }, { merge: true });
+    await setDoc(categoryRef, { ...categoryData, id: categoryRef.id }, { merge: true });
 
   } catch (e) {
     console.error(e);
@@ -115,17 +102,15 @@ export async function getCategoriesForLocation(locationId: string): Promise<Cate
     const querySnapshot = await getDocs(q);
     const categories = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Category[];
     
-    // Sort in-memory to avoid needing a composite index
     return categories.sort((a, b) => (a.sortOrder || 999) - (b.sortOrder || 999));
 }
 
 export async function getCategories(brandId?: string): Promise<Category[]> {
     let q;
-    if (brandId) {
-        q = query(collection(db, 'categories'), where('brandId', '==', brandId), orderBy('categoryName', 'asc'));
-    } else {
-        q = query(collection(db, 'categories'), orderBy('categoryName', 'asc'));
-    }
+    // If a brandId is provided, we still fetch all categories and filter client-side for multi-brand support
+    // but this could be optimized if we decide a category can only belong to one brand implicitly.
+    // For now, fetching all is safer to support the multi-brand requirement.
+    q = query(collection(db, 'categories'), orderBy('categoryName', 'asc'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Category[];
 }

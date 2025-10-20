@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { z } from 'zod';
@@ -32,6 +33,7 @@ import { Separator } from '../ui/separator';
 
 const categorySchema = z.object({
   id: z.string().optional(),
+  brandId: z.string().min(1, 'A primary brand must be selected.'),
   locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
   categoryName: z.string().min(2, { message: 'Category name must be at least 2 characters.' }),
   description: z.string().optional(),
@@ -51,11 +53,11 @@ interface CategoryFormPageProps {
 export function CategoryFormPage({ category, brands, locations }: CategoryFormPageProps) {
     const [isPending, startTransition] = useTransition();
     const { toast } = useToast();
-    const [selectedBrandId, setSelectedBrandId] = useState<string | undefined>(category?.brandId);
     
     const form = useForm<CategoryFormValues>({
         resolver: zodResolver(categorySchema),
         defaultValues: category || {
+            brandId: '',
             locationIds: [],
             categoryName: '',
             description: '',
@@ -66,22 +68,13 @@ export function CategoryFormPage({ category, brands, locations }: CategoryFormPa
 
     const { control, watch, setValue } = form;
 
-    const availableLocations = useMemo(() => {
-        if (!selectedBrandId) return [];
-        return locations.filter(l => l.brandId === selectedBrandId);
-    }, [selectedBrandId, locations]);
+    const locationsByBrand = useMemo(() => {
+      return brands.map(brand => ({
+        ...brand,
+        locations: locations.filter(loc => loc.brandId === brand.id)
+      })).filter(brand => brand.locations.length > 0);
+    }, [brands, locations]);
 
-    // Effect to set initial brand if editing
-    useEffect(() => {
-        if (category && category.locationIds.length > 0) {
-            const firstLocationId = category.locationIds[0];
-            const location = locations.find(l => l.id === firstLocationId);
-            if (location) {
-                setSelectedBrandId(location.brandId);
-            }
-        }
-    }, [category, locations]);
-    
     useEffect(() => {
         if (category) {
             form.reset(category);
@@ -153,7 +146,7 @@ export function CategoryFormPage({ category, brands, locations }: CategoryFormPa
                     render={({ field }) => (
                         <FormItem>
                             <FormLabel>Description (Optional)</FormLabel>
-                            <FormControl><Textarea placeholder="A short description of the category." {...field} /></FormControl>
+                            <FormControl><Textarea placeholder="A short description of the category." {...field} value={field.value ?? ''} /></FormControl>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -180,51 +173,62 @@ export function CategoryFormPage({ category, brands, locations }: CategoryFormPa
                 
                 <Separator />
                 
-                <FormItem>
-                    <FormLabel>Brand</FormLabel>
-                     <Select onValueChange={(brandId) => {
-                        setSelectedBrandId(brandId);
-                        setValue('locationIds', []); // Clear selected locations when brand changes
-                     }} value={selectedBrandId}>
-                        <SelectTrigger><SelectValue placeholder="Select a brand to see its locations" /></SelectTrigger>
-                        <SelectContent>
-                            {brands.map((brand) => (
-                                <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
-                            ))}
-                        </SelectContent>
-                    </Select>
-                </FormItem>
+                 <FormField
+                    control={control}
+                    name="brandId"
+                    render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Primary Brand</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl><SelectTrigger><SelectValue placeholder="Select the main brand for this category" /></SelectTrigger></FormControl>
+                                <SelectContent>
+                                    {brands.map(brand => (
+                                        <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
+                                    ))}
+                                </SelectContent>
+                            </Select>
+                            <FormDescription>This helps with filtering and organization, but you can still select locations from other brands.</FormDescription>
+                            <FormMessage />
+                        </FormItem>
+                    )}
+                />
 
                 <FormField
                     control={control}
                     name="locationIds"
-                    render={({ field }) => (
+                    render={() => (
                         <FormItem>
                             <FormLabel>Available at Locations</FormLabel>
-                            <ScrollArea className="h-40 rounded-md border">
+                            <ScrollArea className="h-60 rounded-md border">
                                 <div className="p-4">
-                                {availableLocations.map((item) => (
-                                    <FormField
-                                        key={item.id}
-                                        control={control}
-                                        name="locationIds"
-                                        render={({ field: locationField }) => (
-                                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-2">
-                                            <FormControl>
-                                            <Checkbox
-                                                checked={locationField.value?.includes(item.id)}
-                                                onCheckedChange={(checked) => {
-                                                    const currentValue = locationField.value || [];
-                                                    return checked ? locationField.onChange([...currentValue, item.id]) : locationField.onChange(currentValue?.filter((value) => value !== item.id))
-                                                }}
-                                            />
-                                            </FormControl>
-                                            <FormLabel className="font-normal">{item.name}</FormLabel>
-                                        </FormItem>
-                                        )}
-                                    />
+                                {locationsByBrand.map((brand) => (
+                                    <div key={brand.id} className="mb-4">
+                                        <h4 className="font-semibold text-sm mb-2">{brand.name}</h4>
+                                        <div className="pl-4 space-y-2">
+                                            {brand.locations.map(item => (
+                                                <FormField
+                                                    key={item.id}
+                                                    control={control}
+                                                    name="locationIds"
+                                                    render={({ field: locationField }) => (
+                                                    <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                                        <FormControl>
+                                                        <Checkbox
+                                                            checked={locationField.value?.includes(item.id)}
+                                                            onCheckedChange={(checked) => {
+                                                                const currentValue = locationField.value || [];
+                                                                return checked ? locationField.onChange([...currentValue, item.id]) : locationField.onChange(currentValue?.filter((value) => value !== item.id))
+                                                            }}
+                                                        />
+                                                        </FormControl>
+                                                        <FormLabel className="font-normal">{item.name}</FormLabel>
+                                                    </FormItem>
+                                                    )}
+                                                />
+                                            ))}
+                                        </div>
+                                    </div>
                                 ))}
-                                {availableLocations.length === 0 && <p className="text-sm text-muted-foreground">No locations available for selected brand.</p>}
                                 </div>
                             </ScrollArea>
                             <FormMessage />
