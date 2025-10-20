@@ -557,7 +557,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     </div>
                 </form>
             </FormProvider>
-            {location && (
+             {location && (
                 <TimeSlotDialog
                     isOpen={isTimeDialogOpen}
                     setIsOpen={setIsTimeDialogOpen}
