@@ -16,7 +16,7 @@ import { useEffect, useState, useTransition, useMemo } from "react";
 import { createStripeCheckoutSessionAction, validateDiscountAction } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, X, Tag, Truck, Store, Clock, MapPin, Check, ShoppingCart, AlertTriangle } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
+import { Badge } from "../ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useParams, useRouter } from "next/navigation";
@@ -47,6 +47,11 @@ const checkoutSchema = z.object({
 });
 
 type CheckoutFormValues = z.infer<typeof checkoutSchema>;
+
+interface CheckoutClientProps {
+    location: Location;
+}
+
 
 function BagFeeRow() {
     const { brand, includeBagFee, toggleBagFee } = useCart();
@@ -402,163 +407,164 @@ function CheckoutForm({ location }: { location: Location }) {
     );
     
     return (
-        <FormProvider {...form}>
-            <form onSubmit={handleFormSubmit}>
-                <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-32 lg:pb-0">
-                    {/* --- Left Column: Info & Details --- */}
-                    <div className="space-y-10">
-                        <section>
-                            <h2 className="text-2xl font-bold mb-4">Delivery & Time</h2>
-                            <div className="space-y-4">
-                                 <div className="flex items-center justify-between rounded-lg border bg-muted p-4">
-                                    <div className="flex items-center gap-3">
-                                        {deliveryType === 'delivery' ? <Truck className="h-6 w-6 text-muted-foreground" /> : <Store className="h-6 w-6 text-muted-foreground" />}
-                                        <div>
-                                            <p className="font-semibold capitalize">{deliveryType}</p>
-                                            {deliveryType === 'pickup' && location && (
-                                                <p className="text-sm text-muted-foreground">{location.address}</p>
-                                            )}
+        <>
+            <FormProvider {...form}>
+                <form onSubmit={handleFormSubmit}>
+                    <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-32 lg:pb-0">
+                        {/* --- Left Column: Info & Details --- */}
+                        <div className="space-y-10">
+                            <section>
+                                <h2 className="text-2xl font-bold mb-4">Delivery & Time</h2>
+                                <div className="space-y-4">
+                                    <div className="flex items-center justify-between rounded-lg border bg-muted p-4">
+                                        <div className="flex items-center gap-3">
+                                            {deliveryType === 'delivery' ? <Truck className="h-6 w-6 text-muted-foreground" /> : <Store className="h-6 w-6 text-muted-foreground" />}
+                                            <div>
+                                                <p className="font-semibold capitalize">{deliveryType}</p>
+                                                {deliveryType === 'pickup' && location && (
+                                                    <p className="text-sm text-muted-foreground">{location.address}</p>
+                                                )}
+                                            </div>
                                         </div>
                                     </div>
-                                </div>
-                                <div className="flex items-center justify-between rounded-lg border bg-muted p-4">
-                                    <div className="flex items-center gap-3">
-                                        <Clock className="h-6 w-6 text-muted-foreground" />
-                                        <div>
-                                            {isLoadingTimes ? <Loader2 className="h-5 w-5 animate-spin"/> : (
-                                                <p className="font-semibold">{displayTime}</p>
-                                            )}
+                                    <div className="flex items-center justify-between rounded-lg border bg-muted p-4">
+                                        <div className="flex items-center gap-3">
+                                            <Clock className="h-6 w-6 text-muted-foreground" />
+                                            <div>
+                                                {isLoadingTimes ? <Loader2 className="h-5 w-5 animate-spin"/> : (
+                                                    <p className="font-semibold">{displayTime}</p>
+                                                )}
+                                            </div>
                                         </div>
+                                        <Button type="button" variant="link" onClick={() => setIsTimeDialogOpen(true)} disabled={isLoadingTimes}>Change</Button>
                                     </div>
-                                    <Button type="button" variant="link" onClick={() => setIsTimeDialogOpen(true)} disabled={isLoadingTimes}>Change</Button>
                                 </div>
-                            </div>
-                        </section>
+                            </section>
 
-                        <section>
-                            <h2 className="text-2xl font-bold mb-4">Customer Information</h2>
-                            <div className="space-y-4">
-                                <FormField control={form.control} name="name" render={({ field }) => (
-                                    <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input placeholder="John Doe" {...field} /></FormControl><FormMessage /></FormItem>
-                                )}/>
-                                <FormField control={form.control} name="email" render={({ field }) => (
-                                    <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john@example.com" {...field} /></FormControl><FormMessage /></FormItem>
-                                )}/>
-                                <FormField control={form.control} name="phone" render={({ field }) => (
-                                    <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" placeholder="+123456789" {...field} /></FormControl><FormMessage /></FormItem>
-                                )}/>
-                                {deliveryType === 'delivery' && (
-                                    <>
-                                        <FormField control={form.control} name="street" render={({ field }) => (
-                                            <FormItem><FormLabel>Street Name</FormLabel><FormControl><Input placeholder="123 Main St" {...field} /></FormControl><FormMessage /></FormItem>
-                                        )}/>
-                                        <div className="grid grid-cols-2 gap-4">
-                                            <FormField control={form.control} name="zipCode" render={({ field }) => (
-                                                <FormItem><FormLabel>Postal Code</FormLabel><FormControl><Input placeholder="12345" {...field} /></FormControl><FormMessage /></FormItem>
+                            <section>
+                                <h2 className="text-2xl font-bold mb-4">Customer Information</h2>
+                                <div className="space-y-4">
+                                    <FormField control={form.control} name="name" render={({ field }) => (
+                                        <FormItem><FormLabel>Full Name</FormLabel><FormControl><Input placeholder="John Doe" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )}/>
+                                    <FormField control={form.control} name="email" render={({ field }) => (
+                                        <FormItem><FormLabel>Email</FormLabel><FormControl><Input type="email" placeholder="john@example.com" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )}/>
+                                    <FormField control={form.control} name="phone" render={({ field }) => (
+                                        <FormItem><FormLabel>Phone Number</FormLabel><FormControl><Input type="tel" placeholder="+123456789" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )}/>
+                                    {deliveryType === 'delivery' && (
+                                        <>
+                                            <FormField control={form.control} name="street" render={({ field }) => (
+                                                <FormItem><FormLabel>Street Name</FormLabel><FormControl><Input placeholder="123 Main St" {...field} /></FormControl><FormMessage /></FormItem>
                                             )}/>
-                                            <FormField control={form.control} name="city" render={({ field }) => (
-                                                <FormItem><FormLabel>City</FormLabel><FormControl><Input placeholder="Anytown" {...field} /></FormControl><FormMessage /></FormItem>
-                                            )}/>
-                                        </div>
-                                    </>
-                                )}
-                                <Separator className="!mt-6" />
-                                <FormField
-                                    control={form.control}
-                                    name="subscribeToNewsletter"
-                                    render={({ field }) => (
-                                        <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
-                                        <FormControl>
-                                            <Checkbox
-                                            checked={field.value}
-                                            onCheckedChange={field.onChange}
-                                            />
-                                        </FormControl>
-                                        <div className="space-y-1 leading-none">
-                                            <FormLabel>Subscribe to newsletter</FormLabel>
-                                            <FormDescription>
-                                                Receive updates and special offers from us.
-                                            </FormDescription>
-                                        </div>
-                                        </FormItem>
+                                            <div className="grid grid-cols-2 gap-4">
+                                                <FormField control={form.control} name="zipCode" render={({ field }) => (
+                                                    <FormItem><FormLabel>Postal Code</FormLabel><FormControl><Input placeholder="12345" {...field} /></FormControl><FormMessage /></FormItem>
+                                                )}/>
+                                                <FormField control={form.control} name="city" render={({ field }) => (
+                                                    <FormItem><FormLabel>City</FormLabel><FormControl><Input placeholder="Anytown" {...field} /></FormControl><FormMessage /></FormItem>
+                                                )}/>
+                                            </div>
+                                        </>
                                     )}
-                                />
-                            </div>
-                        </section>
-                        
-                        <section>
-                            <h2 className="text-2xl font-bold mb-4">Discount Code</h2>
-                            {appliedDiscount ? (
-                                <div className="flex justify-between items-center text-green-600">
-                                    <div className="flex items-center gap-2">
-                                        <Tag className="h-4 w-4" />
-                                        <span>Discount Applied: <span className="font-mono">{appliedDiscount.code}</span></span>
-                                    </div>
-                                        <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={handleRemoveDiscount}><X className="h-4 w-4"/></Button>
+                                    <Separator className="!mt-6" />
+                                    <FormField
+                                        control={form.control}
+                                        name="subscribeToNewsletter"
+                                        render={({ field }) => (
+                                            <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                                            <FormControl>
+                                                <Checkbox
+                                                checked={field.value}
+                                                onCheckedChange={field.onChange}
+                                                />
+                                            </FormControl>
+                                            <div className="space-y-1 leading-none">
+                                                <FormLabel>Subscribe to newsletter</FormLabel>
+                                                <FormDescription>
+                                                    Receive updates and special offers from us.
+                                                </FormDescription>
+                                            </div>
+                                            </FormItem>
+                                        )}
+                                    />
                                 </div>
-                            ) : (
-                                <div className="flex items-center gap-2">
-                                    <Input placeholder="Enter discount code" className="h-9" value={discountCode} onChange={(e) => setDiscountCode(e.target.value)} />
-                                    <Button type="button" variant="outline" onClick={handleApplyDiscount} disabled={isPending || !discountCode}>
-                                        {isPending ? <Loader2 className="animate-spin" /> : 'Apply'}
-                                    </Button>
-                                </div>
-                            )}
-                        </section>
-
-                         {/* --- Mobile Order Summary --- */}
-                        <div className="lg:hidden">
-                            <Accordion type="single" collapsible defaultValue={'item-1'} className="w-full">
-                                <AccordionItem value="item-1">
-                                    <AccordionTrigger>
+                            </section>
+                            
+                            <section>
+                                <h2 className="text-2xl font-bold mb-4">Discount Code</h2>
+                                {appliedDiscount ? (
+                                    <div className="flex justify-between items-center text-green-600">
                                         <div className="flex items-center gap-2">
-                                            <ShoppingCart className="h-5 w-5" />
-                                            <h2 className="text-lg font-bold">
-                                               Order summary ({itemCount} items)
-                                            </h2>
+                                            <Tag className="h-4 w-4" />
+                                            <span>Discount Applied: <span className="font-mono">{appliedDiscount.code}</span></span>
                                         </div>
-                                    </AccordionTrigger>
-                                    <AccordionContent>
-                                        <OrderSummaryContent />
-                                    </AccordionContent>
-                                </AccordionItem>
-                            </Accordion>
+                                            <Button type="button" variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={handleRemoveDiscount}><X className="h-4 w-4"/></Button>
+                                    </div>
+                                ) : (
+                                    <div className="flex items-center gap-2">
+                                        <Input placeholder="Enter discount code" className="h-9" value={discountCode} onChange={(e) => setDiscountCode(e.target.value)} />
+                                        <Button type="button" variant="outline" onClick={handleApplyDiscount} disabled={isPending || !discountCode}>
+                                            {isPending ? <Loader2 className="animate-spin" /> : 'Apply'}
+                                        </Button>
+                                    </div>
+                                )}
+                            </section>
+
+                            {/* --- Mobile Order Summary --- */}
+                            <div className="lg:hidden">
+                                <Accordion type="single" collapsible defaultValue={'item-1'} className="w-full">
+                                    <AccordionItem value="item-1">
+                                        <AccordionTrigger>
+                                            <div className="flex items-center gap-2">
+                                                <ShoppingCart className="h-5 w-5" />
+                                                <h2 className="text-lg font-bold">
+                                                Order summary ({itemCount} items)
+                                                </h2>
+                                            </div>
+                                        </AccordionTrigger>
+                                        <AccordionContent>
+                                            <OrderSummaryContent />
+                                        </AccordionContent>
+                                    </AccordionItem>
+                                </Accordion>
+                            </div>
                         </div>
-                    </div>
-                    
-                    {/* --- Desktop Order Summary --- */}
-                    <div className="hidden lg:block">
-                        <div className="flex flex-col sticky top-6 h-[calc(100vh-3rem)]">
-                            <Card className="flex flex-col flex-1">
-                                <CardHeader>
-                                    <CardTitle>Order Summary</CardTitle>
-                                    <CardDescription>Review the items in your cart.</CardDescription>
-                                </CardHeader>
-                                <CardContent className="flex-1 overflow-y-auto pr-4">
-                                    <OrderSummaryContent />
-                                </CardContent>
-                            </Card>
-                            <div className="p-4 bg-background border border-t-0 rounded-b-lg">
-                                <AcceptTermsAndCompleteOrder />
+                        
+                        {/* --- Desktop Order Summary --- */}
+                        <div className="hidden lg:block">
+                            <div className="flex flex-col sticky top-6 h-[calc(100vh-3rem)]">
+                                <Card className="flex flex-col flex-1">
+                                    <CardHeader>
+                                        <CardTitle>Order Summary</CardTitle>
+                                        <CardDescription>Review the items in your cart.</CardDescription>
+                                    </CardHeader>
+                                    <CardContent className="flex-1 overflow-y-auto pr-4">
+                                        <OrderSummaryContent />
+                                    </CardContent>
+                                </Card>
+                                <div className="p-4 bg-background border border-t-0 rounded-b-lg">
+                                    <AcceptTermsAndCompleteOrder />
+                                </div>
                             </div>
                         </div>
                     </div>
-                </div>
-            
-                {/* Sticky Footer for Mobile */}
-                <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 z-50 lg:hidden">
-                    <AcceptTermsAndCompleteOrder isSticky />
-                </div>
-            </form>
-        </FormProvider>
-         {location && (
-            <TimeSlotDialog
-                isOpen={isTimeDialogOpen}
-                setIsOpen={setIsTimeDialogOpen}
-                locationId={location.id}
-            />
-        )}
-    </>
+                
+                    {/* Sticky Footer for Mobile */}
+                    <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 z-50 lg:hidden">
+                        <AcceptTermsAndCompleteOrder isSticky />
+                    </div>
+                </form>
+            </FormProvider>
+            {location && (
+                <TimeSlotDialog
+                    isOpen={isTimeDialogOpen}
+                    setIsOpen={setIsTimeDialogOpen}
+                    locationId={location.id}
+                />
+            )}
+        </>
     )
 }
 
