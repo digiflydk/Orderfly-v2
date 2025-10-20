@@ -1,5 +1,5 @@
 
-import type { AppTypes } from "@/types/next-async-props";
+import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { notFound } from 'next/navigation';
 import { getOrderDetails } from '@/app/superadmin/sales/orders/[orderId]/page';
@@ -8,7 +8,7 @@ import { FeedbackFormClient } from './form-client';
 
 export const revalidate = 0;
 
-export default async function Page({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function Page({ params, searchParams }: AsyncPageProps) {
   const routeParams = await resolveParams(params);
   const query = await resolveSearchParams(searchParams);
 

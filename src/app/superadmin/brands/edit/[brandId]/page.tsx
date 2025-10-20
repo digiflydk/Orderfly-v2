@@ -1,5 +1,5 @@
 
-import type { AppTypes } from "@/types/next-async-props";
+import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { BrandFormPage } from '@/components/superadmin/brand-form-page';
 import { getBrandById } from '@/app/superadmin/brands/actions';
@@ -8,7 +8,7 @@ import { getUsers } from '@/app/superadmin/users/actions';
 import { notFound } from 'next/navigation';
 import { getFoodCategories } from '@/app/superadmin/food-categories/actions';
 
-export default async function Page({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function Page({ params, searchParams }: AsyncPageProps) {
     const routeParams = await resolveParams(params);
     const query = await resolveSearchParams(searchParams);
 

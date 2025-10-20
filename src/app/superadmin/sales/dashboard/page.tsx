@@ -1,5 +1,5 @@
 
-import type { AppTypes } from "@/types/next-async-props";
+import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, ShoppingCart, Users, Activity, Percent, Ban, Truck, Store, Tags, Banknote, Clock } from "lucide-react";
@@ -14,7 +14,7 @@ import { redirect } from "next/navigation";
 
 export const revalidate = 0; // Force dynamic rendering
 
-export default async function SalesDashboardPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function SalesDashboardPage({ params, searchParams }: AsyncPageProps) {
     const routeParams = await resolveParams(params);
     const query = await resolveSearchParams(searchParams);
 

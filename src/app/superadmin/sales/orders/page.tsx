@@ -1,5 +1,5 @@
 
-import type { AppTypes } from "@/types/next-async-props";
+import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { getOrders } from "@/lib/superadmin/getOrders";
 import { getBrands } from "@/app/superadmin/brands/actions";
@@ -12,7 +12,7 @@ import { redirect } from 'next/navigation';
 
 export const revalidate = 0; // Force dynamic rendering
 
-export default async function OrdersPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function OrdersPage({ params, searchParams }: AsyncPageProps) {
     const routeParams = await resolveParams(params);
     const query = await resolveSearchParams(searchParams);
     

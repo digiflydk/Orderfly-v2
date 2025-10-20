@@ -1,5 +1,5 @@
 
-import type { AppTypes } from "@/types/next-async-props";
+import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -13,7 +13,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DollarSign, ShoppingCart, Users, Activity, Clock, Store, Percent, Tag, Package, BarChart3, MessageSquareQuote, Cookie, UserCheck, MapPin } from 'lucide-react';
 import { redirect } from 'next/navigation';
 
-export default async function SuperadminDashboardPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function SuperadminDashboardPage({ params, searchParams }: AsyncPageProps) {
   const routeParams = await resolveParams(params);
   const query = await resolveSearchParams(searchParams);
   

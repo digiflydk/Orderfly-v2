@@ -1,5 +1,5 @@
 
-import type { AppTypes } from "@/types/next-async-props";
+import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Suspense } from 'react';
 import { getFunnelDataForBrand } from "@/app/admin/analytics/actions";
@@ -50,7 +50,7 @@ async function AnalyticsData({ searchParams }: { searchParams: { [key: string]: 
 }
 
 
-export default async function BrandAnalyticsPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function BrandAnalyticsPage({ params, searchParams }: AsyncPageProps) {
   const routeParams = await resolveParams(params);
   const query = await resolveSearchParams(searchParams);
 

@@ -1,4 +1,4 @@
-import type { AppTypes } from '@/types/next-async-props';
+import type { Query } from '@/types/next-async-props';
 
 /**
  * Safely extracts a string from searchParams.
@@ -6,7 +6,7 @@ import type { AppTypes } from '@/types/next-async-props';
  * @param key The key to look for.
  * @returns The string value or undefined.
  */
-export function qStr(query: AppTypes.Query, key: string): string | undefined {
+export function qStr(query: Query, key: string): string | undefined {
   const value = query[key];
   return typeof value === 'string' ? value : undefined;
 }
@@ -17,7 +17,7 @@ export function qStr(query: AppTypes.Query, key: string): string | undefined {
  * @param key The key to look for.
  * @returns The boolean value or undefined.
  */
-export function qBool(query: AppTypes.Query, key: string): boolean | undefined {
+export function qBool(query: Query, key: string): boolean | undefined {
   const value = query[key];
   if (value === 'true' || value === '1') return true;
   if (value === 'false' || value === '0') return false;
@@ -30,7 +30,7 @@ export function qBool(query: AppTypes.Query, key: string): boolean | undefined {
  * @param key The key to look for.
  * @returns The number value or undefined.
  */
-export function qInt(query: AppTypes.Query, key: string): number | undefined {
+export function qInt(query: Query, key: string): number | undefined {
   const value = query[key];
   if (typeof value === 'string') {
     const num = parseInt(value, 10);

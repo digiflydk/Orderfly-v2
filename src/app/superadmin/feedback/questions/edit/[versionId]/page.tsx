@@ -1,6 +1,6 @@
 // __OF542_INIT__
 // __OF541_PARAMS_INIT__
-import type { AppTypes } from "@/types/next-async-props";
+import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 export const runtime = "nodejs";
 

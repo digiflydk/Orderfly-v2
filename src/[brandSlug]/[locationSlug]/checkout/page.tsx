@@ -1,10 +1,10 @@
 
-import type { AppTypes } from "@/types/next-async-props";
+import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 
 export const runtime = "nodejs";
 
-export default async function CheckoutPage({ params, searchParams }: AppTypes.AsyncPageProps) {
+export default async function CheckoutPage({ params, searchParams }: AsyncPageProps) {
   const routeParams = await resolveParams(params);
   const query = await resolveSearchParams(searchParams);
 
