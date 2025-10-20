@@ -6,6 +6,16 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 
 # Recent Changes
 
+**October 20, 2025 - Layout Async Params Fix**
+- Fixed all layout files to use Next.js 15 async params pattern
+- Updated `src/[brandSlug]/[locationSlug]/checkout/layout.tsx` - async params with both brandSlug and locationSlug
+- Updated `src/[brandSlug]/[locationSlug]/layout.tsx` - async params with both brandSlug and locationSlug
+- Updated `src/[brandSlug]/checkout/layout.tsx` - legacy checkout layout with async params
+- Converted `src/types/next-async-props.d.ts` to `next-async-props.ts` for proper module exports
+- Updated all imports from `AppTypes` namespace to direct `AsyncPageProps` and `Query` type imports
+- Fixed 11 page files that import AsyncPageProps (checkout, confirmation, dashboard, sales, feedback, analytics pages)
+- All layout files now properly await params before rendering
+
 **October 19, 2025 - Production Build Fixes (Phase 4 - Final)**
 - Fixed all remaining Next.js 15 async compatibility issues
 - Updated `src/[brandSlug]/checkout/page.tsx` to await cookies() and use async params
