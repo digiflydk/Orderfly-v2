@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useCart } from "@/context/cart-context";
@@ -117,7 +118,16 @@ function OrderSummaryContent() {
                         </div>
                         <div>
                             <div className="font-medium">{item.productName} {item.itemType === 'combo' && <Badge>Combo</Badge>}</div>
-                            <p className="text-sm text-muted-foreground">Quantity: {item.quantity}</p>
+                            <p className="text-sm">
+                                {hasDiscount ? (
+                                    <>
+                                        <span className="font-bold text-foreground"> kr.{discountedLinePrice.toFixed(2)}</span>
+                                        <span className="text-muted-foreground line-through ml-2">kr.{originalLinePrice.toFixed(2)}</span>
+                                    </>
+                                ) : (
+                                    <span className="text-muted-foreground">kr.{discountedLinePrice.toFixed(2)}</span>
+                                )}
+                            </p>
                             {item.toppings.length > 0 && (
                                 <ul className="text-xs text-muted-foreground pl-4 mt-1 list-disc">
                                     {item.toppings.map(topping => (
@@ -135,14 +145,7 @@ function OrderSummaryContent() {
                         </div>
                     </div>
                     <div className="text-right">
-                        {hasDiscount ? (
-                            <>
-                                <p className="font-medium text-muted-foreground line-through">kr.{originalLinePrice.toFixed(2)}</p>
-                                <p className="font-medium text-destructive">kr.{discountedLinePrice.toFixed(2)}</p>
-                            </>
-                        ) : (
-                            <p className="font-medium">kr.{originalLinePrice.toFixed(2)}</p>
-                        )}
+                        <p className="font-medium">kr. {(item.price * item.quantity + toppingsPrice).toFixed(2)}</p>
                     </div>
                 </div>
             )})}
@@ -151,7 +154,7 @@ function OrderSummaryContent() {
                 <div className="flex justify-between"><span>Subtotal</span><span>kr.{subtotal.toFixed(2)}</span></div>
                 
                 {itemDiscount > 0 && (
-                    <div className="flex justify-between text-green-600">
+                   <div className="flex justify-between text-green-600">
                         <span>Product Discounts</span>
                         <span>- kr.{itemDiscount.toFixed(2)}</span>
                     </div>
@@ -297,11 +300,13 @@ export function CheckoutClient({ location }: CheckoutClientProps) {
             // Track click_purchase event
             trackEvent('click_purchase', { cartValue: checkoutTotal });
 
+            const totalDiscount = (itemDiscount || 0) + (cartDiscount?.amount || 0);
+
            const paymentDetails: Omit<PaymentDetails, 'paymentRefId'> = {
                 subtotal, deliveryFee, bagFee, adminFee, vatAmount,
-                discountTotal: itemDiscount + (cartDiscount?.amount ?? 0),
+                discountTotal: totalDiscount,
                 itemDiscountTotal: itemDiscount,
-                cartDiscountTotal: cartDiscount?.amount ?? 0,
+                cartDiscountTotal: cartDiscount?.amount,
                 cartDiscountName: cartDiscount?.name,
                 tips: 0, taxes: 0, 
            };
@@ -561,3 +566,5 @@ export function CheckoutClient({ location }: CheckoutClientProps) {
         </>
     )
 }
+
+    

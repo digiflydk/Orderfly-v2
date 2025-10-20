@@ -218,21 +218,15 @@ export async function createStripeCheckoutSessionAction(
         });
     }
 
-    const coupons: Stripe.Checkout.SessionCreateParams.Coupon[] = [];
-    if (paymentDetails.cartDiscountTotal && paymentDetails.cartDiscountTotal > 0 && paymentDetails.cartDiscountName) {
-        let coupon;
-        const existingCoupons = await stripe.coupons.list({ limit: 1, coupon: paymentDetails.cartDiscountName });
-        if(existingCoupons.data.length > 0) {
-            coupon = existingCoupons.data[0];
-        } else {
-            coupon = await stripe.coupons.create({
-                amount_off: Math.round(paymentDetails.cartDiscountTotal * 100),
-                currency: 'dkk',
-                duration: 'once',
-                name: paymentDetails.cartDiscountName,
-            });
-        }
-        coupons.push(coupon.id);
+    let couponId: string | undefined = undefined;
+    if (paymentDetails.cartDiscountTotal && paymentDetails.cartDiscountTotal > 0) {
+        const coupon = await stripe.coupons.create({
+            amount_off: Math.round(paymentDetails.cartDiscountTotal * 100),
+            currency: 'dkk',
+            duration: 'once',
+            name: paymentDetails.cartDiscountName,
+        });
+        couponId = coupon.id;
     }
     
     // Step 2: Create Stripe session with orderId in metadata
@@ -256,7 +250,7 @@ export async function createStripeCheckoutSessionAction(
             appliedDiscountId: appliedDiscountId || '',
             anonymousConsentId: anonymousConsentId || '',
         },
-        discounts: coupons.length > 0 ? coupons.map(c => ({ coupon: c.id })) : undefined,
+        discounts: couponId ? [{ coupon: couponId }] : undefined,
         payment_intent_data: {
             statement_descriptor: statement_descriptor,
             statement_descriptor_suffix: statement_descriptor_suffix,
@@ -329,5 +323,7 @@ export async function waitForOrderBySessionId(sessionId: string, timeoutMs = 200
     }
     return null;
 }
+
+    
 
     
