@@ -33,7 +33,7 @@ import { Separator } from '../ui/separator';
 
 const categorySchema = z.object({
   id: z.string().optional(),
-  brandId: z.string().min(1, 'A primary brand must be selected.'),
+  brandIds: z.array(z.string()).min(1, 'At least one brand must be selected.'),
   locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
   categoryName: z.string().min(2, { message: 'Category name must be at least 2 characters.' }),
   description: z.string().optional(),
@@ -56,8 +56,11 @@ export function CategoryFormPage({ category, brands, locations }: CategoryFormPa
     
     const form = useForm<CategoryFormValues>({
         resolver: zodResolver(categorySchema),
-        defaultValues: category || {
-            brandId: '',
+        defaultValues: category ? {
+            ...category,
+            brandIds: Array.from(new Set(locations.filter(l => category.locationIds.includes(l.id)).map(l => l.brandId)))
+        } : {
+            brandIds: [],
             locationIds: [],
             categoryName: '',
             description: '',
@@ -66,20 +69,43 @@ export function CategoryFormPage({ category, brands, locations }: CategoryFormPa
         },
     });
 
-    const { control, watch, setValue } = form;
+    const { control, watch, setValue, formState: { errors } } = form;
 
+    const watchedBrandIds = watch('brandIds', []);
+
+    const availableLocations = useMemo(() => {
+        if (!watchedBrandIds || watchedBrandIds.length === 0) return [];
+        return locations.filter(loc => watchedBrandIds.includes(loc.brandId));
+    }, [watchedBrandIds, locations]);
+    
     const locationsByBrand = useMemo(() => {
-      return brands.map(brand => ({
-        ...brand,
-        locations: locations.filter(loc => loc.brandId === brand.id)
-      })).filter(brand => brand.locations.length > 0);
-    }, [brands, locations]);
+        return availableLocations.reduce((acc, loc) => {
+            const brandName = brands.find(b => b.id === loc.brandId)?.name || 'Unknown Brand';
+            if (!acc[brandName]) {
+                acc[brandName] = [];
+            }
+            acc[brandName].push(loc);
+            return acc;
+        }, {} as Record<string, Location[]>);
+    }, [availableLocations, brands]);
+
 
     useEffect(() => {
         if (category) {
-            form.reset(category);
+            form.reset({
+                ...category,
+                 brandIds: Array.from(new Set(locations.filter(l => category.locationIds.includes(l.id)).map(l => l.brandId)))
+            });
         }
-    }, [category, form]);
+    }, [category, form, locations]);
+    
+    useEffect(() => {
+        // When brand selection changes, filter out locations that are no longer relevant
+        const currentLocIds = form.getValues('locationIds');
+        const validLocIds = currentLocIds.filter(locId => availableLocations.some(l => l.id === locId));
+        setValue('locationIds', validLocIds);
+    }, [watchedBrandIds, form, availableLocations, setValue]);
+
 
     const title = category ? 'Edit Category' : 'Create New Category';
     const description = category ? `Editing details for ${category.categoryName}.` : 'Fill in the details for the new category.';
@@ -97,6 +123,13 @@ export function CategoryFormPage({ category, brands, locations }: CategoryFormPa
                 }
             }
         });
+        
+        // We no longer need to pass brandId separately, as it's derived from locations.
+        // But the schema on the action needs `brandId` to pass validation, so we send the first one.
+        if (data.brandIds.length > 0) {
+            formData.set('brandId', data.brandIds[0]);
+        }
+
 
         startTransition(async () => {
             const result = await createOrUpdateCategory(null, formData);
@@ -175,19 +208,37 @@ export function CategoryFormPage({ category, brands, locations }: CategoryFormPa
                 
                  <FormField
                     control={control}
-                    name="brandId"
-                    render={({ field }) => (
+                    name="brandIds"
+                    render={() => (
                         <FormItem>
-                            <FormLabel>Primary Brand</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl><SelectTrigger><SelectValue placeholder="Select the main brand for this category" /></SelectTrigger></FormControl>
-                                <SelectContent>
-                                    {brands.map(brand => (
-                                        <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
-                                    ))}
-                                </SelectContent>
-                            </Select>
-                            <FormDescription>This helps with filtering and organization, but you can still select locations from other brands.</FormDescription>
+                             <FormLabel>Select Brands</FormLabel>
+                             <FormDescription>Choose one or more brands to show available locations.</FormDescription>
+                             <ScrollArea className="h-40 rounded-md border">
+                                <div className="p-4 space-y-2">
+                                {brands.map((brand) => (
+                                    <FormField
+                                        key={brand.id}
+                                        control={control}
+                                        name="brandIds"
+                                        render={({ field }) => (
+                                            <FormItem className="flex flex-row items-start space-x-3 space-y-0">
+                                                <FormControl>
+                                                <Checkbox
+                                                    checked={field.value?.includes(brand.id)}
+                                                    onCheckedChange={(checked) => {
+                                                    return checked
+                                                        ? field.onChange([...field.value, brand.id])
+                                                        : field.onChange(field.value?.filter((id) => id !== brand.id));
+                                                    }}
+                                                />
+                                                </FormControl>
+                                                <FormLabel className="font-normal">{brand.name}</FormLabel>
+                                            </FormItem>
+                                        )}
+                                    />
+                                ))}
+                                </div>
+                            </ScrollArea>
                             <FormMessage />
                         </FormItem>
                     )}
@@ -201,11 +252,11 @@ export function CategoryFormPage({ category, brands, locations }: CategoryFormPa
                             <FormLabel>Available at Locations</FormLabel>
                             <ScrollArea className="h-60 rounded-md border">
                                 <div className="p-4">
-                                {locationsByBrand.map((brand) => (
-                                    <div key={brand.id} className="mb-4">
-                                        <h4 className="font-semibold text-sm mb-2">{brand.name}</h4>
+                                {Object.keys(locationsByBrand).length > 0 ? Object.entries(locationsByBrand).map(([brandName, locs]) => (
+                                    <div key={brandName} className="mb-4">
+                                        <h4 className="font-semibold text-sm mb-2">{brandName}</h4>
                                         <div className="pl-4 space-y-2">
-                                            {brand.locations.map(item => (
+                                            {locs.map(item => (
                                                 <FormField
                                                     key={item.id}
                                                     control={control}
@@ -228,7 +279,7 @@ export function CategoryFormPage({ category, brands, locations }: CategoryFormPa
                                             ))}
                                         </div>
                                     </div>
-                                ))}
+                                )) : <p className="text-sm text-muted-foreground p-4 text-center">Select one or more brands to see available locations.</p>}
                                 </div>
                             </ScrollArea>
                             <FormMessage />

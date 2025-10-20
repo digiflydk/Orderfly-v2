@@ -11,7 +11,7 @@ import { redirect } from 'next/navigation';
 
 const categorySchema = z.object({
   id: z.string().optional(),
-  brandId: z.string().min(1, 'A primary brand must be selected.'),
+  brandId: z.string().min(1, 'A primary brand must be selected.'), // For validation, not storage
   locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
   categoryName: z.string().min(2, { message: 'Category name must be at least 2 characters.' }),
   description: z.string().optional(),
@@ -36,6 +36,18 @@ export async function createOrUpdateCategory(
 
   rawData.isActive = formData.has('isActive');
 
+  // We need brandId for validation, but we don't store it on the category document anymore.
+  // The form should provide a brandId to satisfy the schema.
+  if (!rawData.brandId) {
+    const firstLocationId = rawData.locationIds[0];
+    if (firstLocationId) {
+        const locSnap = await getDoc(doc(db, 'locations', firstLocationId));
+        if (locSnap.exists()) {
+            rawData.brandId = (locSnap.data() as Location).brandId;
+        }
+    }
+  }
+
   const validatedFields = categorySchema.safeParse(rawData);
 
   if (!validatedFields.success) {
@@ -49,10 +61,11 @@ export async function createOrUpdateCategory(
     };
   }
 
-  const { id, ...categoryData } = validatedFields.data;
+  const { id, brandId, ...categoryData } = validatedFields.data;
 
   try {
     const categoryRef = id ? doc(db, 'categories', id) : doc(collection(db, 'categories'));
+    // The 'brandId' is implicitly defined by the locations and is not saved on the category document itself.
     await setDoc(categoryRef, { ...categoryData, id: categoryRef.id }, { merge: true });
 
   } catch (e) {
@@ -107,9 +120,8 @@ export async function getCategoriesForLocation(locationId: string): Promise<Cate
 
 export async function getCategories(brandId?: string): Promise<Category[]> {
     let q;
-    // If a brandId is provided, we still fetch all categories and filter client-side for multi-brand support
-    // but this could be optimized if we decide a category can only belong to one brand implicitly.
-    // For now, fetching all is safer to support the multi-brand requirement.
+    // Note: Fetching all categories and filtering on the client now,
+    // as a category can span multiple brands via its locations.
     q = query(collection(db, 'categories'), orderBy('categoryName', 'asc'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Category[];
