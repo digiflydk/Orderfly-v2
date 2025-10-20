@@ -78,7 +78,8 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
      }, [deliveryType, brand.id, location.id]);
 
      useEffect(() => {
-        // Show dialog only if a delivery method has not been previously selected in this session.
+        // OF-399: Show delivery modal only if a delivery method has not been previously selected in this session.
+        // This ensures that on a direct land, the user is prompted to choose.
         if (typeof window !== 'undefined') {
             const savedDeliveryMethod = localStorage.getItem('deliveryMethod');
             if (!savedDeliveryMethod) {
