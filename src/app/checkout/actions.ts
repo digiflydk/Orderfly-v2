@@ -218,31 +218,13 @@ export async function createStripeCheckoutSessionAction(
         });
     }
 
-    let couponId: string | undefined = undefined;
-    if (paymentDetails.cartDiscountTotal && paymentDetails.cartDiscountTotal > 0) {
-        const coupon = await stripe.coupons.create({
-            amount_off: Math.round(paymentDetails.cartDiscountTotal * 100),
-            currency: 'dkk',
-            duration: 'once',
-            name: paymentDetails.cartDiscountName,
-        });
-        couponId = coupon.id;
-    }
-    
-    // Step 2: Create Stripe session with orderId in metadata
-    const success_url = `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}`;
-    const cancel_url = `${origin}/${brandSlug}/${locationSlug}/checkout/cancel`;
-
-    const statement_descriptor = makeDescriptorPrefix(brand.name);
-    const statement_descriptor_suffix = makeDescriptorSuffix(location.city);
-
-    const session = await stripe.checkout.sessions.create({
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ['card'],
         line_items,
         mode: 'payment',
         customer_email: customerInfo.email,
-        success_url: success_url,
-        cancel_url: cancel_url,
+        success_url: `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/${brandSlug}/${locationSlug}/checkout/cancel`,
         metadata: {
             orderId,
             brandId,
@@ -250,13 +232,25 @@ export async function createStripeCheckoutSessionAction(
             appliedDiscountId: appliedDiscountId || '',
             anonymousConsentId: anonymousConsentId || '',
         },
-        discounts: couponId ? [{ coupon: couponId }] : undefined,
         payment_intent_data: {
-            statement_descriptor: statement_descriptor,
-            statement_descriptor_suffix: statement_descriptor_suffix,
+            statement_descriptor: makeDescriptorPrefix(brand.name),
+            statement_descriptor_suffix: makeDescriptorSuffix(location.city),
             metadata: { orderId, brandId, locationId },
         },
-    });
+    };
+
+    if (paymentDetails.cartDiscountTotal && paymentDetails.cartDiscountTotal > 0) {
+        const coupon = await stripe.coupons.create({
+            amount_off: Math.round(paymentDetails.cartDiscountTotal * 100),
+            currency: 'dkk',
+            duration: 'once',
+            name: paymentDetails.cartDiscountName || 'Discount',
+        });
+        sessionParams.discounts = [{ coupon: coupon.id }];
+    }
+    
+    // Step 2: Create Stripe session with orderId in metadata
+    const session = await stripe.checkout.sessions.create(sessionParams);
     
     // Step 3: Patch order with session ID
     await updateDoc(orderRef, {
@@ -323,7 +317,5 @@ export async function waitForOrderBySessionId(sessionId: string, timeoutMs = 200
     }
     return null;
 }
-
-    
 
     
