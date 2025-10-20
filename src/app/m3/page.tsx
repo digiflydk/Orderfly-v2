@@ -33,7 +33,7 @@ export default function M3IndexPage() {
   }
 
   const handleNavigateToMenu = () => {
-    setOrderModalOpen(true);
+    router.push('/m3pizza/m3-pizza-hellerup');
   };
   
   const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
