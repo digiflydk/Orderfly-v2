@@ -1,9 +1,8 @@
 
-
 'use client';
 
 import Image from "next/image";
-import type { Topping, ToppingGroup, StandardDiscount } from "@/types";
+import type { Topping, ToppingGroup, StandardDiscount, Allergen } from "@/types";
 import type { ProductForMenu } from "@/app/superadmin/products/actions";
 import { useState, useMemo, useTransition } from "react";
 import { ProductDialog } from "./product-dialog";
@@ -33,6 +32,7 @@ function applyDiscount(price: number, discount: StandardDiscount): number {
 export function ProductCardSkeleton() {
   return (
     <div className="flex items-stretch gap-2 py-4 border-b md:border md:p-3 md:rounded-lg">
+      <Skeleton className="w-36 h-[99px] rounded-md shrink-0" />
       <div className="flex-1 flex flex-col space-y-2">
         <Skeleton className="h-5 w-3/4" />
         <Skeleton className="h-4 w-full" />
@@ -40,7 +40,6 @@ export function ProductCardSkeleton() {
         <div className="flex-1" />
         <Skeleton className="h-5 w-1/4 mt-auto" />
       </div>
-      <Skeleton className="w-36 h-[99px] rounded-md shrink-0" />
     </div>
   );
 }
@@ -149,6 +148,23 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
         className="group flex items-stretch gap-2 cursor-pointer transition-all duration-200 ease-in-out border-b py-4 md:border md:p-3 md:rounded-lg md:shadow-sm md:hover:shadow-lg md:hover:-translate-y-0.5"
         onClick={handleCardClick}
       >
+        <div className="relative w-36 h-[99px] shrink-0">
+          <Image
+            src={product.imageUrl || 'https://placehold.co/400x225.png'}
+            alt={product.productName}
+            fill
+            className="object-cover rounded-md"
+            data-ai-hint="delicious food"
+          />
+          {badgeText && (
+            <Badge className={cn(
+                "absolute top-2 left-2 border-white/50 bg-black/20 text-white backdrop-blur-sm",
+                hasOffer && "bg-destructive/70"
+            )}>
+                {badgeText}
+            </Badge>
+          )}
+        </div>
         <div className="flex-1 flex flex-col space-y-1">
           <div>
             <h4 className="font-semibold text-sm">{product.productName}</h4>
@@ -166,23 +182,6 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
               <p className="font-semibold text-sm text-primary">DKK {finalPrice.toFixed(2)}</p>
             )}
           </div>
-        </div>
-        <div className="relative w-36 h-[99px] shrink-0">
-          <Image
-            src={product.imageUrl || 'https://placehold.co/400x225.png'}
-            alt={product.productName}
-            fill
-            className="object-cover rounded-md"
-            data-ai-hint="delicious food"
-          />
-          {badgeText && (
-            <Badge className={cn(
-                "absolute top-2 left-2 border-white/50 bg-black/20 text-white backdrop-blur-sm",
-                hasOffer && "bg-destructive/70"
-            )}>
-                {badgeText}
-            </Badge>
-          )}
         </div>
       </div>
       <ProductDialog
