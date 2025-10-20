@@ -61,7 +61,7 @@ export function Hero({ onOrderClick }: HeroProps) {
 
   return (
     <section className="container mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-8">
-      <div className="relative h-[420px] overflow-hidden rounded-2xl shadow-lg">
+      <div className="relative h-[420px] overflow-hidden shadow-lg">
         <AnimatePresence initial={false}>
           <motion.div
             key={currentSlide}

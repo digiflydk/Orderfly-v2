@@ -1,3 +1,4 @@
+
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { menuGridContent } from "../_data/constants";
@@ -14,7 +15,7 @@ function PizzaCard({
   imageUrl: string;
 }) {
   return (
-    <div className="relative h-96 overflow-hidden rounded-2xl group cursor-pointer shadow-md hover:shadow-xl transition-shadow">
+    <div className="relative h-96 overflow-hidden group cursor-pointer shadow-md hover:shadow-xl transition-shadow">
       <Image
         src={imageUrl}
         alt={name}

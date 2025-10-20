@@ -1,3 +1,4 @@
+
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { promoBannerContent } from "../_data/constants";
@@ -5,7 +6,7 @@ import { promoBannerContent } from "../_data/constants";
 export function PromoBanner() {
   return (
     <section className="container mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-8">
-      <div className="relative h-[380px] overflow-hidden rounded-2xl group cursor-pointer shadow-lg">
+      <div className="relative h-[380px] overflow-hidden group cursor-pointer shadow-lg">
         <Image
           src={promoBannerContent.imageUrl}
           alt={promoBannerContent.title}
