@@ -10,10 +10,10 @@ import { getProductsForLocation } from '@/app/superadmin/products/actions';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { HeroBanner } from '@/components/layout/hero-banner';
 import type { ProductForMenu, Location } from '@/types';
+import type { AsyncPageProps } from '@/types/next-async-props';
 
-export default async function MenuPage({ params }: { params: { brandSlug: string; locationSlug: string } }) {
-  const brandSlug = params.brandSlug;
-  const locationSlug = params.locationSlug;
+export default async function MenuPage({ params }: AsyncPageProps<{ brandSlug: string; locationSlug: string }>) {
+  const { brandSlug, locationSlug } = await params;
 
   const brand = await getBrandBySlug(brandSlug);
   if (!brand) {
@@ -71,4 +71,3 @@ export default async function MenuPage({ params }: { params: { brandSlug: string
     </>
   );
 }
-
