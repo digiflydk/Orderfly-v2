@@ -149,7 +149,7 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
         className="group flex items-stretch gap-4 cursor-pointer transition-all duration-200 ease-in-out border-b py-4 md:border md:p-3 md:rounded-lg md:shadow-sm md:hover:shadow-lg md:hover:-translate-y-0.5"
         onClick={handleCardClick}
       >
-        <div className="relative w-24 h-24 md:w-36 md:h-full shrink-0">
+        <div className="relative w-24 h-24 md:w-36 md:h-auto shrink-0">
           <Image
             src={product.imageUrl || 'https://placehold.co/400x225.png'}
             alt={product.productName}
@@ -169,8 +169,10 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
         </div>
 
         <div className="flex-1 flex flex-col">
-          <h4 className="font-semibold text-sm pr-2">{product.productName}</h4>
-          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{product.description}</p>
+          <div>
+            <h4 className="font-semibold text-sm pr-2">{product.productName}</h4>
+            <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{product.description}</p>
+          </div>
           <div className="flex-grow" />
           <div className="flex items-end justify-between mt-auto pt-2">
             <div>
