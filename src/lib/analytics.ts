@@ -28,10 +28,10 @@ export const pageview = (url: string) => {
 
 export const trackClientEvent = (eventName: AnalyticsEventName, data: Record<string, any>) => {
     // Native tracking via API
-    fetch('/api/analytics', {
+    fetch('/api/analytics/collect', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: eventName, ...data }),
+        body: JSON.stringify({ name: eventName, params: data }),
         keepalive: true, // Ensures the request is sent even if the page is being unloaded
     }).catch(console.error);
 
