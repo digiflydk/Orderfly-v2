@@ -1,4 +1,3 @@
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -257,8 +256,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 )}
             </div>
         </ScrollArea>
-        <DialogFooter className="py-4 border-t flex-shrink-0 flex flex-col items-center justify-between bg-[#FFF8F0] gap-4 w-full">
-          <div className="flex items-center gap-2">
+        <DialogFooter className="border-t flex-shrink-0 flex flex-col items-center bg-[#FFF8F0] gap-4 w-full p-0">
+          <div className="flex items-center gap-2 pt-4">
             <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
               <MinusCircle />
             </Button>
@@ -269,10 +268,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
           </div>
           <Button
             size="lg"
-            className="w-full h-14"
+            className="w-full h-16 rounded-none text-base"
             onClick={handleAddToCart}
+            disabled={!isSelectionValid}
           >
-            <div className="flex w-full justify-between items-center text-base">
+            <div className="flex w-full justify-between items-center">
                 <span>Add to Cart</span>
                 <div className="flex items-baseline gap-2">
                 {basePrice > finalPrice && (
