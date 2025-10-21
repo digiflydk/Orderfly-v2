@@ -1,14 +1,10 @@
 
-"use client";
+'use client';
 
 import Link from "next/link";
-import Image from "next/image";
 import type { Brand, Location } from "@/types";
 import type { FooterTheme } from "@/types/settings";
-import { Facebook, Instagram, Linkedin, LucideIcon, Twitter, Youtube } from 'lucide-react';
-import SiteLogo from "@/components/common/SiteLogo";
-import { useState } from "react";
-import { CookieConsent } from "../cookie-consent";
+import { Globe } from 'lucide-react';
 
 interface FooterProps {
   brand?: Brand | null;
@@ -18,77 +14,17 @@ interface FooterProps {
   onOpenCookieSettings?: () => void;
 }
 
-const socialIcons: Record<string, LucideIcon> = {
-  facebook: Facebook,
-  instagram: Instagram,
-  x: Twitter,
-  youtube: Youtube,
-  linkedin: Linkedin,
-};
-
 export function Footer({ brand, location, version, onOpenCookieSettings, theme }: FooterProps) {
-  const footerStyle: React.CSSProperties = {
-    backgroundColor: theme?.bgColor || 'var(--secondary)',
-    color: theme?.textColor || 'var(--foreground)',
-  };
-
-  const linkStyle: React.CSSProperties = {
-    color: theme?.linkColor || 'var(--foreground)',
-  };
-
   return (
-    <footer className="w-full" style={footerStyle}>
-      <div className="mx-auto max-w-[1140px] px-4 py-10 grid gap-8 md:grid-cols-12">
-        <div className="md:col-span-4 space-y-4">
-          {theme?.legalText && <p className="text-sm opacity-80">{theme.legalText}</p>}
-          {(theme?.socials ?? []).length > 0 && (
-            <div className="flex gap-4 pt-4">
-              {theme!.socials!.map((s, i) => {
-                const Icon = socialIcons[s.kind];
-                return Icon ? (
-                  <a 
-                    key={i} 
-                    href={s.href}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={s.kind} 
-                    className="transition-colors hover:opacity-80"
-                    style={linkStyle}
-                  >
-                    <Icon className="h-6 w-6" />
-                    <span className="sr-only">{s.kind}</span>
-                  </a>
-                ) : null;
-              })}
-            </div>
-          )}
-        </div>
-
-        {(theme?.columns ?? []).map((col, i) => (
-          <div key={i} className="md:col-span-2">
-            {col?.title && <h4 className="mb-3 font-semibold">{col.title}</h4>}
-            <ul className="space-y-2">
-              {(col?.links ?? []).map((l, j) => (
-                <li key={j}>
-                  <Link
-                    href={l.href}
-                    className="transition-colors hover:text-[var(--of-footer-link-hover)]"
-                    style={linkStyle}
-                  >
-                    {l.label}
-                  </Link>
-                </li>
-              ))}
-            </ul>
-          </div>
-        ))}
-      </div>
-
-      <div className="mx-auto max-w-[1140px] px-4 py-4 border-t" style={{ borderColor: 'var(--of-footer-link)' }}>
-        <div className="flex items-center justify-between text-xs" style={{ color: 'var(--of-footer-text)' }}>
-          <span>🌐 English</span>
+    <footer className="w-full border-t bg-muted/30" style={{'--border': 'hsl(var(--border))'} as React.CSSProperties}>
+      <div className="mx-auto max-w-[1140px] px-4 py-3">
+        <div className="flex items-center justify-between text-xs text-muted-foreground">
+          <button onClick={onOpenCookieSettings} className="flex items-center gap-1 hover:text-foreground">
+            <Globe className="h-4 w-4" />
+            <span>English</span>
+          </button>
           <div className="flex items-center gap-2">
-            <span>1.0.216 • OF-381</span>
+            <span>{version}</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>
