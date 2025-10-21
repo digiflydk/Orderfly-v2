@@ -1,3 +1,4 @@
+
 "use client";
 
 import Link from "next/link";
@@ -27,19 +28,18 @@ const socialIcons: Record<string, LucideIcon> = {
 
 export function Footer({ brand, location, version, onOpenCookieSettings, theme }: FooterProps) {
   const footerStyle: React.CSSProperties = {
-    backgroundColor: 'var(--of-footer-bg)',
-    color: 'var(--of-footer-text)',
+    backgroundColor: theme?.bgColor || 'var(--secondary)',
+    color: theme?.textColor || 'var(--foreground)',
   };
 
-  const linkStyle = {
-    color: 'var(--of-footer-link)',
+  const linkStyle: React.CSSProperties = {
+    color: theme?.linkColor || 'var(--foreground)',
   };
 
   return (
     <footer className="w-full" style={footerStyle}>
       <div className="mx-auto max-w-[1140px] px-4 py-10 grid gap-8 md:grid-cols-12">
         <div className="md:col-span-4 space-y-4">
-          <SiteLogo />
           {theme?.legalText && <p className="text-sm opacity-80">{theme.legalText}</p>}
           {(theme?.socials ?? []).length > 0 && (
             <div className="flex gap-4 pt-4">
