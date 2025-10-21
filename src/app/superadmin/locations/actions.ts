@@ -298,7 +298,7 @@ export async function getTimeSlots(locationId: string, forDateStr?: string): Pro
             } else if (isCurrentlyOpen) {
                 asap_pickup = `ASAP (${effectivePrep}-${effectivePrep + 5} min)`;
             } else if (isBeforeOpening) {
-                asap_pickup = `I dag - ${format(addMinutes(openingTime, effectivePrep), 'HH:mm')}`;
+                asap_pickup = `Today - ${format(addMinutes(openingTime, effectivePrep), 'HH:mm')}`;
             } else if (!dateIsToday) {
                 asap_pickup = `${format(forDate, 'eee, MMM d')} - ${format(addMinutes(openingTime, effectivePrep), 'HH:mm')}`;
             }
@@ -314,7 +314,7 @@ export async function getTimeSlots(locationId: string, forDateStr?: string): Pro
             } else if (isCurrentlyOpen) {
                 asap_delivery = `ASAP (${effectivePrep + location.delivery_time}-${effectivePrep + location.delivery_time + 5} min)`;
             } else if (isBeforeOpening) {
-                asap_delivery = `I dag - ${format(addMinutes(openingTime, effectivePrep + location.delivery_time), 'HH:mm')}`;
+                asap_delivery = `Today - ${format(addMinutes(openingTime, effectivePrep + location.delivery_time), 'HH:mm')}`;
             } else if (!dateIsToday) {
                 asap_delivery = `${format(forDate, 'eee, MMM d')} - ${format(addMinutes(openingTime, effectivePrep + location.delivery_time), 'HH:mm')}`;
             }
@@ -328,12 +328,16 @@ export async function getTimeSlots(locationId: string, forDateStr?: string): Pro
             const nextDate = addDays(forDate, i);
             const nextDayInfo = getDayInfo(nextDate);
             if (nextDayInfo) {
+                const dayLabel = i === 1 ? 'Tomorrow' : format(nextDate, 'eeee');
+                const pickupTime = format(addMinutes(nextDayInfo.openingTime, effectivePrep), 'HH:mm');
+                const deliveryTime = format(addMinutes(nextDayInfo.openingTime, effectivePrep + location.delivery_time), 'HH:mm');
+
                 return { 
                     tidsinterval, 
                     pickup_times: [], 
                     delivery_times: [], 
-                    asap_pickup: `I morgen - ${format(addMinutes(nextDayInfo.openingTime, effectivePrep), 'HH:mm')}`, 
-                    asap_delivery: `I morgen - ${format(addMinutes(nextDayInfo.openingTime, effectivePrep + location.delivery_time), 'HH:mm')}`,
+                    asap_pickup: `${dayLabel} - ${pickupTime}`, 
+                    asap_delivery: `${dayLabel} - ${deliveryTime}`,
                     nextAvailableDate: format(nextDate, 'eeee, MMM d'),
                 };
             }

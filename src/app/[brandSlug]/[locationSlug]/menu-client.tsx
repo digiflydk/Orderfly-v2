@@ -19,6 +19,9 @@ import { getProductsByIds } from '@/app/superadmin/products/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalytics } from '@/context/analytics-context';
 import { openDeliveryModal } from '@/components/modals/DeliveryMethodModal';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Info } from 'lucide-react';
+
 
 interface MenuClientProps {
     brand: Brand;
@@ -30,7 +33,7 @@ interface MenuClientProps {
 }
 
 export function MenuClient({ brand, location, initialCategories, initialProducts, initialActiveCombos, initialActiveStandardDiscounts }: MenuClientProps) {
-    const { setCartContext, deliveryType, itemCount } = useCart();
+    const { setCartContext, deliveryType, itemCount, setSelectedTime } = useCart();
     const { trackEvent } = useAnalytics();
     const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
     
@@ -39,6 +42,8 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
     const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
     const [activeStandardDiscounts, setActiveStandardDiscounts] = useState<StandardDiscount[]>(initialActiveStandardDiscounts);
     const [comboProducts, setComboProducts] = useState<ProductForMenu[]>([]);
+    const [showPreorderAlert, setShowPreorderAlert] = useState(false);
+
 
     useEffect(() => {
         setCartContext(brand, location);
@@ -56,6 +61,19 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
                     setComboProducts(fetchedComboProducts);
                 }
             }
+
+            // OF-424: Handle pre-order logic
+            const isAsapAvailable = deliveryType === 'delivery' ? fetchedTimeSlots.asap_delivery : fetchedTimeSlots.asap_pickup;
+            if (!isAsapAvailable && location.allowPreOrder && fetchedTimeSlots.nextAvailableDate) {
+                setShowPreorderAlert(true);
+                const nextAvailableTime = deliveryType === 'delivery' ? fetchedTimeSlots.asap_delivery : fetchedTimeSlots.asap_pickup;
+                if(nextAvailableTime) {
+                    setSelectedTime(nextAvailableTime);
+                }
+            } else {
+                setShowPreorderAlert(false);
+            }
+            
             setIsLoading(false);
         }
 
@@ -64,7 +82,7 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
         // Track view_menu event on initial load
         trackEvent('view_menu', { locationId: location.id, locationSlug: location.slug });
 
-    }, [brand, location, setCartContext, initialActiveCombos, trackEvent]);
+    }, [brand, location, setCartContext, initialActiveCombos, trackEvent, deliveryType, setSelectedTime]);
 
      useEffect(() => {
         // This hook re-fetches discounts on the client side to ensure they are up-to-date,
@@ -73,7 +91,7 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
              const discounts = await getActiveStandardDiscounts({ brandId: brand.id, locationId: location.id, deliveryType });
              setActiveStandardDiscounts(discounts);
         }
-        fetchDiscounts();
+        if (deliveryType) fetchDiscounts();
      }, [deliveryType, brand.id, location.id]);
 
      useEffect(() => {
@@ -118,6 +136,15 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
     return (
         <div className="bg-[#FFF8F0]">
             <div className="container mx-auto max-w-[1140px] px-4">
+                {showPreorderAlert && (
+                    <Alert className="my-4">
+                        <Info className="h-4 w-4" />
+                        <AlertTitle>Location Closed</AlertTitle>
+                        <AlertDescription>
+                            This location is currently closed. You are placing a pre-order for the next available time.
+                        </AlertDescription>
+                    </Alert>
+                )}
                 <div className="lg:hidden py-4">
                    <TimeSelector timeSlots={timeSlots} />
                 </div>
