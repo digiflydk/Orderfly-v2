@@ -230,6 +230,7 @@ export function MobileFloatingCart() {
                 "
             >
                 <Button
+                variant="brand"
                 size="lg"
                 className="w-full h-14 flex justify-between items-center px-4 rounded-none"
                 >
