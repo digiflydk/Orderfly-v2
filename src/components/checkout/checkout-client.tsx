@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useCart } from "@/context/cart-context";
@@ -372,33 +373,35 @@ function CheckoutForm({ location }: { location: Location }) {
     const isTermsAccepted = form.watch('acceptTerms');
 
     const AcceptTermsAndCompleteOrder = ({ isSticky }: { isSticky?: boolean }) => (
-         <div className={isSticky ? "container mx-auto max-w-[1140px] px-0" : ""}>
+         <div className={cn(isSticky && "container mx-auto max-w-[1140px] px-0")}>
             {isDeliveryBelowMinOrder && (
                 <Alert variant="warning" className="mb-4">
                     <AlertTriangle className="h-4 w-4" />
                     <AlertTitle>Minimum order for delivery is not met (kr. {minOrderAmount.toFixed(2)})</AlertTitle>
                 </Alert>
             )}
-            <FormField
-                control={form.control}
-                name="acceptTerms"
-                render={({ field }) => (
-                    <FormItem className="flex flex-row items-center space-x-3 space-y-0 mb-4">
-                    <FormControl>
-                        <Checkbox
-                            checked={field.value}
-                            onCheckedChange={field.onChange}
-                        />
-                    </FormControl>
-                    <div className="space-y-1 leading-none">
-                        <FormLabel className="text-sm">I accept the <Link href={brand?.termsUrl || '/terms'} target="_blank" className="underline">terms and conditions</Link>.</FormLabel>
-                        <FormMessage />
-                    </div>
-                    </FormItem>
-                )}
-            />
-            <Button type="submit" className="w-full h-12" disabled={isPending || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
-                <div className="flex w-full justify-between items-center text-lg">
+            <div className={cn("mb-4", isSticky ? 'px-4' : 'px-0')}>
+                <FormField
+                    control={form.control}
+                    name="acceptTerms"
+                    render={({ field }) => (
+                        <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+                        <FormControl>
+                            <Checkbox
+                                checked={field.value}
+                                onCheckedChange={field.onChange}
+                            />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                            <FormLabel className="text-sm">I accept the <Link href={brand?.termsUrl || '/terms'} target="_blank" className="underline">terms and conditions</Link>.</FormLabel>
+                            <FormMessage />
+                        </div>
+                        </FormItem>
+                    )}
+                />
+            </div>
+            <Button type="submit" className={cn("w-full", isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg")} disabled={isPending || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
+                <div className="flex w-full justify-between items-center px-4">
                     <span>{isPending ? <Loader2 className="animate-spin" /> : 'Complete Order'}</span>
                     <span>kr. {checkoutTotal.toFixed(2)}</span>
                 </div>
@@ -552,7 +555,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     </div>
                 
                     {/* Sticky Footer for Mobile */}
-                    <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-4 z-50 lg:hidden">
+                    <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-0 z-50 lg:hidden">
                         <AcceptTermsAndCompleteOrder isSticky />
                     </div>
                 </form>
