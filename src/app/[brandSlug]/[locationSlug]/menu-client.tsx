@@ -116,13 +116,13 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
     const hasPromotionalDiscounts = activeStandardDiscounts.some(d => d.assignToOfferCategory);
 
     return (
-        <>
+        <div className="bg-[#FFF8F0]">
             <div className="container mx-auto max-w-[1140px] px-4">
                 <div className="lg:hidden py-4">
                    <TimeSelector timeSlots={timeSlots} />
                 </div>
                 
-                 <div className="sticky top-16 z-30 bg-background/90 backdrop-blur-sm -mx-4 px-4 py-2 border-t border-b">
+                 <div className="sticky top-16 z-30 bg-[#FFF8F0]/90 backdrop-blur-sm -mx-4 px-4 py-2 border-t border-b">
                     {isLoading ? (
                         <div className="flex items-center gap-2 h-9">
                             <Skeleton className="h-full w-24 rounded-md" />
@@ -182,6 +182,6 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
                 </div>
             </div>
             {itemCount > 0 && <MobileFloatingCart />}
-        </>
+        </div>
     );
 }
