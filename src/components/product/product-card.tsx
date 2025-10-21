@@ -144,7 +144,7 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
   return (
     <>
       <div 
-        className="group flex items-stretch gap-4 cursor-pointer transition-all duration-200 ease-in-out border-b py-4 md:border md:p-3 md:rounded-lg md:shadow-sm md:hover:shadow-lg md:hover:-translate-y-0.5 bg-white"
+        className="group flex items-stretch gap-4 cursor-pointer transition-all duration-200 ease-in-out border-b py-4 md:border md:p-3 md:rounded-lg md:shadow-sm md:hover:shadow-lg md:hover:-translate-y-0.5"
         onClick={handleCardClick}
       >
         <div className="relative w-24 h-24 md:w-36 md:h-auto shrink-0">
