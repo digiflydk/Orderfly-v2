@@ -25,9 +25,9 @@ export function MenuHeader({ brand }: MenuHeaderProps) {
   }, [location?.id]);
 
   return (
-    <header className="sticky top-0 z-40 w-full border-b bg-white">
+    <header className="sticky top-0 z-40 w-full" style={{ backgroundColor: '#FFF8F0', borderBottom: '1px solid #F2E8DA' }}>
       <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-center md:justify-between px-4">
-        <Link href={`/${brand.slug}`} className="flex items-center">
+        <Link href={`/${brand.slug}`} className="flex items-center text-[#E94F26] text-[32px] uppercase tracking-tight" style={{ fontWeight: 700 }}>
           {brand.logoUrl ? (
             <div className="relative h-12 w-24">
                 <Image
@@ -39,7 +39,7 @@ export function MenuHeader({ brand }: MenuHeaderProps) {
                 />
             </div>
           ) : (
-            <span className="font-bold">{brand.name}</span>
+            <span>{brand.name}</span>
           )}
         </Link>
         <div className="hidden lg:flex items-center gap-2">
