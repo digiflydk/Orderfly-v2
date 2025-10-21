@@ -15,6 +15,7 @@ export function MobileFloatingCart() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pb-[env(safe-area-inset-bottom)] bg-background border-t">
+      {/* This div is now just a direct wrapper with no padding */}
       <div>
         <CartSheet>
           <Button size="lg" className="w-full h-14 text-base rounded-none">

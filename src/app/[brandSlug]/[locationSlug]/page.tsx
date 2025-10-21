@@ -56,20 +56,18 @@ export default async function MenuPage({ params }: AsyncPageProps<{ brandSlug: s
 
   return (
     <>
-      <div className="space-y-6">
-        <HeroBanner location={location} />
-        
-        <MenuClient 
-            brand={brand}
-            location={location}
-            initialCategories={finalCategories}
-            initialProducts={allProductsForLocation as ProductForMenu[]} // Pass all products to client
-            initialActiveCombos={activeCombos}
-            initialActiveStandardDiscounts={activeStandardDiscounts}
-        />
-      </div>
+      <HeroBanner location={location} />
+      <MenuClient 
+          brand={brand}
+          location={location}
+          initialCategories={finalCategories}
+          initialProducts={allProductsForLocation as ProductForMenu[]} // Pass all products to client
+          initialActiveCombos={activeCombos}
+          initialActiveStandardDiscounts={activeStandardDiscounts}
+      />
     </>
   );
 }
+
 
 
