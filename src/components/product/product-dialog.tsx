@@ -170,7 +170,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg">
+      <DialogContent className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
         <ScrollArea className="flex-1">
             <div className="relative aspect-video w-full shrink-0">
                 <Image 
@@ -228,13 +228,17 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                                 ))}
                                             </RadioGroup>
                                         ) : (
-                                            group.toppings.map(topping => (
-                                               <div key={`${product.id}-${topping.id}`} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
+                                            group.toppings.map(topping => {
+                                              const isChecked = currentSelection.includes(topping.id);
+                                              const selectedInGroup = currentSelection.filter(id => group.toppings.some(t => t.id === id));
+                                              const maxReached = Number(group.maxSelection) > 0 && selectedInGroup.length >= Number(group.maxSelection);
+                                              return (
+                                                <div key={`${product.id}-${topping.id}`} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
                                                     <Checkbox 
                                                         id={`${product.id}-${topping.id}`} 
                                                         onCheckedChange={(checked) => handleToppingChange(topping, !!checked, false)}
                                                         checked={!!selectedToppings[topping.id]}
-                                                        disabled={!selectedToppings[topping.id] && group.maxSelection > 0 && selectedInGroup.length >= group.maxSelection}
+                                                        disabled={!selectedToppings[topping.id] && maxReached}
                                                     />
                                                     <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">
                                                         {topping.toppingName}
@@ -243,7 +247,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                                         +DKK {topping.price.toFixed(2)}
                                                     </span>
                                                </div>
-                                            ))
+                                            )
+                                          })
                                         )}
                                     </div>
                                 </div>
@@ -253,7 +258,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 )}
             </div>
         </ScrollArea>
-        <DialogFooter className="p-4 border-t flex-shrink-0 flex-col sm:flex-row sm:flex-wrap sm:justify-between items-center bg-background gap-4">
+        <DialogFooter className="p-4 border-t flex-shrink-0 flex-col sm:flex-row sm:flex-wrap sm:justify-between items-center bg-[#FFF8F0] gap-4">
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
               <MinusCircle />
