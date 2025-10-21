@@ -33,7 +33,7 @@ function applyDiscount(price: number, discount: StandardDiscount): number {
 export function ProductCardSkeleton() {
   return (
     <div className="flex items-stretch gap-2 py-4 border-b md:border md:p-3 md:rounded-lg">
-      <Skeleton className="w-36 h-[99px] rounded-md shrink-0" />
+      <Skeleton className="w-24 h-24 md:w-36 md:h-[99px] rounded-md shrink-0" />
       <div className="flex-1 flex flex-col space-y-2">
         <Skeleton className="h-5 w-3/4" />
         <Skeleton className="h-4 w-full" />
@@ -146,15 +146,16 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
   return (
     <>
       <div 
-        className="group flex items-stretch gap-2 cursor-pointer transition-all duration-200 ease-in-out border-b py-4 md:border md:p-3 md:rounded-lg md:shadow-sm md:hover:shadow-lg md:hover:-translate-y-0.5"
+        className="group flex items-stretch gap-4 cursor-pointer transition-all duration-200 ease-in-out border-b py-4 md:border md:p-3 md:rounded-lg md:shadow-sm md:hover:shadow-lg md:hover:-translate-y-0.5"
         onClick={handleCardClick}
       >
-        <div className="relative w-24 h-24 md:w-36 md:h-[99px] shrink-0">
+        <div className="relative w-24 h-24 md:w-36 md:h-full shrink-0">
           <Image
             src={product.imageUrl || 'https://placehold.co/400x225.png'}
             alt={product.productName}
             fill
             className="object-cover rounded-md"
+            sizes="(max-width: 768px) 33vw, 25vw"
             data-ai-hint="delicious food"
           />
           {badgeText && (
@@ -166,13 +167,14 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
             </Badge>
           )}
         </div>
+
         <div className="flex-1 flex flex-col">
-          <div className="flex justify-between items-start">
-            <h4 className="font-semibold text-sm pr-2">{product.productName}</h4>
-            <div className="text-right">
-                {isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                ) : hasOffer ? (
+          <h4 className="font-semibold text-sm pr-2">{product.productName}</h4>
+          <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{product.description}</p>
+          <div className="flex-grow" />
+          <div className="flex items-end justify-between mt-auto pt-2">
+            <div>
+                {hasOffer ? (
                   <>
                     <p className="font-semibold text-sm text-destructive">DKK {finalPrice?.toFixed(2)}</p>
                     <p className="text-xs text-muted-foreground line-through">DKK {basePrice?.toFixed(2)}</p>
@@ -181,13 +183,10 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
                   <p className="font-semibold text-sm text-foreground">DKK {finalPrice.toFixed(2)}</p>
                 )}
             </div>
-          </div>
-          <p className="text-xs text-muted-foreground line-clamp-2 mt-1 flex-grow">{product.description}</p>
-        </div>
-        <div className="flex items-center ml-2">
-            <Button size="icon" className="h-10 w-10 bg-m3-button hover:bg-m3-buttonHover text-m3-dark rounded-md">
-                <Plus className="h-5 w-5"/>
+            <Button size="icon" className="h-10 w-10 bg-m3-button hover:bg-m3-buttonHover text-m3-dark rounded-md shrink-0">
+                {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5"/>}
             </Button>
+          </div>
         </div>
       </div>
       <ProductDialog
