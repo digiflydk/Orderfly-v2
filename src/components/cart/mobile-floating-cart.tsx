@@ -15,10 +15,10 @@ export function MobileFloatingCart() {
 
   return (
     <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pb-[env(safe-area-inset-bottom)] bg-background border-t">
-      <div className="container mx-auto p-2">
+      <div className="p-2">
         <CartSheet>
           <Button size="lg" className="w-full h-14 text-base">
-            <div className="flex items-center justify-between w-full">
+            <div className="flex items-center justify-between w-full px-2">
               <div className="flex items-center gap-3">
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary text-sm font-bold">
                   {itemCount}
