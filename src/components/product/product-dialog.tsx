@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -208,7 +207,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
 
                         {relevantToppingGroups.map(group => {
                             const isSingleSelect = Number(group.maxSelection) === 1;
-                            const currentSelection = selection[group.id] || [];
+                            const currentSelection = Object.keys(selectedToppings).filter(tid => group.toppings.some(t => t.id === tid));
 
                             return (
                                 <div key={group.id}>
@@ -230,7 +229,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                         ) : (
                                             group.toppings.map(topping => {
                                               const isChecked = currentSelection.includes(topping.id);
-                                              const selectedInGroup = currentSelection.filter(id => group.toppings.some(t => t.id === id));
+                                              const selectedInGroup = currentSelection;
                                               const maxReached = Number(group.maxSelection) > 0 && selectedInGroup.length >= Number(group.maxSelection);
                                               return (
                                                 <div key={`${product.id}-${topping.id}`} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
@@ -258,7 +257,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 )}
             </div>
         </ScrollArea>
-        <DialogFooter className="p-4 border-t flex-shrink-0 flex-col sm:flex-row sm:flex-wrap sm:justify-between items-center bg-[#FFF8F0] gap-4">
+        <DialogFooter className="p-4 border-t flex-shrink-0 flex flex-col sm:flex-row items-center justify-between bg-[#FFF8F0] gap-4">
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
               <MinusCircle />
@@ -271,19 +270,18 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
           <Button
             onClick={handleAddToCart}
             size="lg"
-            variant="brand"
             className="w-full sm:flex-1 h-14"
           >
             <div className="flex w-full justify-between items-center text-base">
-              <span>Add to Cart</span>
-              <div className="flex items-baseline gap-2">
+                <span>Add to Cart</span>
+                <div className="flex items-baseline gap-2">
                 {basePrice > finalPrice && (
                   <p className="text-sm font-normal line-through opacity-80">
                     kr. {((basePrice + toppingsTotal) * quantity).toFixed(2)}
                   </p>
                 )}
                 <span>DKK {totalItemPrice.toFixed(2)}</span>
-              </div>
+                </div>
             </div>
           </Button>
         </DialogFooter>
