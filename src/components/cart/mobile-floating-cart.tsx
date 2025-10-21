@@ -1,24 +1,34 @@
 
 'use client';
 
-import { ShoppingBag } from 'lucide-react';
-import { useCart } from '@/context/cart-context';
-import { CartSheet } from './cart-sheet';
-import { Button } from '../ui/button';
-import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetClose } from '../ui/sheet';
-import { ScrollArea } from '../ui/scroll-area';
-import { Separator } from '../ui/separator';
-import { useAnalytics } from '@/context/analytics-context';
-import { useTransition } from 'react';
+import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
+import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useToast } from '@/hooks/use-toast';
+import { useState, useTransition } from 'react';
+
+import { useCart } from '@/context/cart-context';
+import type { Product, Upsell, ProductForMenu } from '@/types';
 import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
 import { UpsellDialog } from '@/components/checkout/upsell-dialog';
-import * as React from 'react';
-import Image from 'next/image';
-import { Trash2, Loader2, Tag } from 'lucide-react';
-import { Badge } from '../ui/badge';
+import { useAnalytics } from '@/context/analytics-context';
 
+import { Button } from '@/components/ui/button';
+import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
+import { ScrollArea } from '@/components/ui/scroll-area';
+import { Separator } from '@/components/ui/separator';
+import { Badge } from '../ui/badge';
+import { useToast } from '@/hooks/use-toast';
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+  SheetFooter,
+  SheetClose,
+} from '@/components/ui/sheet';
+import * as React from 'react';
+import { cn } from '@/lib/utils';
 
 function CartContents() {
     const { 
@@ -230,7 +240,6 @@ export function MobileFloatingCart() {
                 "
             >
                 <Button
-                variant="default"
                 size="lg"
                 className="w-full h-14 flex justify-between items-center px-4 rounded-none"
                 >
