@@ -65,10 +65,11 @@ export default async function MenuPage({ params }: AsyncPageProps<{ brandSlug: s
             initialCategories={finalCategories}
             initialProducts={allProductsForLocation as ProductForMenu[]} // Pass all products to client
             initialActiveCombos={activeCombos}
-            initialActiveStandardDiscounts={activeStandardDiscounts} // Pass initial discounts
+            initialActiveStandardDiscounts={activeStandardDiscounts}
         />
       </div>
     </>
   );
 }
+
 
