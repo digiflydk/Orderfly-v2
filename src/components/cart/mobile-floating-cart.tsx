@@ -71,7 +71,7 @@ function CartContents() {
                                 <div className="flex-1">
                                     <div className="font-medium">{item.productName} {item.itemType === 'combo' && <Badge>Combo</Badge>}</div>
                                     <div className="text-sm">
-                                        {hasDiscount ? (
+                                          {hasDiscount ? (
                                             <>
                                                 <span className="font-bold text-foreground"> kr.{discountedLinePrice.toFixed(2)}</span>
                                                 <span className="text-muted-foreground line-through ml-2">kr.{originalLinePrice.toFixed(2)}</span>
@@ -81,11 +81,11 @@ function CartContents() {
                                         )}
                                     </div>
                                     {item.toppings.length > 0 && (
-                                    <ul className="text-xs text-muted-foreground pl-4 mt-1 list-disc">
-                                        {item.toppings.map(topping => (
-                                            <li key={topping.name}>{topping.name} (+kr.{topping.price.toFixed(2)})</li>
-                                        ))}
-                                    </ul>
+                                        <ul className="text-xs text-muted-foreground pl-4 mt-1 list-disc">
+                                            {item.toppings.map(topping => (
+                                                <li key={topping.name}>{topping.name} (+kr.{topping.price.toFixed(2)})</li>
+                                            ))}
+                                        </ul>
                                     )}
                                     {item.comboSelections && item.comboSelections.length > 0 && (
                                         <ul className="text-xs text-muted-foreground pl-4 mt-1 list-disc">
@@ -129,7 +129,8 @@ function CartContents() {
                     })}
                 </div>
             </ScrollArea>
-            <SheetFooter className="mt-auto flex-col space-y-4 pt-4">
+            <SheetFooter className="mt-auto flex-col space-y-0 p-0">
+              <div className="space-y-4 px-4 py-4">
                 <Separator />
                 <div className="w-full text-sm space-y-2">
                     <div className="flex justify-between">
@@ -137,21 +138,21 @@ function CartContents() {
                         <span>kr.{subtotal.toFixed(2)}</span>
                     </div>
                     {itemDiscount > 0 && (
-                        <div className="flex justify-between text-green-600">
-                            <span>Item Discounts</span>
-                            <span>- kr.{itemDiscount.toFixed(2)}</span>
-                        </div>
+                    <div className="flex justify-between text-green-600">
+                        <span>Item Discounts</span>
+                        <span>- kr.{itemDiscount.toFixed(2)}</span>
+                    </div>
                     )}
                     {cartDiscount && (
-                            <div className="flex justify-between text-green-600">
-                            <div className="flex items-center gap-1">
-                                <Tag className="h-4 w-4" />
-                                <span>{cartDiscount.name}</span>
-                            </div>
-                            <span>- kr.{cartDiscount.amount.toFixed(2)}</span>
+                        <div className="flex justify-between text-green-600">
+                        <div className="flex items-center gap-1">
+                            <Tag className="h-4 w-4" />
+                            <span>{cartDiscount.name}</span>
                         </div>
+                        <span>- kr.{cartDiscount.amount.toFixed(2)}</span>
+                    </div>
                     )}
-                     {freeDeliveryDiscountApplied && (
+                    {freeDeliveryDiscountApplied && (
                         <div className="flex justify-between text-green-600">
                             <span>Free Delivery</span>
                             <span>- kr.{deliveryFee.toFixed(2)}</span>
@@ -163,6 +164,7 @@ function CartContents() {
                     <span>Total</span>
                     <span>kr.{cartTotal.toFixed(2)}</span>
                 </div>
+              </div>
             </SheetFooter>
         </>
     );
@@ -240,16 +242,18 @@ export function MobileFloatingCart() {
                 "
             >
                 <Button
-                size="lg"
-                className="w-full h-16 flex justify-between items-center px-4 rounded-none"
+                    size="lg"
+                    className="w-full h-16 rounded-none text-base"
                 >
-                    <div className="flex items-center gap-3">
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary">
-                            {itemCount}
+                    <div className="w-full flex justify-between items-center px-4">
+                        <div className="flex items-center gap-3">
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary">
+                                {itemCount}
+                            </div>
+                            <span className="font-semibold">View cart</span>
                         </div>
-                        <span className="font-semibold">View cart</span>
+                        <span className="font-bold">kr. {cartTotal.toFixed(2)}</span>
                     </div>
-                    <span className="font-bold">kr. {cartTotal.toFixed(2)}</span>
                 </Button>
             </div>
         </SheetTrigger>
