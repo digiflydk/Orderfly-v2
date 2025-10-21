@@ -123,7 +123,6 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
         return;
     }
 
-    // Only fetch toppings if the product has them
     if (product.toppingGroupIds && product.toppingGroupIds.length > 0) {
         startTransition(async () => {
             const [toppings, toppingGroups] = await Promise.all([
@@ -135,7 +134,6 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
             setIsDialogOpen(true);
         });
     } else {
-        // If no toppings, open dialog immediately
         setAllToppings([]);
         setAllToppingGroups([]);
         setIsDialogOpen(true);
@@ -146,7 +144,7 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
   return (
     <>
       <div 
-        className="group flex items-stretch gap-4 cursor-pointer transition-all duration-200 ease-in-out border-b py-4 md:border md:p-3 md:rounded-lg md:shadow-sm md:hover:shadow-lg md:hover:-translate-y-0.5"
+        className="group flex items-stretch gap-4 cursor-pointer transition-all duration-200 ease-in-out border-b py-4 md:border md:p-3 md:rounded-lg md:shadow-sm md:hover:shadow-lg md:hover:-translate-y-0.5 bg-white"
         onClick={handleCardClick}
       >
         <div className="relative w-24 h-24 md:w-36 md:h-auto shrink-0">
@@ -178,14 +176,14 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
             <div>
                 {hasOffer ? (
                   <>
-                    <p className="font-semibold text-sm text-destructive">DKK {finalPrice?.toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground line-through">DKK {basePrice?.toFixed(2)}</p>
+                    <p className="font-semibold text-sm text-destructive">kr. {finalPrice?.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground line-through">kr. {basePrice?.toFixed(2)}</p>
                   </>
                 ) : (
-                  <p className="font-semibold text-sm text-foreground">DKK {finalPrice.toFixed(2)}</p>
+                  <p className="font-semibold text-sm text-foreground">kr. {finalPrice.toFixed(2)}</p>
                 )}
             </div>
-            <Button size="icon" className="h-10 w-10 bg-m3-button hover:bg-m3-buttonHover text-m3-dark rounded-md shrink-0">
+            <Button size="icon" className="h-10 w-10 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark rounded-md shrink-0">
                 {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5"/>}
             </Button>
           </div>
