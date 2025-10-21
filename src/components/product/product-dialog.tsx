@@ -208,7 +208,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
 
                         {relevantToppingGroups.map(group => {
                             const isSingleSelect = Number(group.maxSelection) === 1;
-                            const selectedInGroup = group.toppings.filter(t => selectedToppings[t.id]);
+                            const currentSelection = selection[group.id] || [];
 
                             return (
                                 <div key={group.id}>
@@ -218,13 +218,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                     </div>
                                     <div className="space-y-2">
                                         {isSingleSelect ? (
-                                            <RadioGroup
-                                                value={selectedInGroup[0]?.id || ""}
-                                                onValueChange={(value) => {
-                                                    const topping = group.toppings.find(t => t.id === value);
-                                                    if (topping) handleToppingChange(topping, true, true);
-                                                }}
-                                            >
+                                            <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleToppingChange(group.toppings.find(t => t.id === val)!, true, true)}>
                                                 {group.toppings.map(topping => (
                                                     <div key={`${product.id}-${topping.id}`} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
                                                         <RadioGroupItem value={topping.id} id={`${product.id}-${topping.id}`} />
@@ -259,7 +253,6 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 )}
             </div>
         </ScrollArea>
-
         <DialogFooter className="p-4 border-t flex-shrink-0 flex-col sm:flex-row sm:flex-wrap sm:justify-between items-center bg-background gap-4">
           <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
@@ -270,14 +263,23 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
               <PlusCircle />
             </Button>
           </div>
-          <Button onClick={handleAddToCart} size="lg" className="w-full sm:flex-1">
-             <div className="flex w-full justify-between items-center">
-                <span>Add to Cart</span>
-                <div className="flex items-baseline gap-2">
-                 {(basePrice > finalPrice) && <p className="text-sm font-normal line-through opacity-80">kr. {((basePrice + toppingsTotal) * quantity).toFixed(2)}</p>}
-                 <span>DKK {totalItemPrice.toFixed(2)}</span>
-                </div>
-             </div>
+          <Button
+            onClick={handleAddToCart}
+            size="lg"
+            variant="brand"
+            className="w-full sm:flex-1 h-14"
+          >
+            <div className="flex w-full justify-between items-center text-base">
+              <span>Add to Cart</span>
+              <div className="flex items-baseline gap-2">
+                {basePrice > finalPrice && (
+                  <p className="text-sm font-normal line-through opacity-80">
+                    kr. {((basePrice + toppingsTotal) * quantity).toFixed(2)}
+                  </p>
+                )}
+                <span>DKK {totalItemPrice.toFixed(2)}</span>
+              </div>
+            </div>
           </Button>
         </DialogFooter>
       </DialogContent>
