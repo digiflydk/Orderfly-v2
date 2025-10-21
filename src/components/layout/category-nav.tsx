@@ -13,6 +13,7 @@ import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 interface CategoryNavProps {
     categories: Category[];
     hasCombos: boolean;
+    hasPromotionalDiscounts: boolean; // <-- Add this prop
     brand: Brand;
     activeCategory: string;
 }
@@ -36,7 +37,7 @@ const getIconForSpecialCategory = (type: 'offers' | 'combos') => {
     return null;
 }
 
-export function CategoryNav({ categories, hasCombos, brand, activeCategory }: CategoryNavProps) {
+export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, brand, activeCategory }: CategoryNavProps) {
     const navRef = useRef<HTMLDivElement>(null);
     const activeRef = useRef<HTMLButtonElement>(null);
     
@@ -59,7 +60,6 @@ export function CategoryNav({ categories, hasCombos, brand, activeCategory }: Ca
         }
     }
     
-    // Sort categories here to ensure nav matches page order
     const sortedCategories = useMemo(() => {
         return [...categories].sort((a,b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
     }, [categories]);
@@ -71,7 +71,7 @@ export function CategoryNav({ categories, hasCombos, brand, activeCategory }: Ca
         <div className="flex items-center justify-between gap-4">
              <ScrollArea className="w-full whitespace-nowrap">
                 <div ref={navRef} className="flex w-max space-x-2">
-                    {offersCategory && (
+                    {hasPromotionalDiscounts && offersCategory && (
                         <Button
                             key={offersCategory.id}
                             variant={activeCategory === offersCategory.id ? 'secondary' : 'outline'}

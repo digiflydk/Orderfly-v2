@@ -132,7 +132,8 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
                     ) : (
                        <CategoryNav 
                             categories={initialCategories} 
-                            hasCombos={initialActiveCombos.length > 0} 
+                            hasCombos={initialActiveCombos.length > 0}
+                            hasPromotionalDiscounts={hasPromotionalDiscounts}
                             brand={brand}
                             activeCategory={activeCategory}
                         />
