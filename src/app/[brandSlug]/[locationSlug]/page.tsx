@@ -56,7 +56,7 @@ export default async function MenuPage({ params }: AsyncPageProps<{ brandSlug: s
 
   return (
     <>
-      <div className="space-y-6 pt-6">
+      <div className="space-y-6">
         <HeroBanner location={location} />
         
         <MenuClient 
@@ -71,3 +71,4 @@ export default async function MenuPage({ params }: AsyncPageProps<{ brandSlug: s
     </>
   );
 }
+

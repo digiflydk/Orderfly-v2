@@ -118,7 +118,7 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
     return (
         <>
             <div className="container mx-auto max-w-[1140px] px-4">
-                <div className="lg:hidden pb-4">
+                <div className="lg:hidden py-4">
                    <TimeSelector timeSlots={timeSlots} />
                 </div>
                 
