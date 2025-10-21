@@ -1,9 +1,10 @@
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { MinusCircle, PlusCircle, X } from 'lucide-react';
-import type { ToppingGroup, Topping, CartItemTopping, StandardDiscount, Allergen } from '@/types';
+import type { Topping, ToppingGroup, CartItemTopping, StandardDiscount, Allergen } from '@/types';
 import type { ProductForMenu } from '@/app/superadmin/products/actions';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
@@ -149,7 +150,21 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   const toppingsTotal = Object.values(selectedToppings).reduce((sum, topping) => sum + topping.price, 0);
   const totalItemPrice = (finalPrice + toppingsTotal) * quantity;
 
+  const isSelectionValid = useMemo(() => {
+    return relevantToppingGroups.every(group => {
+        const count = Object.keys(selectedToppings).filter(tid => group.toppings.some(t => t.id === tid)).length;
+        const min = Number(group.minSelection);
+        const max = Number(group.maxSelection);
+
+        if (count < min) return false;
+        if (max > 0 && count > max) return false;
+        
+        return true;
+    });
+}, [selectedToppings, relevantToppingGroups]);
+
   const handleAddToCart = () => {
+    if (!isSelectionValid) return;
     const finalToppings = Object.values(selectedToppings);
     addToCart(product, quantity, finalToppings, basePrice, finalPrice);
     
@@ -256,7 +271,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 )}
             </div>
         </ScrollArea>
-        <DialogFooter className="border-t flex-shrink-0 flex flex-col items-center bg-[#FFF8F0] gap-4 w-full p-0">
+        <DialogFooter className="p-0 border-t flex-shrink-0 flex flex-col items-center bg-[#FFF8F0] gap-4 w-full">
           <div className="flex items-center gap-2 pt-4">
             <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
               <MinusCircle />
