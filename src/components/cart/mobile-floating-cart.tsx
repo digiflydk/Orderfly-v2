@@ -229,19 +229,19 @@ export function MobileFloatingCart() {
 
   return (
     <>
-      <div className="h-14 md:hidden" aria-hidden="true" />
+      <div className="h-16 md:hidden" aria-hidden="true" />
       <Sheet>
         <SheetTrigger asChild>
             <div
                 className="
                 fixed left-0 right-0 bottom-0 z-50 md:hidden
-                bg-background border-t
+                bg-background
                 pb-[max(env(safe-area-inset-bottom),0px)]
                 "
             >
                 <Button
                 size="lg"
-                className="w-full h-14 flex justify-between items-center px-4 rounded-none"
+                className="w-full h-16 flex justify-between items-center px-4 rounded-none"
                 >
                     <div className="flex items-center gap-3">
                         <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary">
