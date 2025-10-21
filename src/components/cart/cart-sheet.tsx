@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
@@ -21,7 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
-import type { Product, Upsell } from '@/types';
+import type { Product, Upsell, ProductForMenu } from '@/types';
 import { UpsellDialog } from '@/components/checkout/upsell-dialog';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
@@ -182,39 +181,41 @@ export function CartSheet() {
                 })}
                 </div>
               </ScrollArea>
-              <SheetFooter className="mt-auto flex-col space-y-4 pt-4 px-4">
-                  <Separator />
-                   <div className="w-full text-sm space-y-2">
-                        <div className="flex justify-between">
-                            <span>Subtotal</span>
-                            <span>kr.{subtotal.toFixed(2)}</span>
-                        </div>
-                        {itemDiscount > 0 && (
-                           <div className="flex justify-between text-green-600">
-                                <span>Item Discounts</span>
-                                <span>- kr.{itemDiscount.toFixed(2)}</span>
+              <SheetFooter className="mt-auto flex-col space-y-0 p-0">
+                  <div className="space-y-4 px-4 py-4">
+                    <Separator />
+                    <div className="w-full text-sm space-y-2">
+                            <div className="flex justify-between">
+                                <span>Subtotal</span>
+                                <span>kr.{subtotal.toFixed(2)}</span>
                             </div>
-                        )}
-                        {cartDiscount && (
-                             <div className="flex justify-between text-green-600">
-                                <div className="flex items-center gap-1">
-                                    <Tag className="h-4 w-4" />
-                                    <span>{cartDiscount.name}</span>
-                                </div>
-                                <span>- kr.{cartDiscount.amount.toFixed(2)}</span>
-                            </div>
-                        )}
-                        {freeDeliveryDiscountApplied && (
+                            {itemDiscount > 0 && (
                             <div className="flex justify-between text-green-600">
-                                <span>Free Delivery</span>
-                                <span>- kr.{deliveryFee.toFixed(2)}</span>
-                            </div>
-                        )}
+                                    <span>Item Discounts</span>
+                                    <span>- kr.{itemDiscount.toFixed(2)}</span>
+                                </div>
+                            )}
+                            {cartDiscount && (
+                                <div className="flex justify-between text-green-600">
+                                    <div className="flex items-center gap-1">
+                                        <Tag className="h-4 w-4" />
+                                        <span>{cartDiscount.name}</span>
+                                    </div>
+                                    <span>- kr.{cartDiscount.amount.toFixed(2)}</span>
+                                </div>
+                            )}
+                            {freeDeliveryDiscountApplied && (
+                                <div className="flex justify-between text-green-600">
+                                    <span>Free Delivery</span>
+                                    <span>- kr.{deliveryFee.toFixed(2)}</span>
+                                </div>
+                            )}
+                        </div>
+                        <Separator/>
+                    <div className="flex justify-between font-bold">
+                        <span>Total</span>
+                        <span>kr.{cartTotal.toFixed(2)}</span>
                     </div>
-                    <Separator/>
-                  <div className="flex justify-between font-bold">
-                      <span>Total</span>
-                      <span>kr.{cartTotal.toFixed(2)}</span>
                   </div>
                 <SheetClose asChild>
                   <Button onClick={handleCheckoutClick} className="w-full h-14 rounded-none text-base" disabled={isPending}>

@@ -253,13 +253,13 @@ export function MobileFloatingCart() {
                 </Button>
             </div>
         </SheetTrigger>
-        <SheetContent className="flex flex-col w-[99vw]">
-            <SheetHeader>
+        <SheetContent className="flex flex-col w-[99vw] p-0">
+            <SheetHeader className="p-4">
                 <SheetTitle>{itemCount} products in your cart</SheetTitle>
             </SheetHeader>
             <CartContents/>
-            <SheetFooter>
-                <Button onClick={handleCheckoutClick} className="w-full" disabled={isPending}>
+            <SheetFooter className="p-0">
+                <Button onClick={handleCheckoutClick} className="w-full h-14 rounded-none text-base" disabled={isPending}>
                     {isPending ? <Loader2 className="animate-spin" /> : 'Proceed to Checkout'}
                 </Button>
             </SheetFooter>
