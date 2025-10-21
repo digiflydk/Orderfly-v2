@@ -14,11 +14,12 @@ export function MobileFloatingCart() {
   }
 
   return (
-    <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-50 lg:hidden">
-      <CartSheet>
-          <Button size="lg" className="rounded-full shadow-lg h-16 text-base px-6">
-            <div className="flex items-center justify-between w-full gap-4">
-              <div className="flex items-center gap-2">
+    <div className="fixed bottom-0 left-0 right-0 z-50 lg:hidden pb-[env(safe-area-inset-bottom)] bg-background border-t">
+      <div className="container mx-auto p-2">
+        <CartSheet>
+          <Button size="lg" className="w-full h-14 text-base">
+            <div className="flex items-center justify-between w-full">
+              <div className="flex items-center gap-3">
                 <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary text-sm font-bold">
                   {itemCount}
                 </div>
@@ -27,7 +28,8 @@ export function MobileFloatingCart() {
               <span className="font-bold">kr. {cartTotal.toFixed(2)}</span>
             </div>
           </Button>
-      </CartSheet>
+        </CartSheet>
+      </div>
     </div>
   );
 }
