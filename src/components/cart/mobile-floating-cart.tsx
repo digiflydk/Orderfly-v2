@@ -235,12 +235,12 @@ export function MobileFloatingCart() {
                 className="w-full h-14 flex justify-between items-center px-4 rounded-none"
                 >
                     <div className="flex items-center gap-3">
-                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary text-sm font-bold">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary-foreground text-sm font-bold">
                             {itemCount}
                         </div>
-                        <span className="font-semibold">View cart</span>
+                        <span className="font-semibold text-primary-foreground">View cart</span>
                     </div>
-                    <span className="font-bold">kr. {cartTotal.toFixed(2)}</span>
+                    <span className="font-bold text-primary-foreground">kr. {cartTotal.toFixed(2)}</span>
                 </Button>
             </div>
         </SheetTrigger>
