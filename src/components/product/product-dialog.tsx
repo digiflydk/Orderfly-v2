@@ -257,33 +257,33 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 )}
             </div>
         </ScrollArea>
-        <DialogFooter className="p-4 border-t flex-shrink-0 flex flex-col sm:flex-row items-center justify-between bg-[#FFF8F0] gap-4">
-            <div className="flex items-center gap-2">
-                <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
-                <MinusCircle />
-                </Button>
-                <span className="text-lg font-bold w-10 text-center">{quantity}</span>
-                <Button variant="outline" size="icon" onClick={() => setQuantity(q => q + 1)}>
-                <PlusCircle />
-                </Button>
-            </div>
-            <Button
-                size="lg"
-                className="w-full sm:flex-1 h-14"
-                onClick={handleAddToCart}
-            >
-                <div className="flex w-full justify-between items-center text-base">
-                    <span>Add to Cart</span>
-                    <div className="flex items-baseline gap-2">
-                    {basePrice > finalPrice && (
-                    <p className="text-sm font-normal line-through opacity-80">
-                        kr. {((basePrice + toppingsTotal) * quantity).toFixed(2)}
-                    </p>
-                    )}
-                    <span>DKK {totalItemPrice.toFixed(2)}</span>
-                    </div>
-                </div>
+        <DialogFooter className="py-4 border-t flex-shrink-0 flex flex-col items-center justify-between bg-[#FFF8F0] gap-4 w-full">
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
+              <MinusCircle />
             </Button>
+            <span className="text-lg font-bold w-10 text-center">{quantity}</span>
+            <Button variant="outline" size="icon" onClick={() => setQuantity(q => q + 1)}>
+              <PlusCircle />
+            </Button>
+          </div>
+          <Button
+            size="lg"
+            className="w-full h-14"
+            onClick={handleAddToCart}
+          >
+            <div className="flex w-full justify-between items-center text-base">
+                <span>Add to Cart</span>
+                <div className="flex items-baseline gap-2">
+                {basePrice > finalPrice && (
+                <p className="text-sm font-normal line-through opacity-80">
+                    kr. {((basePrice + toppingsTotal) * quantity).toFixed(2)}
+                </p>
+                )}
+                <span>DKK {totalItemPrice.toFixed(2)}</span>
+                </div>
+            </div>
+          </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
