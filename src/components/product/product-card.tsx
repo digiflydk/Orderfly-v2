@@ -4,7 +4,7 @@
 import Image from "next/image";
 import type { Topping, ToppingGroup, StandardDiscount, Allergen } from "@/types";
 import type { ProductForMenu } from "@/app/superadmin/products/actions";
-import { useState, useMemo, useTransition } from "react";
+import { useState, useMemo, useTransition, useEffect } from "react";
 import { ProductDialog } from "./product-dialog";
 import { useCart } from "@/context/cart-context";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,8 @@ import { cn } from "@/lib/utils";
 import { Skeleton } from "../ui/skeleton";
 import { getToppings, getToppingGroups } from "@/app/superadmin/toppings/actions";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, Plus } from "lucide-react";
+import { Button } from "../ui/button";
 
 interface ProductCardProps {
   product: ProductForMenu;
@@ -148,7 +149,7 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
         className="group flex items-stretch gap-2 cursor-pointer transition-all duration-200 ease-in-out border-b py-4 md:border md:p-3 md:rounded-lg md:shadow-sm md:hover:shadow-lg md:hover:-translate-y-0.5"
         onClick={handleCardClick}
       >
-        <div className="relative w-36 h-[99px] shrink-0">
+        <div className="relative w-24 h-24 md:w-36 md:h-[99px] shrink-0">
           <Image
             src={product.imageUrl || 'https://placehold.co/400x225.png'}
             alt={product.productName}
@@ -165,23 +166,28 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
             </Badge>
           )}
         </div>
-        <div className="flex-1 flex flex-col space-y-1">
-          <div>
-            <h4 className="font-semibold text-sm">{product.productName}</h4>
-            <p className="text-xs text-muted-foreground line-clamp-2">{product.description}</p>
+        <div className="flex-1 flex flex-col">
+          <div className="flex justify-between items-start">
+            <h4 className="font-semibold text-sm pr-2">{product.productName}</h4>
+            <div className="text-right">
+                {isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                ) : hasOffer ? (
+                  <>
+                    <p className="font-semibold text-sm text-destructive">DKK {finalPrice?.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground line-through">DKK {basePrice?.toFixed(2)}</p>
+                  </>
+                ) : (
+                  <p className="font-semibold text-sm text-foreground">DKK {finalPrice.toFixed(2)}</p>
+                )}
+            </div>
           </div>
-          <div className="flex items-baseline gap-2 pt-1 mt-auto">
-            {isPending ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-            ) : hasOffer ? (
-              <>
-                <p className="font-semibold text-sm text-destructive">DKK {finalPrice?.toFixed(2)}</p>
-                <p className="text-sm text-muted-foreground line-through">DKK {basePrice?.toFixed(2)}</p>
-              </>
-            ) : (
-              <p className="font-semibold text-sm text-primary">DKK {finalPrice.toFixed(2)}</p>
-            )}
-          </div>
+          <p className="text-xs text-muted-foreground line-clamp-2 mt-1 flex-grow">{product.description}</p>
+        </div>
+        <div className="flex items-center ml-2">
+            <Button size="icon" className="h-10 w-10 bg-m3-button hover:bg-m3-buttonHover text-m3-dark rounded-md">
+                <Plus className="h-5 w-5"/>
+            </Button>
         </div>
       </div>
       <ProductDialog
