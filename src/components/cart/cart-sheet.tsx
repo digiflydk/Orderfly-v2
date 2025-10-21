@@ -96,13 +96,13 @@ export function CartSheet() {
             <ShoppingBag />
           </Button>
         </SheetTrigger>
-        <SheetContent className="flex flex-col w-[99vw]">
-          <SheetHeader>
+        <SheetContent className="flex flex-col w-[99vw] p-0">
+          <SheetHeader className="p-4">
             <SheetTitle>{itemCount} products in your cart</SheetTitle>
           </SheetHeader>
           {cartItems.length > 0 ? (
             <>
-              <ScrollArea className="flex-1 pr-4">
+              <ScrollArea className="flex-1 px-4">
                 <div className="space-y-4">
                   {cartItems.map(item => {
                     const toppingsPrice = item.toppings.reduce((sum, topping) => sum + topping.price, 0) * item.quantity;
@@ -182,7 +182,7 @@ export function CartSheet() {
                 })}
                 </div>
               </ScrollArea>
-              <SheetFooter className="mt-auto flex-col space-y-4 pt-4">
+              <SheetFooter className="mt-auto flex-col space-y-4 pt-4 px-4">
                   <Separator />
                    <div className="w-full text-sm space-y-2">
                         <div className="flex justify-between">
@@ -217,7 +217,7 @@ export function CartSheet() {
                       <span>kr.{cartTotal.toFixed(2)}</span>
                   </div>
                 <SheetClose asChild>
-                  <Button onClick={handleCheckoutClick} className="w-full" disabled={isPending}>
+                  <Button onClick={handleCheckoutClick} className="w-full h-14 rounded-none text-base" disabled={isPending}>
                     {isPending ? <Loader2 className="animate-spin" /> : 'Proceed to Checkout'}
                   </Button>
                 </SheetClose>
