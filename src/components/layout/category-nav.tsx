@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useRef, useEffect, useMemo } from 'react';
@@ -13,7 +14,7 @@ import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 interface CategoryNavProps {
     categories: Category[];
     hasCombos: boolean;
-    hasPromotionalDiscounts: boolean; // <-- Add this prop
+    hasPromotionalDiscounts: boolean;
     brand: Brand;
     activeCategory: string;
 }
@@ -74,7 +75,7 @@ export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, br
                     {hasPromotionalDiscounts && offersCategory && (
                         <Button
                             key={offersCategory.id}
-                            variant={activeCategory === offersCategory.id ? 'secondary' : 'outline'}
+                            variant={activeCategory === offersCategory.id ? 'brand' : 'outline'}
                             size="sm"
                             ref={activeCategory === offersCategory.id ? activeRef : null}
                             onClick={() => handleCategoryClick(offersCategory.id)}
@@ -86,7 +87,7 @@ export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, br
                     )}
                     {hasCombos && (
                         <Button
-                            variant={activeCategory === 'combos' ? 'secondary' : 'outline'}
+                            variant={activeCategory === 'combos' ? 'brand' : 'outline'}
                             size="sm"
                             ref={activeCategory === 'combos' ? activeRef : null}
                             onClick={() => handleCategoryClick('combos')}
@@ -99,7 +100,7 @@ export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, br
                     {regularCategories.map(category => (
                         <Button 
                             key={category.id}
-                            variant={activeCategory === category.id ? 'secondary' : 'outline'}
+                            variant={activeCategory === category.id ? 'brand' : 'outline'}
                             size="sm"
                             ref={activeCategory === category.id ? activeRef : null}
                             onClick={() => handleCategoryClick(category.id)}
