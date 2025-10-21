@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useCart } from "@/context/cart-context";
@@ -32,6 +31,7 @@ import { useAnalytics } from '@/context/analytics-context';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, useStripe, useElements } from '@stripe/react-stripe-js';
 import { getActiveStripeKey } from "@/app/superadmin/settings/actions";
+import { cn } from "@/lib/utils";
 
 
 const checkoutSchema = z.object({
