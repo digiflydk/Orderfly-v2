@@ -5,38 +5,264 @@ import { ShoppingBag } from 'lucide-react';
 import { useCart } from '@/context/cart-context';
 import { CartSheet } from './cart-sheet';
 import { Button } from '../ui/button';
-import { SheetTrigger } from '../ui/sheet';
+import { Sheet, SheetTrigger, SheetContent, SheetHeader, SheetTitle, SheetFooter, SheetClose } from '../ui/sheet';
+import { ScrollArea } from '../ui/scroll-area';
+import { Separator } from '../ui/separator';
+import { useAnalytics } from '@/context/analytics-context';
+import { useTransition } from 'react';
+import { useRouter } from 'next/navigation';
+import { useToast } from '@/hooks/use-toast';
+import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
+import { UpsellDialog } from '@/components/checkout/upsell-dialog';
+import * as React from 'react';
+import Image from 'next/image';
+import { Trash2, Loader2, Tag } from 'lucide-react';
+import { Badge } from '../ui/badge';
+
+
+function CartContents() {
+    const { 
+        cartItems, 
+        removeFromCart, 
+        updateQuantity, 
+        cartTotal, 
+        subtotal, 
+        itemDiscount, 
+        cartDiscount, 
+        deliveryFee, 
+        freeDeliveryDiscountApplied,
+        bagFee,
+        adminFee,
+        vatAmount,
+        brand
+    } = useCart();
+
+    return (
+        <>
+            <ScrollArea className="flex-1 pr-4">
+                <div className="space-y-4">
+                    {cartItems.map(item => {
+                        const toppingsPrice = item.toppings.reduce((sum, topping) => sum + topping.price, 0) * item.quantity;
+                        const originalLinePrice = item.basePrice * item.quantity + toppingsPrice;
+                        const discountedLinePrice = item.price * item.quantity + toppingsPrice;
+                        const hasDiscount = originalLinePrice > discountedLinePrice;
+
+                        return (
+                            <div key={item.cartItemId} className="flex items-start gap-4">
+                                <div className="relative h-16 w-16 shrink-0">
+                                <Image
+                                    src={item.imageUrl || 'https://placehold.co/100x100.png'}
+                                    alt={item.productName}
+                                    fill
+                                    className="rounded-md object-cover"
+                                    data-ai-hint="delicious food"
+                                />
+                                </div>
+                                <div className="flex-1">
+                                    <div className="font-medium">{item.productName} {item.itemType === 'combo' && <Badge>Combo</Badge>}</div>
+                                    <div className="text-sm">
+                                        {hasDiscount ? (
+                                            <>
+                                                <span className="font-bold text-foreground"> kr.{discountedLinePrice.toFixed(2)}</span>
+                                                <span className="text-muted-foreground line-through ml-2">kr.{originalLinePrice.toFixed(2)}</span>
+                                            </>
+                                        ) : (
+                                            <span className="text-muted-foreground">kr.{discountedLinePrice.toFixed(2)}</span>
+                                        )}
+                                    </div>
+                                    {item.toppings.length > 0 && (
+                                    <ul className="text-xs text-muted-foreground pl-4 mt-1 list-disc">
+                                        {item.toppings.map(topping => (
+                                            <li key={topping.name}>{topping.name} (+kr.{topping.price.toFixed(2)})</li>
+                                        ))}
+                                    </ul>
+                                    )}
+                                    {item.comboSelections && item.comboSelections.length > 0 && (
+                                        <ul className="text-xs text-muted-foreground pl-4 mt-1 list-disc">
+                                            {item.comboSelections.flatMap(sel => sel.products).map(p => (
+                                                <li key={p.id}>{p.name}</li>
+                                            ))}
+                                        </ul>
+                                    )}
+                                    <div className="mt-2 flex items-center justify-between">
+                                    <div className="flex items-center gap-2">
+                                        <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => updateQuantity(item.cartItemId, item.quantity - 1)}
+                                        >
+                                        -
+                                        </Button>
+                                        <span>{item.quantity}</span>
+                                        <Button
+                                        variant="outline"
+                                        size="icon"
+                                        className="h-6 w-6"
+                                        onClick={() => updateQuantity(item.cartItemId, item.quantity + 1)}
+                                        >
+                                        +
+                                        </Button>
+                                    </div>
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-8 w-8 text-destructive"
+                                        onClick={() => removeFromCart(item.cartItemId)}
+                                    >
+                                        <Trash2 className="size-4" />
+                                    </Button>
+                                    </div>
+                                </div>
+                            </div>
+                        )
+                    })}
+                </div>
+            </ScrollArea>
+            <SheetFooter className="mt-auto flex-col space-y-4 pt-4">
+                <Separator />
+                <div className="w-full text-sm space-y-2">
+                    <div className="flex justify-between">
+                        <span>Subtotal</span>
+                        <span>kr.{subtotal.toFixed(2)}</span>
+                    </div>
+                    {itemDiscount > 0 && (
+                        <div className="flex justify-between text-green-600">
+                            <span>Item Discounts</span>
+                            <span>- kr.{itemDiscount.toFixed(2)}</span>
+                        </div>
+                    )}
+                    {cartDiscount && (
+                            <div className="flex justify-between text-green-600">
+                            <div className="flex items-center gap-1">
+                                <Tag className="h-4 w-4" />
+                                <span>{cartDiscount.name}</span>
+                            </div>
+                            <span>- kr.{cartDiscount.amount.toFixed(2)}</span>
+                        </div>
+                    )}
+                     {freeDeliveryDiscountApplied && (
+                        <div className="flex justify-between text-green-600">
+                            <span>Free Delivery</span>
+                            <span>- kr.{deliveryFee.toFixed(2)}</span>
+                        </div>
+                    )}
+                </div>
+                <Separator/>
+                <div className="flex justify-between font-bold">
+                    <span>Total</span>
+                    <span>kr.{cartTotal.toFixed(2)}</span>
+                </div>
+            </SheetFooter>
+        </>
+    );
+}
+
 
 export function MobileFloatingCart() {
-  const { itemCount, cartTotal } = useCart();
+  const { itemCount, cartTotal, brand, location, subtotal, itemDiscount, cartDiscount, deliveryType } = useCart();
+  const [isPending, startTransition] = useTransition();
+  const [isUpsellDialogOpen, setIsUpsellDialogOpen] = React.useState(false);
+  const [activeUpsell, setActiveUpsell] = React.useState<any>(null);
+  const router = useRouter();
+  const { toast } = useToast();
+  const { trackEvent } = useAnalytics();
 
   if (itemCount === 0) {
     return null;
   }
+  
+  const proceedToCheckout = () => {
+    if (brand && location) {
+      router.push(`/${brand.slug}/${location.slug}/checkout`);
+    }
+  };
+
+  const handleCheckoutClick = () => {
+    if (!location) return;
+
+    trackEvent('start_checkout', { 
+        cartValue: cartTotal, 
+        itemsCount: itemCount, 
+        deliveryType: deliveryType,
+        locationId: location.id,
+        locationSlug: location.slug,
+    });
+
+    startTransition(async () => {
+      if (brand && location) {
+        const minimalCartItems = cartItems.map(item => ({
+            id: item.id,
+            categoryId: item.categoryId
+        }));
+        
+        const upsellData = await getActiveUpsellForCart({
+            brandId: brand.id,
+            locationId: location.id,
+            cartItems: minimalCartItems,
+            cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0)),
+        });
+
+        if (upsellData) {
+            setActiveUpsell(upsellData);
+            setIsUpsellDialogOpen(true);
+        } else {
+            proceedToCheckout();
+        }
+      } else {
+        proceedToCheckout();
+      }
+    });
+  };
+
+  const { cartItems } = useCart(); // Refetch cartItems here to pass to handleCheckoutClick
 
   return (
-    <CartSheet>
-      {/* Spacer to prevent content from being hidden behind the sticky bar */}
+    <>
       <div className="h-14 md:hidden" aria-hidden="true" />
-
-      {/* The sticky, edge-to-edge container */}
-      <div className="fixed bottom-0 left-0 right-0 z-50 md:hidden bg-background border-t pb-[max(env(safe-area-inset-bottom),0px)]">
+      <Sheet>
         <SheetTrigger asChild>
-          <Button
-            size="lg"
-            variant="default"
-            className="w-full h-14 rounded-none flex justify-between items-center px-4"
-          >
-            <div className="flex items-center gap-3">
-              <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary text-sm font-bold">
-                {itemCount}
-              </div>
-              <span className="font-semibold">View cart</span>
+            <div
+                className="
+                fixed left-0 right-0 bottom-0 z-50 md:hidden
+                bg-background border-t
+                pb-[max(env(safe-area-inset-bottom),0px)]
+                "
+            >
+                <Button
+                size="lg"
+                className="w-full h-14 flex justify-between items-center px-4 rounded-none"
+                >
+                    <div className="flex items-center gap-3">
+                        <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary text-sm font-bold">
+                            {itemCount}
+                        </div>
+                        <span className="font-semibold">View cart</span>
+                    </div>
+                    <span className="font-bold">kr. {cartTotal.toFixed(2)}</span>
+                </Button>
             </div>
-            <span className="font-bold">kr. {cartTotal.toFixed(2)}</span>
-          </Button>
         </SheetTrigger>
-      </div>
-    </CartSheet>
+        <SheetContent className="flex flex-col w-[99vw]">
+            <SheetHeader>
+                <SheetTitle>{itemCount} products in your cart</SheetTitle>
+            </SheetHeader>
+            <CartContents/>
+            <SheetFooter>
+                <Button onClick={handleCheckoutClick} className="w-full" disabled={isPending}>
+                    {isPending ? <Loader2 className="animate-spin" /> : 'Proceed to Checkout'}
+                </Button>
+            </SheetFooter>
+        </SheetContent>
+      </Sheet>
+        {activeUpsell && (
+        <UpsellDialog
+            isOpen={isUpsellDialogOpen}
+            setIsOpen={setIsUpsellDialogOpen}
+            upsellData={activeUpsell}
+            onContinue={proceedToCheckout}
+        />
+      )}
+    </>
   );
 }
