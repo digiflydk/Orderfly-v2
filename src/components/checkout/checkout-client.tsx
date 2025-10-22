@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -22,7 +23,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useParams, useRouter } from "next/navigation";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import type { PaymentDetails, TimeSlotResponse, MinimalCartItem, Location } from "@/types";
+import type { PaymentDetails, TimeSlotResponse, MinimalCartItem, Location, Upsell, Product, ProductForMenu, Discount } from "@/types";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { getTimeSlots } from "@/app/superadmin/locations/actions";
 import { TimeSlotDialog } from "./timeslot-dialog";
@@ -33,6 +34,8 @@ import { loadStripe } from '@stripe/stripe-js';
 import { Elements, useStripe, useElements } from '@stripe/react-stripe-js';
 import { cn } from "@/lib/utils";
 import { getActiveStripeKey } from '@/app/superadmin/settings/actions';
+import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
+import { UpsellDialog } from './upsell-dialog';
 
 
 const checkoutSchema = z.object({
@@ -52,6 +55,71 @@ type CheckoutFormValues = z.infer<typeof checkoutSchema>;
 
 interface CheckoutClientProps {
     location: Location;
+}
+
+function AlmostThereDialog({
+  isOpen,
+  onOpenChange,
+  discount,
+  upsellData,
+}: {
+  isOpen: boolean;
+  onOpenChange: (open: boolean) => void;
+  discount: Discount | null;
+  upsellData: { upsell: Upsell, products: ProductForMenu[] } | null;
+}) {
+  const { addToCart } = useCart();
+  const { toast } = useToast();
+
+  const handleAddUpsell = (product: ProductForMenu) => {
+    // Assuming a simple add-to-cart logic for the upsell product
+    addToCart(product, 1, [], product.price, product.price);
+    toast({
+      title: "Added to cart!",
+      description: `${product.productName} has been added to your cart.`,
+    });
+    onOpenChange(false);
+  };
+  
+  const minOrderValue = discount?.minOrderValue ?? 0;
+
+  return (
+    <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Almost There! 🍕</AlertDialogTitle>
+          <AlertDialogDescription>
+            Your discount code activates once your order hits DKK {minOrderValue.toFixed(2)}.
+            Add a side and unlock your savings!
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        
+        {upsellData && upsellData.products.length > 0 && (
+          <div className="space-y-2 py-4">
+            <h4 className="font-semibold text-sm">You might like:</h4>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+              {upsellData.products.slice(0, 2).map(product => (
+                <div key={product.id} className="flex items-center justify-between border rounded-md p-2">
+                  <div className="flex items-center gap-2">
+                    <Image src={product.imageUrl || ''} alt={product.productName} width={40} height={40} className="rounded-sm" data-ai-hint="delicious food"/>
+                    <div>
+                      <p className="text-sm font-medium">{product.productName}</p>
+                      <p className="text-xs text-muted-foreground">kr. {product.price.toFixed(2)}</p>
+                    </div>
+                  </div>
+                  <Button size="sm" onClick={() => handleAddUpsell(product)}>Add</Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <AlertDialogFooter>
+          <AlertDialogAction onClick={() => onOpenChange(false)}>OK</AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
 }
 
 
@@ -223,6 +291,8 @@ function CheckoutForm({ location }: { location: Location }) {
     const [isLoadingTimes, setIsLoadingTimes] = useState(true);
     const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
+    const [failedDiscount, setFailedDiscount] = useState<Discount | null>(null);
+    const [almostThereUpsell, setAlmostThereUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
 
     const minOrderAmount = location?.minOrder ?? 0;
     const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
@@ -351,8 +421,14 @@ function CheckoutForm({ location }: { location: Location }) {
                 applyDiscount(result.discount);
             } else {
                 removeDiscount();
-                setDiscountErrorMessage(result.message);
-                setIsDiscountErrorOpen(true);
+                if (result.message.toLowerCase().includes('minimum order value')) {
+                    setFailedDiscount(result.discount || null); // Save the failed discount to get min value
+                    const upsellResult = await getActiveUpsellForCart({ brandId: brand.id, locationId: location.id, cartItems: cartItems, cartTotal: subtotal });
+                    setAlmostThereUpsell(upsellResult);
+                } else {
+                    setDiscountErrorMessage(result.message);
+                    setIsDiscountErrorOpen(true);
+                }
             }
         })
     }
@@ -404,7 +480,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     )}
                 />
             </div>
-            <Button type="submit" className={cn("w-full", isSticky ? "h-16 rounded-none text-base font-bold" : "h-12 text-lg font-bold")} disabled={isPending || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
+            <Button type="submit" className={cn("w-full font-bold", isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg")} disabled={isPending || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
                 <div className="flex w-full justify-between items-center px-4">
                     <span>{isPending ? <Loader2 className="animate-spin" /> : 'Complete Order'}</span>
                     <span>kr. {checkoutTotal.toFixed(2)}</span>
@@ -571,6 +647,12 @@ function CheckoutForm({ location }: { location: Location }) {
                     locationId={location.id}
                 />
             )}
+             <AlmostThereDialog 
+                isOpen={!!failedDiscount} 
+                onOpenChange={() => setFailedDiscount(null)} 
+                discount={failedDiscount}
+                upsellData={almostThereUpsell}
+             />
              <AlertDialog open={isDiscountErrorOpen} onOpenChange={setIsDiscountErrorOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
