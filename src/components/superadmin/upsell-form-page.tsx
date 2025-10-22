@@ -46,7 +46,7 @@ const upsellSchema = z.object({
     locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
     upsellName: z.string().min(2, 'Upsell name must be at least 2 characters.'),
     description: z.string().optional(),
-    imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+    imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
     
     offerType: z.enum(['product', 'category']),
     offerProductIds: z.array(z.string()).optional().default([]),
@@ -114,9 +114,13 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
         resolver: zodResolver(upsellSchema),
         defaultValues: upsell ? {
             ...upsell,
+            description: upsell.description ?? '',
+            imageUrl: upsell.imageUrl ?? '',
             discountValue: upsell.discountValue ?? undefined,
             startDate: upsell.startDate ? new Date(upsell.startDate) : undefined,
             endDate: upsell.endDate ? new Date(upsell.endDate) : undefined,
+            productGroups: (upsell as any).productGroups || [],
+            activeTimeSlots: upsell.activeTimeSlots || [],
         } : {
             brandId: '',
             locationIds: [],
@@ -136,10 +140,6 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
     });
 
     const { control, watch, setValue, getValues, reset, formState } = form;
-
-    const { fields: groupFields, append: appendGroup, remove: removeGroup } = useFieldArray({
-        control, name: "productGroups"
-    });
     
     const { fields: timeSlotFields, append: appendTimeSlot, remove: removeTimeSlot } = useFieldArray({
         control, name: "activeTimeSlots"
@@ -184,6 +184,11 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
             setValue('locationIds', []);
         }
     }, [selectedBrandId, setValue, upsell?.brandId]);
+
+    const filteredBrandProducts = useMemo(() => {
+        if (categoryFilter === 'all') return brandProducts;
+        return brandProducts.filter(p => p.categoryId === categoryFilter);
+    }, [brandProducts, categoryFilter]);
     
     useEffect(() => {
         if (state?.message) {
@@ -249,7 +254,7 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
                             <FormItem><FormLabel>Upsell Name</FormLabel><FormControl><Input placeholder="e.g., Add Fries & Soda" {...field} /></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="description" render={({ field }) => (
-                            <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Description (Optional)</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="imageUrl"
                             render={({ field }) => (
@@ -448,3 +453,4 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
   );
 }
 
+    
