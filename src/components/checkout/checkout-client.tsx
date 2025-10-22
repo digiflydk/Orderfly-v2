@@ -289,6 +289,7 @@ function CheckoutForm({ location }: { location: Location }) {
     const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
     const [isLoadingTimes, setIsLoadingTimes] = useState(true);
     const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
+    const [isAlmostThereOpen, setIsAlmostThereOpen] = useState(false);
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     const [failedDiscount, setFailedDiscount] = useState<Discount | null>(null);
     const [almostThereUpsell, setAlmostThereUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
@@ -421,9 +422,10 @@ function CheckoutForm({ location }: { location: Location }) {
             } else {
                 removeDiscount();
                 if (result.message.toLowerCase().includes('minimum order value')) {
-                    setFailedDiscount(result.discount || null); // Save the failed discount to get min value
+                    setFailedDiscount(result.discount || null);
                     const upsellResult = await getActiveUpsellForCart({ brandId: brand.id, locationId: location.id, cartItems: cartItems, cartTotal: subtotal });
                     setAlmostThereUpsell(upsellResult);
+                    setIsAlmostThereOpen(true);
                 } else {
                     setDiscountErrorMessage(result.message);
                     setIsDiscountErrorOpen(true);
@@ -648,8 +650,8 @@ function CheckoutForm({ location }: { location: Location }) {
                 />
             )}
              <AlmostThereDialog 
-                isOpen={!!failedDiscount} 
-                onOpenChange={() => setFailedDiscount(null)} 
+                isOpen={isAlmostThereOpen} 
+                onOpenChange={setIsAlmostThereOpen} 
                 discount={failedDiscount}
                 upsellData={almostThereUpsell}
              />
