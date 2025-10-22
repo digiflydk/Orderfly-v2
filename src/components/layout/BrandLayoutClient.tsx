@@ -2,24 +2,26 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import { Header } from "@/components/layout/header";
-import { Footer } from "@/components/layout/footer";
-import type { Brand, Location, GeneralSettings } from "@/types";
+import type { Brand, Location, GeneralSettings } from '@/types';
 import { CookieConsent } from '@/components/cookie-consent';
 import { useState } from 'react';
-import { MenuHeader } from '@/components/layout/menu-header';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { useCart } from '@/context/cart-context';
+import { Header } from '@/components/layout/header';
+import { Footer } from '@/components/layout/footer';
+import { MenuHeader } from '@/components/layout/menu-header';
 
 export function BrandLayoutClient({
   children,
   brand,
   location,
+  settings,
 }: {
   children: React.ReactNode;
   brand: Brand | null;
   location?: Location | null;
+  settings?: GeneralSettings | null;
 }) {
   const pathname = usePathname();
   const [isCookieModalOpen, setIsCookieModalOpen] = useState(false);
@@ -32,21 +34,22 @@ export function BrandLayoutClient({
     );
   }
   
-  const isCheckoutPage = pathname?.includes('/checkout');
-  const isMenuPage = !!location && !isCheckoutPage;
+  // Corrected Logic for OF-426
+  // Any page with a location (menu or checkout) should show the MenuHeader.
+  const isLocationPage = !!location;
   const isBrandHomePage = !location;
 
-  const showGlobalHeader = isBrandHomePage || isCheckoutPage;
-  const showMenuHeader = isMenuPage;
+  const showGlobalHeader = isBrandHomePage;
+  const showMenuHeader = isLocationPage;
   
   const isConfirmationPage = pathname?.includes('/checkout/confirmation');
-  const showFooter = isBrandHomePage || isMenuPage || isConfirmationPage;
+  const showFooter = isBrandHomePage || isLocationPage || isConfirmationPage;
 
   return (
       <div
         className="flex flex-col min-h-screen"
       >
-        {showGlobalHeader && <Header brand={brand} settings={null} />}
+        {showGlobalHeader && <Header brand={brand} settings={settings || null} />}
         {showMenuHeader && location && <MenuHeader brand={brand} />}
         <main className="flex-1 w-full">
             {children}
