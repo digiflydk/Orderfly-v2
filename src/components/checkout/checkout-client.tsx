@@ -22,7 +22,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useParams, useRouter } from "next/navigation";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
-import type { PaymentDetails, TimeSlotResponse, MinimalCartItem, Location, Upsell, Product, ProductForMenu, Discount } from "@/types";
+import type { PaymentDetails, TimeSlotResponse, MinimalCartItem, Location, Upsell, Product, ProductForMenu, Discount } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { getTimeSlots } from "@/app/superadmin/locations/actions";
 import { TimeSlotDialog } from "./timeslot-dialog";
@@ -84,7 +84,7 @@ function AlmostThereDialog({
 
   return (
     <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
-      <AlertDialogContent>
+      <AlertDialogContent onInteractOutside={(e) => e.preventDefault()}>
         <AlertDialogHeader>
           <AlertDialogTitle>Almost There! 🍕</AlertDialogTitle>
           <AlertDialogDescription>
@@ -469,7 +469,7 @@ function CheckoutForm({ location }: { location: Location }) {
                             <Checkbox
                                 checked={field.value}
                                 onCheckedChange={field.onChange}
-                                className="h-[18.4px] w-[18.4px]"
+                                className="h-5 w-5"
                             />
                         </FormControl>
                         <div className="space-y-1 leading-none">
@@ -672,14 +672,33 @@ function CheckoutForm({ location }: { location: Location }) {
 
 export function CheckoutClient({ location }: CheckoutClientProps) {
   const [stripePromise, setStripePromise] = React.useState<ReturnType<typeof loadStripe> | null>(null);
+  const [error, setError] = React.useState<string | null>(null);
 
   React.useEffect(() => {
     getActiveStripeKey().then(key => {
       if (key) {
         setStripePromise(loadStripe(key));
+      } else {
+        console.error("Stripe publishable key is not available.");
+        setError("Payment processing is not configured. Please contact support.");
       }
+    }).catch(err => {
+        console.error("Failed to get Stripe key:", err);
+        setError("Could not initialize payment processing.");
     });
   }, []);
+
+  if (error) {
+    return (
+        <div className="flex items-center justify-center p-8">
+            <Alert variant="destructive">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertTitle>Payment Error</AlertTitle>
+                <AlertDescription>{error}</AlertDescription>
+            </Alert>
+        </div>
+    );
+  }
 
   if (!stripePromise) {
     return <div className="flex items-center justify-center p-8"><Loader2 className="animate-spin h-8 w-8" /></div>;
