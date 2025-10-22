@@ -251,7 +251,7 @@ export function MobileFloatingCart() {
                             <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary">
                                 {itemCount}
                             </div>
-                            <span className="font-semibold">View cart</span>
+                            <span className="font-bold">View cart</span>
                         </div>
                         <span className="font-bold">kr. {cartTotal.toFixed(2)}</span>
                     </div>
@@ -267,7 +267,7 @@ export function MobileFloatingCart() {
             </SheetHeader>
             <CartContents/>
             <SheetFooter className="p-0">
-                <Button onClick={handleCheckoutClick} className="w-full h-14 rounded-none text-base" disabled={isPending}>
+                <Button onClick={handleCheckoutClick} className="w-full h-14 rounded-none text-base font-bold" disabled={isPending}>
                     {isPending ? <Loader2 className="animate-spin" /> : 'Proceed to Checkout'}
                 </Button>
             </SheetFooter>
