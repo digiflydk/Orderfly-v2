@@ -178,12 +178,14 @@ export async function getLocationBySlug(brandId: string, locationSlug: string): 
     }
     
     const lowerCaseSlug = locationSlug.toLowerCase();
+    
     const locationDoc = querySnapshot.docs.find(doc => doc.data().slug.toLowerCase() === lowerCaseSlug);
 
     if (locationDoc) {
         const data = locationDoc.data();
         return { id: locationDoc.id, ...data } as Location;
     }
+
     return null;
 }
 
@@ -293,37 +295,37 @@ export async function getTimeSlots(locationId: string, forDateStr?: string): Pro
         if (location.deliveryTypes.includes('pickup')) {
             const earliestPickupTime = addMinutes(isCurrentlyOpen ? now : openingTime, effectivePrep);
 
-            if (isAfter(earliestPickupTime, lastPossiblePickupTime)) {
-                // No slots available
-            } else if (isCurrentlyOpen) {
-                asap_pickup = `ASAP (${effectivePrep}-${effectivePrep + 5} min)`;
-            } else if (isBeforeOpening) {
-                asap_pickup = `Today - ${format(addMinutes(openingTime, effectivePrep), 'HH:mm')}`;
-            } else if (!dateIsToday) {
-                asap_pickup = `${format(forDate, 'eee, MMM d')} - ${format(addMinutes(openingTime, effectivePrep), 'HH:mm')}`;
+            if (!isAfter(earliestPickupTime, lastPossiblePickupTime)) {
+                if (isCurrentlyOpen) {
+                    asap_pickup = `ASAP (${effectivePrep}-${effectivePrep + 5} min)`;
+                } else if (isBeforeOpening) {
+                    asap_pickup = `Today - ${format(addMinutes(openingTime, effectivePrep), 'HH:mm')}`;
+                } else if (!dateIsToday) {
+                    asap_pickup = `${format(forDate, 'eee, MMM d')} - ${format(addMinutes(openingTime, effectivePrep), 'HH:mm')}`;
+                }
+                pickup_times = generateSlots(earliestPickupTime, lastPossiblePickupTime);
             }
-            pickup_times = generateSlots(earliestPickupTime, lastPossiblePickupTime);
         }
         
         // Delivery Logic
         if (location.deliveryTypes.includes('delivery')) {
             const earliestDeliveryTime = addMinutes(isCurrentlyOpen ? now : openingTime, effectivePrep + location.delivery_time);
             
-            if (isAfter(earliestDeliveryTime, lastPossibleDeliveryTime)) {
-                // No slots available
-            } else if (isCurrentlyOpen) {
-                asap_delivery = `ASAP (${effectivePrep + location.delivery_time}-${effectivePrep + location.delivery_time + 5} min)`;
-            } else if (isBeforeOpening) {
-                asap_delivery = `Today - ${format(addMinutes(openingTime, effectivePrep + location.delivery_time), 'HH:mm')}`;
-            } else if (!dateIsToday) {
-                asap_delivery = `${format(forDate, 'eee, MMM d')} - ${format(addMinutes(openingTime, effectivePrep + location.delivery_time), 'HH:mm')}`;
+            if (!isAfter(earliestDeliveryTime, lastPossibleDeliveryTime)) {
+                if (isCurrentlyOpen) {
+                    asap_delivery = `ASAP (${effectivePrep + location.delivery_time}-${effectivePrep + location.delivery_time + 5} min)`;
+                } else if (isBeforeOpening) {
+                    asap_delivery = `Today - ${format(addMinutes(openingTime, effectivePrep + location.delivery_time), 'HH:mm')}`;
+                } else if (!dateIsToday) {
+                    asap_delivery = `${format(forDate, 'eee, MMM d')} - ${format(addMinutes(openingTime, effectivePrep + location.delivery_time), 'HH:mm')}`;
+                }
+                delivery_times = generateSlots(earliestDeliveryTime, lastPossibleDeliveryTime);
             }
-            delivery_times = generateSlots(earliestDeliveryTime, lastPossibleDeliveryTime);
         }
     }
     
-    // Handle case where restaurant is closed for the day
-    if (pickup_times.length === 0 && delivery_times.length === 0 && (!asap_pickup && !asap_delivery)) {
+    // Handle case where restaurant is closed for the day and pre-order is allowed
+    if (pickup_times.length === 0 && delivery_times.length === 0 && !asap_pickup && !asap_delivery && location.allowPreOrder) {
         for (let i = 1; i <= 7; i++) {
             const nextDate = addDays(forDate, i);
             const nextDayInfo = getDayInfo(nextDate);
