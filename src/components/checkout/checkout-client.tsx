@@ -221,6 +221,8 @@ function CheckoutForm({ location }: { location: Location }) {
     const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
     const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
     const [isLoadingTimes, setIsLoadingTimes] = useState(true);
+    const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
+    const [discountErrorMessage, setDiscountErrorMessage] = useState('');
 
     const minOrderAmount = location?.minOrder ?? 0;
     const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
@@ -349,7 +351,8 @@ function CheckoutForm({ location }: { location: Location }) {
                 applyDiscount(result.discount);
             } else {
                 removeDiscount();
-                toast({ variant: 'destructive', title: 'Error', description: result.message });
+                setDiscountErrorMessage(result.message);
+                setIsDiscountErrorOpen(true);
             }
         })
     }
@@ -401,7 +404,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     )}
                 />
             </div>
-            <Button type="submit" className={cn("w-full font-bold", isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg")} disabled={isPending || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
+            <Button type="submit" className={cn("w-full", isSticky ? "h-16 rounded-none text-base font-bold" : "h-12 text-lg font-bold")} disabled={isPending || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
                 <div className="flex w-full justify-between items-center px-4">
                     <span>{isPending ? <Loader2 className="animate-spin" /> : 'Complete Order'}</span>
                     <span>kr. {checkoutTotal.toFixed(2)}</span>
@@ -568,6 +571,19 @@ function CheckoutForm({ location }: { location: Location }) {
                     locationId={location.id}
                 />
             )}
+             <AlertDialog open={isDiscountErrorOpen} onOpenChange={setIsDiscountErrorOpen}>
+                <AlertDialogContent>
+                    <AlertDialogHeader>
+                    <AlertDialogTitle>Invalid Discount Code</AlertDialogTitle>
+                    <AlertDialogDescription>
+                        {discountErrorMessage}
+                    </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                        <AlertDialogAction onClick={() => setIsDiscountErrorOpen(false)}>OK</AlertDialogAction>
+                    </AlertDialogFooter>
+                </AlertDialogContent>
+            </AlertDialog>
         </>
     )
 }
