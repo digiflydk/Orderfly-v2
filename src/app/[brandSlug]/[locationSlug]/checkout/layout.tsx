@@ -1,28 +1,24 @@
 
-
-import { getBrandBySlug } from "@/app/superadmin/brands/actions";
-import { notFound } from "next/navigation";
+import { getBrandBySlug } from '@/app/superadmin/brands/actions';
+import { BrandLayoutClient } from '../../layout-client';
+import type { Location } from '@/types';
+import { getLocationBySlug } from '@/app/superadmin/locations/actions';
 
 export default async function CheckoutLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: { brandSlug: string };
+  params: { brandSlug: string; locationSlug: string };
 }) {
-  const brand = await getBrandBySlug(params.brandSlug);
+  const { brandSlug, locationSlug } = params;
 
-  if (!brand) {
-    notFound();
-  }
+  const brand = await getBrandBySlug(brandSlug);
+  const location = brand ? await getLocationBySlug(brand.id, locationSlug) : null;
 
-  // The header is now handled by the parent BrandLayoutClient,
-  // so this layout just passes children through.
   return (
-    <div className="flex flex-col min-h-screen">
-      <main className="w-full mx-auto flex-1">
-        {children}
-      </main>
-    </div>
+    <BrandLayoutClient brand={brand} location={location}>
+      {children}
+    </BrandLayoutClient>
   );
 }
