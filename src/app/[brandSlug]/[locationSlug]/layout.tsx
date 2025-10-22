@@ -1,5 +1,4 @@
 
-
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 import { BrandLayoutClient } from '../layout-client';
 import type { Location } from '@/types';
