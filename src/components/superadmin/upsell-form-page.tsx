@@ -1,3 +1,4 @@
+
 'use client';
 
 import { z } from 'zod';
@@ -170,7 +171,8 @@ function ProductGroupCard({ index, control, remove, brandProducts, brandCategori
 export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProps) {
     const { toast } = useToast();
     const [state, formAction] = useActionState(createOrUpdateUpsell, null);
-    
+    const [isPending, startTransition] = useTransition();
+
     const [brandProducts, setBrandProducts] = useState<ProductForMenu[]>([]);
     const [brandCategories, setBrandCategories] = useState<Category[]>([]);
     const [isProductsLoading, setIsProductsLoading] = useState(false);
@@ -180,8 +182,8 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
         resolver: zodResolver(upsellSchema),
         defaultValues: upsell ? {
             ...upsell,
-            description: upsell.description ?? '',
-            imageUrl: upsell.imageUrl ?? '',
+            description: upsell.description ?? undefined,
+            imageUrl: upsell.imageUrl ?? undefined,
             discountValue: upsell.discountValue ?? undefined,
             startDate: upsell.startDate ? new Date(upsell.startDate) : undefined,
             endDate: upsell.endDate ? new Date(upsell.endDate) : undefined,
@@ -348,7 +350,7 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
                             <FormItem><FormLabel>Upsell Name</FormLabel><FormControl><Input placeholder="e.g., Add Fries & Soda" {...field} /></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="description" render={({ field }) => (
-                            <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Description (Optional)</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="imageUrl"
                             render={({ field }) => (
@@ -546,3 +548,5 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
     </Form>
   );
 }
+
+    
