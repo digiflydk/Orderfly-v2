@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { z } from 'zod';
@@ -45,15 +46,15 @@ const upsellSchema = z.object({
     brandId: z.string().min(1, 'A brand must be selected.'),
     locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
     upsellName: z.string().min(2, 'Upsell name must be at least 2 characters.'),
-    description: z.string().optional(),
-    imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
+    description: z.string().optional().nullable(),
+    imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')).nullable(),
     
     offerType: z.enum(['product', 'category']),
     offerProductIds: z.array(z.string()).optional().default([]),
     offerCategoryIds: z.array(z.string()).optional().default([]),
 
     discountType: z.enum(['none', 'percentage', 'fixed_amount']),
-    discountValue: z.coerce.number().optional(),
+    discountValue: z.coerce.number().positive('Discount value must be positive.').optional(),
 
     triggerConditions: z.array(triggerConditionSchema).min(1, 'At least one trigger condition is required.'),
 
@@ -283,7 +284,7 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
                         {offerType === 'product' && (
                              <FormField control={control} name="offerProductIds" render={() => (
                                 <FormItem><FormLabel>Offered Products</FormLabel>
-                                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                                 <Select value={categoryFilter} onValueChange={setCategoryFilter}>
                                     <SelectTrigger className="w-full sm:w-[240px] h-8 text-xs">
                                         <SelectValue placeholder="Filter products by category..." />
                                     </SelectTrigger>
@@ -453,4 +454,3 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
   );
 }
 
-    
