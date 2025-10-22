@@ -1,4 +1,3 @@
-
 // This file is now obsolete as the checkout layout is handled by /[brandSlug]/[locationSlug]/checkout/layout.tsx
 // However, we keep it to prevent build errors and to handle the redirect logic.
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
@@ -10,9 +9,10 @@ export default async function LegacyCheckoutLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { brandSlug: string };
+  params: Promise<{ brandSlug: string }>;
 }) {
-  const brand = await getBrandBySlug(params.brandSlug);
+  const { brandSlug } = await params;
+  const brand = await getBrandBySlug(brandSlug);
 
   if (!brand) {
     notFound();
