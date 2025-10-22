@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { z } from 'zod';
@@ -9,7 +8,7 @@ import { useEffect, useMemo, useState, useTransition, useActionState } from 'rea
 import Link from 'next/link';
 import Image from 'next/image';
 import { format } from 'date-fns';
-import { CalendarIcon, Loader2, PlusCircle, Trash2, Clock } from 'lucide-react';
+import { CalendarIcon, Loader2, PlusCircle, Trash2, X, Clock } from 'lucide-react';
 import { useFormStatus } from 'react-dom';
 
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -89,8 +88,6 @@ interface UpsellFormPageProps {
   upsell?: Upsell;
   brands: Brand[];
   locations: Location[];
-  products: Product[];
-  categories: Category[];
 }
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -99,6 +96,75 @@ const UPSELL_TAGS = ['Popular', 'Recommended', 'Campaign'];
 function SubmitButton({ isEditing }: { isEditing: boolean }) {
     const { pending } = useFormStatus();
     return <Button type="submit" disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : (isEditing ? 'Save Changes' : 'Create Upsell')}</Button>;
+}
+
+
+interface ProductGroupCardProps {
+    index: number;
+    control: any;
+    remove: (index: number) => void;
+    brandProducts: ProductForMenu[];
+    brandCategories: Category[];
+    isProductsLoading: boolean;
+}
+
+function ProductGroupCard({ index, control, remove, brandProducts, brandCategories, isProductsLoading }: ProductGroupCardProps) {
+    const [categoryFilter, setCategoryFilter] = useState('all');
+
+    const filteredProducts = useMemo(() => {
+        if (categoryFilter === 'all') return brandProducts;
+        return brandProducts.filter(p => p.categoryId === categoryFilter);
+    }, [brandProducts, categoryFilter]);
+    
+    return (
+         <Card key={index} className="p-4 relative">
+            <Button type="button" variant="ghost" size="icon" className="absolute top-2 right-2 h-6 w-6 text-destructive" onClick={() => remove(index)}>
+                <Trash2 className="h-4 w-4" />
+            </Button>
+            <div className="space-y-4">
+                <FormField control={control} name={`productGroups.${index}.groupName`} render={({field}) => (<FormItem><FormLabel>Group Name</FormLabel><FormControl><Input placeholder="e.g. Main Dish" {...field}/></FormControl><FormMessage/></FormItem>)}/>
+                <div className="grid grid-cols-2 gap-4">
+                    <FormField control={control} name={`productGroups.${index}.minSelection`} render={({field}) => (<FormItem><FormLabel>Min. Selection</FormLabel><FormControl><Input type="number" placeholder="1" {...field}/></FormControl><FormMessage/></FormItem>)}/>
+                    <FormField control={control} name={`productGroups.${index}.maxSelection`} render={({field}) => (<FormItem><FormLabel>Max. Selection</FormLabel><FormControl><Input type="number" placeholder="1" {...field}/></FormControl><FormDescription>0 for unlimited</FormDescription><FormMessage/></FormItem>)}/>
+                </div>
+            </div>
+            <FormField control={control} name={`productGroups.${index}.productIds`} render={() => (
+                <FormItem className="mt-4">
+                    <div className="flex justify-between items-center">
+                        <FormLabel>Products</FormLabel>
+                        <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                            <SelectTrigger className="w-[200px] h-8 text-xs">
+                                <SelectValue placeholder="Filter by category..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                                <SelectItem value="all">All Categories</SelectItem>
+                                {brandCategories.map(cat => (
+                                <SelectItem key={cat.id} value={cat.id}>{cat.categoryName}</SelectItem>
+                                ))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+                    <ScrollArea className="h-40 rounded-md border">
+                        <div className="p-4">
+                            {isProductsLoading ? (
+                                <p className="text-sm text-muted-foreground">Loading products...</p>
+                            ) : filteredProducts.map((p) => (
+                                <FormField key={p.id} control={control} name={`productGroups.${index}.productIds`} render={({field}) => (
+                                    <FormItem className="flex items-center space-x-2">
+                                        <FormControl>
+                                            <Checkbox name={field.name} checked={field.value?.includes(p.id)} onCheckedChange={(checked) => checked ? field.onChange([...field.value, p.id]) : field.onChange(field.value?.filter(id => id !== p.id))}/>
+                                        </FormControl>
+                                        <FormLabel className="font-normal text-sm">{p.productName}</FormLabel>
+                                    </FormItem>
+                                )}/>
+                            ))}
+                        </div>
+                    </ScrollArea>
+                    <FormMessage/>
+                </FormItem>
+            )}/>
+        </Card>
+    );
 }
 
 
@@ -120,7 +186,8 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
             discountValue: upsell.discountValue ?? undefined,
             startDate: upsell.startDate ? new Date(upsell.startDate) : undefined,
             endDate: upsell.endDate ? new Date(upsell.endDate) : undefined,
-            productGroups: (upsell as any).productGroups || [],
+            offerProductIds: upsell.offerProductIds || [],
+            offerCategoryIds: upsell.offerCategoryIds || [],
             activeTimeSlots: upsell.activeTimeSlots || [],
         } : {
             brandId: '',
@@ -208,16 +275,40 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
     const title = upsell ? 'Edit Upsell' : 'Create New Upsell';
     const description = upsell ? `Editing details for ${upsell.upsellName}.` : 'Fill in the details for the new upsell campaign.';
     
-    const handleFormSubmit = (formData: FormData) => {
-        const formValues = getValues();
-        formData.append('triggerConditions', JSON.stringify(formValues.triggerConditions || []));
-        formData.append('activeTimeSlots', JSON.stringify(formValues.activeTimeSlots || []));
+    const onSubmit = (data: UpsellFormValues) => {
+        const formData = new FormData();
+
+        if (upsell?.id) formData.append('id', upsell.id);
+        
+        Object.entries(data).forEach(([key, value]) => {
+            if (key === 'activeTimeSlots' || key === 'triggerConditions' || value === undefined || value === null) return;
+            
+            if (key === 'startDate' || key === 'endDate') {
+                if (value) formData.append(key, (value as Date).toISOString());
+                return;
+            }
+
+            if (key === 'isActive' || key === 'allowStacking' || key === 'assignToOfferCategory') {
+                if (value === true) formData.append(key, 'on');
+                return;
+            }
+
+            if (Array.isArray(value)) {
+                value.forEach(item => formData.append(key, String(item)));
+            } else {
+                formData.append(key, String(value));
+            }
+        });
+        
+        formData.append('triggerConditions', JSON.stringify(data.triggerConditions || []));
+        formData.append('activeTimeSlots', JSON.stringify(data.activeTimeSlots || []));
+
         formAction(formData);
-    }
+    };
 
   return (
     <Form {...form}>
-      <form action={handleFormSubmit} className="space-y-6">
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         {upsell?.id && <input type="hidden" name="id" value={upsell.id} />}
         <div className="flex items-center justify-between">
             <div><h1 className="text-2xl font-bold tracking-tight">{title}</h1><p className="text-muted-foreground">{description}</p></div>
@@ -233,9 +324,8 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
                             <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value} disabled={!!upsell}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{brands.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
                         )}/>
                         
-                        <FormField control={control} name="locationIds"
-                            render={() => (
-                                <FormItem>
+                        <FormField control={control} name="locationIds" render={() => (
+                            <FormItem>
                                 <FormLabel>Locations</FormLabel>
                                 <FormDescription>Select which locations this upsell is available at.</FormDescription>
                                 <ScrollArea className="h-40 rounded-md border">
@@ -255,7 +345,7 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
                             <FormItem><FormLabel>Upsell Name</FormLabel><FormControl><Input placeholder="e.g., Add Fries & Soda" {...field} /></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="description" render={({ field }) => (
-                            <FormItem><FormLabel>Description (Optional)</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="imageUrl"
                             render={({ field }) => (
@@ -453,4 +543,3 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
     </Form>
   );
 }
-
