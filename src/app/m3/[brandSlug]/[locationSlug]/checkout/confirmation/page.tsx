@@ -5,7 +5,7 @@ import { CheckCircle2 } from "lucide-react";
 
 export default function M3ConfirmationPage() {
   return (
-    <div className="flex min-h-screen items-center justify-center p-4">
+    <div className="flex min-h-screen items-center justify-center p-4 bg-m3-cream">
       <Card className="w-full max-w-lg text-center shadow-lg">
         <CardHeader>
           <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mb-4">
