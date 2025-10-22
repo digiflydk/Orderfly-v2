@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { z } from 'zod';
@@ -288,7 +287,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
                                 <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandCategories.map((c) => (<FormField key={c.id} control={control} name="offerCategoryIds" render={({ field }) => (<FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value?.includes(c.id)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), c.id]) : field.onChange((field.value || [])?.filter(id => id !== c.id))}/></FormControl><FormLabel className="font-normal text-sm">{c.categoryName}</FormLabel></FormItem>)}/>))}</div></ScrollArea><FormMessage/></FormItem>
                             )}/>
                         )}
-
+                        
                         <Separator/>
 
                         <div className="grid grid-cols-2 gap-4">
@@ -439,3 +438,4 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
   );
 }
 
+    
