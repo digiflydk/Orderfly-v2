@@ -38,7 +38,7 @@ export function BrandLayoutClient({
   const isBrandHomePage = !location;
 
   const showGlobalHeader = isBrandHomePage;
-  const showMenuHeader = isLocationPage;
+  const showMenuHeader = isLocationPage; // This is the corrected logic.
   
   const isConfirmationPage = pathname?.includes('/checkout/confirmation');
   const showFooter = isBrandHomePage || isLocationPage || isConfirmationPage;
