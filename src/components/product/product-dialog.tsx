@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -283,7 +284,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
           </div>
           <Button
             size="lg"
-            className="w-full h-16 rounded-none text-base"
+            className="w-full h-16 rounded-none text-base bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold"
             onClick={handleAddToCart}
             disabled={!isSelectionValid}
           >
