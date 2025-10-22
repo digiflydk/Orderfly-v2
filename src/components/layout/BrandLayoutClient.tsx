@@ -34,8 +34,6 @@ export function BrandLayoutClient({
     );
   }
   
-  // Corrected Logic for OF-426
-  // Any page with a location (menu or checkout) should show the MenuHeader.
   const isLocationPage = !!location;
   const isBrandHomePage = !location;
 
@@ -58,7 +56,7 @@ export function BrandLayoutClient({
           <Footer 
             brand={brand} 
             location={location ?? undefined} 
-            version="1.0.205 • OF-479"
+            version="1.0.223 • OF-523"
             onOpenCookieSettings={() => setIsCookieModalOpen(true)} 
           />
         )}
