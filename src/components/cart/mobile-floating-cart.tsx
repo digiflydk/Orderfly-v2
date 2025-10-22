@@ -26,6 +26,7 @@ import {
   SheetTrigger,
   SheetFooter,
   SheetClose,
+  SheetDescription,
 } from '@/components/ui/sheet';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
@@ -49,7 +50,7 @@ function CartContents() {
 
     return (
         <>
-            <ScrollArea className="flex-1 pr-4">
+            <ScrollArea className="flex-1 px-4">
                 <div className="space-y-4">
                     {cartItems.map(item => {
                         const toppingsPrice = item.toppings.reduce((sum, topping) => sum + topping.price, 0) * item.quantity;
@@ -144,13 +145,13 @@ function CartContents() {
                     </div>
                     )}
                     {cartDiscount && (
-                        <div className="flex justify-between text-green-600">
-                        <div className="flex items-center gap-1">
-                            <Tag className="h-4 w-4" />
-                            <span>{cartDiscount.name}</span>
+                         <div className="flex justify-between text-green-600">
+                            <div className="flex items-center gap-1">
+                                <Tag className="h-4 w-4" />
+                                <span>{cartDiscount.name}</span>
+                            </div>
+                            <span>- kr.{cartDiscount.amount.toFixed(2)}</span>
                         </div>
-                        <span>- kr.{cartDiscount.amount.toFixed(2)}</span>
-                    </div>
                     )}
                     {freeDeliveryDiscountApplied && (
                         <div className="flex justify-between text-green-600">
@@ -260,6 +261,9 @@ export function MobileFloatingCart() {
         <SheetContent className="flex flex-col w-[99vw] p-0">
             <SheetHeader className="p-4">
                 <SheetTitle>{itemCount} products in your cart</SheetTitle>
+                <SheetDescription>
+                  Review items and proceed to checkout.
+                </SheetDescription>
             </SheetHeader>
             <CartContents/>
             <SheetFooter className="p-0">
