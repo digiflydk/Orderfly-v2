@@ -8,6 +8,7 @@ import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp,
 import type { Upsell, Product, Category, CartItem, ProductForMenu } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
+import { getProductsByIds } from '@/app/superadmin/products/actions';
 
 const activeTimeSlotSchema = z.object({
   start: z.string(),
@@ -347,4 +348,35 @@ export async function incrementUpsellConversion(upsellId: string): Promise<{ suc
     }
 }
 
+export async function getProductsForBrand(brandId: string): Promise<ProductForMenu[]> {
+  if (!brandId) return [];
+  const q = query(collection(db, 'products'), where('brandId', '==', brandId), orderBy('sortOrder', 'asc'));
+  const querySnapshot = await getDocs(q);
+  return querySnapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as ProductForMenu[];
+}
+
+export async function getCategoriesForBrand(brandId: string): Promise<Category[]> {
+    if (!brandId) return [];
+    
+    // This is not perfectly accurate as categories are linked to locations, not brands directly.
+    // A better approach would be to find all locations for a brand, then all categories for those locations.
+    // For the form, this is a reasonable approximation.
+    const q = query(collection(db, 'categories')); // Fetch all, then filter
+    const categorySnapshots = await getDocs(q);
+
+    const categories: Category[] = [];
+    const locationQuery = query(collection(db, 'locations'), where('brandId', '==', brandId));
+    const locationSnapshot = await getDocs(locationQuery);
+    const locationIdsForBrand = new Set(locationSnapshot.docs.map(doc => doc.id));
+
+
+    categorySnapshots.forEach(doc => {
+        const category = { id: doc.id, ...doc.data() } as Category;
+        if(category.locationIds.some(locId => locationIdsForBrand.has(locId))) {
+            categories.push(category);
+        }
+    });
+
+    return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
+}
     

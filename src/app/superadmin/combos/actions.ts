@@ -243,27 +243,6 @@ export async function getComboById(comboId: string): Promise<ComboMenu | null> {
     return null;
 }
 
-export async function getProductsForBrand(brandId: string): Promise<Product[]> {
-  if (!brandId) return [];
-  const q = query(collection(db, 'products'), where('brandId', '==', brandId), orderBy('sortOrder', 'asc'));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => doc.data() as Product);
-}
-
-export async function getCategoriesForBrand(brandId: string): Promise<Category[]> {
-    if (!brandId) return [];
-    
-    const q = query(collection(db, 'categories'), where('brandId', '==', brandId));
-    const categorySnapshots = await getDocs(q);
-
-    const categories: Category[] = [];
-    categorySnapshots.forEach(doc => {
-        categories.push({ id: doc.id, ...doc.data() } as Category);
-    });
-
-    return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
-}
-
 export async function getActiveCombosForLocation(locationId: string): Promise<ComboMenu[]> {
     const now = new Date();
     const currentDay = now.toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
