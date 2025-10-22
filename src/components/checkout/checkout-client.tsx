@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -470,7 +469,7 @@ function CheckoutForm({ location }: { location: Location }) {
                             <Checkbox
                                 checked={field.value}
                                 onCheckedChange={field.onChange}
-                                className="h-5 w-5"
+                                className="h-[18.4px] w-[18.4px]"
                             />
                         </FormControl>
                         <div className="space-y-1 leading-none">
