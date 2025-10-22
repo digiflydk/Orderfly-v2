@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { z } from 'zod';
@@ -109,6 +108,7 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
     const [brandProducts, setBrandProducts] = useState<ProductForMenu[]>([]);
     const [brandCategories, setBrandCategories] = useState<Category[]>([]);
     const [isProductsLoading, setIsProductsLoading] = useState(false);
+    const [categoryFilter, setCategoryFilter] = useState('all');
 
     const form = useForm<UpsellFormValues>({
         resolver: zodResolver(upsellSchema),
@@ -249,7 +249,7 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
                             <FormItem><FormLabel>Upsell Name</FormLabel><FormControl><Input placeholder="e.g., Add Fries & Soda" {...field} /></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="description" render={({ field }) => (
-                            <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} value={field.value || ''}/></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="imageUrl"
                             render={({ field }) => (
@@ -447,3 +447,4 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
     </Form>
   );
 }
+
