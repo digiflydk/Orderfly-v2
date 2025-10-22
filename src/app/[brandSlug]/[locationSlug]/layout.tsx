@@ -3,15 +3,16 @@ import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 import { BrandLayoutClient } from '../layout-client';
 import type { Location } from '@/types';
 import { getLocationBySlug } from '@/app/superadmin/locations/actions';
+import { resolveParams } from '@/lib/next/resolve-props';
 
 export default async function LocationLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: { brandSlug: string, locationSlug: string };
+  params: Promise<{ brandSlug: string, locationSlug: string }>;
 }) {
-  const { brandSlug, locationSlug } = params;
+  const { brandSlug, locationSlug } = await resolveParams(params);
   
   const brand = await getBrandBySlug(brandSlug);
 

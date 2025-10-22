@@ -4,15 +4,17 @@ import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 import { CartProvider } from '@/context/cart-context';
 import { AnalyticsProvider } from '@/context/analytics-context';
 import DeliveryModalHost from './deliverymodalhost';
+import { resolveParams } from '@/lib/next/resolve-props';
 
 export default async function BrandLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: { brandSlug: string };
+  params: Promise<{ brandSlug: string }>;
 }) {
-  const brand = await getBrandBySlug(params.brandSlug);
+  const { brandSlug } = await resolveParams(params);
+  const brand = await getBrandBySlug(brandSlug);
 
   if (!brand) {
     notFound();
