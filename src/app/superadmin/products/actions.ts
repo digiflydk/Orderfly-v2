@@ -159,6 +159,8 @@ export async function getProductsForLocation(locationId: string): Promise<Produc
     const allProducts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
 
     const locationProducts = allProducts.filter(p => {
+        // If a product has no specific locations assigned, it is available at all locations for the brand.
+        // Otherwise, it must be explicitly assigned to the current location.
         return !p.locationIds || p.locationIds.length === 0 || p.locationIds.includes(locationId);
     });
 
