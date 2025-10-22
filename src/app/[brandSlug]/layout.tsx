@@ -10,10 +10,9 @@ export default async function BrandLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: Promise<{ brandSlug: string }>;
+  params: { brandSlug: string };
 }) {
-  const { brandSlug } = await params;
-  const brand = await getBrandBySlug(brandSlug);
+  const brand = await getBrandBySlug(params.brandSlug);
 
   if (!brand) {
     notFound();

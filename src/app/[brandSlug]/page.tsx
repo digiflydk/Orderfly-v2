@@ -1,9 +1,11 @@
 
+
 import { LocationCard } from "@/components/location-card";
 import type { Brand, Location } from "@/types";
 import { getBrandBySlug } from "../superadmin/brands/actions";
 import { getLocationsForBrand } from "../superadmin/locations/actions";
 import { notFound } from "next/navigation";
+import { BrandLayoutClient } from "@/components/layout/BrandLayoutClient";
 
 interface PageProps {
   brand: Brand;
@@ -14,7 +16,8 @@ function BrandPageComponent({ brand, locations }: PageProps) {
   const locationsWithBrandSlug = locations.map(location => ({...location, brandSlug: brand.slug}));
   
   return (
-    <div className="mx-auto max-w-[1140px] px-4 py-8 w-full pt-24">
+    <BrandLayoutClient brand={brand}>
+        <div className="mx-auto max-w-[1140px] px-4 py-8 w-full">
         <div className="space-y-8">
             <div>
             <h1 className="text-3xl font-bold text-center sm:text-left">
@@ -31,7 +34,8 @@ function BrandPageComponent({ brand, locations }: PageProps) {
             ))}
             </div>
         </div>
-    </div>
+        </div>
+    </BrandLayoutClient>
   );
 }
 
