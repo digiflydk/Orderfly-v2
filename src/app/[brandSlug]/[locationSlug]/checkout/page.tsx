@@ -3,10 +3,11 @@ import { notFound, redirect } from "next/navigation";
 import { CheckoutClient } from "@/components/checkout/checkout-client";
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
 import { getActiveLocationBySlug } from "@/app/superadmin/locations/actions";
+import type { AsyncPageProps } from "@/types/next-async-props";
 
 export default async function CheckoutPage({
   params,
-}: { params: Promise<{ brandSlug: string; locationSlug: string }> }) {
+}: AsyncPageProps<{ brandSlug: string; locationSlug: string }>) {
   const { brandSlug, locationSlug } = await params;
   const brand = await getBrandBySlug(brandSlug);
   if (!brand) notFound();
