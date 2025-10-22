@@ -1,4 +1,3 @@
-
 'use client';
 
 import { z } from 'zod';
@@ -289,7 +288,9 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
             }
 
             if (key === 'isActive' || key === 'allowStacking' || key === 'assignToOfferCategory') {
-                if (value === true) formData.append(key, 'on');
+                if (value === true) {
+                    formData.append(key, 'on');
+                }
                 return;
             }
 
@@ -303,7 +304,9 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
         formData.append('triggerConditions', JSON.stringify(data.triggerConditions || []));
         formData.append('activeTimeSlots', JSON.stringify(data.activeTimeSlots || []));
 
-        formAction(formData);
+        startTransition(async () => {
+            await formAction(formData);
+        });
     };
 
   return (
