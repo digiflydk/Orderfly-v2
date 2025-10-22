@@ -3,15 +3,15 @@
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { UpsellFormPage } from '@/components/superadmin/upsell-form-page';
-import { getCategories } from '@/app/superadmin/categories/actions';
-import { getProducts } from '@/app/superadmin/products/actions';
+import { getCategoriesForBrand, getProductsForBrand } from '@/app/superadmin/upsells/actions';
 
 export default async function NewUpsellPage() {
     const [brands, locations, products, categories] = await Promise.all([
         getBrands(),
         getAllLocations(),
-        getProducts(),
-        getCategories(),
+        // We can pass empty arrays initially, as they will be fetched on brand selection in the client
+        Promise.resolve([]),
+        Promise.resolve([]),
     ]);
     
     return (

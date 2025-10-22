@@ -8,7 +8,6 @@ import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp,
 import type { Upsell, Product, Category, CartItem, ProductForMenu } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
-import { getProductsByIds } from '@/app/superadmin/products/actions';
 
 const activeTimeSlotSchema = z.object({
   start: z.string(),
@@ -295,9 +294,7 @@ export async function getActiveUpsellForCart({ brandId, locationId, cartItems, c
 
             if (finalProductIds.length > 0) {
                 // Fetch full product details
-                const productsQuery = query(collection(db, 'products'), where(documentId(), 'in', finalProductIds.slice(0, 30)));
-                const productsSnapshot = await getDocs(productsQuery);
-                const products = productsSnapshot.docs.map(doc => doc.data() as Product);
+                const products = await getProductsByIds(finalProductIds);
                 
                 if (products.length > 0) {
                     // Increment the views count
@@ -350,9 +347,10 @@ export async function incrementUpsellConversion(upsellId: string): Promise<{ suc
 
 export async function getProductsForBrand(brandId: string): Promise<ProductForMenu[]> {
   if (!brandId) return [];
-  const q = query(collection(db, 'products'), where('brandId', '==', brandId), orderBy('sortOrder', 'asc'));
+  const q = query(collection(db, 'products'), where('brandId', '==', brandId));
   const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as ProductForMenu[];
+  const products = querySnapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Product[];
+  return products.sort((a,b) => (a.sortOrder || 999) - (b.sortOrder || 999));
 }
 
 export async function getCategoriesForBrand(brandId: string): Promise<Category[]> {
@@ -380,3 +378,34 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
     return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
 }
     
+export async function getProductsByIds(productIds: string[]): Promise<ProductForMenu[]> {
+    if (!productIds || productIds.length === 0) return [];
+    
+    const productPromises: Promise<Product[]>[] = [];
+    for (let i = 0; i < productIds.length; i += 30) {
+        const chunk = productIds.slice(i, i + 30);
+        const q = query(collection(db, 'products'), where(documentId(), 'in', chunk));
+        const p = getDocs(q).then(snapshot => snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+        productPromises.push(p);
+    }
+    
+    const productArrays = await Promise.all(productPromises);
+    const allProducts = productArrays.flat();
+    
+    return allProducts.map(p => ({
+        id: p.id,
+        productName: p.productName,
+        description: p.description,
+        price: p.price,
+        priceDelivery: p.priceDelivery,
+        imageUrl: p.imageUrl,
+        isFeatured: p.isFeatured,
+        isNew: p.isNew,
+        isPopular: p.isPopular,
+        allergenIds: p.allergenIds,
+        toppingGroupIds: p.toppingGroupIds,
+        categoryId: p.categoryId,
+        brandId: p.brandId,
+        sortOrder: p.sortOrder,
+    }));
+}
