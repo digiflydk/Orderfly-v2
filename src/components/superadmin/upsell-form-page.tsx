@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import type { Upsell, Brand, Product, Location, Category, ProductForMenu } from '@/types';
-import { createOrUpdateUpsell, type FormState } from '@/app/superadmin/upsells/actions';
+import { createOrUpdateUpsell, getProductsForBrand, getCategoriesForBrand, type FormState } from '@/app/superadmin/upsells/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
