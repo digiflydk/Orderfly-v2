@@ -460,7 +460,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     <AlertTitle>Minimum order for delivery is not met (kr. {minOrderAmount.toFixed(2)})</AlertTitle>
                 </Alert>
             )}
-            <div className={cn("mb-4", isSticky ? 'px-4' : 'px-0')}>
+            <div className={cn("mb-4 bg-[#FFF8F0]", isSticky ? 'px-4' : 'px-0')}>
                 <FormField
                     control={form.control}
                     name="acceptTerms"
@@ -470,6 +470,7 @@ function CheckoutForm({ location }: { location: Location }) {
                             <Checkbox
                                 checked={field.value}
                                 onCheckedChange={field.onChange}
+                                className="h-5 w-5"
                             />
                         </FormControl>
                         <div className="space-y-1 leading-none">
