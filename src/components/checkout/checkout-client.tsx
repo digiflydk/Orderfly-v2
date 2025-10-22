@@ -30,7 +30,6 @@ import Cookies from "js-cookie";
 import { useAnalytics } from '@/context/analytics-context';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, useStripe, useElements } from '@stripe/react-stripe-js';
-import { getActiveStripeKey } from "@/app/superadmin/settings/actions";
 import { cn } from "@/lib/utils";
 
 
@@ -400,7 +399,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     )}
                 />
             </div>
-            <Button type="submit" className={cn("w-full", isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg")} disabled={isPending || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
+            <Button type="submit" className={cn("w-full font-bold", isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg")} disabled={isPending || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
                 <div className="flex w-full justify-between items-center px-4">
                     <span>{isPending ? <Loader2 className="animate-spin" /> : 'Complete Order'}</span>
                     <span>kr. {checkoutTotal.toFixed(2)}</span>
@@ -572,9 +571,9 @@ function CheckoutForm({ location }: { location: Location }) {
 }
 
 export function CheckoutClient({ location }: CheckoutClientProps) {
-  const [stripePromise, setStripePromise] = useState<ReturnType<typeof loadStripe> | null>(null);
+  const [stripePromise, setStripePromise] = React.useState<ReturnType<typeof loadStripe> | null>(null);
 
-  useEffect(() => {
+  React.useEffect(() => {
     getActiveStripeKey().then(key => {
       if (key) {
         setStripePromise(loadStripe(key));

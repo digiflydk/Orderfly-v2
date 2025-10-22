@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
@@ -189,7 +188,7 @@ export function DesktopCart() {
                         <span>Total</span>
                         <span>kr.{cartTotal.toFixed(2)}</span>
                     </div>
-                    <Button onClick={handleCheckoutClick} className="w-full" disabled={isPending}>
+                    <Button onClick={handleCheckoutClick} className="w-full font-bold" disabled={isPending}>
                         <div className="flex w-full justify-between items-center">
                             <span>{isPending ? <Loader2 className="animate-spin" /> : 'Proceed to Checkout'}</span>
                             <span>kr.{cartTotal.toFixed(2)}</span>

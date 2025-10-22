@@ -218,7 +218,7 @@ export function CartSheet() {
                     </div>
                   </div>
                 <SheetClose asChild>
-                  <Button onClick={handleCheckoutClick} className="w-full h-14 rounded-none text-base" disabled={isPending}>
+                  <Button onClick={handleCheckoutClick} className="w-full h-14 rounded-none text-base font-bold" disabled={isPending}>
                     {isPending ? <Loader2 className="animate-spin" /> : 'Proceed to Checkout'}
                   </Button>
                 </SheetClose>
