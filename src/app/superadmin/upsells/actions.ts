@@ -4,7 +4,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, where, documentId, runTransaction } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, documentId, runTransaction, where } from 'firebase/firestore';
 import type { Upsell, Product, Category, CartItem, ProductForMenu } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
@@ -26,7 +26,7 @@ const upsellSchema = z.object({
     locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
     upsellName: z.string().min(2, 'Upsell name must be at least 2 characters.'),
     description: z.string().optional(),
-    imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
+    imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
     
     offerType: z.enum(['product', 'category']),
     offerProductIds: z.array(z.string()).optional().default([]),
@@ -45,12 +45,12 @@ const upsellSchema = z.object({
     isActive: z.boolean().default(true),
     tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])).optional().default([]),
 }).refine(data => {
-    return !(data.offerType === 'product' && data.offerProductIds.length === 0);
+    return !(data.offerType === 'product' && (!data.offerProductIds || data.offerProductIds.length === 0));
 }, {
     message: "At least one product must be selected for a product-based offer.",
     path: ["offerProductIds"],
 }).refine(data => {
-    return !(data.offerType === 'category' && data.offerCategoryIds.length === 0);
+    return !(data.offerType === 'category' && (!data.offerCategoryIds || data.offerCategoryIds.length === 0));
 }, {
     message: "At least one category must be selected for a category-based offer.",
     path: ["offerCategoryIds"],
@@ -294,7 +294,7 @@ export async function getActiveUpsellForCart({ brandId, locationId, cartItems, c
 
             if (finalProductIds.length > 0) {
                 // Fetch full product details
-                const products = await getProductsByIds(finalProductIds);
+                const products = await getProductsByIds(finalProductIds, brandId);
                 
                 if (products.length > 0) {
                     // Increment the views count
@@ -350,6 +350,7 @@ export async function getProductsForBrand(brandId: string): Promise<ProductForMe
   const q = query(collection(db, 'products'), where('brandId', '==', brandId));
   const querySnapshot = await getDocs(q);
   const products = querySnapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Product[];
+  // Sort in memory to avoid needing a composite index for sorting
   return products.sort((a,b) => (a.sortOrder || 999) - (b.sortOrder || 999));
 }
 
@@ -378,21 +379,26 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
     return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
 }
     
-export async function getProductsByIds(productIds: string[]): Promise<ProductForMenu[]> {
+export async function getProductsByIds(productIds: string[], brandId?: string): Promise<ProductForMenu[]> {
     if (!productIds || productIds.length === 0) return [];
     
+    // Firestore 'in' queries are limited to 30 items in the array.
     const productPromises: Promise<Product[]>[] = [];
     for (let i = 0; i < productIds.length; i += 30) {
         const chunk = productIds.slice(i, i + 30);
-        const q = query(collection(db, 'products'), where(documentId(), 'in', chunk));
+        let q = query(collection(db, 'products'), where(documentId(), 'in', chunk));
+        if (brandId) {
+            q = query(q, where('brandId', '==', brandId));
+        }
         const p = getDocs(q).then(snapshot => snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
         productPromises.push(p);
     }
     
     const productArrays = await Promise.all(productPromises);
     const allProducts = productArrays.flat();
-    
-    return allProducts.map(p => ({
+
+    // Map to the lightweight type
+    const finalProducts = allProducts.map(p => ({
         id: p.id,
         productName: p.productName,
         description: p.description,
@@ -408,4 +414,20 @@ export async function getProductsByIds(productIds: string[]): Promise<ProductFor
         brandId: p.brandId,
         sortOrder: p.sortOrder,
     }));
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log(
+        '[DEBUG] getProductsByIds:',
+        finalProducts.map((p) => ({
+          id: p.id,
+          productName: p.productName,
+          price: p.price,
+          toppingGroups: p.toppingGroupIds?.length,
+          imageSize: p.imageUrl?.length,
+          fullSize: JSON.stringify(p).length
+        }))
+      );
+    }
+    
+    return finalProducts;
 }

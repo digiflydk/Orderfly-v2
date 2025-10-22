@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { z } from 'zod';
@@ -46,7 +47,7 @@ const upsellSchema = z.object({
     locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
     upsellName: z.string().min(2, 'Upsell name must be at least 2 characters.'),
     description: z.string().optional(),
-    imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
+    imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
     
     offerType: z.enum(['product', 'category']),
     offerProductIds: z.array(z.string()).optional().default([]),
@@ -65,12 +66,12 @@ const upsellSchema = z.object({
     isActive: z.boolean().default(true),
     tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])).optional().default([]),
 }).refine(data => {
-    return !(data.offerType === 'product' && data.offerProductIds.length === 0);
+    return !(data.offerType === 'product' && (!data.offerProductIds || data.offerProductIds.length === 0));
 }, {
     message: "At least one product must be selected for a product-based offer.",
     path: ["offerProductIds"],
 }).refine(data => {
-    return !(data.offerType === 'category' && data.offerCategoryIds.length === 0);
+    return !(data.offerType === 'category' && (!data.offerCategoryIds || data.offerCategoryIds.length === 0));
 }, {
     message: "At least one category must be selected for a category-based offer.",
     path: ["offerCategoryIds"],
@@ -101,7 +102,7 @@ function SubmitButton({ isEditing }: { isEditing: boolean }) {
 }
 
 
-export function UpsellFormPage({ upsell, brands, locations, products, categories }: UpsellFormPageProps) {
+export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProps) {
     const { toast } = useToast();
     const [state, formAction] = useActionState(createOrUpdateUpsell, null);
     
@@ -248,7 +249,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
                             <FormItem><FormLabel>Upsell Name</FormLabel><FormControl><Input placeholder="e.g., Add Fries & Soda" {...field} /></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="description" render={({ field }) => (
-                            <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} /></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} value={field.value || ''}/></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="imageUrl"
                             render={({ field }) => (
@@ -277,7 +278,16 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
                         {offerType === 'product' && (
                              <FormField control={control} name="offerProductIds" render={() => (
                                 <FormItem><FormLabel>Offered Products</FormLabel>
-                                <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandProducts.map((p) => (<FormField key={p.id} control={control} name="offerProductIds" render={({ field }) => (<FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value?.includes(p.id)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), p.id]) : field.onChange((field.value || [])?.filter(id => id !== p.id))}/></FormControl><FormLabel className="font-normal text-sm">{p.productName}</FormLabel></FormItem>)}/>))}</div></ScrollArea><FormMessage/></FormItem>
+                                <Select value={categoryFilter} onValueChange={setCategoryFilter}>
+                                    <SelectTrigger className="w-full sm:w-[240px] h-8 text-xs">
+                                        <SelectValue placeholder="Filter products by category..." />
+                                    </SelectTrigger>
+                                    <SelectContent>
+                                        <SelectItem value="all">All Categories</SelectItem>
+                                        {brandCategories.map(cat => (<SelectItem key={cat.id} value={cat.id}>{cat.categoryName}</SelectItem>))}
+                                    </SelectContent>
+                                </Select>
+                                <ScrollArea className="h-40 rounded-md border"><div className="p-4">{filteredBrandProducts.map((p) => (<FormField key={p.id} control={control} name="offerProductIds" render={({ field }) => (<FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value?.includes(p.id)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), p.id]) : field.onChange((field.value || [])?.filter(id => id !== p.id))}/></FormControl><FormLabel className="font-normal text-sm">{p.productName}</FormLabel></FormItem>)}/>))}</div></ScrollArea><FormMessage/></FormItem>
                             )}/>
                         )}
 
@@ -437,5 +447,3 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
     </Form>
   );
 }
-
-    
