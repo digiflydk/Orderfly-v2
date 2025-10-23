@@ -35,8 +35,8 @@ const comboMenuSchema = z.object({
     pickupPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
     deliveryPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
     isActive: z.boolean().default(true),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: z.date().optional(),
+    endDate: z.date().optional(),
     activeDays: z.array(z.string()).optional().default([]),
     activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
     orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
@@ -96,9 +96,9 @@ export async function createOrUpdateCombo(
     if (id) rawData.id = id;
 
     const startDate = formData.get('startDate');
-    if (startDate) rawData.startDate = startDate as string;
+    if (startDate) rawData.startDate = new Date(startDate as string);
     const endDate = formData.get('endDate');
-    if (endDate) rawData.endDate = endDate as string;
+    if (endDate) rawData.endDate = new Date(endDate as string);
     
     const productGroupsJSON = formData.get('productGroups');
     if (typeof productGroupsJSON === 'string' && productGroupsJSON.trim() !== '') {
@@ -174,8 +174,8 @@ export async function createOrUpdateCombo(
       updatedAt: Timestamp.now(),
     };
     
-    if (comboData.startDate) dataToSave.startDate = Timestamp.fromDate(new Date(comboData.startDate));
-    if (comboData.endDate) dataToSave.endDate = Timestamp.fromDate(new Date(comboData.endDate));
+    if (comboData.startDate) dataToSave.startDate = Timestamp.fromDate(comboData.startDate);
+    if (comboData.endDate) dataToSave.endDate = Timestamp.fromDate(comboData.endDate);
 
     const comboIdToSave = id || doc(collection(db, 'comboMenus')).id;
     dataToSave.id = comboIdToSave;

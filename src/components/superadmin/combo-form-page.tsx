@@ -55,8 +55,8 @@ const comboMenuSchema = z.object({
     pickupPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
     deliveryPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
     isActive: z.boolean().default(true),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: z.date().optional(),
+    endDate: z.date().optional(),
     activeDays: z.array(z.string()).optional().default([]),
     activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
     orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
@@ -171,8 +171,8 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
         resolver: zodResolver(comboMenuSchema),
         defaultValues: combo ? {
             ...combo,
-            startDate: combo.startDate,
-            endDate: combo.endDate,
+            startDate: combo.startDate ? new Date(combo.startDate) : undefined,
+            endDate: combo.endDate ? new Date(combo.endDate) : undefined,
             imageUrl: combo.imageUrl || '',
             pickupPrice: combo.pickupPrice ?? undefined,
             deliveryPrice: combo.deliveryPrice ?? undefined,
@@ -207,6 +207,8 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
         if (combo) {
             reset({
                 ...combo,
+                startDate: combo.startDate ? new Date(combo.startDate) : undefined,
+                endDate: combo.endDate ? new Date(combo.endDate) : undefined,
                 imageUrl: combo.imageUrl || '',
                 pickupPrice: combo.pickupPrice ?? undefined,
                 deliveryPrice: combo.deliveryPrice ?? undefined,
@@ -292,11 +294,25 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
         // Manually append data to FormData
         if (combo?.id) formData.append('id', combo.id);
         Object.entries(data).forEach(([key, value]) => {
-            if (key === 'productGroups' || key === 'activeTimeSlots') return;
+            if (key === 'productGroups' || key === 'activeTimeSlots' || value === undefined || value === null) return;
+
+            if (key === 'startDate' || key === 'endDate') {
+                if (value) {
+                    formData.append(key, (value as Date).toISOString());
+                }
+                return;
+            }
+
+            if (key === 'isActive' || key === 'allowStacking' || key === 'assignToOfferCategory') {
+                if (value === true) {
+                    formData.append(key, 'on');
+                }
+                return;
+            }
 
             if (Array.isArray(value)) {
                 value.forEach(item => formData.append(key, String(item)));
-            } else if (value !== null && value !== undefined) {
+            } else {
                 formData.append(key, String(value));
             }
         });
@@ -340,7 +356,7 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
                             <FormItem><FormLabel>Combo Name</FormLabel><FormControl><Input placeholder="e.g., Family Feast" {...field} /></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="description" render={({ field }) => (
-                            <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short description of the combo deal." {...field} /></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Description (Optional)</FormLabel><FormControl><Textarea placeholder="A short description of the combo deal." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="imageUrl"
                             render={({ field }) => (
