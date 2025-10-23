@@ -158,7 +158,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
             </TabsList>
             
             <Form {...form}>
-            <form action={formAction} encType="multipart/form-data" className="space-y-6">
+            <form action={formAction} className="space-y-6">
             <TabsContent value="details" className="mt-6">
                 <div className="flex justify-end mb-6">
                     <SubmitButton isEditing={isEditing} />
