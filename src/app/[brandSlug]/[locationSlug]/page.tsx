@@ -38,7 +38,7 @@ export default async function MenuPage({ params }: AsyncPageProps<{ brandSlug: s
   const [categories, activeCombos, allProductsForLocation, activeStandardDiscounts] = await Promise.all([
     getCategoriesForLocation(location.id),
     getActiveCombosForLocation(location.id),
-    getProductsForLocation(location.id),
+    getProductsForLocation(location.id, brand.id), // Pass brandId here
     getActiveStandardDiscounts({ brandId: brand.id, locationId: location.id, deliveryType: 'delivery' }), // Fetch initial discounts
   ]);
   
@@ -68,6 +68,7 @@ export default async function MenuPage({ params }: AsyncPageProps<{ brandSlug: s
     </>
   );
 }
+
 
 
 

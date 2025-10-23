@@ -147,11 +147,12 @@ export type ProductForMenu = Pick<Product,
     'toppingGroupIds' | 'categoryId' | 'brandId' | 'sortOrder'
 >;
 
-export async function getProductsForLocation(locationId: string): Promise<ProductForMenu[]> {
-    if (!locationId) return [];
+export async function getProductsForLocation(locationId: string, brandId: string): Promise<ProductForMenu[]> {
+    if (!locationId || !brandId) return [];
 
     const q = query(
         collection(db, 'products'),
+        where('brandId', '==', brandId),
         where('isActive', '==', true)
     );
     const querySnapshot = await getDocs(q);
