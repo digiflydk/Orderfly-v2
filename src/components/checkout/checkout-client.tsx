@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -88,7 +89,7 @@ function AlmostThereDialog({
         <AlertDialogHeader>
           <AlertDialogTitle>Almost There! 🍕</AlertDialogTitle>
           <AlertDialogDescription>
-            Your discount code activates once your order hits DKK {minOrderValue.toFixed(2)}.
+            Your discount code activates once your order hits kr. {minOrderValue.toFixed(2)}.
             Add a side and unlock your savings!
           </AlertDialogDescription>
         </AlertDialogHeader>
@@ -173,7 +174,7 @@ function BagFeeRow() {
 }
 
 function OrderSummaryContent() {
-    const { cartItems, subtotal, checkoutTotal, itemDiscount, cartDiscount, deliveryFee, brand, adminFee, vatAmount, deliveryType, freeDeliveryDiscountApplied } = useCart();
+    const { cartItems, subtotal, checkoutTotal, itemDiscount, cartDiscount, deliveryFee, brand, adminFee, vatAmount, deliveryType, freeDeliveryDiscountApplied, voucherDiscount } = useCart();
     return (
         <div className="space-y-4">
             {cartItems.map(item => {
@@ -237,6 +238,15 @@ function OrderSummaryContent() {
                         <span>- kr.{cartDiscount.amount.toFixed(2)}</span>
                     </div>
                 )}
+                {voucherDiscount && (
+                    <div className="flex justify-between text-green-600">
+                        <div className="flex items-center gap-1">
+                            <Tag className="h-4 w-4" />
+                            <span>Code: {voucherDiscount.name}</span>
+                        </div>
+                        <span>- kr.{voucherDiscount.amount.toFixed(2)}</span>
+                    </div>
+                )}
 
                 {deliveryType === 'delivery' && (
                     <div className="flex justify-between">
@@ -277,7 +287,7 @@ function CheckoutForm({ location }: { location: Location }) {
     const { 
         cartItems, subtotal, checkoutTotal, brand, applyDiscount, removeDiscount, 
         appliedDiscount, deliveryType, deliveryFee, finalDiscount, itemCount, bagFee, adminFee, vatAmount,
-        selectedTime, itemDiscount, cartDiscount, freeDeliveryDiscountApplied, setCartContext, setSelectedTime
+        selectedTime, itemDiscount, cartDiscount, voucherDiscount, freeDeliveryDiscountApplied, setCartContext, setSelectedTime
     } = useCart();
     
     const router = useRouter();
@@ -375,7 +385,7 @@ function CheckoutForm({ location }: { location: Location }) {
        startTransition(async () => {
             trackEvent('click_purchase', { cartValue: checkoutTotal });
 
-           const totalDiscount = (itemDiscount || 0) + (cartDiscount?.amount || 0);
+           const totalDiscount = (itemDiscount || 0) + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0);
 
            const paymentDetails: Omit<PaymentDetails, 'paymentRefId'> = {
                 subtotal, deliveryFee, bagFee, adminFee, vatAmount,
@@ -416,7 +426,14 @@ function CheckoutForm({ location }: { location: Location }) {
     const handleApplyDiscount = () => {
         if (!discountCode || !brand || !location) return;
         startTransition(async () => {
-            const result = await validateDiscountAction(discountCode, brand.id, location.id, subtotal, deliveryType!);
+            // Corrected subtotal calculation for validation
+            const currentSubtotalForValidation = cartItems.reduce((total, item) => {
+                const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0) * item.quantity;
+                return total + item.basePrice * item.quantity + toppingsPrice;
+            }, 0);
+
+            const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotalForValidation, deliveryType!);
+            
             if (result.success && result.discount) {
                 applyDiscount(result.discount);
             } else {
