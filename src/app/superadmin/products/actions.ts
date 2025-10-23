@@ -25,7 +25,7 @@ const productSchema = z.object({
   isPopular: z.boolean().default(false),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
-  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+  imageUrl: z.any().optional(),
 });
 
 export type FormState = {
@@ -39,13 +39,14 @@ export async function createOrUpdateProduct(
 ): Promise<FormState> {
   const id = formData.get('id') as string | null;
   const imageFile = formData.get('imageUrl') as File | null;
+  const existingImageUrl = formData.get('existingImageUrl') as string | null;
   
   const rawData: Record<string, any> = {};
   formData.forEach((value, key) => {
     if (key === 'locationIds' || key === 'allergenIds' || key === 'toppingGroupIds') {
       if (!rawData[key]) rawData[key] = [];
       rawData[key].push(value);
-    } else if (key !== 'imageUrl') {
+    } else if (key !== 'imageUrl' && key !== 'existingImageUrl') {
       rawData[key] = value;
     }
   });
@@ -74,20 +75,20 @@ export async function createOrUpdateProduct(
       rawData.isFeatured = false;
       rawData.isNew = false;
   }
-
-  let imageUrl: string | undefined = productSchema.shape.imageUrl.parse(formData.get('existingImageUrl') || '');
+  
+  let finalImageUrl = existingImageUrl || undefined;
 
   try {
     if (imageFile && imageFile.size > 0) {
       const blob = await put(imageFile.name, imageFile, { access: 'public' });
-      imageUrl = blob.url;
+      finalImageUrl = blob.url;
     }
   } catch (e: any) {
     console.error("Failed to upload image:", e);
     return { message: "Image upload failed. Please try again.", error: true };
   }
 
-  const validatedFields = productSchema.safeParse({ ...rawData, imageUrl });
+  const validatedFields = productSchema.safeParse({ ...rawData, imageUrl: finalImageUrl });
 
   if (!validatedFields.success) {
     const errorMessages = Object.entries(validatedFields.error.flatten().fieldErrors)

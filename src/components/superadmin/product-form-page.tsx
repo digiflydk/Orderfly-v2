@@ -1,14 +1,13 @@
 
-
 'use client';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
-import { useEffect, useMemo, useState, useTransition, useActionState } from 'react';
-import { useFormStatus } from 'react-dom';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
+import { useFormStatus } from 'react-dom';
 
 import {
   Form,
@@ -50,7 +49,7 @@ const productSchema = z.object({
   isPopular: z.boolean().default(false),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
-  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
+  imageUrl: z.any().optional(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -64,24 +63,17 @@ interface ProductFormPageProps {
   allergens: Allergen[];
 }
 
-function SubmitButton({ isEditing }: { isEditing: boolean }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? <Loader2 className="animate-spin" /> : (isEditing ? 'Save Changes' : 'Create Product')}
-    </Button>
-  );
-}
-
-
 export function ProductFormPage({ product, brands, locations, categories, toppingGroups, allergens }: ProductFormPageProps) {
   const { toast } = useToast();
-  const [state, formAction] = useActionState(createOrUpdateProduct, null);
+  const [isPending, startTransition] = useTransition();
   const [imagePreview, setImagePreview] = useState<string | null>(product?.imageUrl || null);
   
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: product || {
+    defaultValues: product ? {
+        ...product,
+        imageUrl: undefined, // Handled separately
+    } : {
       brandId: '',
       categoryId: '',
       productName: '',
@@ -95,12 +87,11 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
       locationIds: [],
       allergenIds: [],
       toppingGroupIds: [],
-      imageUrl: '',
+      imageUrl: undefined,
     },
   });
     
   const selectedBrandId = form.watch('brandId');
-  const imageUrl = form.watch('imageUrl');
   
   const { brandLocations, brandCategories, brandToppingGroups } = useMemo(() => {
     if (!selectedBrandId) {
@@ -131,22 +122,50 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
         const reader = new FileReader();
         reader.onloadend = () => setImagePreview(reader.result as string);
         reader.readAsDataURL(file);
+    } else {
+        setImagePreview(product?.imageUrl || null);
     }
+    form.setValue('imageUrl', event.target.files);
   };
   
   const title = product ? 'Edit Product' : 'Create New Product';
   const description = product ? `Editing details for ${product.productName || 'product...'}.` : 'Fill in the details for the new product.';
   const isEditing = !!product;
 
-  useEffect(() => {
-    if (state?.message) {
-        if (state.error) {
-            toast({ variant: 'destructive', title: 'Error', description: state.message });
-        } else {
-            toast({ title: 'Success!', description: "Product action successful." });
+  const onSubmit = (data: ProductFormValues) => {
+    const formData = new FormData();
+    
+    // Append all form data
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        if (key === 'imageUrl' && value instanceof FileList && value.length > 0) {
+            formData.append('imageUrl', value[0]);
+        } else if (Array.isArray(value)) {
+            value.forEach(item => formData.append(key, String(item)));
+        } else if (typeof value === 'boolean') {
+            if(value) formData.append(key, 'on');
+        } else if (typeof value !== 'object' || value === null) {
+            formData.append(key, String(value));
         }
+      }
+    });
+
+    if (product?.id) {
+        formData.append('id', product.id);
     }
-  }, [state, toast]);
+    if (product?.imageUrl) {
+        formData.append('existingImageUrl', product.imageUrl);
+    }
+    
+    startTransition(async () => {
+      const result = await createOrUpdateProduct(null, formData);
+      if (result?.error) {
+        toast({ variant: 'destructive', title: 'Error', description: result.message });
+      } else {
+        toast({ title: 'Success!', description: `Product ${product ? 'updated' : 'created'} successfully.` });
+      }
+    });
+  };
 
   return (
     <div className="space-y-6">
@@ -159,8 +178,8 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                 <Button variant="outline" asChild>
                     <Link href="/superadmin/products">Cancel</Link>
                 </Button>
-                <Button type="submit" form="product-form">
-                    {product ? 'Save Changes' : 'Create Product'}
+                <Button onClick={form.handleSubmit(onSubmit)} disabled={isPending}>
+                    {isPending ? <Loader2 className="animate-spin" /> : (product ? 'Save Changes' : 'Create Product')}
                 </Button>
             </div>
         </div>
@@ -172,13 +191,8 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
             </TabsList>
             
             <Form {...form}>
-            <form id="product-form" action={formAction} className="space-y-6">
-            <input type="hidden" name="id" value={product?.id || ''} />
-            <input type="hidden" name="existingImageUrl" value={product?.imageUrl || ''} />
+            <form id="product-form" onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
             <TabsContent value="details" className="mt-6">
-                    <div className="flex justify-end mb-6">
-                        <SubmitButton isEditing={isEditing} />
-                    </div>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 space-y-6">
                             <Card>
@@ -227,7 +241,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                             )}
                                         />
                                          <FormField control={form.control} name="price" render={({ field }) => (
-                                            <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                                            <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
                                         )} />
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -235,17 +249,23 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                             <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                                         )} />
                                     </div>
-                                    <FormItem>
-                                        <FormLabel>Product Image (Optional)</FormLabel>
-                                        <FormControl><Input name="imageUrl" type="file" accept="image/*" onChange={handleImageChange} /></FormControl>
-                                        <FormDescription>Recommended format: 16:9 aspect ratio.</FormDescription>
-                                        {imagePreview && (
-                                            <div className="mt-2 w-48 h-32 relative">
-                                                <Image src={imagePreview} alt="Product Preview" fill sizes="192px" className="object-cover rounded-md border" data-ai-hint="delicious food" />
-                                            </div>
+                                    <FormField
+                                        control={form.control}
+                                        name="imageUrl"
+                                        render={({ field }) => (
+                                            <FormItem>
+                                                <FormLabel>Product Image (Optional)</FormLabel>
+                                                <FormControl><Input type="file" accept="image/*" onChange={handleImageChange} /></FormControl>
+                                                <FormDescription>Recommended format: 16:9 aspect ratio.</FormDescription>
+                                                {imagePreview && (
+                                                    <div className="mt-2 w-48 h-32 relative">
+                                                        <Image src={imagePreview} alt="Product Preview" fill sizes="192px" className="object-cover rounded-md border" data-ai-hint="delicious food" />
+                                                    </div>
+                                                )}
+                                                <FormMessage />
+                                            </FormItem>
                                         )}
-                                        <FormMessage />
-                                    </FormItem>
+                                    />
                                 </CardContent>
                             </Card>
                             <Card>
