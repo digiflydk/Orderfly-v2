@@ -15,7 +15,6 @@ import {
   DialogTitle,
   DialogDescription,
   DialogClose,
-  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '../ui/checkbox';
@@ -178,61 +177,62 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
-        <ScrollArea className="flex-1">
-            <div className="relative aspect-video w-full shrink-0">
-                <Image 
-                    src={product.imageUrl || 'https://placehold.co/400x300.png'} 
-                    alt={product.productName}
-                    fill
-                    sizes="(max-width: 640px) 100vw, 512px"
-                    className="object-cover"
-                    data-ai-hint="delicious food"
-                />
-                 <DialogClose asChild>
-                    <Button variant="ghost" size="icon" className="absolute top-2 right-2 bg-black/30 hover:bg-black/50 text-white rounded-full">
-                        <X className="h-4 w-4" />
-                    </Button>
-                </DialogClose>
-            </div>
-            <div className="p-6 space-y-6">
-                <DialogHeader className="text-left space-y-2">
-                    <DialogTitle className="text-2xl">{product.productName}</DialogTitle>
-                    {product.description && <DialogDescription className="text-base">{product.description}</DialogDescription>}
-                </DialogHeader>
-                
-                {hasOptions && (
-                    <>
-                        <Separator />
-                        {allergens.length > 0 && (
-                            <div>
-                                <h3 className="font-semibold text-lg mb-2">Allergens</h3>
-                                <div className="flex flex-wrap gap-2">
-                                {allergens.map(allergen => (
-                                    <Badge key={allergen.id} variant="secondary" className="gap-1.5">
-                                        {allergen.icon && <DynamicIcon name={allergen.icon} className="h-4 w-4" />}
-                                        {allergen.allergenName}
-                                    </Badge>
-                                ))}
-                                </div>
-                            </div>
-                        )}
-
-                        {relevantToppingGroups.length > 0 && <Separator />}
-
-                        {relevantToppingGroups.map(group => {
-                            const isSingleSelect = Number(group.maxSelection) === 1;
-                            const currentSelection = Object.keys(selectedToppings).filter(tid => group.toppings.some(t => t.id === tid));
-
-                            return (
-                                <div key={group.id}>
-                                    <div className="mb-2">
-                                       <h3 className="font-semibold text-lg">{group.groupName}</h3>
-                                       <p className="text-sm text-muted-foreground">{getSelectionText(group)}</p>
+        <div className="flex-1 flex flex-col">
+            <ScrollArea className="flex-1">
+                <div className="relative aspect-video w-full shrink-0">
+                    <Image 
+                        src={product.imageUrl || 'https://placehold.co/400x300.png'} 
+                        alt={product.productName}
+                        fill
+                        sizes="(max-width: 640px) 100vw, 512px"
+                        className="object-cover"
+                        data-ai-hint="delicious food"
+                    />
+                    <DialogClose asChild>
+                        <Button variant="ghost" size="icon" className="absolute top-2 right-2 bg-black/30 hover:bg-black/50 text-white rounded-full">
+                            <X className="h-4 w-4" />
+                        </Button>
+                    </DialogClose>
+                </div>
+                <div className="p-6 space-y-6">
+                    <DialogHeader className="text-left space-y-2">
+                        <DialogTitle className="text-2xl">{product.productName}</DialogTitle>
+                        {product.description && <DialogDescription className="text-base">{product.description}</DialogDescription>}
+                    </DialogHeader>
+                    
+                    {hasOptions && (
+                        <>
+                            <Separator />
+                            {allergens.length > 0 && (
+                                <div>
+                                    <h3 className="font-semibold text-lg mb-2">Allergens</h3>
+                                    <div className="flex flex-wrap gap-2">
+                                    {allergens.map(allergen => (
+                                        <Badge key={allergen.id} variant="secondary" className="gap-1.5">
+                                            {allergen.icon && <DynamicIcon name={allergen.icon} className="h-4 w-4" />}
+                                            {allergen.allergenName}
+                                        </Badge>
+                                    ))}
                                     </div>
-                                    <div className="space-y-2">
-                                        {isSingleSelect ? (
-                                            <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleToppingChange(group.toppings.find(t => t.id === val)!, true, true)}>
-                                                {group.toppings.map(topping => (
+                                </div>
+                            )}
+
+                            {relevantToppingGroups.length > 0 && <Separator />}
+
+                            {relevantToppingGroups.map(group => {
+                                const isSingleSelect = Number(group.maxSelection) === 1;
+                                const currentSelection = Object.keys(selectedToppings).filter(tid => group.toppings.some(t => t.id === tid));
+
+                                return (
+                                    <div key={group.id}>
+                                        <div className="mb-2">
+                                        <h3 className="font-semibold text-lg">{group.groupName}</h3>
+                                        <p className="text-sm text-muted-foreground">{getSelectionText(group)}</p>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {isSingleSelect ? (
+                                                <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleToppingChange(group.toppings.find(t => t.id === val)!, true, true)}>
+                                                    {group.toppings.map(topping => (
                                                     <div key={`${product.id}-${topping.id}`} className="flex items-center justify-between p-2 rounded-md hover:bg-accent">
                                                         <div className="flex items-center space-x-3">
                                                             <RadioGroupItem value={topping.id} id={`${product.id}-${topping.id}`} />
@@ -240,42 +240,41 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                                         </div>
                                                         <span className="text-sm text-muted-foreground">+DKK {topping.price.toFixed(2)}</span>
                                                     </div>
-                                                ))}
-                                            </RadioGroup>
-                                        ) : (
-                                            group.toppings.map(topping => {
-                                              const isChecked = currentSelection.includes(topping.id);
-                                              const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
-                                              return (
-                                                <div key={`${product.id}-${topping.id}`} className="flex items-center justify-between p-2 rounded-md hover:bg-accent">
-                                                    <div className="flex items-center space-x-3">
-                                                        <Checkbox 
-                                                            id={`${product.id}-${topping.id}`} 
-                                                            onCheckedChange={(checked) => handleToppingChange(topping, !!checked, false)}
-                                                            checked={!!selectedToppings[topping.id]}
-                                                            disabled={!selectedToppings[topping.id] && maxReached}
-                                                        />
-                                                        <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">
-                                                            {topping.toppingName}
-                                                        </Label>
-                                                    </div>
-                                                    <span className="text-sm text-muted-foreground">
-                                                        +DKK {topping.price.toFixed(2)}
-                                                    </span>
-                                               </div>
-                                            )
-                                          })
-                                        )}
+                                                    ))}
+                                                </RadioGroup>
+                                            ) : (
+                                                group.toppings.map(topping => {
+                                                const isChecked = currentSelection.includes(topping.id);
+                                                const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
+                                                return (
+                                                    <div key={`${product.id}-${topping.id}`} className="flex items-center justify-between p-2 rounded-md hover:bg-accent">
+                                                        <div className="flex items-center space-x-3">
+                                                            <Checkbox 
+                                                                id={`${product.id}-${topping.id}`} 
+                                                                onCheckedChange={(checked) => handleToppingChange(topping, !!checked, false)}
+                                                                checked={!!selectedToppings[topping.id]}
+                                                                disabled={!selectedToppings[topping.id] && maxReached}
+                                                            />
+                                                            <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">
+                                                                {topping.toppingName}
+                                                            </Label>
+                                                        </div>
+                                                        <span className="text-sm text-muted-foreground">
+                                                            +DKK {topping.price.toFixed(2)}
+                                                        </span>
+                                                </div>
+                                                )
+                                            })
+                                            )}
+                                        </div>
                                     </div>
-                                </div>
-                            );
-                        })}
-                    </>
-                )}
-            </div>
-        </ScrollArea>
-        <DialogFooter className="p-0">
-            <div className="p-4 bg-white/70 backdrop-blur-sm border-t border-[#F2E8DA] shadow-lg w-full">
+                                );
+                            })}
+                        </>
+                    )}
+                </div>
+            </ScrollArea>
+            <div className="p-4 bg-white/70 backdrop-blur-sm border-t border-[#F2E8DA] shadow-lg w-full mt-auto">
                 <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border">
                     <Button
                         variant="outline"
@@ -305,7 +304,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     </div>
                 </Button>
             </div>
-        </DialogFooter>
+        </div>
       </DialogContent>
     </Dialog>
   );
