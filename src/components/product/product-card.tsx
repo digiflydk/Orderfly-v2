@@ -199,3 +199,4 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
     </>
   );
 }
+
