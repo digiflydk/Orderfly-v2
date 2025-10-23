@@ -8,6 +8,7 @@ import { collection, doc, getDoc, setDoc, deleteDoc, getDocs, query, orderBy, wr
 import type { Product } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
+import { put } from '@vercel/blob';
 
 const productSchema = z.object({
   id: z.string().optional().nullable(),
@@ -36,32 +37,33 @@ export async function createOrUpdateProduct(
   prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
-    
   const id = formData.get('id') as string | null;
+  const imageFile = formData.get('imageUrl') as File | null;
   
-  const rawData: Record<string, any> = Object.fromEntries(formData);
-  
-  rawData.id = id;
-  rawData.locationIds = formData.getAll('locationIds');
-  rawData.allergenIds = formData.getAll('allergenIds');
-  rawData.toppingGroupIds = formData.getAll('toppingGroupIds');
-  
-  // Correctly read boolean values from form data
-  rawData.isActive = formData.get('isActive') === 'on';
-  rawData.isFeatured = formData.get('isFeatured') === 'on';
-  rawData.isNew = formData.get('isNew') === 'on';
-  rawData.isPopular = formData.get('isPopular') === 'on';
+  const rawData: Record<string, any> = {};
+  formData.forEach((value, key) => {
+    if (key === 'locationIds' || key === 'allergenIds' || key === 'toppingGroupIds') {
+      if (!rawData[key]) rawData[key] = [];
+      rawData[key].push(value);
+    } else if (key !== 'imageUrl') {
+      rawData[key] = value;
+    }
+  });
 
-  if (typeof rawData.price === 'string') {
-    rawData.price = rawData.price.replace(',', '.');
-  }
+  rawData.id = id;
+  
+  rawData.isActive = formData.has('isActive');
+  rawData.isFeatured = formData.has('isFeatured');
+  rawData.isNew = formData.has('isNew');
+  rawData.isPopular = formData.has('isPopular');
+
+  if (typeof rawData.price === 'string') rawData.price = rawData.price.replace(',', '.');
   if (typeof rawData.priceDelivery === 'string' && rawData.priceDelivery) {
     rawData.priceDelivery = rawData.priceDelivery.replace(',', '.');
   } else if (!rawData.priceDelivery) {
     delete rawData.priceDelivery;
   }
   
-  // Enforce single badge rule server-side
   if (rawData.isFeatured) {
       rawData.isNew = false;
       rawData.isPopular = false;
@@ -73,10 +75,21 @@ export async function createOrUpdateProduct(
       rawData.isNew = false;
   }
 
-  const validatedFields = productSchema.safeParse(rawData);
+  let imageUrl: string | undefined = productSchema.shape.imageUrl.parse(formData.get('existingImageUrl') || '');
+
+  try {
+    if (imageFile && imageFile.size > 0) {
+      const blob = await put(imageFile.name, imageFile, { access: 'public' });
+      imageUrl = blob.url;
+    }
+  } catch (e: any) {
+    console.error("Failed to upload image:", e);
+    return { message: "Image upload failed. Please try again.", error: true };
+  }
+
+  const validatedFields = productSchema.safeParse({ ...rawData, imageUrl });
 
   if (!validatedFields.success) {
-    console.error(validatedFields.error.flatten());
     const errorMessages = Object.entries(validatedFields.error.flatten().fieldErrors)
         .map(([field, errors]) => `${field}: ${errors.join(', ')}`)
         .join('; ');
@@ -226,7 +239,6 @@ export async function getProductById(productId: string): Promise<Product | null>
 export async function getProductsByIds(productIds: string[], brandId?: string): Promise<ProductForMenu[]> {
     if (!productIds || productIds.length === 0) return [];
     
-    // Firestore 'in' queries are limited to 30 items in the array.
     const productPromises: Promise<Product[]>[] = [];
     for (let i = 0; i < productIds.length; i += 30) {
         const chunk = productIds.slice(i, i + 30);
@@ -241,7 +253,6 @@ export async function getProductsByIds(productIds: string[], brandId?: string): 
     const productArrays = await Promise.all(productPromises);
     const allProducts = productArrays.flat();
 
-    // Map to the lightweight type
     const finalProducts = allProducts.map(p => ({
         id: p.id,
         productName: p.productName,
@@ -294,7 +305,6 @@ export async function duplicateProducts({
 
   try {
     const productsToDuplicate: Product[] = [];
-    // Firestore 'in' query is limited to 30 items, so we might need to batch this
     for (let i = 0; i < productIds.length; i += 30) {
       const chunk = productIds.slice(i, i + 30);
       const q = query(collection(db, 'products'), where(documentId(), 'in', chunk));
@@ -313,15 +323,15 @@ export async function duplicateProducts({
 
     for (const product of productsToDuplicate) {
       const newProductId = doc(collection(db, 'products')).id;
-      const { id, ...originalData } = product; // Exclude original ID
+      const { id, ...originalData } = product;
       
       const newProductData = {
         ...originalData,
         id: newProductId,
         brandId: targetBrandId,
         locationIds: targetLocationIds,
-        productName: product.productName, // Do not add "(Copy)"
-        sortOrder: 9999, // Place duplicated items at the end
+        productName: product.productName, 
+        sortOrder: 9999,
       };
       
       batch.set(doc(db, 'products', newProductId), newProductData);

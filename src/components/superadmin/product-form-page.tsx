@@ -1,14 +1,24 @@
 
+
 'use client';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
-import { useEffect, useMemo, useState, useTransition } from 'react';
+import { useEffect, useMemo, useState, useTransition, useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import Image from 'next/image';
 
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,6 +33,7 @@ import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { BrandAppearancesForm } from './brand-appearances-form';
+import { debounce } from 'lodash';
 
 const productSchema = z.object({
   id: z.string().optional().nullable(),
@@ -53,9 +64,19 @@ interface ProductFormPageProps {
   allergens: Allergen[];
 }
 
+function SubmitButton({ isEditing }: { isEditing: boolean }) {
+  const { pending } = useFormStatus();
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? <Loader2 className="animate-spin" /> : (isEditing ? 'Save Changes' : 'Create Product')}
+    </Button>
+  );
+}
+
+
 export function ProductFormPage({ product, brands, locations, categories, toppingGroups, allergens }: ProductFormPageProps) {
   const { toast } = useToast();
-  const [isPending, startTransition] = useTransition();
+  const [state, formAction] = useActionState(createOrUpdateProduct, null);
   const [imagePreview, setImagePreview] = useState<string | null>(product?.imageUrl || null);
   
   const form = useForm<ProductFormValues>({
@@ -115,43 +136,17 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   
   const title = product ? 'Edit Product' : 'Create New Product';
   const description = product ? `Editing details for ${product.productName || 'product...'}.` : 'Fill in the details for the new product.';
-  
   const isEditing = !!product;
 
-  const onSubmit = (data: ProductFormValues) => {
-    const formData = new FormData();
-    const imageInput = document.querySelector('input[name="imageUrl"]') as HTMLInputElement;
-
-    // Append all form data
-    Object.entries(data).forEach(([key, value]) => {
-      if (value !== undefined && value !== null) {
-        if (Array.isArray(value)) {
-          value.forEach(item => formData.append(key, String(item)));
-        } else if (typeof value === 'boolean') {
-          if (value) formData.append(key, 'on');
+  useEffect(() => {
+    if (state?.message) {
+        if (state.error) {
+            toast({ variant: 'destructive', title: 'Error', description: state.message });
         } else {
-          formData.append(key, String(value));
+            toast({ title: 'Success!', description: "Product action successful." });
         }
-      }
-    });
-
-    if (imageInput?.files?.[0]) {
-      formData.set('imageUrl', imageInput.files[0]);
     }
-    
-    if (product?.id) {
-        formData.set('id', product.id);
-    }
-
-    startTransition(async () => {
-      const result = await createOrUpdateProduct(null, formData);
-      if (result?.error) {
-        toast({ variant: 'destructive', title: 'Error', description: result.message });
-      } else {
-        toast({ title: 'Success!', description: `Product ${product ? 'updated' : 'created'} successfully.` });
-      }
-    });
-  };
+  }, [state, toast]);
 
   return (
     <div className="space-y-6">
@@ -164,8 +159,8 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                 <Button variant="outline" asChild>
                     <Link href="/superadmin/products">Cancel</Link>
                 </Button>
-                <Button onClick={form.handleSubmit(onSubmit)} disabled={isPending}>
-                  {isPending ? <Loader2 className="animate-spin" /> : (product ? 'Save Changes' : 'Create Product')}
+                <Button type="submit" form="product-form">
+                    {product ? 'Save Changes' : 'Create Product'}
                 </Button>
             </div>
         </div>
@@ -177,8 +172,13 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
             </TabsList>
             
             <Form {...form}>
-            <form onSubmit={form.handleSubmit(onSubmit)} encType="multipart/form-data" className="space-y-6">
+            <form id="product-form" action={formAction} className="space-y-6">
+            <input type="hidden" name="id" value={product?.id || ''} />
+            <input type="hidden" name="existingImageUrl" value={product?.imageUrl || ''} />
             <TabsContent value="details" className="mt-6">
+                    <div className="flex justify-end mb-6">
+                        <SubmitButton isEditing={isEditing} />
+                    </div>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 space-y-6">
                             <Card>
@@ -246,13 +246,6 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                         )}
                                         <FormMessage />
                                     </FormItem>
-                                     <FormField
-                                        name="id"
-                                        control={form.control}
-                                        render={({ field }) => (
-                                            <Input type="hidden" {...field} value={field.value ?? ''}/>
-                                        )}
-                                    />
                                 </CardContent>
                             </Card>
                             <Card>
@@ -399,4 +392,3 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
     </div>
   );
 }
-
