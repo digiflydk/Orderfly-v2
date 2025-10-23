@@ -4,8 +4,7 @@
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
-import { useActionState, useEffect, useMemo, useState } from 'react';
-import { useFormStatus } from 'react-dom';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import Link from 'next/link';
 import Image from 'next/image';
 
@@ -54,21 +53,11 @@ interface ProductFormPageProps {
   allergens: Allergen[];
 }
 
-function SubmitButton({ isEditing }: { isEditing: boolean }) {
-    const { pending } = useFormStatus();
-    return (
-        <Button type="submit" disabled={pending}>
-            {pending ? <Loader2 className="animate-spin" /> : (isEditing ? 'Save Changes' : 'Create Product')}
-        </Button>
-    );
-}
-
 export function ProductFormPage({ product, brands, locations, categories, toppingGroups, allergens }: ProductFormPageProps) {
   const { toast } = useToast();
+  const [isPending, startTransition] = useTransition();
   const [imagePreview, setImagePreview] = useState<string | null>(product?.imageUrl || null);
   
-  const [state, formAction] = useActionState(createOrUpdateProduct, null);
-
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: product || {
@@ -115,14 +104,6 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
     }
   }, [selectedBrandId, brandCategories, form]);
 
-  useEffect(() => {
-    if (state?.message) {
-        if (state.error) {
-            toast({ variant: 'destructive', title: 'Error', description: state.message });
-        }
-    }
-  }, [state, toast]);
-
   const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0];
     if (file) {
@@ -137,6 +118,41 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   
   const isEditing = !!product;
 
+  const onSubmit = (data: ProductFormValues) => {
+    const formData = new FormData();
+    const imageInput = document.querySelector('input[name="imageUrl"]') as HTMLInputElement;
+
+    // Append all form data
+    Object.entries(data).forEach(([key, value]) => {
+      if (value !== undefined && value !== null) {
+        if (Array.isArray(value)) {
+          value.forEach(item => formData.append(key, String(item)));
+        } else if (typeof value === 'boolean') {
+          if (value) formData.append(key, 'on');
+        } else {
+          formData.append(key, String(value));
+        }
+      }
+    });
+
+    if (imageInput?.files?.[0]) {
+      formData.set('imageUrl', imageInput.files[0]);
+    }
+    
+    if (product?.id) {
+        formData.set('id', product.id);
+    }
+
+    startTransition(async () => {
+      const result = await createOrUpdateProduct(null, formData);
+      if (result?.error) {
+        toast({ variant: 'destructive', title: 'Error', description: result.message });
+      } else {
+        toast({ title: 'Success!', description: `Product ${product ? 'updated' : 'created'} successfully.` });
+      }
+    });
+  };
+
   return (
     <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -148,6 +164,9 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                 <Button variant="outline" asChild>
                     <Link href="/superadmin/products">Cancel</Link>
                 </Button>
+                <Button onClick={form.handleSubmit(onSubmit)} disabled={isPending}>
+                  {isPending ? <Loader2 className="animate-spin" /> : (product ? 'Save Changes' : 'Create Product')}
+                </Button>
             </div>
         </div>
 
@@ -158,11 +177,8 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
             </TabsList>
             
             <Form {...form}>
-            <form action={formAction} className="space-y-6">
+            <form onSubmit={form.handleSubmit(onSubmit)} encType="multipart/form-data" className="space-y-6">
             <TabsContent value="details" className="mt-6">
-                <div className="flex justify-end mb-6">
-                    <SubmitButton isEditing={isEditing} />
-                </div>
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 space-y-6">
                             <Card>
@@ -234,7 +250,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                         name="id"
                                         control={form.control}
                                         render={({ field }) => (
-                                            <Input type="hidden" {...field} />
+                                            <Input type="hidden" {...field} value={field.value ?? ''}/>
                                         )}
                                     />
                                 </CardContent>
@@ -383,3 +399,4 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
     </div>
   );
 }
+
