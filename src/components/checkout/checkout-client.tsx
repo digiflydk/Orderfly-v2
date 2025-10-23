@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -338,7 +337,7 @@ function CheckoutForm({ location }: { location: Location }) {
         startTransition(async () => {
             const currentSubtotalForValidation = cartItems.reduce((total, item) => {
                 const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0) * item.quantity;
-                return total + item.basePrice * item.quantity + toppingsPrice;
+                return total + item.price * item.quantity + toppingsPrice;
             }, 0);
 
             const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotalForValidation, deliveryType!);
@@ -360,7 +359,6 @@ function CheckoutForm({ location }: { location: Location }) {
         })
     }, [discountCode, brand, location, cartItems, deliveryType, applyDiscount, removeDiscount]);
 
-    // Re-validate discount when cart changes
     useEffect(() => {
         if (discountCode) {
             handleApplyDiscount();
