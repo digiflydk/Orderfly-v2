@@ -66,24 +66,12 @@ function SubmitButton({ isEditing }: { isEditing: boolean }) {
 export function ProductFormPage({ product, brands, locations, categories, toppingGroups, allergens }: ProductFormPageProps) {
   const { toast } = useToast();
   const [imagePreview, setImagePreview] = useState<string | null>(product?.imageUrl || null);
-
-  const [state, formAction] = useActionState(createOrUpdateProduct, null);
   
+  const [state, formAction] = useActionState(createOrUpdateProduct, null);
+
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: product ? {
-        ...product,
-        ownerName: users.find(u => u.id === product.ownerId)?.name || '',
-        ownerEmail: users.find(u => u.id === product.ownerId)?.email || '',
-        foodCategories: product.foodCategories || [],
-        logoUrl: product.logoUrl || '',
-        supportEmail: product.supportEmail || '',
-        website: product.website || '',
-        termsUrl: product.termsUrl || '',
-        privacyUrl: product.privacyUrl || '',
-        offersHeading: product.offersHeading || '',
-        combosHeading: product.combosHeading || '',
-    } : {
+    defaultValues: product || {
       brandId: '',
       categoryId: '',
       productName: '',
@@ -102,6 +90,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   });
     
   const selectedBrandId = form.watch('brandId');
+  const imageUrl = form.watch('imageUrl');
   
   const { brandLocations, brandCategories, brandToppingGroups } = useMemo(() => {
     if (!selectedBrandId) {
@@ -169,7 +158,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
             </TabsList>
             
             <Form {...form}>
-            <form action={formAction}>
+            <form action={formAction} encType="multipart/form-data" className="space-y-6">
             <TabsContent value="details" className="mt-6">
                 <div className="flex justify-end mb-6">
                     <SubmitButton isEditing={isEditing} />
@@ -265,8 +254,8 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                                     <div className="p-4">
                                                         {brandLocations.map((item) => (
                                                             <FormField key={item.id} control={form.control} name="locationIds" render={({ field }) => (
-                                                                <FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-2">
-                                                                    <FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl>
+                                                                <FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
+                                                                    <FormControl><Checkbox name={field.name} checked={field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl>
                                                                     <FormLabel className="font-normal">{item.name}</FormLabel>
                                                                 </FormItem>
                                                             )}/>
