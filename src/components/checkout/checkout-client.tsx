@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -74,7 +73,6 @@ function AlmostThereDialog({
   const { toast } = useToast();
 
   const handleAddUpsell = (product: ProductForMenu) => {
-    // Assuming a simple add-to-cart logic for the upsell product
     addToCart(product, 1, [], product.price, product.price);
     toast({
       title: "Added to cart!",
@@ -340,6 +338,7 @@ function CheckoutForm({ location }: { location: Location }) {
     
     const handleApplyDiscount = useCallback(() => {
         if (!discountCode || !brand || !location) return;
+
         startTransition(async () => {
             const currentSubtotal = cartItems.reduce((total, item) => {
                 const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
@@ -352,8 +351,8 @@ function CheckoutForm({ location }: { location: Location }) {
                 applyDiscount(result.discount);
             } else {
                 removeDiscount();
-                if (result.message.toLowerCase().includes('minimum order value')) {
-                    setFailedDiscount(result.discount || null);
+                if (result.message.toLowerCase().includes('minimum order value') && result.discount) {
+                    setFailedDiscount(result.discount);
                     const upsellResult = await getActiveUpsellForCart({ brandId: brand.id, locationId: location.id, cartItems: cartItems, cartTotal: currentSubtotal });
                     setAlmostThereUpsell(upsellResult);
                     setIsAlmostThereOpen(true);
@@ -362,7 +361,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     setIsDiscountErrorOpen(true);
                 }
             }
-        })
+        });
     }, [discountCode, brand, location, cartItems, deliveryType, applyDiscount, removeDiscount]);
 
     useEffect(() => {
@@ -412,20 +411,10 @@ function CheckoutForm({ location }: { location: Location }) {
            return;
        }
        
-       if (!brand || !location) {
-           toast({ variant: 'destructive', title: 'Error', description: 'Brand or location information is missing. Please refresh and try again.' });
-           return;
-       }
-       
-       if (checkoutStep === 'upsell') {
-           // This case is handled by the upsell dialog's onContinue
-           return;
-       }
-       
-       if (checkoutStep === 'payment' || hasUpsellBeenProcessed) {
-            proceedToStripe(values);
+       if (hasUpsellBeenProcessed) {
+           proceedToStripe(values);
        } else {
-            handleUpsellCheck(values);
+           handleUpsellCheck(values);
        }
     });
     
@@ -448,11 +437,9 @@ function CheckoutForm({ location }: { location: Location }) {
                     setActiveUpsell(upsellData);
                     setCheckoutStep('upsell');
                 } else {
-                    setCheckoutStep('payment');
                     proceedToStripe(formValues);
                 }
             } else {
-                setCheckoutStep('payment');
                 proceedToStripe(formValues);
             }
         });
@@ -460,6 +447,11 @@ function CheckoutForm({ location }: { location: Location }) {
 
     const proceedToStripe = (formValues: CheckoutFormValues) => {
          startTransition(async () => {
+            if (!brand || !location) {
+                toast({ variant: 'destructive', title: 'Error', description: 'Brand or location information is missing. Please refresh and try again.' });
+                return;
+            }
+            
             trackEvent('click_purchase', { cartValue: checkoutTotal });
 
            const totalDiscount = (itemDiscount || 0) + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0);
@@ -501,10 +493,9 @@ function CheckoutForm({ location }: { location: Location }) {
     };
 
     const onUpsellDialogContinue = () => {
-        recalculateAndValidateDiscount();
         setCheckoutStep('payment');
-        setHasUpsellBeenProcessed(true); // Mark upsell as processed
-        // We don't proceed to Stripe here, we let the user click "Complete Order" again
+        setHasUpsellBeenProcessed(true);
+        recalculateAndValidateDiscount();
     };
     
     const handleRemoveDiscount = () => {

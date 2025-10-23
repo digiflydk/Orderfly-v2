@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect } from 'react';
@@ -105,33 +104,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [brand, location]);
 
   const recalculateAndValidateDiscount = useCallback(() => {
-     // This function is now the single source of truth for all cart calculations.
-    
-    // 1. Calculate base values: subtotal and item count
     const currentSubtotal = cartItems.reduce((total, item) => {
         const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-        return total + (item.basePrice * item.quantity) + (toppingsPrice * item.quantity);
+        return total + ((item.itemType === 'combo' ? item.price : item.basePrice) * item.quantity) + (toppingsPrice * item.quantity);
     }, 0);
-    setSubtotal(currentSubtotal);
-    setItemCount(cartItems.reduce((count, item) => count + item.quantity, 0));
 
-    // 2. Calculate item-level discounts
-    const currentItemDiscount = cartItems.reduce((total, item) => {
-         const originalLinePrice = item.basePrice * item.quantity;
-         const discountedLinePrice = item.price * item.quantity;
-         return total + (originalLinePrice - discountedLinePrice);
-    }, 0);
-    setItemDiscount(currentItemDiscount);
-
-    // 3. Calculate discountable subtotal for cart-level discounts
     const unlockedItems = cartItems.filter(item => !isLockedItem(item));
     const discountableSubtotal = unlockedItems.reduce((sum, item) => {
         const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
         return sum + ((item.basePrice + toppingsPrice) * item.quantity);
     }, 0);
 
-    // 4. Calculate best automatic cart discount
-    let bestAutoDiscount: { name: string, amount: number } | null = null;
+    let bestAutoDiscount: { name: string; amount: number } | null = null;
     if (discountableSubtotal > 0) {
         const applicableCartDiscounts = standardDiscounts.filter(d => 
             d.discountType === 'cart' && discountableSubtotal >= (d.minOrderValue || 0)
@@ -154,10 +138,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
             }
         }
     }
-    setAutomaticCartDiscount(bestAutoDiscount);
-    
-    // 5. Calculate voucher discount
-    let calculatedVoucher: { name: string, amount: number } | null = null;
+
+    let calculatedVoucher: { name: string; amount: number } | null = null;
     if (appliedDiscount && discountableSubtotal >= (appliedDiscount.minOrderValue || 0)) {
         let voucherAmount = 0;
         if (appliedDiscount.discountType === 'percentage') {
@@ -169,78 +151,25 @@ export function CartProvider({ children }: { children: ReactNode }) {
             calculatedVoucher = { name: appliedDiscount.code, amount: voucherAmount };
         }
     }
+
+    setSubtotal(currentSubtotal);
+    setItemCount(cartItems.reduce((count, item) => count + item.quantity, 0));
+    const currentItemDiscount = cartItems.reduce((total, item) => {
+        const originalLinePrice = item.basePrice * item.quantity;
+        const discountedLinePrice = item.price * item.quantity;
+        return total + (originalLinePrice - discountedLinePrice);
+    }, 0);
+    setItemDiscount(currentItemDiscount);
+
+    setAutomaticCartDiscount(bestAutoDiscount);
     setVoucherDiscount(calculatedVoucher);
 
-    // 6. Determine which cart-level discount to apply (voucher vs automatic)
-    const finalCartDiscount = (calculatedVoucher && (!bestAutoDiscount || calculatedVoucher.amount > bestAutoDiscount.amount))
-        ? null // If voucher is better, we don't apply the automatic one.
-        : bestAutoDiscount;
-    const finalVoucherDiscount = (calculatedVoucher && (!bestAutoDiscount || calculatedVoucher.amount > bestAutoDiscount.amount))
-        ? calculatedVoucher
-        : null;
-    
-    // 7. Calculate Fees
-    let currentDeliveryFee = 0;
-    let isFreeDelivery = false;
-    if (deliveryType === 'delivery' && location) {
-        currentDeliveryFee = location.deliveryFee;
-        const freeDeliveryDiscount = standardDiscounts.find(d => 
-            d.discountType === 'free_delivery' && 
-            (currentSubtotal - currentItemDiscount) >= (d.minOrderValue || 0)
-        );
-        if (freeDeliveryDiscount) {
-            isFreeDelivery = true;
-        }
-    }
-    setDeliveryFee(currentDeliveryFee);
-    setFreeDeliveryDiscountApplied(isFreeDelivery);
-
-    const currentBagFee = includeBagFee && brand?.bagFee ? brand.bagFee : 0;
-    setBagFee(currentBagFee);
-
-    // 8. Calculate Final Totals
-    const totalDiscountFromCart = (finalCartDiscount?.amount || 0) + (finalVoucherDiscount?.amount || 0);
-    const finalCartTotal = currentSubtotal - currentItemDiscount - totalDiscountFromCart;
-    
-    // Corrected cartTotal: does NOT include bag/admin fees
-    setCartTotal(Math.max(0, finalCartTotal));
-    
-    let finalCheckoutTotal = finalCartTotal;
-    if (!isFreeDelivery) {
-        finalCheckoutTotal += currentDeliveryFee;
-    }
-    finalCheckoutTotal += currentBagFee;
-
-    // Admin fee is calculated on the total *after* all other discounts and fees
-    let currentAdminFee = 0;
-    if (brand?.adminFee && brand.adminFee > 0) {
-        if (brand.adminFeeType === 'fixed') {
-            currentAdminFee = brand.adminFee;
-        } else if (brand.adminFeeType === 'percentage') {
-            currentAdminFee = Math.max(0, finalCheckoutTotal) * (brand.adminFee / 100);
-        }
-    }
-    setAdminFee(currentAdminFee);
-    finalCheckoutTotal += currentAdminFee;
-    
-    setCheckoutTotal(Math.max(0, finalCheckoutTotal));
-
-    const vatRate = brand?.vatPercentage || 25;
-    setVatAmount((finalCheckoutTotal * vatRate) / (100 + vatRate));
-
-    // 9. Consolidate discount info for display
-    let totalDiscountAmount = currentItemDiscount + totalDiscountFromCart;
-    if (isFreeDelivery) totalDiscountAmount += currentDeliveryFee;
-    const allNames = [
-        ...(currentItemDiscount > 0 ? ['Item Offers'] : []),
-        ...(finalCartDiscount ? [finalCartDiscount.name] : []),
-        ...(finalVoucherDiscount ? [finalVoucherDiscount.name] : []),
-        ...(isFreeDelivery ? ['Free Delivery'] : []),
-    ];
-    setFinalDiscount({ name: allNames.join(' + '), amount: totalDiscountAmount });
-    
   }, [cartItems, appliedDiscount, standardDiscounts, brand, location, deliveryType, includeBagFee]);
 
+
+  useEffect(() => {
+    recalculateAndValidateDiscount();
+  }, [cartItems, appliedDiscount, standardDiscounts, recalculateAndValidateDiscount]);
 
   useEffect(() => {
     async function fetchDiscounts() {
@@ -255,11 +184,66 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
     fetchDiscounts();
   }, [deliveryType, brand, location, isInitialized]);
-
-  // Main calculation effect
+  
   useEffect(() => {
-      recalculateAndValidateDiscount();
-  }, [cartItems, appliedDiscount, standardDiscounts, brand, location, deliveryType, includeBagFee, recalculateAndValidateDiscount]);
+    // This is the final calculation step that happens whenever any of its dependencies change
+    let currentDeliveryFee = 0;
+    let isFreeDelivery = false;
+    if (deliveryType === 'delivery' && location) {
+      currentDeliveryFee = location.deliveryFee;
+      const freeDeliveryDiscount = standardDiscounts.find(d =>
+        d.discountType === 'free_delivery' && (subtotal - itemDiscount) >= (d.minOrderValue || 0)
+      );
+      if (freeDeliveryDiscount) {
+        isFreeDelivery = true;
+      }
+    }
+    
+    const finalCartDiscount = (voucherDiscount && (!automaticCartDiscount || voucherDiscount.amount > automaticCartDiscount.amount))
+        ? null
+        : automaticCartDiscount;
+    const finalVoucherDiscount = (voucherDiscount && (!automaticCartDiscount || voucherDiscount.amount > automaticCartDiscount.amount))
+        ? voucherDiscount
+        : null;
+        
+    const totalCartLevelDiscount = (finalCartDiscount?.amount || 0) + (finalVoucherDiscount?.amount || 0);
+
+    const totalDiscount = itemDiscount + totalCartLevelDiscount + (isFreeDelivery ? currentDeliveryFee : 0);
+
+    const cartTotalValue = subtotal - itemDiscount - totalCartLevelDiscount;
+    
+    const currentBagFee = includeBagFee && brand?.bagFee ? brand.bagFee : 0;
+    
+    let currentAdminFee = 0;
+    if (brand?.adminFee && brand.adminFee > 0) {
+        if (brand.adminFeeType === 'fixed') {
+            currentAdminFee = brand.adminFee;
+        } else if (brand.adminFeeType === 'percentage') {
+            currentAdminFee = Math.max(0, cartTotalValue) * (brand.adminFee / 100);
+        }
+    }
+
+    const checkoutTotalValue = cartTotalValue + (isFreeDelivery ? 0 : currentDeliveryFee) + currentBagFee + currentAdminFee;
+    
+    const vatRate = brand?.vatPercentage || 25;
+    
+    setDeliveryFee(currentDeliveryFee);
+    setFreeDeliveryDiscountApplied(isFreeDelivery);
+    setBagFee(currentBagFee);
+    setAdminFee(currentAdminFee);
+    setCartTotal(Math.max(0, cartTotalValue));
+    setCheckoutTotal(Math.max(0, checkoutTotalValue));
+    setVatAmount((checkoutTotalValue * vatRate) / (100 + vatRate));
+
+    const allNames = [
+        ...(itemDiscount > 0 ? ['Item Offers'] : []),
+        ...(finalCartDiscount ? [finalCartDiscount.name] : []),
+        ...(finalVoucherDiscount ? [`Code: ${finalVoucherDiscount.name}`] : []),
+        ...(isFreeDelivery ? ['Free Delivery'] : []),
+    ];
+    setFinalDiscount(totalDiscount > 0 ? { name: allNames.join(' + '), amount: totalDiscount } : null);
+
+  }, [subtotal, itemDiscount, automaticCartDiscount, voucherDiscount, deliveryType, location, standardDiscounts, includeBagFee, brand]);
 
 
   const addToCart = useCallback((product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number) => {
