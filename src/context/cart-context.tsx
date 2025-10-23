@@ -195,19 +195,78 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setAppliedDiscount(null);
   }, []);
   
+  // Base subtotal calculation using basePrice
   const subtotal = useMemo(() => {
-    // Subtotal is the sum of the *actual* prices customers pay for items, before cart-level discounts.
     return cartItems.reduce((total, item) => {
         const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0) * item.quantity;
-        return total + item.price * item.quantity + toppingsPrice;
+        return total + item.basePrice * item.quantity + toppingsPrice;
     }, 0);
   }, [cartItems]);
 
+  // Total discount from standard offers on items
+  const itemDiscount = useMemo(() => {
+      return cartItems.reduce((total, item) => {
+          const originalLinePrice = item.basePrice * item.quantity;
+          const discountedLinePrice = item.price * item.quantity;
+          return total + (originalLinePrice - discountedLinePrice);
+      }, 0);
+  }, [cartItems]);
+  
+  // Calculate cart-level discount (either automatic or from a voucher)
+  const cartDiscount = useMemo(() => {
+    const unlockedItems = cartItems.filter(item => !isLockedItem(item));
+    const discountableSubtotal = unlockedItems.reduce((sum, item) => {
+      const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
+      return sum + (item.basePrice + toppingsPrice) * item.quantity;
+    }, 0);
+
+    if (discountableSubtotal === 0) return null;
+    
+    let bestCartLevelDiscountAmount = 0;
+    let bestCartLevelDiscountName = '';
+    
+    const cartDiscounts = standardDiscounts.filter(d => 
+        d.discountType === 'cart' && 
+        discountableSubtotal >= (d.minOrderValue || 0)
+    );
+
+    if (cartDiscounts.length > 0) {
+        const autoCartDiscount = cartDiscounts[0]; 
+        if (autoCartDiscount.discountMethod === 'percentage' && autoCartDiscount.discountValue) {
+            bestCartLevelDiscountAmount = discountableSubtotal * (autoCartDiscount.discountValue / 100);
+        } else if (autoCartDiscount.discountMethod === 'fixed_amount' && autoCartDiscount.discountValue) {
+            bestCartLevelDiscountAmount = Math.min(discountableSubtotal, autoCartDiscount.discountValue);
+        }
+        bestCartLevelDiscountName = autoCartDiscount.discountName;
+    }
+
+    if (appliedDiscount && discountableSubtotal >= (appliedDiscount.minOrderValue || 0)) {
+        let voucherAmount = 0;
+        if (appliedDiscount.discountType === 'percentage') {
+            voucherAmount = discountableSubtotal * (appliedDiscount.discountValue / 100);
+        } else {
+            voucherAmount = Math.min(discountableSubtotal, appliedDiscount.discountValue);
+        }
+        if(voucherAmount > bestCartLevelDiscountAmount) {
+            bestCartLevelDiscountAmount = voucherAmount;
+            bestCartLevelDiscountName = appliedDiscount.code;
+        }
+    }
+    
+    if (bestCartLevelDiscountAmount > 0) {
+        return { name: bestCartLevelDiscountName, amount: bestCartLevelDiscountAmount };
+    }
+
+    return null;
+  }, [cartItems, standardDiscounts, appliedDiscount]);
+
+
   const { deliveryFee, freeDeliveryDiscountApplied } = useMemo(() => {
     if (deliveryType === 'delivery' && location) {
+        const totalAfterItemDiscounts = subtotal - itemDiscount;
         const freeDeliveryDiscount = standardDiscounts.find(d => 
             d.discountType === 'free_delivery' && 
-            subtotal >= (d.minOrderValue || 0)
+            totalAfterItemDiscounts >= (d.minOrderValue || 0)
         );
 
         if (freeDeliveryDiscount) {
@@ -216,7 +275,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return { deliveryFee: location.deliveryFee, freeDeliveryDiscountApplied: false };
     }
     return { deliveryFee: 0, freeDeliveryDiscountApplied: false };
-  }, [deliveryType, location, standardDiscounts, subtotal]);
+  }, [deliveryType, location, standardDiscounts, subtotal, itemDiscount]);
 
   const bagFee = useMemo(() => {
       return includeBagFee && brand?.bagFee ? brand.bagFee : 0;
@@ -226,85 +285,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return cartItems.reduce((count, item) => count + item.quantity, 0);
   }, [cartItems]);
   
-  const itemDiscount = useMemo(() => {
-      // This is the total discount from individual item offers.
-      return cartItems.reduce((total, item) => {
-          const originalLinePrice = item.basePrice * item.quantity;
-          const discountedLinePrice = item.price * item.quantity;
-          return total + (originalLinePrice - discountedLinePrice);
-      }, 0);
-  }, [cartItems]);
-
-  const cartDiscount = useMemo(() => {
-    const unlockedItems = cartItems.filter(item => !isLockedItem(item));
-    
-    // The subtotal of items eligible for a cart-level discount
-    const discountableSubtotal = unlockedItems.reduce((sum, item) => {
-      const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-      return sum + (item.price + toppingsPrice) * item.quantity;
-    }, 0);
-    
-    if (discountableSubtotal === 0) return null;
-
-    let bestCartLevelDiscountAmount = 0;
-    let bestCartLevelDiscountName = '';
-    
-    // Check for automatic cart discounts first
-    const cartDiscounts = standardDiscounts.filter(d => 
-        d.discountType === 'cart' && 
-        discountableSubtotal >= (d.minOrderValue || 0)
-    );
-
-    if (cartDiscounts.length > 0) {
-        const autoCartDiscount = cartDiscounts[0]; // Assume first one is best for now
-        let autoCartDiscountAmount = 0;
-        if (autoCartDiscount.discountMethod === 'percentage' && autoCartDiscount.discountValue) {
-            autoCartDiscountAmount = discountableSubtotal * (autoCartDiscount.discountValue / 100);
-        } else if (autoCartDiscount.discountMethod === 'fixed_amount' && autoCartDiscount.discountValue) {
-            autoCartDiscountAmount = Math.min(discountableSubtotal, autoCartDiscount.discountValue);
-        }
-        if(autoCartDiscountAmount > bestCartLevelDiscountAmount) {
-            bestCartLevelDiscountAmount = autoCartDiscountAmount;
-            bestCartLevelDiscountName = autoCartDiscount.discountName;
-        }
-    }
-
-    // Check for a manual discount code, which might override the automatic one if better
-    if (appliedDiscount && discountableSubtotal >= (appliedDiscount.minOrderValue || 0)) {
-        let voucherAmount = 0;
-        if (appliedDiscount.discountType === 'percentage') {
-            voucherAmount = discountableSubtotal * (appliedDiscount.discountValue / 100);
-        } else { // fixed_amount
-            voucherAmount = Math.min(discountableSubtotal, appliedDiscount.discountValue);
-        }
-        // The voucher code only applies if it's better than an existing automatic cart discount
-        if(voucherAmount > bestCartLevelDiscountAmount) {
-            bestCartLevelDiscountAmount = voucherAmount;
-            bestCartLevelDiscountName = appliedDiscount.code;
-        }
-    }
-
-    
-    if (bestCartLevelDiscountAmount > 0) {
-        return { name: bestCartLevelDiscountName, amount: bestCartLevelDiscountAmount };
-    }
-
-    return null;
-  }, [standardDiscounts, appliedDiscount, cartItems]);
-  
   const cartTotal = useMemo(() => {
-    let finalTotal = subtotal - (cartDiscount?.amount || 0);
-    if (freeDeliveryDiscountApplied) {
-        finalTotal -= deliveryFee;
-    }
+    let finalTotal = subtotal - itemDiscount - (cartDiscount?.amount || 0);
     return Math.max(0, finalTotal);
-  }, [subtotal, cartDiscount, freeDeliveryDiscountApplied, deliveryFee]);
+  }, [subtotal, itemDiscount, cartDiscount]);
 
   const adminFee = useMemo(() => {
     if (!brand?.adminFee || brand.adminFee <= 0) return 0;
-
     const baseForFee = cartTotal + (freeDeliveryDiscountApplied ? 0 : deliveryFee) + bagFee;
-
     if (brand.adminFeeType === 'fixed') {
         return brand.adminFee;
     }
