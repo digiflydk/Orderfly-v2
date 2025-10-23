@@ -16,7 +16,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import type { ComboMenu, Brand, Product, Location, Category, ProductForMenu } from '@/types';
-import { createOrUpdateCombo, getProductsForBrand, getCategoriesForBrand, type FormState } from '@/app/superadmin/combos/actions';
+import { createOrUpdateCombo, type FormState } from '@/app/superadmin/combos/actions';
+import { getProductsForBrand, getCategoriesForBrand } from '@/app/superadmin/combos/client-actions';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -216,11 +217,11 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
     }, [combo, reset]);
 
 
-    const selectedBrandId = useWatch({ control: form.control, name: 'brandId' });
-    const watchedProductGroups = useWatch({ control: form.control, name: 'productGroups' });
-    const pickupPrice = useWatch({ control: form.control, name: 'pickupPrice' });
-    const deliveryPrice = useWatch({ control: form.control, name: 'deliveryPrice' });
-    const orderTypes = useWatch({ control: form.control, name: 'orderTypes' });
+    const selectedBrandId = watch('brandId');
+    const watchedProductGroups = watch('productGroups');
+    const pickupPrice = watch('pickupPrice');
+    const deliveryPrice = watch('deliveryPrice');
+    const orderTypes = watch('orderTypes');
     const imageUrl = watch('imageUrl');
 
     const availableLocations = useMemo(() => {
@@ -254,7 +255,7 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
     
 
     const title = combo ? 'Edit Combo' : 'Create New Combo';
-    const description = combo ? `Editing details for ${combo.comboName}.` : 'Fill in the details for the new combo.';
+    const description = combo ? `Editing details for ${combo.comboName}.` : 'Fill in the details for the new combo deal.';
     
     const calculateNormalPrice = (priceType: 'pickup' | 'delivery'): number => {
       if (!watchedProductGroups || watchedProductGroups.length === 0 || brandProducts.length === 0) {
@@ -422,10 +423,10 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
                             <FormItem><FormLabel>Order Type Availability</FormLabel>
                                 <div className="flex gap-4 pt-2">
                                     <FormField control={control} name="orderTypes" render={({ field }) => (
-                                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox name={field.name} checked={field.value?.includes('pickup')} onCheckedChange={(checked) => checked ? field.onChange([...field.value, 'pickup']) : field.onChange(field.value?.filter(v => v !== 'pickup'))} disabled={pickupPrice === undefined || pickupPrice === null}/></FormControl><FormLabel className={cn("font-normal capitalize", (pickupPrice === undefined || pickupPrice === null) && 'text-muted-foreground')}>Pickup</FormLabel></FormItem>
+                                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox name={field.name} checked={field.value?.includes('pickup')} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), 'pickup']) : field.onChange((field.value || [])?.filter(v => v !== 'pickup'))} disabled={pickupPrice === undefined || pickupPrice === null}/></FormControl><FormLabel className={cn("font-normal capitalize", (pickupPrice === undefined || pickupPrice === null) && 'text-muted-foreground')}>Pickup</FormLabel></FormItem>
                                     )}/>
                                     <FormField control={control} name="orderTypes" render={({ field }) => (
-                                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox name={field.name} checked={field.value?.includes('delivery')} onCheckedChange={(checked) => checked ? field.onChange([...field.value, 'delivery']) : field.onChange(field.value?.filter(v => v !== 'delivery'))} disabled={deliveryPrice === undefined || deliveryPrice === null}/></FormControl><FormLabel className={cn("font-normal capitalize", (deliveryPrice === undefined || deliveryPrice === null) && 'text-muted-foreground')}>Delivery</FormLabel></FormItem>
+                                        <FormItem className="flex items-center space-x-2"><FormControl><Checkbox name={field.name} checked={field.value?.includes('delivery')} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), 'delivery']) : field.onChange((field.value || [])?.filter(v => v !== 'delivery'))} disabled={deliveryPrice === undefined || deliveryPrice === null}/></FormControl><FormLabel className={cn("font-normal capitalize", (deliveryPrice === undefined || deliveryPrice === null) && 'text-muted-foreground')}>Delivery</FormLabel></FormItem>
                                     )}/>
                                 </div><FormMessage />
                             </FormItem>
@@ -481,10 +482,10 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
                         <Separator/>
                          
                         <FormField control={control} name="startDate" render={({ field }) => (
-                             <FormItem className="flex flex-col"><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ? new Date(field.value) : undefined} onSelect={(date) => field.onChange(date?.toISOString())} /></PopoverContent></Popover><FormMessage /></FormItem>
+                             <FormItem className="flex flex-col"><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ? new Date(field.value) : undefined} onSelect={(date) => field.onChange(date?.toISOString().split('T')[0])} /></PopoverContent></Popover><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="endDate" render={({ field }) => (
-                            <FormItem className="flex flex-col"><FormLabel>End Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ? new Date(field.value) : undefined} onSelect={(date) => field.onChange(date?.toISOString())} /></PopoverContent></Popover><FormMessage /></FormItem>
+                            <FormItem className="flex flex-col"><FormLabel>End Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ? new Date(field.value) : undefined} onSelect={(date) => field.onChange(date?.toISOString().split('T')[0])} /></PopoverContent></Popover><FormMessage /></FormItem>
                         )}/>
                     </CardContent>
                 </Card>
