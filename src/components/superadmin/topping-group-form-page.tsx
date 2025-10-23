@@ -1,9 +1,6 @@
 
 'use client';
 
-import { z } from 'zod';
-import { useForm } from 'react-hook-form';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useMemo, useState, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
@@ -28,19 +25,6 @@ import { Checkbox } from '../ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '../ui/card';
 import { useRouter } from 'next/navigation';
 
-const toppingGroupSchema = z.object({
-  id: z.string().optional(),
-  locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
-  groupName: z.string().min(2, { message: 'Group name must be at least 2 characters.' }),
-  minSelection: z.coerce.number().min(0, "Min selection must be 0 or more."),
-  maxSelection: z.coerce.number().min(0, "Max selection must be 0 or more."),
-}).refine(data => data.maxSelection === 0 || data.maxSelection >= data.minSelection, {
-    message: "Max selection must be 0 (for unlimited) or greater than or equal to min selection.",
-    path: ["maxSelection"],
-});
-
-type GroupFormValues = z.infer<typeof toppingGroupSchema>;
-
 interface ToppingGroupFormPageProps {
   group?: ToppingGroup | null;
   locations: Location[];
@@ -59,28 +43,27 @@ function SubmitButton({ isEditing }: { isEditing: boolean }) {
 export function ToppingGroupFormPage({ group, locations, brands }: ToppingGroupFormPageProps) {
   const { toast } = useToast();
   const [state, formAction] = useActionState(createOrUpdateToppingGroup, null);
-
-  const form = useForm<GroupFormValues>({
-    resolver: zodResolver(toppingGroupSchema),
-    defaultValues: group || {
-        locationIds: [],
-        groupName: '',
-        minSelection: 0,
-        maxSelection: 1,
-    },
+  
+  const [selectedBrandId, setSelectedBrandId] = useState<string>(() => {
+     if(group) {
+        const loc = locations.find(l => group.locationIds.includes(l.id));
+        return loc?.brandId || '';
+     }
+     return '';
   });
+  
+  const [selectedLocationIds, setSelectedLocationIds] = useState<string[]>(group?.locationIds || []);
+  
+  const availableLocations = useMemo(() => {
+    if (!selectedBrandId) return [];
+    return locations.filter(l => l.brandId === selectedBrandId);
+  }, [selectedBrandId, locations]);
 
   useEffect(() => {
     if (state?.error) {
         toast({ variant: 'destructive', title: 'Error', description: state.message });
     }
   }, [state, toast]);
-  
-  useEffect(() => {
-    if (group) {
-      form.reset(group);
-    }
-  }, [group, form]);
 
   const title = group ? 'Edit Topping Group' : 'Create New Topping Group';
   const description = group ? `Editing details for ${group.groupName}.` : 'Fill in the details for the new group.';
@@ -93,92 +76,66 @@ export function ToppingGroupFormPage({ group, locations, brands }: ToppingGroupF
                 <p className="text-muted-foreground">{description}</p>
             </div>
         </div>
-        <Form {...form}>
-            <form action={formAction} className="space-y-6">
-                 {group?.id && <input type="hidden" name="id" value={group.id} />}
-                <Card>
-                    <CardContent className="pt-6 space-y-4">
-                        <FormField control={form.control} name="groupName" render={({ field }) => (
-                        <FormItem><FormLabel>Group Name</FormLabel><FormControl><Input placeholder="e.g., Sauces, Extra Toppings" {...field} /></FormControl><FormMessage /></FormItem>
-                        )}/>
-
-                        <div className="grid grid-cols-2 gap-4">
-                            <FormField control={form.control} name="minSelection" render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Min Selection</FormLabel>
-                                    <FormControl>
-                                        <Input type="number" placeholder="0" {...field} />
-                                    </FormControl>
-                                    <FormMessage />
-                                </FormItem>
-                            )}/>
-                            <FormField control={form.control} name="maxSelection" render={({ field }) => (
-                                <FormItem>
-                                    <FormLabel>Max Selection</FormLabel>
-                                    <FormControl>
-                                        <Input type="number" placeholder="1" {...field} />
-                                    </FormControl>
-                                    <FormDescription>Set to 0 for unlimited selections.</FormDescription>
-                                    <FormMessage />
-                                </FormItem>
-                            )}/>
+        <form action={formAction} className="space-y-6">
+            {group?.id && <input type="hidden" name="id" value={group.id} />}
+            <Card>
+                <CardContent className="pt-6 space-y-4">
+                    <div>
+                        <Label htmlFor="groupName">Group Name</Label>
+                        <Input id="groupName" name="groupName" placeholder="e.g., Sauces, Extra Toppings" defaultValue={group?.groupName} />
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                        <div>
+                            <Label htmlFor="minSelection">Min. Selection</Label>
+                            <Input id="minSelection" name="minSelection" type="number" placeholder="0" defaultValue={group?.minSelection ?? 0} />
                         </div>
-                        
-                        <FormField
-                        control={form.control}
-                        name="locationIds"
-                        render={() => (
-                            <FormItem>
-                            <FormLabel>Available at Locations</FormLabel>
-                            <div className="rounded-md border max-h-48 overflow-y-auto">
-                                <div className="p-4 space-y-2">
-                                {locations.map((item) => (
-                                    <FormField
-                                    key={item.id}
-                                    control={form.control}
-                                    name="locationIds"
-                                    render={({ field }) => {
-                                        return (
-                                        <FormItem
-                                            key={item.id}
-                                            className="flex flex-row items-start space-x-3 space-y-0"
-                                        >
-                                            <FormControl>
-                                            <Checkbox
-                                                checked={field.value?.includes(item.id)}
-                                                onCheckedChange={(checked) => {
-                                                const currentValue = field.value || [];
-                                                const newValue = checked
-                                                    ? [...currentValue, item.id]
-                                                    : currentValue.filter((value) => value !== item.id);
-                                                field.onChange(newValue);
-                                                }}
-                                            />
-                                            </FormControl>
-                                            <FormLabel className="font-normal cursor-pointer">
-                                            {item.name}
-                                            </FormLabel>
-                                        </FormItem>
-                                        )
-                                    }}
+                        <div>
+                            <Label htmlFor="maxSelection">Max. Selection</Label>
+                            <Input id="maxSelection" name="maxSelection" type="number" placeholder="1" defaultValue={group?.maxSelection ?? 1} />
+                            <p className="text-xs text-muted-foreground mt-1">Set to 0 for unlimited selections.</p>
+                        </div>
+                    </div>
+                    <div className="space-y-2">
+                        <Label>Brand</Label>
+                        <Select onValueChange={(value) => { setSelectedBrandId(value); setSelectedLocationIds([]); }} value={selectedBrandId}>
+                            <SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger>
+                            <SelectContent>
+                                {brands.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}
+                            </SelectContent>
+                        </Select>
+                    </div>
+
+                    <div>
+                        <Label>Available at Locations</Label>
+                        <ScrollArea className="h-32 rounded-md border">
+                            <div className="p-4 space-y-2">
+                            {availableLocations.length > 0 ? availableLocations.map((item) => (
+                                <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0">
+                                    <Checkbox
+                                        id={`loc-${item.id}`}
+                                        name="locationIds"
+                                        value={item.id}
+                                        checked={selectedLocationIds.includes(item.id)}
+                                        onCheckedChange={(checked) => {
+                                            setSelectedLocationIds(prev => checked ? [...prev, item.id] : prev.filter(id => id !== item.id));
+                                        }}
                                     />
-                                ))}
+                                    <Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label>
                                 </div>
+                            )) : <p className="text-sm text-center text-muted-foreground p-4">Select a brand to see locations.</p>}
                             </div>
-                            <FormMessage />
-                            </FormItem>
-                        )}
-                        />
-                    </CardContent>
-                     <CardFooter className="flex justify-end gap-2">
-                        <Button type="button" variant="outline" asChild>
-                            <Link href="/superadmin/toppings">Cancel</Link>
-                        </Button>
-                        <SubmitButton isEditing={!!group} />
-                    </CardFooter>
-                </Card>
-            </form>
-        </Form>
+                        </ScrollArea>
+                    </div>
+
+                </CardContent>
+                 <CardFooter className="flex justify-end gap-2">
+                    <Button type="button" variant="outline" asChild>
+                        <Link href="/superadmin/toppings">Cancel</Link>
+                    </Button>
+                    <SubmitButton isEditing={!!group} />
+                </CardFooter>
+            </Card>
+        </form>
     </div>
   );
 }
