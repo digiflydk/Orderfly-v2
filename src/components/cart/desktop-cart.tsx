@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
@@ -34,7 +35,8 @@ export function DesktopCart() {
       voucherDiscount,
       deliveryFee,
       freeDeliveryDiscountApplied,
-      deliveryType
+      deliveryType,
+      checkoutTotal,
   } = useCart();
   const [isPending, startTransition] = useTransition();
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
@@ -54,7 +56,7 @@ export function DesktopCart() {
     if (!location) return;
 
     trackEvent('start_checkout', { 
-        cartValue: cartTotal, 
+        cartValue: checkoutTotal, 
         itemsCount: itemCount, 
         deliveryType: deliveryType,
         locationId: location.id,
@@ -196,12 +198,12 @@ export function DesktopCart() {
                     <Separator/>
                     <div className="w-full flex justify-between font-bold">
                         <span>Total</span>
-                        <span>kr.{cartTotal.toFixed(2)}</span>
+                        <span>kr.{checkoutTotal.toFixed(2)}</span>
                     </div>
                     <Button onClick={handleCheckoutClick} className="w-full font-bold" disabled={isPending}>
                         <div className="flex w-full justify-between items-center">
                             <span>{isPending ? <Loader2 className="animate-spin" /> : 'Proceed to Checkout'}</span>
-                            <span>kr.{cartTotal.toFixed(2)}</span>
+                            <span>kr.{checkoutTotal.toFixed(2)}</span>
                         </div>
                     </Button>
                 </CardFooter>
