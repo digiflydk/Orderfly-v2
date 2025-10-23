@@ -274,8 +274,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     )}
                 </div>
             </ScrollArea>
-            <div className="w-full mt-auto">
-                <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border-t">
+             <div className="w-full mt-auto sticky bottom-0">
+                <div className="flex items-center justify-center gap-3 p-3 bg-[#FFF8F0] border-t">
                     <Button
                         variant="outline"
                         onClick={() => setQuantity(q => Math.max(1, q - 1))}

@@ -4,7 +4,7 @@
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
+import { useState, useTransition, useEffect, useMemo } from 'react';
 
 import { useCart } from '@/context/cart-context';
 import type { Product, Upsell, ProductForMenu } from '@/types';
@@ -231,7 +231,7 @@ export function MobileFloatingCart() {
 
   return (
     <>
-      <div className="h-16 md:hidden" aria-hidden="true" />
+      <div className="h-14 md:hidden" aria-hidden="true" />
       <Sheet>
         <SheetTrigger asChild>
             <div
@@ -239,11 +239,11 @@ export function MobileFloatingCart() {
             >
                 <Button
                     size="lg"
-                    className="w-full h-16 rounded-none text-base font-bold bg-m3-orange hover:bg-m3-orange/90 text-m3-dark"
+                    className="w-full h-14 rounded-none text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                     <div className="w-full flex justify-between items-center px-4">
                         <div className="flex items-center gap-3">
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-m3-dark text-m3-orange">
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary">
                                 {itemCount}
                             </div>
                             <span className="font-bold">View cart</span>
