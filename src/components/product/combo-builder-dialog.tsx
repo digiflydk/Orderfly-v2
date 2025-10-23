@@ -133,7 +133,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg">
+      <DialogContent className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
          <ScrollArea className="flex-1">
             <div className="relative aspect-video w-full shrink-0">
                 <Image 
@@ -144,6 +144,11 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                     className="object-cover"
                     data-ai-hint="delicious food"
                 />
+                 <DialogClose asChild>
+                    <Button variant="ghost" size="icon" className="absolute top-2 right-2 bg-black/30 hover:bg-black/50 text-white rounded-full">
+                        <X className="h-4 w-4" />
+                    </Button>
+                </DialogClose>
             </div>
             <div className="p-4 space-y-6">
                 <DialogHeader className="text-left space-y-2">
@@ -199,7 +204,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
             })}
           </div>
         </ScrollArea>
-        <DialogFooter className="p-4 border-t flex-shrink-0 flex-col sm:flex-row sm:flex-wrap sm:justify-between items-center bg-background gap-4">
+        <DialogFooter className="p-4 border-t flex-shrink-0 flex-col sm:flex-row sm:flex-wrap sm:justify-between items-center bg-[#FFF8F0] gap-4">
            <div className="flex items-center gap-2">
             <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
               <MinusCircle />
@@ -209,11 +214,11 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
               <PlusCircle />
             </Button>
           </div>
-          <Button size="lg" disabled={!isSelectionValid} onClick={handleAddToCart} className="w-full sm:flex-1">
+          <Button size="lg" disabled={!isSelectionValid} onClick={handleAddToCart} className="w-full sm:flex-1 h-12 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base">
             <div className="flex w-full justify-between items-center">
                 <span>Add to Cart</span>
-                <span>kr. {totalItemPrice.toFixed(2)}</span>
-             </div>
+                <span>DKK {totalItemPrice.toFixed(2)}</span>
+            </div>
           </Button>
         </DialogFooter>
       </DialogContent>
