@@ -25,10 +25,10 @@ export function ComboCard({ combo, brandProducts }: ComboCardProps) {
   return (
     <>
       <div 
-        className="group flex w-full items-center gap-4 cursor-pointer border-b py-4"
+        className="group flex w-full items-start gap-4 cursor-pointer border-b py-4"
         onClick={() => setIsDialogOpen(true)}
       >
-        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md md:h-28 md:w-28">
+        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md">
           <Image
             src={combo.imageUrl || 'https://placehold.co/400x400.png'}
             alt={combo.comboName}
@@ -49,16 +49,17 @@ export function ComboCard({ combo, brandProducts }: ComboCardProps) {
             </div>
         </div>
 
-        <div className="flex-1">
-          <h4 className="font-semibold">{combo.comboName}</h4>
-          <p className="text-sm text-muted-foreground line-clamp-2">{combo.description}</p>
-        </div>
-
-        <div className="flex items-center gap-4">
+        <div className="flex-1 flex flex-col h-full">
+          <div className="flex-1">
+            <h4 className="font-semibold">{combo.comboName}</h4>
+            <p className="text-sm text-muted-foreground line-clamp-2">{combo.description}</p>
+          </div>
+          <div className="flex items-center justify-between mt-2">
             <p className="font-semibold text-foreground">kr. {price?.toFixed(2) ?? 'N/A'}</p>
-             <Button size="icon" className="h-10 w-10 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
-                <Plus className="h-5 w-5"/>
+            <Button size="icon" className="h-10 w-10 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
+              <Plus className="h-5 w-5"/>
             </Button>
+          </div>
         </div>
       </div>
       <ComboBuilderDialog

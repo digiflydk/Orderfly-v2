@@ -1,10 +1,10 @@
 
 'use client';
 
-import Image from "next/image";
-import type { Topping, ToppingGroup, StandardDiscount, Allergen } from "@/types";
-import type { ProductForMenu } from "@/app/superadmin/products/actions";
-import { useState, useMemo, useTransition, useEffect } from "react";
+import Image from 'next/image';
+import type { Topping, ToppingGroup, StandardDiscount, Allergen } from '@/types';
+import type { ProductForMenu } from '@/app/superadmin/products/actions';
+import { useState, useMemo, useTransition, useEffect } from 'react';
 import { ProductDialog } from "./product-dialog";
 import { useCart } from "@/context/cart-context";
 import { Badge } from "@/components/ui/badge";
@@ -37,6 +37,7 @@ export function ProductCardSkeleton() {
       <div className="flex-1 space-y-2">
         <Skeleton className="h-5 w-3/4" />
         <Skeleton className="h-4 w-full" />
+        <Skeleton className="h-4 w-1/2" />
       </div>
        <div className="flex items-center gap-4">
         <Skeleton className="h-5 w-12" />
@@ -145,10 +146,10 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
   return (
     <>
       <div 
-        className="group flex w-full items-center gap-4 cursor-pointer border-b py-4"
+        className="group flex w-full items-start gap-4 cursor-pointer border-b py-4"
         onClick={handleCardClick}
       >
-        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md md:h-28 md:w-28">
+        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md">
           <Image
             src={product.imageUrl || 'https://placehold.co/400x400.png'}
             alt={product.productName}
@@ -167,25 +168,26 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
           )}
         </div>
 
-        <div className="flex-1">
-          <h4 className="font-semibold">{product.productName}</h4>
-          <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
-        </div>
-
-        <div className="flex items-center gap-4">
-           <div>
-                {hasOffer ? (
-                  <>
-                    <p className="font-semibold text-sm text-destructive text-right">kr. {finalPrice?.toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground line-through text-right">kr. {basePrice?.toFixed(2)}</p>
-                  </>
-                ) : (
-                  <p className="font-semibold text-foreground">kr. {finalPrice.toFixed(2)}</p>
-                )}
+        <div className="flex-1 flex flex-col h-full">
+          <div className="flex-1">
+            <h4 className="font-semibold">{product.productName}</h4>
+            <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+          </div>
+          <div className="flex items-center justify-between mt-2">
+            <div>
+              {hasOffer ? (
+                <>
+                  <p className="font-semibold text-sm text-destructive">kr. {finalPrice?.toFixed(2)}</p>
+                  <p className="text-xs text-muted-foreground line-through">kr. {basePrice?.toFixed(2)}</p>
+                </>
+              ) : (
+                <p className="font-semibold text-foreground">kr. {finalPrice.toFixed(2)}</p>
+              )}
             </div>
             <Button size="icon" className="h-10 w-10 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
                 {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5"/>}
             </Button>
+          </div>
         </div>
       </div>
       <ProductDialog
@@ -199,4 +201,3 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
     </>
   );
 }
-
