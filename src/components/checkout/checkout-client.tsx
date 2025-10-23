@@ -305,6 +305,7 @@ function CheckoutForm({ location }: { location: Location }) {
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     const [failedDiscount, setFailedDiscount] = useState<Discount | null>(null);
     const [almostThereUpsell, setAlmostThereUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
+    const [hasSeenUpsell, setHasSeenUpsell] = useState(false);
 
     const minOrderAmount = location?.minOrder ?? 0;
     const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
@@ -337,7 +338,7 @@ function CheckoutForm({ location }: { location: Location }) {
         startTransition(async () => {
             const currentSubtotalForValidation = cartItems.reduce((total, item) => {
                 const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0) * item.quantity;
-                return total + item.price * item.quantity + toppingsPrice;
+                return total + item.basePrice * item.quantity + toppingsPrice;
             }, 0);
 
             const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotalForValidation, deliveryType!);

@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import Image from 'next/image';
@@ -15,7 +14,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
+import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 import { useMemo, useTransition, useEffect, useRef } from 'react';
 import { ScrollArea, ScrollBar } from '../ui/scroll-area';
@@ -28,7 +27,7 @@ interface UpsellDialogProps {
   setIsOpen: (isOpen: boolean) => void;
   upsellData: { upsell: Upsell, products: ProductForMenu[] };
   onContinue: () => void;
-  onSuccess: (revalidateDiscount?: boolean) => void;
+  onSuccess?: (revalidateDiscount?: boolean) => void;
 }
 
 export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue, onSuccess }: UpsellDialogProps) {
@@ -77,7 +76,7 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue, onSucc
     if (upsell.discountType !== 'none' && upsell.discountValue) {
         if (upsell.discountType === 'percentage') {
             discountPercentage = upsell.discountValue;
-            finalPrice = originalPrice * (1 - discountPercentage / 100);
+            finalPrice = originalPrice * (1 - (discountPercentage / 100));
         } else if (upsell.discountType === 'fixed_amount') {
             finalPrice = Math.max(0, originalPrice - upsell.discountValue);
             if (originalPrice > 0) {
@@ -110,7 +109,7 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue, onSucc
         });
         
         setIsOpen(false);
-        onSuccess(true); // Signal that discount revalidation is needed
+        if (onSuccess) onSuccess(true); // Signal that discount revalidation is needed
     });
   };
   
