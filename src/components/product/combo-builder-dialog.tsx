@@ -12,7 +12,7 @@ import { Label } from '@/components/ui/label';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import type { ComboMenu, Product, ComboSelection, ProductForMenu } from '@/types';
-import { MinusCircle, PlusCircle, X } from 'lucide-react';
+import { Minus, Plus, X } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import Image from 'next/image';
 import { Badge } from '../ui/badge';
@@ -32,15 +32,15 @@ const getSelectionText = (group: ComboMenu['productGroups'][0]): string => {
     const min = Number(group.minSelection);
     const max = Number(group.maxSelection);
 
-    if (max > 0 && min === max && min > 1) return `Choose ${min}`;
-    if (min > 0 && max > 0 && min !== max) return `Choose ${min} to ${max}`;
-    if (min > 0 && max === 0) return `Choose at least ${min}`;
-    if (max > 1 && min <= 1) return `Choose up to ${max}`;
+    if (max > 0 && min === max && min > 1) return `Vælg præcis ${min}`;
+    if (min > 0 && max > 0 && min !== max) return `Vælg ${min} til ${max}`;
+    if (min > 0 && max === 0) return `Vælg mindst ${min}`;
+    if (max > 1 && min <= 1) return `Vælg op til ${max}`;
     
     // For single select radio buttons, we don't need the helper text
     if (max === 1) return '';
 
-    return "Choose option(s)";
+    return "Vælg option(s)";
 }
 
 export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: ComboBuilderDialogProps) {
@@ -189,8 +189,8 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                         <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
                           <Checkbox
                             id={`${group.id}-${p.id}`}
-                            checked={isChecked}
                             onCheckedChange={(checked) => handleSelectionChange(group.id, p.id, true, !!checked)}
+                            checked={isChecked}
                             disabled={!isChecked && maxReached}
                           />
                           <Label htmlFor={`${group.id}-${p.id}`} className="flex-1 cursor-pointer font-normal">{p.productName}</Label>
@@ -204,22 +204,27 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
             })}
           </div>
         </ScrollArea>
-        <DialogFooter className="p-4 border-t flex-shrink-0 flex-col sm:flex-row sm:flex-wrap sm:justify-between items-center bg-[#FFF8F0] gap-4">
-           <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
-              <MinusCircle />
-            </Button>
-            <span className="text-lg font-bold w-10 text-center">{quantity}</span>
-            <Button variant="outline" size="icon" onClick={() => setQuantity(q => q + 1)}>
-              <PlusCircle />
-            </Button>
-          </div>
-          <Button size="lg" disabled={!isSelectionValid} onClick={handleAddToCart} className="w-full sm:flex-1 h-12 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base">
-            <div className="flex w-full justify-between items-center">
-                <span>Add to Cart</span>
-                <span>DKK {totalItemPrice.toFixed(2)}</span>
-            </div>
-          </Button>
+        <DialogFooter className="p-4 border-t flex-shrink-0 flex-col bg-[#FFF8F0] gap-4">
+             <div className="flex items-center justify-center gap-4">
+                <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
+                    <Minus className="h-6 w-6" />
+                </Button>
+                <span className="text-2xl font-bold w-12 text-center">{quantity}</span>
+                <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => q + 1)}>
+                    <Plus className="h-6 w-6" />
+                </Button>
+             </div>
+             <Button
+                size="lg"
+                className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base"
+                onClick={handleAddToCart}
+                disabled={!isSelectionValid}
+                >
+                <div className="flex w-full justify-between items-center">
+                    <span>Add to Cart</span>
+                    <span>DKK {totalItemPrice.toFixed(2)}</span>
+                </div>
+             </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>

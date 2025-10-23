@@ -4,7 +4,7 @@
 
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
-import { MinusCircle, PlusCircle, X } from 'lucide-react';
+import { Minus, Plus, X } from 'lucide-react';
 import type { Topping, ToppingGroup, CartItemTopping, StandardDiscount, Allergen } from '@/types';
 import type { ProductForMenu } from '@/app/superadmin/products/actions';
 import { useCart } from '@/context/cart-context';
@@ -239,9 +239,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                         {isSingleSelect ? (
                                             <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleToppingChange(group.toppings.find(t => t.id === val)!, true, true)}>
                                                 {group.toppings.map(topping => (
-                                                    <div key={`${product.id}-${topping.id}`} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
-                                                        <RadioGroupItem value={topping.id} id={`${product.id}-${topping.id}`} />
-                                                        <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">{topping.toppingName}</Label>
+                                                    <div key={`${product.id}-${topping.id}`} className="flex items-center justify-between p-2 rounded-md hover:bg-accent">
+                                                        <div className="flex items-center space-x-3">
+                                                            <RadioGroupItem value={topping.id} id={`${product.id}-${topping.id}`} />
+                                                            <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">{topping.toppingName}</Label>
+                                                        </div>
                                                         <span className="text-sm text-muted-foreground">+DKK {topping.price.toFixed(2)}</span>
                                                     </div>
                                                 ))}
@@ -249,19 +251,20 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                         ) : (
                                             group.toppings.map(topping => {
                                               const isChecked = currentSelection.includes(topping.id);
-                                              const selectedInGroup = currentSelection;
-                                              const maxReached = Number(group.maxSelection) > 0 && selectedInGroup.length >= Number(group.maxSelection);
+                                              const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
                                               return (
-                                                <div key={`${product.id}-${topping.id}`} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
-                                                    <Checkbox 
-                                                        id={`${product.id}-${topping.id}`} 
-                                                        onCheckedChange={(checked) => handleToppingChange(topping, !!checked, false)}
-                                                        checked={!!selectedToppings[topping.id]}
-                                                        disabled={!selectedToppings[topping.id] && maxReached}
-                                                    />
-                                                    <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">
-                                                        {topping.toppingName}
-                                                    </Label>
+                                                <div key={`${product.id}-${topping.id}`} className="flex items-center justify-between p-2 rounded-md hover:bg-accent">
+                                                    <div className="flex items-center space-x-3">
+                                                        <Checkbox 
+                                                            id={`${product.id}-${topping.id}`} 
+                                                            onCheckedChange={(checked) => handleToppingChange(topping, !!checked, false)}
+                                                            checked={!!selectedToppings[topping.id]}
+                                                            disabled={!selectedToppings[topping.id] && maxReached}
+                                                        />
+                                                        <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">
+                                                            {topping.toppingName}
+                                                        </Label>
+                                                    </div>
                                                     <span className="text-sm text-muted-foreground">
                                                         +DKK {topping.price.toFixed(2)}
                                                     </span>
@@ -277,34 +280,27 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 )}
             </div>
         </ScrollArea>
-        <DialogFooter className="p-4 border-t flex-shrink-0 flex-col sm:flex-row sm:flex-wrap sm:justify-between items-center bg-[#FFF8F0] gap-4">
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
-              <MinusCircle />
-            </Button>
-            <span className="text-lg font-bold w-10 text-center">{quantity}</span>
-            <Button variant="outline" size="icon" onClick={() => setQuantity(q => q + 1)}>
-              <PlusCircle />
-            </Button>
-          </div>
-          <Button
-            size="lg"
-            className="w-full sm:flex-1 h-12 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base"
-            onClick={handleAddToCart}
-            disabled={!isSelectionValid}
-          >
-            <div className="flex w-full justify-between items-center">
-                <span>Add to Cart</span>
-                <div className="flex items-baseline gap-2">
-                {basePrice > finalPrice && (
-                <p className="text-sm font-normal line-through opacity-80">
-                    kr. {((basePrice + toppingsTotal) * quantity).toFixed(2)}
-                </p>
-                )}
-                <span>DKK {totalItemPrice.toFixed(2)}</span>
+        <DialogFooter className="p-4 border-t flex-shrink-0 flex-col bg-[#FFF8F0] gap-4">
+             <div className="flex items-center justify-center gap-4">
+                <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
+                    <Minus className="h-6 w-6" />
+                </Button>
+                <span className="text-2xl font-bold w-12 text-center">{quantity}</span>
+                <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => q + 1)}>
+                    <Plus className="h-6 w-6" />
+                </Button>
+             </div>
+             <Button
+                size="lg"
+                className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base"
+                onClick={handleAddToCart}
+                disabled={!isSelectionValid}
+                >
+                <div className="flex w-full justify-between items-center">
+                    <span>Add to Cart</span>
+                    <span>DKK {totalItemPrice.toFixed(2)}</span>
                 </div>
-            </div>
-          </Button>
+             </Button>
         </DialogFooter>
       </DialogContent>
     </Dialog>
