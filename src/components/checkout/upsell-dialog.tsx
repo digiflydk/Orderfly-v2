@@ -103,7 +103,6 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
             description: `${product.productName} has been added to your cart.`,
         });
         
-        setIsOpen(false);
         onContinue();
     });
   };
@@ -115,7 +114,6 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
         upsellName: upsell.upsellName,
         auto: isAutoReject,
     });
-    setIsOpen(false);
     onContinue();
   }
 

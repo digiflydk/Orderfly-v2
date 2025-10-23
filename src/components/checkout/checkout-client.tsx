@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -32,7 +31,7 @@ import Cookies from "js-cookie";
 import { useAnalytics } from '@/context/analytics-context';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, useStripe, useElements } from '@stripe/react-stripe-js';
-import { cn } from "@/lib/utils";
+import { cn } from "@/lib/utils';
 import { getActiveStripeKey } from '@/app/superadmin/settings/actions';
 import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
 import { UpsellDialog } from './upsell-dialog';
@@ -221,9 +220,8 @@ function CheckoutForm({ location }: { location: Location }) {
     const { trackEvent } = useAnalytics();
     const { 
         cartItems, subtotal, checkoutTotal, brand, applyDiscount, removeDiscount, 
-        appliedDiscount, deliveryType, deliveryFee, finalDiscount, itemCount, bagFee, adminFee, vatAmount,
-        selectedTime, itemDiscount, cartDiscount, voucherDiscount, freeDeliveryDiscountApplied, setCartContext, setSelectedTime,
-        recalculateAndValidateDiscount,
+        appliedDiscount, deliveryType, deliveryFee, freeDeliveryDiscountApplied, itemCount, bagFee, adminFee, vatAmount,
+        selectedTime, itemDiscount, cartDiscount, voucherDiscount, setCartContext, setSelectedTime,
     } = useCart();
     
     const router = useRouter();
@@ -237,8 +235,9 @@ function CheckoutForm({ location }: { location: Location }) {
     const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     
+    // State machine for checkout flow
+    const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'processing'>('form');
     const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
-    const [upsellOffered, setUpsellOffered] = useState(false);
 
 
     const minOrderAmount = location?.minOrder ?? 0;
@@ -271,13 +270,15 @@ function CheckoutForm({ location }: { location: Location }) {
         if (!discountCode || !brand || !location || !deliveryType) return;
         
         setIsProcessing(true);
-        // This is the critical change: Recalculate subtotal directly from cartItems
-        const currentSubtotal = cartItems.reduce((sum, item) => {
-            const toppingsTotal = item.toppings.reduce((tSum, t) => tSum + t.price, 0);
-            return sum + ((item.basePrice + toppingsTotal) * item.quantity);
-        }, 0);
+        
+        const currentDiscountableSubtotal = cartItems
+            .filter(item => !isLockedItem(item))
+            .reduce((sum, item) => {
+                const toppingsTotal = item.toppings.reduce((tSum, t) => tSum + t.price, 0);
+                return sum + ((item.basePrice + toppingsTotal) * item.quantity);
+            }, 0);
 
-        const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotal, deliveryType);
+        const result = await validateDiscountAction(discountCode, brand.id, location.id, currentDiscountableSubtotal, deliveryType);
         
         if (result.success && result.discount) {
             applyDiscount(result.discount);
@@ -331,11 +332,13 @@ function CheckoutForm({ location }: { location: Location }) {
 
 
     const proceedToStripe = (formValues: CheckoutFormValues) => {
-        setIsProcessing(true);
+        if (checkoutStep === 'processing') return; // Prevent multiple submissions
+        setCheckoutStep('processing');
+        
         startTransition(async () => {
             if (!brand || !location) {
                 toast({ variant: 'destructive', title: 'Error', description: 'Brand or location information is missing. Please refresh and try again.' });
-                setIsProcessing(false);
+                setCheckoutStep('form');
                 return;
             }
             
@@ -375,9 +378,14 @@ function CheckoutForm({ location }: { location: Location }) {
                      description: `An unexpected error occurred. Please try again. If the problem persists, one of the items in your cart may no longer be available. Details: ${result.error}`,
                      duration: 20000 
                 });
-                setIsProcessing(false);
+                setCheckoutStep('form');
             }
        });
+    };
+    
+    const onUpsellDialogContinue = () => {
+        setActiveUpsell(null);
+        proceedToStripe(form.getValues());
     };
 
     const handleFormSubmit = form.handleSubmit(async (formValues: CheckoutFormValues) => {
@@ -388,44 +396,38 @@ function CheckoutForm({ location }: { location: Location }) {
            return;
         }
 
-        if (isProcessing) return;
-
-        if (upsellOffered) {
+        if (checkoutStep !== 'form') {
             proceedToStripe(formValues);
             return;
         }
         
-        setIsProcessing(true);
-        setUpsellOffered(true);
+        setIsProcessing(true); // Disable button immediately
 
-        const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
-        const currentDiscountableSubtotal = cartItems
-            .filter(item => !isLockedItem(item))
-            .reduce((sum, item) => {
-                const toppingsTotal = item.toppings.reduce((tSum, t) => tSum + t.price, 0);
-                return sum + (item.basePrice + toppingsTotal) * item.quantity;
-            }, 0);
+        if (brand && location) {
+             const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
+             const currentDiscountableSubtotal = cartItems
+                .filter(item => !isLockedItem(item))
+                .reduce((sum, item) => sum + (item.basePrice * item.quantity), 0);
 
-        const upsellData = await getActiveUpsellForCart({
-            brandId: brand!.id,
-            locationId: location.id,
-            cartItems: minimalCartItems,
-            cartTotal: currentDiscountableSubtotal,
-        });
+            const upsellData = await getActiveUpsellForCart({
+                brandId: brand.id,
+                locationId: location.id,
+                cartItems: minimalCartItems,
+                cartTotal: currentDiscountableSubtotal,
+            });
 
-        if (upsellData) {
-            setActiveUpsell(upsellData);
-            setIsProcessing(false);
+            if (upsellData) {
+                setActiveUpsell(upsellData);
+                setCheckoutStep('upsell');
+                setIsProcessing(false); // Re-enable button to allow proceeding after upsell
+            } else {
+                proceedToStripe(formValues);
+            }
         } else {
             proceedToStripe(formValues);
         }
     });
 
-    
-    const onUpsellDialogContinue = () => {
-        setActiveUpsell(null);
-        proceedToStripe(form.getValues());
-    };
     
     const handleRemoveDiscount = () => {
         removeDiscount();
@@ -658,7 +660,7 @@ function CheckoutForm({ location }: { location: Location }) {
             
             {activeUpsell && (
                  <UpsellDialog
-                    isOpen={!!activeUpsell}
+                    isOpen={checkoutStep === 'upsell'}
                     setIsOpen={(open) => {
                         if (!open) {
                             onUpsellDialogContinue();
