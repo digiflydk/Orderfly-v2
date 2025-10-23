@@ -203,7 +203,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
             })}
           </div>
             <div className="p-4 pt-0">
-                <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border-2 border-transparent">
+                <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border">
                     <Button
                         variant="outline"
                         onClick={() => setQuantity(q => Math.max(1, q - 1))}
@@ -222,7 +222,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                 </div>
                 <Button
                     size="lg"
-                    className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base"
+                    className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6"
                     onClick={handleAddToCart}
                     disabled={!isSelectionValid}
                 >

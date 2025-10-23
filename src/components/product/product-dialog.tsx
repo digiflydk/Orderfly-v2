@@ -14,7 +14,6 @@ import {
   DialogHeader,
   DialogTitle,
   DialogDescription,
-  DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
@@ -80,7 +79,6 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     if (isOpen && location) {
       setQuantity(1);
 
-      // Initialize with default toppings
       const defaultToppings: Record<string, CartItemTopping> = {};
       relevantToppingGroups.forEach(group => {
           group.toppings.forEach(topping => {
@@ -114,8 +112,6 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   }, [isOpen, product, relevantToppingGroups, trackEvent, location]);
   
   const basePrice = useMemo(() => {
-    // If product has a basePrice property, it's an offer product, use that as original price.
-    // Otherwise, calculate the original price based on delivery type.
     return (product as any).basePrice ?? (deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price);
   }, [product, deliveryType]);
   
@@ -126,17 +122,14 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
         const newSelected = { ...prev };
         
         if (isSingleSelect) {
-            // Remove other toppings from the same group
             const groupToppings = relevantToppingGroups.find(g => g.id === topping.groupId)?.toppings || [];
             groupToppings.forEach(t => {
                 delete newSelected[t.id];
             });
-            // Add the new one
             if (isChecked) {
                 newSelected[topping.id] = { name: topping.toppingName, price: topping.price };
             }
         } else {
-             // Handle multi-select
             if (isChecked) {
                 newSelected[topping.id] = { name: topping.toppingName, price: topping.price };
             } else {
@@ -279,8 +272,9 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     </>
                 )}
             </div>
+            {/* CTA section integrated at the bottom of the scrollable content */}
             <div className="p-4 pt-0">
-                <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border-2 border-transparent">
+                <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border">
                     <Button
                         variant="outline"
                         onClick={() => setQuantity(q => Math.max(1, q - 1))}
@@ -299,7 +293,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 </div>
                 <Button
                     size="lg"
-                    className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base"
+                    className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6"
                     onClick={handleAddToCart}
                     disabled={!isSelectionValid}
                 >
