@@ -141,8 +141,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     // 2. Calculate discountable subtotal (for cart-level discounts)
     const unlockedItems = cartItems.filter(item => !isLockedItem(item));
     const discountableSubtotal = unlockedItems.reduce((sum, item) => {
-        const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-        return sum + ((item.basePrice + toppingsPrice) * item.quantity);
+        const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
+        return sum + ((item.basePrice + toppingsTotal) * item.quantity);
     }, 0);
 
     // 3. Determine best automatic cart discount
@@ -232,8 +232,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setFreeDeliveryDiscountApplied(isFreeDelivery);
     setBagFee(currentBagFee);
     setAdminFee(currentAdminFee);
-    setCartTotal(Math.max(0, calculatedCartTotal));
-    setCheckoutTotal(Math.max(0, calculatedCheckoutTotal));
+    setCartTotal(Math.max(0, calculatedCartTotal)); // This is the value for cart summary
+    setCheckoutTotal(Math.max(0, calculatedCheckoutTotal)); // This is the final value for payment
     setVatAmount((calculatedCheckoutTotal * vatRate) / (100 + vatRate));
 
     const allDiscountNames = [

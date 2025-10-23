@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 import { useMemo, useTransition, useEffect, useRef } from 'react';
-import { ScrollArea, ScrollBar } from '../ui/scroll-area';
+import { ScrollArea } from '../ui/scroll-area';
 import { incrementUpsellConversion } from '@/app/superadmin/upsells/actions';
 import { Loader2 } from 'lucide-react';
 import { useAnalytics } from '@/context/analytics-context';
@@ -35,7 +35,6 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
   const { toast } = useToast();
   const { upsell, products: upsellProducts } = upsellData;
   const [isPending, startTransition] = useTransition();
-  const timerRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -44,23 +43,7 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
         upsellName: upsell.upsellName,
         cartValue: cartTotal,
       });
-
-      timerRef.current = setTimeout(() => {
-        handleSkipAndContinue(true);
-      }, 30000);
-
-    } else {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-        timerRef.current = null;
-      }
     }
-
-    return () => {
-      if (timerRef.current) {
-        clearTimeout(timerRef.current);
-      }
-    };
   }, [isOpen, upsell.id, upsell.upsellName, cartTotal, trackEvent]);
 
   const calculatePrices = (product: ProductForMenu) => {
@@ -83,10 +66,10 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
   }
 
   const handleProductClick = (product: ProductForMenu) => {
-    if (timerRef.current) clearTimeout(timerRef.current);
     startTransition(async () => {
         const { originalPrice, finalPrice } = calculatePrices(product);
         
+        // Add item to cart and close dialog. The parent component will handle the next step.
         addToCart(product, 1, [], originalPrice, finalPrice);
         
         await incrementUpsellConversion(upsell.id);
@@ -103,22 +86,24 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
             description: `${product.productName} has been added to your cart.`,
         });
         
-        onContinue();
+        // Close the dialog, the user is now back on the checkout page with an updated cart.
+        setIsOpen(false);
     });
   };
   
-  const handleSkipAndContinue = (isAutoReject = false) => {
-    if (timerRef.current) clearTimeout(timerRef.current);
+  const handleSkipAndContinue = () => {
     trackEvent('upsell_rejected', {
         upsellId: upsell.id,
         upsellName: upsell.upsellName,
-        auto: isAutoReject,
     });
+    // Just call the onContinue function which should proceed to payment.
     onContinue();
   }
 
   return (
     <Dialog open={isOpen} onOpenChange={(open) => {
+        // If the user closes the dialog manually (e.g. by clicking outside),
+        // treat it as skipping the upsell and proceed to payment.
         if(!open) handleSkipAndContinue();
     }}>
       <DialogContent 
@@ -172,7 +157,7 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
                 })}
             </div>
              <DialogFooter className="px-0 pb-6 pt-4 mt-auto sm:justify-center">
-                <Button variant="link" size="sm" onClick={() => handleSkipAndContinue(false)} className="w-full sm:w-auto text-muted-foreground">
+                <Button variant="link" size="sm" onClick={handleSkipAndContinue} className="w-full sm:w-auto text-muted-foreground">
                     No thanks, continue to payment
                 </Button>
             </DialogFooter>

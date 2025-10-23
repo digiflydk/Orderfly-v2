@@ -74,7 +74,7 @@ function BagFeeRow() {
     };
 
     if (!includeBagFee) {
-        return null; // Don't show the row if the user has removed the bag
+        return null;
     }
 
     return (
@@ -236,7 +236,7 @@ function CheckoutForm({ location }: { location: Location }) {
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     
     const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
-    const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'processing'>('form');
+    const [upsellOffered, setUpsellOffered] = useState(false);
 
     const minOrderAmount = location?.minOrder ?? 0;
     const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
@@ -268,6 +268,7 @@ function CheckoutForm({ location }: { location: Location }) {
         if (!discountCode || !brand || !location || !deliveryType) return;
         
         setIsProcessing(true);
+        // Manually recalculate the discountable subtotal to ensure it's up-to-date
         const currentDiscountableSubtotal = cartItems
             .filter(item => !isLockedItem(item))
             .reduce((sum, item) => {
@@ -287,7 +288,6 @@ function CheckoutForm({ location }: { location: Location }) {
         }
         setIsProcessing(false);
     }, [discountCode, brand, location, deliveryType, cartItems, applyDiscount, removeDiscount, toast]);
-
 
     useEffect(() => {
         const hasTracked = sessionStorage.getItem('checkout_started');
@@ -330,7 +330,7 @@ function CheckoutForm({ location }: { location: Location }) {
 
     const proceedToStripe = (formValues: CheckoutFormValues) => {
         setIsProcessing(true);
-        const process = async () => {
+        startTransition(async () => {
             if (!brand || !location) {
                 toast({ variant: 'destructive', title: 'Error', description: 'Brand or location information is missing. Please refresh and try again.' });
                 setIsProcessing(false);
@@ -375,35 +375,7 @@ function CheckoutForm({ location }: { location: Location }) {
                 });
                 setIsProcessing(false);
             }
-        };
-        process();
-    };
-    
-    const handleUpsellCheck = async (formValues: CheckoutFormValues) => {
-        if (!brand || !location) return;
-
-        const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
-        const currentDiscountableSubtotal = cartItems
-            .filter(item => !isLockedItem(item))
-            .reduce((sum, item) => {
-                const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-                return sum + ((item.basePrice + toppingsTotal) * item.quantity);
-            }, 0);
-
-        const upsellData = await getActiveUpsellForCart({
-            brandId: brand.id,
-            locationId: location.id,
-            cartItems: minimalCartItems,
-            cartTotal: currentDiscountableSubtotal,
         });
-
-        if (upsellData) {
-            setActiveUpsell(upsellData);
-            setCheckoutStep('upsell');
-        } else {
-            setCheckoutStep('processing');
-            proceedToStripe(formValues);
-        }
     };
     
     const handleFormSubmit = form.handleSubmit(async (formValues: CheckoutFormValues) => {
@@ -413,9 +385,35 @@ function CheckoutForm({ location }: { location: Location }) {
            if (!formValues.city) form.setError('city', { message: 'City is required.' });
            return;
         }
+        
+        // If upsell has been offered and handled, proceed directly to payment.
+        if (upsellOffered) {
+            proceedToStripe(formValues);
+            return;
+        }
 
-        if (checkoutStep === 'form') {
-            await handleUpsellCheck(formValues);
+        // Otherwise, check for an upsell.
+        setIsProcessing(true);
+        const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
+        const currentDiscountableSubtotal = cartItems
+            .filter(item => !isLockedItem(item))
+            .reduce((sum, item) => {
+                const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
+                return sum + ((item.basePrice + toppingsTotal) * item.quantity);
+            }, 0);
+        
+        const upsellData = await getActiveUpsellForCart({
+            brandId: brand!.id,
+            locationId: location!.id,
+            cartItems: minimalCartItems,
+            cartTotal: currentDiscountableSubtotal,
+        });
+        
+        setUpsellOffered(true); // Mark as offered so we don't check again.
+        setIsProcessing(false);
+
+        if (upsellData) {
+            setActiveUpsell(upsellData);
         } else {
             proceedToStripe(formValues);
         }
@@ -423,7 +421,6 @@ function CheckoutForm({ location }: { location: Location }) {
 
     const onUpsellDialogContinue = () => {
         setActiveUpsell(null);
-        setCheckoutStep('processing');
         proceedToStripe(form.getValues());
     };
     
@@ -590,7 +587,6 @@ function CheckoutForm({ location }: { location: Location }) {
                                 )}
                             </section>
 
-                            {/* --- Mobile Order Summary --- */}
                             <div className="lg:hidden">
                                 <Accordion type="single" collapsible defaultValue={'item-1'} className="w-full">
                                     <AccordionItem value="item-1">
@@ -610,7 +606,6 @@ function CheckoutForm({ location }: { location: Location }) {
                             </div>
                         </div>
                         
-                        {/* --- Desktop Order Summary --- */}
                         <div className="hidden lg:block">
                             <div className="flex flex-col sticky top-6 h-[calc(100vh-3rem)]">
                                 <Card className="flex flex-col flex-1">
@@ -629,7 +624,6 @@ function CheckoutForm({ location }: { location: Location }) {
                         </div>
                     </div>
                 
-                    {/* Sticky Footer for Mobile */}
                     <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-0 z-50 lg:hidden">
                         <AcceptTermsAndCompleteOrder isSticky />
                     </div>
@@ -658,10 +652,10 @@ function CheckoutForm({ location }: { location: Location }) {
             
             {activeUpsell && (
                  <UpsellDialog
-                    isOpen={checkoutStep === 'upsell'}
+                    isOpen={!!activeUpsell}
                     setIsOpen={(open) => {
                         if (!open) {
-                            onUpsellDialogContinue();
+                           onUpsellDialogContinue();
                         }
                     }}
                     upsellData={activeUpsell}
@@ -712,4 +706,3 @@ export function CheckoutClient({ location }: CheckoutClientProps) {
     </Elements>
   );
 }
-

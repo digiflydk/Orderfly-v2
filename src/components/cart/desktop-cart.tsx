@@ -31,11 +31,11 @@ export function DesktopCart() {
       itemDiscount,
       cartDiscount,
       voucherDiscount,
-      deliveryFee,
+      deliveryFee, 
       freeDeliveryDiscountApplied,
       deliveryType,
-      checkoutTotal,
-      cartTotal, // Use cartTotal for display
+      checkoutTotal, // Use checkoutTotal for final payment
+      cartTotal, // Use cartTotal for summary display
   } = useCart();
   const [isPending, startTransition] = useTransition();
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
@@ -202,7 +202,7 @@ export function DesktopCart() {
                     <Button onClick={handleCheckoutClick} className="w-full font-bold" disabled={isPending}>
                         <div className="flex w-full justify-between items-center">
                             <span>{isPending ? <Loader2 className="animate-spin" /> : 'Proceed to Checkout'}</span>
-                            <span>kr.{cartTotal.toFixed(2)}</span>
+                            <span>kr.{checkoutTotal.toFixed(2)}</span>
                         </div>
                     </Button>
                 </CardFooter>

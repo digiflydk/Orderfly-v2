@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/sheet';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
+import { isLockedItem } from '@/lib/cart-utils';
 
 function CartContents() {
     const { 
@@ -217,11 +218,18 @@ export function MobileFloatingCart() {
             categoryId: item.categoryId
         }));
         
+        const currentDiscountableSubtotal = cartItems
+            .filter(item => !isLockedItem(item))
+            .reduce((sum, item) => {
+                const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
+                return sum + ((item.basePrice + toppingsTotal) * item.quantity);
+            }, 0);
+        
         const upsellData = await getActiveUpsellForCart({
             brandId: brand.id,
             locationId: location.id,
             cartItems: minimalCartItems,
-            cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0)),
+            cartTotal: currentDiscountableSubtotal,
         });
 
         if (upsellData) {
