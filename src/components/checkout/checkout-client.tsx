@@ -305,9 +305,10 @@ function CheckoutForm({ location }: { location: Location }) {
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     const [failedDiscount, setFailedDiscount] = useState<Discount | null>(null);
     const [almostThereUpsell, setAlmostThereUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
-    
     const [isProcessing, setIsProcessing] = useState(false);
-    const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
+    
+    // New state for flow control
+    const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'processing'>('form');
 
 
     const minOrderAmount = location?.minOrder ?? 0;
@@ -340,8 +341,9 @@ function CheckoutForm({ location }: { location: Location }) {
         if (!discountCode || !brand || !location) return;
         
         startTransition(async () => {
+            // **FIX**: Recalculate subtotal for validation inside the action
             const currentSubtotal = cartItems.reduce((sum, item) => {
-                 const toppingsTotal = item.toppings.reduce((tSum, t) => tSum + t.price, 0);
+                const toppingsTotal = item.toppings.reduce((tSum, t) => tSum + t.price, 0);
                 return sum + ((item.basePrice + toppingsTotal) * item.quantity);
             }, 0);
             
@@ -352,15 +354,8 @@ function CheckoutForm({ location }: { location: Location }) {
                 toast({ title: 'Success!', description: 'Discount code applied.' });
             } else {
                 removeDiscount();
-                if (result.message.toLowerCase().includes('minimum order value') && result.discount) {
-                    setFailedDiscount(result.discount);
-                    const upsellResult = await getActiveUpsellForCart({ brandId: brand.id, locationId: location.id, cartItems: cartItems, cartTotal: currentSubtotal });
-                    setAlmostThereUpsell(upsellResult);
-                    setIsAlmostThereOpen(true);
-                } else {
-                    setDiscountErrorMessage(result.message);
-                    setIsDiscountErrorOpen(true);
-                }
+                setDiscountErrorMessage(result.message);
+                setIsDiscountErrorOpen(true);
             }
         });
     }, [discountCode, brand, location, cartItems, deliveryType, applyDiscount, removeDiscount, toast]);
@@ -413,36 +408,45 @@ function CheckoutForm({ location }: { location: Location }) {
            return;
        }
        
-       if (isProcessing) return; // Prevent multiple submissions
+       if (isProcessing) return;
        setIsProcessing(true);
-
-       // Upsell Logic
-       const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
-       const currentDiscountableSubtotal = cartItems
-           .filter(item => !isLockedItem(item))
-           .reduce((sum, item) => sum + (item.basePrice * item.quantity), 0);
-
-       const upsellData = await getActiveUpsellForCart({
-           brandId: brand!.id,
-           locationId: location.id,
-           cartItems: minimalCartItems,
-           cartTotal: currentDiscountableSubtotal,
-       });
-
-       if (upsellData) {
-           setActiveUpsell(upsellData);
-           return; // Stop here, the dialog will take over
+       
+       if(checkoutStep === 'form') {
+           handleUpsellCheck(formValues);
+       } else {
+           proceedToStripe(formValues);
        }
-
-       // If no upsell, proceed to Stripe
-       proceedToStripe(formValues);
     });
+
+    const handleUpsellCheck = async (formValues: CheckoutFormValues) => {
+        const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
+        const currentDiscountableSubtotal = cartItems
+            .filter(item => !isLockedItem(item))
+            .reduce((sum, item) => sum + (item.basePrice * item.quantity), 0);
+
+        const upsellData = await getActiveUpsellForCart({
+            brandId: brand!.id,
+            locationId: location.id,
+            cartItems: minimalCartItems,
+            cartTotal: currentDiscountableSubtotal,
+        });
+        
+        if (upsellData) {
+            setAlmostThereUpsell(upsellData); // reusing state name but it's for upsell
+            setCheckoutStep('upsell');
+            setIsProcessing(false); // Allow interaction with the dialog
+        } else {
+            proceedToStripe(formValues);
+        }
+    };
     
     const proceedToStripe = (formValues: CheckoutFormValues) => {
+        setCheckoutStep('processing');
         startTransition(async () => {
             if (!brand || !location) {
                 toast({ variant: 'destructive', title: 'Error', description: 'Brand or location information is missing. Please refresh and try again.' });
                 setIsProcessing(false);
+                setCheckoutStep('form');
                 return;
             }
             
@@ -483,13 +487,14 @@ function CheckoutForm({ location }: { location: Location }) {
                      duration: 20000 
                 });
                 setIsProcessing(false);
+                setCheckoutStep('form');
             }
        });
     };
     
     const onUpsellDialogContinue = () => {
-        setActiveUpsell(null); // Close the dialog
-        proceedToStripe(form.getValues()); // Continue to payment with the same form data
+        setAlmostThereUpsell(null);
+        proceedToStripe(form.getValues());
     };
     
     const handleRemoveDiscount = () => {
@@ -519,7 +524,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     <AlertTitle>Minimum order for delivery is not met (kr. {minOrderAmount.toFixed(2)})</AlertTitle>
                 </Alert>
             )}
-            <div className={cn("mb-4 bg-[#FFF8F0]", isSticky ? 'px-4' : 'px-0')}>
+            <div className={cn("mb-4 bg-background", isSticky ? 'px-4' : 'px-0')}>
                 <FormField
                     control={form.control}
                     name="acceptTerms"
@@ -730,15 +735,15 @@ function CheckoutForm({ location }: { location: Location }) {
                 </AlertDialogContent>
             </AlertDialog>
             
-            {activeUpsell && (
+            {almostThereUpsell && (
                  <UpsellDialog
-                    isOpen={!!activeUpsell}
+                    isOpen={checkoutStep === 'upsell'}
                     setIsOpen={(open) => {
                         if (!open) {
                            onUpsellDialogContinue();
                         }
                     }}
-                    upsellData={activeUpsell}
+                    upsellData={almostThereUpsell}
                     onContinue={onUpsellDialogContinue}
                 />
             )}

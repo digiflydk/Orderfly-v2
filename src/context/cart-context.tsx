@@ -103,17 +103,49 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [brand, location]);
 
   const recalculateAndValidateDiscount = useCallback(() => {
+    // This is now handled by the main useEffect below.
+    // The function is kept for API compatibility but can be removed later if unused.
+  }, []);
+
+
+  useEffect(() => {
+    async function fetchDiscounts() {
+      if (isInitialized && brand && location && deliveryType) {
+        const activeDiscounts = await getActiveStandardDiscounts({
+          brandId: brand.id,
+          locationId: location.id,
+          deliveryType,
+        });
+        setStandardDiscounts(activeDiscounts);
+      }
+    }
+    fetchDiscounts();
+  }, [deliveryType, brand, location, isInitialized]);
+  
+  useEffect(() => {
+    // Single source of truth for all calculations.
+    // Recalculates whenever cart items or discounts change.
+    
+    // 1. Calculate base totals
+    const currentItemCount = cartItems.reduce((count, item) => count + item.quantity, 0);
     const currentSubtotal = cartItems.reduce((total, item) => {
         const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
         return total + ((item.itemType === 'combo' ? item.price : item.basePrice) * item.quantity) + (toppingsPrice * item.quantity);
     }, 0);
-
+    const currentItemDiscount = cartItems.reduce((total, item) => {
+        const originalLinePrice = item.basePrice * item.quantity;
+        const discountedLinePrice = item.price * item.quantity;
+        return total + (originalLinePrice - discountedLinePrice);
+    }, 0);
+    
+    // 2. Calculate discountable subtotal (for cart-level discounts)
     const unlockedItems = cartItems.filter(item => !isLockedItem(item));
     const discountableSubtotal = unlockedItems.reduce((sum, item) => {
         const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
         return sum + ((item.basePrice + toppingsPrice) * item.quantity);
     }, 0);
 
+    // 3. Determine best automatic cart discount
     let bestAutoDiscount: { name: string; amount: number } | null = null;
     if (discountableSubtotal > 0) {
         const applicableCartDiscounts = standardDiscounts.filter(d => 
@@ -138,6 +170,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
     }
 
+    // 4. Calculate voucher discount
     let calculatedVoucher: { name: string; amount: number } | null = null;
     if (appliedDiscount && discountableSubtotal >= (appliedDiscount.minOrderValue || 0)) {
         let voucherAmount = 0;
@@ -150,69 +183,33 @@ export function CartProvider({ children }: { children: ReactNode }) {
             calculatedVoucher = { name: appliedDiscount.code, amount: voucherAmount };
         }
     }
+    
+    // 5. Determine which cart-level discount to apply (voucher vs automatic)
+    const finalCartDiscount = (calculatedVoucher && (!bestAutoDiscount || calculatedVoucher.amount > bestAutoDiscount.amount))
+        ? null
+        : bestAutoDiscount;
+    const finalVoucherDiscount = (calculatedVoucher && (!bestAutoDiscount || calculatedVoucher.amount > bestAutoDiscount.amount))
+        ? calculatedVoucher
+        : null;
 
-    setSubtotal(currentSubtotal);
-    setItemCount(cartItems.reduce((count, item) => count + item.quantity, 0));
-    const currentItemDiscount = cartItems.reduce((total, item) => {
-        const originalLinePrice = item.basePrice * item.quantity;
-        const discountedLinePrice = item.price * item.quantity;
-        return total + (originalLinePrice - discountedLinePrice);
-    }, 0);
-    setItemDiscount(currentItemDiscount);
-
-    setAutomaticCartDiscount(bestAutoDiscount);
-    setVoucherDiscount(calculatedVoucher);
-
-  }, [cartItems, appliedDiscount, standardDiscounts]);
-
-
-  useEffect(() => {
-    recalculateAndValidateDiscount();
-  }, [cartItems, appliedDiscount, standardDiscounts, recalculateAndValidateDiscount]);
-
-  useEffect(() => {
-    async function fetchDiscounts() {
-      if (isInitialized && brand && location && deliveryType) {
-        const activeDiscounts = await getActiveStandardDiscounts({
-          brandId: brand.id,
-          locationId: location.id,
-          deliveryType,
-        });
-        setStandardDiscounts(activeDiscounts);
-      }
-    }
-    fetchDiscounts();
-  }, [deliveryType, brand, location, isInitialized]);
-  
-  useEffect(() => {
-    // This is the final calculation step that happens whenever any of its dependencies change
+    // 6. Calculate delivery fee and free delivery
     let currentDeliveryFee = 0;
     let isFreeDelivery = false;
     if (deliveryType === 'delivery' && location) {
       currentDeliveryFee = location.deliveryFee;
       const freeDeliveryDiscount = standardDiscounts.find(d =>
-        d.discountType === 'free_delivery' && (subtotal - itemDiscount) >= (d.minOrderValue || 0)
+        d.discountType === 'free_delivery' && (currentSubtotal - currentItemDiscount) >= (d.minOrderValue || 0)
       );
       if (freeDeliveryDiscount) {
         isFreeDelivery = true;
       }
     }
     
-    const finalCartDiscount = (voucherDiscount && (!automaticCartDiscount || voucherDiscount.amount > automaticCartDiscount.amount))
-        ? null
-        : automaticCartDiscount;
-    const finalVoucherDiscount = (voucherDiscount && (!automaticCartDiscount || voucherDiscount.amount > automaticCartDiscount.amount))
-        ? voucherDiscount
-        : null;
-        
+    // 7. Calculate final totals
     const totalCartLevelDiscount = (finalCartDiscount?.amount || 0) + (finalVoucherDiscount?.amount || 0);
-
-    const totalDiscount = itemDiscount + totalCartLevelDiscount + (isFreeDelivery ? currentDeliveryFee : 0);
-
-    const calculatedCartTotal = subtotal - itemDiscount - totalCartLevelDiscount;
+    const calculatedCartTotal = currentSubtotal - currentItemDiscount - totalCartLevelDiscount;
     
     const currentBagFee = includeBagFee && brand?.bagFee ? brand.bagFee : 0;
-    
     let currentAdminFee = 0;
     if (brand?.adminFee && brand.adminFee > 0) {
         if (brand.adminFeeType === 'fixed') {
@@ -223,9 +220,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     const calculatedCheckoutTotal = calculatedCartTotal + (isFreeDelivery ? 0 : currentDeliveryFee) + currentBagFee + currentAdminFee;
-    
     const vatRate = brand?.vatPercentage || 25;
     
+    // 8. Update all state variables
+    setSubtotal(currentSubtotal);
+    setItemCount(currentItemCount);
+    setItemDiscount(currentItemDiscount);
+    setAutomaticCartDiscount(finalCartDiscount);
+    setVoucherDiscount(finalVoucherDiscount);
     setDeliveryFee(currentDeliveryFee);
     setFreeDeliveryDiscountApplied(isFreeDelivery);
     setBagFee(currentBagFee);
@@ -234,15 +236,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setCheckoutTotal(Math.max(0, calculatedCheckoutTotal));
     setVatAmount((calculatedCheckoutTotal * vatRate) / (100 + vatRate));
 
-    const allNames = [
-        ...(itemDiscount > 0 ? ['Item Offers'] : []),
+    const allDiscountNames = [
+        ...(currentItemDiscount > 0 ? ['Item Offers'] : []),
         ...(finalCartDiscount ? [finalCartDiscount.name] : []),
         ...(finalVoucherDiscount ? [`Code: ${finalVoucherDiscount.name}`] : []),
         ...(isFreeDelivery ? ['Free Delivery'] : []),
     ];
-    setFinalDiscount(totalDiscount > 0 ? { name: allNames.join(' + '), amount: totalDiscount } : null);
+    setFinalDiscount(allDiscountNames.length > 0 ? { name: allDiscountNames.join(' + '), amount: itemDiscount + totalCartLevelDiscount + (isFreeDelivery ? currentDeliveryFee : 0) } : null);
 
-  }, [subtotal, itemDiscount, automaticCartDiscount, voucherDiscount, deliveryType, location, standardDiscounts, includeBagFee, brand]);
+  }, [cartItems, appliedDiscount, standardDiscounts, deliveryType, location, isInitialized, brand, includeBagFee]);
 
 
   const addToCart = useCallback((product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number) => {
