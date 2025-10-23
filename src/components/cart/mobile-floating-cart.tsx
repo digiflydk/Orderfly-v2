@@ -208,8 +208,6 @@ export function MobileFloatingCart() {
         cartValue: cartTotal, 
         itemsCount: itemCount, 
         deliveryType: deliveryType,
-        locationId: location.id,
-        locationSlug: location.slug,
     });
 
     startTransition(async () => {
@@ -289,9 +287,10 @@ export function MobileFloatingCart() {
             setIsOpen={setIsUpsellDialogOpen}
             upsellData={activeUpsell}
             onContinue={proceedToCheckout}
-            onSuccess={() => { /* No revalidation needed here */ }}
         />
       )}
     </>
   );
 }
+
+    

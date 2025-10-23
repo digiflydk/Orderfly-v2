@@ -27,17 +27,15 @@ interface UpsellDialogProps {
   setIsOpen: (isOpen: boolean) => void;
   upsellData: { upsell: Upsell, products: ProductForMenu[] };
   onContinue: () => void;
-  onSuccess?: (revalidateDiscount?: boolean) => void;
 }
 
-export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue, onSuccess }: UpsellDialogProps) {
+export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: UpsellDialogProps) {
   const { addToCart, deliveryType, cartTotal } = useCart();
   const { trackEvent } = useAnalytics();
   const { toast } = useToast();
   const { upsell, products: upsellProducts } = upsellData;
   const [isPending, startTransition] = useTransition();
   const timerRef = useRef<NodeJS.Timeout | null>(null);
-
 
   useEffect(() => {
     if (isOpen) {
@@ -47,13 +45,11 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue, onSucc
         cartValue: cartTotal,
       });
 
-      // Start a 30-second timer for auto-rejection
       timerRef.current = setTimeout(() => {
-        handleSkipAndContinue(true); // true indicates it's an auto-reject
-      }, 30000); // 30 seconds
+        handleSkipAndContinue(true);
+      }, 30000);
 
     } else {
-      // Clear timer if dialog is closed manually
       if (timerRef.current) {
         clearTimeout(timerRef.current);
         timerRef.current = null;
@@ -66,7 +62,6 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue, onSucc
       }
     };
   }, [isOpen, upsell.id, upsell.upsellName, cartTotal, trackEvent]);
-
 
   const calculatePrices = (product: ProductForMenu) => {
     const originalPrice = deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price;
@@ -109,7 +104,7 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue, onSucc
         });
         
         setIsOpen(false);
-        if (onSuccess) onSuccess(true); // Signal that discount revalidation is needed
+        onContinue();
     });
   };
   
@@ -187,3 +182,4 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue, onSucc
     </Dialog>
   );
 }
+    

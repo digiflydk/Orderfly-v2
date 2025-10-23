@@ -222,9 +222,10 @@ export function DesktopCart() {
             setIsOpen={setIsUpsellDialogOpen}
             upsellData={activeUpsell}
             onContinue={proceedToCheckout}
-            onSuccess={() => { /* No revalidation needed here */ }}
         />
       )}
     </>
   );
 }
+
+    
