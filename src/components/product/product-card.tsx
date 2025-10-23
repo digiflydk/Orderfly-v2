@@ -32,14 +32,15 @@ function applyDiscount(price: number, discount: StandardDiscount): number {
 
 export function ProductCardSkeleton() {
   return (
-    <div className="flex items-stretch gap-2 py-4 border-b md:border md:p-3 md:rounded-lg">
-      <Skeleton className="w-24 h-24 md:w-36 md:h-[99px] rounded-md shrink-0" />
-      <div className="flex-1 flex flex-col space-y-2">
+    <div className="flex w-full items-center gap-4 py-4 border-b">
+      <Skeleton className="h-24 w-24 rounded-md shrink-0" />
+      <div className="flex-1 space-y-2">
         <Skeleton className="h-5 w-3/4" />
         <Skeleton className="h-4 w-full" />
-        <Skeleton className="h-4 w-1/2" />
-        <div className="flex-1" />
-        <Skeleton className="h-5 w-1/4 mt-auto" />
+      </div>
+       <div className="flex items-center gap-4">
+        <Skeleton className="h-5 w-12" />
+        <Skeleton className="h-10 w-10 rounded-md" />
       </div>
     </div>
   );
@@ -144,49 +145,47 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
   return (
     <>
       <div 
-        className="group flex items-stretch gap-4 cursor-pointer transition-all duration-200 ease-in-out border-b py-4 md:border md:p-3 md:rounded-lg md:shadow-sm md:hover:shadow-lg md:hover:-translate-y-0.5"
+        className="group flex w-full items-center gap-4 cursor-pointer border-b py-4"
         onClick={handleCardClick}
       >
-        <div className="relative w-24 h-24 md:w-36 md:h-auto shrink-0">
+        <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md md:h-28 md:w-28">
           <Image
-            src={product.imageUrl || 'https://placehold.co/400x225.png'}
+            src={product.imageUrl || 'https://placehold.co/400x400.png'}
             alt={product.productName}
             fill
-            className="object-cover rounded-md"
-            sizes="(max-width: 768px) 33vw, 25vw"
+            sizes="(max-width: 768px) 25vw, 15vw"
+            className="object-cover"
             data-ai-hint="delicious food"
           />
           {badgeText && (
             <Badge className={cn(
-                "absolute top-2 left-2 border-white/50 bg-black/20 text-white backdrop-blur-sm",
-                hasOffer && "bg-destructive/70"
+                "absolute top-2 left-2",
+                hasOffer && "bg-destructive/80"
             )}>
                 {badgeText}
             </Badge>
           )}
         </div>
 
-        <div className="flex-1 flex flex-col">
-          <div>
-            <h4 className="font-semibold text-sm pr-2">{product.productName}</h4>
-            <p className="text-xs text-muted-foreground line-clamp-2 mt-1">{product.description}</p>
-          </div>
-          <div className="flex-grow" />
-          <div className="flex items-end justify-between mt-auto pt-2">
-            <div>
+        <div className="flex-1">
+          <h4 className="font-semibold">{product.productName}</h4>
+          <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
+        </div>
+
+        <div className="flex items-center gap-4">
+           <div>
                 {hasOffer ? (
                   <>
-                    <p className="font-semibold text-sm text-destructive">kr. {finalPrice?.toFixed(2)}</p>
-                    <p className="text-xs text-muted-foreground line-through">kr. {basePrice?.toFixed(2)}</p>
+                    <p className="font-semibold text-sm text-destructive text-right">kr. {finalPrice?.toFixed(2)}</p>
+                    <p className="text-xs text-muted-foreground line-through text-right">kr. {basePrice?.toFixed(2)}</p>
                   </>
                 ) : (
-                  <p className="font-semibold text-sm text-foreground">kr. {finalPrice.toFixed(2)}</p>
+                  <p className="font-semibold text-foreground">kr. {finalPrice.toFixed(2)}</p>
                 )}
             </div>
-            <Button size="icon" className="h-10 w-10 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark rounded-md shrink-0">
+            <Button size="icon" className="h-10 w-10 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
                 {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5"/>}
             </Button>
-          </div>
         </div>
       </div>
       <ProductDialog
