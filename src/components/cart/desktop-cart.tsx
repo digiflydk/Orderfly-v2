@@ -24,7 +24,6 @@ export function DesktopCart() {
       cartItems, 
       removeFromCart, 
       updateQuantity, 
-      cartTotal, 
       itemCount, 
       brand, 
       location,
@@ -36,6 +35,7 @@ export function DesktopCart() {
       freeDeliveryDiscountApplied,
       deliveryType,
       checkoutTotal,
+      cartTotal, // Use cartTotal for display
   } = useCart();
   const [isPending, startTransition] = useTransition();
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
@@ -228,5 +228,3 @@ export function DesktopCart() {
     </>
   );
 }
-
-    

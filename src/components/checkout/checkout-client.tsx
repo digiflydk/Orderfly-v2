@@ -310,7 +310,6 @@ function CheckoutForm({ location }: { location: Location }) {
     const [hasUpsellBeenProcessed, setHasUpsellBeenProcessed] = useState(false);
     const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
 
-
     const minOrderAmount = location?.minOrder ?? 0;
     const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
 
@@ -326,6 +325,11 @@ function CheckoutForm({ location }: { location: Location }) {
             getTimeSlots(location.id).then(setTimeSlots).finally(() => setIsLoadingTimes(false));
         }
     }, [location?.id]);
+
+    useEffect(() => {
+        // When cart items change, recalculate discounts.
+        recalculateAndValidateDiscount();
+    }, [cartItems, recalculateAndValidateDiscount]);
     
     const availableTimes = timeSlots ? (deliveryType === 'delivery' ? timeSlots.delivery_times : timeSlots.pickup_times) : [];
     
@@ -341,8 +345,10 @@ function CheckoutForm({ location }: { location: Location }) {
         if (!discountCode || !brand || !location) return;
 
         startTransition(async () => {
-            // Use the cart subtotal which is always up-to-date
-            const currentSubtotal = subtotal;
+            const currentSubtotal = cartItems.reduce((sum, item) => {
+                const toppingsTotal = item.toppings.reduce((tSum, t) => tSum + t.price, 0);
+                return sum + ((item.basePrice + toppingsTotal) * item.quantity);
+            }, 0);
             
             const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotal, deliveryType!);
             
@@ -361,8 +367,7 @@ function CheckoutForm({ location }: { location: Location }) {
                 }
             }
         });
-    }, [discountCode, brand, location, subtotal, deliveryType, applyDiscount, removeDiscount, cartItems]);
-
+    }, [discountCode, brand, location, cartItems, deliveryType, applyDiscount, removeDiscount]);
 
     useEffect(() => {
         const hasTracked = sessionStorage.getItem('checkout_started');
@@ -432,8 +437,9 @@ function CheckoutForm({ location }: { location: Location }) {
                     cartItems: minimalCartItems,
                     cartTotal: currentDiscountableSubtotal,
                 });
+                
+                setHasUpsellBeenProcessed(true); // Mark that we've done this check
 
-                setHasUpsellBeenProcessed(true);
                 if (upsellData) {
                     setActiveUpsell(upsellData);
                     setCheckoutStep('upsell');
@@ -792,3 +798,4 @@ export function CheckoutClient({ location }: CheckoutClientProps) {
     </Elements>
   );
 }
+

@@ -41,7 +41,7 @@ interface CartContextType {
   freeDeliveryDiscountApplied: boolean;
   applyDiscount: (discount: Discount) => void;
   removeDiscount: () => void;
-  finalDiscount: { name: string, amount: number } | null; // For payment submission
+  finalDiscount: { name: string; amount: number } | null; // For payment submission
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
@@ -163,7 +163,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setAutomaticCartDiscount(bestAutoDiscount);
     setVoucherDiscount(calculatedVoucher);
 
-  }, [cartItems, appliedDiscount, standardDiscounts, brand, location, deliveryType, includeBagFee]);
+  }, [cartItems, appliedDiscount, standardDiscounts]);
 
 
   useEffect(() => {
@@ -209,7 +209,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
     const totalDiscount = itemDiscount + totalCartLevelDiscount + (isFreeDelivery ? currentDeliveryFee : 0);
 
-    const cartTotalValue = subtotal - itemDiscount - totalCartLevelDiscount;
+    const calculatedCartTotal = subtotal - itemDiscount - totalCartLevelDiscount;
     
     const currentBagFee = includeBagFee && brand?.bagFee ? brand.bagFee : 0;
     
@@ -218,11 +218,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
         if (brand.adminFeeType === 'fixed') {
             currentAdminFee = brand.adminFee;
         } else if (brand.adminFeeType === 'percentage') {
-            currentAdminFee = Math.max(0, cartTotalValue) * (brand.adminFee / 100);
+            currentAdminFee = Math.max(0, calculatedCartTotal) * (brand.adminFee / 100);
         }
     }
 
-    const checkoutTotalValue = cartTotalValue + (isFreeDelivery ? 0 : currentDeliveryFee) + currentBagFee + currentAdminFee;
+    const calculatedCheckoutTotal = calculatedCartTotal + (isFreeDelivery ? 0 : currentDeliveryFee) + currentBagFee + currentAdminFee;
     
     const vatRate = brand?.vatPercentage || 25;
     
@@ -230,9 +230,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setFreeDeliveryDiscountApplied(isFreeDelivery);
     setBagFee(currentBagFee);
     setAdminFee(currentAdminFee);
-    setCartTotal(Math.max(0, cartTotalValue));
-    setCheckoutTotal(Math.max(0, checkoutTotalValue));
-    setVatAmount((checkoutTotalValue * vatRate) / (100 + vatRate));
+    setCartTotal(Math.max(0, calculatedCartTotal));
+    setCheckoutTotal(Math.max(0, calculatedCheckoutTotal));
+    setVatAmount((calculatedCheckoutTotal * vatRate) / (100 + vatRate));
 
     const allNames = [
         ...(itemDiscount > 0 ? ['Item Offers'] : []),

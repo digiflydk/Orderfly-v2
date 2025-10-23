@@ -183,4 +183,3 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
     </Dialog>
   );
 }
-    
