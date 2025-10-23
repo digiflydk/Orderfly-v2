@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { useEffect, useTransition, useMemo, useActionState } from 'react';
 import Link from 'next/link';
+import { useFormStatus } from 'react-dom';
 
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
@@ -119,35 +120,33 @@ export function ToppingGroupFormPage({ group, locations, brands }: ToppingGroupF
                                 <div className="p-4 space-y-2">
                                 {locations.map((item) => (
                                     <FormField
-                                        key={item.id}
-                                        control={form.control}
-                                        name="locationIds"
-                                        render={({ field }) => {
-                                            return (
-                                            <FormItem
-                                                key={item.id}
-                                                className="flex flex-row items-start space-x-3 space-y-0"
-                                            >
-                                                <FormControl>
-                                                <Checkbox
-                                                    checked={field.value?.includes(item.id)}
-                                                    onCheckedChange={(checked) => {
-                                                    return checked
-                                                        ? field.onChange([...(field.value || []), item.id])
-                                                        : field.onChange(
-                                                            (field.value || [])?.filter(
-                                                            (value) => value !== item.id
-                                                            )
-                                                        )
-                                                    }}
-                                                />
-                                                </FormControl>
-                                                <FormLabel className="font-normal cursor-pointer">
-                                                    {item.name}
-                                                </FormLabel>
-                                            </FormItem>
-                                            )
-                                        }}
+                                    key={item.id}
+                                    control={form.control}
+                                    name="locationIds"
+                                    render={({ field }) => {
+                                        return (
+                                        <FormItem
+                                            key={item.id}
+                                            className="flex flex-row items-start space-x-3 space-y-0"
+                                        >
+                                            <FormControl>
+                                            <Checkbox
+                                                checked={field.value?.includes(item.id)}
+                                                onCheckedChange={(checked) => {
+                                                const currentValue = field.value || [];
+                                                const newValue = checked
+                                                    ? [...currentValue, item.id]
+                                                    : currentValue.filter((value) => value !== item.id);
+                                                field.onChange(newValue);
+                                                }}
+                                            />
+                                            </FormControl>
+                                            <FormLabel className="font-normal cursor-pointer">
+                                            {item.name}
+                                            </FormLabel>
+                                        </FormItem>
+                                        )
+                                    }}
                                     />
                                 ))}
                                 </div>
