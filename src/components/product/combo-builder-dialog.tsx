@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -203,29 +202,29 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
               );
             })}
           </div>
-        </ScrollArea>
-        <DialogFooter className="p-4 border-t flex-shrink-0 flex-col bg-[#FFF8F0] gap-4">
-             <div className="flex items-center justify-center gap-4">
-                <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
-                    <Minus className="h-6 w-6" />
-                </Button>
-                <span className="text-2xl font-bold w-12 text-center">{quantity}</span>
-                <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => q + 1)}>
-                    <Plus className="h-6 w-6" />
-                </Button>
-             </div>
-             <Button
-                size="lg"
-                className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base"
-                onClick={handleAddToCart}
-                disabled={!isSelectionValid}
-                >
-                <div className="flex w-full justify-between items-center">
-                    <span>Add to Cart</span>
-                    <span>DKK {totalItemPrice.toFixed(2)}</span>
+            <div className="p-4 flex-shrink-0">
+                <div className="flex items-center justify-center gap-4 mb-4">
+                    <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
+                        <Minus className="h-6 w-6" />
+                    </Button>
+                    <span className="text-2xl font-bold w-12 text-center">{quantity}</span>
+                    <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => q + 1)}>
+                        <Plus className="h-6 w-6" />
+                    </Button>
                 </div>
-             </Button>
-        </DialogFooter>
+                <Button
+                    size="lg"
+                    className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base"
+                    onClick={handleAddToCart}
+                    disabled={!isSelectionValid}
+                >
+                    <div className="flex w-full justify-between items-center">
+                        <span>Add to Cart</span>
+                        <span>DKK {totalItemPrice.toFixed(2)}</span>
+                    </div>
+                </Button>
+            </div>
+        </ScrollArea>
       </DialogContent>
     </Dialog>
   );
