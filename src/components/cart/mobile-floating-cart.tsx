@@ -235,17 +235,15 @@ export function MobileFloatingCart() {
       <Sheet>
         <SheetTrigger asChild>
             <div
-                className="
-                fixed left-0 right-0 bottom-0 z-50 md:hidden
-                "
+                className="fixed left-0 right-0 bottom-0 z-50 md:hidden"
             >
                 <Button
                     size="lg"
-                    className="w-full h-16 rounded-none text-base font-bold"
+                    className="w-full h-16 rounded-none text-base font-bold bg-m3-orange hover:bg-m3-orange/90 text-m3-dark"
                 >
                     <div className="w-full flex justify-between items-center px-4">
                         <div className="flex items-center gap-3">
-                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-primary-foreground text-primary">
+                            <div className="flex h-6 w-6 items-center justify-center rounded-full bg-m3-dark text-m3-orange">
                                 {itemCount}
                             </div>
                             <span className="font-bold">View cart</span>

@@ -177,7 +177,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
-        <div className="flex-1 flex flex-col">
+        <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
                 <div className="relative aspect-video w-full shrink-0">
                     <Image 
@@ -274,8 +274,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     )}
                 </div>
             </ScrollArea>
-            <div className="p-4 bg-white/70 backdrop-blur-sm border-t border-[#F2E8DA] shadow-lg w-full mt-auto">
-                <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border">
+            <div className="w-full mt-auto">
+                <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border-t">
                     <Button
                         variant="outline"
                         onClick={() => setQuantity(q => Math.max(1, q - 1))}
@@ -294,7 +294,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 </div>
                 <Button
                     size="lg"
-                    className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6"
+                    className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
                     onClick={handleAddToCart}
                     disabled={!isSelectionValid}
                 >
