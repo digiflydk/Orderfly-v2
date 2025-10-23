@@ -31,7 +31,7 @@ import Cookies from "js-cookie";
 import { useAnalytics } from '@/context/analytics-context';
 import { loadStripe } from '@stripe/stripe-js';
 import { Elements, useStripe, useElements } from '@stripe/react-stripe-js';
-import { cn } from "@/lib/utils';
+import { cn } from '@/lib/utils';
 import { getActiveStripeKey } from '@/app/superadmin/settings/actions';
 import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
 import { UpsellDialog } from './upsell-dialog';
@@ -227,7 +227,7 @@ function CheckoutForm({ location }: { location: Location }) {
     const router = useRouter();
     const { toast } = useToast();
     const params = useParams();
-    const [isProcessing, setIsProcessing] = useState(false);
+    const [isProcessing, startTransition] = useTransition();
     const [discountCode, setDiscountCode] = useState('');
     const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
     const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
@@ -235,10 +235,8 @@ function CheckoutForm({ location }: { location: Location }) {
     const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     
-    // State machine for checkout flow
     const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'processing'>('form');
     const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
-
 
     const minOrderAmount = location?.minOrder ?? 0;
     const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
@@ -269,26 +267,25 @@ function CheckoutForm({ location }: { location: Location }) {
     const handleApplyDiscount = useCallback(async () => {
         if (!discountCode || !brand || !location || !deliveryType) return;
         
-        setIsProcessing(true);
-        
-        const currentDiscountableSubtotal = cartItems
-            .filter(item => !isLockedItem(item))
-            .reduce((sum, item) => {
-                const toppingsTotal = item.toppings.reduce((tSum, t) => tSum + t.price, 0);
-                return sum + ((item.basePrice + toppingsTotal) * item.quantity);
-            }, 0);
+        startTransition(async () => {
+            const currentDiscountableSubtotal = cartItems
+                .filter(item => !isLockedItem(item))
+                .reduce((sum, item) => {
+                    const toppingsTotal = item.toppings.reduce((tSum, t) => tSum + t.price, 0);
+                    return sum + ((item.basePrice + toppingsTotal) * item.quantity);
+                }, 0);
 
-        const result = await validateDiscountAction(discountCode, brand.id, location.id, currentDiscountableSubtotal, deliveryType);
-        
-        if (result.success && result.discount) {
-            applyDiscount(result.discount);
-            toast({ title: 'Success!', description: 'Discount code applied.' });
-        } else {
-            removeDiscount();
-            setDiscountErrorMessage(result.message);
-            setIsDiscountErrorOpen(true);
-        }
-        setIsProcessing(false);
+            const result = await validateDiscountAction(discountCode, brand.id, location.id, currentDiscountableSubtotal, deliveryType);
+            
+            if (result.success && result.discount) {
+                applyDiscount(result.discount);
+                toast({ title: 'Success!', description: 'Discount code applied.' });
+            } else {
+                removeDiscount();
+                setDiscountErrorMessage(result.message);
+                setIsDiscountErrorOpen(true);
+            }
+        });
     }, [discountCode, brand, location, deliveryType, cartItems, applyDiscount, removeDiscount, toast]);
 
 
@@ -332,9 +329,7 @@ function CheckoutForm({ location }: { location: Location }) {
 
 
     const proceedToStripe = (formValues: CheckoutFormValues) => {
-        if (checkoutStep === 'processing') return; // Prevent multiple submissions
         setCheckoutStep('processing');
-        
         startTransition(async () => {
             if (!brand || !location) {
                 toast({ variant: 'destructive', title: 'Error', description: 'Brand or location information is missing. Please refresh and try again.' });
@@ -401,13 +396,16 @@ function CheckoutForm({ location }: { location: Location }) {
             return;
         }
         
-        setIsProcessing(true); // Disable button immediately
+        setCheckoutStep('processing'); // Set to processing to avoid double clicks
 
         if (brand && location) {
              const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
              const currentDiscountableSubtotal = cartItems
                 .filter(item => !isLockedItem(item))
-                .reduce((sum, item) => sum + (item.basePrice * item.quantity), 0);
+                .reduce((sum, item) => {
+                    const toppingsTotal = item.toppings.reduce((tTotal, t) => tSum + t.price, 0);
+                    return sum + ((item.basePrice + toppingsTotal) * item.quantity);
+                }, 0);
 
             const upsellData = await getActiveUpsellForCart({
                 brandId: brand.id,
@@ -419,7 +417,6 @@ function CheckoutForm({ location }: { location: Location }) {
             if (upsellData) {
                 setActiveUpsell(upsellData);
                 setCheckoutStep('upsell');
-                setIsProcessing(false); // Re-enable button to allow proceeding after upsell
             } else {
                 proceedToStripe(formValues);
             }
@@ -477,9 +474,9 @@ function CheckoutForm({ location }: { location: Location }) {
                     )}
                 />
             </div>
-            <Button type="submit" className={cn("w-full font-bold", isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg")} disabled={isProcessing || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
+            <Button type="submit" className={cn("w-full font-bold", isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg")} disabled={isPending || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
                 <div className="flex w-full justify-between items-center px-4">
-                    <span>{isProcessing ? <Loader2 className="animate-spin" /> : 'Complete Order'}</span>
+                    <span>{isPending ? <Loader2 className="animate-spin" /> : 'Complete Order'}</span>
                     <span>kr. {checkoutTotal.toFixed(2)}</span>
                 </div>
             </Button>
@@ -585,8 +582,8 @@ function CheckoutForm({ location }: { location: Location }) {
                                 ) : (
                                     <div className="flex items-center gap-2">
                                         <Input placeholder="Enter discount code" className="h-9" value={discountCode} onChange={(e) => setDiscountCode(e.target.value)} />
-                                        <Button type="button" variant="outline" onClick={handleApplyDiscount} disabled={isProcessing || !discountCode}>
-                                            {isProcessing ? <Loader2 className="animate-spin" /> : 'Apply'}
+                                        <Button type="button" variant="outline" onClick={handleApplyDiscount} disabled={isPending || !discountCode}>
+                                            {isPending ? <Loader2 className="animate-spin" /> : 'Apply'}
                                         </Button>
                                     </div>
                                 )}
