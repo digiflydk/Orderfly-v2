@@ -14,7 +14,7 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { useEffect, useState, useTransition, useMemo } from "react";
+import { useEffect, useState, useTransition, useMemo, useCallback } from "react";
 import { createStripeCheckoutSessionAction, validateDiscountAction } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, X, Tag, Truck, Store, Clock, MapPin, Check, ShoppingCart, AlertTriangle } from "lucide-react";
@@ -62,11 +62,13 @@ function AlmostThereDialog({
   onOpenChange,
   discount,
   upsellData,
+  onSuccess
 }: {
   isOpen: boolean;
   onOpenChange: (open: boolean) => void;
   discount: Discount | null;
   upsellData: { upsell: Upsell, products: ProductForMenu[] } | null;
+  onSuccess: (revalidateDiscount: boolean) => void;
 }) {
   const { addToCart } = useCart();
   const { toast } = useToast();
@@ -79,6 +81,7 @@ function AlmostThereDialog({
       description: `${product.productName} has been added to your cart.`,
     });
     onOpenChange(false);
+    onSuccess(true);
   };
   
   const minOrderValue = discount?.minOrderValue ?? 0;
@@ -329,6 +332,41 @@ function CheckoutForm({ location }: { location: Location }) {
             subscribeToNewsletter: false, acceptTerms: false,
         },
     });
+    
+    const handleApplyDiscount = useCallback(() => {
+        if (!discountCode || !brand || !location) return;
+        startTransition(async () => {
+            const currentSubtotalForValidation = cartItems.reduce((total, item) => {
+                const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0) * item.quantity;
+                return total + item.basePrice * item.quantity + toppingsPrice;
+            }, 0);
+
+            const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotalForValidation, deliveryType!);
+            
+            if (result.success && result.discount) {
+                applyDiscount(result.discount);
+            } else {
+                removeDiscount();
+                if (result.message.toLowerCase().includes('minimum order value')) {
+                    setFailedDiscount(result.discount || null);
+                    const upsellResult = await getActiveUpsellForCart({ brandId: brand.id, locationId: location.id, cartItems: cartItems, cartTotal: currentSubtotalForValidation });
+                    setAlmostThereUpsell(upsellResult);
+                    setIsAlmostThereOpen(true);
+                } else {
+                    setDiscountErrorMessage(result.message);
+                    setIsDiscountErrorOpen(true);
+                }
+            }
+        })
+    }, [discountCode, brand, location, cartItems, deliveryType, applyDiscount, removeDiscount]);
+
+    // Re-validate discount when cart changes
+    useEffect(() => {
+        if (discountCode) {
+            handleApplyDiscount();
+        }
+    }, [cartItems, discountCode, handleApplyDiscount]);
+
 
     useEffect(() => {
         const hasTracked = sessionStorage.getItem('checkout_started');
@@ -422,33 +460,6 @@ function CheckoutForm({ location }: { location: Location }) {
             }
        });
     });
-
-    const handleApplyDiscount = () => {
-        if (!discountCode || !brand || !location) return;
-        startTransition(async () => {
-            const currentSubtotalForValidation = cartItems.reduce((total, item) => {
-                const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0) * item.quantity;
-                return total + item.price * item.quantity + toppingsPrice;
-            }, 0);
-    
-            const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotalForValidation, deliveryType!);
-            
-            if (result.success && result.discount) {
-                applyDiscount(result.discount);
-            } else {
-                removeDiscount();
-                if (result.message.toLowerCase().includes('minimum order value')) {
-                    setFailedDiscount(result.discount || null);
-                    const upsellResult = await getActiveUpsellForCart({ brandId: brand.id, locationId: location.id, cartItems: cartItems, cartTotal: currentSubtotalForValidation });
-                    setAlmostThereUpsell(upsellResult);
-                    setIsAlmostThereOpen(true);
-                } else {
-                    setDiscountErrorMessage(result.message);
-                    setIsDiscountErrorOpen(true);
-                }
-            }
-        })
-    }
     
     const handleRemoveDiscount = () => {
         removeDiscount();
@@ -670,6 +681,9 @@ function CheckoutForm({ location }: { location: Location }) {
                 onOpenChange={setIsAlmostThereOpen} 
                 discount={failedDiscount}
                 upsellData={almostThereUpsell}
+                onSuccess={(revalidate) => {
+                    if (revalidate) handleApplyDiscount();
+                }}
              />
              <AlertDialog open={isDiscountErrorOpen} onOpenChange={setIsDiscountErrorOpen}>
                 <AlertDialogContent>

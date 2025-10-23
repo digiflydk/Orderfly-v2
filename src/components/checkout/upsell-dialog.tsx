@@ -28,9 +28,10 @@ interface UpsellDialogProps {
   setIsOpen: (isOpen: boolean) => void;
   upsellData: { upsell: Upsell, products: ProductForMenu[] };
   onContinue: () => void;
+  onSuccess: (revalidateDiscount?: boolean) => void;
 }
 
-export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: UpsellDialogProps) {
+export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue, onSuccess }: UpsellDialogProps) {
   const { addToCart, deliveryType, cartTotal } = useCart();
   const { trackEvent } = useAnalytics();
   const { toast } = useToast();
@@ -109,7 +110,7 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
         });
         
         setIsOpen(false);
-        onContinue();
+        onSuccess(true); // Signal that discount revalidation is needed
     });
   };
   
