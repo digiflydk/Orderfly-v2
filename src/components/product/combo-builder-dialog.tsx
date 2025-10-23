@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -149,60 +149,63 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                     </Button>
                 </DialogClose>
             </div>
-            <div className="p-4 space-y-6">
+            <div className="p-6 space-y-6">
                 <DialogHeader className="text-left space-y-2">
                     <DialogTitle className="text-2xl">{combo.comboName}</DialogTitle>
                     {combo.description && <DialogDescription className="text-base">{combo.description}</DialogDescription>}
                 </DialogHeader>
                 
-            <Separator />
-            {combo.productGroups.map(group => {
-              const productsInGroup = group.productIds
-                .map(pid => brandProducts.find(p => p.id === pid))
-                .filter(Boolean) as ProductForMenu[];
+                <Separator />
 
-              const isSingleSelect = Number(group.maxSelection) === 1;
-              const currentSelection = selection[group.id] || [];
+                {combo.productGroups.map(group => {
+                  const productsInGroup = group.productIds
+                    .map(pid => brandProducts.find(p => p.id === pid))
+                    .filter(Boolean) as ProductForMenu[];
 
-              return (
-                <div key={group.id}>
-                  <div className="mb-2">
-                    <h3 className="font-semibold text-lg">{group.groupName}</h3>
-                    <p className="text-sm text-muted-foreground">{getSelectionText(group)}</p>
-                  </div>
-                  <div className="space-y-2">
-                  {isSingleSelect ? (
-                    <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleSelectionChange(group.id, val, false)}>
-                        {productsInGroup.map(p => (
-                          <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
-                            <RadioGroupItem value={p.id} id={`${group.id}-${p.id}`} />
-                            <Label htmlFor={`${group.id}-${p.id}`} className="flex-1 cursor-pointer font-normal">{p.productName}</Label>
-                          </div>
-                        ))}
-                    </RadioGroup>
-                  ) : (
-                    productsInGroup.map(p => {
-                      const isChecked = currentSelection.includes(p.id);
-                      const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
-                      return (
-                        <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
-                          <Checkbox
-                            id={`${group.id}-${p.id}`}
-                            onCheckedChange={(checked) => handleSelectionChange(group.id, p.id, true, !!checked)}
-                            checked={isChecked}
-                            disabled={!isChecked && maxReached}
-                          />
-                          <Label htmlFor={`${group.id}-${p.id}`} className="flex-1 cursor-pointer font-normal">{p.productName}</Label>
-                        </div>
-                      )
-                    })
-                  )}
-                  </div>
-                </div>
-              );
-            })}
+                  const isSingleSelect = Number(group.maxSelection) === 1;
+                  const currentSelection = selection[group.id] || [];
+
+                  return (
+                    <div key={group.id}>
+                      <div className="mb-2">
+                        <h3 className="font-semibold text-lg">{group.groupName}</h3>
+                        <p className="text-sm text-muted-foreground">{getSelectionText(group)}</p>
+                      </div>
+                      <div className="space-y-2">
+                      {isSingleSelect ? (
+                        <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleSelectionChange(group.id, val, false)}>
+                            {productsInGroup.map(p => (
+                              <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
+                                <RadioGroupItem value={p.id} id={`${group.id}-${p.id}`} />
+                                <Label htmlFor={`${group.id}-${p.id}`} className="flex-1 cursor-pointer font-normal">{p.productName}</Label>
+                              </div>
+                            ))}
+                        </RadioGroup>
+                      ) : (
+                        productsInGroup.map(p => {
+                          const isChecked = currentSelection.includes(p.id);
+                          const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
+                          return (
+                            <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
+                              <Checkbox
+                                id={`${group.id}-${p.id}`}
+                                onCheckedChange={(checked) => handleSelectionChange(group.id, p.id, true, !!checked)}
+                                checked={isChecked}
+                                disabled={!isChecked && maxReached}
+                              />
+                              <Label htmlFor={`${group.id}-${p.id}`} className="flex-1 cursor-pointer font-normal">{p.productName}</Label>
+                            </div>
+                          )
+                        })
+                      )}
+                      </div>
+                    </div>
+                  );
+                })}
           </div>
-            <div className="p-4 pt-0">
+        </ScrollArea>
+        <DialogFooter className="p-0">
+            <div className="p-4 bg-white/70 backdrop-blur-sm border-t border-[#F2E8DA] shadow-lg w-full">
                 <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border">
                     <Button
                         variant="outline"
@@ -232,7 +235,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                     </div>
                 </Button>
             </div>
-        </ScrollArea>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

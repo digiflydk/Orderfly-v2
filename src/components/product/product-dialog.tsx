@@ -15,6 +15,7 @@ import {
   DialogTitle,
   DialogDescription,
   DialogClose,
+  DialogFooter,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Checkbox } from '../ui/checkbox';
@@ -193,7 +194,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     </Button>
                 </DialogClose>
             </div>
-            <div className="p-4 space-y-6">
+            <div className="p-6 space-y-6">
                 <DialogHeader className="text-left space-y-2">
                     <DialogTitle className="text-2xl">{product.productName}</DialogTitle>
                     {product.description && <DialogDescription className="text-base">{product.description}</DialogDescription>}
@@ -272,8 +273,9 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     </>
                 )}
             </div>
-            {/* CTA section integrated at the bottom of the scrollable content */}
-            <div className="p-4 pt-0">
+        </ScrollArea>
+        <DialogFooter className="p-0">
+            <div className="p-4 bg-white/70 backdrop-blur-sm border-t border-[#F2E8DA] shadow-lg w-full">
                 <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border">
                     <Button
                         variant="outline"
@@ -303,7 +305,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     </div>
                 </Button>
             </div>
-        </ScrollArea>
+        </DialogFooter>
       </DialogContent>
     </Dialog>
   );

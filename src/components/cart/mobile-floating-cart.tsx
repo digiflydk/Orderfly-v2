@@ -33,22 +33,7 @@ import { cn } from '@/lib/utils';
 import { isLockedItem } from '@/lib/cart-utils';
 
 function CartContents() {
-    const { 
-        cartItems, 
-        removeFromCart, 
-        updateQuantity, 
-        cartTotal, 
-        subtotal, 
-        itemDiscount, 
-        cartDiscount, 
-        voucherDiscount,
-        deliveryFee, 
-        freeDeliveryDiscountApplied,
-        bagFee,
-        adminFee,
-        vatAmount,
-        brand
-    } = useCart();
+    const { cartItems, removeFromCart, updateQuantity, cartTotal, subtotal, itemDiscount, cartDiscount, voucherDiscount, deliveryFee, freeDeliveryDiscountApplied, bagFee, adminFee, vatAmount, brand } = useCart();
 
     return (
         <>
@@ -252,7 +237,6 @@ export function MobileFloatingCart() {
             <div
                 className="
                 fixed left-0 right-0 bottom-0 z-50 md:hidden
-                pb-[max(env(safe-area-inset-bottom),0px)]
                 "
             >
                 <Button
