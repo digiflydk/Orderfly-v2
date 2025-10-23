@@ -13,7 +13,7 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { useEffect, useState, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback, useTransition } from "react";
 import { createStripeCheckoutSessionAction, validateDiscountAction } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, X, Tag, Truck, Store, Clock, MapPin, Check, ShoppingCart, AlertTriangle } from "lucide-react";
@@ -271,7 +271,7 @@ function CheckoutForm({ location }: { location: Location }) {
         const currentDiscountableSubtotal = cartItems
             .filter(item => !isLockedItem(item))
             .reduce((sum, item) => {
-                const toppingsTotal = item.toppings.reduce((tTotal, t) => tSum + t.price, 0);
+                const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
                 return sum + ((item.basePrice + toppingsTotal) * item.quantity);
             }, 0);
 
@@ -385,7 +385,10 @@ function CheckoutForm({ location }: { location: Location }) {
         const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
         const currentDiscountableSubtotal = cartItems
             .filter(item => !isLockedItem(item))
-            .reduce((sum, item) => sum + (item.basePrice * item.quantity), 0);
+            .reduce((sum, item) => {
+                const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
+                return sum + ((item.basePrice + toppingsTotal) * item.quantity);
+            }, 0);
 
         const upsellData = await getActiveUpsellForCart({
             brandId: brand.id,
