@@ -287,8 +287,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [cartItems]);
   
   const cartTotal = useMemo(() => {
-    let finalTotal = subtotal - itemDiscount - (cartDiscount?.amount || 0);
-    return Math.max(0, finalTotal);
+    const totalAfterDiscounts = subtotal - itemDiscount - (cartDiscount?.amount || 0);
+    return Math.max(0, totalAfterDiscounts);
   }, [subtotal, itemDiscount, cartDiscount]);
 
   const adminFee = useMemo(() => {
@@ -304,7 +304,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [brand, cartTotal, deliveryFee, bagFee, freeDeliveryDiscountApplied]);
 
   const checkoutTotal = useMemo(() => {
-      return cartTotal + (freeDeliveryDiscountApplied ? 0 : deliveryFee) + bagFee + adminFee;
+      const finalTotal = cartTotal + (freeDeliveryDiscountApplied ? 0 : deliveryFee) + bagFee + adminFee;
+      return Math.max(0, finalTotal);
   }, [cartTotal, freeDeliveryDiscountApplied, deliveryFee, bagFee, adminFee]);
   
   const vatAmount = useMemo(() => {
@@ -317,7 +318,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (freeDeliveryDiscountApplied) {
           totalDiscount += deliveryFee;
       }
-      return { name: "Total Discounts", amount: totalDiscount };
+      const allDiscountNames = [
+          ...(itemDiscount > 0 ? ['Item Offers'] : []),
+          ...(cartDiscount ? [cartDiscount.name] : []),
+          ...(freeDeliveryDiscountApplied ? ['Free Delivery'] : []),
+      ];
+
+      return { name: allDiscountNames.join(' + ') || 'Total Discounts', amount: totalDiscount };
   }, [itemDiscount, cartDiscount, freeDeliveryDiscountApplied, deliveryFee]);
 
 
