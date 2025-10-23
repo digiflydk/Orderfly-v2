@@ -213,14 +213,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
         // 8. Calculate Final Totals
         const totalDiscountFromCart = (finalCartDiscount?.amount || 0) + (finalVoucherDiscount?.amount || 0);
-        const finalCartTotal = currentSubtotal - currentItemDiscount;
+        const finalCartTotal = currentSubtotal - currentItemDiscount - totalDiscountFromCart;
         setCartTotal(Math.max(0, finalCartTotal));
         
-        let total = finalCartTotal - totalDiscountFromCart;
+        let finalCheckoutTotal = finalCartTotal;
         if (!isFreeDelivery) {
-            total += currentDeliveryFee;
+            finalCheckoutTotal += currentDeliveryFee;
         }
-        total += currentBagFee;
+        finalCheckoutTotal += currentBagFee;
 
         // Admin fee is calculated on the total *after* all other discounts and fees
         let currentAdminFee = 0;
@@ -228,16 +228,16 @@ export function CartProvider({ children }: { children: ReactNode }) {
             if (brand.adminFeeType === 'fixed') {
                 currentAdminFee = brand.adminFee;
             } else if (brand.adminFeeType === 'percentage') {
-                currentAdminFee = Math.max(0, total) * (brand.adminFee / 100);
+                currentAdminFee = Math.max(0, finalCheckoutTotal) * (brand.adminFee / 100);
             }
         }
         setAdminFee(currentAdminFee);
-        total += currentAdminFee;
+        finalCheckoutTotal += currentAdminFee;
         
-        setCheckoutTotal(Math.max(0, total));
+        setCheckoutTotal(Math.max(0, finalCheckoutTotal));
 
         const vatRate = brand?.vatPercentage || 25;
-        setVatAmount((total * vatRate) / (100 + vatRate));
+        setVatAmount((finalCheckoutTotal * vatRate) / (100 + vatRate));
 
         // 9. Consolidate discount info for display
         let totalDiscountAmount = currentItemDiscount + totalDiscountFromCart;

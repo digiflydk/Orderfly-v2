@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -305,7 +306,7 @@ function CheckoutForm({ location }: { location: Location }) {
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     const [failedDiscount, setFailedDiscount] = useState<Discount | null>(null);
     const [almostThereUpsell, setAlmostThereUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
-    const [hasSeenUpsell, setHasSeenUpsell] = useState(false);
+    const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'payment'>('form');
 
     const minOrderAmount = location?.minOrder ?? 0;
     const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
@@ -336,12 +337,9 @@ function CheckoutForm({ location }: { location: Location }) {
     const handleApplyDiscount = useCallback(() => {
         if (!discountCode || !brand || !location) return;
         startTransition(async () => {
-            const currentSubtotalForValidation = cartItems.reduce((total, item) => {
-                const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0) * item.quantity;
-                return total + item.basePrice * item.quantity + toppingsPrice;
-            }, 0);
-
-            const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotalForValidation, deliveryType!);
+            const currentSubtotal = cartItems.reduce((total, item) => total + item.basePrice * item.quantity, 0);
+            
+            const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotal, deliveryType!);
             
             if (result.success && result.discount) {
                 applyDiscount(result.discount);
@@ -349,7 +347,7 @@ function CheckoutForm({ location }: { location: Location }) {
                 removeDiscount();
                 if (result.message.toLowerCase().includes('minimum order value')) {
                     setFailedDiscount(result.discount || null);
-                    const upsellResult = await getActiveUpsellForCart({ brandId: brand.id, locationId: location.id, cartItems: cartItems, cartTotal: currentSubtotalForValidation });
+                    const upsellResult = await getActiveUpsellForCart({ brandId: brand.id, locationId: location.id, cartItems: cartItems, cartTotal: currentSubtotal });
                     setAlmostThereUpsell(upsellResult);
                     setIsAlmostThereOpen(true);
                 } else {
@@ -359,13 +357,6 @@ function CheckoutForm({ location }: { location: Location }) {
             }
         })
     }, [discountCode, brand, location, cartItems, deliveryType, applyDiscount, removeDiscount]);
-
-    useEffect(() => {
-        if (discountCode) {
-            handleApplyDiscount();
-        }
-    }, [cartItems, discountCode, handleApplyDiscount]);
-
 
     useEffect(() => {
         const hasTracked = sessionStorage.getItem('checkout_started');
@@ -418,8 +409,17 @@ function CheckoutForm({ location }: { location: Location }) {
            toast({ variant: 'destructive', title: 'Error', description: 'Brand or location information is missing. Please refresh and try again.' });
            return;
        }
-       
-       startTransition(async () => {
+
+       if (checkoutStep === 'form') {
+            handleCheckoutClick();
+       } else if (checkoutStep === 'payment') {
+            proceedToStripe();
+       }
+    });
+
+    const proceedToStripe = () => {
+         startTransition(async () => {
+            const values = form.getValues();
             trackEvent('click_purchase', { cartValue: checkoutTotal });
 
            const totalDiscount = (itemDiscount || 0) + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0);
@@ -458,7 +458,49 @@ function CheckoutForm({ location }: { location: Location }) {
                 });
             }
        });
-    });
+    };
+
+    const handleCheckoutClick = () => {
+        if (checkoutStep !== 'form') {
+            proceedToStripe();
+            return;
+        }
+
+        trackEvent('start_checkout', { 
+            cartValue: checkoutTotal, 
+            itemsCount: itemCount, 
+            deliveryType: deliveryType,
+            locationId: location.id,
+            locationSlug: location.slug,
+        });
+
+        startTransition(async () => {
+        if (brand && location) {
+            const minimalCartItems = cartItems.map(item => ({
+                id: item.id,
+                categoryId: item.categoryId
+            }));
+            
+            const upsellData = await getActiveUpsellForCart({
+                brandId: brand.id,
+                locationId: location.id,
+                cartItems: minimalCartItems,
+                cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0)),
+            });
+
+            if (upsellData) {
+                setActiveUpsell(upsellData);
+                setCheckoutStep('upsell');
+            } else {
+                setCheckoutStep('payment');
+                proceedToStripe();
+            }
+        } else {
+             setCheckoutStep('payment');
+             proceedToStripe();
+        }
+        });
+    };
     
     const handleRemoveDiscount = () => {
         removeDiscount();
@@ -697,6 +739,23 @@ function CheckoutForm({ location }: { location: Location }) {
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>
+            
+            {activeUpsell && (
+                 <UpsellDialog
+                    isOpen={checkoutStep === 'upsell'}
+                    setIsOpen={(open) => {
+                        if (!open) {
+                            setCheckoutStep('payment');
+                            proceedToStripe();
+                        }
+                    }}
+                    upsellData={activeUpsell}
+                    onContinue={() => {
+                        setCheckoutStep('payment');
+                        proceedToStripe();
+                    }}
+                />
+            )}
         </>
     )
 }
