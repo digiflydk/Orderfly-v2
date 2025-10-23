@@ -290,7 +290,8 @@ function CheckoutForm({ location }: { location: Location }) {
     const { 
         cartItems, subtotal, checkoutTotal, brand, applyDiscount, removeDiscount, 
         appliedDiscount, deliveryType, deliveryFee, finalDiscount, itemCount, bagFee, adminFee, vatAmount,
-        selectedTime, itemDiscount, cartDiscount, voucherDiscount, freeDeliveryDiscountApplied, setCartContext, setSelectedTime
+        selectedTime, itemDiscount, cartDiscount, voucherDiscount, freeDeliveryDiscountApplied, setCartContext, setSelectedTime,
+        recalculateAndValidateDiscount,
     } = useCart();
     
     const router = useRouter();
@@ -306,7 +307,10 @@ function CheckoutForm({ location }: { location: Location }) {
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     const [failedDiscount, setFailedDiscount] = useState<Discount | null>(null);
     const [almostThereUpsell, setAlmostThereUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
+    
     const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'payment'>('form');
+    const [hasUpsellBeenProcessed, setHasUpsellBeenProcessed] = useState(false);
+
 
     const minOrderAmount = location?.minOrder ?? 0;
     const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
@@ -337,7 +341,10 @@ function CheckoutForm({ location }: { location: Location }) {
     const handleApplyDiscount = useCallback(() => {
         if (!discountCode || !brand || !location) return;
         startTransition(async () => {
-            const currentSubtotal = cartItems.reduce((total, item) => total + item.basePrice * item.quantity, 0);
+            const currentSubtotal = cartItems.reduce((total, item) => {
+                const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
+                return total + ((item.itemType === 'combo' ? item.price : item.basePrice) * item.quantity) + (toppingsPrice * item.quantity);
+            }, 0);
             
             const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotal, deliveryType!);
             
@@ -409,17 +416,50 @@ function CheckoutForm({ location }: { location: Location }) {
            toast({ variant: 'destructive', title: 'Error', description: 'Brand or location information is missing. Please refresh and try again.' });
            return;
        }
-
-       if (checkoutStep === 'form') {
-            handleCheckoutClick();
-       } else if (checkoutStep === 'payment') {
-            proceedToStripe();
+       
+       if (checkoutStep === 'upsell') {
+           // This case is handled by the upsell dialog's onContinue
+           return;
+       }
+       
+       if (checkoutStep === 'payment' || hasUpsellBeenProcessed) {
+            proceedToStripe(values);
+       } else {
+            handleUpsellCheck(values);
        }
     });
+    
+    const handleUpsellCheck = (formValues: CheckoutFormValues) => {
+        startTransition(async () => {
+            if (brand && location) {
+                const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
+                const currentDiscountableSubtotal = cartItems
+                    .filter(item => !isLockedItem(item))
+                    .reduce((sum, item) => sum + (item.basePrice * item.quantity), 0);
 
-    const proceedToStripe = () => {
+                const upsellData = await getActiveUpsellForCart({
+                    brandId: brand.id,
+                    locationId: location.id,
+                    cartItems: minimalCartItems,
+                    cartTotal: currentDiscountableSubtotal,
+                });
+
+                if (upsellData) {
+                    setActiveUpsell(upsellData);
+                    setCheckoutStep('upsell');
+                } else {
+                    setCheckoutStep('payment');
+                    proceedToStripe(formValues);
+                }
+            } else {
+                setCheckoutStep('payment');
+                proceedToStripe(formValues);
+            }
+        });
+    };
+
+    const proceedToStripe = (formValues: CheckoutFormValues) => {
          startTransition(async () => {
-            const values = form.getValues();
             trackEvent('click_purchase', { cartValue: checkoutTotal });
 
            const totalDiscount = (itemDiscount || 0) + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0);
@@ -445,7 +485,7 @@ function CheckoutForm({ location }: { location: Location }) {
                 toppings: item.toppings.map(t => t.name)
             }));
 
-            const result = await createStripeCheckoutSessionAction(minimalCartItems, values, deliveryType!, brand.id, location.id, paymentDetails, appliedDiscount?.id || null, brand.slug, location.slug, finalDeliveryTime, anonymousId);
+            const result = await createStripeCheckoutSessionAction(minimalCartItems, formValues, deliveryType!, brand!.id, location!.id, paymentDetails, appliedDiscount?.id || null, brand!.slug, location!.slug, finalDeliveryTime, anonymousId);
 
             if (result.success && result.url) {
                 router.push(result.url);
@@ -460,46 +500,11 @@ function CheckoutForm({ location }: { location: Location }) {
        });
     };
 
-    const handleCheckoutClick = () => {
-        if (checkoutStep !== 'form') {
-            proceedToStripe();
-            return;
-        }
-
-        trackEvent('start_checkout', { 
-            cartValue: checkoutTotal, 
-            itemsCount: itemCount, 
-            deliveryType: deliveryType,
-            locationId: location.id,
-            locationSlug: location.slug,
-        });
-
-        startTransition(async () => {
-        if (brand && location) {
-            const minimalCartItems = cartItems.map(item => ({
-                id: item.id,
-                categoryId: item.categoryId
-            }));
-            
-            const upsellData = await getActiveUpsellForCart({
-                brandId: brand.id,
-                locationId: location.id,
-                cartItems: minimalCartItems,
-                cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0)),
-            });
-
-            if (upsellData) {
-                setActiveUpsell(upsellData);
-                setCheckoutStep('upsell');
-            } else {
-                setCheckoutStep('payment');
-                proceedToStripe();
-            }
-        } else {
-             setCheckoutStep('payment');
-             proceedToStripe();
-        }
-        });
+    const onUpsellDialogContinue = () => {
+        recalculateAndValidateDiscount();
+        setCheckoutStep('payment');
+        setHasUpsellBeenProcessed(true); // Mark upsell as processed
+        // We don't proceed to Stripe here, we let the user click "Complete Order" again
     };
     
     const handleRemoveDiscount = () => {
@@ -744,16 +749,12 @@ function CheckoutForm({ location }: { location: Location }) {
                  <UpsellDialog
                     isOpen={checkoutStep === 'upsell'}
                     setIsOpen={(open) => {
-                        if (!open) {
-                            setCheckoutStep('payment');
-                            proceedToStripe();
+                        if (!open) { // If dialog is being closed
+                            onUpsellDialogContinue();
                         }
                     }}
                     upsellData={activeUpsell}
-                    onContinue={() => {
-                        setCheckoutStep('payment');
-                        proceedToStripe();
-                    }}
+                    onContinue={onUpsellDialogContinue}
                 />
             )}
         </>
