@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { z } from 'zod';
@@ -17,7 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import type { ComboMenu, Brand, Product, Location, Category, ProductForMenu } from '@/types';
 import { createOrUpdateCombo, type FormState } from '@/app/superadmin/combos/actions';
-import { getProductsForBrand, getCategoriesForBrand } from '@/app/superadmin/combos/client-actions';
+import { getProductsForBrand, getCategoriesForBrand } from '@/app/superadmin/upsells/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -166,6 +165,7 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
     const [brandProducts, setBrandProducts] = useState<ProductForMenu[]>([]);
     const [brandCategories, setBrandCategories] = useState<Category[]>([]);
     const [isProductsLoading, setIsProductsLoading] = useState(false);
+    const [categoryFilter, setCategoryFilter] = useState('all');
 
     const form = useForm<ComboFormValues>({
         resolver: zodResolver(comboMenuSchema),
@@ -252,7 +252,6 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
             setValue('locationIds', []);
         }
     }, [selectedBrandId, setValue, combo?.brandId]);
-    
 
     const title = combo ? 'Edit Combo' : 'Create New Combo';
     const description = combo ? `Editing details for ${combo.comboName}.` : 'Fill in the details for the new combo deal.';
@@ -307,10 +306,13 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
 
         startTransition(async () => {
             const result = await createOrUpdateCombo(null, formData);
-             if (result?.message) {
-                 if (result.error) {
-                    toast({ variant: 'destructive', title: 'Error', description: result.message });
-                 }
+             if (result?.error && result.errors) {
+                toast({ variant: 'destructive', title: 'Validation Failed', description: 'Please check the form for errors.' });
+                result.errors.forEach(error => {
+                    form.setError(error.path.join('.') as any, { message: error.message });
+                });
+            } else if (result?.error) {
+                toast({ variant: 'destructive', title: 'Error', description: result.message });
             }
         });
     });
@@ -482,10 +484,10 @@ export function ComboFormPage({ combo, brands, locations }: ComboFormPageProps) 
                         <Separator/>
                          
                         <FormField control={control} name="startDate" render={({ field }) => (
-                             <FormItem className="flex flex-col"><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ? new Date(field.value) : undefined} onSelect={(date) => field.onChange(date?.toISOString().split('T')[0])} /></PopoverContent></Popover><FormMessage /></FormItem>
+                             <FormItem className="flex flex-col"><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="endDate" render={({ field }) => (
-                            <FormItem className="flex flex-col"><FormLabel>End Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ? new Date(field.value) : undefined} onSelect={(date) => field.onChange(date?.toISOString().split('T')[0])} /></PopoverContent></Popover><FormMessage /></FormItem>
+                            <FormItem className="flex flex-col"><FormLabel>End Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
                         )}/>
                     </CardContent>
                 </Card>

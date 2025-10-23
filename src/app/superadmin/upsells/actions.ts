@@ -357,23 +357,31 @@ export async function getProductsForBrand(brandId: string): Promise<ProductForMe
 export async function getCategoriesForBrand(brandId: string): Promise<Category[]> {
     if (!brandId) return [];
     
-    // This is not perfectly accurate as categories are linked to locations, not brands directly.
-    // A better approach would be to find all locations for a brand, then all categories for those locations.
-    // For the form, this is a reasonable approximation.
-    const q = query(collection(db, 'categories')); // Fetch all, then filter
-    const categorySnapshots = await getDocs(q);
+    const locationsQuery = query(collection(db, 'locations'), where('brandId', '==', brandId));
+    const locationsSnapshot = await getDocs(locationsQuery);
+    if (locationsSnapshot.empty) return [];
+    const locationIds = locationsSnapshot.docs.map(doc => doc.id);
 
+    // Firestore 'array-contains-any' is limited to 30 values in a single query.
+    // If a brand has more than 30 locations, we need to batch the queries.
+    const categoryPromises: Promise<any>[] = [];
+    for (let i = 0; i < locationIds.length; i += 30) {
+        const chunk = locationIds.slice(i, i + 30);
+        const categoriesQuery = query(collection(db, 'categories'), where('locationIds', 'array-contains-any', chunk));
+        categoryPromises.push(getDocs(categoriesQuery));
+    }
+    
+    const categorySnapshots = await Promise.all(categoryPromises);
     const categories: Category[] = [];
-    const locationQuery = query(collection(db, 'locations'), where('brandId', '==', brandId));
-    const locationSnapshot = await getDocs(locationQuery);
-    const locationIdsForBrand = new Set(locationSnapshot.docs.map(doc => doc.id));
+    const categoryIds = new Set<string>();
 
-
-    categorySnapshots.forEach(doc => {
-        const category = { id: doc.id, ...doc.data() } as Category;
-        if(category.locationIds.some(locId => locationIdsForBrand.has(locId))) {
-            categories.push(category);
-        }
+    categorySnapshots.forEach(snapshot => {
+        snapshot.forEach(doc => {
+            if (!categoryIds.has(doc.id)) {
+                categories.push({ id: doc.id, ...doc.data() } as Category);
+                categoryIds.add(doc.id);
+            }
+        });
     });
 
     return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
