@@ -3,6 +3,7 @@
 
 import { z } from 'zod';
 import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
 import { useEffect, useMemo, useState, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
@@ -69,24 +70,17 @@ export function ToppingGroupFormPage({ group, locations, brands }: ToppingGroupF
     },
   });
 
-  const selectedBrandId = form.watch('brandId'); // Assuming you might add brand filtering later
-
-  const availableLocations = useMemo(() => {
-    // For now, show all locations. This could be filtered by a selected brand if needed.
-    return locations;
-  }, [locations]);
+  useEffect(() => {
+    if (state?.error) {
+        toast({ variant: 'destructive', title: 'Error', description: state.message });
+    }
+  }, [state, toast]);
   
   useEffect(() => {
     if (group) {
       form.reset(group);
     }
   }, [group, form]);
-
-  useEffect(() => {
-    if (state?.error) {
-        toast({ variant: 'destructive', title: 'Error', description: state.message });
-    }
-  }, [state, toast]);
 
   const title = group ? 'Edit Topping Group' : 'Create New Topping Group';
   const description = group ? `Editing details for ${group.groupName}.` : 'Fill in the details for the new group.';
@@ -138,7 +132,7 @@ export function ToppingGroupFormPage({ group, locations, brands }: ToppingGroupF
                             <FormLabel>Available at Locations</FormLabel>
                             <div className="rounded-md border max-h-48 overflow-y-auto">
                                 <div className="p-4 space-y-2">
-                                {availableLocations.map((item) => (
+                                {locations.map((item) => (
                                     <FormField
                                     key={item.id}
                                     control={form.control}
