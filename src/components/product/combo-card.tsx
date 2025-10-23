@@ -7,7 +7,6 @@ import type { ComboMenu, Product, ProductForMenu } from "@/types";
 import { useCart } from "@/context/cart-context";
 import { ComboBuilderDialog } from "./combo-builder-dialog";
 import { Badge } from "../ui/badge";
-import { cn } from "@/lib/utils";
 import { Button } from "../ui/button";
 import { Plus } from "lucide-react";
 

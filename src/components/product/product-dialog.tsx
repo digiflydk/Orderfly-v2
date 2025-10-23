@@ -208,6 +208,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 
                 {hasOptions && (
                     <>
+                        <Separator />
                         {allergens.length > 0 && (
                             <div>
                                 <h3 className="font-semibold text-lg mb-2">Allergens</h3>
@@ -278,13 +279,21 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     </>
                 )}
             </div>
-             <div className="p-4 flex-shrink-0">
-                <div className="flex items-center justify-center gap-4 mb-4">
-                    <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
+            <div className="p-4 pt-0">
+                <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border-2 border-transparent">
+                    <Button
+                        variant="outline"
+                        onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                        className="w-11 h-11 rounded-lg bg-gray-200 text-gray-800 flex items-center justify-center transition-all hover:bg-gray-300"
+                    >
                         <Minus className="h-6 w-6" />
                     </Button>
                     <span className="text-2xl font-bold w-12 text-center">{quantity}</span>
-                    <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => q + 1)}>
+                    <Button
+                        variant="outline"
+                        onClick={() => setQuantity(q => q + 1)}
+                        className="w-11 h-11 rounded-lg bg-gray-200 text-gray-800 flex items-center justify-center transition-all hover:bg-gray-300"
+                    >
                         <Plus className="h-6 w-6" />
                     </Button>
                 </div>

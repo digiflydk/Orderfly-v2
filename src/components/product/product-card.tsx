@@ -2,9 +2,8 @@
 'use client';
 
 import Image from 'next/image';
-import type { Topping, ToppingGroup, StandardDiscount, Allergen } from '@/types';
-import type { ProductForMenu } from '@/app/superadmin/products/actions';
-import { useState, useMemo, useTransition, useEffect } from 'react';
+import type { StandardDiscount, ProductForMenu } from '@/types';
+import { useState, useMemo, useTransition } from 'react';
 import { ProductDialog } from "./product-dialog";
 import { useCart } from "@/context/cart-context";
 import { Badge } from "@/components/ui/badge";
@@ -50,8 +49,8 @@ export function ProductCardSkeleton() {
 
 export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [allToppingGroups, setAllToppingGroups] = useState<ToppingGroup[]>([]);
-  const [allToppings, setAllToppings] = useState<Topping[]>([]);
+  const [allToppingGroups, setAllToppingGroups] = useState([]);
+  const [allToppings, setAllToppings] = useState([]);
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
 
@@ -131,8 +130,8 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
                 getToppings(location.id),
                 getToppingGroups(location.id)
             ]);
-            setAllToppings(toppings);
-            setAllToppingGroups(toppingGroups);
+            setAllToppings(toppings as any);
+            setAllToppingGroups(toppingGroups as any);
             setIsDialogOpen(true);
         });
     } else {

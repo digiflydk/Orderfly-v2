@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription, DialogClose } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -202,13 +202,21 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
               );
             })}
           </div>
-            <div className="p-4 flex-shrink-0">
-                <div className="flex items-center justify-center gap-4 mb-4">
-                    <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => Math.max(1, q - 1))}>
+            <div className="p-4 pt-0">
+                <div className="flex items-center justify-center gap-3 mb-4 rounded-lg bg-white p-3 border-2 border-transparent">
+                    <Button
+                        variant="outline"
+                        onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                        className="w-11 h-11 rounded-lg bg-gray-200 text-gray-800 flex items-center justify-center transition-all hover:bg-gray-300"
+                    >
                         <Minus className="h-6 w-6" />
                     </Button>
                     <span className="text-2xl font-bold w-12 text-center">{quantity}</span>
-                    <Button variant="outline" size="icon" className="w-12 h-12 rounded-lg" onClick={() => setQuantity(q => q + 1)}>
+                    <Button
+                        variant="outline"
+                        onClick={() => setQuantity(q => q + 1)}
+                        className="w-11 h-11 rounded-lg bg-gray-200 text-gray-800 flex items-center justify-center transition-all hover:bg-gray-300"
+                    >
                         <Plus className="h-6 w-6" />
                     </Button>
                 </div>
