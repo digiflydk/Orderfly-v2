@@ -2,19 +2,26 @@
 'use client';
 
 import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, useFieldArray, useWatch } from 'react-hook-form';
-import { useEffect, useMemo, useState, useTransition, useActionState } from 'react';
-import Link from 'next/link';
+import { useForm } from 'react-hook-form';
+import { useEffect, useMemo, useState, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
+import Link from 'next/link';
 
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import type { ToppingGroup, Location, Brand } from '@/types';
 import { createOrUpdateToppingGroup, type FormState } from '@/app/superadmin/toppings/actions';
 import { useToast } from '@/hooks/use-toast';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Trash2 } from 'lucide-react';
 import { ScrollArea } from '../ui/scroll-area';
 import { Checkbox } from '../ui/checkbox';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter } from '../ui/card';
@@ -36,7 +43,7 @@ type GroupFormValues = z.infer<typeof toppingGroupSchema>;
 interface ToppingGroupFormPageProps {
   group?: ToppingGroup | null;
   locations: Location[];
-  brands: any[]; // Assuming brands might be needed for filtering locations in future
+  brands: any[];
 }
 
 function SubmitButton({ isEditing }: { isEditing: boolean }) {
@@ -61,6 +68,19 @@ export function ToppingGroupFormPage({ group, locations, brands }: ToppingGroupF
         maxSelection: 1,
     },
   });
+
+  const selectedBrandId = form.watch('brandId'); // Assuming you might add brand filtering later
+
+  const availableLocations = useMemo(() => {
+    // For now, show all locations. This could be filtered by a selected brand if needed.
+    return locations;
+  }, [locations]);
+  
+  useEffect(() => {
+    if (group) {
+      form.reset(group);
+    }
+  }, [group, form]);
 
   useEffect(() => {
     if (state?.error) {
@@ -118,7 +138,7 @@ export function ToppingGroupFormPage({ group, locations, brands }: ToppingGroupF
                             <FormLabel>Available at Locations</FormLabel>
                             <div className="rounded-md border max-h-48 overflow-y-auto">
                                 <div className="p-4 space-y-2">
-                                {locations.map((item) => (
+                                {availableLocations.map((item) => (
                                     <FormField
                                     key={item.id}
                                     control={form.control}
