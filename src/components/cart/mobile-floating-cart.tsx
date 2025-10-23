@@ -252,13 +252,12 @@ export function MobileFloatingCart() {
             <div
                 className="
                 fixed left-0 right-0 bottom-0 z-50 md:hidden
-                bg-background
                 pb-[max(env(safe-area-inset-bottom),0px)]
                 "
             >
                 <Button
                     size="lg"
-                    className="w-full h-16 rounded-none text-base"
+                    className="w-full h-16 rounded-none text-base font-bold"
                 >
                     <div className="w-full flex justify-between items-center px-4">
                         <div className="flex items-center gap-3">
