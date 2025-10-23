@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -56,74 +57,6 @@ interface CheckoutClientProps {
     location: Location;
 }
 
-function AlmostThereDialog({
-  isOpen,
-  onOpenChange,
-  discount,
-  upsellData,
-  onSuccess
-}: {
-  isOpen: boolean;
-  onOpenChange: (open: boolean) => void;
-  discount: Discount | null;
-  upsellData: { upsell: Upsell, products: ProductForMenu[] } | null;
-  onSuccess: (revalidateDiscount: boolean) => void;
-}) {
-  const { addToCart } = useCart();
-  const { toast } = useToast();
-
-  const handleAddUpsell = (product: ProductForMenu) => {
-    addToCart(product, 1, [], product.price, product.price);
-    toast({
-      title: "Added to cart!",
-      description: `${product.productName} has been added to your cart.`,
-    });
-    onOpenChange(false);
-    onSuccess(true);
-  };
-  
-  const minOrderValue = discount?.minOrderValue ?? 0;
-
-  return (
-    <AlertDialog open={isOpen} onOpenChange={onOpenChange}>
-      <AlertDialogContent onInteractOutside={(e) => e.preventDefault()}>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Almost There! 🍕</AlertDialogTitle>
-          <AlertDialogDescription>
-            Your discount code activates once your order hits kr. {minOrderValue.toFixed(2)}.
-            Add a side and unlock your savings!
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        
-        {upsellData && upsellData.products.length > 0 && (
-          <div className="space-y-2 py-4">
-            <h4 className="font-semibold text-sm">You might like:</h4>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-              {upsellData.products.slice(0, 2).map(product => (
-                <div key={product.id} className="flex items-center justify-between border rounded-md p-2">
-                  <div className="flex items-center gap-2">
-                    <Image src={product.imageUrl || ''} alt={product.productName} width={40} height={40} className="rounded-sm" data-ai-hint="delicious food"/>
-                    <div>
-                      <p className="text-sm font-medium">{product.productName}</p>
-                      <p className="text-xs text-muted-foreground">kr. {product.price.toFixed(2)}</p>
-                    </div>
-                  </div>
-                  <Button size="sm" onClick={() => handleAddUpsell(product)}>Add</Button>
-                </div>
-              ))}
-            </div>
-          </div>
-        )}
-
-        <AlertDialogFooter>
-          <AlertDialogAction onClick={() => onOpenChange(false)}>OK</AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-  );
-}
-
-
 function BagFeeRow() {
     const { brand, includeBagFee, toggleBagFee } = useCart();
     const [isAlertOpen, setIsAlertOpen] = useState(false);
@@ -175,7 +108,8 @@ function BagFeeRow() {
 }
 
 function OrderSummaryContent() {
-    const { cartItems, subtotal, checkoutTotal, itemDiscount, cartDiscount, deliveryFee, brand, adminFee, vatAmount, deliveryType, freeDeliveryDiscountApplied, voucherDiscount } = useCart();
+    const { cartItems, subtotal, cartTotal, itemDiscount, cartDiscount, voucherDiscount, freeDeliveryDiscountApplied, deliveryFee, brand, adminFee, vatAmount, deliveryType } = useCart();
+
     return (
         <div className="space-y-4">
             {cartItems.map(item => {
@@ -270,7 +204,7 @@ function OrderSummaryContent() {
                 )}
                 
                 <Separator />
-                <div className="flex justify-between font-bold text-lg"><span>Total</span><span>kr.{checkoutTotal.toFixed(2)}</span></div>
+                <div className="flex justify-between font-bold text-lg"><span>Total</span><span>kr.{cartTotal.toFixed(2)}</span></div>
                 
                 {vatAmount > 0 && (
                     <div className="flex justify-between text-xs text-muted-foreground pt-1">
@@ -289,6 +223,7 @@ function CheckoutForm({ location }: { location: Location }) {
         cartItems, subtotal, checkoutTotal, brand, applyDiscount, removeDiscount, 
         appliedDiscount, deliveryType, deliveryFee, finalDiscount, itemCount, bagFee, adminFee, vatAmount,
         selectedTime, itemDiscount, cartDiscount, voucherDiscount, freeDeliveryDiscountApplied, setCartContext, setSelectedTime,
+        recalculateAndValidateDiscount,
     } = useCart();
     
     const router = useRouter();
@@ -302,12 +237,8 @@ function CheckoutForm({ location }: { location: Location }) {
     const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     
-    // State for the "Almost There" dialog
-    const [isAlmostThereOpen, setIsAlmostThereOpen] = useState(false);
-    const [failedDiscount, setFailedDiscount] = useState<Discount | null>(null);
-    const [almostThereUpsell, setAlmostThereUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
-    
-    const [hasUpsellBeenProcessed, setHasUpsellBeenProcessed] = useState(false);
+    const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
+    const [upsellOffered, setUpsellOffered] = useState(false);
 
 
     const minOrderAmount = location?.minOrder ?? 0;
@@ -338,13 +269,14 @@ function CheckoutForm({ location }: { location: Location }) {
     
     const handleApplyDiscount = useCallback(async () => {
         if (!discountCode || !brand || !location || !deliveryType) return;
-
-        // Manually calculate the current subtotal to pass to the validation action
+        
+        setIsProcessing(true);
+        // This is the critical change: Recalculate subtotal directly from cartItems
         const currentSubtotal = cartItems.reduce((sum, item) => {
             const toppingsTotal = item.toppings.reduce((tSum, t) => tSum + t.price, 0);
             return sum + ((item.basePrice + toppingsTotal) * item.quantity);
         }, 0);
-        
+
         const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotal, deliveryType);
         
         if (result.success && result.discount) {
@@ -355,6 +287,7 @@ function CheckoutForm({ location }: { location: Location }) {
             setDiscountErrorMessage(result.message);
             setIsDiscountErrorOpen(true);
         }
+        setIsProcessing(false);
     }, [discountCode, brand, location, deliveryType, cartItems, applyDiscount, removeDiscount, toast]);
 
 
@@ -397,48 +330,6 @@ function CheckoutForm({ location }: { location: Location }) {
     }, [displayTime]);
 
 
-    const handleFormSubmit = form.handleSubmit(async (formValues: CheckoutFormValues) => {
-        if (deliveryType === 'delivery' && (!formValues.street || !formValues.zipCode || !formValues.city)) {
-           if (!formValues.street) form.setError('street', { message: 'Street name is required.' });
-           if (!formValues.zipCode) form.setError('zipCode', { message: 'Postal code is required.' });
-           if (!formValues.city) form.setError('city', { message: 'City is required.' });
-           return;
-       }
-       
-       if (isProcessing) return;
-
-       if (hasUpsellBeenProcessed) {
-         proceedToStripe(formValues);
-         return;
-       }
-       
-       handleUpsellCheck(formValues);
-    });
-
-    const handleUpsellCheck = async (formValues: CheckoutFormValues) => {
-        setIsProcessing(true);
-        const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
-        const currentDiscountableSubtotal = cartItems
-            .filter(item => !isLockedItem(item))
-            .reduce((sum, item) => sum + (item.basePrice * item.quantity), 0);
-
-        const upsellData = await getActiveUpsellForCart({
-            brandId: brand!.id,
-            locationId: location.id,
-            cartItems: minimalCartItems,
-            cartTotal: currentDiscountableSubtotal,
-        });
-        
-        setHasUpsellBeenProcessed(true); // Mark that we've done the check
-
-        if (upsellData) {
-            setAlmostThereUpsell(upsellData);
-            setIsProcessing(false); 
-        } else {
-            proceedToStripe(formValues);
-        }
-    };
-    
     const proceedToStripe = (formValues: CheckoutFormValues) => {
         setIsProcessing(true);
         startTransition(async () => {
@@ -488,9 +379,51 @@ function CheckoutForm({ location }: { location: Location }) {
             }
        });
     };
+
+    const handleFormSubmit = form.handleSubmit(async (formValues: CheckoutFormValues) => {
+        if (deliveryType === 'delivery' && (!formValues.street || !formValues.zipCode || !formValues.city)) {
+           if (!formValues.street) form.setError('street', { message: 'Street name is required.' });
+           if (!formValues.zipCode) form.setError('zipCode', { message: 'Postal code is required.' });
+           if (!formValues.city) form.setError('city', { message: 'City is required.' });
+           return;
+        }
+
+        if (isProcessing) return;
+
+        if (upsellOffered) {
+            proceedToStripe(formValues);
+            return;
+        }
+        
+        setIsProcessing(true);
+        setUpsellOffered(true);
+
+        const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
+        const currentDiscountableSubtotal = cartItems
+            .filter(item => !isLockedItem(item))
+            .reduce((sum, item) => {
+                const toppingsTotal = item.toppings.reduce((tSum, t) => tSum + t.price, 0);
+                return sum + (item.basePrice + toppingsTotal) * item.quantity;
+            }, 0);
+
+        const upsellData = await getActiveUpsellForCart({
+            brandId: brand!.id,
+            locationId: location.id,
+            cartItems: minimalCartItems,
+            cartTotal: currentDiscountableSubtotal,
+        });
+
+        if (upsellData) {
+            setActiveUpsell(upsellData);
+            setIsProcessing(false);
+        } else {
+            proceedToStripe(formValues);
+        }
+    });
+
     
     const onUpsellDialogContinue = () => {
-        setAlmostThereUpsell(null);
+        setActiveUpsell(null);
         proceedToStripe(form.getValues());
     };
     
@@ -650,8 +583,8 @@ function CheckoutForm({ location }: { location: Location }) {
                                 ) : (
                                     <div className="flex items-center gap-2">
                                         <Input placeholder="Enter discount code" className="h-9" value={discountCode} onChange={(e) => setDiscountCode(e.target.value)} />
-                                        <Button type="button" variant="outline" onClick={handleApplyDiscount} disabled={isPending || !discountCode}>
-                                            {isPending ? <Loader2 className="animate-spin" /> : 'Apply'}
+                                        <Button type="button" variant="outline" onClick={handleApplyDiscount} disabled={isProcessing || !discountCode}>
+                                            {isProcessing ? <Loader2 className="animate-spin" /> : 'Apply'}
                                         </Button>
                                     </div>
                                 )}
@@ -709,15 +642,6 @@ function CheckoutForm({ location }: { location: Location }) {
                     locationId={location.id}
                 />
             )}
-             <AlmostThereDialog 
-                isOpen={isAlmostThereOpen} 
-                onOpenChange={setIsAlmostThereOpen} 
-                discount={failedDiscount}
-                upsellData={almostThereUpsell}
-                onSuccess={(revalidate) => {
-                    if (revalidate) handleApplyDiscount();
-                }}
-             />
              <AlertDialog open={isDiscountErrorOpen} onOpenChange={setIsDiscountErrorOpen}>
                 <AlertDialogContent>
                     <AlertDialogHeader>
@@ -732,15 +656,15 @@ function CheckoutForm({ location }: { location: Location }) {
                 </AlertDialogContent>
             </AlertDialog>
             
-            {almostThereUpsell && (
+            {activeUpsell && (
                  <UpsellDialog
-                    isOpen={true}
+                    isOpen={!!activeUpsell}
                     setIsOpen={(open) => {
                         if (!open) {
-                           onUpsellDialogContinue();
+                            onUpsellDialogContinue();
                         }
                     }}
-                    upsellData={almostThereUpsell}
+                    upsellData={activeUpsell}
                     onContinue={onUpsellDialogContinue}
                 />
             )}
@@ -757,7 +681,7 @@ export function CheckoutClient({ location }: CheckoutClientProps) {
       if (key) {
         setStripePromise(loadStripe(key));
       } else {
-        console.error("Stripe publishable key is not available.");
+        console.error("Stripe publishable key is not configured.");
         setError("Payment processing is not configured. Please contact support.");
       }
     }).catch(err => {
