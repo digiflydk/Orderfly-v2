@@ -45,7 +45,7 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-const isLockedItem = (item: CartItem) => item.itemType === 'combo' || item.basePrice > item.price;
+const isLockedItem = (item: CartItem) => item.itemType === 'combo';
 
 
 export function CartProvider({ children }: { children: ReactNode }) {
@@ -204,18 +204,24 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [cartItems]);
   
   const { automaticCartDiscount, voucherDiscount } = useMemo(() => {
+    // Corrected: Include ALL items for minOrderValue check, but only non-locked for discount calc.
+    const cartValueForThreshold = cartItems.reduce((sum, item) => {
+      const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
+      return sum + (item.price + toppingsPrice) * item.quantity;
+    }, 0);
+
     const unlockedItems = cartItems.filter(item => !isLockedItem(item));
     const discountableSubtotal = unlockedItems.reduce((sum, item) => {
       const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
       return sum + (item.basePrice + toppingsPrice) * item.quantity;
     }, 0);
 
-    if (discountableSubtotal === 0) return { automaticCartDiscount: null, voucherDiscount: null };
+    if (discountableSubtotal === 0 && cartValueForThreshold === 0) return { automaticCartDiscount: null, voucherDiscount: null };
     
     let autoCartDiscount: { name: string, amount: number } | null = null;
     const cartDiscounts = standardDiscounts.filter(d => 
         d.discountType === 'cart' && 
-        discountableSubtotal >= (d.minOrderValue || 0)
+        cartValueForThreshold >= (d.minOrderValue || 0)
     );
 
     if (cartDiscounts.length > 0) {
@@ -233,7 +239,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     let calculatedVoucher: { name: string, amount: number } | null = null;
-    if (appliedDiscount && discountableSubtotal >= (appliedDiscount.minOrderValue || 0)) {
+    if (appliedDiscount && cartValueForThreshold >= (appliedDiscount.minOrderValue || 0)) {
         let voucherAmount = 0;
         if (appliedDiscount.discountType === 'percentage') {
             voucherAmount = discountableSubtotal * (appliedDiscount.discountValue / 100);
@@ -249,20 +255,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [cartItems, standardDiscounts, appliedDiscount]);
 
   const cartDiscount = useMemo(() => {
-      // Logic to decide whether automatic or voucher discount is better
-      // For now, we assume they don't stack and voucher takes precedence if better
       if (voucherDiscount && (!automaticCartDiscount || voucherDiscount.amount > automaticCartDiscount.amount)) {
-          return null; // voucher is better, so no automatic cart discount
+          return null;
       }
       return automaticCartDiscount;
   }, [automaticCartDiscount, voucherDiscount]);
 
   const { deliveryFee, freeDeliveryDiscountApplied } = useMemo(() => {
     if (deliveryType === 'delivery' && location) {
-        const totalAfterDiscounts = subtotal - itemDiscount - (cartDiscount?.amount || 0) - (voucherDiscount?.amount || 0);
+        const totalAfterItemDiscounts = subtotal - itemDiscount;
         const freeDeliveryDiscount = standardDiscounts.find(d => 
             d.discountType === 'free_delivery' && 
-            totalAfterDiscounts >= (d.minOrderValue || 0)
+            totalAfterItemDiscounts >= (d.minOrderValue || 0)
         );
 
         if (freeDeliveryDiscount) {
@@ -271,7 +275,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return { deliveryFee: location.deliveryFee, freeDeliveryDiscountApplied: false };
     }
     return { deliveryFee: 0, freeDeliveryDiscountApplied: false };
-  }, [deliveryType, location, standardDiscounts, subtotal, itemDiscount, cartDiscount, voucherDiscount]);
+  }, [deliveryType, location, standardDiscounts, subtotal, itemDiscount]);
 
   const bagFee = useMemo(() => {
       return includeBagFee && brand?.bagFee ? brand.bagFee : 0;
@@ -282,13 +286,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [cartItems]);
   
   const cartTotal = useMemo(() => {
-    const totalAfterDiscounts = subtotal - itemDiscount - (cartDiscount?.amount || 0) - (voucherDiscount?.amount || 0);
+    const totalAfterDiscounts = subtotal - itemDiscount;
     return Math.max(0, totalAfterDiscounts);
-  }, [subtotal, itemDiscount, cartDiscount, voucherDiscount]);
+  }, [subtotal, itemDiscount]);
 
   const adminFee = useMemo(() => {
     if (!brand?.adminFee || brand.adminFee <= 0) return 0;
-    const baseForFee = cartTotal + (freeDeliveryDiscountApplied ? 0 : deliveryFee) + bagFee;
+    const baseForFee = subtotal - itemDiscount - (cartDiscount?.amount || 0) - (voucherDiscount?.amount || 0) + (freeDeliveryDiscountApplied ? 0 : deliveryFee) + bagFee;
     if (brand.adminFeeType === 'fixed') {
         return brand.adminFee;
     }
@@ -296,12 +300,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return baseForFee * (brand.adminFee / 100);
     }
     return 0;
-  }, [brand, cartTotal, deliveryFee, bagFee, freeDeliveryDiscountApplied]);
+  }, [brand, subtotal, itemDiscount, cartDiscount, voucherDiscount, deliveryFee, bagFee, freeDeliveryDiscountApplied]);
 
   const checkoutTotal = useMemo(() => {
-      const finalTotal = cartTotal + (freeDeliveryDiscountApplied ? 0 : deliveryFee) + bagFee + adminFee;
+      const finalTotal = subtotal - itemDiscount - (cartDiscount?.amount || 0) - (voucherDiscount?.amount || 0) + (freeDeliveryDiscountApplied ? 0 : deliveryFee) + bagFee + adminFee;
       return Math.max(0, finalTotal);
-  }, [cartTotal, freeDeliveryDiscountApplied, deliveryFee, bagFee, adminFee]);
+  }, [subtotal, itemDiscount, cartDiscount, voucherDiscount, freeDeliveryDiscountApplied, deliveryFee, bagFee, adminFee]);
   
   const vatAmount = useMemo(() => {
       const vatRate = brand?.vatPercentage || 25;
