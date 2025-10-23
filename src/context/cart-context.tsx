@@ -204,24 +204,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [cartItems]);
   
   const { automaticCartDiscount, voucherDiscount } = useMemo(() => {
-    // Corrected: Include ALL items for minOrderValue check, but only non-locked for discount calc.
-    const cartValueForThreshold = cartItems.reduce((sum, item) => {
-      const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-      return sum + (item.price + toppingsPrice) * item.quantity;
-    }, 0);
-
+    // Both minOrderValue check and discount calculation now use the same base.
     const unlockedItems = cartItems.filter(item => !isLockedItem(item));
     const discountableSubtotal = unlockedItems.reduce((sum, item) => {
       const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
       return sum + (item.basePrice + toppingsPrice) * item.quantity;
     }, 0);
-
-    if (discountableSubtotal === 0 && cartValueForThreshold === 0) return { automaticCartDiscount: null, voucherDiscount: null };
+    
+    if (discountableSubtotal === 0) return { automaticCartDiscount: null, voucherDiscount: null };
     
     let autoCartDiscount: { name: string, amount: number } | null = null;
     const cartDiscounts = standardDiscounts.filter(d => 
         d.discountType === 'cart' && 
-        cartValueForThreshold >= (d.minOrderValue || 0)
+        discountableSubtotal >= (d.minOrderValue || 0)
     );
 
     if (cartDiscounts.length > 0) {
@@ -239,7 +234,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
 
     let calculatedVoucher: { name: string, amount: number } | null = null;
-    if (appliedDiscount && cartValueForThreshold >= (appliedDiscount.minOrderValue || 0)) {
+    if (appliedDiscount && discountableSubtotal >= (appliedDiscount.minOrderValue || 0)) {
         let voucherAmount = 0;
         if (appliedDiscount.discountType === 'percentage') {
             voucherAmount = discountableSubtotal * (appliedDiscount.discountValue / 100);

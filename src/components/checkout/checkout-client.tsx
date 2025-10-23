@@ -426,12 +426,11 @@ function CheckoutForm({ location }: { location: Location }) {
     const handleApplyDiscount = () => {
         if (!discountCode || !brand || !location) return;
         startTransition(async () => {
-            // Corrected subtotal calculation for validation
             const currentSubtotalForValidation = cartItems.reduce((total, item) => {
                 const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0) * item.quantity;
-                return total + item.basePrice * item.quantity + toppingsPrice;
+                return total + item.price * item.quantity + toppingsPrice;
             }, 0);
-
+    
             const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotalForValidation, deliveryType!);
             
             if (result.success && result.discount) {
@@ -440,7 +439,7 @@ function CheckoutForm({ location }: { location: Location }) {
                 removeDiscount();
                 if (result.message.toLowerCase().includes('minimum order value')) {
                     setFailedDiscount(result.discount || null);
-                    const upsellResult = await getActiveUpsellForCart({ brandId: brand.id, locationId: location.id, cartItems: cartItems, cartTotal: subtotal });
+                    const upsellResult = await getActiveUpsellForCart({ brandId: brand.id, locationId: location.id, cartItems: cartItems, cartTotal: currentSubtotalForValidation });
                     setAlmostThereUpsell(upsellResult);
                     setIsAlmostThereOpen(true);
                 } else {
