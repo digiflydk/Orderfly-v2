@@ -305,9 +305,9 @@ function CheckoutForm({ location }: { location: Location }) {
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     const [failedDiscount, setFailedDiscount] = useState<Discount | null>(null);
     const [almostThereUpsell, setAlmostThereUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
+    const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
     
     const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'payment'>('form');
-    const [hasUpsellBeenProcessed, setHasUpsellBeenProcessed] = useState(false);
 
 
     const minOrderAmount = location?.minOrder ?? 0;
@@ -411,10 +411,10 @@ function CheckoutForm({ location }: { location: Location }) {
            return;
        }
        
-       if (hasUpsellBeenProcessed) {
-           proceedToStripe(values);
-       } else {
+       if (checkoutStep === 'form') {
            handleUpsellCheck(values);
+       } else {
+           proceedToStripe(values);
        }
     });
     
@@ -494,7 +494,6 @@ function CheckoutForm({ location }: { location: Location }) {
 
     const onUpsellDialogContinue = () => {
         setCheckoutStep('payment');
-        setHasUpsellBeenProcessed(true);
         recalculateAndValidateDiscount();
     };
     
@@ -740,7 +739,7 @@ function CheckoutForm({ location }: { location: Location }) {
                  <UpsellDialog
                     isOpen={checkoutStep === 'upsell'}
                     setIsOpen={(open) => {
-                        if (!open) { // If dialog is being closed
+                        if (!open) {
                             onUpsellDialogContinue();
                         }
                     }}
