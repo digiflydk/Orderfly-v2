@@ -5,6 +5,7 @@ import { createContext, useContext, useState, ReactNode, useCallback, useMemo, u
 import type { Product, CartItemTopping, Brand, Location, ComboMenu, ComboSelection, Discount, StandardDiscount, CartItem, ProductForMenu } from '@/types';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import Cookies from 'js-cookie';
+import { isLockedItem } from '@/lib/cart-utils';
 
 
 interface CartContextType {
@@ -44,8 +45,6 @@ interface CartContextType {
 }
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
-
-const isLockedItem = (item: CartItem) => item.itemType === 'combo';
 
 
 export function CartProvider({ children }: { children: ReactNode }) {

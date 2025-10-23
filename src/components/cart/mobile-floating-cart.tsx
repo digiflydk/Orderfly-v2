@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
@@ -37,7 +36,7 @@ function CartContents() {
         cartItems, 
         removeFromCart, 
         updateQuantity, 
-        checkoutTotal, 
+        cartTotal, 
         subtotal, 
         itemDiscount, 
         cartDiscount, 
@@ -174,7 +173,7 @@ function CartContents() {
                 <Separator/>
                 <div className="flex justify-between font-bold">
                     <span>Total</span>
-                    <span>kr.{checkoutTotal.toFixed(2)}</span>
+                    <span>kr.{cartTotal.toFixed(2)}</span>
                 </div>
               </div>
             </SheetFooter>
@@ -184,7 +183,7 @@ function CartContents() {
 
 
 export function MobileFloatingCart() {
-  const { cartItems, itemCount, checkoutTotal, brand, location, subtotal, itemDiscount, cartDiscount, voucherDiscount, deliveryType } = useCart();
+  const { cartItems, itemCount, cartTotal, checkoutTotal, brand, location, subtotal, itemDiscount, cartDiscount, voucherDiscount, deliveryType } = useCart();
   const [isPending, startTransition] = useTransition();
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = React.useState(false);
   const [activeUpsell, setActiveUpsell] = React.useState<any>(null);
@@ -260,7 +259,7 @@ export function MobileFloatingCart() {
                             </div>
                             <span className="font-bold">View cart</span>
                         </div>
-                        <span className="font-bold">kr. {checkoutTotal.toFixed(2)}</span>
+                        <span className="font-bold">kr. {cartTotal.toFixed(2)}</span>
                     </div>
                 </Button>
             </div>

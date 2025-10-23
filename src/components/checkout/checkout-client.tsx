@@ -35,7 +35,7 @@ import { cn } from "@/lib/utils";
 import { getActiveStripeKey } from '@/app/superadmin/settings/actions';
 import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
 import { UpsellDialog } from './upsell-dialog';
-
+import { isLockedItem } from '@/lib/cart-utils';
 
 const checkoutSchema = z.object({
     name: z.string().min(2, "Name is required"),
@@ -305,9 +305,10 @@ function CheckoutForm({ location }: { location: Location }) {
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     const [failedDiscount, setFailedDiscount] = useState<Discount | null>(null);
     const [almostThereUpsell, setAlmostThereUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
-    const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
     
     const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'payment'>('form');
+    const [hasUpsellBeenProcessed, setHasUpsellBeenProcessed] = useState(false);
+    const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
 
 
     const minOrderAmount = location?.minOrder ?? 0;
@@ -340,10 +341,8 @@ function CheckoutForm({ location }: { location: Location }) {
         if (!discountCode || !brand || !location) return;
 
         startTransition(async () => {
-            const currentSubtotal = cartItems.reduce((total, item) => {
-                const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-                return total + ((item.itemType === 'combo' ? item.price : item.basePrice) * item.quantity) + (toppingsPrice * item.quantity);
-            }, 0);
+            // Use the cart subtotal which is always up-to-date
+            const currentSubtotal = subtotal;
             
             const result = await validateDiscountAction(discountCode, brand.id, location.id, currentSubtotal, deliveryType!);
             
@@ -362,7 +361,8 @@ function CheckoutForm({ location }: { location: Location }) {
                 }
             }
         });
-    }, [discountCode, brand, location, cartItems, deliveryType, applyDiscount, removeDiscount]);
+    }, [discountCode, brand, location, subtotal, deliveryType, applyDiscount, removeDiscount, cartItems]);
+
 
     useEffect(() => {
         const hasTracked = sessionStorage.getItem('checkout_started');
@@ -411,7 +411,7 @@ function CheckoutForm({ location }: { location: Location }) {
            return;
        }
        
-       if (checkoutStep === 'form') {
+       if (checkoutStep === 'form' && !hasUpsellBeenProcessed) {
            handleUpsellCheck(values);
        } else {
            proceedToStripe(values);
@@ -433,6 +433,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     cartTotal: currentDiscountableSubtotal,
                 });
 
+                setHasUpsellBeenProcessed(true);
                 if (upsellData) {
                     setActiveUpsell(upsellData);
                     setCheckoutStep('upsell');

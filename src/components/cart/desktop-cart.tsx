@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
