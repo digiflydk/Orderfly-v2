@@ -36,6 +36,7 @@ interface CartContextType {
   standardDiscounts: StandardDiscount[];
   itemDiscount: number;
   cartDiscount: { name: string, amount: number } | null;
+  voucherDiscount: { name: string, amount: number } | null;
   freeDeliveryDiscountApplied: boolean;
   applyDiscount: (discount: Discount) => void;
   removeDiscount: () => void;
@@ -44,7 +45,6 @@ interface CartContextType {
 
 const CartContext = createContext<CartContextType | undefined>(undefined);
 
-// An item's price is "locked" if it's a combo or has an individual offer applied.
 const isLockedItem = (item: CartItem) => item.itemType === 'combo' || item.basePrice > item.price;
 
 
@@ -60,7 +60,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [includeBagFee, setIncludeBagFee] = useState(true);
 
   useEffect(() => {
-    // This effect runs once on mount to initialize from localStorage
     const savedDeliveryMethod = localStorage.getItem('deliveryMethod') as 'delivery' | 'pickup' | null;
     if (savedDeliveryMethod) {
       setDeliveryTypeState(savedDeliveryMethod);
@@ -75,26 +74,20 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const setDeliveryType = (type: 'delivery' | 'pickup') => {
     localStorage.setItem('deliveryMethod', type);
     setDeliveryTypeState(type);
-    setSelectedTime('asap'); // Reset time selection on delivery type change
+    setSelectedTime('asap');
   };
   
   const setCartContext = useCallback((newBrand: Brand, newLocation: Location) => {
-    // Only clear the cart if the brand/location *actually* changes from a previously set one.
     if (brand && location && (brand.id !== newBrand.id || location.id !== newLocation.id)) {
         setCartItems([]);
         setIncludeBagFee(true);
     }
-
     setBrand(newBrand);
     setLocation(newLocation);
-    
-    // Persist location slug to a cookie for cross-page navigation
     Cookies.set('of_location', newLocation.slug, { expires: 1/48, path: '/', sameSite: 'Lax' });
   }, [brand, location]);
 
   useEffect(() => {
-    // This effect runs on the client to fetch discounts when necessary.
-    // It's separate from the context setting to avoid state conflicts.
     async function fetchDiscounts() {
       if (isInitialized && brand && location && deliveryType) {
         const activeDiscounts = await getActiveStandardDiscounts({
@@ -107,7 +100,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }
     fetchDiscounts();
   }, [deliveryType, brand, location, isInitialized]);
-
 
   const addToCart = useCallback((product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number) => {
     const sortedToppings = [...toppings].sort((a, b) => a.name.localeCompare(b.name));
@@ -155,11 +147,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
           productName: combo.comboName,
           description: combo.description,
           imageUrl: combo.imageUrl || undefined,
-          basePrice: price, // For combos, base and final price are the same initially
+          basePrice: price,
           price: price,
           quantity: quantity,
           itemTotal: price,
-          toppings: [], // Combos don't have toppings in this model
+          toppings: [],
           brandId: combo.brandId,
           comboSelections: selections,
       };
@@ -196,7 +188,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setAppliedDiscount(null);
   }, []);
   
-  // Base subtotal calculation using basePrice
   const subtotal = useMemo(() => {
     return cartItems.reduce((total, item) => {
         const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0) * item.quantity;
@@ -204,7 +195,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     }, 0);
   }, [cartItems]);
 
-  // Total discount from standard offers on items
   const itemDiscount = useMemo(() => {
       return cartItems.reduce((total, item) => {
           const originalLinePrice = item.basePrice * item.quantity;
@@ -213,34 +203,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }, 0);
   }, [cartItems]);
   
-  // Calculate cart-level discount (either automatic or from a voucher)
-  const cartDiscount = useMemo(() => {
+  const { automaticCartDiscount, voucherDiscount } = useMemo(() => {
     const unlockedItems = cartItems.filter(item => !isLockedItem(item));
     const discountableSubtotal = unlockedItems.reduce((sum, item) => {
       const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
       return sum + (item.basePrice + toppingsPrice) * item.quantity;
     }, 0);
 
-    if (discountableSubtotal === 0) return null;
+    if (discountableSubtotal === 0) return { automaticCartDiscount: null, voucherDiscount: null };
     
-    let bestCartLevelDiscountAmount = 0;
-    let bestCartLevelDiscountName = '';
-    
+    let autoCartDiscount: { name: string, amount: number } | null = null;
     const cartDiscounts = standardDiscounts.filter(d => 
         d.discountType === 'cart' && 
         discountableSubtotal >= (d.minOrderValue || 0)
     );
 
     if (cartDiscounts.length > 0) {
-        const autoCartDiscount = cartDiscounts[0]; 
-        if (autoCartDiscount.discountMethod === 'percentage' && autoCartDiscount.discountValue) {
-            bestCartLevelDiscountAmount = discountableSubtotal * (autoCartDiscount.discountValue / 100);
-        } else if (autoCartDiscount.discountMethod === 'fixed_amount' && autoCartDiscount.discountValue) {
-            bestCartLevelDiscountAmount = Math.min(discountableSubtotal, autoCartDiscount.discountValue);
+        const bestAutoDiscount = cartDiscounts.reduce((best, current) => {
+            const bestAmount = best.discountMethod === 'percentage' ? discountableSubtotal * ((best.discountValue || 0) / 100) : (best.discountValue || 0);
+            const currentAmount = current.discountMethod === 'percentage' ? discountableSubtotal * ((current.discountValue || 0) / 100) : (current.discountValue || 0);
+            return currentAmount > bestAmount ? current : best;
+        });
+
+        if (bestAutoDiscount.discountMethod === 'percentage' && bestAutoDiscount.discountValue) {
+            autoCartDiscount = { name: bestAutoDiscount.discountName, amount: discountableSubtotal * (bestAutoDiscount.discountValue / 100) };
+        } else if (bestAutoDiscount.discountMethod === 'fixed_amount' && bestAutoDiscount.discountValue) {
+            autoCartDiscount = { name: bestAutoDiscount.discountName, amount: Math.min(discountableSubtotal, bestAutoDiscount.discountValue) };
         }
-        bestCartLevelDiscountName = autoCartDiscount.discountName;
     }
 
+    let calculatedVoucher: { name: string, amount: number } | null = null;
     if (appliedDiscount && discountableSubtotal >= (appliedDiscount.minOrderValue || 0)) {
         let voucherAmount = 0;
         if (appliedDiscount.discountType === 'percentage') {
@@ -248,26 +240,29 @@ export function CartProvider({ children }: { children: ReactNode }) {
         } else {
             voucherAmount = Math.min(discountableSubtotal, appliedDiscount.discountValue);
         }
-        if(voucherAmount > bestCartLevelDiscountAmount) {
-            bestCartLevelDiscountAmount = voucherAmount;
-            bestCartLevelDiscountName = appliedDiscount.code;
+        if (voucherAmount > 0) {
+            calculatedVoucher = { name: appliedDiscount.code, amount: voucherAmount };
         }
     }
     
-    if (bestCartLevelDiscountAmount > 0) {
-        return { name: bestCartLevelDiscountName, amount: bestCartLevelDiscountAmount };
-    }
-
-    return null;
+    return { automaticCartDiscount: autoCartDiscount, voucherDiscount: calculatedVoucher };
   }, [cartItems, standardDiscounts, appliedDiscount]);
 
+  const cartDiscount = useMemo(() => {
+      // Logic to decide whether automatic or voucher discount is better
+      // For now, we assume they don't stack and voucher takes precedence if better
+      if (voucherDiscount && (!automaticCartDiscount || voucherDiscount.amount > automaticCartDiscount.amount)) {
+          return null; // voucher is better, so no automatic cart discount
+      }
+      return automaticCartDiscount;
+  }, [automaticCartDiscount, voucherDiscount]);
 
   const { deliveryFee, freeDeliveryDiscountApplied } = useMemo(() => {
     if (deliveryType === 'delivery' && location) {
-        const totalAfterItemDiscounts = subtotal - itemDiscount;
+        const totalAfterDiscounts = subtotal - itemDiscount - (cartDiscount?.amount || 0) - (voucherDiscount?.amount || 0);
         const freeDeliveryDiscount = standardDiscounts.find(d => 
             d.discountType === 'free_delivery' && 
-            totalAfterItemDiscounts >= (d.minOrderValue || 0)
+            totalAfterDiscounts >= (d.minOrderValue || 0)
         );
 
         if (freeDeliveryDiscount) {
@@ -276,7 +271,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return { deliveryFee: location.deliveryFee, freeDeliveryDiscountApplied: false };
     }
     return { deliveryFee: 0, freeDeliveryDiscountApplied: false };
-  }, [deliveryType, location, standardDiscounts, subtotal, itemDiscount]);
+  }, [deliveryType, location, standardDiscounts, subtotal, itemDiscount, cartDiscount, voucherDiscount]);
 
   const bagFee = useMemo(() => {
       return includeBagFee && brand?.bagFee ? brand.bagFee : 0;
@@ -287,9 +282,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [cartItems]);
   
   const cartTotal = useMemo(() => {
-    const totalAfterDiscounts = subtotal - itemDiscount - (cartDiscount?.amount || 0);
+    const totalAfterDiscounts = subtotal - itemDiscount - (cartDiscount?.amount || 0) - (voucherDiscount?.amount || 0);
     return Math.max(0, totalAfterDiscounts);
-  }, [subtotal, itemDiscount, cartDiscount]);
+  }, [subtotal, itemDiscount, cartDiscount, voucherDiscount]);
 
   const adminFee = useMemo(() => {
     if (!brand?.adminFee || brand.adminFee <= 0) return 0;
@@ -314,18 +309,19 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [checkoutTotal, brand?.vatPercentage]);
 
   const finalDiscount = useMemo(() => {
-      let totalDiscount = itemDiscount + (cartDiscount?.amount || 0);
+      let totalDiscount = itemDiscount + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0);
       if (freeDeliveryDiscountApplied) {
           totalDiscount += deliveryFee;
       }
       const allDiscountNames = [
           ...(itemDiscount > 0 ? ['Item Offers'] : []),
           ...(cartDiscount ? [cartDiscount.name] : []),
+          ...(voucherDiscount ? [voucherDiscount.name] : []),
           ...(freeDeliveryDiscountApplied ? ['Free Delivery'] : []),
       ];
 
       return { name: allDiscountNames.join(' + ') || 'Total Discounts', amount: totalDiscount };
-  }, [itemDiscount, cartDiscount, freeDeliveryDiscountApplied, deliveryFee]);
+  }, [itemDiscount, cartDiscount, voucherDiscount, freeDeliveryDiscountApplied, deliveryFee]);
 
 
   const value = {
@@ -356,6 +352,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     standardDiscounts,
     itemDiscount,
     cartDiscount,
+    voucherDiscount,
     freeDeliveryDiscountApplied,
     applyDiscount,
     removeDiscount,

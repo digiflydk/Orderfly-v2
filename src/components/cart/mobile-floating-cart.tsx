@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
@@ -40,6 +41,7 @@ function CartContents() {
         subtotal, 
         itemDiscount, 
         cartDiscount, 
+        voucherDiscount,
         deliveryFee, 
         freeDeliveryDiscountApplied,
         bagFee,
@@ -153,6 +155,15 @@ function CartContents() {
                             <span>- kr.{cartDiscount.amount.toFixed(2)}</span>
                         </div>
                     )}
+                    {voucherDiscount && (
+                        <div className="flex justify-between text-green-600">
+                            <div className="flex items-center gap-1">
+                                <Tag className="h-4 w-4" />
+                                <span>Code: {voucherDiscount.name}</span>
+                            </div>
+                            <span>- kr.{voucherDiscount.amount.toFixed(2)}</span>
+                        </div>
+                    )}
                     {freeDeliveryDiscountApplied && (
                         <div className="flex justify-between text-green-600">
                             <span>Free Delivery</span>
@@ -173,7 +184,7 @@ function CartContents() {
 
 
 export function MobileFloatingCart() {
-  const { itemCount, cartTotal, brand, location, subtotal, itemDiscount, cartDiscount, deliveryType } = useCart();
+  const { itemCount, cartTotal, brand, location, subtotal, itemDiscount, cartDiscount, voucherDiscount, deliveryType } = useCart();
   const [isPending, startTransition] = useTransition();
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = React.useState(false);
   const [activeUpsell, setActiveUpsell] = React.useState<any>(null);
@@ -213,7 +224,7 @@ export function MobileFloatingCart() {
             brandId: brand.id,
             locationId: location.id,
             cartItems: minimalCartItems,
-            cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0)),
+            cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0)),
         });
 
         if (upsellData) {

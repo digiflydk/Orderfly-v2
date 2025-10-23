@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
@@ -31,6 +32,7 @@ export function DesktopCart() {
       subtotal,
       itemDiscount,
       cartDiscount,
+      voucherDiscount,
       deliveryFee,
       freeDeliveryDiscountApplied,
       deliveryType
@@ -71,7 +73,7 @@ export function DesktopCart() {
             brandId: brand.id,
             locationId: location.id,
             cartItems: minimalCartItems,
-            cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0)),
+            cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0)),
         });
 
         if (upsellData) {
@@ -174,6 +176,15 @@ export function DesktopCart() {
                                     <span>{cartDiscount.name}</span>
                                 </div>
                                 <span>- kr.{cartDiscount.amount.toFixed(2)}</span>
+                            </div>
+                        )}
+                         {voucherDiscount && (
+                            <div className="flex justify-between text-green-600">
+                                <div className="flex items-center gap-1">
+                                    <Tag className="h-4 w-4" />
+                                    <span>Code: {voucherDiscount.name}</span>
+                                </div>
+                                <span>- kr.{voucherDiscount.amount.toFixed(2)}</span>
                             </div>
                         )}
                         {freeDeliveryDiscountApplied && (
