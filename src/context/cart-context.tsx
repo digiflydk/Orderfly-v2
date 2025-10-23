@@ -7,7 +7,6 @@ import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/
 import Cookies from 'js-cookie';
 import { isLockedItem } from '@/lib/cart-utils';
 
-
 interface CartContextType {
   cartItems: CartItem[];
   brand: Brand | null;
@@ -123,10 +122,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [deliveryType, brand, location, isInitialized]);
   
   useEffect(() => {
-    // Single source of truth for all calculations.
-    // Recalculates whenever cart items or discounts change.
-    
-    // 1. Calculate base totals
     const currentItemCount = cartItems.reduce((count, item) => count + item.quantity, 0);
     const currentSubtotal = cartItems.reduce((total, item) => {
         const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
@@ -138,14 +133,12 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return total + (originalLinePrice - discountedLinePrice);
     }, 0);
     
-    // 2. Calculate discountable subtotal (for cart-level discounts)
     const unlockedItems = cartItems.filter(item => !isLockedItem(item));
     const discountableSubtotal = unlockedItems.reduce((sum, item) => {
         const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
         return sum + ((item.basePrice + toppingsTotal) * item.quantity);
     }, 0);
 
-    // 3. Determine best automatic cart discount
     let bestAutoDiscount: { name: string; amount: number } | null = null;
     if (discountableSubtotal > 0) {
         const applicableCartDiscounts = standardDiscounts.filter(d => 
@@ -170,7 +163,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
     }
 
-    // 4. Calculate voucher discount
     let calculatedVoucher: { name: string; amount: number } | null = null;
     if (appliedDiscount && discountableSubtotal >= (appliedDiscount.minOrderValue || 0)) {
         let voucherAmount = 0;
@@ -184,7 +176,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
         }
     }
     
-    // 5. Determine which cart-level discount to apply (voucher vs automatic)
     const finalCartDiscount = (calculatedVoucher && (!bestAutoDiscount || calculatedVoucher.amount > bestAutoDiscount.amount))
         ? null
         : bestAutoDiscount;
@@ -192,7 +183,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
         ? calculatedVoucher
         : null;
 
-    // 6. Calculate delivery fee and free delivery
     let currentDeliveryFee = 0;
     let isFreeDelivery = false;
     if (deliveryType === 'delivery' && location) {
@@ -205,7 +195,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
       }
     }
     
-    // 7. Calculate final totals
     const totalCartLevelDiscount = (finalCartDiscount?.amount || 0) + (finalVoucherDiscount?.amount || 0);
     const calculatedCartTotal = currentSubtotal - currentItemDiscount - totalCartLevelDiscount;
     
@@ -222,7 +211,6 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const calculatedCheckoutTotal = calculatedCartTotal + (isFreeDelivery ? 0 : currentDeliveryFee) + currentBagFee + currentAdminFee;
     const vatRate = brand?.vatPercentage || 25;
     
-    // 8. Update all state variables
     setSubtotal(currentSubtotal);
     setItemCount(currentItemCount);
     setItemDiscount(currentItemDiscount);
@@ -232,8 +220,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setFreeDeliveryDiscountApplied(isFreeDelivery);
     setBagFee(currentBagFee);
     setAdminFee(currentAdminFee);
-    setCartTotal(Math.max(0, calculatedCartTotal)); // This is the value for cart summary
-    setCheckoutTotal(Math.max(0, calculatedCheckoutTotal)); // This is the final value for payment
+    setCartTotal(Math.max(0, calculatedCartTotal));
+    setCheckoutTotal(Math.max(0, calculatedCheckoutTotal));
     setVatAmount((calculatedCheckoutTotal * vatRate) / (100 + vatRate));
 
     const allDiscountNames = [

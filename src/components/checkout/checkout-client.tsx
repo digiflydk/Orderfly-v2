@@ -236,7 +236,7 @@ function CheckoutForm({ location }: { location: Location }) {
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     
     const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
-    const [upsellOffered, setUpsellOffered] = useState(false);
+    const [upsellAlreadyOffered, setUpsellAlreadyOffered] = useState(false);
 
     const minOrderAmount = location?.minOrder ?? 0;
     const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
@@ -268,7 +268,7 @@ function CheckoutForm({ location }: { location: Location }) {
         if (!discountCode || !brand || !location || !deliveryType) return;
         
         setIsProcessing(true);
-        // Manually recalculate the discountable subtotal to ensure it's up-to-date
+        // Recalculate subtotal for validation, including toppings
         const currentDiscountableSubtotal = cartItems
             .filter(item => !isLockedItem(item))
             .reduce((sum, item) => {
@@ -386,13 +386,11 @@ function CheckoutForm({ location }: { location: Location }) {
            return;
         }
         
-        // If upsell has been offered and handled, proceed directly to payment.
-        if (upsellOffered) {
+        if (upsellAlreadyOffered) {
             proceedToStripe(formValues);
             return;
         }
 
-        // Otherwise, check for an upsell.
         setIsProcessing(true);
         const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
         const currentDiscountableSubtotal = cartItems
@@ -409,7 +407,7 @@ function CheckoutForm({ location }: { location: Location }) {
             cartTotal: currentDiscountableSubtotal,
         });
         
-        setUpsellOffered(true); // Mark as offered so we don't check again.
+        setUpsellAlreadyOffered(true);
         setIsProcessing(false);
 
         if (upsellData) {
@@ -655,6 +653,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     isOpen={!!activeUpsell}
                     setIsOpen={(open) => {
                         if (!open) {
+                           setActiveUpsell(null);
                            onUpsellDialogContinue();
                         }
                     }}
