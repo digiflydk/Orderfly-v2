@@ -234,7 +234,10 @@ function CheckoutForm({ location }: { location: Location }) {
     const [isLoadingTimes, setIsLoadingTimes] = useState(true);
     const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
+    const [isPending, startTransition] = useTransition();
     
+    const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'processing'>('form');
+
     const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
     const [upsellAlreadyOffered, setUpsellAlreadyOffered] = useState(false);
 
@@ -329,8 +332,8 @@ function CheckoutForm({ location }: { location: Location }) {
 
 
     const proceedToStripe = (formValues: CheckoutFormValues) => {
-        setIsProcessing(true);
         startTransition(async () => {
+            setIsProcessing(true);
             if (!brand || !location) {
                 toast({ variant: 'destructive', title: 'Error', description: 'Brand or location information is missing. Please refresh and try again.' });
                 setIsProcessing(false);
@@ -363,6 +366,8 @@ function CheckoutForm({ location }: { location: Location }) {
             }));
 
             const result = await createStripeCheckoutSessionAction(minimalCartItems, formValues, deliveryType!, brand!.id, location!.id, paymentDetails, appliedDiscount?.id || null, brand!.slug, location!.slug, finalDeliveryTime, anonymousId);
+            
+            setIsProcessing(false);
 
             if (result.success && result.url) {
                 router.push(result.url);
@@ -373,7 +378,6 @@ function CheckoutForm({ location }: { location: Location }) {
                      description: `An unexpected error occurred. Please try again. If the problem persists, one of the items in your cart may no longer be available. Details: ${result.error}`,
                      duration: 20000 
                 });
-                setIsProcessing(false);
             }
         });
     };
@@ -386,7 +390,7 @@ function CheckoutForm({ location }: { location: Location }) {
            return;
         }
         
-        if (upsellAlreadyOffered) {
+        if (checkoutStep !== 'form') {
             proceedToStripe(formValues);
             return;
         }
@@ -407,11 +411,11 @@ function CheckoutForm({ location }: { location: Location }) {
             cartTotal: currentDiscountableSubtotal,
         });
         
-        setUpsellAlreadyOffered(true);
         setIsProcessing(false);
 
         if (upsellData) {
             setActiveUpsell(upsellData);
+            setCheckoutStep('upsell');
         } else {
             proceedToStripe(formValues);
         }
@@ -419,6 +423,7 @@ function CheckoutForm({ location }: { location: Location }) {
 
     const onUpsellDialogContinue = () => {
         setActiveUpsell(null);
+        setCheckoutStep('processing'); // Move to next state
         proceedToStripe(form.getValues());
     };
     
@@ -650,10 +655,9 @@ function CheckoutForm({ location }: { location: Location }) {
             
             {activeUpsell && (
                  <UpsellDialog
-                    isOpen={!!activeUpsell}
+                    isOpen={checkoutStep === 'upsell'}
                     setIsOpen={(open) => {
                         if (!open) {
-                           setActiveUpsell(null);
                            onUpsellDialogContinue();
                         }
                     }}
