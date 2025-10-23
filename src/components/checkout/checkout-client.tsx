@@ -13,7 +13,7 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
-import { useEffect, useState, useTransition, useMemo, useCallback } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import { createStripeCheckoutSessionAction, validateDiscountAction } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, X, Tag, Truck, Store, Clock, MapPin, Check, ShoppingCart, AlertTriangle } from "lucide-react";
@@ -227,7 +227,7 @@ function CheckoutForm({ location }: { location: Location }) {
     const router = useRouter();
     const { toast } = useToast();
     const params = useParams();
-    const [isProcessing, startTransition] = useTransition();
+    const [isProcessing, setIsProcessing] = useState(false);
     const [discountCode, setDiscountCode] = useState('');
     const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
     const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
@@ -235,8 +235,8 @@ function CheckoutForm({ location }: { location: Location }) {
     const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
     const [discountErrorMessage, setDiscountErrorMessage] = useState('');
     
-    const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'processing'>('form');
     const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
+    const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'processing'>('form');
 
     const minOrderAmount = location?.minOrder ?? 0;
     const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
@@ -267,25 +267,25 @@ function CheckoutForm({ location }: { location: Location }) {
     const handleApplyDiscount = useCallback(async () => {
         if (!discountCode || !brand || !location || !deliveryType) return;
         
-        startTransition(async () => {
-            const currentDiscountableSubtotal = cartItems
-                .filter(item => !isLockedItem(item))
-                .reduce((sum, item) => {
-                    const toppingsTotal = item.toppings.reduce((tSum, t) => tSum + t.price, 0);
-                    return sum + ((item.basePrice + toppingsTotal) * item.quantity);
-                }, 0);
+        setIsProcessing(true);
+        const currentDiscountableSubtotal = cartItems
+            .filter(item => !isLockedItem(item))
+            .reduce((sum, item) => {
+                const toppingsTotal = item.toppings.reduce((tTotal, t) => tSum + t.price, 0);
+                return sum + ((item.basePrice + toppingsTotal) * item.quantity);
+            }, 0);
 
-            const result = await validateDiscountAction(discountCode, brand.id, location.id, currentDiscountableSubtotal, deliveryType);
-            
-            if (result.success && result.discount) {
-                applyDiscount(result.discount);
-                toast({ title: 'Success!', description: 'Discount code applied.' });
-            } else {
-                removeDiscount();
-                setDiscountErrorMessage(result.message);
-                setIsDiscountErrorOpen(true);
-            }
-        });
+        const result = await validateDiscountAction(discountCode, brand.id, location.id, currentDiscountableSubtotal, deliveryType);
+        
+        if (result.success && result.discount) {
+            applyDiscount(result.discount);
+            toast({ title: 'Success!', description: 'Discount code applied.' });
+        } else {
+            removeDiscount();
+            setDiscountErrorMessage(result.message);
+            setIsDiscountErrorOpen(true);
+        }
+        setIsProcessing(false);
     }, [discountCode, brand, location, deliveryType, cartItems, applyDiscount, removeDiscount, toast]);
 
 
@@ -329,11 +329,11 @@ function CheckoutForm({ location }: { location: Location }) {
 
 
     const proceedToStripe = (formValues: CheckoutFormValues) => {
-        setCheckoutStep('processing');
-        startTransition(async () => {
+        setIsProcessing(true);
+        const process = async () => {
             if (!brand || !location) {
                 toast({ variant: 'destructive', title: 'Error', description: 'Brand or location information is missing. Please refresh and try again.' });
-                setCheckoutStep('form');
+                setIsProcessing(false);
                 return;
             }
             
@@ -373,16 +373,36 @@ function CheckoutForm({ location }: { location: Location }) {
                      description: `An unexpected error occurred. Please try again. If the problem persists, one of the items in your cart may no longer be available. Details: ${result.error}`,
                      duration: 20000 
                 });
-                setCheckoutStep('form');
+                setIsProcessing(false);
             }
-       });
+        };
+        process();
     };
     
-    const onUpsellDialogContinue = () => {
-        setActiveUpsell(null);
-        proceedToStripe(form.getValues());
-    };
+    const handleUpsellCheck = async (formValues: CheckoutFormValues) => {
+        if (!brand || !location) return;
 
+        const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
+        const currentDiscountableSubtotal = cartItems
+            .filter(item => !isLockedItem(item))
+            .reduce((sum, item) => sum + (item.basePrice * item.quantity), 0);
+
+        const upsellData = await getActiveUpsellForCart({
+            brandId: brand.id,
+            locationId: location.id,
+            cartItems: minimalCartItems,
+            cartTotal: currentDiscountableSubtotal,
+        });
+
+        if (upsellData) {
+            setActiveUpsell(upsellData);
+            setCheckoutStep('upsell');
+        } else {
+            setCheckoutStep('processing');
+            proceedToStripe(formValues);
+        }
+    };
+    
     const handleFormSubmit = form.handleSubmit(async (formValues: CheckoutFormValues) => {
         if (deliveryType === 'delivery' && (!formValues.street || !formValues.zipCode || !formValues.city)) {
            if (!formValues.street) form.setError('street', { message: 'Street name is required.' });
@@ -391,47 +411,25 @@ function CheckoutForm({ location }: { location: Location }) {
            return;
         }
 
-        if (checkoutStep !== 'form') {
-            proceedToStripe(formValues);
-            return;
-        }
-        
-        setCheckoutStep('processing'); // Set to processing to avoid double clicks
-
-        if (brand && location) {
-             const minimalCartItems = cartItems.map(item => ({ id: item.id, categoryId: item.categoryId }));
-             const currentDiscountableSubtotal = cartItems
-                .filter(item => !isLockedItem(item))
-                .reduce((sum, item) => {
-                    const toppingsTotal = item.toppings.reduce((tTotal, t) => tSum + t.price, 0);
-                    return sum + ((item.basePrice + toppingsTotal) * item.quantity);
-                }, 0);
-
-            const upsellData = await getActiveUpsellForCart({
-                brandId: brand.id,
-                locationId: location.id,
-                cartItems: minimalCartItems,
-                cartTotal: currentDiscountableSubtotal,
-            });
-
-            if (upsellData) {
-                setActiveUpsell(upsellData);
-                setCheckoutStep('upsell');
-            } else {
-                proceedToStripe(formValues);
-            }
+        if (checkoutStep === 'form') {
+            await handleUpsellCheck(formValues);
         } else {
             proceedToStripe(formValues);
         }
     });
 
+    const onUpsellDialogContinue = () => {
+        setActiveUpsell(null);
+        setCheckoutStep('processing');
+        proceedToStripe(form.getValues());
+    };
     
     const handleRemoveDiscount = () => {
         removeDiscount();
         setDiscountCode('');
     }
 
-    if (cartItems.length === 0 && !isPending) {
+    if (cartItems.length === 0 && !isProcessing) {
         return (
             <div className="text-center">
                 <h1 className="text-2xl font-bold">Your Cart is Empty</h1>
@@ -474,9 +472,9 @@ function CheckoutForm({ location }: { location: Location }) {
                     )}
                 />
             </div>
-            <Button type="submit" className={cn("w-full font-bold", isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg")} disabled={isPending || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
+            <Button type="submit" className={cn("w-full font-bold", isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg")} disabled={isProcessing || !isTermsAccepted || isDeliveryBelowMinOrder || !isOrderTimeValid}>
                 <div className="flex w-full justify-between items-center px-4">
-                    <span>{isPending ? <Loader2 className="animate-spin" /> : 'Complete Order'}</span>
+                    <span>{isProcessing ? <Loader2 className="animate-spin" /> : 'Complete Order'}</span>
                     <span>kr. {checkoutTotal.toFixed(2)}</span>
                 </div>
             </Button>
@@ -582,8 +580,8 @@ function CheckoutForm({ location }: { location: Location }) {
                                 ) : (
                                     <div className="flex items-center gap-2">
                                         <Input placeholder="Enter discount code" className="h-9" value={discountCode} onChange={(e) => setDiscountCode(e.target.value)} />
-                                        <Button type="button" variant="outline" onClick={handleApplyDiscount} disabled={isPending || !discountCode}>
-                                            {isPending ? <Loader2 className="animate-spin" /> : 'Apply'}
+                                        <Button type="button" variant="outline" onClick={handleApplyDiscount} disabled={isProcessing || !discountCode}>
+                                            {isProcessing ? <Loader2 className="animate-spin" /> : 'Apply'}
                                         </Button>
                                     </div>
                                 )}
@@ -711,3 +709,4 @@ export function CheckoutClient({ location }: CheckoutClientProps) {
     </Elements>
   );
 }
+
