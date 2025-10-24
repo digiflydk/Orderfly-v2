@@ -1,14 +1,13 @@
 
-
 'use client';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
+import { useEffect, useMemo, useState, useTransition } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
-import { useFormStatus } from 'react-dom';
+
 import {
   Form,
   FormControl,
@@ -33,6 +32,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { BrandAppearancesForm } from './brand-appearances-form';
 import { debounce } from 'lodash';
+
 
 const productSchema = z.object({
   id: z.string().optional().nullable(),
@@ -63,17 +63,8 @@ interface ProductFormPageProps {
   allergens: Allergen[];
 }
 
-function SubmitButton({ isEditing }: { isEditing: boolean }) {
-  const { pending } = useFormStatus();
-  return (
-    <Button type="submit" disabled={pending}>
-      {pending ? <Loader2 className="animate-spin" /> : (isEditing ? 'Save Changes' : 'Create Product')}
-    </Button>
-  );
-}
-
 export function ProductFormPage({ product, brands, locations, categories, toppingGroups, allergens }: ProductFormPageProps) {
-  const [state, formAction] = useActionState(createOrUpdateProduct, null);
+  const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   
   const [imagePreview, setImagePreview] = useState<string | null>(product?.imageUrl || null);
@@ -129,21 +120,46 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   const description = product ? `Editing details for ${product.productName || 'product...'}.` : 'Fill in the details for the new product.';
   const isEditing = !!product;
 
-  useEffect(() => {
-    if(state?.message) {
-        if (state.error) {
-            toast({ variant: 'destructive', title: 'Error', description: state.message });
+  const onSubmit = (data: ProductFormValues) => {
+    startTransition(async () => {
+        const formData = new FormData();
+        const imageInput = document.querySelector('input[name="imageUrl"]') as HTMLInputElement;
+
+        // Append all form data
+        Object.entries(data).forEach(([key, value]) => {
+            if (key === 'imageUrl') return; // Handled separately
+            if (value !== undefined && value !== null) {
+                if (Array.isArray(value)) {
+                    value.forEach(item => formData.append(key, String(item)));
+                } else {
+                    formData.append(key, String(value));
+                }
+            }
+        });
+
+        if (product?.id) {
+            formData.append('id', product.id);
         }
-    }
-  }, [state, toast]);
+        if (product?.imageUrl) {
+            formData.append('existingImageUrl', product.imageUrl);
+        }
+        if (imageInput?.files?.[0]) {
+            formData.append('imageUrl', imageInput.files[0]);
+        }
+
+        const result = await createOrUpdateProduct(null, formData);
+        if (result.error) {
+            toast({ variant: 'destructive', title: 'Error', description: result.message });
+        } else {
+            toast({ title: 'Success!', description: result.message });
+        }
+    });
+  };
 
   return (
     <div className="space-y-6">
         <Form {...form}>
-            <form action={formAction}>
-                {product?.id && <input type="hidden" name="id" value={product.id} />}
-                {product?.imageUrl && <input type="hidden" name="existingImageUrl" value={product.imageUrl} />}
-                
+            <form onSubmit={form.handleSubmit(onSubmit)}>
                 <div className="flex items-center justify-between">
                     <div>
                         <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
@@ -153,7 +169,9 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                         <Button variant="outline" asChild>
                             <Link href="/superadmin/products">Cancel</Link>
                         </Button>
-                        <SubmitButton isEditing={isEditing} />
+                        <Button type="submit" disabled={isPending}>
+                            {isPending ? <Loader2 className="animate-spin" /> : (isEditing ? 'Save Changes' : 'Create Product')}
+                        </Button>
                     </div>
                 </div>
 
@@ -190,12 +208,12 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                                     </FormItem>
                                                 )} />
                                                 <FormField control={form.control} name="price" render={({ field }) => (
-                                                    <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
+                                                    <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>
                                                 )} />
                                             </div>
                                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                                 <FormField control={form.control} name="priceDelivery" render={({ field }) => (
-                                                    <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                                                    <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} /></FormControl><FormMessage /></FormItem>
                                                 )} />
                                             </div>
                                             <FormItem>
@@ -218,7 +236,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                                 <FormItem>
                                                     <FormLabel>Available at Locations</FormLabel>
                                                     <FormDescription>Select which locations this product is sold at. If none are selected, it is available at all of the brand's locations.</FormDescription>
-                                                    <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandLocations.map((item) => (<FormField key={item.id} control={form.control} name="locationIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox name={field.name} checked={field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl><FormLabel className="font-normal">{item.name}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
+                                                    <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandLocations.map((item) => (<FormField key={item.id} control={form.control} name="locationIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox name="locationIds" checked={field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl><FormLabel className="font-normal">{item.name}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
                                                     <FormMessage />
                                                 </FormItem>
                                             )}/>
@@ -261,6 +279,9 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     </Card>
                                 </div>
                             </div>
+                    </TabsContent>
+                    <TabsContent value="appearances" className="mt-6">
+                        {brand && <BrandAppearancesForm brand={brand} />}
                     </TabsContent>
                 </Tabs>
             </form>

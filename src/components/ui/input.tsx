@@ -14,12 +14,12 @@ export type InputProps = Omit<
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, value, defaultValue, ...props }, ref) => {
-    const isControlled = value !== undefined;
-    
-    // Ensure value/defaultValue is never null or undefined to prevent uncontrolled -> controlled switch
+    // To prevent "uncontrolled to controlled" error, we ensure the value is never null/undefined.
     const normalizedValue = value ?? '';
     const normalizedDefaultValue = defaultValue ?? '';
 
+    const isControlled = value !== undefined;
+    
     return (
       <input
         ref={ref}
@@ -36,7 +36,6 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
     );
   }
 );
-
 Input.displayName = "Input";
 
 export { Input };
