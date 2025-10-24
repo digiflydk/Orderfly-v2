@@ -92,7 +92,7 @@ export async function createOrUpdateProduct(
 
   if (!validatedFields.success) {
     const errorMessages = Object.entries(validatedFields.error.flatten().fieldErrors)
-        .map(([field, errors]) => `${field}: ${errors.join(', ')}`)
+        .map(([field, errors]) => `${''}${field}: ${errors.join(', ')}`)
         .join('; ');
     return {
       message: `Validation failed: ${errorMessages}`,
@@ -254,6 +254,7 @@ export async function getProductsByIds(productIds: string[], brandId?: string): 
     const productArrays = await Promise.all(productPromises);
     const allProducts = productArrays.flat();
 
+    // Map to the lightweight type
     const finalProducts = allProducts.map(p => ({
         id: p.id,
         productName: p.productName,

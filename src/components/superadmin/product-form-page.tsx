@@ -1,15 +1,16 @@
 
+
 'use client';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
-import { useActionState, useEffect, useMemo, useState, useTransition } from 'react';
-import Image from 'next/image';
+import { useEffect, useMemo, useState, useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
+import Image from 'next/image';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2, PlusCircle, Trash2, X, Clock } from 'lucide-react';
-import { useFormStatus } from 'react-dom';
 
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
@@ -26,7 +27,6 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { BrandAppearancesForm } from './brand-appearances-form';
 import { debounce } from 'lodash';
-
 
 const productSchema = z.object({
   id: z.string().optional().nullable(),
@@ -57,7 +57,6 @@ interface ProductFormPageProps {
   allergens: Allergen[];
 }
 
-
 function SubmitButton({ isEditing }: { isEditing: boolean }) {
     const { pending } = useFormStatus();
     return (
@@ -73,18 +72,13 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   
   const [imagePreview, setImagePreview] = useState<string | null>(product?.imageUrl || null);
   
-  const brand = useMemo(() => {
-    if (product) {
-      return brands.find(b => b.id === product.brandId);
-    }
-    return undefined;
-  }, [product, brands]);
-  
+  const isEditing = !!product;
+
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: product ? {
+    defaultValues: isEditing ? {
         ...product,
-        imageUrl: undefined, // Handled separately
+        imageUrl: undefined, // Handled separately by file input
     } : {
       brandId: '', categoryId: '', productName: '', description: '', price: undefined, priceDelivery: undefined, isActive: true,
       isFeatured: false, isNew: false, isPopular: false, locationIds: [], allergenIds: [], toppingGroupIds: [], imageUrl: undefined,
@@ -92,7 +86,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   });
     
   const selectedBrandId = form.watch('brandId');
-  const imageUrl = form.watch('imageUrl');
+  const watchedImageUrl = form.watch('imageUrl');
 
   const { brandLocations, brandCategories, brandToppingGroups } = useMemo(() => {
     if (!selectedBrandId) {
@@ -128,9 +122,8 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
     }
   };
   
-  const title = product ? 'Edit Product' : 'Create New Product';
-  const description = product ? `Editing details for ${product.productName || 'product...'}.` : 'Fill in the details for the new product.';
-  const isEditing = !!product;
+  const title = isEditing ? 'Edit Product' : 'Create New Product';
+  const description = isEditing ? `Editing details for ${product.productName || 'product...'}.` : 'Fill in the details for the new product.';
   
   useEffect(() => {
     if(state?.message) {
@@ -144,48 +137,47 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
 
   return (
     <div className="space-y-6">
-        <div className="flex items-center justify-between">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-                <p className="text-muted-foreground">{description}</p>
-            </div>
-             <div className="flex gap-2">
-                <Button variant="outline" asChild>
-                    <Link href="/superadmin/products">Cancel</Link>
-                </Button>
-            </div>
-        </div>
-
-        <Tabs defaultValue="details">
-            <TabsList>
-                <TabsTrigger value="details">Details</TabsTrigger>
-                <TabsTrigger value="appearances" disabled={!isEditing}>Appearances</TabsTrigger>
-            </TabsList>
-            
-            <Form {...form}>
-            <form action={formAction} className="space-y-6">
-            <TabsContent value="details" className="mt-6">
-                <div className="flex justify-end mb-6">
+        <Form {...form}>
+        <form action={formAction}>
+            {product?.id && <input type="hidden" name="id" value={product.id} />}
+             {product?.imageUrl && <input type="hidden" name="existingImageUrl" value={product.imageUrl} />}
+            <div className="flex items-center justify-between">
+                <div>
+                    <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+                    <p className="text-muted-foreground">{description}</p>
+                </div>
+                <div className="flex gap-2">
+                    <Button variant="outline" asChild>
+                        <Link href="/superadmin/products">Cancel</Link>
+                    </Button>
                     <SubmitButton isEditing={isEditing} />
                 </div>
+            </div>
+
+            <Tabs defaultValue="details">
+                <TabsList>
+                    <TabsTrigger value="details">Details</TabsTrigger>
+                    <TabsTrigger value="appearances" disabled={!isEditing}>Appearances</TabsTrigger>
+                </TabsList>
+                
+                <TabsContent value="details" className="mt-6">
                     <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                         <div className="lg:col-span-2 space-y-6">
                             <Card>
-                                <CardHeader><CardTitle>Core Details</CardTitle></CardHeader>
+                                <CardHeader>
+                                    <CardTitle>Core Details</CardTitle>
+                                    <CardDescription>Legal and public-facing brand details.</CardDescription>
+                                </CardHeader>
                                 <CardContent className="space-y-4">
                                     <FormField control={form.control} name="brandId" render={({ field }) => (
                                         <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value} disabled={isEditing}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{brands.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}</SelectContent></Select>{isEditing && <FormDescription>Product's brand cannot be changed after creation.</FormDescription>}<FormMessage /></FormItem>
                                     )}/>
                                     
                                     <FormField control={form.control} name="productName" render={({ field }) => (
-                                        <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input placeholder="e.g., Margherita Pizza" {...field} onChange={(e) => {
-                                        field.onChange(e);
-                                        const slug = e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
-                                        // You might want to set a slug field if it exists in your schema
-                                        }} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input placeholder="e.g., Margherita Pizza" {...field} /></FormControl><FormMessage /></FormItem>
                                     )} />
                                     <FormField control={form.control} name="description" render={({ field }) => (
-                                        <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description for the product." {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description for the product." {...field} /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <FormField control={form.control} name="categoryId" render={({ field }) => (
@@ -199,18 +191,24 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                             </FormItem>
                                         )} />
                                         <FormField control={form.control} name="price" render={({ field }) => (
-                                            <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>
+                                            <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
                                         )} />
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <FormField control={form.control} name="priceDelivery" render={({ field }) => (
-                                            <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} onChange={e => field.onChange(parseFloat(e.target.value))} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>
+                                            <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
                                         )} />
                                     </div>
                                     <FormItem>
                                         <FormLabel>Product Image (Optional)</FormLabel>
-                                        <FormControl><Input name="imageUrl" type="file" accept="image/*" onChange={handleImageChange} /></FormControl>
-                                        {product?.imageUrl && <input type="hidden" name="existingImageUrl" value={product.imageUrl} />}
+                                        <FormControl>
+                                            <Input 
+                                                name="imageUrl" 
+                                                type="file" 
+                                                accept="image/*" 
+                                                onChange={handleImageChange} 
+                                            />
+                                        </FormControl>
                                         <FormDescription>Recommended format: 16:9 aspect ratio.</FormDescription>
                                         {imagePreview && (
                                             <div className="mt-2 w-48 h-32 relative">
@@ -272,12 +270,12 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                         </div>
                     </div>
             </TabsContent>
-            </form>
-            </Form>
             
             <TabsContent value="appearances" className="mt-6">
                 {brand && <BrandAppearancesForm brand={brand} />}
             </TabsContent>
+            </form>
+            </Form>
         </Tabs>
     </div>
   );
