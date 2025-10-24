@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { z } from 'zod';
@@ -138,9 +137,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   return (
     <div className="space-y-6">
         <Form {...form}>
-        <form action={formAction}>
-            {product?.id && <input type="hidden" name="id" value={product.id} />}
-             {product?.imageUrl && <input type="hidden" name="existingImageUrl" value={product.imageUrl} />}
+            <form action={formAction} className="space-y-6">
             <div className="flex items-center justify-between">
                 <div>
                     <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
@@ -177,7 +174,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                         <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input placeholder="e.g., Margherita Pizza" {...field} /></FormControl><FormMessage /></FormItem>
                                     )} />
                                     <FormField control={form.control} name="description" render={({ field }) => (
-                                        <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description for the product." {...field} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description for the product." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                                     )}/>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <FormField control={form.control} name="categoryId" render={({ field }) => (
@@ -191,12 +188,12 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                             </FormItem>
                                         )} />
                                         <FormField control={form.control} name="price" render={({ field }) => (
-                                            <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
+                                            <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                                         )} />
                                     </div>
                                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                         <FormField control={form.control} name="priceDelivery" render={({ field }) => (
-                                            <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
+                                            <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                                         )} />
                                     </div>
                                     <FormItem>
@@ -270,13 +267,14 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                         </div>
                     </div>
             </TabsContent>
-            
-            <TabsContent value="appearances" className="mt-6">
-                {brand && <BrandAppearancesForm brand={brand} />}
-            </TabsContent>
             </form>
             </Form>
+            
+            <TabsContent value="appearances" className="mt-6">
+                {isEditing && brand && <BrandAppearancesForm brand={brand} />}
+            </TabsContent>
         </Tabs>
     </div>
   );
 }
+
