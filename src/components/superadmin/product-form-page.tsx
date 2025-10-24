@@ -50,7 +50,6 @@ type ProductFormValues = z.infer<typeof productSchema>;
 
 interface ProductFormPageProps {
   product?: Product;
-  brand?: Brand;
   brands: Brand[];
   locations: Location[];
   categories: Category[];
@@ -73,7 +72,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   const [state, formAction] = useActionState(createOrUpdateProduct, null);
   
   const [imagePreview, setImagePreview] = useState<string | null>(product?.imageUrl || null);
-
+  
   const brand = useMemo(() => {
     if (product) {
       return brands.find(b => b.id === product.brandId);
@@ -164,7 +163,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
             </TabsList>
             
             <Form {...form}>
-            <form action={formAction} encType="multipart/form-data" className="space-y-6">
+            <form action={formAction} className="space-y-6">
             <TabsContent value="details" className="mt-6">
                 <div className="flex justify-end mb-6">
                     <SubmitButton isEditing={isEditing} />
@@ -177,8 +176,13 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     <FormField control={form.control} name="brandId" render={({ field }) => (
                                         <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value} disabled={isEditing}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{brands.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}</SelectContent></Select>{isEditing && <FormDescription>Product's brand cannot be changed after creation.</FormDescription>}<FormMessage /></FormItem>
                                     )}/>
+                                    
                                     <FormField control={form.control} name="productName" render={({ field }) => (
-                                        <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input placeholder="e.g., Margherita Pizza" {...field} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input placeholder="e.g., Margherita Pizza" {...field} onChange={(e) => {
+                                        field.onChange(e);
+                                        const slug = e.target.value.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
+                                        // You might want to set a slug field if it exists in your schema
+                                        }} /></FormControl><FormMessage /></FormItem>
                                     )} />
                                     <FormField control={form.control} name="description" render={({ field }) => (
                                         <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description for the product." {...field} value={field.value || ''} /></FormControl><FormMessage /></FormItem>
@@ -206,6 +210,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     <FormItem>
                                         <FormLabel>Product Image (Optional)</FormLabel>
                                         <FormControl><Input name="imageUrl" type="file" accept="image/*" onChange={handleImageChange} /></FormControl>
+                                        {product?.imageUrl && <input type="hidden" name="existingImageUrl" value={product.imageUrl} />}
                                         <FormDescription>Recommended format: 16:9 aspect ratio.</FormDescription>
                                         {imagePreview && (
                                             <div className="mt-2 w-48 h-32 relative">
