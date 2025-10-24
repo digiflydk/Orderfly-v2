@@ -25,7 +25,7 @@ const productSchema = z.object({
   isPopular: z.boolean().default(false),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
-  imageUrl: z.any().optional(),
+  imageUrl: z.string().url().optional().nullable(),
 });
 
 export type FormState = {
@@ -85,7 +85,7 @@ export async function createOrUpdateProduct(
     }
   } catch (e: any) {
     console.error("Failed to upload image:", e);
-    return { message: "Image upload failed. Please try again.", error: true };
+    return { message: `Image upload failed: ${e.message}. Please try again.`, error: true };
   }
 
   const validatedFields = productSchema.safeParse({ ...rawData, imageUrl: finalImageUrl });
