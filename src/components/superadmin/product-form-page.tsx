@@ -15,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Product, Brand, Location, Category, ToppingGroup, Allergen } from '@/types';
-import { createOrUpdateProduct, type FormState } from '@/app/superadmin/products/actions';
+import { createOrUpdateProduct } from '@/app/superadmin/products/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
@@ -23,7 +23,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Switch } from '../ui/switch';
 import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { BrandAppearancesForm } from './brand-appearances-form';
 
 const productSchema = z.object({
@@ -41,7 +40,6 @@ const productSchema = z.object({
   isPopular: z.boolean().default(false),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
-  imageUrl: z.any().optional(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -74,17 +72,26 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
-    defaultValues: isEditing ? {
-        ...product,
-        imageUrl: undefined, // Handled separately by file input
-    } : {
-      brandId: '', categoryId: '', productName: '', description: '', price: undefined, priceDelivery: undefined, isActive: true,
-      isFeatured: false, isNew: false, isPopular: false, locationIds: [], allergenIds: [], toppingGroupIds: [], imageUrl: undefined,
+    defaultValues: {
+        id: product?.id || '',
+        brandId: product?.brandId || '',
+        categoryId: product?.categoryId || '',
+        productName: product?.productName || '',
+        description: product?.description || '',
+        price: product?.price ?? "" as unknown as number,
+        priceDelivery: product?.priceDelivery ?? "" as unknown as number,
+        isActive: product?.isActive ?? false,
+        isFeatured: product?.isFeatured ?? false,
+        isNew: product?.isNew ?? false,
+        isPopular: product?.isPopular ?? false,
+        locationIds: product?.locationIds || [],
+        allergenIds: product?.allergenIds || [],
+        toppingGroupIds: product?.toppingGroupIds || [],
     },
   });
     
   const selectedBrandId = form.watch('brandId');
-  const watchedImageUrl = form.watch('imageUrl');
+  const imageUrl = form.watch('imageUrl');
 
   const { brandLocations, brandCategories, brandToppingGroups } = useMemo(() => {
     if (!selectedBrandId) {
@@ -121,7 +128,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   };
   
   const title = isEditing ? 'Edit Product' : 'Create New Product';
-  const description = isEditing ? `Editing details for ${product.productName || 'product...'}.` : 'Fill in the details for the new product.';
+  const description = isEditing ? `Editing details for ${product?.productName || 'product...'}.` : 'Fill in the details for the new product.';
   
   useEffect(() => {
     if(state?.message) {
@@ -156,25 +163,25 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                             <CardHeader><CardTitle>Core Details</CardTitle><CardDescription>Public-facing product information.</CardDescription></CardHeader>
                             <CardContent className="space-y-4">
                                 <FormField control={form.control} name="brandId" render={({ field }) => (
-                                    <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value} disabled={isEditing}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{brands.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}</SelectContent></Select>{isEditing && <FormDescription>Product's brand cannot be changed after creation.</FormDescription>}<FormMessage /></FormItem>
+                                    <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value ?? ''} defaultValue={field.value} disabled={isEditing}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{brands.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}</SelectContent></Select>{isEditing && <FormDescription>Product's brand cannot be changed after creation.</FormDescription>}<FormMessage /></FormItem>
                                 )}/>
                                 <FormField control={form.control} name="productName" render={({ field }) => (
-                                    <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input placeholder="e.g., Margherita Pizza" {...field} /></FormControl><FormMessage /></FormItem>
+                                    <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input placeholder="e.g., Margherita Pizza" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
                                 )} />
                                 <FormField control={form.control} name="description" render={({ field }) => (
-                                    <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description." {...field} /></FormControl><FormMessage /></FormItem>
+                                    <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description." {...field} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>
                                 )} />
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField control={form.control} name="categoryId" render={({ field }) => (
-                                        <FormItem><FormLabel>Category</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value} disabled={!selectedBrandId}><FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl><SelectContent>{brandCategories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.categoryName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
+                                        <FormItem><FormLabel>Category</FormLabel><Select onValueChange={field.onChange} value={field.value ?? ''} defaultValue={field.value} disabled={!selectedBrandId}><FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl><SelectContent>{brandCategories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.categoryName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
                                     )} />
                                     <FormField control={form.control} name="price" render={({ field }) => (
-                                        <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? "" : Number(e.target.value))}/></FormControl><FormMessage /></FormItem>
                                     )} />
                                 </div>
                                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <FormField control={form.control} name="priceDelivery" render={({ field }) => (
-                                        <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                                        <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? "" : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
                                     )} />
                                 </div>
                                 <FormItem>
@@ -204,21 +211,21 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     <FormItem>
                                         <FormLabel>Available at Locations</FormLabel>
                                         <FormDescription>Select locations where this product is sold. If none selected, it's available at all brand locations.</FormDescription>
-                                        <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandLocations.map((item) => (<FormField key={item.id} control={form.control} name="locationIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {return checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id))}}/></FormControl><FormLabel className="font-normal">{item.name}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
+                                        <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandLocations.map((item) => (<FormField key={item.id} control={form.control} name="locationIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={!!field.value?.includes(item.id)} onCheckedChange={(checked) => {return checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id))}}/></FormControl><FormLabel className="font-normal">{item.name}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
                                         <FormMessage />
                                     </FormItem>
                                 )}/>
                                 <FormField control={form.control} name="allergenIds" render={() => (
                                     <FormItem>
                                         <FormLabel>Allergens</FormLabel>
-                                        <ScrollArea className="h-40 rounded-md border"><div className="p-4">{allergens.filter(a => a.isActive).map((item) => (<FormField key={item.id} control={form.control} name="allergenIds" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl><FormLabel className="font-normal">{item.allergenName}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
+                                        <ScrollArea className="h-40 rounded-md border"><div className="p-4">{allergens.filter(a => a.isActive).map((item) => (<FormField key={item.id} control={form.control} name="allergenIds" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={!!field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl><FormLabel className="font-normal">{item.allergenName}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
                                         <FormMessage />
                                     </FormItem>
                                 )}/>
                                 <FormField control={form.control} name="toppingGroupIds" render={() => (
                                     <FormItem>
                                         <FormLabel>Topping Groups</FormLabel>
-                                        <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandToppingGroups.map((item) => (<FormField key={item.id} control={form.control} name="toppingGroupIds" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl><FormLabel className="font-normal">{item.groupName}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
+                                        <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandToppingGroups.map((item) => (<FormField key={item.id} control={form.control} name="toppingGroupIds" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={!!field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl><FormLabel className="font-normal">{item.groupName}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
                                         <FormMessage />
                                     </FormItem>
                                 )}/>
@@ -230,16 +237,16 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                             <CardHeader><CardTitle>Configuration</CardTitle></CardHeader>
                             <CardContent className="space-y-4">
                                 <FormField control={form.control} name="isActive" render={({ field }) => (
-                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Active</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
+                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Active</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
                                 )}/>
                                 <FormField control={form.control} name="isFeatured" render={({ field }) => (
-                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Featured</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isNew', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
+                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Featured</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isNew', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
                                 )}/>
                                 <FormField control={form.control} name="isNew" render={({ field }) => (
-                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>New Product</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
+                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>New Product</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
                                 )}/>
                                 <FormField control={form.control} name="isPopular" render={({ field }) => (
-                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Popular Product</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isNew', false); } }} /></FormControl></FormItem>
+                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Popular Product</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isNew', false); } }} /></FormControl></FormItem>
                                 )}/>
                             </CardContent>
                         </Card>
@@ -252,23 +259,24 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                 <input type="hidden" name="categoryId" value={form.watch('categoryId') ?? ''} />
                 <input type="hidden" name="productName" value={form.watch('productName') ?? ''} />
                 <input type="hidden" name="description" value={form.watch('description') ?? ''} />
-                <input type="hidden" name="price" value={form.watch('price')?.toString() ?? ''} />
-                <input type="hidden" name="priceDelivery" value={form.watch('priceDelivery')?.toString() ?? ''} />
+                <input type="hidden" name="price" value={(form.watch('price') ?? '').toString()} />
+                <input type="hidden" name="priceDelivery" value={(form.watch('priceDelivery') ?? '').toString()} />
 
-                <input type="hidden" name="isActive" value={form.watch('isActive') ? 'on' : 'off'} />
-                <input type="hidden" name="isFeatured" value={form.watch('isFeatured') ? 'on' : 'off'} />
-                <input type="hidden" name="isNew" value={form.watch('isNew') ? 'on' : 'off'} />
-                <input type="hidden" name="isPopular" value={form.watch('isPopular') ? 'on' : 'off'} />
+                <input type="hidden" name="isActive" value={form.watch('isActive') ? '1' : '0'} />
+                <input type="hidden" name="isFeatured" value={form.watch('isFeatured') ? '1' : '0'} />
+                <input type="hidden" name="isNew" value={form.watch('isNew') ? '1' : '0'} />
+                <input type="hidden" name="isPopular" value={form.watch('isPopular') ? '1' : '0'} />
 
                 {(form.watch('locationIds') ?? []).map((id) => (
-                    <input key={`loc-${id}`} type="hidden" name="locationIds" value={id} />
+                <input key={`loc-${id}`} type="hidden" name="locationIds" value={id} />
                 ))}
                 {(form.watch('allergenIds') ?? []).map((id) => (
-                    <input key={`alg-${id}`} type="hidden" name="allergenIds" value={id} />
+                <input key={`alg-${id}`} type="hidden" name="allergenIds" value={id} />
                 ))}
                 {(form.watch('toppingGroupIds') ?? []).map((id) => (
-                    <input key={`tg-${id}`} type="hidden" name="toppingGroupIds" value={id} />
+                <input key={`tg-${id}`} type="hidden" name="toppingGroupIds" value={id} />
                 ))}
+
             </form>
         </Form>
     </div>
