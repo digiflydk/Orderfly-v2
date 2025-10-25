@@ -135,100 +135,68 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
 
   return (
     <div className="space-y-6">
-        <div className="flex items-center justify-between">
-            <div>
-                <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-                <p className="text-muted-foreground">{description}</p>
-            </div>
-            <div className="flex gap-2">
-                <Button variant="outline" asChild>
-                    <Link href="/superadmin/products">Cancel</Link>
-                </Button>
-                {/* Submit button moved inside the form */}
-            </div>
-        </div>
-
         <Form {...form}>
             <form action={formAction} className="space-y-6">
-                <Tabs defaultValue="details">
-                    <TabsList>
-                        <TabsTrigger value="details">Details</TabsTrigger>
-                        <TabsTrigger value="inventory">Inventory & Associations</TabsTrigger>
-                        <TabsTrigger value="appearances" disabled={!isEditing}>Appearances</TabsTrigger>
-                    </TabsList>
-                    
-                    <TabsContent value="details" className="mt-6">
-                        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                            <div className="lg:col-span-2 space-y-6">
-                                <Card>
-                                    <CardHeader><CardTitle>Core Details</CardTitle><CardDescription>Public-facing product information.</CardDescription></CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <FormField control={form.control} name="brandId" render={({ field }) => (
-                                            <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value} disabled={isEditing}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{brands.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}</SelectContent></Select>{isEditing && <FormDescription>Product's brand cannot be changed after creation.</FormDescription>}<FormMessage /></FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="productName" render={({ field }) => (
-                                            <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input placeholder="e.g., Margherita Pizza" {...field} /></FormControl><FormMessage /></FormItem>
-                                        )} />
-                                        <FormField control={form.control} name="description" render={({ field }) => (
-                                            <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description." {...field} /></FormControl><FormMessage /></FormItem>
-                                        )} />
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <FormField control={form.control} name="categoryId" render={({ field }) => (
-                                                <FormItem><FormLabel>Category</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value} disabled={!selectedBrandId}><FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl><SelectContent>{brandCategories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.categoryName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
-                                            )} />
-                                            <FormField control={form.control} name="price" render={({ field }) => (
-                                                <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
-                                            )} />
-                                        </div>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                            <FormField control={form.control} name="priceDelivery" render={({ field }) => (
-                                                <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
-                                            )} />
-                                        </div>
-                                        <FormItem>
-                                            <FormLabel>Product Image</FormLabel>
-                                            <FormControl>
-                                                <Input 
-                                                    name="imageUrl" 
-                                                    type="file" 
-                                                    accept="image/*" 
-                                                    onChange={handleImageChange} 
-                                                />
-                                            </FormControl>
-                                            {imagePreview && (
-                                                <div className="mt-2 w-48 h-32 relative">
-                                                    <Image src={imagePreview} alt="Product Preview" fill sizes="192px" className="object-cover rounded-md border" data-ai-hint="delicious food" />
-                                                </div>
-                                            )}
-                                            <input type="hidden" name="existingImageUrl" value={product?.imageUrl || ''} />
-                                            <FormMessage />
-                                        </FormItem>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                            <div className="space-y-6">
-                                <Card>
-                                    <CardHeader><CardTitle>Configuration</CardTitle></CardHeader>
-                                    <CardContent className="space-y-4">
-                                        <FormField control={form.control} name="isActive" render={({ field }) => (
-                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Active</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="isFeatured" render={({ field }) => (
-                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Featured</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isNew', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="isNew" render={({ field }) => (
-                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>New Product</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
-                                        )}/>
-                                        <FormField control={form.control} name="isPopular" render={({ field }) => (
-                                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Popular Product</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isNew', false); } }} /></FormControl></FormItem>
-                                        )}/>
-                                    </CardContent>
-                                </Card>
-                            </div>
-                        </div>
-                    </TabsContent>
+                <div className="flex items-center justify-between">
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+                        <p className="text-muted-foreground">{description}</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" asChild>
+                            <Link href="/superadmin/products">Cancel</Link>
+                        </Button>
+                        <SubmitButton isEditing={isEditing} />
+                    </div>
+                </div>
 
-                    <TabsContent value="inventory" className="mt-6">
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div className="lg:col-span-2 space-y-6">
+                        <Card>
+                            <CardHeader><CardTitle>Core Details</CardTitle><CardDescription>Public-facing product information.</CardDescription></CardHeader>
+                            <CardContent className="space-y-4">
+                                <FormField control={form.control} name="brandId" render={({ field }) => (
+                                    <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value} disabled={isEditing}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{brands.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}</SelectContent></Select>{isEditing && <FormDescription>Product's brand cannot be changed after creation.</FormDescription>}<FormMessage /></FormItem>
+                                )}/>
+                                <FormField control={form.control} name="productName" render={({ field }) => (
+                                    <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input placeholder="e.g., Margherita Pizza" {...field} /></FormControl><FormMessage /></FormItem>
+                                )} />
+                                <FormField control={form.control} name="description" render={({ field }) => (
+                                    <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description." {...field} /></FormControl><FormMessage /></FormItem>
+                                )} />
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <FormField control={form.control} name="categoryId" render={({ field }) => (
+                                        <FormItem><FormLabel>Category</FormLabel><Select onValueChange={field.onChange} value={field.value} defaultValue={field.value} disabled={!selectedBrandId}><FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl><SelectContent>{brandCategories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.categoryName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
+                                    )} />
+                                    <FormField control={form.control} name="price" render={({ field }) => (
+                                        <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <FormField control={form.control} name="priceDelivery" render={({ field }) => (
+                                        <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>
+                                    )} />
+                                </div>
+                                <FormItem>
+                                    <FormLabel>Product Image</FormLabel>
+                                    <FormControl>
+                                        <Input 
+                                            name="imageUrl" 
+                                            type="file" 
+                                            accept="image/*" 
+                                            onChange={handleImageChange} 
+                                        />
+                                    </FormControl>
+                                    {imagePreview && (
+                                        <div className="mt-2 w-48 h-32 relative">
+                                            <Image src={imagePreview} alt="Product Preview" fill sizes="192px" className="object-cover rounded-md border" data-ai-hint="delicious food"/>
+                                        </div>
+                                    )}
+                                    <input type="hidden" name="existingImageUrl" value={product?.imageUrl || ''} />
+                                    <FormMessage />
+                                </FormItem>
+                            </CardContent>
+                        </Card>
                         <Card>
                             <CardHeader><CardTitle>Associations</CardTitle><CardDescription>Link this product to locations, allergens, and toppings.</CardDescription></CardHeader>
                             <CardContent className="space-y-6">
@@ -256,40 +224,51 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                 )}/>
                             </CardContent>
                         </Card>
-                    </TabsContent>
-                    
-                    <TabsContent value="appearances" className="mt-6">
-                        {isEditing && product && <BrandAppearancesForm brand={product} />}
-                    </TabsContent>
-                
-                    {/* Hidden serialization so the Server Action receives complete FormData */}
-                    <input type="hidden" name="id" value={form.watch('id') ?? ''} />
-                    <input type="hidden" name="brandId" value={form.watch('brandId') ?? ''} />
-                    <input type="hidden" name="categoryId" value={form.watch('categoryId') ?? ''} />
-                    <input type="hidden" name="productName" value={form.watch('productName') ?? ''} />
-                    <input type="hidden" name="description" value={form.watch('description') ?? ''} />
-                    <input type="hidden" name="price" value={form.watch('price')?.toString() ?? ''} />
-                    <input type="hidden" name="priceDelivery" value={form.watch('priceDelivery')?.toString() ?? ''} />
-                    
-                    <input type="hidden" name="isActive" value={form.watch('isActive') ? 'on' : 'off'} />
-                    <input type="hidden" name="isFeatured" value={form.watch('isFeatured') ? 'on' : 'off'} />
-                    <input type="hidden" name="isNew" value={form.watch('isNew') ? 'on' : 'off'} />
-                    <input type="hidden" name="isPopular" value={form.watch('isPopular') ? 'on' : 'off'} />
-                    
-                    {(form.watch('locationIds') ?? []).map((id) => (
-                      <input key={`loc-${id}`} type="hidden" name="locationIds" value={id} />
-                    ))}
-                    {(form.watch('allergenIds') ?? []).map((id) => (
-                      <input key={`alg-${id}`} type="hidden" name="allergenIds" value={id} />
-                    ))}
-                    {(form.watch('toppingGroupIds') ?? []).map((id) => (
-                      <input key={`tg-${id}`} type="hidden" name="toppingGroupIds" value={id} />
-                    ))}
-                
-                    <div className="flex justify-end mt-6">
-                        <SubmitButton isEditing={isEditing} />
                     </div>
-                </Tabs>
+                    <div className="space-y-6">
+                        <Card>
+                            <CardHeader><CardTitle>Configuration</CardTitle></CardHeader>
+                            <CardContent className="space-y-4">
+                                <FormField control={form.control} name="isActive" render={({ field }) => (
+                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Active</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
+                                )}/>
+                                <FormField control={form.control} name="isFeatured" render={({ field }) => (
+                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Featured</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isNew', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
+                                )}/>
+                                <FormField control={form.control} name="isNew" render={({ field }) => (
+                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>New Product</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
+                                )}/>
+                                <FormField control={form.control} name="isPopular" render={({ field }) => (
+                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Popular Product</FormLabel></div><FormControl><Switch checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isNew', false); } }} /></FormControl></FormItem>
+                                )}/>
+                            </CardContent>
+                        </Card>
+                    </div>
+                </div>
+
+                {/* --- Hidden serialization so Server Action gets ALL values --- */}
+                <input type="hidden" name="id" value={form.watch('id') ?? ''} />
+                <input type="hidden" name="brandId" value={form.watch('brandId') ?? ''} />
+                <input type="hidden" name="categoryId" value={form.watch('categoryId') ?? ''} />
+                <input type="hidden" name="productName" value={form.watch('productName') ?? ''} />
+                <input type="hidden" name="description" value={form.watch('description') ?? ''} />
+                <input type="hidden" name="price" value={form.watch('price')?.toString() ?? ''} />
+                <input type="hidden" name="priceDelivery" value={form.watch('priceDelivery')?.toString() ?? ''} />
+
+                <input type="hidden" name="isActive" value={form.watch('isActive') ? 'on' : 'off'} />
+                <input type="hidden" name="isFeatured" value={form.watch('isFeatured') ? 'on' : 'off'} />
+                <input type="hidden" name="isNew" value={form.watch('isNew') ? 'on' : 'off'} />
+                <input type="hidden" name="isPopular" value={form.watch('isPopular') ? 'on' : 'off'} />
+
+                {(form.watch('locationIds') ?? []).map((id) => (
+                    <input key={`loc-${id}`} type="hidden" name="locationIds" value={id} />
+                ))}
+                {(form.watch('allergenIds') ?? []).map((id) => (
+                    <input key={`alg-${id}`} type="hidden" name="allergenIds" value={id} />
+                ))}
+                {(form.watch('toppingGroupIds') ?? []).map((id) => (
+                    <input key={`tg-${id}`} type="hidden" name="toppingGroupIds" value={id} />
+                ))}
             </form>
         </Form>
     </div>
