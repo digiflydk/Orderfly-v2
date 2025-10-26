@@ -1,12 +1,14 @@
 
 'use server';
 
+import 'server-only';
+
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { put } from '@vercel/blob';
-import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
-import type { Product } from '@/types';
+import { getAdminDb } from '@/lib/firebase-admin';
+import type { Product, ProductForMenu } from '@/types';
 
 const asBool = (v: unknown) => {
   if (v === true || v === false) return v;
@@ -133,7 +135,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
 
       if (id) {
         await db.collection('products').doc(id).update({
-          ...toWrite,
+          ...toWrite,         // (OF-460) contains only defined fields on update
           updatedAt: now,
         });
         revalidatePath('/superadmin/products');
@@ -141,7 +143,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       } else {
         const payload = {
           ...toWrite,
-          isActive: (toWrite as any).isActive ?? false,
+          isActive: (toWrite as any).isActive ?? false, // explicit default on create
           createdAt: now,
           updatedAt: now,
         };
@@ -201,37 +203,6 @@ export async function updateProductSortOrder(orderedProducts: {id: string, sortO
     }
 }
 
-// New lightweight product type for menu display
-export type ProductForMenu = Pick<Product, 
-    'id' | 'productName' | 'description' | 'price' | 'priceDelivery' | 
-    'imageUrl' | 'isFeatured' | 'isNew' | 'isPopular' | 'allergenIds' | 
-    'toppingGroupIds' | 'categoryId' | 'brandId' | 'sortOrder'
->;
-
-export async function getProductsForLocation(locationId: string, brandId: string): Promise<ProductForMenu[]> {
-    if (!locationId || !brandId) return [];
-    const db = getAdminDb();
-    const q = db.collection('products').where('brandId', '==', brandId).where('isActive', '==', true);
-    const querySnapshot = await q.get();
-
-    const allProducts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
-
-    const locationProducts = allProducts.filter(p => {
-        return !p.locationIds || p.locationIds.length === 0 || p.locationIds.includes(locationId);
-    });
-
-    const sortedProducts = locationProducts.sort((a,b) => (a.sortOrder || 999) - (b.sortOrder || 999));
-
-    const finalProducts = sortedProducts.map(p => ({
-        id: p.id, productName: p.productName, description: p.description, price: p.price, priceDelivery: p.priceDelivery,
-        imageUrl: p.imageUrl, isFeatured: p.isFeatured, isNew: p.isNew, isPopular: p.isPopular, allergenIds: p.allergenIds,
-        toppingGroupIds: p.toppingGroupIds, categoryId: p.categoryId, brandId: p.brandId, sortOrder: p.sortOrder,
-    }));
-    
-    return finalProducts;
-}
-
-
 export async function getProducts(): Promise<Product[]> {
     const db = getAdminDb();
     const q = db.collection('products').orderBy('sortOrder', 'asc');
@@ -252,10 +223,11 @@ export async function getProductById(productId: string): Promise<Product | null>
 export async function getProductsByIds(productIds: string[], brandId?: string): Promise<ProductForMenu[]> {
     if (!productIds || productIds.length === 0) return [];
     const db = getAdminDb();
+    
     const productPromises: Promise<Product[]>[] = [];
     for (let i = 0; i < productIds.length; i += 30) {
         const chunk = productIds.slice(i, i + 30);
-        let q = db.collection('products').where(admin.firestore.FieldPath.documentId(), 'in', chunk);
+        let q: admin.firestore.Query = db.collection('products').where(admin.firestore.FieldPath.documentId(), 'in', chunk);
         if (brandId) {
             q = q.where('brandId', '==', brandId);
         }
@@ -266,7 +238,7 @@ export async function getProductsByIds(productIds: string[], brandId?: string): 
     const productArrays = await Promise.all(productPromises);
     const allProducts = productArrays.flat();
 
-    const finalProducts = allProducts.map(p => ({
+    const finalProducts: ProductForMenu[] = allProducts.map(p => ({
         id: p.id,
         productName: p.productName,
         description: p.description,
@@ -282,6 +254,20 @@ export async function getProductsByIds(productIds: string[], brandId?: string): 
         brandId: p.brandId,
         sortOrder: p.sortOrder,
     }));
+    
+    if (process.env.NODE_ENV === 'development') {
+      console.log(
+        '[DEBUG] getProductsByIds:',
+        finalProducts.map((p) => ({
+          id: p.id,
+          productName: p.productName,
+          price: p.price,
+          toppingGroups: p.toppingGroupIds?.length,
+          imageSize: p.imageUrl?.length,
+          fullSize: JSON.stringify(p).length
+        }))
+      );
+    }
     
     return finalProducts;
 }

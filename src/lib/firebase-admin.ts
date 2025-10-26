@@ -14,10 +14,17 @@ function getServiceAccount(): admin.ServiceAccount {
     throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set.');
   }
   try {
-    const parsed = JSON.parse(raw);
+    let parsed: any;
+    // Attempt to parse as JSON, if it fails, assume it's base64 encoded
+    try {
+        parsed = JSON.parse(raw);
+    } catch (e) {
+        parsed = JSON.parse(Buffer.from(raw, 'base64').toString('utf8'));
+    }
+    
     const required = ['project_id', 'client_email', 'private_key'];
     for (const k of required) {
-      if (!parsed[k]) throw new Error(`Missing field in service account: ${k}`);
+      if (!parsed[k]) throw new Error(`Missing field in service account JSON: ${k}`);
     }
     // Some providers strip \n; fix if needed
     if (typeof parsed.private_key === 'string') {
@@ -34,13 +41,18 @@ function getServiceAccount(): admin.ServiceAccount {
 }
 
 if (!admin.apps.length) {
+  // Defensive check to ensure ADC is not being used by mistake.
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.warn("WARNING: GOOGLE_APPLICATION_CREDENTIALS is set. This configuration is not recommended. Unset it to rely solely on FIREBASE_SERVICE_ACCOUNT_JSON.");
+  }
+  
   try {
     const serviceAccount = getServiceAccount();
     admin.initializeApp({
       credential: admin.credential.cert(serviceAccount),
     });
   } catch(e) {
-    console.error("FIREBASE ADMIN SDK INIT FAILED:", (e as Error).message);
+    console.error("CRITICAL: FIREBASE ADMIN SDK INIT FAILED:", (e as Error).message);
     // In a non-production environment, we can allow the app to continue running
     // with a dummy client to avoid crashing the whole server on startup.
     if (!isProdLike()) {
@@ -59,6 +71,8 @@ export const getAdminDb = (): admin.firestore.Firestore => {
         return {
             collection: () => { throw new Error('Firebase Admin not initialized.')},
             doc: () => { throw new Error('Firebase Admin not initialized.')},
+            batch: () => { throw new Error('Firebase Admin not initialized.') },
+            runTransaction: () => { throw new Error('Firebase Admin not initialized.') },
         } as unknown as admin.firestore.Firestore;
     }
     return admin.firestore();
@@ -84,7 +98,8 @@ export async function adminHealthProbe() {
     return { ok: false, error: "Firebase Admin not initialized.", code: "SDK_NOT_INITIALIZED" };
   }
   try {
-    await getAdminDb().listCollections();
+    // A simple, quick read operation to test connectivity and permissions
+    await getAdminDb().collection('__health_check__').limit(1).get();
     return { ok: true, ts: Date.now() };
   } catch (e: any) {
     return { ok: false, error: e.message, code: e.code };

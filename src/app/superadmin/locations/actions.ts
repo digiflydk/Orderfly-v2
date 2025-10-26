@@ -3,8 +3,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, doc, setDoc, deleteDoc, orderBy, getDoc, limit } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, getDoc, limit, writeBatch } from 'firebase/firestore';
 import type { Location, Brand, TimeSlotResponse } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
@@ -114,15 +114,15 @@ export async function createOrUpdateLocation(
   const address = `${locationData.street}, ${locationData.zipCode} ${locationData.city}, ${locationData.country}`;
 
   try {
-    const locationRef = id ? doc(db, 'locations', id) : doc(collection(db, 'locations'));
+    const db = getAdminDb();
+    const locationRef = id ? db.collection('locations').doc(id) : db.collection('locations').doc();
     const finalData: any = { ...locationData, address, id: locationRef.id };
     
-    // Ensure undefined is not sent to Firestore if it's optional and not set
     if (finalData.manual_override === undefined) {
         delete finalData.manual_override;
     }
 
-    await setDoc(locationRef, finalData, { merge: true });
+    await locationRef.set(finalData, { merge: true });
 
   } catch (e) {
     console.error(e);
@@ -136,7 +136,8 @@ export async function createOrUpdateLocation(
 
 export async function deleteLocation(locationId: string, brandId: string) {
     try {
-        await deleteDoc(doc(db, "locations", locationId));
+        const db = getAdminDb();
+        await db.collection("locations").doc(locationId).delete();
         revalidatePath(`/superadmin/locations`);
         revalidatePath(`/superadmin/locations/${brandId}`);
         return { message: "Location deleted successfully.", error: false };
@@ -148,12 +149,9 @@ export async function deleteLocation(locationId: string, brandId: string) {
 }
 
 export async function getActiveLocationBySlug(brandId: string, locationSlug: string): Promise<Location | null> {
-    const q = query(
-        collection(db, 'locations'),
-        where('brandId', '==', brandId),
-        where('isActive', '==', true),
-    );
-    const querySnapshot = await getDocs(q);
+    const db = getAdminDb();
+    const q = db.collection('locations').where('brandId', '==', brandId).where('isActive', '==', true);
+    const querySnapshot = await q.get();
     if (querySnapshot.empty) {
         return null;
     }
@@ -168,11 +166,9 @@ export async function getActiveLocationBySlug(brandId: string, locationSlug: str
 }
 
 export async function getLocationBySlug(brandId: string, locationSlug: string): Promise<Location | null> {
-    const q = query(
-        collection(db, 'locations'),
-        where('brandId', '==', brandId)
-    );
-    const querySnapshot = await getDocs(q);
+    const db = getAdminDb();
+    const q = db.collection('locations').where('brandId', '==', brandId);
+    const querySnapshot = await q.get();
     if (querySnapshot.empty) {
         return null;
     }
@@ -190,19 +186,20 @@ export async function getLocationBySlug(brandId: string, locationSlug: string): 
 }
 
 export async function getLocationsForBrand(brandId: string): Promise<Location[]> {
-    const q = query(collection(db, 'locations'), where('brandId', '==', brandId));
-    const querySnapshot = await getDocs(q);
+    const db = getAdminDb();
+    const q = db.collection('locations').where('brandId', '==', brandId);
+    const querySnapshot = await q.get();
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Location[];
 }
 
 export async function getAllLocations(brandId?: string): Promise<Location[]> {
-    let q;
+    const db = getAdminDb();
+    let q: admin.firestore.Query = db.collection('locations');
     if (brandId) {
-        q = query(collection(db, 'locations'), where('brandId', '==', brandId), orderBy('name'));
-    } else {
-        q = query(collection(db, 'locations'), orderBy('name'));
+        q = q.where('brandId', '==', brandId);
     }
-    const querySnapshot = await getDocs(q);
+    q = q.orderBy('name');
+    const querySnapshot = await q.get();
     const locations = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Location[];
     
     return locations.map(location => ({
@@ -212,11 +209,11 @@ export async function getAllLocations(brandId?: string): Promise<Location[]> {
     }));
 }
 
-
 export async function getLocationById(locationId: string): Promise<Location | null> {
-    const docRef = doc(db, 'locations', locationId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
+    const db = getAdminDb();
+    const docRef = db.collection('locations').doc(locationId);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
         const data = docSnap.data();
         return { id: docSnap.id, ...data } as Location;
     }
@@ -268,7 +265,7 @@ export async function getTimeSlots(locationId: string, forDateStr?: string): Pro
     
     let effectivePrep = (location.manual_override ?? 0) > 0 
       ? (location.manual_override ?? 0)
-      : (location.prep_time ?? 0); // Ensure prep_time has a fallback
+      : (location.prep_time ?? 0);
 
     if (!location.manual_override || location.manual_override === 0) {
         if (location.travlhed_factor === 'medium') effectivePrep += 10;
@@ -348,5 +345,3 @@ export async function getTimeSlots(locationId: string, forDateStr?: string): Pro
 
     return { tidsinterval, pickup_times, delivery_times, asap_pickup, asap_delivery };
 }
-
-    
