@@ -1,8 +1,3 @@
-
 import { redirect } from "next/navigation";
-
 export const runtime = "nodejs";
-
-export default function RootRedirect() {
-  redirect("/m3");
-}
+export default function Root() { redirect("/m3"); }
