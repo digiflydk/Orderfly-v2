@@ -44,10 +44,10 @@ const productSchema = z.object({
   description: z.string().optional(),
   price: z.coerce.number().min(0, 'Price must be a non-negative number.'),
   priceDelivery: z.coerce.number().min(0, 'Delivery price must be a non-negative number.').optional(),
-  isActive: z.boolean().default(false),
-  isFeatured: z.boolean().default(false),
-  isNew: z.boolean().default(false),
-  isPopular: z.boolean().default(false),
+  isActive: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
+  isFeatured: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
+  isNew: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
+  isPopular: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
   imageUrl: z.any().optional(),
@@ -243,29 +243,28 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                         <CardDescription>Control where and how this product appears.</CardDescription>
                     </CardHeader>
                      <CardContent className="space-y-4">
-                        <FormField control={form.control} name="locationIds" render={() => (
+                        <FormField control={form.control} name="locationIds" render={({ field }) => (
                             <FormItem>
                                 <FormLabel>Available at Locations</FormLabel>
                                 <FormDescription>If no locations are selected, the product will be available at all brand locations.</FormDescription>
                                 <ScrollArea className="h-40 rounded-md border">
                                     <div className="p-4">
                                     {brandLocations.map((item) => (
-                                        <FormField key={item.id} control={form.control} name="locationIds" render={({ field }) => (
-                                          <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
-                                              <Checkbox
-                                                  name="locationIds"
-                                                  value={item.id}
-                                                  checked={field.value?.includes(item.id)}
-                                                  onCheckedChange={(checked) => {
-                                                      const currentValue = field.value || [];
-                                                      return checked
-                                                          ? field.onChange([...currentValue, item.id])
-                                                          : field.onChange(currentValue?.filter((value) => value !== item.id));
-                                                  }}
-                                              />
-                                              <Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label>
-                                          </div>
-                                        )} />
+                                        <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
+                                            <Checkbox
+                                                id={`loc-${item.id}`}
+                                                name="locationIds"
+                                                value={item.id}
+                                                checked={field.value?.includes(item.id)}
+                                                onCheckedChange={(checked) => {
+                                                    const currentValue = field.value || [];
+                                                    return checked
+                                                        ? field.onChange([...currentValue, item.id])
+                                                        : field.onChange(currentValue?.filter((value) => value !== item.id));
+                                                }}
+                                            />
+                                            <Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label>
+                                        </div>
                                     ))}
                                     </div>
                                 </ScrollArea>
@@ -280,6 +279,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     {brandToppingGroups.map((item) => (
                                         <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
                                             <Checkbox
+                                                id={`tg-${item.id}`}
                                                 name="toppingGroupIds"
                                                 value={item.id}
                                                 checked={field.value?.includes(item.id)}
@@ -306,6 +306,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     {allergens.map((item) => (
                                         <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
                                             <Checkbox
+                                                id={`alg-${item.id}`}
                                                 name="allergenIds"
                                                 value={item.id}
                                                 checked={field.value?.includes(item.id)}
@@ -359,8 +360,25 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                     </CardContent>
                 </Card>
             </div>
-            {/* Hidden serialization */}
-            <input type="hidden" {...form.register('id')} />
+            
+            {/* Hidden fields for FormData submission */}
+            {isEditing && <input type="hidden" {...form.register('id')} />}
+            <input type="hidden" name="brandId" value={form.watch('brandId') ?? ''} />
+            <input type="hidden" name="categoryId" value={form.watch('categoryId') ?? ''} />
+            <input type="hidden" name="isActive" value={form.watch('isActive') ? '1' : '0'} />
+            <input type="hidden" name="isFeatured" value={form.watch('isFeatured') ? '1' : '0'} />
+            <input type="hidden" name="isNew" value={form.watch('isNew') ? '1' : '0'} />
+            <input type="hidden" name="isPopular" value={form.watch('isPopular') ? '1' : '0'} />
+            
+            {(form.watch('locationIds') || []).map((id) => (
+                <input key={`loc-${id}`} type="hidden" name="locationIds[]" value={id} />
+            ))}
+            {(form.watch('allergenIds') || []).map((id) => (
+                <input key={`alg-${id}`} type="hidden" name="allergenIds[]" value={id} />
+            ))}
+            {(form.watch('toppingGroupIds') || []).map((id) => (
+                <input key={`tg-${id}`} type="hidden" name="toppingGroupIds[]" value={id} />
+            ))}
           </div>
         </form>
       </Form>
