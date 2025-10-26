@@ -1,9 +1,8 @@
 // src/lib/docs/whitelist.ts
-export const DOCS_DIR = "design/m3-figma-export/guidelines";
+export const DOCS_DIR = "docs";
 
 export const DOC_WHITELIST = [
   "FILE-MAP.md",
-  "Guidelines.md",
   "OPERATIONS-LOG.md",
   "PM-KICKOFF-TEMPLATE.md",
   "PM-ONEPAGER.md",
