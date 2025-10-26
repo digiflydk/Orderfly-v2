@@ -4,23 +4,22 @@
 
 ## Arkitektur (kort)
 - **Frontend:** Next.js App Router (v15). Sider: `/superadmin/...`
-- **Server Actions & API:** Server-kald til Firestore via Admin SDK
+- **Server Actions & API:** Server-kald til Firestore via Admin SDK.
 - **Database:** Firestore
 - **Docs:** `/docs/*` (denne mappe)
 - **Debug:** `/api/debug/all` (scopes via `?scope=feedback`)
 
-## Hvor ligger feedback-flowet?
-- **Create (UI):** `/superadmin/feedback/questions/new`
-- **Edit (UI):** `/superadmin/feedback/questions/edit/[id]`
-- **Server action:** `src/app/superadmin/feedback/actions.ts`
-  - `createOrUpdateQuestionVersion(formData) → { ok:true,id } | { ok:false,error }`
-- **DB collection:** `feedbackQuestionsVersion` (felt: `id`, `versionLabel`, `isActive`, `language`, `orderTypes`, `questions[]`, `createdAt`, `updatedAt`)
-- **Form-komponent:** `src/components/superadmin/feedback-question-version-form.tsx`
+## Hvor ligger produkt-flowet?
+- **Create (UI):** `/superadmin/products/new`
+- **Edit (UI):** `/superadmin/products/edit/[productId]`
+- **Form-komponent:** `src/components/superadmin/product-form-page.tsx`
+- **Server action:** `src/app/superadmin/products/actions.ts` (`createOrUpdateProduct`)
+- **DB collection:** `products`
 
 ## Hurtig fejlsøgning (3 trin)
-1) **Helbred:** `GET /api/debug/all?scope=feedback` → skal returnere `ok:true`.  
-2) **Action isoleret (Swagger):** `GET /api/docs` → Try it out for action-endpoint (når dokumenteret).  
-3) **UI:** Hvis action er OK i Swagger, er fejlen i submit/redirect på siden.
+1) **Helbred:** `GET /api/debug/all` → skal returnere `ok:true`.
+2) **Action isoleret (Swagger):** `GET /api/docs` → Test endpoints direkte når de er dokumenteret.
+3) **UI:** Hvis serveren er OK, er fejlen sandsynligvis i klient-side logik eller form-serialisering.
 
 ## Vigtige hjælpelinks
 - **Debug overview:** `/api/debug/all`

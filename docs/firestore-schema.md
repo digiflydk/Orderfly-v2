@@ -1,7 +1,30 @@
 # Firestore Schema (Orderfly)
 
+## Collection: products
+**DocId**: `<string>` (auto-generated)
+
+**Fields**
+- `id`: string (docId, redundans)
+- `brandId`: string
+- `locationIds`: string[]
+- `categoryId`: string
+- `productName`: string
+- `description`: string (optional)
+- `price`: number
+- `priceDelivery`: number (optional)
+- `imageUrl`: string (optional, URL)
+- `isActive`: boolean
+- `isFeatured`: boolean (optional)
+- `isNew`: boolean (optional)
+- `isPopular`: boolean (optional)
+- `allergenIds`: string[] (optional)
+- `toppingGroupIds`: string[] (optional)
+- `sortOrder`: number (optional)
+- `createdAt`: timestamp
+- `updatedAt`: timestamp
+
 ## Collection: feedbackQuestionsVersion
-**DocId**: `<string>` (gemmes også i felt `id`)
+**DocId**: `<string>` (auto-generated)
 
 **Fields**
 - `id`: string (docId, redundans)
@@ -9,16 +32,10 @@
 - `isActive`: boolean
 - `language`: string (fx 'da', 'en')
 - `orderTypes`: string[] ('pickup'|'delivery')
-- `questions`: Question[]
-  - `questionId`: string
-  - `label`: string
-  - `type`: 'stars' | 'nps' | 'text' | 'tags' | 'multiple_options'
-  - `isRequired`: boolean
-  - `options`?: { id: string; label: string }[]
-  - `minSelection`?: number
-  - `maxSelection`?: number
+- `questions`: Question[] (se `src/lib/schemas/feedback.ts` for detaljer)
 - `createdAt`: timestamp
 - `updatedAt`: timestamp
 
-**Indexes anbefalet**
-- `feedbackQuestionsVersion` orderBy `updatedAt` desc (til lister og debug)
+**Indexes Anbefalet**
+- `products` orderBy `sortOrder` asc
+- `feedbackQuestionsVersion` orderBy `updatedAt` desc

@@ -1,24 +1,27 @@
 # Orderfly — Data Flow (Frontend → API/Actions → Firestore)
 
+## Product Management Flow
+```mermaid
+flowchart TD
+  A[/UI: /superadmin/products/new] -->|submit FormData| B[Server Action: createOrUpdateProduct]
+  B -->|create/update| C[(Firestore: products)]
+  C --> D{Redirect}
+  B --> D
+```
+
+## Feedback Questions Flow
 ```mermaid
 flowchart TD
   A[/UI: /superadmin/feedback/questions/new/] -->|submit FormData| B[Server Action: createOrUpdateQuestionVersion]
   B -->|create/update| C[(Firestore: feedbackQuestionsVersion)]
-  A2[/UI: /superadmin/feedback/questions/edit/:id/] -->|load| D[Server Page Loader]
-  D -->|read doc by id / field 'id'| C
-  E[/UI: /superadmin/feedback/questions/] -->|list| F[Server Page Loader (list)]
-  F -->|query| C
-
-
-Frontend: Next.js App Router sider (server components) og formular-komponent (client component).
-
-Server Actions/API: Kald fra form submit → skriver/læser Firestore.
-
-Database: feedbackQuestionsVersion (singular) med felter beskrevet i firestore-schema.md.
-
-Debug-endpoints:
-
-GET /api/debug/all – samlet health + nøgle-docs + feedback stats.
-
-GET /api/debug/feedback – seneste 20 question versions.
+  C --> D{Redirect}
+  B --> D
 ```
+
+**Frontend:** Next.js App Router sider (server components) og formular-komponenter (client components).
+
+**Server Actions/API:** Kald fra form submit → skriver/læser Firestore.
+
+**Debug-endpoints:**
+- `GET /api/debug/all` – Samlet health-check og nøgle-dokumenter.
+- `GET /api/docs` – API-dokumentation.
