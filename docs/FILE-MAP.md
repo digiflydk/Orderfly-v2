@@ -1,5 +1,17 @@
 # File Map (nuværende placeringer — opdater løbende ved ændringer)
 
+## Customer Webshop (Frontend)
+- **Brand Homepage (Location List):** `src/app/[brandSlug]/page.tsx`
+- **Menu Page (Server):** `src/app/[brandSlug]/[locationSlug]/page.tsx`
+- **Menu Page (Client):** `src/app/[brandSlug]/[locationSlug]/menu-client.tsx`
+- **Checkout Page:** `src/app/[brandSlug]/[locationSlug]/checkout/page.tsx`
+- **Confirmation Page:** `src/app/[brandSlug]/[locationSlug]/checkout/confirmation/page.tsx`
+- **Cart Context:** `src/context/cart-context.tsx`
+- **Cart Components:** `src/components/cart/*`
+- **Checkout Components:** `src/components/checkout/*`
+- **Product Components:** `src/components/product/*`
+- **Layout Components:** `src/components/layout/*`
+
 ## Superadmin Core
 - **Layout:** `src/app/superadmin/layout.tsx`
 - **Sidebar:** `src/components/superadmin/sidebar-client.tsx`
