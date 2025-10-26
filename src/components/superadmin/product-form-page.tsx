@@ -10,7 +10,15 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { debounce } from 'lodash';
 
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -23,7 +31,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Switch } from '../ui/switch';
 import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
-import { BrandAppearancesForm } from './brand-appearances-form';
 
 const productSchema = z.object({
   id: z.string().optional().nullable(),
@@ -73,20 +80,20 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
     defaultValues: {
-        id: product?.id || '',
-        brandId: product?.brandId || '',
-        categoryId: product?.categoryId || '',
-        productName: product?.productName || '',
-        description: product?.description || '',
-        price: product?.price ?? "" as unknown as number,
-        priceDelivery: product?.priceDelivery ?? "" as unknown as number,
-        isActive: product?.isActive ?? false,
-        isFeatured: product?.isFeatured ?? false,
-        isNew: product?.isNew ?? false,
-        isPopular: product?.isPopular ?? false,
-        locationIds: product?.locationIds || [],
-        allergenIds: product?.allergenIds || [],
-        toppingGroupIds: product?.toppingGroupIds || [],
+      id: product?.id ?? '',
+      brandId: product?.brandId ?? '',
+      categoryId: product?.categoryId ?? '',
+      productName: product?.productName ?? '',
+      description: product?.description ?? '',
+      price: product?.price ?? "" as unknown as number,
+      priceDelivery: product?.priceDelivery ?? "" as unknown as number,
+      isActive: product?.isActive ?? false,
+      isFeatured: product?.isFeatured ?? false,
+      isNew: product?.isNew ?? false,
+      isPopular: product?.isPopular ?? false,
+      locationIds: product?.locationIds ?? [],
+      allergenIds: product?.allergenIds ?? [],
+      toppingGroupIds: product?.toppingGroupIds ?? [],
     },
   });
     
@@ -130,155 +137,140 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   const title = isEditing ? 'Edit Product' : 'Create New Product';
   const description = isEditing ? `Editing details for ${product?.productName || 'product...'}.` : 'Fill in the details for the new product.';
   
-  useEffect(() => {
-    if(state?.message) {
-        if (state.error) {
-            toast({ variant: 'destructive', title: 'Error', description: state.message });
-        } else {
-            toast({ title: 'Success!', description: state.message });
-        }
-    }
-  }, [state, toast]);
-
   return (
     <div className="space-y-6">
-        <Form {...form}>
-            <form action={formAction} className="space-y-6">
-                <div className="flex items-center justify-between">
-                    <div>
-                        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-                        <p className="text-muted-foreground">{description}</p>
-                    </div>
-                    <div className="flex gap-2">
-                        <Button variant="outline" asChild>
-                            <Link href="/superadmin/products">Cancel</Link>
-                        </Button>
-                        <SubmitButton isEditing={isEditing} />
-                    </div>
-                </div>
+      <Form {...form}>
+        <form action={formAction} className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                  <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+                  <p className="text-muted-foreground">{description}</p>
+              </div>
+              <div className="flex gap-2">
+                  <Button variant="outline" asChild>
+                      <Link href="/superadmin/products">Cancel</Link>
+                  </Button>
+                  <SubmitButton isEditing={isEditing} />
+              </div>
+            </div>
 
-                <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                    <div className="lg:col-span-2 space-y-6">
-                        <Card>
-                            <CardHeader><CardTitle>Core Details</CardTitle><CardDescription>Public-facing product information.</CardDescription></CardHeader>
-                            <CardContent className="space-y-4">
-                                <FormField control={form.control} name="brandId" render={({ field }) => (
-                                    <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value ?? ''} defaultValue={field.value} disabled={isEditing}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{brands.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}</SelectContent></Select>{isEditing && <FormDescription>Product's brand cannot be changed after creation.</FormDescription>}<FormMessage /></FormItem>
-                                )}/>
-                                <FormField control={form.control} name="productName" render={({ field }) => (
-                                    <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input placeholder="e.g., Margherita Pizza" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <div className="lg:col-span-2 space-y-6">
+                    <Card>
+                        <CardHeader>
+                            <CardTitle>Core Details</CardTitle>
+                            <CardDescription>Public-facing product information.</CardDescription>
+                        </CardHeader>
+                        <CardContent className="space-y-4">
+                            <FormField control={form.control} name="brandId" render={({ field }) => (
+                                <FormItem><FormLabel>Brand</FormLabel><Select onValueChange={field.onChange} value={field.value ?? ''} defaultValue={field.value} disabled={isEditing}><FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl><SelectContent>{brands.map((b) => (<SelectItem key={b.id} value={b.id}>{b.name}</SelectItem>))}</SelectContent></Select>{isEditing && <FormDescription>Product's brand cannot be changed after creation.</FormDescription>}<FormMessage /></FormItem>
+                            )}/>
+                            <FormField control={form.control} name="productName" render={({ field }) => (
+                                <FormItem><FormLabel>Product Name</FormLabel><FormControl><Input placeholder="e.g., Margherita Pizza" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <FormField control={form.control} name="description" render={({ field }) => (
+                                <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description." {...field} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>
+                            )} />
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField control={form.control} name="categoryId" render={({ field }) => (
+                                    <FormItem><FormLabel>Category</FormLabel><Select onValueChange={field.onChange} value={field.value ?? ''} defaultValue={field.value} disabled={!selectedBrandId}><FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl><SelectContent>{brandCategories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.categoryName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
                                 )} />
-                                <FormField control={form.control} name="description" render={({ field }) => (
-                                    <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description." {...field} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>
+                                <FormField control={form.control} name="price" render={({ field }) => (
+                                    <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? "" : Number(e.target.value))}/></FormControl><FormMessage /></FormItem>
                                 )} />
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <FormField control={form.control} name="categoryId" render={({ field }) => (
-                                        <FormItem><FormLabel>Category</FormLabel><Select onValueChange={field.onChange} value={field.value ?? ''} defaultValue={field.value} disabled={!selectedBrandId}><FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl><SelectContent>{brandCategories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.categoryName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
-                                    )} />
-                                    <FormField control={form.control} name="price" render={({ field }) => (
-                                        <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? "" : Number(e.target.value))}/></FormControl><FormMessage /></FormItem>
-                                    )} />
-                                </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                    <FormField control={form.control} name="priceDelivery" render={({ field }) => (
-                                        <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? "" : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
-                                    )} />
-                                </div>
+                            </div>
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <FormField control={form.control} name="priceDelivery" render={({ field }) => (
+                                    <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" step="0.01" {...field} value={field.value ?? ''} onChange={e => field.onChange(e.target.value === "" ? "" : Number(e.target.value))} /></FormControl><FormMessage /></FormItem>
+                                )} />
+                            </div>
+                            <FormItem>
+                                <FormLabel>Product Image</FormLabel>
+                                <FormControl>
+                                    <Input name="imageUrl" type="file" accept="image/*" onChange={handleImageChange} />
+                                </FormControl>
+                                {imagePreview && (
+                                    <div className="mt-2 w-48 h-32 relative">
+                                        <Image src={imagePreview} alt="Product Preview" fill sizes="192px" className="object-cover rounded-md border" data-ai-hint="delicious food"/>
+                                    </div>
+                                )}
+                                <input type="hidden" name="existingImageUrl" value={product?.imageUrl || ''} />
+                                <FormMessage />
+                            </FormItem>
+                        </CardContent>
+                    </Card>
+                    <Card>
+                        <CardHeader><CardTitle>Associations</CardTitle><CardDescription>Link this product to locations, allergens, and toppings.</CardDescription></CardHeader>
+                        <CardContent className="space-y-6">
+                            <FormField control={form.control} name="locationIds" render={() => (
                                 <FormItem>
-                                    <FormLabel>Product Image</FormLabel>
-                                    <FormControl>
-                                        <Input 
-                                            name="imageUrl" 
-                                            type="file" 
-                                            accept="image/*" 
-                                            onChange={handleImageChange} 
-                                        />
-                                    </FormControl>
-                                    {imagePreview && (
-                                        <div className="mt-2 w-48 h-32 relative">
-                                            <Image src={imagePreview} alt="Product Preview" fill sizes="192px" className="object-cover rounded-md border" data-ai-hint="delicious food"/>
-                                        </div>
-                                    )}
-                                    <input type="hidden" name="existingImageUrl" value={product?.imageUrl || ''} />
+                                    <FormLabel>Available at Locations</FormLabel>
+                                    <FormDescription>Select locations where this product is sold. If none selected, it's available at all brand locations.</FormDescription>
+                                    <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandLocations.map((item) => (<FormField key={item.id} control={form.control} name="locationIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={!!field.value?.includes(item.id)} onCheckedChange={(checked) => {return checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id))}}/></FormControl><FormLabel className="font-normal">{item.name}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
                                     <FormMessage />
                                 </FormItem>
-                            </CardContent>
-                        </Card>
-                        <Card>
-                            <CardHeader><CardTitle>Associations</CardTitle><CardDescription>Link this product to locations, allergens, and toppings.</CardDescription></CardHeader>
-                            <CardContent className="space-y-6">
-                                <FormField control={form.control} name="locationIds" render={() => (
-                                    <FormItem>
-                                        <FormLabel>Available at Locations</FormLabel>
-                                        <FormDescription>Select locations where this product is sold. If none selected, it's available at all brand locations.</FormDescription>
-                                        <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandLocations.map((item) => (<FormField key={item.id} control={form.control} name="locationIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={!!field.value?.includes(item.id)} onCheckedChange={(checked) => {return checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id))}}/></FormControl><FormLabel className="font-normal">{item.name}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}/>
-                                <FormField control={form.control} name="allergenIds" render={() => (
-                                    <FormItem>
-                                        <FormLabel>Allergens</FormLabel>
-                                        <ScrollArea className="h-40 rounded-md border"><div className="p-4">{allergens.filter(a => a.isActive).map((item) => (<FormField key={item.id} control={form.control} name="allergenIds" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={!!field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl><FormLabel className="font-normal">{item.allergenName}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}/>
-                                <FormField control={form.control} name="toppingGroupIds" render={() => (
-                                    <FormItem>
-                                        <FormLabel>Topping Groups</FormLabel>
-                                        <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandToppingGroups.map((item) => (<FormField key={item.id} control={form.control} name="toppingGroupIds" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={!!field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl><FormLabel className="font-normal">{item.groupName}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
-                                        <FormMessage />
-                                    </FormItem>
-                                )}/>
-                            </CardContent>
-                        </Card>
-                    </div>
-                    <div className="space-y-6">
-                        <Card>
-                            <CardHeader><CardTitle>Configuration</CardTitle></CardHeader>
-                            <CardContent className="space-y-4">
-                                <FormField control={form.control} name="isActive" render={({ field }) => (
-                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Active</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
-                                )}/>
-                                <FormField control={form.control} name="isFeatured" render={({ field }) => (
-                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Featured</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isNew', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
-                                )}/>
-                                <FormField control={form.control} name="isNew" render={({ field }) => (
-                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>New Product</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
-                                )}/>
-                                <FormField control={form.control} name="isPopular" render={({ field }) => (
-                                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Popular Product</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isNew', false); } }} /></FormControl></FormItem>
-                                )}/>
-                            </CardContent>
-                        </Card>
-                    </div>
+                            )}/>
+                            <FormField control={form.control} name="allergenIds" render={() => (
+                                <FormItem>
+                                    <FormLabel>Allergens</FormLabel>
+                                    <ScrollArea className="h-40 rounded-md border"><div className="p-4">{allergens.filter(a => a.isActive).map((item) => (<FormField key={item.id} control={form.control} name="allergenIds" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={!!field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl><FormLabel className="font-normal">{item.allergenName}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
+                                    <FormMessage />
+                                </FormItem>
+                            )}/>
+                            <FormField control={form.control} name="toppingGroupIds" render={() => (
+                                <FormItem>
+                                    <FormLabel>Topping Groups</FormLabel>
+                                    <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandToppingGroups.map((item) => (<FormField key={item.id} control={form.control} name="toppingGroupIds" render={({ field }) => (<FormItem className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={!!field.value?.includes(item.id)} onCheckedChange={(checked) => ( checked ? field.onChange([...(field.value || []), item.id]) : field.onChange(field.value?.filter((value) => value !== item.id)))}/></FormControl><FormLabel className="font-normal">{item.groupName}</FormLabel></FormItem>)}/>))}</div></ScrollArea>
+                                    <FormMessage />
+                                </FormItem>
+                            )}/>
+                        </CardContent>
+                    </Card>
                 </div>
+                <div className="space-y-6">
+                    <Card>
+                        <CardHeader><CardTitle>Configuration</CardTitle></CardHeader>
+                        <CardContent className="space-y-4">
+                            <FormField control={form.control} name="isActive" render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Active</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
+                            )}/>
+                            <FormField control={form.control} name="isFeatured" render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Featured</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isNew', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
+                            )}/>
+                            <FormField control={form.control} name="isNew" render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>New Product</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
+                            )}/>
+                            <FormField control={form.control} name="isPopular" render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Popular Product</FormLabel></div><FormControl><Switch checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isNew', false); } }} /></FormControl></FormItem>
+                            )}/>
+                        </CardContent>
+                    </Card>
+                </div>
+            </div>
 
-                {/* --- Hidden serialization so Server Action gets ALL values --- */}
-                <input type="hidden" name="id" value={form.watch('id') ?? ''} />
-                <input type="hidden" name="brandId" value={form.watch('brandId') ?? ''} />
-                <input type="hidden" name="categoryId" value={form.watch('categoryId') ?? ''} />
-                <input type="hidden" name="productName" value={form.watch('productName') ?? ''} />
-                <input type="hidden" name="description" value={form.watch('description') ?? ''} />
-                <input type="hidden" name="price" value={(form.watch('price') ?? '').toString()} />
-                <input type="hidden" name="priceDelivery" value={(form.watch('priceDelivery') ?? '').toString()} />
-
-                <input type="hidden" name="isActive" value={form.watch('isActive') ? '1' : '0'} />
-                <input type="hidden" name="isFeatured" value={form.watch('isFeatured') ? '1' : '0'} />
-                <input type="hidden" name="isNew" value={form.watch('isNew') ? '1' : '0'} />
-                <input type="hidden" name="isPopular" value={form.watch('isPopular') ? '1' : '0'} />
-
-                {(form.watch('locationIds') ?? []).map((id) => (
+            {/* Hidden serialization so the Server Action receives complete FormData */}
+            <input type="hidden" name="id" value={form.watch('id') ?? ''} />
+            <input type="hidden" name="brandId" value={form.watch('brandId') ?? ''} />
+            <input type="hidden" name="categoryId" value={form.watch('categoryId') ?? ''} />
+            <input type="hidden" name="productName" value={form.watch('productName') ?? ''} />
+            <input type="hidden" name="description" value={form.watch('description') ?? ''} />
+            <input type="hidden" name="price" value={(form.watch('price') ?? '').toString()} />
+            <input type="hidden" name="priceDelivery" value={(form.watch('priceDelivery') ?? '').toString()} />
+            <input type="hidden" name="isActive" value={form.watch('isActive') ? '1' : '0'} />
+            <input type="hidden" name="isFeatured" value={form.watch('isFeatured') ? '1' : '0'} />
+            <input type="hidden" name="isNew" value={form.watch('isNew') ? '1' : '0'} />
+            <input type="hidden" name="isPopular" value={form.watch('isPopular') ? '1' : '0'} />
+            {(form.watch('locationIds') ?? []).map((id) => (
                 <input key={`loc-${id}`} type="hidden" name="locationIds" value={id} />
-                ))}
-                {(form.watch('allergenIds') ?? []).map((id) => (
+            ))}
+            {(form.watch('allergenIds') ?? []).map((id) => (
                 <input key={`alg-${id}`} type="hidden" name="allergenIds" value={id} />
-                ))}
-                {(form.watch('toppingGroupIds') ?? []).map((id) => (
+            ))}
+            {(form.watch('toppingGroupIds') ?? []).map((id) => (
                 <input key={`tg-${id}`} type="hidden" name="toppingGroupIds" value={id} />
-                ))}
-
-            </form>
-        </Form>
+            ))}
+        </form>
+      </Form>
     </div>
   );
 }
