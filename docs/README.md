@@ -10,4 +10,5 @@
 - **data-communication.md** — Superadmin ↔ Firestore ↔ Frontend communications  
 - **firestore-collections-overview.md** — Collections, schema & relationships  
 - **firestore-schema.md** — Field-level schema details  
+- **performance-indexes.md** — Firestore indexing and performance guide  
 - **security-rbac.md** — Security and Role-Based Access Control  

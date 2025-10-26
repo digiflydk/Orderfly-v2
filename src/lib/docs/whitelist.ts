@@ -14,6 +14,7 @@ export const DOC_WHITELIST = [
   "data-communication.md",
   "firestore-collections-overview.md",
   "firestore-schema.md",
+  "performance-indexes.md",
   "security-rbac.md",
 ] as const;
 
