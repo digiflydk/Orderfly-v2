@@ -7,15 +7,16 @@ export default async function LegacyConfirmationPage({
   params,
   searchParams,
 }: {
-  params: { brandSlug: string };
+  params: Promise<{ brandSlug: string }>;
   searchParams: { session_id?: string; order_id?: string };
 }) {
+  const { brandSlug } = await params;
   const sessionId = searchParams?.session_id;
   const orderId = searchParams?.order_id;
 
   if (!sessionId && !orderId) {
     // If we have neither, we can't look up the order, so redirect to brand page as a fallback.
-    redirect(`/${params.brandSlug}`);
+    redirect(`/${brandSlug}`);
   }
   
   // Try to find the order using the most reliable ID we have.
@@ -26,7 +27,7 @@ export default async function LegacyConfirmationPage({
   if (!order) {
     // If order still not found, a graceful fallback.
     // In a production environment, you might show a "we're processing your order" page.
-    redirect(`/${params.brandSlug}`);
+    redirect(`/${brandSlug}`);
   }
   
   const location = await getLocationById(order.locationId);
@@ -38,6 +39,6 @@ export default async function LegacyConfirmationPage({
   // Construct the full, correct URL and redirect.
   // We prioritize the session_id from the original request if it exists.
   const finalSessionId = sessionId || order.psp?.checkoutSessionId;
-  const confirmationUrl = `/${params.brandSlug}/${location.slug}/checkout/confirmation?order_id=${order.id}&session_id=${finalSessionId}`;
+  const confirmationUrl = `/${brandSlug}/${location.slug}/checkout/confirmation?order_id=${order.id}&session_id=${finalSessionId}`;
   redirect(confirmationUrl);
 }
