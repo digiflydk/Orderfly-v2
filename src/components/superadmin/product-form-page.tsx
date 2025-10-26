@@ -1,14 +1,15 @@
 
+
 'use client';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
-import { useEffect, useMemo, useState, useActionState, useCallback } from 'react';
+import { useEffect, useMemo, useState, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import Image from 'next/image';
-import { debounce } from 'lodash';
+import { useRouter } from 'next/navigation';
 
 import {
   Form,
@@ -98,10 +99,10 @@ const uniq = <T,>(arr: T[] | undefined) =>
 
 export function ProductFormPage({ product, brands, locations, categories, toppingGroups, allergens }: ProductFormPageProps) {
   const { toast } = useToast();
+  const router = useRouter();
   const [state, formAction] = useActionState(createOrUpdateProduct, null);
   const [imagePreview, setImagePreview] = useState<string | null>(product?.imageUrl || null);
-  const [isClient, setIsClient] = useState(false);
-
+  
   const isEditing = !!product;
 
   const form = useForm<ProductFormValues>({
@@ -160,18 +161,17 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
         form.setValue('categoryId', '');
     }
   }, [selectedBrandId, brandCategories, form]);
-
-  useEffect(() => {
-      setIsClient(true);
-  }, []);
   
   useEffect(() => {
-    if (state?.message) {
-      if (state.error) {
-        toast({ variant: "destructive", title: "Error", description: state.message });
+    if (state) {
+      if (state.ok) {
+        toast({ title: 'Success!', description: `Product ${product ? 'updated' : 'created'} successfully.` });
+        router.push('/superadmin/products');
+      } else if (state.error) {
+        toast({ variant: 'destructive', title: 'Error', description: state.error.detail || state.error.message });
       }
     }
-  }, [state, toast]);
+  }, [state, toast, router, product]);
   
   const title = isEditing ? 'Edit Product' : 'Create New Product';
   const description = isEditing ? `Editing details for ${product?.productName || 'product...'}.` : 'Fill in the details for the new product.';
@@ -206,8 +206,11 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                         <CardDescription>Public-facing product information.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <FormField control={form.control} name="brandId" render={({ field }) => (
-                            <FormItem>
+                        <FormField
+                            control={form.control}
+                            name="brandId"
+                            render={({ field }) => (
+                                <FormItem>
                                 <FormLabel>Brand</FormLabel>
                                 <Select onValueChange={(value) => field.onChange(value)} value={field.value ?? ''} disabled={isEditing}>
                                 <FormControl><SelectTrigger><SelectValue placeholder="Select a brand" /></SelectTrigger></FormControl>
@@ -215,29 +218,30 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                 </Select>
                                 {isEditing && <FormDescription>Product's brand cannot be changed after creation.</FormDescription>}
                                 <FormMessage />
-                            </FormItem>
-                        )}/>
+                                </FormItem>
+                            )}
+                        />
                         <FormField control={form.control} name="productName" render={({ field }) => (
                             <FormItem>
                             <FormLabel>Product Name</FormLabel>
-                            <FormControl><Input placeholder="e.g., Margherita Pizza" {...field} value={field.value ?? ''} /></FormControl>
+                            <FormControl><Input placeholder="e.g., Margherita Pizza" {...field} value={field.value ?? ''} name="productName"/></FormControl>
                             <FormMessage />
                             </FormItem>
                         )} />
                         <FormField control={form.control} name="description" render={({ field }) => (
-                            <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description." {...field} value={field.value ?? ''}/></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Description</FormLabel><FormControl><Textarea placeholder="A short, tasty description." {...field} value={field.value ?? ''} name="description"/></FormControl><FormMessage /></FormItem>
                         )} />
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <FormField control={form.control} name="categoryId" render={({ field }) => (
                                 <FormItem><FormLabel>Category</FormLabel><Select onValueChange={field.onChange} value={field.value ?? ''} disabled={!selectedBrandId}><FormControl><SelectTrigger><SelectValue placeholder="Select a category" /></SelectTrigger></FormControl><SelectContent>{brandCategories.map((c) => (<SelectItem key={c.id} value={c.id}>{c.categoryName}</SelectItem>))}</SelectContent></Select><FormMessage /></FormItem>
                             )} />
                             <FormField control={form.control} name="price" render={({ field }) => (
-                                <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Price (Pickup)</FormLabel><FormControl><Input type="number" inputMode="decimal" step="0.01" placeholder="0.00" {...field} value={field.value ?? ''} name="price"/></FormControl><FormMessage /></FormItem>
                             )} />
                         </div>
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                             <FormField control={form.control} name="priceDelivery" render={({ field }) => (
-                                <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" inputMode="decimal" step="0.01" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                                <FormItem><FormLabel>Price (Delivery)</FormLabel><FormControl><Input type="number" inputMode="decimal" step="0.01" {...field} value={field.value ?? ''} name="priceDelivery"/></FormControl><FormMessage /></FormItem>
                             )} />
                         </div>
                         <FormItem>
@@ -279,7 +283,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     <div className="p-4">
                                     {brandLocations.map((item) => (
                                         <FormField key={item.id} control={form.control} name="locationIds"
-                                        render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? field.onChange([...currentValue, item.id]) : field.onChange(currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label></FormItem>)} />
+                                        render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? form.setValue('locationIds', [...currentValue, item.id]) : form.setValue('locationIds', currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label></FormItem>)} />
                                     ))}
                                     </div>
                                 </ScrollArea>
@@ -292,7 +296,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                 <ScrollArea className="h-40 rounded-md border">
                                     <div className="p-4">
                                     {brandToppingGroups.map((item) => (
-                                        <FormField key={item.id} control={form.control} name="toppingGroupIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? field.onChange([...currentValue, item.id]) : field.onChange(currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`tg-${item.id}`} className="font-normal">{item.groupName}</Label></FormItem>)} />
+                                        <FormField key={item.id} control={form.control} name="toppingGroupIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? form.setValue('toppingGroupIds', [...currentValue, item.id]) : form.setValue('toppingGroupIds', currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`tg-${item.id}`} className="font-normal">{item.groupName}</Label></FormItem>)} />
                                     ))}
                                     </div>
                                 </ScrollArea>
@@ -305,11 +309,14 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                 <ScrollArea className="h-40 rounded-md border">
                                     <div className="p-4">
                                     {allergens.map((item) => (
-                                        <FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={form.getValues('allergenIds')?.includes(item.id)} onCheckedChange={(checked) => {
-                                            const currentValues = form.getValues('allergenIds') || [];
-                                            const newValues = checked ? [...currentValues, item.id] : currentValues.filter(id => id !== item.id);
-                                            form.setValue('allergenIds', newValues);
-                                        }}/></FormControl><Label htmlFor={`alg-${item.id}`} className="font-normal">{item.allergenName}</Label></FormItem>
+                                        <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
+                                            <Checkbox id={`alg-${item.id}`} checked={allergenIds?.includes(item.id)} onCheckedChange={(checked) => {
+                                                const currentValues = form.getValues('allergenIds') || [];
+                                                const newValues = checked ? [...currentValues, item.id] : currentValues.filter(id => id !== item.id);
+                                                form.setValue('allergenIds', newValues);
+                                            }}/>
+                                            <Label htmlFor={`alg-${item.id}`} className="font-normal">{item.allergenName}</Label>
+                                        </div>
                                     ))}
                                     </div>
                                 </ScrollArea>
@@ -319,7 +326,6 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                     </CardContent>
                 </Card>
             </div>
-            {/* Right Column */}
             <div className="space-y-6">
                 <Card>
                     <CardHeader><CardTitle>Configuration</CardTitle></CardHeader>
@@ -339,8 +345,6 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                     </CardContent>
                 </Card>
             </div>
-            
-            {/* Hidden fields for FormData submission */}
             {isEditing && <input type="hidden" name="id" value={product.id} />}
             <input type="hidden" name="brandId" value={form.watch('brandId') ?? ''} />
             <input type="hidden" name="categoryId" value={form.watch('categoryId') ?? ''} />

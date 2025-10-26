@@ -1,5 +1,7 @@
 
-import * as admin from "firebase-admin";
+
+import 'server-only';
+import * as admin from 'firebase-admin';
 
 let app: admin.app.App | undefined;
 
@@ -8,22 +10,17 @@ let app: admin.app.App | undefined;
  * Bruger FIREBASE_SERVICE_ACCOUNT fra environment som JSON
  */
 export function getAdminApp(): admin.app.App {
-  if (!app) {
-    try {
-      // Brug eksisterende instans hvis den findes
-      app = admin.app();
-    } catch {
-      const raw = process.env.FIREBASE_SERVICE_ACCOUNT;
-      if (!raw) {
-        throw new Error("FIREBASE_SERVICE_ACCOUNT missing or empty");
-      }
-
-      const serviceAccount = JSON.parse(raw);
-
-      app = admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-      });
+  if (!admin.apps.length) {
+    const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+    if (!raw) {
+      throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON is not set.");
     }
+    const serviceAccount = JSON.parse(raw);
+    app = admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  } else {
+    app = admin.app();
   }
   return app!;
 }

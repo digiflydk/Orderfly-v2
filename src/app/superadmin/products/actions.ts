@@ -1,13 +1,13 @@
 
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { collection, doc, getDoc, setDoc, deleteDoc, getDocs, query, orderBy, writeBatch, where, documentId } from 'firebase/firestore';
-import type { Product } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { put } from '@vercel/blob';
+import { getAdminDb } from '@/lib/firebase-admin';
+import type { Product } from '@/types';
 
 const asBool = (v: unknown) => {
   if (v === true || v === false) return v;
@@ -47,15 +47,15 @@ const updateSchema = z.object({
 });
 
 
-export type FormState = {
-  message: string;
-  error: boolean;
-};
+type ActionOk = { ok: true; id: string };
+type ActionErr = { ok: false; error: { message: string, code?: string, detail?: string } };
+export type FormState = ActionOk | ActionErr | null;
 
-// Accept either (formData) or (prevState, formData)
-export async function createOrUpdateProduct(prevState: FormState | null, formData: FormData) {
+
+export async function createOrUpdateProduct(prevState: FormState | null, formData: FormData): Promise<FormState> {
     const id = formData.get('id')?.toString();
     const schema = id ? updateSchema : createSchema;
+    const db = getAdminDb();
     
     const rawData: Record<string, unknown> = {};
 
@@ -84,59 +84,87 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
     const parsed = schema.safeParse(rawData);
 
     if (!parsed.success) {
-      console.error("Zod validation failed", parsed.error.flatten());
-      const errorMessages = Object.entries(parsed.error.flatten().fieldErrors)
+      const flatErrors = parsed.error.flatten();
+      const errorMessages = Object.entries(flatErrors.fieldErrors)
         .map(([field, errors]) => `${field}: ${errors.join(', ')}`)
         .join('; ');
       return {
-        message: `Validation failed: ${errorMessages}`,
-        error: true,
+        ok: false,
+        error: { message: `Validation failed: ${errorMessages}`, detail: JSON.stringify(flatErrors) },
       };
     }
     
     const { id: validatedId, ...productData } = parsed.data;
     
     // For updates, filter out undefined values to prevent overwriting existing data.
-    const finalProductData: Partial<Product> = id
+    const toWrite: Partial<Product> = id
       ? Object.fromEntries(Object.entries(productData).filter(([, v]) => v !== undefined))
       : productData;
+
+    // quick sanity before DB (helps catch type issues early)
+    const sanity = {
+        price: typeof (toWrite as any).price,
+        isActive: typeof (toWrite as any).isActive,
+        locationIdsIsArray: Array.isArray((toWrite as any).locationIds),
+    };
+    if (sanity.price !== 'number' || Number.isNaN((toWrite as any).price)) {
+        return { ok: false, error: { message: 'Invalid price', detail: 'Price must be a number.' } };
+    }
+    if ((toWrite as any).isActive !== undefined && sanity.isActive !== 'boolean') {
+        return { ok: false, error: { message: 'Invalid isActive', detail: 'Must be boolean.' } };
+    }
+    if ((toWrite as any).locationIds && !sanity.locationIdsIsArray) {
+        return { ok: false, error: { message: 'Invalid locationIds', detail: 'Must be string[]' } };
+    }
   
     try {
       const imageFile = formData.get('imageUrl') as File | null;
       if (imageFile && imageFile.size > 0) {
         const blob = await put(imageFile.name, imageFile, { access: 'public' });
-        finalProductData.imageUrl = blob.url;
+        toWrite.imageUrl = blob.url;
       } else if (validatedId) {
+        // Retain existing image if no new one is uploaded
         const existingProduct = await getProductById(validatedId);
-        finalProductData.imageUrl = existingProduct?.imageUrl;
+        toWrite.imageUrl = existingProduct?.imageUrl;
       } else {
-        finalProductData.imageUrl = undefined;
+        toWrite.imageUrl = undefined;
       }
 
+      const now = new Date();
 
-      const productRef = validatedId ? doc(db, 'products', validatedId) : doc(collection(db, 'products'));
-      const finalId = productRef.id;
-  
-      if (!validatedId) {
-          const productsCountQuery = query(collection(db, 'products'), where('brandId', '==', productData.brandId));
-          const countSnapshot = await getDocs(productsCountQuery);
-          finalProductData.sortOrder = countSnapshot.size;
+      if (id) {
+        await db.collection('products').doc(id).update({
+          ...toWrite,
+          updatedAt: now,
+        });
+        return { ok: true, id };
+      } else {
+        const payload = {
+          ...toWrite,
+          isActive: (toWrite as any).isActive ?? false,
+          createdAt: now,
+          updatedAt: now,
+        };
+        const ref = await db.collection('products').add(payload);
+        await db.collection('products').doc(ref.id).update({ id: ref.id });
+        return { ok: true, id: ref.id };
       }
   
-      const dataToSave: Partial<Product> = { ...finalProductData, id: finalId, updatedAt: new Date() };
-      if (!validatedId) {
-        (dataToSave as any).createdAt = new Date();
-      }
-
-      await setDoc(productRef, dataToSave, { merge: true });
-  
-    } catch (e) {
-      console.error(e);
-      throw new Error('Failed to save product to database.');
+    } catch (e: any) {
+      console.error('[products.createOrUpdate] Firestore write failed', {
+        message: e?.message,
+        code: e?.code,
+        stack: e?.stack,
+      });
+      return {
+        ok: false,
+        error: {
+          message: 'Database write failed',
+          code: e?.code ?? 'unknown',
+          detail: e?.message ?? 'No details from Firestore',
+        },
+      };
     }
-    
-    revalidatePath(`/superadmin/products`);
-    redirect(`/superadmin/products`);
 }
 
 
@@ -144,7 +172,8 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
 
 export async function deleteProduct(productId: string) {
     try {
-        await deleteDoc(doc(db, "products", productId));
+        const db = getAdminDb();
+        await db.collection("products").doc(productId).delete();
         revalidatePath("/superadmin/products");
         return { message: "Product deleted successfully.", error: false };
     } catch (e) {
@@ -156,9 +185,10 @@ export async function deleteProduct(productId: string) {
 
 export async function updateProductSortOrder(orderedProducts: {id: string, sortOrder: number}[]) {
     try {
-        const batch = writeBatch(db);
+        const db = getAdminDb();
+        const batch = db.batch();
         orderedProducts.forEach(product => {
-            const docRef = doc(db, 'products', product.id);
+            const docRef = db.collection('products').doc(product.id);
             batch.update(docRef, { sortOrder: product.sortOrder });
         });
         await batch.commit();
@@ -179,7 +209,7 @@ export type ProductForMenu = Pick<Product,
 
 export async function getProductsForLocation(locationId: string, brandId: string): Promise<ProductForMenu[]> {
     if (!locationId || !brandId) return [];
-
+    const db = getAdminDb();
     const q = query(
         collection(db, 'products'),
         where('brandId', '==', brandId),
@@ -190,61 +220,30 @@ export async function getProductsForLocation(locationId: string, brandId: string
     const allProducts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
 
     const locationProducts = allProducts.filter(p => {
-        // If a product has no specific locations assigned, it is available at all locations for the brand.
-        // Otherwise, it must be explicitly assigned to the current location.
         return !p.locationIds || p.locationIds.length === 0 || p.locationIds.includes(locationId);
     });
 
     const sortedProducts = locationProducts.sort((a,b) => (a.sortOrder || 999) - (b.sortOrder || 999));
 
-    // Map to the lightweight type *before* returning
     const finalProducts = sortedProducts.map(p => ({
-        id: p.id,
-        productName: p.productName,
-        description: p.description,
-        price: p.price,
-        priceDelivery: p.priceDelivery,
-        imageUrl: p.imageUrl,
-        isFeatured: p.isFeatured,
-        isNew: p.isNew,
-        isPopular: p.isPopular,
-        allergenIds: p.allergenIds,
-        toppingGroupIds: p.toppingGroupIds,
-        categoryId: p.categoryId,
-        brandId: p.brandId,
-        sortOrder: p.sortOrder,
+        id: p.id, productName: p.productName, description: p.description, price: p.price, priceDelivery: p.priceDelivery,
+        imageUrl: p.imageUrl, isFeatured: p.isFeatured, isNew: p.isNew, isPopular: p.isPopular, allergenIds: p.allergenIds,
+        toppingGroupIds: p.toppingGroupIds, categoryId: p.categoryId, brandId: p.brandId, sortOrder: p.sortOrder,
     }));
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        '[DEBUG] getProductsForLocation:',
-        finalProducts.map((p) => ({
-          id: p.id,
-          productName: p.productName,
-          price: p.price,
-          toppingGroups: p.toppingGroupIds?.length,
-          imageSize: p.imageUrl?.length,
-          fullSize: JSON.stringify(p).length
-        }))
-      );
-    }
     
     return finalProducts;
 }
 
 
-export async function getProducts(brandId?: string): Promise<Product[]> {
-    let q;
-    if (brandId) {
-        q = query(collection(db, 'products'), where('brandId', '==', brandId), orderBy('sortOrder', 'asc'));
-    } else {
-        q = query(collection(db, 'products'), orderBy('sortOrder', 'asc'));
-    }
+export async function getProducts(): Promise<Product[]> {
+    const db = getAdminDb();
+    const q = query(collection(db, 'products'), orderBy('sortOrder', 'asc'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
 }
 
 export async function getProductById(productId: string): Promise<Product | null> {
+    const db = getAdminDb();
     const docRef = doc(db, 'products', productId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
@@ -255,7 +254,7 @@ export async function getProductById(productId: string): Promise<Product | null>
 
 export async function getProductsByIds(productIds: string[], brandId?: string): Promise<ProductForMenu[]> {
     if (!productIds || productIds.length === 0) return [];
-    
+    const db = getAdminDb();
     const productPromises: Promise<Product[]>[] = [];
     for (let i = 0; i < productIds.length; i += 30) {
         const chunk = productIds.slice(i, i + 30);
@@ -270,37 +269,11 @@ export async function getProductsByIds(productIds: string[], brandId?: string): 
     const productArrays = await Promise.all(productPromises);
     const allProducts = productArrays.flat();
 
-    // Map to the lightweight type
     const finalProducts = allProducts.map(p => ({
-        id: p.id,
-        productName: p.productName,
-        description: p.description,
-        price: p.price,
-        priceDelivery: p.priceDelivery,
-        imageUrl: p.imageUrl,
-        isFeatured: p.isFeatured,
-        isNew: p.isNew,
-        isPopular: p.isPopular,
-        allergenIds: p.allergenIds,
-        toppingGroupIds: p.toppingGroupIds,
-        categoryId: p.categoryId,
-        brandId: p.brandId,
-        sortOrder: p.sortOrder,
+        id: p.id, productName: p.productName, description: p.description, price: p.price, priceDelivery: p.priceDelivery,
+        imageUrl: p.imageUrl, isFeatured: p.isFeatured, isNew: p.isNew, isPopular: p.isPopular, allergenIds: p.allergenIds,
+        toppingGroupIds: p.toppingGroupIds, categoryId: p.categoryId, brandId: p.brandId, sortOrder: p.sortOrder,
     }));
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        '[DEBUG] getProductsByIds:',
-        finalProducts.map((p) => ({
-          id: p.id,
-          productName: p.productName,
-          price: p.price,
-          toppingGroups: p.toppingGroupIds?.length,
-          imageSize: p.imageUrl?.length,
-          fullSize: JSON.stringify(p).length
-        }))
-      );
-    }
     
     return finalProducts;
 }
@@ -320,7 +293,7 @@ export async function duplicateProducts({
   if (!targetBrandId) {
     return { success: false, message: 'Target brand must be selected.' };
   }
-
+  const db = getAdminDb();
   try {
     const productsToDuplicate: Product[] = [];
     for (let i = 0; i < productIds.length; i += 30) {
@@ -336,7 +309,7 @@ export async function duplicateProducts({
       return { success: false, message: 'Could not find the selected products to duplicate.' };
     }
 
-    const batch = writeBatch(db);
+    const batch = db.batch();
     let duplicatedCount = 0;
 
     for (const product of productsToDuplicate) {
@@ -365,3 +338,4 @@ export async function duplicateProducts({
   }
 }
     
+
