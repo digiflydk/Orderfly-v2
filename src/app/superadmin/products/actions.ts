@@ -36,15 +36,28 @@ export type FormState = {
 // Accept either (formData) or (prevState, formData)
 export async function createOrUpdateProduct(prevState: FormState | null, formData: FormData) {
     
-    const rawData: Record<string, any> = {};
+    const rawData: Record<string, unknown> = {};
+
     for (const [key, value] of formData.entries()) {
-        if (key.endsWith('[]')) { // Handle array inputs from hidden fields
-            const arrayKey = key.slice(0, -2);
-            if (!rawData[arrayKey]) rawData[arrayKey] = [];
-            rawData[arrayKey].push(value);
-        } else {
-            rawData[key] = value;
+      if (key.endsWith('[]')) {
+        const arrayKey = key.slice(0, -2);
+
+        if (rawData[arrayKey] == null) {
+          rawData[arrayKey] = [];
+        } else if (!Array.isArray(rawData[arrayKey])) {
+          rawData[arrayKey] = [String(rawData[arrayKey])].filter(Boolean);
         }
+
+        (rawData[arrayKey] as string[]).push(typeof value === 'string' ? value : String(value));
+      } else {
+        if (rawData[key] === undefined) {
+          rawData[key] = value;
+        } else if (Array.isArray(rawData[key])) {
+          (rawData[key] as string[]).push(typeof value === 'string' ? value : String(value));
+        } else {
+          rawData[key] = [String(rawData[key]), typeof value === 'string' ? value : String(value)];
+        }
+      }
     }
     
     // Ensure arrays are present even if empty

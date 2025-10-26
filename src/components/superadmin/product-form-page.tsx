@@ -53,6 +53,7 @@ const productSchema = z.object({
   imageUrl: z.any().optional(),
 });
 
+
 type ProductFormValues = z.infer<typeof productSchema>;
 
 interface ProductFormPageProps {
@@ -307,8 +308,6 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                         <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
                                             <Checkbox
                                                 id={`alg-${item.id}`}
-                                                name="allergenIds"
-                                                value={item.id}
                                                 checked={field.value?.includes(item.id)}
                                                 onCheckedChange={(checked) => {
                                                     const currentValue = field.value || [];
@@ -336,25 +335,25 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                         <FormField control={form.control} name="isActive" render={({ field }) => (
                             <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                                 <div className="space-y-0.5"><FormLabel>Active</FormLabel></div>
-                                <FormControl><Switch name="isActive" checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                                <FormControl><Switch name="isActive" checked={field.value} onCheckedChange={field.onChange} /></FormControl>
                             </FormItem>
                         )}/>
                         <FormField control={form.control} name="isFeatured" render={({ field }) => (
                             <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                                 <div className="space-y-0.5"><FormLabel>Featured</FormLabel></div>
-                                <FormControl><Switch name="isFeatured" checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isNew', false); form.setValue('isPopular', false); } }} /></FormControl>
+                                <FormControl><Switch name="isFeatured" checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isNew', false); form.setValue('isPopular', false); } }} /></FormControl>
                             </FormItem>
                         )}/>
                         <FormField control={form.control} name="isNew" render={({ field }) => (
                             <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                                 <div className="space-y-0.5"><FormLabel>New Product</FormLabel></div>
-                                <FormControl><Switch name="isNew" checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isPopular', false); } }} /></FormControl>
+                                <FormControl><Switch name="isNew" checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isPopular', false); } }} /></FormControl>
                             </FormItem>
                         )}/>
                         <FormField control={form.control} name="isPopular" render={({ field }) => (
                             <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
                                 <div className="space-y-0.5"><FormLabel>Popular Product</FormLabel></div>
-                                <FormControl><Switch name="isPopular" checked={!!field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isNew', false); } }} /></FormControl>
+                                <FormControl><Switch name="isPopular" checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isNew', false); } }} /></FormControl>
                             </FormItem>
                         )}/>
                     </CardContent>
@@ -371,13 +370,13 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
             <input type="hidden" name="isPopular" value={form.watch('isPopular') ? '1' : '0'} />
             
             {(form.watch('locationIds') || []).map((id) => (
-                <input key={`loc-${id}`} type="hidden" name="locationIds[]" value={id} />
+                <input key={`loc-hidden-${id}`} type="hidden" name="locationIds[]" value={id} />
             ))}
             {(form.watch('allergenIds') || []).map((id) => (
-                <input key={`alg-${id}`} type="hidden" name="allergenIds[]" value={id} />
+                <input key={`alg-hidden-${id}`} type="hidden" name="allergenIds[]" value={id} />
             ))}
             {(form.watch('toppingGroupIds') || []).map((id) => (
-                <input key={`tg-${id}`} type="hidden" name="toppingGroupIds[]" value={id} />
+                <input key={`tg-hidden-${id}`} type="hidden" name="toppingGroupIds[]" value={id} />
             ))}
           </div>
         </form>
