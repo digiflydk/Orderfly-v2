@@ -33,6 +33,7 @@ import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { BrandAppearancesForm } from './brand-appearances-form';
+import { Label } from '@/components/ui/label';
 
 const productSchema = z.object({
   id: z.string().optional().nullable(),
@@ -242,28 +243,29 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                         <CardDescription>Control where and how this product appears.</CardDescription>
                     </CardHeader>
                      <CardContent className="space-y-4">
-                        <FormField control={form.control} name="locationIds" render={({ field }) => (
+                        <FormField control={form.control} name="locationIds" render={() => (
                             <FormItem>
                                 <FormLabel>Available at Locations</FormLabel>
                                 <FormDescription>If no locations are selected, the product will be available at all brand locations.</FormDescription>
                                 <ScrollArea className="h-40 rounded-md border">
                                     <div className="p-4">
                                     {brandLocations.map((item) => (
-                                        <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
-                                            <Checkbox
-                                                id={`loc-${item.id}`}
-                                                name="locationIds"
-                                                value={item.id}
-                                                checked={field.value?.includes(item.id)}
-                                                onCheckedChange={(checked) => {
-                                                    const currentValue = field.value || [];
-                                                    return checked
-                                                        ? field.onChange([...currentValue, item.id])
-                                                        : field.onChange(currentValue?.filter((value) => value !== item.id));
-                                                }}
-                                            />
-                                            <Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label>
-                                        </div>
+                                        <FormField key={item.id} control={form.control} name="locationIds" render={({ field }) => (
+                                          <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
+                                              <Checkbox
+                                                  name="locationIds"
+                                                  value={item.id}
+                                                  checked={field.value?.includes(item.id)}
+                                                  onCheckedChange={(checked) => {
+                                                      const currentValue = field.value || [];
+                                                      return checked
+                                                          ? field.onChange([...currentValue, item.id])
+                                                          : field.onChange(currentValue?.filter((value) => value !== item.id));
+                                                  }}
+                                              />
+                                              <Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label>
+                                          </div>
+                                        )} />
                                     ))}
                                     </div>
                                 </ScrollArea>
@@ -278,7 +280,6 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     {brandToppingGroups.map((item) => (
                                         <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
                                             <Checkbox
-                                                id={`tg-${item.id}`}
                                                 name="toppingGroupIds"
                                                 value={item.id}
                                                 checked={field.value?.includes(item.id)}
@@ -305,7 +306,6 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     {allergens.map((item) => (
                                         <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
                                             <Checkbox
-                                                id={`alg-${item.id}`}
                                                 name="allergenIds"
                                                 value={item.id}
                                                 checked={field.value?.includes(item.id)}
