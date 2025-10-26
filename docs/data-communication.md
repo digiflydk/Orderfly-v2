@@ -64,3 +64,4 @@ flowchart LR
 
 * `/docs/data-flow.md` – Technical flow overview
 * `/docs/architecture.md` – System architecture diagram
+* `/docs/firestore-collections-overview.md` — Complete schema and relationship map

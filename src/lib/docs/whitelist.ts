@@ -9,7 +9,9 @@ export const DOC_WHITELIST = [
   "TROUBLESHOOTING-QUICK.md",
   "api-overview.md",
   "architecture.md",
+  "data-communication.md",
   "data-flow.md",
+  "firestore-collections-overview.md",
   "firestore-schema.md",
 ] as const;
 
