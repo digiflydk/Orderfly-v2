@@ -18,14 +18,15 @@ const productSchema = z.object({
   description: z.string().optional(),
   price: z.coerce.number().min(0, 'Price must be a non-negative number.'),
   priceDelivery: z.coerce.number().min(0, 'Delivery price must be a non-negative number.').optional(),
-  isActive: z.boolean().default(false),
-  isFeatured: z.boolean().default(false),
-  isNew: z.boolean().default(false),
-  isPopular: z.boolean().default(false),
+  isActive: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
+  isFeatured: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
+  isNew: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
+  isPopular: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
-  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
+  imageUrl: z.any().optional(),
 });
+
 
 export type FormState = {
   message: string;
@@ -33,55 +34,35 @@ export type FormState = {
 };
 
 // Accept either (formData) or (prevState, formData)
-export async function createOrUpdateProduct(...args: any[]) {
-    const maybeForm: FormData | null | undefined =
-      args.length === 1 ? args[0] : args[1];
-  
-    if (!(maybeForm instanceof FormData)) {
-      // Better error than “entries of null”
-      throw new Error("createOrUpdateProduct: No FormData received. " +
-        "Make sure <form action={createOrUpdateProduct}> is used or pass FormData explicitly.");
-    }
-  
-    const formData = maybeForm as FormData;
-
-    // Collect fields (supports arrays with foo[] names)
-    const raw: Record<string, any> = {};
+export async function createOrUpdateProduct(prevState: FormState | null, formData: FormData) {
+    
+    const rawData: Record<string, any> = {};
     for (const [key, value] of formData.entries()) {
-        if (key.endsWith('[]')) {
-            const arrKey = key.slice(0, -2);
-            (raw[arrKey] ??= []).push(String(value));
+        if (key.endsWith('[]')) { // Handle array inputs from hidden fields
+            const arrayKey = key.slice(0, -2);
+            if (!rawData[arrayKey]) rawData[arrayKey] = [];
+            rawData[arrayKey].push(value);
         } else {
-            raw[key] = value instanceof File ? value : String(value);
+            rawData[key] = value;
         }
     }
     
-    // Normalize booleans expected as "1"/"0"
-    const bool = (v: any) => v === "1" || v === "true" || v === true;
-
-    const validatedFields = productSchema.safeParse({
-        id: raw.id,
-        brandId: raw.brandId,
-        locationIds: raw.locationIds,
-        categoryId: raw.categoryId,
-        productName: raw.productName,
-        description: raw.description,
-        price: raw.price,
-        priceDelivery: raw.priceDelivery,
-        isActive: bool(raw.isActive),
-        isFeatured: bool(raw.isFeatured),
-        isNew: bool(raw.isNew),
-        isPopular: bool(raw.isPopular),
-        allergenIds: raw.allergenIds,
-        toppingGroupIds: raw.toppingGroupIds,
-        imageUrl: raw.imageUrl,
-    });
-
+    // Ensure arrays are present even if empty
+    if (!rawData.locationIds) rawData.locationIds = [];
+    if (!rawData.allergenIds) rawData.allergenIds = [];
+    if (!rawData.toppingGroupIds) rawData.toppingGroupIds = [];
+    
+    const validatedFields = productSchema.safeParse(rawData);
 
     if (!validatedFields.success) {
       console.error("Zod validation failed", validatedFields.error.flatten());
-      // In a real app, you'd return this error to the form using useActionState
-      throw new Error('Validation failed');
+      const errorMessages = Object.entries(validatedFields.error.flatten().fieldErrors)
+        .map(([field, errors]) => `${field}: ${errors.join(', ')}`)
+        .join('; ');
+      return {
+        message: `Validation failed: ${errorMessages}`,
+        error: true,
+      };
     }
     
     const { id: validatedId, ...productData } = validatedFields.data;
@@ -110,7 +91,6 @@ export async function createOrUpdateProduct(...args: any[]) {
           finalProductData.sortOrder = countSnapshot.size;
       }
   
-      // Explicitly remove undefined keys before saving to Firestore
       const dataToSave: Partial<Product> = { ...finalProductData, id: finalId };
       Object.keys(dataToSave).forEach(key => (dataToSave as any)[key] === undefined && delete (dataToSave as any)[key]);
 
@@ -350,5 +330,6 @@ export async function duplicateProducts({
     return { success: false, message: `An error occurred: ${e.message}` };
   }
 }
+    
 
     
