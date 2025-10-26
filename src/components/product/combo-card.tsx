@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import Image from "next/image";
@@ -9,6 +10,7 @@ import { ComboBuilderDialog } from "./combo-builder-dialog";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Plus } from "lucide-react";
+import { safeImage } from "@/lib/images";
 
 interface ComboCardProps {
   combo: ComboMenu;
@@ -29,7 +31,7 @@ export function ComboCard({ combo, brandProducts }: ComboCardProps) {
       >
         <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md">
           <Image
-            src={combo.imageUrl || 'https://placehold.co/400x400.png'}
+            src={safeImage(combo.imageUrl)}
             alt={combo.comboName}
             fill
             sizes="(max-width: 768px) 25vw, 15vw"

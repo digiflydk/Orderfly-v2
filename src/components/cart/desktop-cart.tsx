@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
@@ -18,6 +19,7 @@ import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '../ui/badge';
 import { useToast } from '@/hooks/use-toast';
+import { safeImage } from '@/lib/images';
 
 export function DesktopCart() {
   const { 
@@ -109,7 +111,7 @@ export function DesktopCart() {
                             <div key={item.cartItemId} className="flex items-start gap-4">
                                 <div className="relative h-16 w-16 shrink-0">
                                 <Image
-                                    src={item.imageUrl || 'https://placehold.co/100x100.png'}
+                                    src={safeImage(item.imageUrl)}
                                     alt={item.productName}
                                     fill
                                     className="rounded-md object-cover"

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import Image from 'next/image';
@@ -21,6 +22,7 @@ import { ScrollArea } from '../ui/scroll-area';
 import { incrementUpsellConversion } from '@/app/superadmin/upsells/actions';
 import { Loader2 } from 'lucide-react';
 import { useAnalytics } from '@/context/analytics-context';
+import { safeImage } from '@/lib/images';
 
 interface UpsellDialogProps {
   isOpen: boolean;
@@ -129,8 +131,8 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
                         <div key={product.id} className="relative group flex flex-col overflow-hidden rounded-lg border">
                             <div className="aspect-video w-full relative">
                                 <Image 
-                                    src={upsell.imageUrl || product.imageUrl || 'https://placehold.co/400x300.png'} 
-                                    alt={product.productName} 
+                                    src={safeImage(upsell.imageUrl || product.imageUrl)} 
+                                    alt={product.productName || ''} 
                                     fill 
                                     className="object-cover"
                                     sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"

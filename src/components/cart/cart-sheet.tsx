@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
@@ -26,6 +27,7 @@ import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 import { useToast } from '@/hooks/use-toast';
 import { useAnalytics } from '@/context/analytics-context';
+import { safeImage } from '@/lib/images';
 
 export function CartSheet() {
   const { cartItems, removeFromCart, updateQuantity, itemCount, brand, location, subtotal, itemDiscount, cartDiscount, cartTotal, deliveryFee, freeDeliveryDiscountApplied, deliveryType } = useCart();
@@ -113,7 +115,7 @@ export function CartSheet() {
                         <div key={item.cartItemId} className="flex items-start gap-4">
                         <div className="relative h-16 w-16 shrink-0">
                           <Image
-                              src={item.imageUrl || 'https://placehold.co/100x100.png'}
+                              src={safeImage(item.imageUrl)}
                               alt={item.productName}
                               fill
                               className="rounded-md object-cover"

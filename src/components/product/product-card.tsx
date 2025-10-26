@@ -13,6 +13,7 @@ import { getToppings, getToppingGroups } from "@/app/superadmin/toppings/actions
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "../ui/button";
+import { safeImage } from '@/lib/images';
 
 interface ProductCardProps {
   product: ProductForMenu;
@@ -150,8 +151,8 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
       >
         <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md">
           <Image
-            src={product.imageUrl || 'https://placehold.co/400x400.png'}
-            alt={product.productName}
+            src={safeImage(product.imageUrl)}
+            alt={product.productName || 'Product image'}
             fill
             sizes="(max-width: 768px) 25vw, 15vw"
             className="object-cover"

@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
@@ -26,6 +27,7 @@ import { DynamicIcon } from '../superadmin/dynamic-icon';
 import { getAllergens } from '@/app/superadmin/allergens/actions';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { useAnalytics } from '@/context/analytics-context';
+import { safeImage } from '@/lib/images';
 
 interface ProductDialogProps {
   product: ProductForMenu;
@@ -181,8 +183,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
             <ScrollArea className="flex-1">
                 <div className="relative aspect-video w-full shrink-0">
                     <Image 
-                        src={product.imageUrl || 'https://placehold.co/400x300.png'} 
-                        alt={product.productName}
+                        src={safeImage(product.imageUrl)} 
+                        alt={product.productName || 'Product image'}
                         fill
                         sizes="(max-width: 640px) 100vw, 512px"
                         className="object-cover"

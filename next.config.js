@@ -5,14 +5,21 @@ const nextConfig = {
     serverActions: {},
   },
   images: {
-    // Tillad eksterne billeder fra de domæner vi bruger i projektet
+    domains: [
+      'firebasestorage.googleapis.com',
+      'placehold.co',
+      'i.postimg.cc',
+      'picsum.photos',
+      'images.unsplash.com',
+      'res.cloudinary.com',
+    ],
     remotePatterns: [
       { protocol: "https", hostname: "i.postimg.cc" },
       { protocol: "https", hostname: "picsum.photos" },
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "res.cloudinary.com" },
       { protocol: "https", hostname: "placehold.co" },
-      // Tilføj flere her hvis I ser tilsvarende fejl fra andre hosts
+      { protocol: 'https', hostname: 'firebasestorage.googleapis.com' },
     ],
   },
   webpack: (config) => {
