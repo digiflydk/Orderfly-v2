@@ -8,7 +8,7 @@ export const DOC_WHITELIST = [
   "PM-ONEPAGER.md",
   "TROUBLESHOOTING-QUICK.md",
   "api-overview.md",
-  "architecture.md", // <-- ADDED
+  "architecture.md",
   "data-flow.md",
   "firestore-schema.md",
 ] as const;
