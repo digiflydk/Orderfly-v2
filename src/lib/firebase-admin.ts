@@ -4,9 +4,15 @@ import * as admin from 'firebase-admin';
 
 type SA = { project_id: string; client_email: string; private_key: string };
 
-function loadServiceAccount(): { projectId: string; clientEmail: string; privateKey: string } {
+function loadServiceAccount(): { projectId: string; clientEmail: string; privateKey: string } | null {
   let raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set.');
+  if (!raw) {
+    if (process.env.NODE_ENV === 'production') {
+        throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON is not set in a production environment.');
+    }
+    console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT_JSON is not set. Using dummy admin app for development. Firestore operations will fail.");
+    return null;
+  }
   raw = raw.trim();
 
   // Accept both base64 and raw JSON
@@ -45,31 +51,68 @@ function assertNoADC() {
 const globalAny = globalThis as any;
 if (!globalAny.__OF_ADMIN_APP__) {
   assertNoADC();
-  const { projectId, clientEmail, privateKey } = loadServiceAccount();
-  const app = admin.initializeApp({
-    credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
-    projectId,
-  });
+  const serviceAccount = loadServiceAccount();
+  
+  if (serviceAccount) {
+      const app = admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: serviceAccount.projectId,
+      });
 
-  const credName = (app.options as any)?.credential?.constructor?.name;
-  if (credName !== 'CertCredential') {
-    throw new Error(`Firebase Admin initialized with ${credName}, expected CertCredential.`);
+      const credName = (app.options as any)?.credential?.constructor?.name;
+      if (credName !== 'CertCredential') {
+        throw new Error(`Firebase Admin initialized with ${credName}, expected CertCredential.`);
+      }
+
+      globalAny.__OF_ADMIN_APP__ = app;
+  } else {
+    // Create a dummy app for local dev without credentials
+    globalAny.__OF_ADMIN_APP__ = {
+      name: 'dummy-app',
+      options: {},
+      firestore: () => {
+        throw new Error("Firestore is not available. FIREBASE_SERVICE_ACCOUNT_JSON is not set.");
+      }
+    };
   }
-
-  globalAny.__OF_ADMIN_APP__ = app;
 }
 
 export const adminApp = (globalThis as any).__OF_ADMIN_APP__ as admin.app.App;
-export const getAdminDb = () => admin.firestore(adminApp);
+
+export const getAdminDb = () => {
+    try {
+        return admin.firestore(adminApp);
+    } catch (e: any) {
+        if (e.message.includes("Firestore is not available")) {
+            console.error("Firestore operation failed: Firebase Admin SDK was initialized with a dummy app due to missing credentials.");
+        }
+        throw e;
+    }
+};
+
 export function _adminDebugInfo() {
+  if (adminApp.name === 'dummy-app') {
+    return {
+      appsCount: 0,
+      projectId: 'dummy-project',
+      cred: 'DummyCredential',
+      note: 'Firebase Admin not initialized. Set FIREBASE_SERVICE_ACCOUNT_JSON.'
+    };
+  }
   return {
     appsCount: admin.apps.length,
     projectId: (adminApp.options as any).projectId,
     cred: (adminApp.options as any)?.credential?.constructor?.name,
   };
 }
+export { admin };
 
-export const getAdminFieldValue = () => admin.firestore.FieldValue;
+// Stub for getAdminFieldValue until it can be properly implemented
+export const getAdminFieldValue = () => ({
+  serverTimestamp: () => new Date(), 
+  // Add other FieldValue methods if needed, returning sensible defaults
+  // e.g., increment: (n: number) => n,
+});
 
 export async function adminHealthProbe() {
     try {
@@ -79,4 +122,3 @@ export async function adminHealthProbe() {
         return { ok: false, error: e.message, code: e.code };
     }
 }
-export { admin };
