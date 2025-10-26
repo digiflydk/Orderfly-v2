@@ -2,6 +2,7 @@
 export const DOCS_DIR = "docs";
 
 export const DOC_WHITELIST = [
+  "README.md",
   "FILE-MAP.md",
   "OPERATIONS-LOG.md",
   "PM-KICKOFF-TEMPLATE.md",
@@ -9,8 +10,8 @@ export const DOC_WHITELIST = [
   "TROUBLESHOOTING-QUICK.md",
   "api-overview.md",
   "architecture.md",
-  "data-communication.md",
   "data-flow.md",
+  "data-communication.md",
   "firestore-collections-overview.md",
   "firestore-schema.md",
 ] as const;

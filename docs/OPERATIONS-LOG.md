@@ -1,6 +1,7 @@
 # Operations Log (seneste status & åbne punkter)
 
 ## Seneste leverancer
+* 1.0.230 • OF-453 — Added documentation index and resolved ticket ID collision.
 * 1.0.229 • OF-452 — Added Firestore collections overview (schema + relationships between Superadmin and Frontend)
 * 1.0.228 • OF-451 — Added database communication map showing data exchange between Superadmin, Firestore, and Frontend.
 * 1.0.227 • OF-450 — Added architecture overview and system diagram to documentation bundle (architecture.md + data-flow.md update)
@@ -33,7 +34,7 @@
 - 1.0.200 • OF-465 — Developed initial version of the customer list page.
 - 1.0.199 • OF-464 — Added server actions for creating and managing upsell campaigns.
 - 1.0.198 • OF-463 — Created form page for upsell configuration.
-- 1.0.197 • OF-462 — Developed client page for listing and filtering upsells.
+-- 1.0.197 • OF-462 — Developed client page for listing and filtering upsells.
 - 1.0.196 • OF-461 — Added server actions for combo menus.
 - 1.0.195 • OF-460 — Created form page for building and editing combo menus.
 - 1.0.194 • OF-459 — Developed client page for combo menus with brand filtering.
@@ -43,7 +44,7 @@
 - 1.0.190 • OF-455 — Developed form page for creating and editing standard discounts.
 - 1.0.189 • OF-454 — Implemented client-side page for managing standard discounts.
 - 1.0.188 • OF-453 — Refined discount code validation server-side action.
-- 1.0.187 • OF-452 — Created form page for discount code management.
+- 1.0.187 • OF-452-LEG — Created form page for discount code management (legacy renumber to avoid collision)
 - 1.0.186 • OF-451 — Developed client page for discount code list with filtering.
 - 1.0.185 • OF-450 — Implemented drag-and-drop sorting for topping lists.
 - 1.0.184 • OF-449 — Created form pages for toppings and topping groups.
