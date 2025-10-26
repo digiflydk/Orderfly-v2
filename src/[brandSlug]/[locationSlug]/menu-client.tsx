@@ -87,11 +87,13 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
      useEffect(() => {
         // This hook re-fetches discounts on the client side to ensure they are up-to-date,
         // especially when the deliveryType changes.
-        async function fetchDiscounts() {
-             const discounts = await getActiveStandardDiscounts({ brandId: brand.id, locationId: location.id, deliveryType });
+        async function fetchDiscounts(type: 'delivery' | 'pickup') {
+             const discounts = await getActiveStandardDiscounts({ brandId: brand.id, locationId: location.id, deliveryType: type });
              setActiveStandardDiscounts(discounts);
         }
-        if (deliveryType) fetchDiscounts();
+        if (deliveryType) {
+            fetchDiscounts(deliveryType);
+        }
      }, [deliveryType, brand.id, location.id]);
 
      useEffect(() => {
