@@ -1,37 +1,45 @@
 
-
 import 'server-only';
 import * as admin from 'firebase-admin';
 
-let app: admin.app.App | undefined;
+let db: admin.firestore.Firestore;
 
-/**
- * Returnerer en singleton Firebase Admin App
- * Bruger FIREBASE_SERVICE_ACCOUNT fra environment som JSON
- */
-export function getAdminApp(): admin.app.App {
-  if (!admin.apps.length) {
-    const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-    if (!raw) {
-      throw new Error("FIREBASE_SERVICE_ACCOUNT_JSON is not set.");
-    }
-    const serviceAccount = JSON.parse(raw);
-    app = admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-  } else {
-    app = admin.app();
+function getServiceAccount(): admin.ServiceAccount {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw) {
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set.');
   }
-  return app!;
+  try {
+    const parsed = JSON.parse(raw);
+    // Minimal sanity
+    const required = ['project_id','client_email','private_key'];
+    for (const k of required) {
+      if (!parsed[k]) throw new Error(`Missing field in service account: ${k}`);
+    }
+    // Some providers strip \n; fix if needed
+    if (typeof parsed.private_key === 'string') {
+      parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+    }
+    return {
+      projectId: parsed.project_id,
+      clientEmail: parsed.client_email,
+      privateKey: parsed.private_key,
+    };
+  } catch (e: any) {
+    throw new Error(`Invalid FIREBASE_SERVICE_ACCOUNT_JSON: ${e?.message ?? 'parse error'}`);
+  }
 }
 
-/**
- * Returnerer Firestore Admin instance.
- * Bruges i alle server routes (fx /api/ops/catalog/...).
- */
-export function getAdminDb(): admin.firestore.Firestore {
-  return getAdminApp().firestore();
+if (!admin.apps.length) {
+  const creds = getServiceAccount();
+  admin.initializeApp({
+    credential: admin.credential.cert(creds),
+  });
 }
+db = admin.firestore();
+
+export { db as getAdminDb, admin as getAdminApp };
+
 
 export async function adminHealthProbe() {
   return { ok: true, ts: Date.now() };
