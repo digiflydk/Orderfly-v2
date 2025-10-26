@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { z } from 'zod';
@@ -32,6 +31,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui
 import { Switch } from '../ui/switch';
 import { Textarea } from '../ui/textarea';
 import { ScrollArea } from '../ui/scroll-area';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
+import { BrandAppearancesForm } from './brand-appearances-form';
 
 const productSchema = z.object({
   id: z.string().optional().nullable(),
@@ -48,6 +49,7 @@ const productSchema = z.object({
   isPopular: z.boolean().default(false),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
+  imageUrl: z.any().optional(),
 });
 
 type ProductFormValues = z.infer<typeof productSchema>;
@@ -71,19 +73,22 @@ function SubmitButton({ isEditing }: { isEditing: boolean }) {
 }
 
 export function ProductFormPage({ product, brands, locations, categories, toppingGroups, allergens }: ProductFormPageProps) {
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const [imagePreview, setImagePreview] = useState<string | null>(product?.imageUrl || null);
+  const [isClient, setIsClient] = useState(false);
+
   const isEditing = !!product;
 
   const form = useForm<ProductFormValues>({
     resolver: zodResolver(productSchema),
+    mode: "onSubmit",
     defaultValues: {
       id: product?.id ?? "",
       brandId: product?.brandId ?? "",
       categoryId: product?.categoryId ?? "",
       productName: product?.productName ?? "",
       description: product?.description ?? "",
-      price: product?.price ?? "" as unknown as number,
-      priceDelivery: product?.priceDelivery ?? "" as unknown as number,
+      price: (product?.price ?? "") as unknown as number,
+      priceDelivery: (product?.priceDelivery ?? "") as unknown as number,
       isActive: product?.isActive ?? false,
       isFeatured: product?.isFeatured ?? false,
       isNew: product?.isNew ?? false,
@@ -91,11 +96,13 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
       locationIds: product?.locationIds ?? [],
       allergenIds: product?.allergenIds ?? [],
       toppingGroupIds: product?.toppingGroupIds ?? [],
+      imageUrl: product?.imageUrl ?? undefined,
     },
   });
-    
+
   const selectedBrandId = form.watch('brandId');
-  
+  const imageUrlValue = form.watch('imageUrl');
+
   const { brandLocations, brandCategories, brandToppingGroups } = useMemo(() => {
     if (!selectedBrandId) {
         return { brandLocations: [], brandCategories: [], brandToppingGroups: [] };
@@ -118,26 +125,31 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
         form.setValue('categoryId', '');
     }
   }, [selectedBrandId, brandCategories, form]);
+
+  useEffect(() => {
+      setIsClient(true);
+  }, []);
   
   const title = isEditing ? 'Edit Product' : 'Create New Product';
   const description = isEditing ? `Editing details for ${product?.productName || 'product...'}.` : 'Fill in the details for the new product.';
   
   return (
     <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-              <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
-              <p className="text-muted-foreground">{description}</p>
-          </div>
-        </div>
         <Form {...form}>
             <form action={createOrUpdateProduct}>
-                <div className="flex justify-end mb-6">
-                    <Button variant="outline" asChild className="mr-2">
-                        <Link href="/superadmin/products">Cancel</Link>
-                    </Button>
-                    <SubmitButton isEditing={isEditing} />
+                <div className="flex items-center justify-between mb-6">
+                    <div>
+                        <h1 className="text-2xl font-bold tracking-tight">{title}</h1>
+                        <p className="text-muted-foreground">{description}</p>
+                    </div>
+                    <div className="flex gap-2">
+                        <Button variant="outline" asChild>
+                            <Link href="/superadmin/products">Cancel</Link>
+                        </Button>
+                        <SubmitButton isEditing={isEditing} />
+                    </div>
                 </div>
+
                 <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
                     <div className="lg:col-span-2 space-y-6">
                          <Card>
@@ -171,8 +183,24 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                 <FormItem>
                                     <FormLabel>Product Image</FormLabel>
                                     <FormControl>
-                                        <Input name="image" type="file" accept="image/*" />
+                                        <Input name="imageUrl" type="file" accept="image/*" onChange={(e) => {
+                                            const file = e.target.files?.[0];
+                                            if (file) {
+                                                const reader = new FileReader();
+                                                reader.onloadend = () => {
+                                                    setImagePreview(reader.result as string);
+                                                };
+                                                reader.readAsDataURL(file);
+                                            } else {
+                                                setImagePreview(product?.imageUrl || null);
+                                            }
+                                        }} />
                                     </FormControl>
+                                    {imagePreview && (
+                                        <div className="mt-2 w-32 h-32 relative">
+                                            <Image src={imagePreview} alt="Image Preview" fill className="object-contain rounded-md border" />
+                                        </div>
+                                    )}
                                     <FormMessage />
                                 </FormItem>
                             </CardContent>
@@ -226,7 +254,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                     </div>
                 </div>
 
-                {/* --- Hidden serialization so Server Action gets ALL values --- */}
+                 {/* Hidden serialization so the Server Action receives complete FormData */}
                 <input type="hidden" name="id" value={form.watch('id') ?? ''} />
                 <input type="hidden" name="brandId" value={form.watch('brandId') ?? ''} />
                 <input type="hidden" name="categoryId" value={form.watch('categoryId') ?? ''} />
@@ -239,17 +267,18 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                 <input type="hidden" name="isNew" value={form.watch('isNew') ? '1' : '0'} />
                 <input type="hidden" name="isPopular" value={form.watch('isPopular') ? '1' : '0'} />
                 {(form.watch('locationIds') ?? []).map((id: string) => (
-                    <input key={`loc-${id}`} type="hidden" name="locationIds[]" value={id} />
+                    <input key={`loc-hidden-${id}`} type="hidden" name="locationIds" value={id} />
                 ))}
                 {(form.watch('allergenIds') ?? []).map((id: string) => (
-                    <input key={`alg-${id}`} type="hidden" name="allergenIds[]" value={id} />
+                    <input key={`alg-hidden-${id}`} type="hidden" name="allergenIds" value={id} />
                 ))}
                 {(form.watch('toppingGroupIds') ?? []).map((id: string) => (
-                    <input key={`tg-${id}`} type="hidden" name="toppingGroupIds[]" value={id} />
+                    <input key={`tg-hidden-${id}`} type="hidden" name="toppingGroupIds" value={id} />
                 ))}
-
             </form>
         </Form>
     </div>
   );
 }
+
+    

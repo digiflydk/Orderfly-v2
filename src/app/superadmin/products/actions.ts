@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -33,7 +32,7 @@ export type FormState = {
   error: boolean;
 };
 
-// Accept either (formData)  or  (prevState, formData)
+// Accept either (formData) or (prevState, formData)
 export async function createOrUpdateProduct(...args: any[]) {
     const maybeForm: FormData | null | undefined =
       args.length === 1 ? args[0] : args[1];
@@ -49,7 +48,7 @@ export async function createOrUpdateProduct(...args: any[]) {
     // Collect fields (supports arrays with foo[] names)
     const raw: Record<string, any> = {};
     for (const [key, value] of formData.entries()) {
-        if (key.endsWith("[]")) {
+        if (key.endsWith('[]')) {
             const arrKey = key.slice(0, -2);
             (raw[arrKey] ??= []).push(String(value));
         } else {
@@ -68,7 +67,7 @@ export async function createOrUpdateProduct(...args: any[]) {
         productName: raw.productName,
         description: raw.description,
         price: raw.price,
-        priceDelivery: raw.priceDelivery || undefined,
+        priceDelivery: raw.priceDelivery,
         isActive: bool(raw.isActive),
         isFeatured: bool(raw.isFeatured),
         isNew: bool(raw.isNew),
@@ -89,6 +88,19 @@ export async function createOrUpdateProduct(...args: any[]) {
     let finalProductData: Partial<Product> = productData;
   
     try {
+      const imageFile = formData.get('imageUrl') as File | null;
+      if (imageFile && imageFile.size > 0) {
+        const blob = await put(imageFile.name, imageFile, { access: 'public' });
+        finalProductData.imageUrl = blob.url;
+      } else if (validatedId) {
+        // Retain existing image URL if no new file is uploaded during an edit
+        const existingProduct = await getProductById(validatedId);
+        finalProductData.imageUrl = existingProduct?.imageUrl;
+      } else {
+        finalProductData.imageUrl = undefined;
+      }
+
+
       const productRef = validatedId ? doc(db, 'products', validatedId) : doc(collection(db, 'products'));
       const finalId = productRef.id;
   
@@ -98,7 +110,10 @@ export async function createOrUpdateProduct(...args: any[]) {
           finalProductData.sortOrder = countSnapshot.size;
       }
   
-      const dataToSave = { ...finalProductData, id: finalId };
+      // Explicitly remove undefined keys before saving to Firestore
+      const dataToSave: Partial<Product> = { ...finalProductData, id: finalId };
+      Object.keys(dataToSave).forEach(key => (dataToSave as any)[key] === undefined && delete (dataToSave as any)[key]);
+
       await setDoc(productRef, dataToSave, { merge: true });
   
     } catch (e) {
@@ -335,3 +350,5 @@ export async function duplicateProducts({
     return { success: false, message: `An error occurred: ${e.message}` };
   }
 }
+
+    
