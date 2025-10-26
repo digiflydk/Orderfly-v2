@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -24,7 +25,7 @@ const productSchema = z.object({
   isPopular: z.boolean().default(false),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
-  imageUrl: z.string().url().optional().nullable(),
+  imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
 });
 
 export type FormState = {
@@ -32,100 +33,82 @@ export type FormState = {
   error: boolean;
 };
 
-export async function createOrUpdateProduct(formData: FormData) {
-  const rawData: Record<string, any> = {};
+// Accept either (formData)  or  (prevState, formData)
+export async function createOrUpdateProduct(...args: any[]) {
+    const maybeForm: FormData | null | undefined =
+      args.length === 1 ? args[0] : args[1];
   
-  // Extract all fields from formData
-  for (const [key, value] of formData.entries()) {
-    if (key.endsWith('[]')) {
-      const arrayKey = key.slice(0, -2);
-      if (!rawData[arrayKey]) rawData[arrayKey] = [];
-      rawData[arrayKey].push(value);
-    } else {
-       // Special handling for booleans from checkboxes/switches
-       if (['isActive', 'isFeatured', 'isNew', 'isPopular'].includes(key)) {
-         rawData[key] = value === '1';
-       } else {
-         rawData[key] = value;
-       }
+    if (!(maybeForm instanceof FormData)) {
+      // Better error than “entries of null”
+      throw new Error("createOrUpdateProduct: No FormData received. " +
+        "Make sure <form action={createOrUpdateProduct}> is used or pass FormData explicitly.");
     }
-  }
-
-  // Handle arrays from getAll
-  rawData.locationIds = formData.getAll('locationIds');
-  rawData.allergenIds = formData.getAll('allergenIds');
-  rawData.toppingGroupIds = formData.getAll('toppingGroupIds');
-
-  const imageFile = formData.get('imageUrl') as File | null;
-  const existingImageUrl = formData.get('existingImageUrl') as string | null;
-
-  let finalImageUrl = existingImageUrl;
   
-  try {
-    if (imageFile && imageFile.size > 0) {
-      const blob = await put(imageFile.name, imageFile, { access: 'public' });
-      finalImageUrl = blob.url;
+    const formData = maybeForm as FormData;
+
+    // Collect fields (supports arrays with foo[] names)
+    const raw: Record<string, any> = {};
+    for (const [key, value] of formData.entries()) {
+        if (key.endsWith("[]")) {
+            const arrKey = key.slice(0, -2);
+            (raw[arrKey] ??= []).push(String(value));
+        } else {
+            raw[key] = value instanceof File ? value : String(value);
+        }
     }
-  } catch(e: any) {
-    console.error("Image upload failed:", e);
-    // You might want to return an error state here if the upload is critical
-  }
+    
+    // Normalize booleans expected as "1"/"0"
+    const bool = (v: any) => v === "1" || v === "true" || v === true;
 
-  rawData.imageUrl = finalImageUrl;
-
-  // Now, create the object for Zod parsing
-  const dataToParse = {
-    id: rawData.id || undefined,
-    brandId: rawData.brandId,
-    locationIds: rawData.locationIds,
-    categoryId: rawData.categoryId,
-    productName: rawData.productName,
-    description: rawData.description,
-    price: rawData.price,
-    priceDelivery: rawData.priceDelivery || undefined,
-    isActive: rawData.isActive,
-    isFeatured: rawData.isFeatured,
-    isNew: rawData.isNew,
-    isPopular: rawData.isPopular,
-    allergenIds: rawData.allergenIds,
-    toppingGroupIds: rawData.toppingGroupIds,
-    imageUrl: rawData.imageUrl,
-  };
+    const validatedFields = productSchema.safeParse({
+        id: raw.id,
+        brandId: raw.brandId,
+        locationIds: raw.locationIds,
+        categoryId: raw.categoryId,
+        productName: raw.productName,
+        description: raw.description,
+        price: raw.price,
+        priceDelivery: raw.priceDelivery || undefined,
+        isActive: bool(raw.isActive),
+        isFeatured: bool(raw.isFeatured),
+        isNew: bool(raw.isNew),
+        isPopular: bool(raw.isPopular),
+        allergenIds: raw.allergenIds,
+        toppingGroupIds: raw.toppingGroupIds,
+        imageUrl: raw.imageUrl,
+    });
 
 
-  const validatedFields = productSchema.safeParse(dataToParse);
-
-  if (!validatedFields.success) {
-    console.error("Zod validation failed", validatedFields.error.flatten());
-    // In a real app, you'd return this error to the form
-    return;
-  }
-  
-  const { id: validatedId, ...productData } = validatedFields.data;
-  let finalProductData: Partial<Product> = productData;
-
-  try {
-    const productRef = validatedId ? doc(db, 'products', validatedId) : doc(collection(db, 'products'));
-    const finalId = productRef.id;
-
-    if (!validatedId) {
-        const productsCountQuery = query(collection(db, 'products'), where('brandId', '==', productData.brandId));
-        const countSnapshot = await getDocs(productsCountQuery);
-        finalProductData.sortOrder = countSnapshot.size;
+    if (!validatedFields.success) {
+      console.error("Zod validation failed", validatedFields.error.flatten());
+      // In a real app, you'd return this error to the form using useActionState
+      throw new Error('Validation failed');
     }
-
-    const dataToSave = { ...finalProductData, id: finalId };
-    await setDoc(productRef, dataToSave, { merge: true });
-
-  } catch (e) {
-    console.error(e);
-    // Handle error appropriately
-    return;
-  }
+    
+    const { id: validatedId, ...productData } = validatedFields.data;
+    let finalProductData: Partial<Product> = productData;
   
-  revalidatePath(`/superadmin/products`);
-  redirect(`/superadmin/products`);
-}
+    try {
+      const productRef = validatedId ? doc(db, 'products', validatedId) : doc(collection(db, 'products'));
+      const finalId = productRef.id;
+  
+      if (!validatedId) {
+          const productsCountQuery = query(collection(db, 'products'), where('brandId', '==', productData.brandId));
+          const countSnapshot = await getDocs(productsCountQuery);
+          finalProductData.sortOrder = countSnapshot.size;
+      }
+  
+      const dataToSave = { ...finalProductData, id: finalId };
+      await setDoc(productRef, dataToSave, { merge: true });
+  
+    } catch (e) {
+      console.error(e);
+      throw new Error('Failed to save product to database.');
+    }
+    
+    revalidatePath(`/superadmin/products`);
+    redirect(`/superadmin/products`);
+  }
 
 
 // --- OTHER ACTIONS ---
