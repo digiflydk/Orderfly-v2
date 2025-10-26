@@ -3,8 +3,8 @@
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import { useEffect, useMemo, useState, useActionState } from 'react';
+import { useForm, useFieldArray, useWatch } from 'react-hook-form';
+import { useEffect, useMemo, useState, useActionState, useCallback } from 'react';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
 import Image from 'next/image';
@@ -34,8 +34,16 @@ import { ScrollArea } from '../ui/scroll-area';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { BrandAppearancesForm } from './brand-appearances-form';
 import { Label } from '@/components/ui/label';
+import { safeImage } from '@/lib/images';
 
-const productSchema = z.object({
+const asBool = (v: unknown) => {
+  if (v === true || v === false) return v;
+  if (v == null) return undefined;
+  const s = String(v).toLowerCase().trim();
+  return ['1', 'true', 'on', 'yes', 'checked'].includes(s);
+};
+
+const baseFields = {
   id: z.string().optional().nullable(),
   brandId: z.string().min(1, 'A brand must be selected.'),
   locationIds: z.array(z.string()).optional().default([]),
@@ -44,17 +52,28 @@ const productSchema = z.object({
   description: z.string().optional(),
   price: z.coerce.number().min(0, 'Price must be a non-negative number.'),
   priceDelivery: z.coerce.number().min(0, 'Delivery price must be a non-negative number.').optional(),
-  isActive: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
-  isFeatured: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
-  isNew: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
-  isPopular: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
   imageUrl: z.any().optional(),
+};
+
+const createSchema = z.object({
+  ...baseFields,
+  isActive: z.preprocess(asBool, z.boolean()).optional().default(false),
+  isFeatured: z.preprocess(asBool, z.boolean()).optional().default(false),
+  isNew: z.preprocess(asBool, z.boolean()).optional().default(false),
+  isPopular: z.preprocess(asBool, z.boolean()).optional().default(false),
 });
 
+const updateSchema = z.object({
+  ...baseFields,
+  isActive: z.preprocess(asBool, z.boolean()).optional(),
+  isFeatured: z.preprocess(asBool, z.boolean()).optional(),
+  isNew: z.preprocess(asBool, z.boolean()).optional(),
+  isPopular: z.preprocess(asBool, z.boolean()).optional(),
+});
 
-type ProductFormValues = z.infer<typeof productSchema>;
+type ProductFormValues = z.infer<typeof createSchema>;
 
 interface ProductFormPageProps {
   product?: Product;
@@ -74,6 +93,9 @@ function SubmitButton({ isEditing }: { isEditing: boolean }) {
     )
 }
 
+const uniq = <T,>(arr: T[] | undefined) =>
+  Array.from(new Set((arr ?? []).filter(Boolean)));
+
 export function ProductFormPage({ product, brands, locations, categories, toppingGroups, allergens }: ProductFormPageProps) {
   const { toast } = useToast();
   const [state, formAction] = useActionState(createOrUpdateProduct, null);
@@ -83,7 +105,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   const isEditing = !!product;
 
   const form = useForm<ProductFormValues>({
-    resolver: zodResolver(productSchema),
+    resolver: zodResolver(isEditing ? updateSchema : createSchema),
     mode: "onSubmit",
     defaultValues: product ? {
         ...product,
@@ -93,9 +115,9 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
         isFeatured: product.isFeatured ?? false,
         isNew: product.isNew ?? false,
         isPopular: product.isPopular ?? false,
-        locationIds: product.locationIds ?? [],
-        allergenIds: product.allergenIds ?? [],
-        toppingGroupIds: product.toppingGroupIds ?? [],
+        locationIds: uniq(product.locationIds),
+        allergenIds: uniq(product.allergenIds),
+        toppingGroupIds: uniq(product.toppingGroupIds),
     } : {
       id: "",
       brandId: "",
@@ -153,6 +175,11 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
   
   const title = isEditing ? 'Edit Product' : 'Create New Product';
   const description = isEditing ? `Editing details for ${product?.productName || 'product...'}.` : 'Fill in the details for the new product.';
+  
+  const locationIds = uniq(form.watch('locationIds'));
+  const allergenIds = uniq(form.watch('allergenIds'));
+  const toppingGroupIds = uniq(form.watch('toppingGroupIds'));
+
 
   return (
     <div className="space-y-6">
@@ -252,7 +279,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     <div className="p-4">
                                     {brandLocations.map((item) => (
                                         <FormField key={item.id} control={form.control} name="locationIds"
-                                        render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox name="locationIds[]" checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? field.onChange([...currentValue, item.id]) : field.onChange(currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label></FormItem>)} />
+                                        render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? field.onChange([...currentValue, item.id]) : field.onChange(currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label></FormItem>)} />
                                     ))}
                                     </div>
                                 </ScrollArea>
@@ -265,7 +292,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                 <ScrollArea className="h-40 rounded-md border">
                                     <div className="p-4">
                                     {brandToppingGroups.map((item) => (
-                                        <FormField key={item.id} control={form.control} name="toppingGroupIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox name="toppingGroupIds[]" checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? field.onChange([...currentValue, item.id]) : field.onChange(currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`tg-${item.id}`} className="font-normal">{item.groupName}</Label></FormItem>)} />
+                                        <FormField key={item.id} control={form.control} name="toppingGroupIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? field.onChange([...currentValue, item.id]) : field.onChange(currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`tg-${item.id}`} className="font-normal">{item.groupName}</Label></FormItem>)} />
                                     ))}
                                     </div>
                                 </ScrollArea>
@@ -278,9 +305,11 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                 <ScrollArea className="h-40 rounded-md border">
                                     <div className="p-4">
                                     {allergens.map((item) => (
-                                        <FormField key={item.id} control={form.control} name="allergenIds" render={({ field }) => (
-                                        <FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox name="allergenIds[]" checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? field.onChange([...currentValue, item.id]) : field.onChange(currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`alg-${item.id}`} className="font-normal">{item.allergenName}</Label></FormItem>
-                                        )}/>
+                                        <FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={form.getValues('allergenIds')?.includes(item.id)} onCheckedChange={(checked) => {
+                                            const currentValues = form.getValues('allergenIds') || [];
+                                            const newValues = checked ? [...currentValues, item.id] : currentValues.filter(id => id !== item.id);
+                                            form.setValue('allergenIds', newValues);
+                                        }}/></FormControl><Label htmlFor={`alg-${item.id}`} className="font-normal">{item.allergenName}</Label></FormItem>
                                     ))}
                                     </div>
                                 </ScrollArea>
@@ -319,15 +348,15 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
             <input type="hidden" name="isFeatured" value={form.watch('isFeatured') ? '1' : '0'} />
             <input type="hidden" name="isNew" value={form.watch('isNew') ? '1' : '0'} />
             <input type="hidden" name="isPopular" value={form.watch('isPopular') ? '1' : '0'} />
-            
-            {(form.watch('locationIds') ?? []).map((id: string) => (
-              <input key={`loc-hidden-${id}`} type="hidden" name="locationIds[]" value={id} />
+
+            {locationIds.map((id, idx) => (
+                <input key={`loc-hidden-${id}-${idx}`} type="hidden" name="locationIds[]" value={id} />
             ))}
-            {(form.watch('allergenIds') ?? []).map((id: string) => (
-              <input key={`alg-hidden-${id}`} type="hidden" name="allergenIds[]" value={id} />
+            {allergenIds.map((id, idx) => (
+                <input key={`alg-hidden-${id}-${idx}`} type="hidden" name="allergenIds[]" value={id} />
             ))}
-            {(form.watch('toppingGroupIds') ?? []).map((id: string) => (
-              <input key={`tg-hidden-${id}`} type="hidden" name="toppingGroupIds[]" value={id} />
+            {toppingGroupIds.map((id, idx) => (
+                <input key={`tg-hidden-${id}-${idx}`} type="hidden" name="toppingGroupIds[]" value={id} />
             ))}
           </div>
         </form>
