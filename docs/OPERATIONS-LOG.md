@@ -1,6 +1,7 @@
 # Operations Log (seneste status & åbne punkter)
 
 ## Seneste leverancer
+* 1.0.231 • OF-454 — Expanded API contract and OpenAPI spec for server actions.
 * 1.0.230 • OF-453 — Added documentation index and resolved ticket ID collision.
 * 1.0.229 • OF-452 — Added Firestore collections overview (schema + relationships between Superadmin and Frontend)
 * 1.0.228 • OF-451 — Added database communication map showing data exchange between Superadmin, Firestore, and Frontend.
