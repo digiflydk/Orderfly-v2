@@ -1,11 +1,11 @@
 
+
 // src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
 import ProductGrid from "@/components/catalog/product-grid";
-import type { AsyncPageProps } from "@/types/next-async-props";
 
 function normalizeProbe(raw: any) {
   if (!raw || typeof raw !== "object") {
@@ -53,8 +53,11 @@ function normalizeProbe(raw: any) {
 export default async function Page({
   params,
   searchParams,
-}: AsyncPageProps<{ brandSlug: string; locationSlug: string }>) {
-  const { brandSlug, locationSlug } = await params;
+}: {
+  params: { brandSlug: string; locationSlug: string };
+  searchParams: { [key: string]: string | string[] | undefined };
+}) {
+  const { brandSlug, locationSlug } = params;
   const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
 
   try {
@@ -81,7 +84,7 @@ export default async function Page({
             <section key={cat.id} className="mb-6">
               <h2 className="font-semibold">{cat.name}</h2>
               <ul className="list-disc ml-5 mt-2">
-                {(((menu.productsByCategory as Record<string, any[]>)[cat.id]) ?? []).map((p:any)=>(<li key={p.id}>{p.productName || p.name || p.title || "Uden navn"}</li>))}
+                {((menu.productsByCategory as Record<string, any[]>)[cat.id] ?? []).map((p:any)=>(<li key={p.id}>{p.productName || p.name || p.title || "Uden navn"}</li>))}
               </ul>
             </section>
           ))}
