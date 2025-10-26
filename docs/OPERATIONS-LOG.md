@@ -1,6 +1,7 @@
 # Operations Log (seneste status & åbne punkter)
 
 ## Seneste leverancer
+* 1.0.230 • OF-453 — Added docs/README.md and fixed historical ticket ID collision.
 * 1.0.229 • OF-452 — Added Firestore collections overview (schema + relationships between Superadmin and Frontend)
 * 1.0.228 • OF-451 — Added database communication map showing data exchange between Superadmin, Firestore, and Frontend.
 * 1.0.227 • OF-450 — Added architecture overview and system diagram to documentation bundle (architecture.md + data-flow.md update)
