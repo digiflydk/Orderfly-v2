@@ -7,7 +7,7 @@ import { Button } from "../ui/button";
 import { Truck, Clock, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useEffect, useState } from "react";
-import type { TimeSlotResponse } from "@/app/superadmin/locations/actions";
+import type { TimeSlotResponse } from "@/types";
 import { Skeleton } from "../ui/skeleton";
 import { TimeSlotDialog } from "./timeslot-dialog";
 

@@ -7,7 +7,6 @@ import type { Brand, Category, ComboMenu, Location, Product, StandardDiscount, T
 import { useCart } from '@/context/cart-context';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { getActiveCombosForLocation } from '@/app/superadmin/combos/actions';
-import { DeliveryMethodDialog } from '@/components/checkout/delivery-method-dialog';
 import { DesktopCart } from '@/components/cart/desktop-cart';
 import { CategoryNav } from '@/components/layout/category-nav';
 import { MobileFloatingCart } from '@/components/cart/mobile-floating-cart';
@@ -19,6 +18,10 @@ import { TimeSelector } from '@/components/checkout/time-selector';
 import { getProductsByIds } from '@/app/superadmin/products/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalytics } from '@/context/analytics-context';
+import { openDeliveryModal } from '@/components/modals/DeliveryMethodModal';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Info } from 'lucide-react';
+
 
 interface MenuClientProps {
     brand: Brand;
@@ -30,16 +33,17 @@ interface MenuClientProps {
 }
 
 export function MenuClient({ brand, location, initialCategories, initialProducts, initialActiveCombos, initialActiveStandardDiscounts }: MenuClientProps) {
-    const { setCartContext, deliveryType, itemCount } = useCart();
+    const { setCartContext, deliveryType, itemCount, setSelectedTime } = useCart();
     const { trackEvent } = useAnalytics();
     const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
     
     const [isLoading, setIsLoading] = useState(true);
-    const [isDeliveryDialogOpen, setIsDeliveryDialogOpen] = useState(false);
     const [activeCategory, setActiveCategory] = useState<string>('offers');
     const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
     const [activeStandardDiscounts, setActiveStandardDiscounts] = useState<StandardDiscount[]>(initialActiveStandardDiscounts);
     const [comboProducts, setComboProducts] = useState<ProductForMenu[]>([]);
+    const [showPreorderAlert, setShowPreorderAlert] = useState(false);
+
 
     useEffect(() => {
         setCartContext(brand, location);
@@ -57,6 +61,19 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
                     setComboProducts(fetchedComboProducts);
                 }
             }
+
+            // OF-424: Handle pre-order logic
+            const isAsapAvailable = deliveryType === 'delivery' ? fetchedTimeSlots.asap_delivery : fetchedTimeSlots.asap_pickup;
+            if (!isAsapAvailable && location.allowPreOrder && fetchedTimeSlots.nextAvailableDate) {
+                setShowPreorderAlert(true);
+                const nextAvailableTime = deliveryType === 'delivery' ? fetchedTimeSlots.asap_delivery : fetchedTimeSlots.asap_pickup;
+                if(nextAvailableTime) {
+                    setSelectedTime(nextAvailableTime);
+                }
+            } else {
+                setShowPreorderAlert(false);
+            }
+            
             setIsLoading(false);
         }
 
@@ -65,7 +82,7 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
         // Track view_menu event on initial load
         trackEvent('view_menu', { locationId: location.id, locationSlug: location.slug });
 
-    }, [brand, location, setCartContext, initialActiveCombos, trackEvent]);
+    }, [brand, location, setCartContext, initialActiveCombos, trackEvent, deliveryType, setSelectedTime]);
 
      useEffect(() => {
         // This hook re-fetches discounts on the client side to ensure they are up-to-date,
@@ -74,18 +91,19 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
              const discounts = await getActiveStandardDiscounts({ brandId: brand.id, locationId: location.id, deliveryType });
              setActiveStandardDiscounts(discounts);
         }
-        fetchDiscounts();
+        if (deliveryType) fetchDiscounts();
      }, [deliveryType, brand.id, location.id]);
 
      useEffect(() => {
-        // Show dialog only if a delivery method has not been previously selected in this session.
+        // OF-399: Show delivery modal only if a delivery method has not been previously selected in this session.
+        // This ensures that on a direct land, the user is prompted to choose.
         if (typeof window !== 'undefined') {
             const savedDeliveryMethod = localStorage.getItem('deliveryMethod');
             if (!savedDeliveryMethod) {
-                setIsDeliveryDialogOpen(true);
+                openDeliveryModal({ brandSlug: brand.slug, locationSlug: location.slug });
             }
         }
-    }, []);
+    }, [brand.slug, location.slug]);
 
     useEffect(() => {
         if (isLoading) return; // Don't run observer until everything is loaded
@@ -116,15 +134,22 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
     const hasPromotionalDiscounts = activeStandardDiscounts.some(d => d.assignToOfferCategory);
 
     return (
-        <>
-            <DeliveryMethodDialog isOpen={isDeliveryDialogOpen} setIsOpen={setIsDeliveryDialogOpen} />
-
+        <div className="bg-[#FFF8F0]">
             <div className="container mx-auto max-w-[1140px] px-4">
-                <div className="lg:hidden pb-4">
+                {showPreorderAlert && (
+                    <Alert className="my-4">
+                        <Info className="h-4 w-4" />
+                        <AlertTitle>Location Closed</AlertTitle>
+                        <AlertDescription>
+                            This location is currently closed. You are placing a pre-order for the next available time.
+                        </AlertDescription>
+                    </Alert>
+                )}
+                <div className="lg:hidden py-4">
                    <TimeSelector timeSlots={timeSlots} />
                 </div>
                 
-                 <div className="sticky top-16 z-30 bg-background/90 backdrop-blur-sm -mx-4 px-4 py-2 border-t border-b">
+                 <div className="sticky top-16 z-30 bg-[#FFF8F0]/90 backdrop-blur-sm -mx-4 px-4 py-2 border-t border-b">
                     {isLoading ? (
                         <div className="flex items-center gap-2 h-9">
                             <Skeleton className="h-full w-24 rounded-md" />
@@ -134,7 +159,8 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
                     ) : (
                        <CategoryNav 
                             categories={initialCategories} 
-                            hasCombos={initialActiveCombos.length > 0} 
+                            hasCombos={initialActiveCombos.length > 0}
+                            hasPromotionalDiscounts={hasPromotionalDiscounts}
                             brand={brand}
                             activeCategory={activeCategory}
                         />
@@ -183,6 +209,6 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
                 </div>
             </div>
             {itemCount > 0 && <MobileFloatingCart />}
-        </>
+        </div>
     );
 }

@@ -10,14 +10,16 @@ import {
   DialogHeader,
   DialogTitle,
   DialogFooter,
+  DialogDescription,
 } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { getTimeSlots, type TimeSlotResponse } from '@/app/superadmin/locations/actions';
+import { getTimeSlots } from '@/app/superadmin/locations/actions';
 import { useCart } from '@/context/cart-context';
 import { format, addDays, isToday, startOfDay, isSameDay } from 'date-fns';
 import { Loader2, X } from 'lucide-react';
 import { DialogClose } from '@radix-ui/react-dialog';
+import type { TimeSlotResponse } from '@/types';
 
 interface TimeSlotDialogProps {
   isOpen: boolean;
@@ -76,6 +78,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
       <DialogContent className="max-w-lg p-0">
         <DialogHeader className="p-4 border-b">
           <DialogTitle>Choose Time</DialogTitle>
+          <DialogDescription>Select your desired pickup or delivery time.</DialogDescription>
         </DialogHeader>
         
         <div className="p-4 space-y-4">
