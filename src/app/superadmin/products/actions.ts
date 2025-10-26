@@ -9,7 +9,14 @@ import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { put } from '@vercel/blob';
 
-const productSchema = z.object({
+const asBool = (v: unknown) => {
+  if (v === true || v === false) return v;
+  if (v == null) return undefined;
+  const s = String(v).toLowerCase().trim();
+  return ['1', 'true', 'on', 'yes', 'checked'].includes(s);
+};
+
+const baseFields = {
   id: z.string().optional().nullable(),
   brandId: z.string().min(1, 'A brand must be selected.'),
   locationIds: z.array(z.string()).optional().default([]),
@@ -18,13 +25,25 @@ const productSchema = z.object({
   description: z.string().optional(),
   price: z.coerce.number().min(0, 'Price must be a non-negative number.'),
   priceDelivery: z.coerce.number().min(0, 'Delivery price must be a non-negative number.').optional(),
-  isActive: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
-  isFeatured: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
-  isNew: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
-  isPopular: z.preprocess((val) => val === 'on' || val === '1' || val === true, z.boolean()),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
   imageUrl: z.any().optional(),
+};
+
+const createSchema = z.object({
+  ...baseFields,
+  isActive: z.preprocess(asBool, z.boolean()).optional().default(false),
+  isFeatured: z.preprocess(asBool, z.boolean()).optional().default(false),
+  isNew: z.preprocess(asBool, z.boolean()).optional().default(false),
+  isPopular: z.preprocess(asBool, z.boolean()).optional().default(false),
+});
+
+const updateSchema = z.object({
+  ...baseFields,
+  isActive: z.preprocess(asBool, z.boolean()).optional(),
+  isFeatured: z.preprocess(asBool, z.boolean()).optional(),
+  isNew: z.preprocess(asBool, z.boolean()).optional(),
+  isPopular: z.preprocess(asBool, z.boolean()).optional(),
 });
 
 
@@ -35,6 +54,8 @@ export type FormState = {
 
 // Accept either (formData) or (prevState, formData)
 export async function createOrUpdateProduct(prevState: FormState | null, formData: FormData) {
+    const id = formData.get('id')?.toString();
+    const schema = id ? updateSchema : createSchema;
     
     const rawData: Record<string, unknown> = {};
 
@@ -60,16 +81,11 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       }
     }
     
-    // Ensure arrays are present even if empty
-    if (!rawData.locationIds) rawData.locationIds = [];
-    if (!rawData.allergenIds) rawData.allergenIds = [];
-    if (!rawData.toppingGroupIds) rawData.toppingGroupIds = [];
-    
-    const validatedFields = productSchema.safeParse(rawData);
+    const parsed = schema.safeParse(rawData);
 
-    if (!validatedFields.success) {
-      console.error("Zod validation failed", validatedFields.error.flatten());
-      const errorMessages = Object.entries(validatedFields.error.flatten().fieldErrors)
+    if (!parsed.success) {
+      console.error("Zod validation failed", parsed.error.flatten());
+      const errorMessages = Object.entries(parsed.error.flatten().fieldErrors)
         .map(([field, errors]) => `${field}: ${errors.join(', ')}`)
         .join('; ');
       return {
@@ -78,8 +94,12 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       };
     }
     
-    const { id: validatedId, ...productData } = validatedFields.data;
-    let finalProductData: Partial<Product> = productData;
+    const { id: validatedId, ...productData } = parsed.data;
+    
+    // For updates, filter out undefined values to prevent overwriting existing data.
+    const finalProductData: Partial<Product> = id
+      ? Object.fromEntries(Object.entries(productData).filter(([, v]) => v !== undefined))
+      : productData;
   
     try {
       const imageFile = formData.get('imageUrl') as File | null;
@@ -87,7 +107,6 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
         const blob = await put(imageFile.name, imageFile, { access: 'public' });
         finalProductData.imageUrl = blob.url;
       } else if (validatedId) {
-        // Retain existing image URL if no new file is uploaded during an edit
         const existingProduct = await getProductById(validatedId);
         finalProductData.imageUrl = existingProduct?.imageUrl;
       } else {
@@ -104,8 +123,10 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
           finalProductData.sortOrder = countSnapshot.size;
       }
   
-      const dataToSave: Partial<Product> = { ...finalProductData, id: finalId };
-      Object.keys(dataToSave).forEach(key => (dataToSave as any)[key] === undefined && delete (dataToSave as any)[key]);
+      const dataToSave: Partial<Product> = { ...finalProductData, id: finalId, updatedAt: new Date() };
+      if (!validatedId) {
+        (dataToSave as any).createdAt = new Date();
+      }
 
       await setDoc(productRef, dataToSave, { merge: true });
   
@@ -116,7 +137,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
     
     revalidatePath(`/superadmin/products`);
     redirect(`/superadmin/products`);
-  }
+}
 
 
 // --- OTHER ACTIONS ---
@@ -343,6 +364,4 @@ export async function duplicateProducts({
     return { success: false, message: `An error occurred: ${e.message}` };
   }
 }
-    
-
     

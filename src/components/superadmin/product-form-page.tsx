@@ -3,7 +3,7 @@
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, useFieldArray, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { useEffect, useMemo, useState, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
@@ -231,7 +231,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                             </FormControl>
                             {imagePreview && (
                                 <div className="mt-2 w-32 h-32 relative">
-                                    <Image src={imagePreview} alt="Image Preview" fill className="object-contain rounded-md border" />
+                                    <Image src={imagePreview} alt="Image Preview" fill className="object-contain rounded-md border" data-ai-hint="delicious food"/>
                                 </div>
                             )}
                             <FormMessage />
@@ -244,80 +244,43 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                         <CardDescription>Control where and how this product appears.</CardDescription>
                     </CardHeader>
                      <CardContent className="space-y-4">
-                        <FormField control={form.control} name="locationIds" render={({ field }) => (
+                        <FormField control={form.control} name="locationIds" render={() => (
                             <FormItem>
                                 <FormLabel>Available at Locations</FormLabel>
                                 <FormDescription>If no locations are selected, the product will be available at all brand locations.</FormDescription>
                                 <ScrollArea className="h-40 rounded-md border">
                                     <div className="p-4">
                                     {brandLocations.map((item) => (
-                                        <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
-                                            <Checkbox
-                                                id={`loc-${item.id}`}
-                                                name="locationIds"
-                                                value={item.id}
-                                                checked={field.value?.includes(item.id)}
-                                                onCheckedChange={(checked) => {
-                                                    const currentValue = field.value || [];
-                                                    return checked
-                                                        ? field.onChange([...currentValue, item.id])
-                                                        : field.onChange(currentValue?.filter((value) => value !== item.id));
-                                                }}
-                                            />
-                                            <Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label>
-                                        </div>
+                                        <FormField key={item.id} control={form.control} name="locationIds"
+                                        render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox name="locationIds[]" checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? field.onChange([...currentValue, item.id]) : field.onChange(currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label></FormItem>)} />
                                     ))}
                                     </div>
                                 </ScrollArea>
                                 <FormMessage />
                             </FormItem>
                         )} />
-                        <FormField control={form.control} name="toppingGroupIds" render={({ field }) => (
+                        <FormField control={form.control} name="toppingGroupIds" render={() => (
                             <FormItem>
                                 <FormLabel>Topping Groups</FormLabel>
                                 <ScrollArea className="h-40 rounded-md border">
                                     <div className="p-4">
                                     {brandToppingGroups.map((item) => (
-                                        <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
-                                            <Checkbox
-                                                id={`tg-${item.id}`}
-                                                name="toppingGroupIds"
-                                                value={item.id}
-                                                checked={field.value?.includes(item.id)}
-                                                onCheckedChange={(checked) => {
-                                                    const currentValue = field.value || [];
-                                                    return checked
-                                                        ? field.onChange([...currentValue, item.id])
-                                                        : field.onChange(currentValue?.filter((value) => value !== item.id));
-                                                }}
-                                            />
-                                            <Label htmlFor={`tg-${item.id}`} className="font-normal">{item.groupName}</Label>
-                                        </div>
+                                        <FormField key={item.id} control={form.control} name="toppingGroupIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox name="toppingGroupIds[]" checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? field.onChange([...currentValue, item.id]) : field.onChange(currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`tg-${item.id}`} className="font-normal">{item.groupName}</Label></FormItem>)} />
                                     ))}
                                     </div>
                                 </ScrollArea>
                                 <FormMessage />
                             </FormItem>
                         )} />
-                        <FormField control={form.control} name="allergenIds" render={({ field }) => (
+                        <FormField control={form.control} name="allergenIds" render={() => (
                             <FormItem>
                                 <FormLabel>Allergens</FormLabel>
                                 <ScrollArea className="h-40 rounded-md border">
                                     <div className="p-4">
                                     {allergens.map((item) => (
-                                        <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
-                                            <Checkbox
-                                                id={`alg-${item.id}`}
-                                                checked={field.value?.includes(item.id)}
-                                                onCheckedChange={(checked) => {
-                                                    const currentValue = field.value || [];
-                                                    return checked
-                                                        ? field.onChange([...currentValue, item.id])
-                                                        : field.onChange(currentValue?.filter((value) => value !== item.id));
-                                                }}
-                                            />
-                                            <Label htmlFor={`alg-${item.id}`} className="font-normal">{item.allergenName}</Label>
-                                        </div>
+                                        <FormField key={item.id} control={form.control} name="allergenIds" render={({ field }) => (
+                                        <FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox name="allergenIds[]" checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? field.onChange([...currentValue, item.id]) : field.onChange(currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`alg-${item.id}`} className="font-normal">{item.allergenName}</Label></FormItem>
+                                        )}/>
                                     ))}
                                     </div>
                                 </ScrollArea>
@@ -333,35 +296,23 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                     <CardHeader><CardTitle>Configuration</CardTitle></CardHeader>
                     <CardContent className="space-y-4">
                         <FormField control={form.control} name="isActive" render={({ field }) => (
-                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                                <div className="space-y-0.5"><FormLabel>Active</FormLabel></div>
-                                <FormControl><Switch name="isActive" checked={field.value} onCheckedChange={field.onChange} /></FormControl>
-                            </FormItem>
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Active</FormLabel></div><FormControl><Switch name="isActive" checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
                         )}/>
                         <FormField control={form.control} name="isFeatured" render={({ field }) => (
-                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                                <div className="space-y-0.5"><FormLabel>Featured</FormLabel></div>
-                                <FormControl><Switch name="isFeatured" checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isNew', false); form.setValue('isPopular', false); } }} /></FormControl>
-                            </FormItem>
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Featured</FormLabel></div><FormControl><Switch name="isFeatured" checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isNew', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
                         )}/>
                         <FormField control={form.control} name="isNew" render={({ field }) => (
-                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                                <div className="space-y-0.5"><FormLabel>New Product</FormLabel></div>
-                                <FormControl><Switch name="isNew" checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isPopular', false); } }} /></FormControl>
-                            </FormItem>
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>New Product</FormLabel></div><FormControl><Switch name="isNew" checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isPopular', false); } }} /></FormControl></FormItem>
                         )}/>
                         <FormField control={form.control} name="isPopular" render={({ field }) => (
-                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                                <div className="space-y-0.5"><FormLabel>Popular Product</FormLabel></div>
-                                <FormControl><Switch name="isPopular" checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isNew', false); } }} /></FormControl>
-                            </FormItem>
+                            <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Popular Product</FormLabel></div><FormControl><Switch name="isPopular" checked={field.value} onCheckedChange={(checked) => { field.onChange(checked); if (checked) { form.setValue('isFeatured', false); form.setValue('isNew', false); } }} /></FormControl></FormItem>
                         )}/>
                     </CardContent>
                 </Card>
             </div>
             
             {/* Hidden fields for FormData submission */}
-            {isEditing && <input type="hidden" {...form.register('id')} />}
+            {isEditing && <input type="hidden" name="id" value={product.id} />}
             <input type="hidden" name="brandId" value={form.watch('brandId') ?? ''} />
             <input type="hidden" name="categoryId" value={form.watch('categoryId') ?? ''} />
             <input type="hidden" name="isActive" value={form.watch('isActive') ? '1' : '0'} />
@@ -369,14 +320,14 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
             <input type="hidden" name="isNew" value={form.watch('isNew') ? '1' : '0'} />
             <input type="hidden" name="isPopular" value={form.watch('isPopular') ? '1' : '0'} />
             
-            {(form.watch('locationIds') || []).map((id) => (
-                <input key={`loc-hidden-${id}`} type="hidden" name="locationIds[]" value={id} />
+            {(form.watch('locationIds') ?? []).map((id: string) => (
+              <input key={`loc-hidden-${id}`} type="hidden" name="locationIds[]" value={id} />
             ))}
-            {(form.watch('allergenIds') || []).map((id) => (
-                <input key={`alg-hidden-${id}`} type="hidden" name="allergenIds[]" value={id} />
+            {(form.watch('allergenIds') ?? []).map((id: string) => (
+              <input key={`alg-hidden-${id}`} type="hidden" name="allergenIds[]" value={id} />
             ))}
-            {(form.watch('toppingGroupIds') || []).map((id) => (
-                <input key={`tg-hidden-${id}`} type="hidden" name="toppingGroupIds[]" value={id} />
+            {(form.watch('toppingGroupIds') ?? []).map((id: string) => (
+              <input key={`tg-hidden-${id}`} type="hidden" name="toppingGroupIds[]" value={id} />
             ))}
           </div>
         </form>
