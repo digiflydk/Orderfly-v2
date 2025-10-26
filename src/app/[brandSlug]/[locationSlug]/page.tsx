@@ -1,11 +1,11 @@
 
-
 // src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
 import ProductGrid from "@/components/catalog/product-grid";
+import { AsyncPageProps } from "@/types/next-async-props";
 
 function normalizeProbe(raw: any) {
   if (!raw || typeof raw !== "object") {
@@ -53,11 +53,8 @@ function normalizeProbe(raw: any) {
 export default async function Page({
   params,
   searchParams,
-}: {
-  params: { brandSlug: string; locationSlug: string };
-  searchParams: { [key: string]: string | string[] | undefined };
-}) {
-  const { brandSlug, locationSlug } = params;
+}: AsyncPageProps<{ brandSlug: string; locationSlug: string }>) {
+  const { brandSlug, locationSlug } = await params;
   const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
 
   try {
@@ -80,7 +77,7 @@ export default async function Page({
         <div className="mx-auto max-w-3xl p-4">
           <h1 className="text-2xl font-bold mb-4">Safe Mode – {probe.brand?.name ?? brandSlug} / {probe.location?.name ?? locationSlug}</h1>
           <pre className="text-xs bg-black/5 p-3 rounded mb-4">{JSON.stringify({ counts, fallbackUsed: menu.fallbackUsed }, null, 2)}</pre>
-          {menu.categories.map((cat: { id: string; name: string }) =>(
+          {menu.categories.map((cat: { id: string; name: string })=>(
             <section key={cat.id} className="mb-6">
               <h2 className="font-semibold">{cat.name}</h2>
               <ul className="list-disc ml-5 mt-2">
