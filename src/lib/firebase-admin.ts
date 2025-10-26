@@ -34,17 +34,55 @@ function getServiceAccount(): admin.ServiceAccount {
 }
 
 if (!admin.apps.length) {
-  const serviceAccount = getServiceAccount();
-  admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-  });
+  try {
+    const serviceAccount = getServiceAccount();
+    admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+    });
+  } catch(e) {
+    console.error("FIREBASE ADMIN SDK INIT FAILED:", (e as Error).message);
+    // In a non-production environment, we can allow the app to continue running
+    // with a dummy client to avoid crashing the whole server on startup.
+    if (!isProdLike()) {
+      console.warn("⚠️ Firebase Admin SDK could not initialize. Using a DUMMY client for development. Firestore operations will fail.");
+    } else {
+      // In production, it's better to fail fast.
+      throw e;
+    }
+  }
 }
 
-export const getAdminDb = () => admin.firestore();
-export const getAdminApp = () => admin.app();
-export const getAdminFieldValue = () => admin.firestore.FieldValue;
+// Safely get Firestore instance, or a dummy if init failed in dev
+export const getAdminDb = (): admin.firestore.Firestore => {
+    if (!admin.apps.length) {
+        // Return a dummy object that will throw errors when its methods are called
+        return {
+            collection: () => { throw new Error('Firebase Admin not initialized.')},
+            doc: () => { throw new Error('Firebase Admin not initialized.')},
+        } as unknown as admin.firestore.Firestore;
+    }
+    return admin.firestore();
+};
+
+export const getAdminApp = () => {
+    if (!admin.apps.length) throw new Error('Firebase Admin not initialized.');
+    return admin.app();
+};
+
+export const getAdminFieldValue = () => {
+    if (!admin.apps.length) {
+        return {
+            serverTimestamp: () => new Date(), // Return a plain date as a fallback
+        } as unknown as typeof admin.firestore.FieldValue
+    };
+    return admin.firestore.FieldValue;
+}
+
 
 export async function adminHealthProbe() {
+  if (!admin.apps.length) {
+    return { ok: false, error: "Firebase Admin not initialized.", code: "SDK_NOT_INITIALIZED" };
+  }
   try {
     await getAdminDb().listCollections();
     return { ok: true, ts: Date.now() };
