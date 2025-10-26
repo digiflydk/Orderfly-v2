@@ -30,7 +30,7 @@ The platform defines several key roles. The "Superadmin" role has unrestricted a
 Every Server Action that performs a write, update, or delete operation MUST be guarded with a permission check at the very beginning of the function.
 
 **Example Guard Pattern:**
-```typescript
+````typescript
 // src/app/superadmin/products/actions.ts
 
 import { hasPermission } from '@/lib/permissions';
@@ -51,7 +51,7 @@ export async function createOrUpdateProduct(formData: FormData) {
 
   revalidatePath('/superadmin/products');
 }
-```
+````
 
 This ensures that even if a user bypasses client-side UI restrictions, the server will prevent any unauthorized data modification.
 
