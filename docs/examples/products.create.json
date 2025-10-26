@@ -1,0 +1,17 @@
+{
+  "brandId": "brand_abc",
+  "locationIds": ["loc_kbh_k", "loc_aarhus_c"],
+  "categoryId": "cat_pizza",
+  "productName": "Truffle Margherita",
+  "description": "San Marzano, fior di latte, basil, truffle oil",
+  "price": 109,
+  "priceDelivery": 119,
+  "imageUrl": "https://cdn.example.com/img/pizza-truffle.jpg",
+  "isActive": true,
+  "isFeatured": true,
+  "isNew": true,
+  "isPopular": false,
+  "allergenIds": ["all_gluten", "all_lactose"],
+  "toppingGroupIds": ["tg_cheese", "tg_extras"],
+  "sortOrder": 120
+}

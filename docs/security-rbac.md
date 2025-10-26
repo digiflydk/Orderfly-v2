@@ -86,3 +86,9 @@ This ensures that even if a user bypasses client-side UI restrictions, the serve
 | **Location Mgr** | Read | ✗ | ✅ | ✅ | ✅ | ✗ | ✗ | ✗ |
 | | Update | ✗ | ✗ | ✗ | ✅ | ✗ | ✗ | ✗ |
 | **Viewer** | Read | ✓ | ✓ | ✓ | ✓ | ✓ | ✗ | ✗ |
+
+---
+
+## Related Code
+- Permission utility: `src/lib/permissions.ts`
+- Guard usage: called at the start of every write Server Action (e.g., `src/app/superadmin/products/actions.ts`)

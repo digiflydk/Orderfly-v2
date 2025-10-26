@@ -1,0 +1,13 @@
+{
+  "brandId": "brand_abc",
+  "locationId": "loc_kbh_k",
+  "customerId": "cust_001",
+  "status": "Received",
+  "paymentStatus": "Paid",
+  "totalAmount": 245.5,
+  "productItems": [
+    { "productId": "prod_margherita", "name": "Margherita", "quantity": 1, "price": 89 },
+    { "productId": "prod_coke", "name": "Coke", "quantity": 2, "price": 25 }
+  ],
+  "paymentDetails": { "subtotal": 139, "discounts": 0, "fees": 0, "delivery": 0, "total": 139 }
+}

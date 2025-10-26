@@ -1,13 +1,14 @@
 # Operations Log (seneste status & åbne punkter)
 
 ## Seneste leverancer
+* 1.0.236 • OF-459 — Finalized missing files (debug-ui-spec + examples) and cleanup.
 * 1.0.235 • OF-458 — Added Debug UI specification for a health status dashboard.
 * 1.0.234 • OF-457 — Added Firestore indexing and performance guide.
 * 1.0.233 • OF-456 — Added security and RBAC documentation.
 * 1.0.232 • OF-455 — Completed Firestore schema documentation for all key collections.
 * 1.0.231 • OF-454 — Expanded API contract with OpenAPI specs and example payloads.
 * 1.0.230 • OF-453 — Added docs/README.md and fixed historical ticket ID collision.
-* 1.0.229 • OF-452 — Added Firestore collections overview (schema + relationships between Superadmin and Frontend)
+* 1.0.229 • OF-452 — Added Firestore collections overview (schema + relationships between Superadmin and Frontend).
 * 1.0.228 • OF-451 — Added database communication map showing data exchange between Superadmin, Firestore, and Frontend.
 * 1.0.227 • OF-450 — Added architecture overview and system diagram to documentation bundle (architecture.md + data-flow.md update)
 - 1.0.226 • OF-448 — Restored and updated all documentation files in the `docs/` directory to ensure they are accurate.
@@ -64,9 +65,8 @@
 - 1.0.175 • OF-438 — Refined server actions for locations with geocoding stubs.
 
 ## Åbne issues (eksempler — ajourfør ved behov)
-- [ ] Dokumentér `createOrUpdateProduct` som HTTP endpoint i OpenAPI.
-- [ ] Superadmin debug UI, der visualiserer `/api/debug/all` grønt/gult/rødt.
 - [ ] Implementere fuld validering og database-logik i `createOrUpdateProduct` action.
+Se også: `/docs/OPEN-ISSUES.md`
 
 ## Nøgleversioner
 - Next.js: 15.5.x

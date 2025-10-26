@@ -13,3 +13,6 @@
 - **performance-indexes.md** — Firestore indexing and performance guide  
 - **security-rbac.md** — Security and Role-Based Access Control
 - **debug-ui-spec.md** — Specification for the Superadmin health check dashboard.
+- **OPEN-ISSUES.md** — Current open documentation tasks
+- **CHANGELOG-SUMMARY.md** — Short history of docs evolution
+- **examples/** — Example JSON payloads for Swagger “Try it out”

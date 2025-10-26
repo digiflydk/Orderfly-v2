@@ -1,0 +1,7 @@
+{
+  "locationIds": ["loc_kbh_k", "loc_aarhus_c"],
+  "categoryName": "Signature Pizzas",
+  "sortOrder": 10,
+  "isActive": true,
+  "icon": "pizza"
+}
