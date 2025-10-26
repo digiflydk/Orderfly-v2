@@ -1,3 +1,4 @@
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   experimental: {
@@ -10,6 +11,7 @@ const nextConfig = {
       { protocol: "https", hostname: "picsum.photos" },
       { protocol: "https", hostname: "images.unsplash.com" },
       { protocol: "https", hostname: "res.cloudinary.com" },
+      { protocol: "https", hostname: "placehold.co" },
       // Tilføj flere her hvis I ser tilsvarende fejl fra andre hosts
     ],
   },
