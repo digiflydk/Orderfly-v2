@@ -1,0 +1,3 @@
+# Firestore Schema
+
+(Placeholder)

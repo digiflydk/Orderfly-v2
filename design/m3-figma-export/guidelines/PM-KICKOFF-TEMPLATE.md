@@ -1,0 +1,3 @@
+# Project Kickoff Template
+
+(Placeholder)

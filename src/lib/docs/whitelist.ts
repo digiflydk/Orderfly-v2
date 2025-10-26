@@ -2,7 +2,15 @@
 export const DOCS_DIR = "design/m3-figma-export/guidelines";
 
 export const DOC_WHITELIST = [
+  "FILE-MAP.md",
   "Guidelines.md",
+  "OPERATIONS-LOG.md",
+  "PM-KICKOFF-TEMPLATE.md",
+  "PM-ONEPAGER.md",
+  "TROUBLESHOOTING-QUICK.md",
+  "api-overview.md",
+  "data-flow.md",
+  "firestore-schema.md",
 ] as const;
 
 export type DocName = (typeof DOC_WHITELIST)[number];
