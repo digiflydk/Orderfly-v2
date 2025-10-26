@@ -87,3 +87,4 @@ erDiagram
 * `/docs/data-communication.md` — Communication paths
 * `/docs/data-flow.md` — System data flows
 * `/docs/architecture.md` — Global architecture diagram
+* `/docs/firestore-schema.md` — Detailed field-level schemas
