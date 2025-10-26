@@ -11,4 +11,5 @@
 - **firestore-collections-overview.md** — Collections, schema & relationships  
 - **firestore-schema.md** — Field-level schema details  
 - **performance-indexes.md** — Firestore indexing and performance guide  
-- **security-rbac.md** — Security and Role-Based Access Control  
+- **security-rbac.md** — Security and Role-Based Access Control
+- **debug-ui-spec.md** — Specification for the Superadmin health check dashboard.

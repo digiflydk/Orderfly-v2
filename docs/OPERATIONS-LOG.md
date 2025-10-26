@@ -1,6 +1,7 @@
 # Operations Log (seneste status & åbne punkter)
 
 ## Seneste leverancer
+* 1.0.235 • OF-458 — Added Debug UI specification for a health status dashboard.
 * 1.0.234 • OF-457 — Added Firestore indexing and performance guide.
 * 1.0.233 • OF-456 — Added security and RBAC documentation.
 * 1.0.232 • OF-455 — Completed Firestore schema documentation for all key collections.
