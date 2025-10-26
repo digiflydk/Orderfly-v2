@@ -46,3 +46,4 @@ flowchart LR
   classDef box fill:#fff,stroke:#999,rx:6,ry:6;
   classDef db fill:#eef7ff,stroke:#5b9bd5,rx:6,ry:6;
 ```
+See also: `/docs/data-communication.md` for a detailed breakdown of data exchange between Superadmin, Firestore, and Frontend.

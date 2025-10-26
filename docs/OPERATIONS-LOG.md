@@ -1,6 +1,7 @@
 # Operations Log (seneste status & åbne punkter)
 
 ## Seneste leverancer
+* 1.0.228 • OF-451 — Added database communication map showing data exchange between Superadmin, Firestore, and Frontend.
 * 1.0.227 • OF-450 — Added architecture overview and system diagram to documentation bundle (architecture.md + data-flow.md update)
 - 1.0.226 • OF-448 — Restored and updated all documentation files in the `docs/` directory to ensure they are accurate.
 - 1.0.225 • OF-447 — Fixed product form submission by correctly structuring the form and handling `FormData` on the server.
