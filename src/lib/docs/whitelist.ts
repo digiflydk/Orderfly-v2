@@ -12,7 +12,7 @@ export const DOC_WHITELIST = [
   "firestore-schema.md",
 ] as const;
 
-export type DocName = typeof DOC_WHITELIST[number];
+export type DocName = (typeof DOC_WHITELIST)[number];
 
 export function isAllowedDoc(name: string): name is DocName {
   return (DOC_WHITELIST as readonly string[]).includes(name);
