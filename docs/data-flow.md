@@ -25,3 +25,24 @@ flowchart TD
 **Debug-endpoints:**
 - `GET /api/debug/all` – Samlet health-check og nøgle-dokumenter.
 - `GET /api/docs` – API-dokumentation.
+
+---
+
+## System Context (Short Version)
+See `/docs/architecture.md` for the full diagram.
+
+```mermaid
+flowchart LR
+  subgraph Client
+    A[Customer Webshop]:::box
+    B[Superadmin UI]:::box
+  end
+  subgraph Backend
+    C[Server Actions]:::box
+    D[(Firestore)]:::db
+  end
+  A --> C --> D
+  B --> C
+  classDef box fill:#fff,stroke:#999,rx:6,ry:6;
+  classDef db fill:#eef7ff,stroke:#5b9bd5,rx:6,ry:6;
+```
