@@ -1,5 +1,4 @@
 
-
 import { LocationCard } from "@/components/location-card";
 import type { Brand, Location } from "@/types";
 import { getBrandBySlug } from "../superadmin/brands/actions";
@@ -40,8 +39,9 @@ function BrandPageComponent({ brand, locations }: PageProps) {
 }
 
 
-export default async function BrandPage({ params }: { params: { brandSlug: string } }) {
-  const brand = await getBrandBySlug(params.brandSlug);
+export default async function BrandPage({ params }: { params: Promise<{ brandSlug: string }> }) {
+  const { brandSlug } = await params;
+  const brand = await getBrandBySlug(brandSlug);
 
   if (!brand) {
     notFound();
