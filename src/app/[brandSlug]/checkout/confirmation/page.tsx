@@ -2,17 +2,19 @@
 import { redirect, notFound } from 'next/navigation';
 import { getOrderById, getOrderByCheckoutSessionId } from '@/app/checkout/order-actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
+import type { AsyncPageProps, Query } from '@/types/next-async-props';
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
+
 
 export default async function LegacyConfirmationPage({
   params,
   searchParams,
-}: {
-  params: Promise<{ brandSlug: string }>;
-  searchParams: { session_id?: string; order_id?: string };
-}) {
-  const { brandSlug } = await params;
-  const sessionId = searchParams?.session_id;
-  const orderId = searchParams?.order_id;
+}: AsyncPageProps<{ brandSlug: string }, { session_id?: string; order_id?: string }>) {
+  const { brandSlug } = await resolveParams(params);
+  const query = await resolveSearchParams(searchParams);
+
+  const sessionId = query?.session_id;
+  const orderId = query?.order_id;
 
   if (!sessionId && !orderId) {
     // If we have neither, we can't look up the order, so redirect to brand page as a fallback.
