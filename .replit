@@ -15,3 +15,10 @@ value = "20"
 [[deployment.env]]
 key = "NEXT_PUBLIC_M3_PREVIEW"
 value = "true"
+
+[agent]
+expertMode = true
+
+[[ports]]
+localPort = 5000
+externalPort = 80
