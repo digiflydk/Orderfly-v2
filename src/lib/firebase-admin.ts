@@ -2,24 +2,16 @@
 import 'server-only';
 import * as admin from 'firebase-admin';
 
-let db: admin.firestore.Firestore;
-let app: admin.app.App;
-
 // Helper to check if we're in a production-like environment
 function isProdLike() {
   const env = process.env.NODE_ENV || 'development';
   return env.toLowerCase() === 'production';
 }
 
-function getServiceAccount(): admin.ServiceAccount | null {
+function getServiceAccount(): admin.ServiceAccount {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) {
-    // Only throw in production. In dev, we can proceed with a dummy client.
-    if (isProdLike()) {
-      throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set in a production environment.');
-    }
-    console.warn('⚠️ FIREBASE_SERVICE_ACCOUNT_JSON is not set. Using a dummy Firestore client. Backend operations will fail.');
-    return null;
+    throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set.');
   }
   try {
     const parsed = JSON.parse(raw);
@@ -27,6 +19,7 @@ function getServiceAccount(): admin.ServiceAccount | null {
     for (const k of required) {
       if (!parsed[k]) throw new Error(`Missing field in service account: ${k}`);
     }
+    // Some providers strip \n; fix if needed
     if (typeof parsed.private_key === 'string') {
       parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
     }
@@ -42,37 +35,17 @@ function getServiceAccount(): admin.ServiceAccount | null {
 
 if (!admin.apps.length) {
   const serviceAccount = getServiceAccount();
-  if (serviceAccount) {
-    app = admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-    });
-    db = admin.firestore();
-  } else {
-    // Create a dummy app/db if service account is not available (dev only)
-    app = admin.initializeApp();
-    db = admin.firestore();
-    console.warn("🔥 Firebase Admin SDK initialized with a DUMMY client. Real database calls will fail.");
-  }
-} else {
-  app = admin.app();
-  db = admin.firestore();
+  admin.initializeApp({
+    credential: admin.credential.cert(serviceAccount),
+  });
 }
 
-export function getAdminDb() {
-  return db;
-}
-
-export function getAdminApp() {
-  return app;
-}
-
-export function getAdminFieldValue() {
-  return admin.firestore.FieldValue;
-}
+export const getAdminDb = () => admin.firestore();
+export const getAdminApp = () => admin.app();
+export const getAdminFieldValue = () => admin.firestore.FieldValue;
 
 export async function adminHealthProbe() {
   try {
-    // A lightweight check: try to list collections. This fails if creds are wrong.
     await getAdminDb().listCollections();
     return { ok: true, ts: Date.now() };
   } catch (e: any) {

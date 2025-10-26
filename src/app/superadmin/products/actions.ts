@@ -1,12 +1,11 @@
 
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { put } from '@vercel/blob';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import type { Product } from '@/types';
 
 const asBool = (v: unknown) => {
@@ -137,6 +136,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
           ...toWrite,
           updatedAt: now,
         });
+        revalidatePath('/superadmin/products');
         return { ok: true, id };
       } else {
         const payload = {
@@ -147,6 +147,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
         };
         const ref = await db.collection('products').add(payload);
         await db.collection('products').doc(ref.id).update({ id: ref.id });
+        revalidatePath('/superadmin/products');
         return { ok: true, id: ref.id };
       }
   
@@ -210,12 +211,8 @@ export type ProductForMenu = Pick<Product,
 export async function getProductsForLocation(locationId: string, brandId: string): Promise<ProductForMenu[]> {
     if (!locationId || !brandId) return [];
     const db = getAdminDb();
-    const q = query(
-        collection(db, 'products'),
-        where('brandId', '==', brandId),
-        where('isActive', '==', true)
-    );
-    const querySnapshot = await getDocs(q);
+    const q = db.collection('products').where('brandId', '==', brandId).where('isActive', '==', true);
+    const querySnapshot = await q.get();
 
     const allProducts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
 
@@ -237,16 +234,16 @@ export async function getProductsForLocation(locationId: string, brandId: string
 
 export async function getProducts(): Promise<Product[]> {
     const db = getAdminDb();
-    const q = query(collection(db, 'products'), orderBy('sortOrder', 'asc'));
-    const querySnapshot = await getDocs(q);
+    const q = db.collection('products').orderBy('sortOrder', 'asc');
+    const querySnapshot = await q.get();
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
 }
 
 export async function getProductById(productId: string): Promise<Product | null> {
     const db = getAdminDb();
-    const docRef = doc(db, 'products', productId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
+    const docRef = db.collection('products').doc(productId);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as Product;
     }
     return null;
@@ -258,11 +255,11 @@ export async function getProductsByIds(productIds: string[], brandId?: string): 
     const productPromises: Promise<Product[]>[] = [];
     for (let i = 0; i < productIds.length; i += 30) {
         const chunk = productIds.slice(i, i + 30);
-        let q = query(collection(db, 'products'), where(documentId(), 'in', chunk));
+        let q = db.collection('products').where(admin.firestore.FieldPath.documentId(), 'in', chunk);
         if (brandId) {
-            q = query(q, where('brandId', '==', brandId));
+            q = q.where('brandId', '==', brandId);
         }
-        const p = getDocs(q).then(snapshot => snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
+        const p = q.get().then(snapshot => snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
         productPromises.push(p);
     }
     
@@ -270,9 +267,20 @@ export async function getProductsByIds(productIds: string[], brandId?: string): 
     const allProducts = productArrays.flat();
 
     const finalProducts = allProducts.map(p => ({
-        id: p.id, productName: p.productName, description: p.description, price: p.price, priceDelivery: p.priceDelivery,
-        imageUrl: p.imageUrl, isFeatured: p.isFeatured, isNew: p.isNew, isPopular: p.isPopular, allergenIds: p.allergenIds,
-        toppingGroupIds: p.toppingGroupIds, categoryId: p.categoryId, brandId: p.brandId, sortOrder: p.sortOrder,
+        id: p.id,
+        productName: p.productName,
+        description: p.description,
+        price: p.price,
+        priceDelivery: p.priceDelivery,
+        imageUrl: p.imageUrl,
+        isFeatured: p.isFeatured,
+        isNew: p.isNew,
+        isPopular: p.isPopular,
+        allergenIds: p.allergenIds,
+        toppingGroupIds: p.toppingGroupIds,
+        categoryId: p.categoryId,
+        brandId: p.brandId,
+        sortOrder: p.sortOrder,
     }));
     
     return finalProducts;
@@ -298,8 +306,8 @@ export async function duplicateProducts({
     const productsToDuplicate: Product[] = [];
     for (let i = 0; i < productIds.length; i += 30) {
       const chunk = productIds.slice(i, i + 30);
-      const q = query(collection(db, 'products'), where(documentId(), 'in', chunk));
-      const snapshot = await getDocs(q);
+      const q = db.collection('products').where(admin.firestore.FieldPath.documentId(), 'in', chunk);
+      const snapshot = await q.get();
       snapshot.forEach(doc => {
         productsToDuplicate.push({ id: doc.id, ...doc.data() } as Product);
       });
@@ -313,7 +321,7 @@ export async function duplicateProducts({
     let duplicatedCount = 0;
 
     for (const product of productsToDuplicate) {
-      const newProductId = doc(collection(db, 'products')).id;
+      const newProductId = db.collection('products').doc().id;
       const { id, ...originalData } = product;
       
       const newProductData = {
@@ -325,7 +333,7 @@ export async function duplicateProducts({
         sortOrder: 9999,
       };
       
-      batch.set(doc(db, 'products', newProductId), newProductData);
+      batch.set(db.collection('products').doc(newProductId), newProductData);
       duplicatedCount++;
     }
 
@@ -337,5 +345,3 @@ export async function duplicateProducts({
     return { success: false, message: `An error occurred: ${e.message}` };
   }
 }
-    
-
