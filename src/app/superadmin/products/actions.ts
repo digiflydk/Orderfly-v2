@@ -9,6 +9,7 @@ import { redirect } from 'next/navigation';
 import { put } from '@vercel/blob';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Product, ProductForMenu } from '@/types';
+import * as admin from 'firebase-admin';
 
 const asBool = (v: unknown) => {
   if (v === true || v === false) return v;
