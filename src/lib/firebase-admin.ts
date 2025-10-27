@@ -1,3 +1,4 @@
+
 import 'server-only';
 import * as admin from 'firebase-admin';
 
@@ -9,30 +10,44 @@ import * as admin from 'firebase-admin';
 type SA = { project_id: string; client_email: string; private_key: string };
 
 let adminApp: admin.app.App | null = null;
+let initError: Error | null = null;
 
-function loadServiceAccount(): SA {
+function loadServiceAccount(): SA | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) {
-    throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
+    // Don't throw here; allow build to pass and throw at runtime.
+    return null;
   }
 
   try {
     const parsed = JSON.parse(raw.trim());
     if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
-      throw new Error('Service account JSON is missing required fields.');
+      throw new Error('Service account JSON is missing required fields (project_id, client_email, private_key).');
     }
     return parsed;
   } catch (e) {
-    throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON. Ensure it is valid JSON.');
+    const message = e instanceof Error ? e.message : String(e);
+    // This will be thrown at runtime if credentials are bad.
+    initError = new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON. Ensure it is valid JSON. Details: ${message}`);
+    return null;
   }
 }
 
 function initializeAdminApp(): admin.app.App {
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    console.warn('WARNING: GOOGLE_APPLICATION_CREDENTIALS is set. Forcing explicit credential from FIREBASE_SERVICE_ACCOUNT_JSON to avoid ambiguity.');
+  // If there was a previous initialization error, throw it immediately.
+  if (initError) {
+    throw initError;
   }
 
   const serviceAccount = loadServiceAccount();
+  if (!serviceAccount) {
+    throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
+  }
+
+  // Prevent accidental use of Application Default Credentials.
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    throw new Error('FATAL: GOOGLE_APPLICATION_CREDENTIALS should not be set. Use FIREBASE_SERVICE_ACCOUNT_JSON exclusively.');
+  }
 
   const appName = `orderfly-admin-${Date.now()}`;
   
@@ -48,9 +63,11 @@ function initializeAdminApp(): admin.app.App {
 
 function getAdminApp(): admin.app.App {
   if (!adminApp) {
-    if (admin.apps.length > 0) {
-      adminApp = admin.apps[0]!;
+    // Check if an app is already initialized (e.g., by another part of Firebase)
+    if (admin.apps.length > 0 && admin.apps[0]) {
+      adminApp = admin.apps[0];
     } else {
+      // Lazy initialization: create the app on first access.
       adminApp = initializeAdminApp();
     }
   }
@@ -62,14 +79,7 @@ function getAdminApp(): admin.app.App {
  * This is the primary export to be used by server-side code.
  */
 export function getAdminDb(): admin.firestore.Firestore {
-  try {
-    return getAdminApp().firestore();
-  } catch(e:any) {
-    if (e.message.includes("Firestore is not available")) {
-        console.error("Firestore operation failed: Firebase Admin SDK was initialized with a dummy app due to missing credentials.");
-    }
-    throw e;
-  }
+  return getAdminApp().firestore();
 }
 
 // Export the admin namespace itself for access to types and other utilities.
