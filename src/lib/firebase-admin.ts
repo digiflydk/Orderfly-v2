@@ -1,115 +1,84 @@
-
 import 'server-only';
 import * as admin from 'firebase-admin';
-import dotenv from 'dotenv';
 
-// Force load .env.local variables at the top.
-dotenv.config();
+// This file is the single source of truth for initializing the Firebase Admin SDK.
+// It uses a lazy-loading singleton pattern to ensure that the SDK is initialized
+// exactly once and only when it's first needed. This is crucial for Next.js
+// environments where environment variables might not be available at build time.
 
 type SA = { project_id: string; client_email: string; private_key: string };
 
-function loadServiceAccount(): { projectId: string; clientEmail: string; privateKey: string } | null {
-  let raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+let adminApp: admin.app.App | null = null;
+
+function loadServiceAccount(): SA {
+  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) {
-    // In a real production/preview environment, this should ideally be a hard failure.
-    // For development and ease of use in Studio, we'll log an error and allow a dummy app.
-    if (process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview') {
-       throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set in a production/preview environment.');
-    }
-    console.warn('⚠️ FIREBASE_SERVICE_ACCOUNT_JSON is not set. A dummy app will be used for local development. Firestore operations will fail.');
-    return null;
-  }
-  
-  raw = raw.trim();
-
-  const looksBase64 = !raw.startsWith('{');
-  if (looksBase64) {
-    try {
-      raw = Buffer.from(raw, 'base64').toString('utf8');
-    } catch {
-      throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON appears to be base64-encoded but cannot be decoded.');
-    }
+    throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
   }
 
-  let sa: SA;
   try {
-    sa = JSON.parse(raw) as SA;
-  } catch (e: any) {
-    throw new Error(`FATAL: Could not parse FIREBASE_SERVICE_ACCOUNT_JSON: ${e?.message ?? 'Invalid JSON'}`);
-  }
-
-  if (!sa.project_id || !sa.client_email || !sa.private_key) {
-    throw new Error('FATAL: Service account JSON is missing required fields (project_id, client_email, or private_key).');
-  }
-
-  const privateKey = sa.private_key.replace(/\\n/g, '\n');
-  return { projectId: sa.project_id, clientEmail: sa.client_email, privateKey };
-}
-
-function assertNoADC() {
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    console.warn('WARNING: GOOGLE_APPLICATION_CREDENTIALS is set. This is not recommended. Explicit service account is preferred.');
+    const parsed = JSON.parse(raw.trim());
+    if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
+      throw new Error('Service account JSON is missing required fields.');
+    }
+    return parsed;
+  } catch (e) {
+    throw new Error('Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON. Ensure it is valid JSON.');
   }
 }
-
 
 function initializeAdminApp(): admin.app.App {
-  if (admin.apps.length > 0) {
-    return admin.app();
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.warn('WARNING: GOOGLE_APPLICATION_CREDENTIALS is set. Forcing explicit credential from FIREBASE_SERVICE_ACCOUNT_JSON to avoid ambiguity.');
   }
 
-  assertNoADC();
   const serviceAccount = loadServiceAccount();
 
-  if (!serviceAccount) {
-    // Initialize a dummy app for local development without credentials
-    return admin.initializeApp({ projectId: `dummy-project-${Date.now()}`});
-  }
-
-  try {
-    return admin.initializeApp({
-      credential: admin.credential.cert(serviceAccount),
-      projectId: serviceAccount.projectId,
-    });
-  } catch (error: any) {
-    if (error.code === 'app/duplicate-app') {
-      return admin.app();
-    }
-    throw error;
-  }
+  const appName = `orderfly-admin-${Date.now()}`;
+  
+  return admin.initializeApp({
+    credential: admin.credential.cert({
+      projectId: serviceAccount.project_id,
+      clientEmail: serviceAccount.client_email,
+      privateKey: serviceAccount.private_key.replace(/\\n/g, '\n'),
+    }),
+    projectId: serviceAccount.project_id,
+  }, appName);
 }
 
-// Use a lazy-loading singleton pattern
-let adminAppInstance: admin.app.App | null = null;
 function getAdminApp(): admin.app.App {
-  if (!adminAppInstance) {
-    adminAppInstance = initializeAdminApp();
+  if (!adminApp) {
+    if (admin.apps.length > 0) {
+      adminApp = admin.apps[0]!;
+    } else {
+      adminApp = initializeAdminApp();
+    }
   }
-  return adminAppInstance;
+  return adminApp;
 }
 
 /**
  * Returns an initialized Firestore database instance from the admin SDK.
+ * This is the primary export to be used by server-side code.
  */
 export function getAdminDb(): admin.firestore.Firestore {
-    try {
-        return getAdminApp().firestore();
-    } catch(e:any) {
-        if (e.message.includes("Firestore is not available")) {
-            console.error("Firestore operation failed: Firebase Admin SDK was initialized with a dummy app due to missing credentials.");
-        }
-        throw e;
+  try {
+    return getAdminApp().firestore();
+  } catch(e:any) {
+    if (e.message.includes("Firestore is not available")) {
+        console.error("Firestore operation failed: Firebase Admin SDK was initialized with a dummy app due to missing credentials.");
     }
+    throw e;
+  }
 }
 
+// Export the admin namespace itself for access to types and other utilities.
 export { admin };
 
 /**
  * A helper to get Firestore-specific values like serverTimestamp.
  */
 export const getAdminFieldValue = () => {
-    // This is a simplified getter for FieldValues like serverTimestamp.
-    // In a more complex setup, you might need to handle multiple Firebase app instances.
     return admin.firestore.FieldValue;
 };
 
