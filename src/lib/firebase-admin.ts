@@ -13,59 +13,65 @@ type ServiceAccount = {
 const globalAny = globalThis as any;
 
 /**
- * Lazily initializes the Firebase Admin SDK.
+ * Parses the service account JSON from environment variables.
+ * Supports both raw JSON and base64-encoded JSON.
+ * @returns {ServiceAccount} The parsed service account object.
+ */
+function parseServiceAccount(): ServiceAccount {
+  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+
+  if (!serviceAccountJson) {
+    throw new Error('CRITICAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set. The Admin SDK requires this for server-side authentication.');
+  }
+
+  let rawJson = serviceAccountJson.trim();
+  
+  // Handle base64-encoded service accounts.
+  if (!rawJson.startsWith('{')) {
+    try {
+      rawJson = Buffer.from(rawJson, 'base64').toString('utf8');
+    } catch (e) {
+      throw new Error('Failed to decode base64-encoded FIREBASE_SERVICE_ACCOUNT_JSON.');
+    }
+  }
+
+  try {
+    const parsed = JSON.parse(rawJson);
+    // Normalize the private key, replacing escaped newlines.
+    if (parsed.private_key) {
+      parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
+    }
+    return parsed;
+  } catch (e: any) {
+    throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON: ${e.message}`);
+  }
+}
+
+/**
+ * Lazily initializes the Firebase Admin SDK using a singleton pattern.
  * This function ensures that the Admin SDK is initialized only once.
- * It will throw a clear error if the service account credentials are not configured.
  * @returns {admin.app.App} The initialized Firebase Admin app.
  */
 function initializeAdminApp(): admin.app.App {
-  // If the app is already initialized, return the existing instance.
   if (globalAny.__OF_ADMIN_APP__) {
     return globalAny.__OF_ADMIN_APP__;
   }
 
-  // Check that GOOGLE_APPLICATION_CREDENTIALS is not set, to avoid conflicts.
+  const serviceAccount = parseServiceAccount();
+  
+  // Explicitly check for GOOGLE_APPLICATION_CREDENTIALS to prevent ADC fallback.
   if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    throw new Error('GOOGLE_APPLICATION_CREDENTIALS environment variable is set. Please unset it to allow explicit initialization via service account JSON.');
+    console.warn('Warning: GOOGLE_APPLICATION_CREDENTIALS is set. This configuration will be ignored in favor of FIREBASE_SERVICE_ACCOUNT_JSON.');
   }
 
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-  if (!serviceAccountJson) {
-    throw new Error('The FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set. The Admin SDK requires this for server-side authentication.');
-  }
-
-  let serviceAccount: ServiceAccount;
-  try {
-    let rawJson = serviceAccountJson.trim();
-    // Handle base64-encoded service accounts.
-    if (!rawJson.startsWith('{')) {
-      rawJson = Buffer.from(rawJson, 'base64').toString('utf8');
-    }
-    serviceAccount = JSON.parse(rawJson);
-  } catch (e: any) {
-    throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON: ${e.message}`);
-  }
-
-  // Validate the parsed service account object.
-  if (!serviceAccount.project_id || !serviceAccount.client_email || !serviceAccount.private_key) {
-    throw new Error('The parsed service account is missing required fields (project_id, client_email, private_key).');
-  }
-
-  // Initialize the app with the explicit credential.
   const app = admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: serviceAccount.project_id,
-      clientEmail: serviceAccount.client_email,
-      privateKey: serviceAccount.private_key.replace(/\\n/g, '\n'),
-    }),
+    credential: admin.credential.cert(serviceAccount),
     projectId: serviceAccount.project_id,
-  });
+  }, 'orderfly-admin-app'); // Give the app a unique name
 
-  // Store the initialized app in the global scope to act as a singleton.
+  console.log(`[Firebase Admin] SDK initialized for project: ${app.options.projectId}`);
   globalAny.__OF_ADMIN_APP__ = app;
   
-  console.log(`[OF-469] Firebase Admin SDK initialized for project: ${app.options.projectId}`);
   return app;
 }
 
@@ -79,14 +85,12 @@ export function getAdminApp(): admin.app.App {
 
 /**
  * Returns a Firestore database instance from the initialized Admin app.
- * This is the primary function to be used by server actions.
  * @returns {admin.firestore.Firestore}
  */
 export function getAdminDb(): admin.firestore.Firestore {
-  return getAdminApp().firestore();
+    return getAdminApp().firestore();
 }
 
-// Export the admin namespace itself for access to types and other utilities.
 export { admin };
 
 /**

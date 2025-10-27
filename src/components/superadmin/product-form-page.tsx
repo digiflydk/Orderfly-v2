@@ -261,7 +261,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                             </FormControl>
                             {imagePreview && (
                                 <div className="mt-2 w-32 h-32 relative">
-                                    <Image src={imagePreview} alt="Image Preview" fill className="object-contain rounded-md border" data-ai-hint="delicious food"/>
+                                    <Image src={safeImage(imagePreview)} alt="Image Preview" fill className="object-contain rounded-md border" data-ai-hint="delicious food"/>
                                 </div>
                             )}
                             <FormMessage />
