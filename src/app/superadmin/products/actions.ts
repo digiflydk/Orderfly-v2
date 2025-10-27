@@ -6,7 +6,6 @@ import 'server-only';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
-import { put } from '@vercel/blob';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Product, ProductForMenu } from '@/types';
 import * as admin from 'firebase-admin';
@@ -120,12 +119,15 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
     }
   
     try {
-      const imageFile = formData.get('imageUrl') as File | null;
-      if (imageFile && imageFile.size > 0) {
-        const blob = await put(imageFile.name, imageFile, { access: 'public' });
-        toWrite.imageUrl = blob.url;
+      const imageFileOrUrl = formData.get('imageUrl');
+
+      if (imageFileOrUrl instanceof File && imageFileOrUrl.size > 0) {
+        // Placeholder for Firebase Storage upload logic
+        console.warn('Image upload is not yet implemented. Saving placeholder URL.');
+        toWrite.imageUrl = `https://picsum.photos/seed/${imageFileOrUrl.name}/400/300`;
+      } else if (typeof imageFileOrUrl === 'string') {
+        toWrite.imageUrl = imageFileOrUrl;
       } else if (validatedId) {
-        // Retain existing image if no new one is uploaded
         const existingProduct = await getProductById(validatedId);
         toWrite.imageUrl = existingProduct?.imageUrl;
       } else {
@@ -136,7 +138,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
 
       if (id) {
         await db.collection('products').doc(id).update({
-          ...toWrite,         // (OF-460) contains only defined fields on update
+          ...toWrite,
           updatedAt: now,
         });
         revalidatePath('/superadmin/products');
@@ -144,7 +146,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       } else {
         const payload = {
           ...toWrite,
-          isActive: (toWrite as any).isActive ?? false, // explicit default on create
+          isActive: (toWrite as any).isActive ?? false,
           createdAt: now,
           updatedAt: now,
         };
