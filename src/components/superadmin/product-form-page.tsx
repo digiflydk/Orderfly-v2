@@ -1,10 +1,9 @@
 
-
 'use client';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, useFieldArray, useWatch } from 'react-hook-form';
+import { useForm } from 'react-hook-form';
 import { useEffect, useMemo, useState, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
 import Link from 'next/link';
@@ -283,7 +282,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     <div className="p-4">
                                     {brandLocations.map((item) => (
                                         <FormField key={item.id} control={form.control} name="locationIds"
-                                        render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? form.setValue('locationIds', [...currentValue, item.id]) : form.setValue('locationIds', currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label></FormItem>)} />
+                                        render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox name="locationIds[]" checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? form.setValue('locationIds', [...currentValue, item.id]) : form.setValue('locationIds', currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`loc-${item.id}`} className="font-normal">{item.name}</Label></FormItem>)} />
                                     ))}
                                     </div>
                                 </ScrollArea>
@@ -296,7 +295,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                 <ScrollArea className="h-40 rounded-md border">
                                     <div className="p-4">
                                     {brandToppingGroups.map((item) => (
-                                        <FormField key={item.id} control={form.control} name="toppingGroupIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? form.setValue('toppingGroupIds', [...currentValue, item.id]) : form.setValue('toppingGroupIds', currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`tg-${item.id}`} className="font-normal">{item.groupName}</Label></FormItem>)} />
+                                        <FormField key={item.id} control={form.control} name="toppingGroupIds" render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox name="toppingGroupIds[]" checked={field.value?.includes(item.id)} onCheckedChange={(checked) => {const currentValue = field.value || []; return checked ? form.setValue('toppingGroupIds', [...currentValue, item.id]) : form.setValue('toppingGroupIds', currentValue?.filter((value) => value !== item.id))}}/></FormControl><Label htmlFor={`tg-${item.id}`} className="font-normal">{item.groupName}</Label></FormItem>)} />
                                     ))}
                                     </div>
                                 </ScrollArea>
@@ -310,7 +309,7 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                                     <div className="p-4">
                                     {allergens.map((item) => (
                                         <div key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2">
-                                            <Checkbox id={`alg-${item.id}`} checked={allergenIds?.includes(item.id)} onCheckedChange={(checked) => {
+                                            <Checkbox name="allergenIds[]" id={`alg-${item.id}`} checked={allergenIds?.includes(item.id)} onCheckedChange={(checked) => {
                                                 const currentValues = form.getValues('allergenIds') || [];
                                                 const newValues = checked ? [...currentValues, item.id] : currentValues.filter(id => id !== item.id);
                                                 form.setValue('allergenIds', newValues);
@@ -345,23 +344,6 @@ export function ProductFormPage({ product, brands, locations, categories, toppin
                     </CardContent>
                 </Card>
             </div>
-            {isEditing && <input type="hidden" name="id" value={product.id} />}
-            <input type="hidden" name="brandId" value={form.watch('brandId') ?? ''} />
-            <input type="hidden" name="categoryId" value={form.watch('categoryId') ?? ''} />
-            <input type="hidden" name="isActive" value={form.watch('isActive') ? '1' : '0'} />
-            <input type="hidden" name="isFeatured" value={form.watch('isFeatured') ? '1' : '0'} />
-            <input type="hidden" name="isNew" value={form.watch('isNew') ? '1' : '0'} />
-            <input type="hidden" name="isPopular" value={form.watch('isPopular') ? '1' : '0'} />
-
-            {locationIds.map((id, idx) => (
-                <input key={`loc-hidden-${id}-${idx}`} type="hidden" name="locationIds[]" value={id} />
-            ))}
-            {allergenIds.map((id, idx) => (
-                <input key={`alg-hidden-${id}-${idx}`} type="hidden" name="allergenIds[]" value={id} />
-            ))}
-            {toppingGroupIds.map((id, idx) => (
-                <input key={`tg-hidden-${id}-${idx}`} type="hidden" name="toppingGroupIds[]" value={id} />
-            ))}
           </div>
         </form>
       </Form>
