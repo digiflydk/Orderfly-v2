@@ -7,7 +7,7 @@ import { logDiag } from "@/lib/log";
 import ProductGrid from "@/components/catalog/product-grid";
 
 type PageProps = {
-  params: { brandSlug: string; locationSlug: string };
+  params: Promise<{ brandSlug: string; locationSlug: string }>;
   searchParams: { [key: string]: string | string[] | undefined };
 };
 
@@ -58,7 +58,7 @@ export default async function Page({
   params,
   searchParams,
 }: PageProps) {
-  const { brandSlug, locationSlug } = params;
+  const { brandSlug, locationSlug } = await params;
   const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
 
   try {
