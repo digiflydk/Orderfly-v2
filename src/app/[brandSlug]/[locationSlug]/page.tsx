@@ -7,8 +7,8 @@ import { logDiag } from "@/lib/log";
 import ProductGrid from "@/components/catalog/product-grid";
 
 type PageProps = {
-  params: Promise<{ brandSlug: string; locationSlug: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  params: { brandSlug: string; locationSlug: string };
+  searchParams: { [key: string]: string | string[] | undefined };
 };
 
 function normalizeProbe(raw: any) {
@@ -58,9 +58,8 @@ export default async function Page({
   params,
   searchParams,
 }: PageProps) {
-  const { brandSlug, locationSlug } = await params;
-  const queryParams = await searchParams;
-  const safe = String(queryParams?.safe ?? "").toLowerCase() === "1";
+  const { brandSlug, locationSlug } = params;
+  const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
 
   try {
     const raw = await getBrandAndLocation(brandSlug, locationSlug);
@@ -82,11 +81,11 @@ export default async function Page({
         <div className="mx-auto max-w-3xl p-4">
           <h1 className="text-2xl font-bold mb-4">Safe Mode – {probe.brand?.name ?? brandSlug} / {probe.location?.name ?? locationSlug}</h1>
           <pre className="text-xs bg-black/5 p-3 rounded mb-4">{JSON.stringify({ counts, fallbackUsed: menu.fallbackUsed }, null, 2)}</pre>
-          {menu.categories.map(cat=>(
+          {menu.categories.map((cat: {id: string; name: string}) =>(
             <section key={cat.id} className="mb-6">
               <h2 className="font-semibold">{cat.name}</h2>
               <ul className="list-disc ml-5 mt-2">
-                {(menu.productsByCategory[cat.id] ?? []).map((p:any)=>(<li key={p.id}>{p.productName || p.name || p.title || "Uden navn"}</li>))}
+                {(menu.productsByCategory[cat.id as string] ?? []).map((p:any)=>(<li key={p.id}>{p.productName || p.name || p.title || "Uden navn"}</li>))}
               </ul>
             </section>
           ))}
