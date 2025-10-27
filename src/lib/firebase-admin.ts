@@ -4,14 +4,16 @@ import * as admin from 'firebase-admin';
 
 type SA = { project_id: string; client_email: string; private_key: string };
 
-function loadServiceAccount(): { projectId: string; clientEmail: string; privateKey: string } | null {
+function loadServiceAccount(): { projectId: string; clientEmail: string; privateKey: string } {
   let raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) {
     if (process.env.NODE_ENV === 'production') {
         throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON is not set in a production environment.');
     }
+    // This path should ideally not be taken in a properly configured dev env, but it prevents crashing.
     console.warn("⚠️ FIREBASE_SERVICE_ACCOUNT_JSON is not set. Using dummy admin app for development. Firestore operations will fail.");
-    return null;
+    // Return a dummy structure for the dummy app logic below.
+    return { projectId: 'dummy-project', clientEmail: 'dummy@example.com', privateKey: 'dummy-key' };
   }
   raw = raw.trim();
 
@@ -53,7 +55,7 @@ if (!globalAny.__OF_ADMIN_APP__) {
   assertNoADC();
   const serviceAccount = loadServiceAccount();
   
-  if (serviceAccount) {
+  if (serviceAccount && serviceAccount.projectId !== 'dummy-project') {
       const app = admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
         projectId: serviceAccount.projectId,

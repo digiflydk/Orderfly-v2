@@ -49,6 +49,7 @@ const locationSchema = z.object({
   pickupSaveTag: z.string().optional(),
 });
 
+
 export type FormState = {
   message: string;
   error: boolean;
@@ -209,6 +210,7 @@ export async function getAllLocations(brandId?: string): Promise<Location[]> {
     }));
 }
 
+
 export async function getLocationById(locationId: string): Promise<Location | null> {
     const db = getAdminDb();
     const docRef = db.collection('locations').doc(locationId);
@@ -327,16 +329,12 @@ export async function getTimeSlots(locationId: string, forDateStr?: string): Pro
             const nextDate = addDays(forDate, i);
             const nextDayInfo = getDayInfo(nextDate);
             if (nextDayInfo) {
-                const dayLabel = i === 1 ? 'Tomorrow' : format(nextDate, 'eeee');
-                const pickupTime = format(addMinutes(nextDayInfo.openingTime, effectivePrep), 'HH:mm');
-                const deliveryTime = format(addMinutes(nextDayInfo.openingTime, effectivePrep + location.delivery_time), 'HH:mm');
-
                 return { 
                     tidsinterval, 
                     pickup_times: [], 
                     delivery_times: [], 
-                    asap_pickup: `${dayLabel} - ${pickupTime}`, 
-                    asap_delivery: `${dayLabel} - ${deliveryTime}`,
+                    asap_pickup: `Tomorrow - ${format(addMinutes(nextDayInfo.openingTime, effectivePrep), 'HH:mm')}`, 
+                    asap_delivery: `Tomorrow - ${format(addMinutes(nextDayInfo.openingTime, effectivePrep + location.delivery_time), 'HH:mm')}`,
                     nextAvailableDate: format(nextDate, 'eeee, MMM d'),
                 };
             }
