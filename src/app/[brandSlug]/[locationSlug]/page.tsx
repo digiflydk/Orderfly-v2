@@ -1,11 +1,15 @@
 
-
 // src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
 import ProductGrid from "@/components/catalog/product-grid";
+
+type PageProps = {
+  params: { brandSlug: string; locationSlug: string };
+  searchParams?: { [key: string]: string | string[] | undefined };
+};
 
 function normalizeProbe(raw: any) {
   if (!raw || typeof raw !== "object") {
@@ -50,13 +54,7 @@ function normalizeProbe(raw: any) {
   return { brand, location, ok: hasBrand && hasLocation && brandMatchesLocation, flags: { hasBrand, hasLocation, hasBrandIdField, brandMatchesLocation }, hints };
 }
 
-export default async function Page({
-  params,
-  searchParams,
-}: {
-  params: { brandSlug: string; locationSlug: string };
-  searchParams: { [key: string]: string | string[] | undefined };
-}) {
+export default async function Page({ params, searchParams }: PageProps) {
   const { brandSlug, locationSlug } = params;
   const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
 
