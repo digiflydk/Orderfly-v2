@@ -8,38 +8,32 @@ dotenv.config();
 
 type SA = { project_id: string; client_email: string; private_key: string };
 
-function initializeAdminApp(): admin.app.App {
-  // Prevent re-initialization
-  if (admin.apps.length > 0) {
-    return admin.app();
-  }
-
-  // Check for Application Default Credentials, which we want to avoid.
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    throw new Error('FATAL: GOOGLE_APPLICATION_CREDENTIALS is set. Remove it to use explicit service account credentials.');
-  }
-  
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-  if (!serviceAccountJson) {
-    throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
+function loadServiceAccount(): { projectId: string; clientEmail: string; privateKey: string } | null {
+  let raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw) {
+    // In a real production/preview environment, this should ideally be a hard failure.
+    // For development and ease of use in Studio, we'll log an error and allow a dummy app.
+    if (process.env.NODE_ENV === 'production' || process.env.NEXT_PUBLIC_VERCEL_ENV === 'preview') {
+       throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set in a production/preview environment.');
+    }
+    console.warn('⚠️ FIREBASE_SERVICE_ACCOUNT_JSON is not set. A dummy app will be used for local development. Firestore operations will fail.');
+    return null;
   }
   
-  let rawJson = serviceAccountJson.trim();
+  raw = raw.trim();
 
-  // Handle both raw JSON and base64 encoded JSON
-  const looksBase64 = !rawJson.startsWith('{');
+  const looksBase64 = !raw.startsWith('{');
   if (looksBase64) {
     try {
-      rawJson = Buffer.from(rawJson, 'base64').toString('utf8');
+      raw = Buffer.from(raw, 'base64').toString('utf8');
     } catch {
-      throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON appears to be base64-encoded but could not be decoded.');
+      throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON appears to be base64-encoded but cannot be decoded.');
     }
   }
 
   let sa: SA;
   try {
-    sa = JSON.parse(rawJson) as SA;
+    sa = JSON.parse(raw) as SA;
   } catch (e: any) {
     throw new Error(`FATAL: Could not parse FIREBASE_SERVICE_ACCOUNT_JSON: ${e?.message ?? 'Invalid JSON'}`);
   }
@@ -48,22 +42,35 @@ function initializeAdminApp(): admin.app.App {
     throw new Error('FATAL: Service account JSON is missing required fields (project_id, client_email, or private_key).');
   }
 
-  // The private key from environment variables often has escaped newlines.
   const privateKey = sa.private_key.replace(/\\n/g, '\n');
+  return { projectId: sa.project_id, clientEmail: sa.client_email, privateKey };
+}
+
+function assertNoADC() {
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    console.warn('WARNING: GOOGLE_APPLICATION_CREDENTIALS is set. This is not recommended. Explicit service account is preferred.');
+  }
+}
+
+
+function initializeAdminApp(): admin.app.App {
+  if (admin.apps.length > 0) {
+    return admin.app();
+  }
+
+  assertNoADC();
+  const serviceAccount = loadServiceAccount();
+
+  if (!serviceAccount) {
+    // Initialize a dummy app for local development without credentials
+    return admin.initializeApp({ projectId: `dummy-project-${Date.now()}`});
+  }
 
   try {
-    const app = admin.initializeApp({
-      credential: admin.credential.cert({
-        projectId: sa.project_id,
-        clientEmail: sa.client_email,
-        privateKey: privateKey,
-      }),
-      projectId: sa.project_id,
+    return admin.initializeApp({
+      credential: admin.credential.cert(serviceAccount),
+      projectId: serviceAccount.projectId,
     });
-    
-    console.log(`[Firebase Admin] SDK initialized successfully for project: ${sa.project_id}.`);
-    return app;
-
   } catch (error: any) {
     if (error.code === 'app/duplicate-app') {
       return admin.app();
@@ -74,7 +81,6 @@ function initializeAdminApp(): admin.app.App {
 
 // Use a lazy-loading singleton pattern
 let adminAppInstance: admin.app.App | null = null;
-
 function getAdminApp(): admin.app.App {
   if (!adminAppInstance) {
     adminAppInstance = initializeAdminApp();
@@ -86,14 +92,25 @@ function getAdminApp(): admin.app.App {
  * Returns an initialized Firestore database instance from the admin SDK.
  */
 export function getAdminDb(): admin.firestore.Firestore {
-  return getAdminApp().firestore();
+    try {
+        return getAdminApp().firestore();
+    } catch(e:any) {
+        if (e.message.includes("Firestore is not available")) {
+            console.error("Firestore operation failed: Firebase Admin SDK was initialized with a dummy app due to missing credentials.");
+        }
+        throw e;
+    }
 }
+
+export { admin };
 
 /**
  * A helper to get Firestore-specific values like serverTimestamp.
  */
 export const getAdminFieldValue = () => {
-  return admin.firestore.FieldValue;
+    // This is a simplified getter for FieldValues like serverTimestamp.
+    // In a more complex setup, you might need to handle multiple Firebase app instances.
+    return admin.firestore.FieldValue;
 };
 
 /**
@@ -107,6 +124,3 @@ export async function adminHealthProbe() {
         return { ok: false, error: e.message, code: e.code };
     }
 }
-
-// Export the admin namespace itself for access to types and other utilities.
-export { admin };
