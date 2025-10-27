@@ -1,114 +1,95 @@
 
 import 'server-only';
 import * as admin from 'firebase-admin';
+import dotenv from 'dotenv';
 
-// This is a lazy-loading singleton pattern.
-// The Firebase Admin app is only initialized when getAdminApp() is first called.
+// Force load .env.local variables at the top.
+dotenv.config();
 
-// Use a global symbol to store the app instance to avoid re-initialization during hot-reloads.
+type SA = { project_id: string; client_email: string; private_key: string };
+
+function parseServiceAccountJSON(): { projectId: string; clientEmail: string; privateKey: string } {
+  let raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!raw) {
+    throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON is not set.');
+  }
+
+  raw = raw.trim();
+  const looksBase64 = !raw.startsWith('{');
+  if (looksBase64) {
+    try {
+      raw = Buffer.from(raw, 'base64').toString('utf8');
+    } catch {
+      throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON looks like base64 but cannot be decoded.');
+    }
+  }
+
+  let sa: SA;
+  try {
+    sa = JSON.parse(raw) as SA;
+  } catch (e: any) {
+    throw new Error(`FATAL: Invalid FIREBASE_SERVICE_ACCOUNT_JSON: ${e?.message ?? 'parse error'}`);
+  }
+
+  if (!sa.project_id || !sa.client_email || !sa.private_key) {
+    throw new Error('FATAL: Service account missing project_id, client_email, or private_key.');
+  }
+
+  const privateKey = sa.private_key.replace(/\\n/g, '\n');
+  return { projectId: sa.project_id, clientEmail: sa.client_email, privateKey };
+}
+
+function assertNoADC() {
+  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
+    throw new Error(
+      'FATAL: GOOGLE_APPLICATION_CREDENTIALS is set. Remove it to avoid ADC fallback. We require explicit cert init.'
+    );
+  }
+}
+
+// Use a global symbol to ensure the app is a true singleton.
 const ADMIN_APP_SYMBOL = Symbol.for('orderfly.admin.app');
 
 interface GlobalWithAdmin extends NodeJS.Global {
   [ADMIN_APP_SYMBOL]?: admin.app.App;
 }
 
-function initializeAdminApp(): admin.app.App {
-  // Check if GOOGLE_APPLICATION_CREDENTIALS is set and throw an error to prevent ADC fallback.
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    throw new Error('FATAL: GOOGLE_APPLICATION_CREDENTIALS is set. Unset it to use explicit credentials from FIREBASE_SERVICE_ACCOUNT_JSON.');
-  }
-
-  const serviceAccountJson = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-
-  if (!serviceAccountJson) {
-    throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
-  }
-
-  let rawJson = serviceAccountJson.trim();
-  
-  // Handle base64-encoded service accounts.
-  if (!rawJson.startsWith('{')) {
-    try {
-      rawJson = Buffer.from(rawJson, 'base64').toString('utf8');
-    } catch (e) {
-      throw new Error('Failed to decode base64-encoded FIREBASE_SERVICE_ACCOUNT_JSON.');
-    }
-  }
-
-  let serviceAccount: { project_id: string; client_email: string; private_key: string; };
-  try {
-    serviceAccount = JSON.parse(rawJson);
-    // Normalize the private key, replacing escaped newlines.
-    if (serviceAccount.private_key) {
-      serviceAccount.private_key = serviceAccount.private_key.replace(/\\n/g, '\n');
-    }
-  } catch (e: any) {
-    throw new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON: ${e.message}`);
-  }
-  
-  if (!serviceAccount.project_id || !serviceAccount.client_email || !serviceAccount.private_key) {
-    throw new Error('Service account JSON is missing required fields (project_id, client_email, private_key).');
-  }
-
-  // Use a unique app name to prevent conflicts.
-  const appName = 'orderfly-admin-singleton';
-  const existingApp = admin.apps.find(app => app?.name === appName);
-  
-  if (existingApp) {
-    return existingApp;
-  }
-  
-  console.log(`[Firebase Admin] Initializing SDK for project: ${serviceAccount.project_id}...`);
-  const app = admin.initializeApp({
-    credential: admin.credential.cert(serviceAccount),
-    projectId: serviceAccount.project_id,
-  }, appName);
-
-  return app;
-}
-
-/**
- * Returns an initialized instance of the Firebase Admin app using a singleton pattern.
- * This function is the single source of truth for accessing the Admin SDK.
- * It will attempt to initialize on first call if not already initialized.
- * @returns {admin.app.App}
- */
-export function getAdminApp(): admin.app.App {
+function getAdminApp(): admin.app.App {
   const globalWithAdmin = global as GlobalWithAdmin;
+  
   if (!globalWithAdmin[ADMIN_APP_SYMBOL]) {
-    globalWithAdmin[ADMIN_APP_SYMBOL] = initializeAdminApp();
+    assertNoADC();
+    const { projectId, clientEmail, privateKey } = parseServiceAccountJSON();
+    
+    try {
+      globalWithAdmin[ADMIN_APP_SYMBOL] = admin.initializeApp({
+        credential: admin.credential.cert({ projectId, clientEmail, privateKey }),
+        projectId,
+      });
+      console.log(`[Firebase Admin] SDK initialized successfully for project: ${projectId}.`);
+    } catch (error: any) {
+       // Catch initialization errors (e.g., if it was already initialized elsewhere without the singleton pattern)
+      if (error.code === 'app/duplicate-app') {
+        globalWithAdmin[ADMIN_APP_SYMBOL] = admin.app();
+      } else {
+        throw error;
+      }
+    }
   }
+  
   return globalWithAdmin[ADMIN_APP_SYMBOL]!;
 }
 
-/**
- * Returns a Firestore database instance from the initialized Admin app.
- * This is the primary export to be used by server actions.
- * @returns {admin.firestore.Firestore}
- */
 export function getAdminDb(): admin.firestore.Firestore {
-  try {
-    return getAdminApp().firestore();
-  } catch (e: any) {
-    // If the error during initialization was because the env var was not set,
-    // this will be the point where the error is thrown to the caller.
-    if (e.message.includes("FIREBASE_SERVICE_ACCOUNT_JSON")) {
-       console.error("Firestore is not available. ", e.message);
-    }
-    // Re-throw to make it clear that the DB operation will fail.
-    throw e;
-  }
+  return getAdminApp().firestore();
 }
 
-// Export the admin namespace itself for access to types and other utilities.
 export { admin };
 
 /**
  * A helper to get Firestore-specific values like serverTimestamp.
  */
 export const getAdminFieldValue = () => {
-    // This is a simplified getter for FieldValues like serverTimestamp.
-    // In a more complex setup, you might need to handle multiple Firebase app instances.
     return admin.firestore.FieldValue;
 };
 
