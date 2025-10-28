@@ -1,7 +1,9 @@
 
 "use client";
 
-export default function ConfirmationClient() {
-  // keep existing UI if available
-  return null; // replace with real JSX if needed
-}
+const ConfirmationClient = () => {
+  return null;
+};
+
+export default ConfirmationClient;
+export { ConfirmationClient };

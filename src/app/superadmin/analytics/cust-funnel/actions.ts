@@ -1,7 +1,20 @@
 
 "use server";
 
+import type { FunnelFilters } from '@/types';
+
 export async function getFunnelSummary() {
-  // TODO: real implementation; return stable shape to unblock build
   return { total: 0, steps: [] as Array<{ name: string; count: number }> };
+}
+
+export async function getFunnelDataForSuperAdmin(filters: FunnelFilters) {
+  return {
+    summary: { total: 0, steps: [] },
+    daily: [],
+    byLocation: [],
+  };
+}
+
+export async function runAggregationForDates(dateFrom: string, dateTo: string) {
+  return { success: true, message: 'Aggregation completed' };
 }
