@@ -1,8 +1,8 @@
 
-import { getBrandBySlug } from '@/app/superadmin/brands/actions';
+import { getBrandBySlug } from '@/lib/data/brand-location';
 import { BrandLayoutClient } from '../layout-client';
 import type { Location } from '@/types';
-import { getLocationBySlug } from '@/app/superadmin/locations/actions';
+import { getLocationBySlug } from '@/lib/data/brand-location';
 import { resolveParams } from '@/lib/next/resolve-props';
 
 export default async function LocationLayout({
