@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -166,33 +167,6 @@ export async function getActiveLocationBySlug(brandId: string, locationSlug: str
     return null;
 }
 
-export async function getLocationBySlug(brandId: string, locationSlug: string): Promise<Location | null> {
-    const db = getAdminDb();
-    const q = db.collection('locations').where('brandId', '==', brandId);
-    const querySnapshot = await q.get();
-    if (querySnapshot.empty) {
-        return null;
-    }
-    
-    const lowerCaseSlug = locationSlug.toLowerCase();
-    
-    const locationDoc = querySnapshot.docs.find(doc => doc.data().slug.toLowerCase() === lowerCaseSlug);
-
-    if (locationDoc) {
-        const data = locationDoc.data();
-        return { id: locationDoc.id, ...data } as Location;
-    }
-
-    return null;
-}
-
-export async function getLocationsForBrand(brandId: string): Promise<Location[]> {
-    const db = getAdminDb();
-    const q = db.collection('locations').where('brandId', '==', brandId);
-    const querySnapshot = await q.get();
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Location[];
-}
-
 export async function getAllLocations(brandId?: string): Promise<Location[]> {
     const db = getAdminDb();
     let q: admin.firestore.Query = db.collection('locations');
@@ -267,7 +241,7 @@ export async function getTimeSlots(locationId: string, forDateStr?: string): Pro
     
     let effectivePrep = (location.manual_override ?? 0) > 0 
       ? (location.manual_override ?? 0)
-      : (location.prep_time ?? 0);
+      : (location.prep_time ?? 0); // Ensure prep_time has a fallback
 
     if (!location.manual_override || location.manual_override === 0) {
         if (location.travlhed_factor === 'medium') effectivePrep += 10;
