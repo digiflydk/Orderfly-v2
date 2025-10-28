@@ -1,14 +1,13 @@
-
 export type Product = {
   id: string;
-  productName: string;
-  // ...existing fields
+  productName?: string;
+  name?: string;
+  title?: string;
 };
 
 export type Category = {
-  id: string;
+  id: string;  // string id used as key
   name: string;
-  // ...existing fields
 };
 
 export type MenuData = {
