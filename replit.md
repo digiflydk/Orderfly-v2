@@ -6,6 +6,15 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 
 # Recent Changes
 
+**October 28, 2025 - Fixed Duplicate Location Page TypeScript Error**
+- **Fixed type annotation in duplicate file**: Found and fixed `src/[brandSlug]/[locationSlug]/page.tsx` (old location outside app directory)
+- Added proper type annotation `(cat: Category)` to map callback on line 88
+- Imported required types: `AsyncPageProps`, `MenuData`, `Category`, `Product`
+- Updated to use Next.js 15 async params pattern with resolveParams and resolveSearchParams
+- Used productsForCategory helper function for type-safe category product access
+- This resolves TypeScript error: "Parameter 'cat' implicitly has an 'any' type"
+- Dev server compiling successfully after fix
+
 **October 28, 2025 - Fixed Missing Exports for Production Build**
 - **Added missing function exports**: Exported `getFunnelDataForSuperAdmin` and `runAggregationForDates` from `src/app/superadmin/analytics/cust-funnel/actions.ts`
 - **Added named export for ConfirmationClient**: Added both default and named export for `ConfirmationClient` component
