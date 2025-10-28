@@ -2,7 +2,7 @@
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Suspense } from 'react';
-import { getFunnelDataForSuperAdmin } from "./actions";
+import { getFunnelDataForSuperAdmin } from "@/app/superadmin/analytics/cust-funnel/actions";
 import { AnalyticsDashboardClient } from '@/components/superadmin/analytics-dashboard-client';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
