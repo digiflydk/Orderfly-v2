@@ -1,7 +1,6 @@
 
-
 import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs } from "firebase/firestore";
+import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import type { Brand, Location } from "@/types";
 
 export type BrandDoc = Brand | null;
@@ -31,13 +30,23 @@ export async function getLocationsForBrand(brandId: string): Promise<Location[]>
 export async function getLocationBySlug(brandId: string, locationSlug: string): Promise<LocationDoc> {
   const q = query(
     collection(db, "locations"),
-    where("brandId", "==", brandId),
-    where("slug", "==", locationSlug)
+    where("brandId", "==", brandId)
   );
-  const snap = await getDocs(q);
-  if (snap.empty) return null;
-  const doc = snap.docs[0];
-  return { id: doc.id, ...doc.data() } as Location;
+  const querySnapshot = await getDocs(q);
+  if (querySnapshot.empty) {
+      return null;
+  }
+  
+  const lowerCaseSlug = locationSlug.toLowerCase();
+  
+  const locationDoc = querySnapshot.docs.find(doc => doc.data().slug.toLowerCase() === lowerCaseSlug);
+
+  if (locationDoc) {
+      const data = locationDoc.data();
+      return { id: locationDoc.id, ...data } as Location;
+  }
+
+  return null;
 }
 
 export async function getBrandAndLocation(brandSlug: string, locationSlug: string) {
