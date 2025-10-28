@@ -19,9 +19,14 @@ const SESSION_ID_COOKIE = 'orderfly_session_id';
 const ATTRIBUTION_COOKIE = 'orderfly_attribution';
 const ONE_YEAR_DAYS = 365;
 
-export function AnalyticsProvider({ children }: { children: ReactNode }) {
+interface AnalyticsProviderProps {
+  children: ReactNode;
+  brand?: Brand | null;
+}
+
+export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProviderProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
-  const [brand, setBrand] = useState<Brand | null>(null);
+  const [brand, setBrand] = useState<Brand | null>(brandProp || null);
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
@@ -50,24 +55,27 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
       }
     }
     
-    const parts = pathname.split('/').filter(Boolean);
-    if (parts.length > 0) {
-        const brandSlug = parts[0];
-        getBrandBySlug(brandSlug).then(setBrand);
+    if (!brandProp) {
+      const parts = pathname.split('/').filter(Boolean);
+      if (parts.length > 0) {
+          const brandSlug = parts[0];
+          getBrandBySlug(brandSlug).then(setBrand);
+      }
     }
 
-  }, [searchParams, pathname]);
+  }, [searchParams, pathname, brandProp]);
   
   const trackEvent = useCallback((eventName: AnalyticsEventName, props: Record<string, any> = {}) => {
-    if (!sessionId || !brand) return;
+    const effectiveBrand = brandProp || brand;
+    if (!sessionId || !effectiveBrand) return;
 
     const attributionCookie = Cookies.get(ATTRIBUTION_COOKIE);
     const attributionData = attributionCookie ? JSON.parse(attributionCookie) : {};
     
     const eventData: Record<string, any> = {
-      brandId: brand.id,
-      brandSlug: brand.slug,
-      brandGtmId: brand.gtmContainerId, // For GTM logic
+      brandId: effectiveBrand.id,
+      brandSlug: effectiveBrand.slug,
+      brandGtmId: effectiveBrand.gtmContainerId, // For GTM logic
       sessionId,
       deviceType: window.innerWidth < 768 ? 'mobile' : 'desktop',
       urlPath: window.location.pathname,
@@ -77,7 +85,7 @@ export function AnalyticsProvider({ children }: { children: ReactNode }) {
     
     trackClientEvent(eventName, eventData);
 
-  }, [sessionId, brand]);
+  }, [sessionId, brand, brandProp]);
 
   return (
     <AnalyticsContext.Provider value={{ trackEvent, sessionId }}>
