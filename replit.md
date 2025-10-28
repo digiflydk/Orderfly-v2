@@ -58,3 +58,25 @@ Preferred communication style: Simple, everyday language.
 - `firebase`: Database and hosting.
 - `handlebars`: Template rendering.
 - `js-cookie`: Cookie management.
+
+# Recent Changes
+
+**October 28, 2025 - Fixed AnalyticsProvider TypeScript Error**
+- **Added brand prop to AnalyticsProvider**: Updated `src/context/analytics-context.tsx` to accept optional `brand` prop
+- Created `AnalyticsProviderProps` interface with `children: ReactNode` and `brand?: Brand | null`
+- Modified provider to use passed brand prop when available, falling back to pathname-based fetch if not provided
+- Updated `trackEvent` callback to use `effectiveBrand = brandProp || brand` for type safety
+- This resolves production build error: "Property 'brand' does not exist on type '{ children: ReactNode }'"
+- Backward compatible: Works with or without brand prop
+
+**October 28, 2025 - Fixed File Casing Conflict: Header.tsx**
+- **Resolved case-sensitivity build error**: Deleted unused `src/components/layout/Header.tsx` (uppercase)
+- All imports use lowercase `@/components/layout/header`, kept the correct `header.tsx` file
+- M3 app has its own Header component at `src/app/m3/_components/Header.tsx` (no conflict)
+- This resolves TS1149 error: "File name differs from already included file name only in casing"
+
+**October 28, 2025 - Fixed Duplicate Location Page TypeScript Error**
+- **Fixed type annotation in duplicate file**: Found and fixed `src/[brandSlug]/[locationSlug]/page.tsx`
+- Added proper type annotation `(cat: Category)` to map callback
+- Updated to use Next.js 15 async params pattern with `AsyncPageProps`
+- This resolves error: "Parameter 'cat' implicitly has an 'any' type"
