@@ -1,113 +1,6 @@
 # Overview
 
-This is a multi-tenant restaurant ordering platform built with Next.js 15, Firebase, and Stripe. The system enables restaurant brands to manage multiple locations, menus, orders, and customer interactions through a comprehensive admin interface. Each brand operates with its own subdomain/slug, customizable appearance, and independent menu catalog.
-
-The platform supports both pickup and delivery ordering, dynamic pricing, combo meals, discount management, customer loyalty programs, and integrated payment processing through Stripe. It includes analytics tracking, feedback collection, and cookie consent management.
-
-# Recent Changes
-
-**October 28, 2025 - Fixed Duplicate Location Page TypeScript Error**
-- **Fixed type annotation in duplicate file**: Found and fixed `src/[brandSlug]/[locationSlug]/page.tsx` (old location outside app directory)
-- Added proper type annotation `(cat: Category)` to map callback on line 88
-- Imported required types: `AsyncPageProps`, `MenuData`, `Category`, `Product`
-- Updated to use Next.js 15 async params pattern with resolveParams and resolveSearchParams
-- Used productsForCategory helper function for type-safe category product access
-- This resolves TypeScript error: "Parameter 'cat' implicitly has an 'any' type"
-- Dev server compiling successfully after fix
-
-**October 28, 2025 - Fixed Missing Exports for Production Build**
-- **Added missing function exports**: Exported `getFunnelDataForSuperAdmin` and `runAggregationForDates` from `src/app/superadmin/analytics/cust-funnel/actions.ts`
-- **Added named export for ConfirmationClient**: Added both default and named export for `ConfirmationClient` component
-- Created stub implementations for analytics functions to unblock build
-- This resolves build errors: "Missing exports: 'runAggregationForDates', 'getFunnelDataForSuperAdmin', 'ConfirmationClient'"
-- Dev server compiling successfully after fix
-
-**October 28, 2025 - Fixed Async Params in Location Page**
-- **Removed duplicate PageProps type**: Deleted custom type definition in favor of AsyncPageProps
-- Updated page function to use AsyncPageProps type from `@/types/next-async-props`
-- Fixed params and searchParams handling using resolveParams and resolveSearchParams helpers
-- This resolves TypeScript compilation error: "Element implicitly has an 'any' type because expression of type 'any' can't be used to index type"
-- Dev server compiling successfully after fix
-
-**October 28, 2025 - OF-471: Normalized Orders Client Page Import**
-- **Fixed orders-client-page import structure**: Moved component from `src/sales/orders/client-page.tsx` to canonical location `src/components/superadmin/sales/orders-client-page.tsx`
-- Changed export from named export to default export for consistency
-- Updated `src/app/superadmin/sales/orders/page.tsx` to import from new location using `@components/*` alias
-- Added `@components/*` path alias to `tsconfig.json` for better import resolution
-- Removed duplicate file at old location
-- Fixed relative import for updateOrderStatus action to use absolute path
-- This resolves build error: "Cannot find module '@/components/superadmin/sales/orders-client-page'"
-- Dev server compiling successfully after fix
-
-**October 28, 2025 - SearchParams Promise Fix for Next.js 15**
-- **Fixed searchParams type in location page**: Updated `src/app/[brandSlug]/[locationSlug]/page.tsx` to use `Promise<>` type for searchParams
-- Changed `searchParams: { [key: string]: string | string[] | undefined }` to `searchParams: Promise<{ [key: string]: string | string[] | undefined }>`
-- Updated page function to await searchParams before accessing values
-- This resolves Next.js 15.5.0 build error: "searchParams must be a Promise type"
-- Dev server compiling successfully after fix
-
-**October 28, 2025 - Critical Build Fix: Case-Sensitivity Issue**
-- **Fixed duplicate directory causing TypeScript hang**: Removed duplicate `src/lib/admin/` directory (lowercase)
-- Kept `src/lib/Admin/` directory (capital A) which contains analytics subdirectory
-- This was causing TS1149 errors: "File name differs from already included file name only in casing"
-- TypeScript compiler was looping infinitely trying to process the same files twice
-- Fixed layout files to properly destructure params for Next.js 15 compatibility
-- Updated next.config.js to use `output: 'standalone'` for better production builds
-- Dev server confirmed working after fixes (compiles successfully)
-
-**October 20, 2025 - Layout Async Params Fix**
-- Fixed all layout files to use Next.js 15 async params pattern
-- Updated `src/[brandSlug]/[locationSlug]/checkout/layout.tsx` - async params with both brandSlug and locationSlug
-- Updated `src/[brandSlug]/[locationSlug]/layout.tsx` - async params with both brandSlug and locationSlug
-- Updated `src/[brandSlug]/checkout/layout.tsx` - legacy checkout layout with async params
-- Converted `src/types/next-async-props.d.ts` to `next-async-props.ts` for proper module exports
-- Updated all imports from `AppTypes` namespace to direct `AsyncPageProps` and `Query` type imports
-- Fixed 11 page files that import AsyncPageProps (checkout, confirmation, dashboard, sales, feedback, analytics pages)
-- All layout files now properly await params before rendering
-
-**October 19, 2025 - Production Build Fixes (Phase 4 - Final)**
-- Fixed all remaining Next.js 15 async compatibility issues
-- Updated `src/[brandSlug]/checkout/page.tsx` to await cookies() and use async params
-- Fixed `src/[brandSlug]/layout.tsx` import path and async params
-- Updated `src/lib/http/base-url.ts` to await headers() call
-- Fixed `src/lib/resolve-active-location.ts` to await cookies() call
-- Configured deployment to use Node 20 via deployment config, package.json engines, .nvmrc
-- **Manual step required**: `.replit` file line 7 still has `nodejs-18_x` - needs manual change to `nodejs-20` for production deployments
-- All TypeScript async/await patterns now Next.js 15 compatible
-
-**October 19, 2025 - Production Build Fixes (Phase 3 - Complete)**
-- Fixed all 20 superadmin dynamic route pages to use Next.js 15 async params pattern
-- Updated categories, code-review, combos, customers, discounts, feedback, locations, products, QA, roles, settings, standard-discounts, toppings, upsells pages
-- Fixed `src/lib/url.ts` to await `headers()` (Next.js 15 now returns Promise for headers)
-- Updated checkout actions to await `getOrigin()` calls
-- Added `.nvmrc` file with Node 20 specification
-- Excluded `design/` folder from TypeScript compilation in `tsconfig.json`
-- All Next.js 15 compatibility issues resolved - build ready for deployment
-
-**October 19, 2025 - Production Build Fixes (Phase 2)**
-- Fixed async params in `src/app/brand-safe/[brandSlug]/page.tsx` - converted to async function with Promise params
-- Resolved Footer.tsx casing conflict by renaming `Footer.tsx` → `M3Footer.tsx` for M3-specific footer
-- All imports now use consistent casing: main footer uses `@/components/layout/footer` (lowercase)
-- Updated `src/app/m3/page.tsx` to import from `M3Footer` instead of `Footer`
-- Node 20 configuration verified in `replit.nix` and `NIXPACKS_NODE_VERSION` environment variable
-- Dev server running successfully with all routes compiling cleanly
-
-**October 19, 2025 - Production Build Fixes (Phase 1)**
-- Fixed Next.js 15 async params compatibility across all dynamic route pages
-- Updated page components to use `Promise<{ params }>` pattern: `src/[brandSlug]/[locationSlug]/page.tsx`, checkout pages, confirmation pages
-- Added health check endpoints: `/api/ok` and `/api/env` for deployment monitoring
-- Created stub functions in `src/lib/firebase-admin.ts`: `adminHealthProbe()`, `getAdminFieldValue()`
-- Fixed analytics bridge exports in `src/app/admin/analytics/actions.ts`
-- Configured deployment settings for autoscale deployment with Node 20
-- Environment variables verified: `NEXT_PUBLIC_M3_PREVIEW=true`, `NIXPACKS_NODE_VERSION=20`
-
-**October 12, 2025 - OF-158: M3 Preview Feature**
-- Implemented M3 preview routes in `src/app/m3/` with Next.js 15 async params compatibility
-- Added feature flag system (`NEXT_PUBLIC_M3_PREVIEW=true`) to enable/disable M3 preview
-- Created mock menu structure for testing (Esmeralda Pizza Amager location)
-- Routes: `/m3` (index), `/m3/[brandSlug]/[locationSlug]` (location-specific)
-- New components: `MenuList` (client component for menu items display)
-- New files: `src/lib/feature-flags.ts`, `src/app/m3/_data/mock.ts`, `src/app/m3/_components/MenuList.tsx`
+This project is a multi-tenant restaurant ordering platform built with Next.js 15, Firebase, and Stripe. It enables restaurant brands to manage multiple locations, menus, orders, and customer interactions via a comprehensive admin interface. Each brand operates with its own subdomain/slug, customizable appearance, and independent menu catalog. The platform supports pickup and delivery, dynamic pricing, combo meals, discount management, customer loyalty programs, integrated Stripe payments, analytics, feedback collection, and cookie consent. The business vision is to provide a scalable and customizable online ordering solution for restaurant brands, enhancing their digital presence and operational efficiency.
 
 # User Preferences
 
@@ -117,122 +10,51 @@ Preferred communication style: Simple, everyday language.
 
 ## Frontend Architecture
 
-**Framework**: Next.js 15 with App Router and TypeScript
-- Server and client components pattern with async params
-- Dynamic routing using `[brandSlug]` and location-specific routes
-- Server actions for data mutations
-- Tailwind CSS with Radix UI components for styling
-- Custom theming system with HSL color variables and brand-specific CSS injection
-
-**State Management**:
-- React Context for cart management (`CartProvider`)
-- React Context for analytics tracking (`AnalyticsProvider`)
-- Client-side form state with React Hook Form and Zod validation
-- Cookie-based session and consent tracking
-
-**UI Components**:
-- Radix UI primitives for accessible components (Dialog, Dropdown, Select, etc.)
-- Custom drag-and-drop interfaces using `@dnd-kit` for sortable categories
-- Responsive design with mobile-first approach
-- Dynamic icon rendering system for categories and allergens
+**Framework**: Next.js 15 with App Router and TypeScript, utilizing server and client components with async params. It features dynamic routing, server actions for data mutations, and a responsive, mobile-first design.
+**Styling**: Tailwind CSS with Radix UI components, custom theming using HSL color variables and brand-specific CSS injection.
+**State Management**: React Context for cart and analytics, React Hook Form with Zod for client-side form state, and cookie-based session/consent tracking.
+**UI Components**: Radix UI primitives for accessibility, `@dnd-kit` for drag-and-drop, and dynamic icon rendering.
 
 ## Backend Architecture
 
-**Database**: Firebase Firestore (NoSQL document database)
-- Collections: brands, locations, products, categories, orders, customers, feedback, discounts, allergens, toppings, combo_menus, subscriptions, settings
-- Server-side data fetching with Firebase Admin SDK
-- Real-time capabilities (not actively used but available)
-- Timestamp fields use Firestore Timestamp type, converted to Date objects on client
-
-**Authentication & Authorization**:
-- Cookie-based session tracking (`orderfly_session_id`, `orderfly_anonymous_id`)
-- Brand-scoped data isolation through brandId and locationIds filters
-- Admin routes protected (implementation details not shown in provided code)
-- Customer tracking with anonymous-to-authenticated user linking
-
-**Server Actions Pattern**:
-- All mutations through Next.js server actions
-- Zod schema validation for form inputs
-- Optimistic updates with revalidatePath
-- Consistent error handling with FormState return type
-
-**Business Logic**:
-- Multi-level discount system (voucher codes, standard offers, item-level, cart-level)
-- Dynamic pricing based on delivery type (pickup vs delivery)
-- Combo meal builder with product groups and selection constraints
-- Loyalty points calculation and redemption
-- Opening hours validation with timezone support (date-fns-tz)
+**Database**: Firebase Firestore (NoSQL) for all data (brands, locations, products, orders, etc.). Server-side data fetching uses Firebase Admin SDK.
+**Authentication & Authorization**: Cookie-based session tracking with brand-scoped data isolation.
+**Server Actions Pattern**: Next.js server actions for all mutations, including Zod validation, optimistic updates, and consistent error handling.
+**Business Logic**: Supports multi-level discounts, dynamic pricing (pickup/delivery), combo meal builder, loyalty programs, and opening hours validation with timezone support.
 
 ## Payment Processing
 
-**Stripe Integration**:
-- Checkout Session API for payment collection
-- Brand-specific Stripe accounts (stored in settings)
-- Dynamic statement descriptors using brand and location names
-- Webhook handling for payment confirmation
-- Support for test and live modes
-
-**Order Flow**:
-1. Cart assembly with pricing calculation
-2. Discount application (vouchers + standard offers)
-3. Stripe Checkout Session creation
-4. Payment capture via Stripe
-5. Order confirmation with email notification (implied)
-6. Webhook verification and order status update
+**Stripe Integration**: Utilizes Stripe Checkout Session API for payment collection, supports brand-specific Stripe accounts, dynamic statement descriptors, and webhook handling for payment confirmation.
 
 ## Analytics & Tracking
 
-**Multi-Channel Analytics**:
-- Custom event tracking API (`/api/analytics`)
-- Google Tag Manager integration (brand-specific GTM IDs supported)
-- Cookie consent management with granular categories (functional, marketing, statistics)
-- Anonymous user tracking with consent linking
-- Attribution tracking (UTM parameters, referrer, landing page)
-
-**Event Types**: page_view, add_to_cart, remove_from_cart, view_product, checkout_initiated, order_completed, etc.
-
-**Privacy Compliance**:
-- Cookie consent banner with customizable text per brand
-- Anonymous consent storage before user authentication
-- Consent migration from anonymous to authenticated users
-- GDPR-ready with opt-in/opt-out capabilities
+**Multi-Channel Analytics**: Custom event tracking API, Google Tag Manager integration (brand-specific), cookie consent management (functional, marketing, statistics), anonymous user tracking, and attribution tracking.
+**Privacy Compliance**: Cookie consent banner, anonymous consent storage, and GDPR readiness.
 
 ## AI/ML Features
 
-**Firebase Genkit Integration**:
-- Google AI plugin for Gemini 2.0 Flash model
-- Menu import flow automation (referenced but not shown in detail)
-- AI-powered content generation capabilities
+**Firebase Genkit Integration**: Utilizes Google AI plugin for Gemini 2.0 Flash for potential features like menu import automation and AI-powered content generation.
 
-## External Dependencies
+# External Dependencies
 
 **Core Services**:
-- Firebase (Firestore, Hosting, App Hosting)
-- Stripe (Payment processing)
-- Google AI / Gemini (via Genkit)
+- **Firebase**: Firestore (database), Hosting, App Hosting.
+- **Stripe**: Payment processing.
+- **Google AI / Gemini**: Via Genkit.
 
-**Image Hosting**: 
-- External domains whitelisted: i.postimg.cc, picsum.photos, images.unsplash.com, res.cloudinary.com
-- Next.js Image optimization with remote patterns
+**Image Hosting**: Whitelisted external domains including i.postimg.cc, picsum.photos, images.unsplash.com, res.cloudinary.com for Next.js Image optimization.
 
 **Deployment**:
-- Firebase App Hosting with backend region us-central1
-- Node.js 18 runtime (configured via Nix)
-- Next.js build process with custom prebuild scripts (codemods, assertions)
+- Firebase App Hosting with `us-central1` backend region.
+- Node.js 20 runtime.
 
 **Key NPM Dependencies**:
-- @radix-ui/* - UI component primitives
-- @dnd-kit/* - Drag and drop functionality
-- date-fns & date-fns-tz - Date manipulation with timezone support
-- zod - Schema validation
-- react-hook-form - Form state management
-- stripe - Payment processing
-- firebase - Database and hosting
-- handlebars - Template rendering
-- js-cookie - Cookie management
-
-**Development Tools**:
-- TypeScript strict mode
-- ESLint for code quality
-- Webpack custom configuration for warning suppression
-- Custom build-time checks (route params validation, Next.js manifest verification)
+- `@radix-ui/*`: UI component primitives.
+- `@dnd-kit/*`: Drag and drop functionality.
+- `date-fns` & `date-fns-tz`: Date manipulation.
+- `zod`: Schema validation.
+- `react-hook-form`: Form state management.
+- `stripe`: Payment processing.
+- `firebase`: Database and hosting.
+- `handlebars`: Template rendering.
+- `js-cookie`: Cookie management.
