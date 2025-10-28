@@ -6,6 +6,13 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 
 # Recent Changes
 
+**October 28, 2025 - Fixed Async Params in Location Page**
+- **Removed duplicate PageProps type**: Deleted custom type definition in favor of AsyncPageProps
+- Updated page function to use AsyncPageProps type from `@/types/next-async-props`
+- Fixed params and searchParams handling using resolveParams and resolveSearchParams helpers
+- This resolves TypeScript compilation error: "Element implicitly has an 'any' type because expression of type 'any' can't be used to index type"
+- Dev server compiling successfully after fix
+
 **October 28, 2025 - OF-471: Normalized Orders Client Page Import**
 - **Fixed orders-client-page import structure**: Moved component from `src/sales/orders/client-page.tsx` to canonical location `src/components/superadmin/sales/orders-client-page.tsx`
 - Changed export from named export to default export for consistency
