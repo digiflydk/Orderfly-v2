@@ -5,10 +5,15 @@ import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
 import ProductGrid from "@/components/catalog/product-grid";
+import type { AsyncPageProps } from "@/types/next-async-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
+import type { MenuData, Category, Product } from "@/types/menu";
+import { productsForCategory } from "@/lib/menu-helpers";
+
 
 type PageProps = {
-  params: Promise<{ brandSlug: string; locationSlug: string }>;
-  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
+  params: { brandSlug: string; locationSlug: string; };
+  searchParams: { [key: string]: string | string[] | undefined; };
 };
 
 function normalizeProbe(raw: any) {
@@ -58,9 +63,8 @@ export default async function Page({
   params,
   searchParams,
 }: PageProps) {
-  const { brandSlug, locationSlug } = await params;
-  const query = await searchParams;
-  const safe = String(query?.safe ?? "").toLowerCase() === "1";
+  const { brandSlug, locationSlug } = params;
+  const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
 
   try {
     const raw = await getBrandAndLocation(brandSlug, locationSlug);
@@ -76,17 +80,22 @@ export default async function Page({
 
     const counts = await getCatalogCounts({ brandId: probe.brand!.id });
     const menu = await getMenuForRender({ brandId: probe.brand!.id });
+    const typedMenu = menu as unknown as MenuData;
 
     if(safe){
       return (
         <div className="mx-auto max-w-3xl p-4">
           <h1 className="text-2xl font-bold mb-4">Safe Mode – {probe.brand?.name ?? brandSlug} / {probe.location?.name ?? locationSlug}</h1>
           <pre className="text-xs bg-black/5 p-3 rounded mb-4">{JSON.stringify({ counts, fallbackUsed: menu.fallbackUsed }, null, 2)}</pre>
-          {menu.categories.map((cat: {id: string; name: string}) =>(
+          {(typedMenu.categories as Category[]).map((cat: Category) => (
             <section key={cat.id} className="mb-6">
               <h2 className="font-semibold">{cat.name}</h2>
               <ul className="list-disc ml-5 mt-2">
-                {(menu.productsByCategory[cat.id as string] ?? []).map((p:any)=>(<li key={p.id}>{p.productName || p.name || p.title || "Uden navn"}</li>))}
+                {productsForCategory(typedMenu, cat.id).map((p: Product) => (
+                  <li key={p.id}>
+                    {p.productName || p.name || p.title || "Uden navn"}
+                  </li>
+                ))}
               </ul>
             </section>
           ))}
@@ -111,7 +120,7 @@ export default async function Page({
           <h1 className="text-2xl sm:text-3xl font-bold">{probe.brand?.name ?? brandSlug}</h1>
           <p className="opacity-70">{probe.location?.name ?? locationSlug}</p>
         </header>
-        <ProductGrid menu={menu}/>
+        <ProductGrid menu={menu as MenuData}/>
       </div>
     );
   }catch(e:any){
