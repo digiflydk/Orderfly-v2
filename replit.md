@@ -6,6 +6,16 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 
 # Recent Changes
 
+**October 28, 2025 - Critical Build Fix: Case-Sensitivity Issue**
+- **Fixed duplicate directory causing TypeScript hang**: Removed duplicate `src/lib/admin/` directory (lowercase)
+- Kept `src/lib/Admin/` directory (capital A) which contains analytics subdirectory
+- This was causing TS1149 errors: "File name differs from already included file name only in casing"
+- TypeScript compiler was looping infinitely trying to process the same files twice
+- Fixed layout files to properly destructure params for Next.js 15 compatibility
+- Updated next.config.js to use `output: 'standalone'` for better production builds
+- Dev server confirmed working after fixes (compiles successfully)
+- **Note**: Production builds still take very long to complete (investigating optimization phase hang)
+
 **October 20, 2025 - Layout Async Params Fix**
 - Fixed all layout files to use Next.js 15 async params pattern
 - Updated `src/[brandSlug]/[locationSlug]/checkout/layout.tsx` - async params with both brandSlug and locationSlug
