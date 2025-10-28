@@ -1,22 +1,21 @@
-
 'use client';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 import { isM3Enabled } from "@/lib/feature-flags";
-import { MobileHeader } from "./_components/MobileHeader";
-import { MobileHero } from "./_components/MobileHero";
-import { MobileCardGrid } from "./_components/MobileCardGrid";
-import StickyOrderChoice from "./_components/StickyOrderChoice";
+import Header from "./_components/Header";
 import { Hero } from "./_components/Hero";
 import { CTADeck } from "./_components/CTADeck";
 import { MenuGrid } from "./_components/MenuGrid";
 import { PromoBanner } from "./_components/PromoBanner";
 import { FooterCTA } from "./_components/FooterCTA";
-import Header from "./_components/Header";
 import M3Footer from "@/components/layout/M3Footer";
 import { OrderModal } from './_components/OrderModal';
-import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { Button } from '@/components/ui/button';
+import { MobileHeader } from './_components/MobileHeader';
+import { MobileHero } from './_components/MobileHero';
+import { MobileCardGrid } from './_components/MobileCardGrid';
+import StickyOrderChoice from './_components/StickyOrderChoice';
 
 export default function M3IndexPage() {
   const [orderModalOpen, setOrderModalOpen] = useState(false);
@@ -34,14 +33,10 @@ export default function M3IndexPage() {
     );
   }
 
-  const handleNavigateToMenu = () => {
-    // Corrected to use router for client-side navigation
-    router.push('/m3pizza/m3-pizza-hellerup');
-  };
-  
   const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
     console.log(`Selected delivery method: ${method}`);
     // Example navigation: router.push('/m3pizza/m3-pizza-hellerup?deliveryMethod=' + method);
+    router.push('/m3pizza/esmeralda/esmeralda-pizza-amager');
   };
 
   return (
@@ -54,7 +49,7 @@ export default function M3IndexPage() {
           <div className="px-3 py-4">
             <MobileCardGrid />
           </div>
-          <StickyOrderChoice onOrderClick={handleNavigateToMenu} />
+          <StickyOrderChoice onOrderClick={() => setOrderModalOpen(true)} />
         </main>
       </div>
       
@@ -69,7 +64,7 @@ export default function M3IndexPage() {
               <p className="mb-2">Eksempel-route:</p>
               <Button asChild>
                 <Link
-                  href="/m3pizza/m3-pizza-hellerup"
+                  href="/m3pizza/esmeralda/esmeralda-pizza-amager"
                 >
                   Åbn Esmeralda – Amager (mock)
                 </Link>

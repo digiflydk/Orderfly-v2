@@ -1,4 +1,3 @@
-
 "use client";
 
 import { useState, useEffect } from "react";
@@ -137,5 +136,3 @@ export function Hero({ onOrderClick }: HeroProps) {
     </section>
   );
 }
-
-    
