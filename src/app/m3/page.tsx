@@ -14,6 +14,7 @@ import Header from "./_components/Header";
 import M3Footer from "@/components/layout/M3Footer";
 import { OrderModal } from './_components/OrderModal';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
 
 export default function M3IndexPage() {
   const [orderModalOpen, setOrderModalOpen] = useState(false);
@@ -32,13 +33,12 @@ export default function M3IndexPage() {
   }
 
   const handleNavigateToMenu = () => {
-    router.push('/m3pizza/m3-pizza-hellerup');
+    // Corrected to use router for client-side navigation
+    router.push('/m3/esmeralda/esmeralda-pizza-amager');
   };
   
   const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
     console.log(`Selected delivery method: ${method}`);
-    // Here you would typically navigate to the menu with the selected method
-    // For now, we can just log it.
     // Example navigation: router.push('/m3/esmeralda/esmeralda-pizza-amager?deliveryMethod=' + method);
   };
 
@@ -58,9 +58,23 @@ export default function M3IndexPage() {
       
       {/* Desktop View */}
       <div className="hidden md:block bg-m3-cream">
-        <Header onOrderClick={handleNavigateToMenu}/>
+        <Header onOrderClick={() => setOrderModalOpen(true)}/>
         <main>
-          <Hero onOrderClick={handleNavigateToMenu} />
+          <div className="text-center p-8">
+            <h1 className="text-2xl font-semibold">M3 (Preview)</h1>
+            <p>Dette er en placeholder for M3-frontend.</p>
+             <div className="mt-4">
+              <p className="mb-2">Eksempel-route:</p>
+              <Button asChild>
+                <Link
+                  href="/m3/esmeralda/esmeralda-pizza-amager"
+                >
+                  Åbn Esmeralda – Amager (mock)
+                </Link>
+              </Button>
+            </div>
+          </div>
+          <Hero onOrderClick={() => setOrderModalOpen(true)} />
           <CTADeck />
           <MenuGrid />
           <PromoBanner />
