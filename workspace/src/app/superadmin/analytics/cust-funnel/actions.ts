@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import type { FunnelFilters, FunnelOutput } from '@/types';
@@ -6,13 +7,11 @@ import { getFunnelData } from '@/lib/analytics/getFunnelData';
 import { aggregateDailyData } from '@/lib/analytics/aggregateDaily';
 import { revalidatePath } from 'next/cache';
 
-// Placeholder for a real SuperAdmin user object from auth
-const MOCK_SUPER_ADMIN_USER = { role: 'superadmin' };
+const SUPER = { role: 'superadmin' as const };
 
 export async function getFunnelDataForSuperAdmin(filters: FunnelFilters): Promise<FunnelOutput> {
-  // Pass the mock superadmin user to indicate elevated permissions
   // @ts-ignore
-  return getFunnelData(filters, MOCK_SUPER_ADMIN_USER);
+  return getFunnelData(filters, SUPER);
 }
 
 export async function runAggregationForDates(startDate: string, endDate: string) {

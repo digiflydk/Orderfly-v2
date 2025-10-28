@@ -1,5 +1,6 @@
 
 
+
 // src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
@@ -79,7 +80,7 @@ export default async function Page({
     }
 
     const counts = await getCatalogCounts({ brandId: probe.brand!.id });
-    const menu = await getMenuForRender({ brandId: probe.brand!.id });
+    const menu: MenuData = await getMenuForRender({ brandId: probe.brand!.id });
     const typedMenu = menu as unknown as MenuData;
 
     if(safe){
