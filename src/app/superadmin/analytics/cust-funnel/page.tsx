@@ -4,34 +4,23 @@ import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Suspense } from 'react';
 import { getFunnelDataForSuperAdmin } from "./actions";
 import { AnalyticsDashboardClient } from '@/components/superadmin/analytics-dashboard-client';
-import { getBrands } from '../../brands/actions';
-import { getAllLocations } from '../../locations/actions';
+import { getBrands } from '@/app/superadmin/brands/actions';
+import { getAllLocations } from '@/app/superadmin/locations/actions';
 import type { FunnelFilters } from '@/types';
 
 export const revalidate = 0;
 
-async function AnalyticsData({ searchParams }: { searchParams: { [key: string]: string | string[] | undefined } }) {
+async function AnalyticsData({ searchParams }: { searchParams: FunnelFilters }) {
   const [brands, locations] = await Promise.all([
     getBrands(),
     getAllLocations()
   ]);
 
-  // Explicitly create a plain object from searchParams
-  const plainSearchParams: { [key: string]: string } = {};
-  for (const key in searchParams) {
-    const value = searchParams[key];
-    if (typeof value === 'string') {
-      plainSearchParams[key] = value;
-    }
-  }
-
-  // Set default date range to today if not provided
-  const today = new Date().toISOString().slice(0, 10);
-  const dateFrom = plainSearchParams.dateFrom || today;
-  const dateTo = plainSearchParams.dateTo || today;
+  const dateFrom = searchParams.dateFrom || new Date(new Date().setDate(new Date().getDate() - 7)).toISOString();
+  const dateTo = searchParams.dateTo || new Date().toISOString();
 
   const filters = {
-    ...plainSearchParams,
+    ...searchParams,
     dateFrom,
     dateTo,
   };
@@ -61,7 +50,7 @@ export default async function CustomerFunnelPage({ params, searchParams }: Async
         </p>
       </div>
       <Suspense fallback={<p>Loading dashboard...</p>}>
-        <AnalyticsData searchParams={query} />
+        <AnalyticsData searchParams={query as FunnelFilters} />
       </Suspense>
     </div>
   );

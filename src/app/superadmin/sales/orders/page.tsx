@@ -4,7 +4,7 @@ import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { getOrders } from "@/lib/superadmin/getOrders";
 import { getBrands } from "@/app/superadmin/brands/actions";
 import { getAllLocations } from "@/app/superadmin/locations/actions";
-import { OrdersClientPage, type ClientOrderSummary } from "@/sales/orders/client-page";
+import { OrdersClientPage, type ClientOrderSummary } from "@/components/superadmin/sales/orders-client-page";
 import type { OrderSummary } from "@/types";
 import { fromQuery } from "@/lib/utils/url";
 import { SACommonFilters } from "@/types/superadmin";
@@ -25,7 +25,7 @@ export default async function OrdersPage({ params, searchParams }: AsyncPageProp
         dateFrom: (query.from as string),
         dateTo: (query.to as string),
         brandId: (query.brand as string) || 'all',
-        locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc]) : [],
+        locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc as string]) : [],
     };
     
     const [orders, brands, locations] = await Promise.all([
@@ -37,6 +37,8 @@ export default async function OrdersPage({ params, searchParams }: AsyncPageProp
     const serializedOrders: ClientOrderSummary[] = orders.map(order => ({
         ...order,
         createdAt: order.createdAt.toISOString(),
+        paidAt: order.paidAt?.toISOString(),
+        updatedAt: order.updatedAt?.toISOString(),
     }));
 
     return (
@@ -44,6 +46,7 @@ export default async function OrdersPage({ params, searchParams }: AsyncPageProp
             initialOrders={serializedOrders}
             brands={brands}
             locations={locations}
+            initialFilters={filters}
         />
     );
 }
