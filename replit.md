@@ -61,6 +61,15 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+**October 28, 2025 - Fixed FunnelFilters Type Error in Admin Analytics**
+- **Updated admin analytics page**: Modified `src/admin/analytics/page.tsx` to match working superadmin implementation
+- Added Next.js 15 async params pattern with `AsyncPageProps`, `resolveParams`, `resolveSearchParams`
+- Added explicit `FunnelFilters` type annotation to filters object
+- Updated page function to properly handle async searchParams with type casting
+- Removed manual searchParams conversion loop, using direct spread with type safety
+- This resolves build error: "Type has no properties in common with type 'FunnelFilters'"
+- Dev server compiling successfully after fix
+
 **October 28, 2025 - Fixed Import Paths in Duplicate Brand Page**
 - **Fixed incorrect relative import paths**: Updated `src/[brandSlug]/page.tsx` (duplicate file outside app directory)
 - Changed `../superadmin/brands/actions` to `@/app/superadmin/brands/actions`
