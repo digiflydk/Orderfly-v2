@@ -61,6 +61,13 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
+**October 28, 2025 - Fixed Import Paths in Duplicate Brand Page**
+- **Fixed incorrect relative import paths**: Updated `src/[brandSlug]/page.tsx` (duplicate file outside app directory)
+- Changed `../superadmin/brands/actions` to `@/app/superadmin/brands/actions`
+- Changed `../superadmin/locations/actions` to `@/app/superadmin/locations/actions`
+- This resolves build error: "Cannot find module '../superadmin/brands/actions'"
+- Dev server compiling successfully after fix
+
 **October 28, 2025 - Fixed AnalyticsProvider TypeScript Error**
 - **Added brand prop to AnalyticsProvider**: Updated `src/context/analytics-context.tsx` to accept optional `brand` prop
 - Created `AnalyticsProviderProps` interface with `children: ReactNode` and `brand?: Brand | null`
