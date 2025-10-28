@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
@@ -9,7 +8,7 @@ import { useCart } from '@/context/cart-context';
 import { Badge } from '../ui/badge';
 import type { Location } from '@/types';
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
-import { getLocationBySlug } from '@/app/superadmin/locations/actions';
+import { getLocationBySlug } from '@/lib/data/brand-location';
 
 type Payload = { brandSlug: string; locationSlug: string };
 
