@@ -6,6 +6,16 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 
 # Recent Changes
 
+**October 28, 2025 - OF-471: Normalized Orders Client Page Import**
+- **Fixed orders-client-page import structure**: Moved component from `src/sales/orders/client-page.tsx` to canonical location `src/components/superadmin/sales/orders-client-page.tsx`
+- Changed export from named export to default export for consistency
+- Updated `src/app/superadmin/sales/orders/page.tsx` to import from new location using `@components/*` alias
+- Added `@components/*` path alias to `tsconfig.json` for better import resolution
+- Removed duplicate file at old location
+- Fixed relative import for updateOrderStatus action to use absolute path
+- This resolves build error: "Cannot find module '@/components/superadmin/sales/orders-client-page'"
+- Dev server compiling successfully after fix
+
 **October 28, 2025 - SearchParams Promise Fix for Next.js 15**
 - **Fixed searchParams type in location page**: Updated `src/app/[brandSlug]/[locationSlug]/page.tsx` to use `Promise<>` type for searchParams
 - Changed `searchParams: { [key: string]: string | string[] | undefined }` to `searchParams: Promise<{ [key: string]: string | string[] | undefined }>`
