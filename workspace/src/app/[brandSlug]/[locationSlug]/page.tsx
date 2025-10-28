@@ -1,4 +1,5 @@
 
+
 // src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
@@ -7,6 +8,7 @@ import { logDiag } from "@/lib/log";
 import ProductGrid from "@/components/catalog/product-grid";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import type { AsyncPageProps } from "@/types/next-async-props";
+import type { MenuData, Category } from '@/types/menu';
 
 export default async function Page({
   params,
@@ -29,18 +31,18 @@ export default async function Page({
     }
 
     const counts = await getCatalogCounts({ brandId: probe.brand!.id });
-    const menu = await getMenuForRender({ brandId: probe.brand!.id });
+    const menu: MenuData = await getMenuForRender({ brandId: probe.brand!.id });
 
     if(safe){
       return (
         <div className="mx-auto max-w-3xl p-4">
           <h1 className="text-2xl font-bold mb-4">Safe Mode – {probe.brand?.name ?? brandSlug} / {probe.location?.name ?? locationSlug}</h1>
           <pre className="text-xs bg-black/5 p-3 rounded mb-4">{JSON.stringify({ counts, fallbackUsed: menu.fallbackUsed }, null, 2)}</pre>
-          {menu.categories.map((cat: {id: string; name: string}) =>(
+          {menu.categories.map((cat: Category) =>(
             <section key={cat.id} className="mb-6">
               <h2 className="font-semibold">{cat.name}</h2>
               <ul className="list-disc ml-5 mt-2">
-                {(menu.productsByCategory[cat.id as keyof typeof menu.productsByCategory] ?? []).map((p:any)=>(<li key={p.id}>{p.productName || p.name || p.title || "Uden navn"}</li>))}
+                {(menu.productsByCategory[cat.id] ?? []).map((p)=>(<li key={p.id}>{p.productName || p.name || "Uden navn"}</li>))}
               </ul>
             </section>
           ))}

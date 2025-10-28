@@ -1,7 +1,8 @@
 
+
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
-import { ConfirmationClient } from './confirmation-client';
+import ConfirmationClient from './confirmation-client';
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 import { getLocationBySlug } from '@/app/superadmin/locations/actions';
 import { getOrderById } from '@/app/checkout/order-actions';
