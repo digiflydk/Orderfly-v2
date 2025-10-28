@@ -6,6 +6,13 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 
 # Recent Changes
 
+**October 28, 2025 - Fixed Missing Exports for Production Build**
+- **Added missing function exports**: Exported `getFunnelDataForSuperAdmin` and `runAggregationForDates` from `src/app/superadmin/analytics/cust-funnel/actions.ts`
+- **Added named export for ConfirmationClient**: Added both default and named export for `ConfirmationClient` component
+- Created stub implementations for analytics functions to unblock build
+- This resolves build errors: "Missing exports: 'runAggregationForDates', 'getFunnelDataForSuperAdmin', 'ConfirmationClient'"
+- Dev server compiling successfully after fix
+
 **October 28, 2025 - Fixed Async Params in Location Page**
 - **Removed duplicate PageProps type**: Deleted custom type definition in favor of AsyncPageProps
 - Updated page function to use AsyncPageProps type from `@/types/next-async-props`
