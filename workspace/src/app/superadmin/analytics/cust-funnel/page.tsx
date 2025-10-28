@@ -1,11 +1,12 @@
 
+
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Suspense } from 'react';
 import { getFunnelDataForSuperAdmin } from "./actions";
 import { AnalyticsDashboardClient } from '@/components/superadmin/analytics-dashboard-client';
-import { getBrands } from '../../brands/actions';
-import { getAllLocations } from '../../locations/actions';
+import { getBrands } from '@/app/superadmin/brands/actions';
+import { getAllLocations } from '@/app/superadmin/locations/actions';
 import type { FunnelFilters } from '@/types';
 
 export const revalidate = 0;
