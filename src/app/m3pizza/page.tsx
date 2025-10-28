@@ -1,23 +1,27 @@
-import Link from "next/link";
-import { isM3Enabled } from "@/lib/feature-flags";
-import { Button } from "@/components/ui/button";
 
-import Header from "./_components/Header";
+'use client';
+import { useState } from 'react';
+import { isM3Enabled } from "@/lib/feature-flags";
+import { MobileHeader } from "./_components/MobileHeader";
+import { MobileHero } from "./_components/MobileHero";
+import { MobileCardGrid } from "./_components/MobileCardGrid";
+import StickyOrderChoice from "./_components/StickyOrderChoice";
 import { Hero } from "./_components/Hero";
 import { CTADeck } from "./_components/CTADeck";
 import { MenuGrid } from "./_components/MenuGrid";
 import { PromoBanner } from "./_components/PromoBanner";
 import { FooterCTA } from "./_components/FooterCTA";
+import Header from "./_components/Header";
 import M3Footer from "@/components/layout/M3Footer";
-import { MobileHeader } from "./_components/MobileHeader";
-import { MobileHero } from "./_components/MobileHero";
-import { MobileCardGrid } from "./_components/MobileCardGrid";
-import StickyOrderChoice from "./_components/StickyOrderChoice";
-import { OrderModal } from "./_components/OrderModal";
+import { OrderModal } from './_components/OrderModal';
+import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
 
-// This page is now a Server Component.
-// All client-side logic for modals has been moved to the respective components.
 export default function M3IndexPage() {
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const router = useRouter();
+
   if (!isM3Enabled()) {
     return (
       <main className="space-y-2 p-6 text-center">
@@ -30,8 +34,16 @@ export default function M3IndexPage() {
     );
   }
 
-  // The onOrderClick prop is now passed to the client-side Header.
-  // The OrderModal is now handled within its own component or a layout component.
+  const handleNavigateToMenu = () => {
+    // Corrected to use router for client-side navigation
+    router.push('/m3pizza/m3-pizza-hellerup');
+  };
+  
+  const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
+    console.log(`Selected delivery method: ${method}`);
+    // Example navigation: router.push('/m3pizza/m3-pizza-hellerup?deliveryMethod=' + method);
+  };
+
   return (
     <>
       {/* Mobile View */}
@@ -42,18 +54,13 @@ export default function M3IndexPage() {
           <div className="px-3 py-4">
             <MobileCardGrid />
           </div>
-          <StickyOrderChoice onOrderClick={() => {
-            // Placeholder for future client-side navigation logic if needed from a server component
-            // For now, this can be static or handled differently.
-          }} />
+          <StickyOrderChoice onOrderClick={handleNavigateToMenu} />
         </main>
       </div>
       
       {/* Desktop View */}
       <div className="hidden md:block bg-m3-cream">
-        <Header onOrderClick={() => {
-            // The actual modal opening logic is in Header.tsx, this is a placeholder
-        }}/>
+        <Header onOrderClick={() => setOrderModalOpen(true)}/>
         <main>
           <div className="text-center p-8">
             <h1 className="text-2xl font-semibold">M3 (Preview)</h1>
@@ -69,9 +76,7 @@ export default function M3IndexPage() {
               </Button>
             </div>
           </div>
-          <Hero onOrderClick={() => {
-             // The actual modal opening logic is in Hero.tsx, this is a placeholder
-          }}/>
+          <Hero onOrderClick={() => setOrderModalOpen(true)} />
           <CTADeck />
           <MenuGrid />
           <PromoBanner />
@@ -79,6 +84,12 @@ export default function M3IndexPage() {
         </main>
         <M3Footer />
       </div>
+
+      <OrderModal 
+        open={orderModalOpen}
+        onOpenChange={setOrderModalOpen}
+        onDeliveryMethodSelected={handleDeliveryMethodSelected}
+      />
     </>
   );
 }
