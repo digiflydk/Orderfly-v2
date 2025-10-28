@@ -4,7 +4,7 @@ import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { getOrders } from "@/lib/superadmin/getOrders";
 import { getBrands } from "@/app/superadmin/brands/actions";
 import { getAllLocations } from "@/app/superadmin/locations/actions";
-import { OrdersClientPage, type ClientOrderSummary } from "@/components/superadmin/sales/orders-client-page";
+import OrdersClientPage, { type ClientOrderSummary } from "@components/superadmin/sales/orders-client-page";
 import type { OrderSummary } from "@/types";
 import { fromQuery } from "@/lib/utils/url";
 import { SACommonFilters } from "@/types/superadmin";
