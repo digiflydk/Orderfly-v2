@@ -1,0 +1,88 @@
+# OF-471 — Replit build fix: normalize Orders client-page import (no rollback)
+
+**Version:** 1.0.238 • OF-471
+**Environment:** Replit (Production)
+**Critical constraint:** **Do NOT roll back the project or revert commits.** Apply the fixes below and republish.
+
+## Files
+
+* `src/app/superadmin/sales/orders/page.tsx`
+* `src/components/superadmin/sales/orders-client-page.tsx` *(create/move here if missing)*
+* `tsconfig.json`
+
+## Changes
+
+1. **Create/ensure canonical component file**
+
+   * The Orders client component must live at:
+
+     ```
+     src/components/superadmin/sales/orders-client-page.tsx
+     ```
+   * Export default + type:
+
+     ```tsx
+     // src/components/superadmin/sales/orders-client-page.tsx
+     export type ClientOrderSummary = {
+       // keep existing fields if already defined
+     };
+
+     const OrdersClientPage = () => {
+       // existing implementation
+       return null; // replace with real JSX
+     };
+
+     export default OrdersClientPage;
+     ```
+
+2. **Fix imports in the page**
+
+   * Edit `src/app/superadmin/sales/orders/page.tsx` to import from the canonical path via alias:
+
+     ```tsx
+     // AFTER
+     import OrdersClientPage, {
+       type ClientOrderSummary,
+     } from "@components/superadmin/sales/orders-client-page";
+     ```
+   * Remove any previous imports that include `/orders/orders-client-page` or different directories.
+
+3. **Verify TypeScript path aliases**
+
+   * In `tsconfig.json`, ensure these entries exist exactly (case-sensitive):
+
+     ```json
+     {
+       "compilerOptions": {
+         "baseUrl": ".",
+         "paths": {
+           "@/*": ["src/*"],
+           "@components/*": ["src/components/*"]
+         }
+       }
+     }
+     ```
+   * If already present, leave unchanged.
+
+4. **Eliminate duplicate or mis-cased files**
+
+   * Delete any near-duplicates that can confuse Linux builds (case sensitive), for example:
+
+     ```
+     src/sales/orders/client-page.tsx
+     src/components/Superadmin/sales/Orders-Client-Page.tsx
+     src/components/superadmin/sales/orders/ClientPage.tsx
+     ```
+   * There must be **one** file: `src/components/superadmin/sales/orders-client-page.tsx`.
+
+## Definition of Done
+
+* Replit **Build** passes without:
+
+  * `Can't resolve '@components/superadmin/sales/orders-client-page'`
+  * “component file may be missing or located in a different directory”
+* `/superadmin/sales/orders` renders using `OrdersClientPage` at runtime (no red console errors).
+* `tsconfig.json` alias resolution works; no path alias warnings.
+* **No rollback** of the project history; only the above targeted changes applied.
+
+**Deploy:** Republish after changes.
