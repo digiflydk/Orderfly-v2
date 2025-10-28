@@ -1,4 +1,5 @@
 
+
 import { LocationCard } from "@/components/location-card";
 import type { Brand, Location } from "@/types";
 import { getBrandBySlug } from "../superadmin/brands/actions";
