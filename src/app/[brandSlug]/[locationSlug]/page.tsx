@@ -11,11 +11,6 @@ import type { MenuData, Category, Product } from "@/types/menu";
 import { productsForCategory } from "@/lib/menu-helpers";
 
 
-type PageProps = {
-  params: { brandSlug: string; locationSlug: string; };
-  searchParams: { [key: string]: string | string[] | undefined; };
-};
-
 function normalizeProbe(raw: any) {
   if (!raw || typeof raw !== "object") {
     return {
@@ -62,9 +57,10 @@ function normalizeProbe(raw: any) {
 export default async function Page({
   params,
   searchParams,
-}: PageProps) {
-  const { brandSlug, locationSlug } = params;
-  const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
+}: AsyncPageProps) {
+  const { brandSlug, locationSlug } = await resolveParams(params);
+  const query = await resolveSearchParams(searchParams);
+  const safe = String(query?.safe ?? "").toLowerCase() === "1";
 
   try {
     const raw = await getBrandAndLocation(brandSlug, locationSlug);
