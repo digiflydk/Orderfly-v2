@@ -61,13 +61,15 @@ Preferred communication style: Simple, everyday language.
 
 # Recent Changes
 
-**October 28, 2025 - Fixed FunnelFilters Type Error in Admin Analytics**
+**October 28, 2025 - Fixed FunnelFilters Type Conflict in Admin Analytics**
+- **Root cause**: Two different `FunnelFilters` types existed - one in `@/types` and one in `@/lib/analytics/actions`
+- **Updated admin analytics actions**: Replaced `src/admin/analytics/actions.ts` with proper implementation
+- Created `getFunnelDataForBrand` function using correct `FunnelFilters` and `FunnelOutput` types from `@/types`
+- Removed conflicting type export from `@/lib/analytics/actions`
+- Added stub implementation returning proper FunnelOutput structure (totals, daily, byLocation)
 - **Updated admin analytics page**: Modified `src/admin/analytics/page.tsx` to match working superadmin implementation
 - Added Next.js 15 async params pattern with `AsyncPageProps`, `resolveParams`, `resolveSearchParams`
-- Added explicit `FunnelFilters` type annotation to filters object
-- Updated page function to properly handle async searchParams with type casting
-- Removed manual searchParams conversion loop, using direct spread with type safety
-- This resolves build error: "Type has no properties in common with type 'FunnelFilters'"
+- This resolves build errors: "Type 'FunnelFilters' has no properties in common with type 'FunnelFilters'" and "Type 'FunnelData' is missing properties from 'FunnelOutput'"
 - Dev server compiling successfully after fix
 
 **October 28, 2025 - Fixed Import Paths in Duplicate Brand Page**
