@@ -6,6 +6,13 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 
 # Recent Changes
 
+**October 28, 2025 - SearchParams Promise Fix for Next.js 15**
+- **Fixed searchParams type in location page**: Updated `src/app/[brandSlug]/[locationSlug]/page.tsx` to use `Promise<>` type for searchParams
+- Changed `searchParams: { [key: string]: string | string[] | undefined }` to `searchParams: Promise<{ [key: string]: string | string[] | undefined }>`
+- Updated page function to await searchParams before accessing values
+- This resolves Next.js 15.5.0 build error: "searchParams must be a Promise type"
+- Dev server compiling successfully after fix
+
 **October 28, 2025 - Critical Build Fix: Case-Sensitivity Issue**
 - **Fixed duplicate directory causing TypeScript hang**: Removed duplicate `src/lib/admin/` directory (lowercase)
 - Kept `src/lib/Admin/` directory (capital A) which contains analytics subdirectory
@@ -14,7 +21,6 @@ The platform supports both pickup and delivery ordering, dynamic pricing, combo 
 - Fixed layout files to properly destructure params for Next.js 15 compatibility
 - Updated next.config.js to use `output: 'standalone'` for better production builds
 - Dev server confirmed working after fixes (compiles successfully)
-- **Note**: Production builds still take very long to complete (investigating optimization phase hang)
 
 **October 20, 2025 - Layout Async Params Fix**
 - Fixed all layout files to use Next.js 15 async params pattern
