@@ -8,7 +8,7 @@ import ProductGrid from "@/components/catalog/product-grid";
 
 type PageProps = {
   params: Promise<{ brandSlug: string; locationSlug: string }>;
-  searchParams: { [key: string]: string | string[] | undefined };
+  searchParams: Promise<{ [key: string]: string | string[] | undefined }>;
 };
 
 function normalizeProbe(raw: any) {
@@ -59,7 +59,8 @@ export default async function Page({
   searchParams,
 }: PageProps) {
   const { brandSlug, locationSlug } = await params;
-  const safe = String(searchParams?.safe ?? "").toLowerCase() === "1";
+  const query = await searchParams;
+  const safe = String(query?.safe ?? "").toLowerCase() === "1";
 
   try {
     const raw = await getBrandAndLocation(brandSlug, locationSlug);
