@@ -15,7 +15,8 @@ let initError: Error | null = null;
 function loadServiceAccount(): SA | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) {
-    // Create a "soft" error that will only be thrown if the Admin SDK is actually used.
+    // We create a "soft" error here that will only be thrown if the Admin SDK is actually used.
+    // This allows public pages to build and run without the admin credentials.
     initError = new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
     return null;
   }
@@ -60,14 +61,12 @@ function initializeAdminApp(): admin.app.App {
       }, appName);
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    // This handles cases where initializeApp itself fails (e.g., duplicate app)
     initError = new Error(`Firebase Admin initialization failed: ${message}`);
     throw initError;
   }
 }
 
 function getAdminApp(): admin.app.App {
-  // Always check for pre-existing initialization error first.
   if (initError) {
     throw initError;
   }
@@ -85,6 +84,7 @@ function getAdminApp(): admin.app.App {
 /**
  * Returns an initialized Firestore database instance from the admin SDK.
  * This is the primary export to be used by server-side code.
+ * Will throw a descriptive error if the Admin SDK is not configured.
  */
 export function getAdminDb(): admin.firestore.Firestore {
   return getAdminApp().firestore();
@@ -97,11 +97,12 @@ export { admin };
  * A helper to get Firestore-specific values like serverTimestamp.
  */
 export const getAdminFieldValue = () => {
-    return admin.firestore.FieldValue;
+    return getAdminApp().firestore.FieldValue;
 };
 
 /**
  * A health check function to verify the connection to Firestore.
+ * Returns an error object instead of throwing if the connection fails.
  */
 export async function adminHealthProbe() {
     try {

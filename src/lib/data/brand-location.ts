@@ -1,5 +1,6 @@
 
-// src/lib/data/brand-location.ts
+'use server';
+
 import { db } from "@/lib/firebase";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import type { Brand, Location } from "@/types";
