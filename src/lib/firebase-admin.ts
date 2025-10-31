@@ -15,7 +15,8 @@ let initError: Error | null = null;
 function loadServiceAccount(): SA | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) {
-    // Don't throw here; allow build to pass and throw at runtime.
+    // Create a "soft" error that will only be thrown if the Admin SDK is actually used.
+    initError = new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
     return null;
   }
 
@@ -41,7 +42,8 @@ function initializeAdminApp(): admin.app.App {
 
   const serviceAccount = loadServiceAccount();
   if (!serviceAccount) {
-    throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
+    // This will now only be thrown if an attempt is made to use the Admin SDK without the env var.
+    throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set. Cannot initialize Firebase Admin.');
   }
 
   // Prevent accidental use of Application Default Credentials.
@@ -51,23 +53,29 @@ function initializeAdminApp(): admin.app.App {
 
   const appName = `orderfly-admin-${Date.now()}`;
   
-  return admin.initializeApp({
-    credential: admin.credential.cert({
-      projectId: serviceAccount.project_id,
-      clientEmail: serviceAccount.client_email,
-      privateKey: serviceAccount.private_key.replace(/\\n/g, '\n'),
-    }),
-    projectId: serviceAccount.project_id,
-  }, appName);
+  try {
+    return admin.initializeApp({
+        credential: admin.credential.cert(serviceAccount),
+        projectId: serviceAccount.project_id,
+      }, appName);
+  } catch (e) {
+    const message = e instanceof Error ? e.message : String(e);
+    // This handles cases where initializeApp itself fails (e.g., duplicate app)
+    initError = new Error(`Firebase Admin initialization failed: ${message}`);
+    throw initError;
+  }
 }
 
 function getAdminApp(): admin.app.App {
+  // Always check for pre-existing initialization error first.
+  if (initError) {
+    throw initError;
+  }
+  
   if (!adminApp) {
-    // Check if an app is already initialized (e.g., by another part of Firebase)
     if (admin.apps.length > 0 && admin.apps[0]) {
       adminApp = admin.apps[0];
     } else {
-      // Lazy initialization: create the app on first access.
       adminApp = initializeAdminApp();
     }
   }
