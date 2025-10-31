@@ -7,8 +7,7 @@ import { useCart } from '@/context/cart-context';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { getProductsByIds } from '@/app/superadmin/products/actions';
 import { useAnalytics } from '@/context/analytics-context';
-import { getTimeSlots } from '@/app/superadmin/locations/actions';
-
+import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
 import { MenuClient } from './menu-client';
 
 interface BrandPageClientProps {
