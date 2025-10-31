@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -13,7 +12,6 @@ import { MobileFloatingCart } from '@/components/cart/mobile-floating-cart';
 import { OffersSection } from '@/components/product/offers-section';
 import { ComboSection } from '@/components/product/combo-section';
 import { CategorySection } from '@/components/product/category-section';
-import { getTimeSlots } from '@/app/superadmin/locations/actions';
 import { TimeSelector } from '@/components/checkout/time-selector';
 import { getProductsByIds } from '@/app/superadmin/products/actions';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -21,6 +19,7 @@ import { useAnalytics } from '@/context/analytics-context';
 import { openDeliveryModal } from '@/components/modals/DeliveryMethodModal';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
+import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
 
 
 interface MenuClientProps {
@@ -50,7 +49,7 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
         
         async function fetchInitialData() {
             setIsLoading(true);
-            const fetchedTimeSlots = await getTimeSlots(location.id);
+            const fetchedTimeSlots = calculateTimeSlots(location);
             setTimeSlots(fetchedTimeSlots);
             
              // Fetch products for combos if they exist
@@ -87,11 +86,13 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
      useEffect(() => {
         // This hook re-fetches discounts on the client side to ensure they are up-to-date,
         // especially when the deliveryType changes.
-        async function fetchDiscounts() {
-             const discounts = await getActiveStandardDiscounts({ brandId: brand.id, locationId: location.id, deliveryType });
+        async function fetchDiscounts(type: 'delivery' | 'pickup') {
+             const discounts = await getActiveStandardDiscounts({ brandId: brand.id, locationId: location.id, deliveryType: type });
              setActiveStandardDiscounts(discounts);
         }
-        if (deliveryType) fetchDiscounts();
+        if (deliveryType) {
+            fetchDiscounts(deliveryType);
+        }
      }, [deliveryType, brand.id, location.id]);
 
      useEffect(() => {
@@ -146,7 +147,7 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
                     </Alert>
                 )}
                 <div className="lg:hidden py-4">
-                   <TimeSelector timeSlots={timeSlots} />
+                   <TimeSelector />
                 </div>
                 
                  <div className="sticky top-16 z-30 bg-[#FFF8F0]/90 backdrop-blur-sm -mx-4 px-4 py-2 border-t border-b">

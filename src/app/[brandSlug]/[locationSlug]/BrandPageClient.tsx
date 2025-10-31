@@ -37,12 +37,12 @@ export default function BrandPageClient({
     }, [menu.productsByCategory]);
 
     // Create a placeholder for the "Offers" category if needed later on the client.
-    const offerCategoryPlaceholder = {
+    const offerCategoryPlaceholder: Category = {
         id: 'offers',
         categoryName: brand.offersHeading || 'Offers',
         locationIds: [location.id],
         isActive: true,
-        sortOrder: -1, // Ensures "Offers" comes first
+        sortOrder: -1,
         brandId: brand.id,
     };
     
