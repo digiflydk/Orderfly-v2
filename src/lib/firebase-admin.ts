@@ -1,5 +1,6 @@
 
-import 'server-only';
+'use server';
+
 import * as admin from 'firebase-admin';
 
 // This file is the single source of truth for initializing the Firebase Admin SDK.
@@ -15,8 +16,6 @@ let initError: Error | null = null;
 function loadServiceAccount(): SA | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) {
-    // We create a "soft" error here that will only be thrown if the Admin SDK is actually used.
-    // This allows public pages to build and run without the admin credentials.
     initError = new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
     return null;
   }
@@ -26,21 +25,17 @@ function loadServiceAccount(): SA | null {
     if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
       throw new Error('Service account JSON is missing required fields (project_id, client_email, private_key).');
     }
+    // Correctly format the private key
+    parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
     return parsed;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
-    // This will be thrown at runtime if credentials are bad.
     initError = new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON. Ensure it is valid JSON. Details: ${message}`);
     return null;
   }
 }
 
 function initializeAdminApp(): admin.app.App {
-  // If there was a previous initialization error, throw it immediately.
-  if (initError) {
-    throw initError;
-  }
-
   const serviceAccount = loadServiceAccount();
   if (!serviceAccount) {
     // This will now only be thrown if an attempt is made to use the Admin SDK without the env var.

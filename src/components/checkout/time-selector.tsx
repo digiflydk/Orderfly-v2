@@ -10,6 +10,7 @@ import { useEffect, useState } from "react";
 import type { TimeSlotResponse } from "@/types";
 import { Skeleton } from "../ui/skeleton";
 import { TimeSlotDialog } from "./timeslot-dialog";
+import { calculateTimeSlots } from "@/app/superadmin/locations/client-actions";
 
 
 function TimeSlotSkeleton() {
@@ -25,9 +26,20 @@ function TimeSlotSkeleton() {
 }
 
 
-export function TimeSelector({ timeSlots }: { timeSlots: TimeSlotResponse | null }) {
+export function TimeSelector() {
     const { deliveryType, setDeliveryType, location, selectedTime } = useCart();
     const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
+    const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
+    const [isLoadingTimes, setIsLoadingTimes] = useState(true);
+
+    useEffect(() => {
+        if (location?.id) {
+            setIsLoadingTimes(true);
+            const slots = calculateTimeSlots(location);
+            setTimeSlots(slots);
+            setIsLoadingTimes(false);
+        }
+    }, [location]);
     
     if (!location) return null;
     
@@ -66,7 +78,7 @@ export function TimeSelector({ timeSlots }: { timeSlots: TimeSlotResponse | null
                 </Button>
             </div>
             <div className="flex items-center justify-between border rounded-lg bg-card p-2 px-3 flex-1">
-                 {!timeSlots ? (
+                 {isLoadingTimes ? (
                     <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-muted-foreground" /><Skeleton className="h-5 w-24" /></div>
                  ) : (
                     <>

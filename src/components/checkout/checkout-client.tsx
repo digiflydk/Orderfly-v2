@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -24,7 +25,6 @@ import { useParams, useRouter } from "next/navigation";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "@/components/ui/alert-dialog";
 import type { PaymentDetails, TimeSlotResponse, MinimalCartItem, Location, Upsell, Product, ProductForMenu, Discount } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
-import { getTimeSlots } from "@/app/superadmin/locations/actions";
 import { TimeSlotDialog } from "./timeslot-dialog";
 import { Alert, AlertTitle } from "../ui/alert";
 import Cookies from "js-cookie";
@@ -36,6 +36,7 @@ import { getActiveStripeKey } from '@/app/superadmin/settings/actions';
 import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
 import { UpsellDialog } from './upsell-dialog';
 import { isLockedItem } from '@/lib/cart-utils';
+import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
 
 const checkoutSchema = z.object({
     name: z.string().min(2, "Name is required"),
@@ -253,9 +254,11 @@ function CheckoutForm({ location }: { location: Location }) {
     useEffect(() => {
         if(location?.id) {
             setIsLoadingTimes(true);
-            getTimeSlots(location.id).then(setTimeSlots).finally(() => setIsLoadingTimes(false));
+            const slots = calculateTimeSlots(location);
+            setTimeSlots(slots);
+            setIsLoadingTimes(false);
         }
-    }, [location?.id]);
+    }, [location]);
     
     const availableTimes = timeSlots ? (deliveryType === 'delivery' ? timeSlots.delivery_times : timeSlots.pickup_times) : [];
     
@@ -303,6 +306,7 @@ function CheckoutForm({ location }: { location: Location }) {
             sessionStorage.setItem('checkout_started', 'true');
         }
     }, [trackEvent, checkoutTotal, itemCount, deliveryType]);
+
 
     useEffect(() => {
         const subscription = form.watch((value, { name, type }) => {
