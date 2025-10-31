@@ -16,7 +16,9 @@ let initError: Error | null = null;
 function loadServiceAccount(): SA | null {
   const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) {
-    initError = new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set.');
+    // We create a "soft" error here that will only be thrown if the Admin SDK is actually used.
+    // This allows public pages to build and run without the admin credentials.
+    initError = new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set. Cannot initialize Firebase Admin.');
     return null;
   }
 
@@ -30,6 +32,7 @@ function loadServiceAccount(): SA | null {
     return parsed;
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    // This will be thrown at runtime if credentials are bad.
     initError = new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON. Ensure it is valid JSON. Details: ${message}`);
     return null;
   }

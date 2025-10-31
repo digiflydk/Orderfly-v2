@@ -1,4 +1,5 @@
 
+'use server';
 
 // src/lib/superadmin/getSalesSummary.ts
 import { db } from '@/lib/firebase';
