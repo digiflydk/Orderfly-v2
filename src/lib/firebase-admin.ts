@@ -1,5 +1,5 @@
 
-'use server';
+'use server-only';
 
 import * as admin from 'firebase-admin';
 

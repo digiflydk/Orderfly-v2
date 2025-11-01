@@ -1,4 +1,3 @@
-
 'use client';
 
 import { usePathname } from 'next/navigation';
@@ -34,14 +33,15 @@ export function BrandLayoutClient({
     );
   }
   
-  const isLocationPage = !!location;
+  const isCheckoutPage = pathname?.includes('/checkout');
+  const isMenuPage = !!location && !isCheckoutPage;
   const isBrandHomePage = !location;
 
-  const showGlobalHeader = isBrandHomePage;
-  const showMenuHeader = isLocationPage; // This is the corrected logic.
+  const showGlobalHeader = isBrandHomePage || isCheckoutPage;
+  const showMenuHeader = isMenuPage;
   
   const isConfirmationPage = pathname?.includes('/checkout/confirmation');
-  const showFooter = isBrandHomePage || isLocationPage || isConfirmationPage;
+  const showFooter = isBrandHomePage || isMenuPage || isConfirmationPage;
 
   return (
       <div
@@ -56,7 +56,7 @@ export function BrandLayoutClient({
           <Footer 
             brand={brand} 
             location={location ?? undefined} 
-            version="1.0.223 • OF-523"
+            version="1.0.238 • OF-487"
             onOpenCookieSettings={() => setIsCookieModalOpen(true)} 
           />
         )}
