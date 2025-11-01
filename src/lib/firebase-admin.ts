@@ -3,99 +3,67 @@
 
 import * as admin from 'firebase-admin';
 
-// This file is the single source of truth for initializing the Firebase Admin SDK.
-// It uses a lazy-loading singleton pattern to ensure that the SDK is initialized
-// exactly once and only when it's first needed. This is crucial for Next.js
-// environments where environment variables might not be available at build time.
-
-type SA = { project_id: string; client_email: string; private_key: string };
-
-let adminApp: admin.app.App | null = null;
+let app: admin.app.App | null = null;
 let initError: Error | null = null;
 
-function loadServiceAccount(): SA | null {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-  if (!raw) {
-    // We create a "soft" error here that will only be thrown if the Admin SDK is actually used.
-    // This allows public pages to build and run without the admin credentials.
-    initError = new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set. Cannot initialize Firebase Admin.');
+function loadServiceAccount(): admin.ServiceAccount | null {
+  const json = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  if (!json) {
+    initError = new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set.');
     return null;
   }
-
   try {
-    const parsed = JSON.parse(raw.trim());
-    if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
-      throw new Error('Service account JSON is missing required fields (project_id, client_email, private_key).');
+    const parsed = JSON.parse(json);
+    // Handle \n in private key if needed
+    if (parsed.private_key && typeof parsed.private_key === 'string') {
+      parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
     }
-    // Correctly format the private key
-    parsed.private_key = parsed.private_key.replace(/\\n/g, '\n');
-    return parsed;
+    return parsed as admin.ServiceAccount;
   } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    // This will be thrown at runtime if credentials are bad.
-    initError = new Error(`Failed to parse FIREBASE_SERVICE_ACCOUNT_JSON. Ensure it is valid JSON. Details: ${message}`);
+    initError = new Error('Invalid FIREBASE_SERVICE_ACCOUNT_JSON (parse failed).');
     return null;
   }
 }
 
-function initializeAdminApp(): admin.app.App {
-  const serviceAccount = loadServiceAccount();
-  if (!serviceAccount) {
-    // This will now only be thrown if an attempt is made to use the Admin SDK without the env var.
-    throw new Error('FATAL: FIREBASE_SERVICE_ACCOUNT_JSON environment variable is not set. Cannot initialize Firebase Admin.');
+function initializeAdminApp(): admin.app.App | null {
+  if (admin.apps.length > 0 && admin.apps[0]) {
+    app = admin.apps[0];
+    return app;
   }
+  const svc = loadServiceAccount();
+  if (!svc) return null;
 
-  // Prevent accidental use of Application Default Credentials.
-  if (process.env.GOOGLE_APPLICATION_CREDENTIALS) {
-    throw new Error('FATAL: GOOGLE_APPLICATION_CREDENTIALS should not be set. Use FIREBASE_SERVICE_ACCOUNT_JSON exclusively.');
-  }
-
-  const appName = `orderfly-admin-${Date.now()}`;
-  
   try {
-    return admin.initializeApp({
-        credential: admin.credential.cert(serviceAccount),
-        projectId: serviceAccount.project_id,
-      }, appName);
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    initError = new Error(`Firebase Admin initialization failed: ${message}`);
-    throw initError;
-  }
-}
-
-function getAdminApp(): admin.app.App {
-  if (initError) {
-    throw initError;
-  }
-  
-  if (!adminApp) {
-    if (admin.apps.length > 0 && admin.apps[0]) {
-      adminApp = admin.apps[0];
-    } else {
-      adminApp = initializeAdminApp();
+    app = admin.initializeApp({ credential: admin.credential.cert(svc) });
+    return app;
+  } catch(e) {
+    if (e instanceof Error && e.message.includes('already exists')) {
+        app = admin.app();
+        return app;
     }
+    initError = e as Error;
+    return null;
   }
-  return adminApp;
 }
 
-/**
- * Returns an initialized Firestore database instance from the admin SDK.
- * This is the primary export to be used by server-side code.
- * Will throw a descriptive error if the Admin SDK is not configured.
- */
+export function isAdminReady(): boolean {
+  return !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+}
+
+/** Use ONLY in server actions/admin code. Will throw if not configured. */
 export function getAdminDb(): admin.firestore.Firestore {
-  return getAdminApp().firestore();
+  const a = app || initializeAdminApp();
+  if (!a) {
+    throw initError ?? new Error('Firebase Admin is not initialized.');
+  }
+  return a.firestore();
 }
-
-// Export the admin namespace itself for access to types and other utilities.
-export { admin };
 
 /**
  * A helper to get Firestore-specific values like serverTimestamp.
  */
 export const getAdminFieldValue = () => {
-    return getAdminApp().firestore.FieldValue;
+    return getAdminDb().FieldValue;
 };
 
 /**

@@ -1,31 +1,49 @@
-
+import type { ReactNode } from "react";
+import { isAdminReady } from '@/lib/runtime';
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
-import { BrandLayoutClient } from '../layout-client';
-import type { Location } from '@/types';
 import { getLocationBySlug } from '@/app/superadmin/locations/actions';
+import { BrandLayoutClient } from "../layout-client";
+import type { Location } from "@/types";
+
+export const runtime = "nodejs";
 
 export default async function LocationLayout({
   children,
   params,
 }: {
   children: React.ReactNode;
-  params: { brandSlug: string, locationSlug: string };
+  params: { brandSlug: string; locationSlug: string };
 }) {
   const { brandSlug, locationSlug } = params;
-  
-  const brand = await getBrandBySlug(brandSlug);
+  const adminReady = isAdminReady();
 
-  const fetchedLocation = brand ? await getLocationBySlug(brand.id, locationSlug) : null;
+  const brand = adminReady ? await getBrandBySlug(brandSlug) : null;
 
-  // Validate smileyUrl only if location is found
-  const rawUrl = (fetchedLocation?.smileyUrl || '').trim();
-  const isValid = /^https?:\/\//i.test(rawUrl);
-  const location: Location | null = fetchedLocation ? {
-      ...fetchedLocation,
-      smileyUrl: isValid ? rawUrl : undefined,
-  } : null;
+  const fetchedLocation = adminReady && brand
+    ? await getLocationBySlug(brand.id, locationSlug)
+    : null;
+
+  const location: Location | null = fetchedLocation
+    ? {
+        ...(fetchedLocation as Location),
+        smileyUrl:
+          fetchedLocation.smileyUrl &&
+          /^https?:\/\//i.test((fetchedLocation.smileyUrl || "").trim())
+            ? (fetchedLocation.smileyUrl || "").trim()
+            : undefined,
+      }
+    : null;
 
   return (
-      <BrandLayoutClient brand={brand} location={location}>{children}</BrandLayoutClient>
+    <>
+      {!adminReady && (
+        <div className="bg-amber-100 text-amber-900 text-sm px-3 py-2 text-center">
+          Running in limited mode (no Admin credentials). Public pages are available; Superadmin requires configuration.
+        </div>
+      )}
+       <BrandLayoutClient brand={brand} location={location}>
+        {children}
+      </BrandLayoutClient>
+    </>
   );
 }

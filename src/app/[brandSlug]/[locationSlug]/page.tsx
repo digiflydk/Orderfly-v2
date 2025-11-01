@@ -1,97 +1,55 @@
-// src/app/[brandSlug]/[locationSlug]/page.tsx
-import EmptyState from "@/components/ui/empty-state";
-import { getBrandAndLocation } from "@/lib/data/brand-location";
-import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
-import { logDiag } from "@/lib/log";
-import type { AsyncPageProps } from "@/types/next-async-props";
-import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
-import BrandPageClient from "./BrandPageClient";
+
+import type { AsyncPageProps } from '@/types/next-async-props';
+import { isAdminReady } from '@/lib/runtime';
+import { getProductsForLocation } from '@/app/superadmin/products/actions';
+import { getActiveCombosForLocation } from '@/app/superadmin/combos/actions';
+import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
+import BrandPageClient from './BrandPageClient';
+import { getBrandAndLocation } from '@/lib/data/brand-location';
+import { getMenuForRender } from '@/lib/server/catalog';
+import EmptyState from '@/components/ui/empty-state';
 
 export const runtime = 'nodejs';
 export const revalidate = 0; // Or a specific time in seconds
 
-type UICategory = { id: string; name: string };
-type UIProduct = { id: string; name?: string; productName?: string; title?: string };
-type UIMenu = {
-  categories: UICategory[];
-  productsByCategory: Record<string, UIProduct[]>;
-  fallbackUsed?: boolean;
-};
-
-type Probe = {
-  brand?: { name?: string } | null;
-  location?: { name?: string } | null;
-  ok: boolean;
-  flags: any;
-  hints: any;
-};
-
-function normalizeProbe(raw: any): Probe {
-  if (!raw || typeof raw !== "object") {
-    return {
-      brand: null,
-      location: null,
-      flags: { hasBrand: false, hasLocation: false, hasBrandIdField: false, brandMatchesLocation: false },
-      hints: { missing: "Mangler brand og location." },
-      ok: false,
-    };
-  }
-  const brand = raw.brand ?? null;
-  const location = raw.location ?? null;
-
-  if (raw.flags) {
-    return {
-      ...raw,
-      brand,
-      location,
-      flags: {
-        hasBrand: !!raw.flags.hasBrand,
-        hasLocation: !!raw.flags.hasLocation,
-        hasBrandIdField: !!raw.flags.hasBrandIdField,
-        brandMatchesLocation: !!raw.flags.brandMatchesLocation,
-      },
-      hints: raw.hints ?? {},
-    };
-  }
-
-  const hasBrand = !!brand?.id;
-  const hasLocation = !!location?.id;
-  const hasBrandIdField = typeof location?.brandId === "string" && !!location?.brandId;
-  const brandMatchesLocation = hasBrand && hasLocation ? (hasBrandIdField ? location.brandId === brand.id : true) : false;
-
-  const hints: any = {};
-  if (!hasBrand && !hasLocation) hints.missing = "Mangler både brand og location.";
-  else if (!hasBrand) hints.missing = "Mangler brand.";
-  else if (!hasLocation) hints.missing = "Mangler location.";
-  if (hasLocation && !hasBrandIdField) hints.link = "location.brandId mangler (tilføj brandId).";
-  else if (hasLocation && hasBrand && !brandMatchesLocation) hints.link = `location.brandId matcher ikke brand.id (${location.brandId} ≠ ${brand.id}).`;
-
-  return { brand, location, ok: hasBrand && hasLocation && brandMatchesLocation, flags: { hasBrand, hasLocation, hasBrandIdField, brandMatchesLocation }, hints };
-}
-
 export default async function LocationPage({ params }: AsyncPageProps<{ brandSlug: string; locationSlug: string }>) {
-  const { brandSlug, locationSlug } = await resolveParams(params);
+  const { brandSlug, locationSlug } = params;
 
-  try {
-    const raw = await getBrandAndLocation(brandSlug, locationSlug);
-    const probe = normalizeProbe(raw);
-
-    if (!probe.ok) {
-      return <EmptyState title="Butik ikke konfigureret" hint={probe.hints.missing || "Mangler data."} details={`brand=${brandSlug}\nlocation=${locationSlug}`}/>;
-    }
-
-    const menu = await getMenuForRender({ brandId: probe.brand!.id, locationId: probe.location!.id });
-
+  if (!isAdminReady()) {
+    // No admin → render safe fallback, no Admin calls
     return (
-      <BrandPageClient
-        menu={menu as UIMenu}
-        probe={probe}
-        brandSlug={brandSlug}
-        locationSlug={locationSlug}
-      />
+      <main className="p-6">
+        <h1 className="text-2xl font-bold mb-4">{brandSlug} / {locationSlug}</h1>
+        <p className="text-sm opacity-70">Limited mode: data unavailable until Admin credentials are configured.</p>
+      </main>
     );
-  } catch(e:any) {
-    await logDiag?.({ scope:"brand-page", message:"Top-level render failure (wrapper)", details:{ brandSlug, locationSlug, error:String(e?.message??e), stack:e?.stack??null } }).catch(()=>{});
-    return <EmptyState title="Noget gik galt på brand-siden" hint="Der opstod en fejl under renderingen." details={process.env.NEXT_PUBLIC_ENABLE_ENV_DEBUG ? String(e?.stack ?? e) : undefined}/>;
   }
+
+  // Admin available → use real data
+  const { brand, location } = await getBrandAndLocation(brandSlug, locationSlug);
+
+  if (!brand || !location) {
+      return <EmptyState title="Not Found" hint="The requested brand or location could not be found." />;
+  }
+
+  const [products, combos, discounts, menu] = await Promise.all([
+    getProductsForLocation(location.id),
+    getActiveCombosForLocation(location.id),
+    getActiveStandardDiscounts({brandId: brand.id, locationId: location.id, deliveryType: 'pickup'}), // Default to pickup
+    getMenuForRender({brandId: brand.id, locationId: location.id}),
+  ]);
+
+  return (
+    <BrandPageClient
+      brand={brand}
+      location={location}
+      menu={{
+        categories: menu.categories,
+        productsByCategory: menu.productsByCategory,
+        fallbackUsed: menu.fallbackUsed,
+      }}
+      activeCombos={combos}
+      activeStandardDiscounts={discounts}
+    />
+  );
 }
