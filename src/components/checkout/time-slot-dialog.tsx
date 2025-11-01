@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
@@ -14,11 +13,13 @@ import {
 } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { getTimeSlots, type TimeSlotResponse } from '@/app/superadmin/locations/actions';
+import { getTimeSlots } from '@/app/superadmin/locations/actions';
 import { useCart } from '@/context/cart-context';
 import { format, addDays, isToday, startOfDay, isSameDay } from 'date-fns';
 import { Loader2, X } from 'lucide-react';
 import { DialogClose } from '@radix-ui/react-dialog';
+import type { TimeSlotResponse } from '@/types';
+import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
 
 interface TimeSlotDialogProps {
   isOpen: boolean;
@@ -27,7 +28,7 @@ interface TimeSlotDialogProps {
 }
 
 export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialogProps) {
-  const { deliveryType, selectedTime, setSelectedTime } = useCart();
+  const { deliveryType, selectedTime, setSelectedTime, location } = useCart();
   const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
   const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -40,13 +41,13 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
   }, [isOpen]);
 
   const handleDateChange = async (date: Date | undefined) => {
-    if (!date) return;
+    if (!date || !location) return;
     setIsLoading(true);
     setSelectedDate(date);
-    const slots = await getTimeSlots(locationId, date.toISOString());
+    // Use the client-safe action here
+    const slots = calculateTimeSlots(location, date.toISOString());
     setTimeSlots(slots);
     setIsLoading(false);
-    // Reset time selection if new date has no slots or new date is chosen
     setInternalTime('asap');
   };
 
