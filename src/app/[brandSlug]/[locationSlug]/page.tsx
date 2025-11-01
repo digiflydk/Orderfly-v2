@@ -1,8 +1,6 @@
 
 'use server';
 
-// src/app/[brandSlug]/[locationSlug]/page.tsx
-
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams } from "@/lib/next/resolve-props";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
