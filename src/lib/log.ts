@@ -10,7 +10,7 @@ export async function logDiag(entry: {
   details?: any;
 }) {
   try {
-    const db = getAdminDb();
+    const db = await getAdminDb();
     const now = new Date();
     await db.collection("diag_logs").add({
       level: entry.level ?? "error",

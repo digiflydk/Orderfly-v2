@@ -11,7 +11,7 @@ export type CatalogCounts = {
 };
 
 export async function getCatalogCounts(params: { brandId: string }): Promise<CatalogCounts> {
-  const db = getAdminDb(); const { brandId } = params;
+  const db = await getAdminDb(); const { brandId } = params;
   const [cats, prods] = await Promise.all([
     db.collection("categories").where("brandId","==",brandId).count().get(),
     db.collection("products").where("brandId","==",brandId).count().get(),
@@ -24,7 +24,7 @@ export async function getCatalogCounts(params: { brandId: string }): Promise<Cat
 }
 
 export async function getMenuForRender({ brandId, locationId }: { brandId: string, locationId: string }): Promise<MenuForRender> {
-  const db = getAdminDb();
+  const db = await getAdminDb();
   
   const categoriesQuery = db.collection("categories").where('locationIds', 'array-contains', locationId).where('isActive', '==', true);
   const productsQuery = db.collection("products").where('brandId','==', brandId).where('isActive', '==', true);

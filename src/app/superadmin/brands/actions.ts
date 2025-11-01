@@ -3,7 +3,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, getDoc, updateDoc } from 'firebase/firestore';
 import type { Brand, FoodCategory, Allergen, BrandAppearances } from '@/types';
 import { z } from 'zod';
@@ -170,7 +170,7 @@ export async function createOrUpdateBrand(
 export async function deleteBrand(brandId: string) {
     try {
         const db = await getAdminDb();
-        await deleteDoc(doc(db, "brands", brandId));
+        await db.collection("brands").doc(brandId).delete();
         revalidatePath("/superadmin/brands");
         return { message: "Brand deleted successfully.", error: false };
     } catch (e) {
