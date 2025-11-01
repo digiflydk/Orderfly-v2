@@ -1,9 +1,10 @@
 
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, doc, updateDoc, deleteDoc, setDoc, query, where, getDocs, documentId, getDoc, orderBy } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, getDoc, updateDoc } from 'firebase/firestore';
 import type { Brand, FoodCategory, Allergen, BrandAppearances } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
@@ -98,6 +99,7 @@ export async function createOrUpdateBrand(
   const { id, ownerName, ownerEmail, companyRegNo, slug, ...brandData } = validatedFields.data;
   
   try {
+    const db = await getAdminDb();
     // Check for unique company registration number
     let q = query(collection(db, 'brands'), where('companyRegNo', '==', companyRegNo));
     let querySnapshot = await getDocs(q);
@@ -167,6 +169,7 @@ export async function createOrUpdateBrand(
 
 export async function deleteBrand(brandId: string) {
     try {
+        const db = await getAdminDb();
         await deleteDoc(doc(db, "brands", brandId));
         revalidatePath("/superadmin/brands");
         return { message: "Brand deleted successfully.", error: false };
@@ -178,12 +181,14 @@ export async function deleteBrand(brandId: string) {
 }
 
 export async function getAllergens(): Promise<Allergen[]> {
+    const db = await getAdminDb();
     const q = query(collection(db, 'allergens'), orderBy('allergenName'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Allergen[];
 }
 
 export async function getBrandById(brandId: string): Promise<Brand | null> {
+    const db = await getAdminDb();
     const docRef = doc(db, 'brands', brandId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
@@ -194,6 +199,7 @@ export async function getBrandById(brandId: string): Promise<Brand | null> {
 }
 
 export async function getBrandBySlug(brandSlug: string): Promise<Brand | null> {
+    const db = await getAdminDb();
     const q = query(collection(db, 'brands'), where('slug', '==', brandSlug));
     const querySnapshot = await getDocs(q);
     if (querySnapshot.empty) {
@@ -204,6 +210,7 @@ export async function getBrandBySlug(brandSlug: string): Promise<Brand | null> {
 }
 
 export async function getBrands(): Promise<Brand[]> {
+  const db = await getAdminDb();
   const q = query(collection(db, 'brands'), orderBy('name'));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Brand[];
@@ -217,6 +224,7 @@ export async function updateBrandAppearances(
     const brandId = formData.get('brandId') as string;
     const appearancesJSON = formData.get('appearances') as string;
     const appearances = JSON.parse(appearancesJSON) as BrandAppearances;
+    const db = await getAdminDb();
 
     if (!brandId || !appearances) {
       return { message: 'Missing brand ID or appearance data.', error: true };

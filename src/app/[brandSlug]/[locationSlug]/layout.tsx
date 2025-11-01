@@ -1,3 +1,4 @@
+
 import { isAdminReady } from '@/lib/runtime';
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 import { getLocationBySlug } from '@/app/superadmin/locations/actions';
@@ -16,7 +17,7 @@ export default async function LocationLayout({
   const { brandSlug, locationSlug } = params;
   const adminReady = isAdminReady();
 
-  const brand = await getBrandBySlug(brandSlug);
+  const brand = adminReady ? await getBrandBySlug(brandSlug) : null;
 
   const fetchedLocation = adminReady && brand
     ? await getLocationBySlug(brand.id, locationSlug)
