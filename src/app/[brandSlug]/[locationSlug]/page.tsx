@@ -1,13 +1,13 @@
-
 import type { AsyncPageProps } from '@/types/next-async-props';
 import { isAdminReady } from '@/lib/runtime';
 import { getProductsForLocation } from '@/app/superadmin/products/actions';
 import { getActiveCombosForLocation } from '@/app/superadmin/combos/actions';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
-import BrandPageClient from './BrandPageClient';
-import { getBrandAndLocation } from '@/lib/data/brand-location';
+import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getMenuForRender } from '@/lib/server/catalog';
 import EmptyState from '@/components/ui/empty-state';
+import BrandPageClient from "./BrandPageClient";
+
 
 export const runtime = 'nodejs';
 export const revalidate = 0; // Or a specific time in seconds

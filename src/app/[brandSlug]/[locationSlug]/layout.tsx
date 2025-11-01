@@ -1,9 +1,8 @@
-import type { ReactNode } from "react";
 import { isAdminReady } from '@/lib/runtime';
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 import { getLocationBySlug } from '@/app/superadmin/locations/actions';
-import { BrandLayoutClient } from "../layout-client";
-import type { Location } from "@/types";
+import { BrandLayoutClient } from '../layout-client';
+import type { Location } from '@/types';
 
 export const runtime = "nodejs";
 
@@ -17,7 +16,7 @@ export default async function LocationLayout({
   const { brandSlug, locationSlug } = params;
   const adminReady = isAdminReady();
 
-  const brand = adminReady ? await getBrandBySlug(brandSlug) : null;
+  const brand = await getBrandBySlug(brandSlug);
 
   const fetchedLocation = adminReady && brand
     ? await getLocationBySlug(brand.id, locationSlug)

@@ -1,3 +1,4 @@
-export function isAdminEnvReady(): boolean {
+// No "use client"; server-only helper.
+export function isAdminReady(): boolean {
   return !!process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 }
