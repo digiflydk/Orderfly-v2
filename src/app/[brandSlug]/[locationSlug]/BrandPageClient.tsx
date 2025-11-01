@@ -2,12 +2,11 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { Brand, Category, ComboMenu, Location, ProductForMenu, StandardDiscount, TimeSlotResponse } from '@/types';
+import type { Brand, Category, ComboMenu, Location, ProductForMenu, StandardDiscount } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { getProductsByIds } from '@/app/superadmin/products/actions';
 import { useAnalytics } from '@/context/analytics-context';
-import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
 import { MenuClient } from './menu-client';
 
 interface BrandPageClientProps {

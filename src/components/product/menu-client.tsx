@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import type { Brand, Category, ComboMenu, Location, Product, StandardDiscount, TimeSlotResponse, ProductForMenu } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
-import { getActiveCombosForLocation } from '@/app/superadmin/combos/actions';
+import { getProductsByIds } from '@/app/superadmin/products/actions';
 import { DesktopCart } from '@/components/cart/desktop-cart';
 import { CategoryNav } from '@/components/layout/category-nav';
 import { MobileFloatingCart } from '@/components/cart/mobile-floating-cart';
@@ -13,7 +13,6 @@ import { OffersSection } from '@/components/product/offers-section';
 import { ComboSection } from '@/components/product/combo-section';
 import { CategorySection } from '@/components/product/category-section';
 import { TimeSelector } from '@/components/checkout/time-selector';
-import { getProductsByIds } from '@/app/superadmin/products/actions';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAnalytics } from '@/context/analytics-context';
 import { openDeliveryModal } from '@/components/modals/DeliveryMethodModal';
@@ -38,7 +37,6 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
     
     const [isLoading, setIsLoading] = useState(true);
     const [activeCategory, setActiveCategory] = useState<string>('offers');
-    const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
     const [activeStandardDiscounts, setActiveStandardDiscounts] = useState<StandardDiscount[]>(initialActiveStandardDiscounts);
     const [comboProducts, setComboProducts] = useState<ProductForMenu[]>([]);
     const [showPreorderAlert, setShowPreorderAlert] = useState(false);
@@ -50,7 +48,6 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
         async function fetchInitialData() {
             setIsLoading(true);
             const fetchedTimeSlots = calculateTimeSlots(location);
-            setTimeSlots(fetchedTimeSlots);
             
              // Fetch products for combos if they exist
             if (initialActiveCombos.length > 0) {
