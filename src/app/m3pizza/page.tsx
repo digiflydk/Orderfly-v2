@@ -57,20 +57,6 @@ export default function M3IndexPage() {
       <div className="hidden md:block bg-m3-cream">
         <Header onOrderClick={() => setOrderModalOpen(true)}/>
         <main>
-          <div className="text-center p-8">
-            <h1 className="text-2xl font-semibold">M3 (Preview)</h1>
-            <p>Dette er en placeholder for M3-frontend.</p>
-             <div className="mt-4">
-              <p className="mb-2">Eksempel-route:</p>
-              <Button asChild>
-                <Link
-                  href="/m3pizza/esmeralda/esmeralda-pizza-amager"
-                >
-                  Åbn Esmeralda – Amager (mock)
-                </Link>
-              </Button>
-            </div>
-          </div>
           <Hero onOrderClick={() => setOrderModalOpen(true)} />
           <CTADeck />
           <MenuGrid />
