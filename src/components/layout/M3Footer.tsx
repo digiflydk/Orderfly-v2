@@ -40,7 +40,7 @@ export default function Footer() {
         </div>
       </div>
       <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-6 border-t border-neutral-700 text-center">
-        <p className="text-xs text-neutral-400">© 2025 M3 Pizza. Alle rettigheder forbeholdes. • 1.0.223 • OF-390</p>
+        <p className="text-xs text-neutral-400">© 2025 M3 Pizza. Alle rettigheder forbeholdes. • 1.0.246 • OF-499</p>
         <div className="flex justify-center gap-4 mt-2">
             <Link href="#" className="text-xs text-neutral-400 hover:text-m3-orange transition-colors">Privatlivspolitik</Link>
             <Link href="#" className="text-xs text-neutral-400 hover:text-m3-orange transition-colors">Cookiepolitik</Link>

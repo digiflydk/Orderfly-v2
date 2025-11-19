@@ -11,13 +11,13 @@ const config: Config = {
     extend: {
       colors: {
         m3: {
-          orange: "#FF7A29",
-          dark: "#2D2D2D",
-          cream: "#FFF7EF",
+          orange: "#FFBD02",
+          dark: "#000000",
+          cream: "#000000",
           white: "#FFFFFF",
-          gray: "#F3F3F3",
-          button: '#FF7A29',
-          buttonHover: '#E96F20',
+          gray: "#333333",
+          button: '#FFBD02',
+          buttonHover: '#E0A800',
         },
         border: "hsl(var(--border))",
         input: "hsl(var(--input))",

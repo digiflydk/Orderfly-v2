@@ -43,7 +43,7 @@ export default function M3IndexPage() {
     <>
       {/* Mobile View */}
       <div className="md:hidden">
-        <main className="bg-m3-cream min-h-dvh">
+        <main className="bg-m3-dark min-h-dvh">
           <MobileHeader />
           <MobileHero />
           <div className="px-3 py-4">
@@ -54,7 +54,7 @@ export default function M3IndexPage() {
       </div>
       
       {/* Desktop View */}
-      <div className="hidden md:block bg-m3-cream">
+      <div className="hidden md:block bg-m3-dark">
         <Header onOrderClick={() => setOrderModalOpen(true)}/>
         <main>
           <Hero onOrderClick={() => setOrderModalOpen(true)} />
