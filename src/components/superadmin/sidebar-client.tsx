@@ -154,8 +154,6 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/subscriptions', label: 'Subscriptions', icon: Bookmark },
       ],
     },
-
-    // WEBSITE — CMS til public forsiden [/]
     {
       key: 'website',
       title: 'Website',
@@ -164,22 +162,15 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/website/design', label: 'Design', icon: Palette },
         { href: '/superadmin/website/leads', label: 'Customer Leads', icon: UserPlus },
         { href: '/superadmin/website/customers', label: 'Kunder', icon: Users },
-        {
-          label: 'Settings',
-          icon: SettingsIcon,
-          children: [
-            { href: '/superadmin/website/settings/general', label: 'General', icon: SlidersHorizontal },
-            { href: '/superadmin/website/settings/ai', label: 'AI Prompt', icon: Sparkles },
-            { href: '/superadmin/website/settings/seo', label: 'SEO', icon: Search },
-            { href: '/superadmin/website/settings/social', label: 'Social Share', icon: Share2 },
-            { href: '/superadmin/website/settings/tracking', label: 'Tracking', icon: Activity },
-            { href: '/superadmin/website/settings/cookie-texts', label: 'Cookies', icon: Cookie },
-            { href: '/superadmin/website/settings/business-listing', label: 'Business Listing', icon: Building2 },
-          ],
-        },
+        { href: '/superadmin/website/settings/general', label: 'General', icon: SlidersHorizontal },
+        { href: '/superadmin/website/settings/ai', label: 'AI Prompt', icon: Sparkles },
+        { href: '/superadmin/website/settings/seo', label: 'SEO', icon: Search },
+        { href: '/superadmin/website/settings/social', label: 'Social Share', icon: Share2 },
+        { href: '/superadmin/website/settings/tracking', label: 'Tracking', icon: Activity },
+        { href: '/superadmin/website/settings/cookie-texts', label: 'Cookies', icon: Cookie },
+        { href: '/superadmin/website/settings/business-listing', label: 'Business Listing', icon: Building2 },
       ],
     },
-
     {
       key: 'system',
       title: 'System',
