@@ -62,6 +62,6 @@ export async function getBrandAndLocation(brandSlug: string, locationSlug: strin
     brand,
     location,
     ok: !!location,
-    brandMatchesLocation: true, // This is implicit in the new getLocationBySlug
+    brandMatchesLocation: true,
   };
 }

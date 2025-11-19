@@ -5,6 +5,8 @@ import { CartProvider } from '@/context/cart-context';
 import { AnalyticsProvider } from '@/context/analytics-context';
 import DeliveryModalHost from './deliverymodalhost';
 import { resolveParams } from '@/lib/next/resolve-props';
+import { BrandLayoutClient } from './layout-client';
+import { getGeneralSettings } from '@/services/settings';
 
 export default async function BrandLayout({
   children,
@@ -14,8 +16,11 @@ export default async function BrandLayout({
   params: Promise<{ brandSlug: string }>;
 }) {
   const { brandSlug } = await resolveParams(params);
+  
+  // Fetch data on the server. The client component will handle nulls gracefully.
   const brand = await getBrandBySlug(brandSlug);
-
+  const settings = await getGeneralSettings();
+  
   if (!brand) {
     notFound();
   }
@@ -36,7 +41,9 @@ export default async function BrandLayout({
             } as React.CSSProperties
           }
         >
-          {children}
+          <BrandLayoutClient brand={brand} settings={settings}>
+            {children}
+          </BrandLayoutClient>
         </div>
         <DeliveryModalHost />
       </CartProvider>

@@ -1,7 +1,8 @@
+
 'use client';
 
 import { usePathname } from 'next/navigation';
-import type { Brand, Location } from '@/types';
+import type { Brand, Location, GeneralSettings } from '@/types';
 import { useState } from 'react';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
@@ -14,10 +15,12 @@ export function BrandLayoutClient({
   children,
   brand,
   location,
+  settings
 }: {
   children: React.ReactNode;
   brand: Brand | null;
   location?: Location | null;
+  settings?: GeneralSettings | null;
 }) {
   const pathname = usePathname();
   const [isCookieModalOpen, setIsCookieModalOpen] = useState(false);
@@ -41,9 +44,8 @@ export function BrandLayoutClient({
   const showFooter = isBrandHomePage || isMenuPage || isConfirmationPage;
 
   return (
-    <CartProvider>
       <div className="flex flex-col min-h-screen">
-        {showGlobalHeader && <Header brand={brand} />}
+        {showGlobalHeader && <Header brand={brand} settings={settings} />}
         {showMenuHeader && <MenuHeader brand={brand} />}
         <main className="flex-1 w-full">
           {children}
@@ -52,7 +54,7 @@ export function BrandLayoutClient({
           <Footer
             brand={brand}
             location={location ?? undefined}
-            version="1.0.237 • OF-486"
+            version="1.0.504 • OF-504"
             onOpenCookieSettings={() => setIsCookieModalOpen(true)}
           />
         )}
@@ -61,8 +63,6 @@ export function BrandLayoutClient({
           isModalOpen={isCookieModalOpen}
           setIsModalOpen={setIsCookieModalOpen}
         />
-        <DeliveryModalHost />
       </div>
-    </CartProvider>
   );
 }
