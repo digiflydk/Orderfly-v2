@@ -1,57 +1,73 @@
+// src/app/superadmin/docs/page.tsx
+import { DEV_DOCS, DEV_UTILITIES } from '@/lib/superadmin/docs-config';
+import DocsLayout from '@/components/superadmin/docs/DocsLayout';
+import DocsNav from '@/components/superadmin/docs/DocsNav';
+import DocsMarkdown from '@/components/superadmin/docs/DocsMarkdown';
+import DocsCard from '@/components/superadmin/docs/DocsCard';
+import Link from 'next/link';
+import { requireSuperadmin } from '@/lib/auth/superadmin';
 
-export const runtime = "nodejs";
-export const dynamic = "force-dynamic";
+export default async function SuperadminDocsPage({
+  searchParams,
+}: {
+  searchParams?: { doc?: string };
+}) {
+  await requireSuperadmin();
 
-import "server-only";
-import Link from "next/link";
-import { DOC_WHITELIST } from "@/lib/docs/whitelist";
-
-export default async function DocumentationAdminPage() {
-  const files = DOC_WHITELIST;
+  const activeDocId = searchParams?.doc ?? 'overview';
+  const activeDocMeta = DEV_DOCS.find((d) => d.id === activeDocId) ?? DEV_DOCS[0];
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8 space-y-6">
-      <h1 className="text-2xl font-semibold">Dokumentation</h1>
+    <DocsLayout
+      sidebar={
+        <DocsNav
+          docs={DEV_DOCS}
+          utilities={DEV_UTILITIES}
+          activeDocId={activeDocMeta.id}
+        />
+      }
+    >
+      <div className="space-y-6">
+        <section>
+          <h1 className="text-2xl font-semibold mb-2">Developer docs</h1>
+          <p className="text-sm text-muted-foreground">
+            Central place for Orderfly developer documentation, diagnostics and dumps.
+          </p>
+        </section>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <Link
-          href="/api/docs/bundle"
-          className="inline-flex items-center rounded-md border px-4 py-2 text-sm hover:bg-muted"
-          prefetch={false}
-        >
-          Download samlet bundle (.md)
-        </Link>
+        <section className="border rounded-lg p-4 bg-card">
+          <DocsMarkdown filename={activeDocMeta.filename} />
+        </section>
 
-        <Link
-          href="/api/debug/snapshot"
-          className="inline-flex items-center rounded-md border px-4 py-2 text-sm hover:bg-muted"
-          prefetch={false}
-        >
-          Download debug (JSON)
-        </Link>
+        <section className="space-y-2">
+          <h2 className="text-xl font-semibold">Utilities</h2>
+          <div className="grid gap-3 md:grid-cols-2">
+            {DEV_UTILITIES.map((util) => (
+              <DocsCard
+                key={util.id}
+                title={util.title}
+                description={util.description}
+                action={
+                  util.type === 'link' ? (
+                    <Link href={util.apiPath} className="text-sm underline">
+                      Open
+                    </Link>
+                  ) : (
+                    <a
+                      href={util.apiPath}
+                      className="text-sm underline"
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Download JSON
+                    </a>
+                  )
+                }
+              />
+            ))}
+          </div>
+        </section>
       </div>
-
-      <div className="space-y-2">
-        <h2 className="text-lg font-medium mt-6">Enkeltfiler</h2>
-        <ul className="list-disc pl-6 space-y-1">
-          {files.map((name) => (
-            <li key={name} className="flex items-center gap-3">
-              <span className="font-mono text-sm">{name}</span>
-              <Link
-                href={`/api/docs/download?name=${encodeURIComponent(name)}`}
-                className="text-primary hover:underline text-sm"
-                prefetch={false}
-              >
-                Download
-              </Link>
-            </li>
-          ))}
-        </ul>
-      </div>
-
-      <p className="text-xs text-muted-foreground mt-8">
-        Filer hentes fra <code>/docs</code> i repoet (whitelistet).
-      </p>
-    </div>
+    </DocsLayout>
   );
 }
