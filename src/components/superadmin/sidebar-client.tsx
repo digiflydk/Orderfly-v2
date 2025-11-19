@@ -71,7 +71,7 @@ type Group = {
 
 function isActive(pathname: string, href?: string) {
   if (!href) return false
-  if (href === '/') return pathname === '/'
+  if (href === '/superadmin') return pathname === href;
   return pathname === href || pathname.startsWith(href + '/')
 }
 
@@ -145,7 +145,16 @@ export function SuperAdminSidebarClient({
         },
       ],
     },
-    { key: 'insights', title: 'Insights', items: [{ href: '/superadmin/analytics', label: 'Analytics', icon: BarChart3 }] },
+    { key: 'insights', title: 'Insights', items: [
+      { 
+        label: 'Analytics', 
+        icon: BarChart3,
+        children: [
+          { href: '/superadmin/analytics/cust-funnel', label: 'Customer Funnel'},
+          { href: '/superadmin/analytics/cookies', label: 'Cookie Consents'},
+        ]
+      },
+    ]},
     {
       key: 'billing',
       title: 'Billing',
@@ -158,17 +167,22 @@ export function SuperAdminSidebarClient({
       key: 'website',
       title: 'Website',
       items: [
-        { href: '/superadmin/website/pages', label: 'Indhold', icon: FileText },
+        { href: '/superadmin/website/pages', label: 'Pages', icon: FileText },
         { href: '/superadmin/website/design', label: 'Design', icon: Palette },
         { href: '/superadmin/website/leads', label: 'Customer Leads', icon: UserPlus },
-        { href: '/superadmin/website/customers', label: 'Kunder', icon: Users },
-        { href: '/superadmin/website/settings/general', label: 'General', icon: SlidersHorizontal },
-        { href: '/superadmin/website/settings/ai', label: 'AI Prompt', icon: Sparkles },
-        { href: '/superadmin/website/settings/seo', label: 'SEO', icon: Search },
-        { href: '/superadmin/website/settings/social', label: 'Social Share', icon: Share2 },
-        { href: '/superadmin/website/settings/tracking', label: 'Tracking', icon: Activity },
-        { href: '/superadmin/website/settings/cookie-texts', label: 'Cookies', icon: Cookie },
-        { href: '/superadmin/website/settings/business-listing', label: 'Business Listing', icon: Building2 },
+        { href: '/superadmin/website/customers', label: 'Customers', icon: Users },
+        { 
+            label: 'Settings', 
+            icon: SettingsIcon, 
+            children: [
+                { href: '/superadmin/website/settings/general', label: 'General', icon: SlidersHorizontal },
+                { href: '/superadmin/website/settings/ai', label: 'AI Prompt', icon: Sparkles },
+                { href: '/superadmin/website/settings/seo', label: 'SEO', icon: Search },
+                { href: '/superadmin/website/settings/social', label: 'Social Share', icon: Share2 },
+                { href: '/superadmin/website/settings/tracking', label: 'Tracking', icon: Activity },
+                { href: '/superadmin/website/settings/cookie-texts', label: 'Cookies', icon: Cookie },
+            ]
+        },
       ],
     },
     {
@@ -184,7 +198,6 @@ export function SuperAdminSidebarClient({
     },
   ]
 
-  // Åbn relevante grupper/noder baseret på aktiv route
   const [open, setOpen] = React.useState<Record<string, boolean>>(() => {
     const state: Record<string, boolean> = {
       core: true,
@@ -193,7 +206,7 @@ export function SuperAdminSidebarClient({
       promotions: false,
       people: false,
       quality: false,
-      insights: false,
+      insights: true,
       billing: false,
       website: true,
       system: true,
@@ -272,14 +285,12 @@ export function SuperAdminSidebarClient({
                       )
                     }
 
-                    // Parent med children (Website › Settings)
                     const key = `${group.key}:${item.label}`
                     const parentOpen = !!open[key]
                     const ParentIcon = item.icon ?? LayoutTemplate
 
                     return (
                       <React.Fragment key={`${item.label}-group`}>
-                        {/* Parent-knap som et SidebarMenuItem (li) */}
                         <SidebarMenuItem>
                           <button
                             type="button"
@@ -294,7 +305,6 @@ export function SuperAdminSidebarClient({
                           </button>
                         </SidebarMenuItem>
 
-                        {/* Child-links som et nyt SidebarMenu (ul) */}
                         {parentOpen && (
                           <SidebarMenu key={`${item.label}-children`} className="ml-6 space-y-1 group-data-[collapsible=icon]:hidden">
                             {(item.children ?? []).map((child) => {
