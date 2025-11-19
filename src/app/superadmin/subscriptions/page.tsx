@@ -1,5 +1,4 @@
 
-
 import { db } from '@/lib/firebase';
 import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import type { SubscriptionPlan } from '@/types';

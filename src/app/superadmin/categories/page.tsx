@@ -1,5 +1,4 @@
 
-
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getCategories } from './actions';

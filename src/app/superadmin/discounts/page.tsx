@@ -1,18 +1,14 @@
 
-
 import { getDiscounts } from './actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { DiscountsClientPage } from './client-page';
-import type { Brand, Location, Discount } from '@/types';
-import { getAllLocations } from '../locations/actions';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
 
 async function DiscountsPageContent() {
-    const [discounts, brands, locations] = await Promise.all([
+    const [discounts, brands] = await Promise.all([
         getDiscounts(),
         getBrands(),
-        getAllLocations(),
     ]);
 
     const brandMap = new Map(brands.map(b => [b.id, b.name]));

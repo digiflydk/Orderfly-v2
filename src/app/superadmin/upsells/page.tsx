@@ -1,9 +1,7 @@
 
-
 import { getUpsells } from './actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { UpsellsClientPage } from './client-page';
-import type { Brand, Location } from '@/types';
 import { getAllLocations } from '../locations/actions';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';

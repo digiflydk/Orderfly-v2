@@ -1,12 +1,10 @@
 
-
 import { getFeedbackEntries } from "./actions";
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { getCustomers } from '@/app/superadmin/customers/actions';
 import { getFeedbackQuestionVersions } from './actions';
 import { FeedbackClientPage } from './client-page';
-import type { Brand, Location, User, Feedback, FeedbackQuestionsVersion, Customer } from '@/types';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
 

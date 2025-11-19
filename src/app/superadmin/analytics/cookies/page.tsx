@@ -1,5 +1,4 @@
 
-
 import { getAnonymousCookieConsents } from './actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { CookiesClientPage } from './client-page';

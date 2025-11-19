@@ -1,5 +1,4 @@
 
-
 import { getAllLocations } from './actions';
 import { getBrands } from '../brands/actions';
 import { LocationsClientPage } from './client-page';

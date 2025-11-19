@@ -1,7 +1,5 @@
 
-
 import { getUsers } from './actions';
-import type { Role } from '@/types';
 import { UsersClientPage } from './client-page';
 import { getRoles } from '../roles/actions';
 import { isAdminReady } from '@/lib/runtime';
