@@ -1,5 +1,4 @@
 
-
 import { getCustomers } from './actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { CustomersClientPage } from './client-page';
@@ -7,10 +6,13 @@ import type { Customer } from '@/types';
 import { getAllLocations } from '../locations/actions';
 import { getLoyaltySettings } from '../loyalty/actions';
 import { format } from 'date-fns';
+import { isAdminReady } from '@/lib/runtime';
+import EmptyState from '@/components/ui/empty-state';
 
 export const revalidate = 0;
+export const dynamic = 'force-dynamic';
 
-export default async function CustomersPage() {
+async function CustomerPageContent() {
     const [customers, brands, locations, loyaltySettings] = await Promise.all([
         getCustomers(),
         getBrands(),
@@ -21,8 +23,6 @@ export default async function CustomersPage() {
     const brandMap = new Map(brands.map(b => [b.id, b.name]));
     const locationMap = new Map(locations.map(l => [l.id, l.name]));
 
-    // Use the already calculated loyalty fields from the enhanced getCustomers()
-    // and ensure all date-like objects are converted to strings
     const customersWithDetails = customers.map(customer => ({
         ...customer,
         lastOrderDate: customer.lastOrderDate instanceof Date ? format(customer.lastOrderDate, 'yyyy-MM-dd') : undefined,
@@ -41,4 +41,19 @@ export default async function CustomersPage() {
             brands={brands}
         />
     );
+}
+
+
+export default function CustomersPage() {
+    if (!isAdminReady()) {
+        return (
+            <EmptyState
+                title="Admin Environment Not Configured"
+                hint="This page requires Firebase Admin credentials, which are not available in this environment."
+                details="Set FIREBASE_SERVICE_ACCOUNT_JSON to enable this page."
+            />
+        );
+    }
+    
+    return <CustomerPageContent />;
 }
