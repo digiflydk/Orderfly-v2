@@ -12,7 +12,7 @@ const config: Config = {
       colors: {
         m3: {
           orange: "#FFBD02",
-          dark: "#000000",
+          dark: "#1d1d1b",
           cream: "#000000",
           white: "#FFFFFF",
           gray: "#333333",
