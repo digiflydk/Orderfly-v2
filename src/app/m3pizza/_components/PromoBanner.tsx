@@ -12,9 +12,8 @@ export function PromoBanner() {
           alt={promoBannerContent.title}
           fill
           sizes="(max-width: 1200px) 100vw, 1200px"
-          className="object-cover brightness-75 group-hover:scale-105 transition-transform duration-500"
+          className="object-cover group-hover:scale-105 transition-transform duration-500"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-black/60 via-transparent to-transparent" />
         <div className="absolute left-0 top-1/2 -translate-y-1/2 p-8 md:p-12 text-m3-white">
           <h3 className="text-3xl lg:text-4xl font-bold mb-4 uppercase leading-tight max-w-md">
             {promoBannerContent.title}

@@ -21,9 +21,8 @@ function CTAFullWidthCard({
         alt={title}
         fill
         sizes="(max-width: 768px) 100vw, 50vw"
-        className="object-cover brightness-75 group-hover:scale-105 transition-transform duration-500"
+        className="object-cover group-hover:scale-105 transition-transform duration-500"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/40 to-transparent" />
       <div className="absolute bottom-0 left-0 p-8 text-white">
         <h3 className="text-2xl lg:text-3xl font-bold mb-3 uppercase leading-tight">
           {title}

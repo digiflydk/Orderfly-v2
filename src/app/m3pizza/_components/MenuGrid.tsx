@@ -23,7 +23,6 @@ function PizzaCard({
         sizes="(max-width: 768px) 50vw, 33vw"
         className="object-cover group-hover:scale-105 transition-transform duration-500"
       />
-      <div className="absolute inset-0 bg-gradient-to-t from-black/90 via-black/60 to-transparent" />
       <div className="absolute bottom-0 left-0 p-6 w-full text-m3-white">
         <h3 className="text-2xl font-bold mb-2 uppercase leading-tight">
           {name}
