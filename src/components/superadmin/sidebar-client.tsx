@@ -165,7 +165,7 @@ export function SuperAdminSidebarClient({
     },
     {
       key: 'website',
-      title: 'Website',
+      title: 'Orderfly Website',
       items: [
         { href: '/superadmin/website/pages', label: 'Pages', icon: FileText },
         { href: '/superadmin/website/design', label: 'Design', icon: Palette },
