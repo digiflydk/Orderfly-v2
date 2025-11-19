@@ -1,10 +1,13 @@
 
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { CreditCard, DollarSign, Users, AlertTriangle } from "lucide-react";
 import { getBillingDashboardData } from "./actions";
 import { BillingClientPage } from "./client-page";
+import { isAdminReady } from '@/lib/runtime';
+import EmptyState from '@/components/ui/empty-state';
 
-export default async function BillingPage() {
+async function BillingPageContent() {
     const { metrics, brands } = await getBillingDashboardData();
 
     const metricCards = [
@@ -41,4 +44,17 @@ export default async function BillingPage() {
             <BillingClientPage initialBrands={brands} />
         </div>
     );
+}
+
+export default function BillingPage() {
+    if (!isAdminReady()) {
+        return (
+            <EmptyState
+                title="Admin Environment Not Configured"
+                hint="This page requires Firebase Admin credentials, which are not available in this environment."
+                details="Set FIREBASE_SERVICE_ACCOUNT_JSON to enable this page."
+            />
+        );
+    }
+    return <BillingPageContent />;
 }

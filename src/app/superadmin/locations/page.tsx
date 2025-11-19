@@ -4,8 +4,10 @@ import { getAllLocations } from './actions';
 import { getBrands } from '../brands/actions';
 import { LocationsClientPage } from './client-page';
 import type { Brand, Location } from '@/types';
+import { isAdminReady } from '@/lib/runtime';
+import EmptyState from '@/components/ui/empty-state';
 
-export default async function LocationsOverviewPage() {
+async function LocationsPageContent() {
     const [locations, brands] = await Promise.all([
         getAllLocations(),
         getBrands()
@@ -21,4 +23,17 @@ export default async function LocationsOverviewPage() {
     return (
        <LocationsClientPage initialLocations={locationsWithBrandNames} brands={brands} />
     );
+}
+
+export default function LocationsOverviewPage() {
+    if (!isAdminReady()) {
+        return (
+            <EmptyState
+                title="Admin Environment Not Configured"
+                hint="This page requires Firebase Admin credentials, which are not available in this environment."
+                details="Set FIREBASE_SERVICE_ACCOUNT_JSON to enable this page."
+            />
+        );
+    }
+    return <LocationsPageContent />;
 }

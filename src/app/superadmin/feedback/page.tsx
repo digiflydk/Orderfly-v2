@@ -1,4 +1,5 @@
 
+
 import { getFeedbackEntries } from "./actions";
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
@@ -6,8 +7,10 @@ import { getCustomers } from '@/app/superadmin/customers/actions';
 import { getFeedbackQuestionVersions } from './actions';
 import { FeedbackClientPage } from './client-page';
 import type { Brand, Location, User, Feedback, FeedbackQuestionsVersion, Customer } from '@/types';
+import { isAdminReady } from '@/lib/runtime';
+import EmptyState from '@/components/ui/empty-state';
 
-export default async function FeedbackPage() {
+async function FeedbackPageContent() {
     const [feedback, brands, locations, customers, versions] = await Promise.all([
         getFeedbackEntries(),
         getBrands(),
@@ -44,4 +47,17 @@ export default async function FeedbackPage() {
             />
         </div>
     );
+}
+
+export default function FeedbackPage() {
+    if (!isAdminReady()) {
+        return (
+            <EmptyState
+                title="Admin Environment Not Configured"
+                hint="This page requires Firebase Admin credentials, which are not available in this environment."
+                details="Set FIREBASE_SERVICE_ACCOUNT_JSON to enable this page."
+            />
+        );
+    }
+    return <FeedbackPageContent />;
 }

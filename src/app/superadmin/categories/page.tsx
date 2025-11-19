@@ -5,9 +5,11 @@ import { getBrands } from '@/app/superadmin/brands/actions';
 import { getCategories } from './actions';
 import { CategoriesClientPage } from './client-page';
 import type { Brand, Location } from '@/types';
+import { isAdminReady } from '@/lib/runtime';
+import EmptyState from '@/components/ui/empty-state';
 
 
-export default async function CategoriesPage() {
+async function CategoriesPageContent() {
     const [categories, locations, brands] = await Promise.all([
         getCategories(),
         getAllLocations(),
@@ -47,4 +49,17 @@ export default async function CategoriesPage() {
             brands={brands}
         />
     );
+}
+
+export default function CategoriesPage() {
+    if (!isAdminReady()) {
+        return (
+            <EmptyState
+                title="Admin Environment Not Configured"
+                hint="This page requires Firebase Admin credentials, which are not available in this environment."
+                details="Set FIREBASE_SERVICE_ACCOUNT_JSON to enable this page."
+            />
+        );
+    }
+    return <CategoriesPageContent />;
 }
