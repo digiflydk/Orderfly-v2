@@ -1,13 +1,13 @@
 
-
 'use server';
 
+import 'server-only';
+
 import { revalidatePath } from 'next/cache';
-import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, getDoc, updateDoc } from 'firebase/firestore';
-import type { Brand, FoodCategory, Allergen, BrandAppearances } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
+import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
+import type { Brand, FoodCategory, Allergen, BrandAppearances } from '@/types';
 
 const appearancesSchema = z.object({
   colors: z.object({
@@ -67,6 +67,9 @@ const brandSchema = z.object({
    // Analytics overrides
   ga4MeasurementId: z.string().optional(),
   gtmContainerId: z.string().optional(),
+
+  // Appearances is handled by its own form
+  appearances: z.any().optional(),
 });
 
 export type FormState = {
@@ -99,13 +102,12 @@ export async function createOrUpdateBrand(
   const { id, ownerName, ownerEmail, companyRegNo, slug, ...brandData } = validatedFields.data;
   
   try {
-    const db = await getAdminDb();
+    const db = getAdminDb();
     // Check for unique company registration number
-    let q = query(collection(db, 'brands'), where('companyRegNo', '==', companyRegNo));
-    let querySnapshot = await getDocs(q);
+    let companyRegQuerySnapshot = await db.collection('brands').where('companyRegNo', '==', companyRegNo).get();
     
-    if (!querySnapshot.empty) {
-        const existingBrandDoc = querySnapshot.docs[0];
+    if (!companyRegQuerySnapshot.empty) {
+        const existingBrandDoc = companyRegQuerySnapshot.docs[0];
         if (existingBrandDoc.id !== id) {
             return {
                 message: 'This Company Registration Number is already in use by another brand.',
@@ -115,10 +117,9 @@ export async function createOrUpdateBrand(
     }
     
     // Check for unique slug
-    q = query(collection(db, 'brands'), where('slug', '==', slug));
-    querySnapshot = await getDocs(q);
-    if (!querySnapshot.empty) {
-        const existingBrandDoc = querySnapshot.docs[0];
+    let slugQuerySnapshot = await db.collection('brands').where('slug', '==', slug).get();
+    if (!slugQuerySnapshot.empty) {
+        const existingBrandDoc = slugQuerySnapshot.docs[0];
         if (existingBrandDoc.id !== id) {
             return {
                 message: 'This brand slug is already in use. Please choose another.',
@@ -127,22 +128,21 @@ export async function createOrUpdateBrand(
         }
     }
 
-
     let ownerId: string;
 
     if (id) {
       // For updates, we assume the owner doesn't change via this form.
-      const brandDoc = await getDoc(doc(db, 'brands', id));
+      const brandDoc = await db.collection('brands').doc(id).get();
       const existingBrand = brandDoc.data() as Brand;
       ownerId = existingBrand.ownerId;
       
-      const brandRef = doc(db, 'brands', id);
-      await updateDoc(brandRef, { ...brandData, companyRegNo, slug, ownerId });
+      const brandRef = db.collection('brands').doc(id);
+      await brandRef.update({ ...brandData, companyRegNo, slug, ownerId });
 
     } else {
       // Create new user first
-      const newUserRef = doc(collection(db, 'users'));
-      await setDoc(newUserRef, { 
+      const newUserRef = db.collection('users').doc();
+      await newUserRef.set({ 
         id: newUserRef.id,
         name: ownerName, 
         email: ownerEmail, 
@@ -151,8 +151,8 @@ export async function createOrUpdateBrand(
       ownerId = newUserRef.id;
 
       // Then create the new brand, linking it to the new user
-      const newBrandRef = doc(collection(db, 'brands'));
-      await setDoc(newBrandRef, { ...brandData, companyRegNo, slug, id: newBrandRef.id, ownerId });
+      const newBrandRef = db.collection('brands').doc();
+      await newBrandRef.set({ ...brandData, companyRegNo, slug, id: newBrandRef.id, ownerId });
     }
 
   } catch (e) {
@@ -169,7 +169,7 @@ export async function createOrUpdateBrand(
 
 export async function deleteBrand(brandId: string) {
     try {
-        const db = await getAdminDb();
+        const db = getAdminDb();
         await db.collection("brands").doc(brandId).delete();
         revalidatePath("/superadmin/brands");
         return { message: "Brand deleted successfully.", error: false };
@@ -181,17 +181,17 @@ export async function deleteBrand(brandId: string) {
 }
 
 export async function getAllergens(): Promise<Allergen[]> {
-    const db = await getAdminDb();
-    const q = query(collection(db, 'allergens'), orderBy('allergenName'));
-    const querySnapshot = await getDocs(q);
+    const db = getAdminDb();
+    const q = db.collection('allergens').orderBy('allergenName');
+    const querySnapshot = await q.get();
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Allergen[];
 }
 
 export async function getBrandById(brandId: string): Promise<Brand | null> {
-    const db = await getAdminDb();
-    const docRef = doc(db, 'brands', brandId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
+    const db = getAdminDb();
+    const docRef = db.collection('brands').doc(brandId);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
         const data = docSnap.data();
         return { id: docSnap.id, ...data } as Brand;
     }
@@ -199,9 +199,9 @@ export async function getBrandById(brandId: string): Promise<Brand | null> {
 }
 
 export async function getBrandBySlug(brandSlug: string): Promise<Brand | null> {
-    const db = await getAdminDb();
-    const q = query(collection(db, 'brands'), where('slug', '==', brandSlug));
-    const querySnapshot = await getDocs(q);
+    const db = getAdminDb();
+    const q = db.collection('brands').where('slug', '==', brandSlug);
+    const querySnapshot = await q.get();
     if (querySnapshot.empty) {
         return null;
     }
@@ -210,9 +210,9 @@ export async function getBrandBySlug(brandSlug: string): Promise<Brand | null> {
 }
 
 export async function getBrands(): Promise<Brand[]> {
-  const db = await getAdminDb();
-  const q = query(collection(db, 'brands'), orderBy('name'));
-  const querySnapshot = await getDocs(q);
+  const db = getAdminDb();
+  const q = db.collection('brands').orderBy('name');
+  const querySnapshot = await q.get();
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Brand[];
 }
 
@@ -224,7 +224,7 @@ export async function updateBrandAppearances(
     const brandId = formData.get('brandId') as string;
     const appearancesJSON = formData.get('appearances') as string;
     const appearances = JSON.parse(appearancesJSON) as BrandAppearances;
-    const db = await getAdminDb();
+    const db = getAdminDb();
 
     if (!brandId || !appearances) {
       return { message: 'Missing brand ID or appearance data.', error: true };
@@ -236,8 +236,8 @@ export async function updateBrandAppearances(
       return { message: 'Invalid appearance data.', error: true };
     }
     
-    const brandRef = doc(db, 'brands', brandId);
-    await updateDoc(brandRef, { appearances: validatedFields.data });
+    const brandRef = db.collection('brands').doc(brandId);
+    await brandRef.update({ appearances: validatedFields.data });
     
     revalidatePath(`/superadmin/brands/edit/${brandId}`);
     return { message: 'Appearance settings updated.', error: false };
