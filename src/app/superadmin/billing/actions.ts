@@ -14,12 +14,18 @@ import Stripe from 'stripe';
 async function getSubscriptions(): Promise<Subscription[]> {
     const db = getAdminDb();
     const querySnapshot = await db.collection("subscriptions").get();
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), currentPeriodStart: (doc.data().currentPeriodStart).toDate(), currentPeriodEnd: (doc.data().currentPeriodEnd).toDate() })) as Subscription[];
+    return querySnapshot.docs.map(doc => {
+      const data = doc.data();
+      return { 
+        id: doc.id, 
+        ...data, 
+        currentPeriodStart: (data.currentPeriodStart).toDate(), 
+        currentPeriodEnd: (data.currentPeriodEnd).toDate() 
+      }
+    }) as Subscription[];
 }
 
 async function getInvoices(brandId?: string): Promise<Invoice[]> {
-    // This is more complex in a real scenario, often involving Stripe API calls
-    // For now, we simulate by returning an empty array as there's no "invoices" collection.
     return Promise.resolve([]);
 }
 

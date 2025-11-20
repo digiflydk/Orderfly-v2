@@ -1,7 +1,6 @@
 
 
 import { getAdminDb } from '@/lib/firebase-admin';
-import { collection, getDocs, query, orderBy } from 'firebase/firestore';
 import type { SubscriptionPlan } from '@/types';
 import { SubscriptionsClientPage } from './client-page';
 import { isAdminReady } from '@/lib/runtime';
@@ -10,8 +9,8 @@ import EmptyState from '@/components/ui/empty-state';
 
 export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
   const db = getAdminDb();
-  const q = query(collection(db, 'subscription_plans'), orderBy('priceMonthly'));
-  const querySnapshot = await getDocs(q);
+  const q = db.collection('subscription_plans').orderBy('priceMonthly');
+  const querySnapshot = await q.get();
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SubscriptionPlan[];
 }
 

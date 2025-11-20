@@ -2,15 +2,10 @@
 'use server';
 
 import { getAdminDb } from '@/lib/firebase-admin';
-import {
-  collection, query, where, getDocs, Timestamp, doc, setDoc,
-} from 'firebase/firestore';
 import type { AnalyticsEvent, AnalyticsDaily } from '@/types';
-// Note (OF-375): eachDayOfInterval should precisely match the UI filters
-// to avoid a mismatch between the number of days processed and the
-// number of days displayed in the UI.
-import { eachDayOfInterval, startOfDay, endOfDay, differenceInCalendarDays } from 'date-fns';
+import { eachDayOfInterval, startOfDay, endOfDay } from 'date-fns';
 import { getPurchasesInRange } from './sources/orders';
+import * as admin from 'firebase-admin';
 
 const COL_EVENTS = process.env.NEXT_PUBLIC_FS_COL_ANALYTICS_EVENTS || 'analytics_events';
 const COL_DAILY  = process.env.NEXT_PUBLIC_FS_COL_ANALYTICS_DAILY  || 'analytics_daily';
@@ -35,14 +30,12 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
     const dateKey = toDateKey(d0);
 
     const db = getAdminDb();
-    const q = query(
-      collection(db, COL_EVENTS),
-      where('ts', '>=', Timestamp.fromDate(d0)),
-      where('ts', '<=', Timestamp.fromDate(d1)),
-    );
+    const q = db.collection(COL_EVENTS)
+      .where('ts', '>=', admin.firestore.Timestamp.fromDate(d0))
+      .where('ts', '<=', admin.firestore.Timestamp.fromDate(d1));
     
     const [snap, purchasesData] = await Promise.all([
-      getDocs(q),
+      q.get(),
       getPurchasesInRange({ startDate: d0, endDate: d1 })
     ]);
 
@@ -69,7 +62,7 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
           upsell_offer_shown: 0, upsell_accepted: 0, upsell_rejected: 0,
           revenue_paid: 0, delivery_fees_total: 0, discounts_total: 0,
           agg_version: 1,
-          updated_at: Timestamp.now(),
+          updated_at: admin.firestore.Timestamp.now(),
         } as AnalyticsDaily & { __sid?: Set<string> });
       }
 
@@ -85,7 +78,6 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
         case 'start_checkout': b.start_checkout++; break;
         case 'click_purchase': b.click_purchase++; break;
         case 'payment_succeeded':
-          // We now rely on the getPurchasesInRange for this, but keep this for backwards compatibility
           b.payment_succeeded++;
           b.revenue_paid += Number(e.cartValue || 0);
           b.delivery_fees_total += Number(e.deliveryFee || 0);
@@ -101,7 +93,6 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
       }
     });
     
-    // Merge purchase data
     for (const p of purchasesData) {
         const key = `${p.brandId}_${p.locationId}`;
         if (!buckets.has(key)) {
@@ -112,7 +103,7 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
                 click_purchase: 0, payment_succeeded: 0, payment_session_created: 0,
                 upsell_offer_shown: 0, upsell_accepted: 0, upsell_rejected: 0,
                 revenue_paid: 0, delivery_fees_total: 0, discounts_total: 0,
-                agg_version: 1, updated_at: Timestamp.now(), __sid: new Set<string>()
+                agg_version: 1, updated_at: admin.firestore.Timestamp.now(), __sid: new Set<string>()
              } as AnalyticsDaily & {__sid?: Set<string>});
         }
         const b = buckets.get(key)!;
@@ -123,11 +114,11 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
 
     for (const [, b] of buckets) {
       b.unique_sessions = b.__sid ? b.__sid.size : 0;
-      b.sessions = b.unique_sessions; // For now, sessions and unique_sessions are the same.
+      b.sessions = b.unique_sessions;
       delete b.__sid;
 
-      const docRef = doc(collection(db, COL_DAILY), b.id);
-      await setDoc(docRef, { ...b }, { merge: true });
+      const docRef = db.collection(COL_DAILY).doc(b.id);
+      await docRef.set({ ...b }, { merge: true });
       docsWritten++;
     }
   }

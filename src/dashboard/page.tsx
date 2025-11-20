@@ -3,16 +3,15 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, ShoppingCart, Users, Activity } from "lucide-react";
 import type { OrderSummary } from "@/types";
-import { getBrands } from "../brands/actions";
-import { collection, getDocs } from "firebase/firestore";
+import { getBrands } from "../app/superadmin/brands/actions";
 import { getAdminDb } from "@/lib/firebase-admin";
 
 export const revalidate = 0; // Force dynamic rendering
 
 async function getOrdersFromFirestore(): Promise<OrderSummary[]> {
     const db = getAdminDb();
-    const ordersCol = collection(db, 'orders');
-    const orderSnapshot = await getDocs(ordersCol);
+    const ordersCol = db.collection('orders');
+    const orderSnapshot = await ordersCol.get();
     const orderList = orderSnapshot.docs.map(doc => {
         const data = doc.data();
         return {

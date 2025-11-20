@@ -29,7 +29,7 @@ function LayoutWithLoader({ children }: { children: React.ReactNode }) {
 export function SuperAdminLayoutClient({ children, brandingSettings }: Props) {
   return (
     <S.SidebarProvider>
-      <S.Sidebar className="border-r">
+      <S.Sidebar collapsible="icon" className="border-r">
         <div className="p-4 text-sm font-medium">
           {brandingSettings?.platformHeading ?? 'Orderfly Studio'}
         </div>

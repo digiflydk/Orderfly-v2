@@ -1,10 +1,9 @@
 
-
 'use server';
 
 import { getAdminDb } from '@/lib/firebase-admin';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import type { OrderDetail } from '@/types';
+import * as admin from 'firebase-admin';
 
 const COL_ORDERS = process.env.FS_COL_ORDERS || 'orders';
 const OK_STATUSES = ['paid', 'completed', 'delivered', 'Paid', 'Completed', 'Delivered', 'Ready'];
@@ -28,15 +27,13 @@ interface PurchaseResult {
 
 export async function getPurchasesInRange(params: PurchaseParams): Promise<PurchaseResult[]> {
     const db = getAdminDb();
-    let q = query(
-        collection(db, COL_ORDERS),
-        where('createdAt', '>=', Timestamp.fromDate(params.startDate)),
-        where('createdAt', '<=', Timestamp.fromDate(params.endDate))
-    );
+    let q: admin.firestore.Query = db.collection(COL_ORDERS)
+        .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(params.startDate))
+        .where('createdAt', '<=', admin.firestore.Timestamp.fromDate(params.endDate));
     
     // We filter brandId and locationId later in code to avoid composite indexes for now
     
-    const snap = await getDocs(q);
+    const snap = await q.get();
     const ordersByLocation = new Map<string, { count: number, revenue: number, deliveryFee: number, discount: number, sessionIds: Set<string> }>();
 
     snap.forEach(doc => {

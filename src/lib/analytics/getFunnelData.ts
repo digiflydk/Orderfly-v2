@@ -1,12 +1,12 @@
 
 
+'use server';
+
 import { getAdminDb } from '@/lib/firebase-admin';
-import {
-  collection, query, where, getDocs, Timestamp,
-} from 'firebase/firestore';
-import type { AnalyticsEvent, AnalyticsDaily, FunnelFilters, FunnelOutput } from '@/types';
+import type { AnalyticsDaily, FunnelFilters, FunnelOutput } from '@/types';
 import { getPurchasesInRange } from './sources/orders';
 import { startOfDay, endOfDay } from 'date-fns';
+import * as admin from 'firebase-admin';
 
 const COL_EVENTS = process.env.NEXT_PUBLIC_FS_COL_ANALYTICS_EVENTS || 'analytics_events';
 const COL_DAILY = process.env.NEXT_PUBLIC_FS_COL_ANALYTICS_DAILY || 'analytics_daily';
@@ -19,13 +19,11 @@ const STEP_ORDER: StepKey[] = [
 
 function addNum(a?: number, b?: number){ const x=Number(a||0), y=Number(b||0); return Number.isFinite(x+y)?x+y:0; }
 
-// This function ensures that the funnel steps are always monotonically decreasing.
 function clampMonotone(totals: Record<string, number>) {
   for (let i=1;i<STEP_ORDER.length;i++){
     const prevStep = STEP_ORDER[i-1];
     const currentStep = STEP_ORDER[i];
     
-    // Ensure the current step is not greater than the previous step.
     if (totals[currentStep] > totals[prevStep]) {
         totals[currentStep] = totals[prevStep];
     }
@@ -50,14 +48,13 @@ export async function getFunnelData(filters: FunnelFilters, _user?: any): Promis
 
 
   if (filters.counting === 'unique') {
-      const evWhere: any[] = [
-          where('ts','>=',Timestamp.fromDate(dateFrom)),
-          where('ts','<=',Timestamp.fromDate(dateTo)),
-      ];
-      if (filters.brandId && filters.brandId !== 'all')    evWhere.push(where('brandId','==',filters.brandId));
-      if (filters.locationId && filters.locationId !== 'all') evWhere.push(where('locationId','==',filters.locationId));
+      let q = db.collection(COL_EVENTS)
+          .where('ts','>=',admin.firestore.Timestamp.fromDate(dateFrom))
+          .where('ts','<=',admin.firestore.Timestamp.fromDate(dateTo));
+      if (filters.brandId && filters.brandId !== 'all')    q = q.where('brandId','==',filters.brandId);
+      if (filters.locationId && filters.locationId !== 'all') q = q.where('locationId','==',filters.locationId);
       
-      const eventSnapshots = await getDocs(query(collection(db, COL_EVENTS), ...evWhere));
+      const eventSnapshots = await q.get();
       
       const stepSets: Record<StepKey, Set<string>> = {
           view_menu:new Set(), view_product:new Set(), add_to_cart:new Set(),
@@ -91,14 +88,13 @@ export async function getFunnelData(filters: FunnelFilters, _user?: any): Promis
       totals.payment_succeeded = stepSets.payment_succeeded.size;
 
   } else { // 'events' counting
-      let q: any = query(collection(db, COL_DAILY),
-          where('date','>=',dateFromKey),
-          where('date','<=',dateToKey)
-      );
-      if (filters.brandId && filters.brandId !== 'all')   q = query(q, where('brandId','==',filters.brandId));
-      if (filters.locationId && filters.locationId !== 'all') q = query(q, where('locationId','==',filters.locationId));
+      let q: admin.firestore.Query = db.collection(COL_DAILY)
+          .where('date','>=',dateFromKey)
+          .where('date','<=',dateToKey);
+      if (filters.brandId && filters.brandId !== 'all')   q = q.where('brandId','==',filters.brandId);
+      if (filters.locationId && filters.locationId !== 'all') q = q.where('locationId','==',filters.locationId);
 
-      const snap = await getDocs(q);
+      const snap = await q.get();
 
       snap.forEach(doc=>{
         const d = doc.data() as AnalyticsDaily;
@@ -114,17 +110,14 @@ export async function getFunnelData(filters: FunnelFilters, _user?: any): Promis
         totals.sessions              = addNum(totals.sessions, d.sessions);
       });
       
-      // For "All Events", the session count should logically start at the top of the funnel
       totals.sessions = totals.view_menu;
       totals.payment_succeeded = purchaseCount;
   }
 
-  // Override purchases with robust order data regardless of counting method
   totals.revenue_paid      = purchasesData.reduce((s,p)=>s+p.revenue,0);
   totals.delivery_fees_total = purchasesData.reduce((s,p)=>s+p.deliveryFee,0);
   totals.discounts_total = purchasesData.reduce((s,p)=>s+p.discount,0);
   
-  // ALWAYS clamp the funnel to be monotonic, regardless of counting method.
   clampMonotone(totals);
 
   return { totals, daily: [], byLocation: [] } as FunnelOutput;

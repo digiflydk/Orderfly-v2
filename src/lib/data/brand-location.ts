@@ -1,5 +1,4 @@
 
-
 'use server';
 
 import { getAdminDb } from "@/lib/firebase-admin";
@@ -12,7 +11,7 @@ export async function getBrandBySlug(slug: string): Promise<BrandDoc> {
   if (!slug) return null;
   const db = getAdminDb();
   try {
-    const q = db.collection("brands").where("slug", "==", slug);
+    const q = db.collection("brands").where("slug", "==", slug).limit(1);
     const snap = await q.get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
@@ -33,22 +32,15 @@ export async function getLocationsForBrand(brandId: string): Promise<Location[]>
 
 export async function getLocationBySlug(brandId: string, locationSlug: string): Promise<LocationDoc> {
   const db = getAdminDb();
-  const q = db.collection("locations").where("brandId", "==", brandId);
+  const q = db.collection("locations").where("brandId", "==", brandId).where("slug", "==", locationSlug).limit(1);
   const querySnapshot = await q.get();
   if (querySnapshot.empty) {
       return null;
   }
   
-  const lowerCaseSlug = locationSlug.toLowerCase();
-  
-  const locationDoc = querySnapshot.docs.find(doc => doc.data().slug.toLowerCase() === lowerCaseSlug);
-
-  if (locationDoc) {
-      const data = locationDoc.data();
-      return { id: locationDoc.id, ...data } as Location;
-  }
-
-  return null;
+  const locationDoc = querySnapshot.docs[0];
+  const data = locationDoc.data();
+  return { id: locationDoc.id, ...data } as Location;
 }
 
 export async function getBrandAndLocation(brandSlug: string, locationSlug: string) {
@@ -62,6 +54,6 @@ export async function getBrandAndLocation(brandSlug: string, locationSlug: strin
     brand,
     location,
     ok: !!location,
-    brandMatchesLocation: true,
+    brandMatchesLocation: !!location && location.brandId === brand.id,
   };
 }

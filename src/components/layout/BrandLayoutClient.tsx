@@ -1,3 +1,4 @@
+
 'use client';
 
 import { usePathname } from 'next/navigation';
@@ -56,7 +57,7 @@ export function BrandLayoutClient({
           <Footer 
             brand={brand} 
             location={location ?? undefined} 
-            version="1.0.238 • OF-487"
+            version="1.0.242 • OF-512"
             onOpenCookieSettings={() => setIsCookieModalOpen(true)} 
           />
         )}
