@@ -1,11 +1,11 @@
 
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, getDoc } from 'firebase/firestore';
-import { z } from 'zod';
 import type { User } from '@/types';
+import { z } from 'zod';
 
 const userSchema = z.object({
   id: z.string().optional(),
@@ -42,11 +42,11 @@ export async function createOrUpdateUser(
   const { id, ...userData } = validatedFields.data;
   const db = getAdminDb();
   
-  const userId = id || doc(collection(db, 'users')).id;
+  const userId = id || db.collection('users').doc().id;
   
   try {
-    const userRef = doc(db, 'users', userId);
-    await setDoc(userRef, { id: userId, ...userData }, { merge: true });
+    const userRef = db.collection('users').doc(userId);
+    await userRef.set({ id: userId, ...userData }, { merge: true });
     
     revalidatePath('/superadmin/users');
     revalidatePath('/superadmin/brands'); // Revalidate brands in case owner names changed
@@ -61,7 +61,7 @@ export async function createOrUpdateUser(
 export async function deleteUser(userId: string) {
     try {
         const db = getAdminDb();
-        await deleteDoc(doc(db, "users", userId));
+        await db.collection("users").doc(userId).delete();
         revalidatePath("/superadmin/users");
         revalidatePath('/superadmin/brands');
         return { message: "User deleted successfully.", error: false };
@@ -74,16 +74,16 @@ export async function deleteUser(userId: string) {
 
 export async function getUsers(): Promise<User[]> {
     const db = getAdminDb();
-    const q = query(collection(db, 'users'), orderBy('name'));
-    const querySnapshot = await getDocs(q);
+    const q = db.collection('users').orderBy('name');
+    const querySnapshot = await q.get();
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
 }
 
 export async function getUserById(id: string): Promise<User | null> {
     const db = getAdminDb();
-    const docRef = doc(db, 'users', id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
+    const docRef = db.collection('users').doc(id);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as User;
     }
     return null;

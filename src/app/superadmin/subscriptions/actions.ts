@@ -3,7 +3,6 @@
 
 import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { collection, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import type { SubscriptionPlan } from '@/types';
 import { z } from 'zod';
 
@@ -44,8 +43,8 @@ export async function createOrUpdatePlan(
   const db = getAdminDb();
 
   try {
-    const planRef = id ? doc(db, 'subscription_plans', id) : doc(collection(db, 'subscription_plans'));
-    await setDoc(planRef, { ...planData, id: planRef.id }, { merge: true });
+    const planRef = id ? db.collection('subscription_plans').doc(id) : db.collection('subscription_plans').doc();
+    await planRef.set({ ...planData, id: planRef.id }, { merge: true });
 
     revalidatePath('/superadmin/subscriptions');
     return { message: `Plan ${id ? 'updated' : 'created'} successfully.`, error: false };
@@ -59,7 +58,7 @@ export async function createOrUpdatePlan(
 export async function deletePlan(planId: string) {
     try {
         const db = getAdminDb();
-        await deleteDoc(doc(db, "subscription_plans", planId));
+        await db.collection("subscription_plans").doc(planId).delete();
         revalidatePath("/superadmin/subscriptions");
         return { message: "Plan deleted successfully.", error: false };
     } catch (e) {
@@ -67,4 +66,11 @@ export async function deletePlan(planId: string) {
         const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
         return { message: `Failed to delete plan: ${errorMessage}`, error: true };
     }
+}
+
+export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
+  const db = getAdminDb();
+  const q = db.collection('subscription_plans').orderBy('priceMonthly');
+  const querySnapshot = await q.get();
+  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SubscriptionPlan[];
 }

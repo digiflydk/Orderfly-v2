@@ -1,18 +1,10 @@
 
 
-import { getAdminDb } from '@/lib/firebase-admin';
-import type { SubscriptionPlan } from '@/types';
 import { SubscriptionsClientPage } from './client-page';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
+import { getSubscriptionPlans } from './actions';
 
-
-export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
-  const db = getAdminDb();
-  const q = db.collection('subscription_plans').orderBy('priceMonthly');
-  const querySnapshot = await q.get();
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SubscriptionPlan[];
-}
 
 async function SubscriptionsPageContent() {
   const plans = await getSubscriptionPlans();
