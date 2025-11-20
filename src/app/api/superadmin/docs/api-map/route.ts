@@ -1,4 +1,3 @@
-
 // src/app/api/superadmin/docs/api-map/route.ts
 import { NextResponse } from 'next/server';
 import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
