@@ -1,3 +1,4 @@
+
 // src/app/api/superadmin/docs/api-map/route.ts
 import { NextResponse } from 'next/server';
 import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
@@ -76,6 +77,42 @@ export async function GET() {
       description: 'Serves the OpenAPI specification file.',
       auth: 'superadmin',
     },
+    {
+        method: 'GET',
+        path: '/api/debug/diag-logs',
+        description: 'Retrieves diagnostic logs from Firestore.',
+        auth: 'superadmin'
+    },
+    {
+        method: 'GET',
+        path: '/api/debug/feedback',
+        description: 'Retrieves the latest 20 feedback entries.',
+        auth: 'superadmin'
+    },
+    {
+        method: 'GET',
+        path: '/api/docs/bundle',
+        description: 'Downloads a bundle of all markdown documentation.',
+        auth: 'superadmin'
+    },
+    {
+        method: 'GET',
+        path: '/api/docs/download',
+        description: 'Downloads a specific documentation file.',
+        auth: 'superadmin'
+    },
+    {
+        method: 'GET',
+        path: '/api/docs/list',
+        description: 'Lists all available documentation files.',
+        auth: 'superadmin'
+    },
+    {
+        method: 'GET',
+        path: '/api/superadmin/kpis',
+        description: 'Retrieves key performance indicators.',
+        auth: 'superadmin'
+    },
     // --- Diagnostic APIs (require debug token) ---
     {
       method: 'GET',
@@ -100,6 +137,12 @@ export async function GET() {
       path: '/api/diag/catalog',
       description: 'Gets product and category counts for a brand.',
       auth: 'debug',
+    },
+    {
+        method: 'GET',
+        path: '/api/diag/sample/products',
+        description: 'Gets sample products for a brand.',
+        auth: 'debug',
     },
      {
       method: 'POST',
@@ -143,42 +186,6 @@ export async function GET() {
       path: '/api/env',
       description: 'Returns the current Node.js version and M3 preview flag status.',
       auth: 'public',
-    },
-    {
-        method: 'GET',
-        path: '/api/debug/diag-logs',
-        description: 'Retrieves diagnostic logs from Firestore.',
-        auth: 'superadmin'
-    },
-    {
-        method: 'GET',
-        path: '/api/debug/feedback',
-        description: 'Retrieves the latest 20 feedback entries.',
-        auth: 'superadmin'
-    },
-    {
-        method: 'GET',
-        path: '/api/docs/bundle',
-        description: 'Downloads a bundle of all markdown documentation.',
-        auth: 'superadmin'
-    },
-    {
-        method: 'GET',
-        path: '/api/docs/download',
-        description: 'Downloads a specific documentation file.',
-        auth: 'superadmin'
-    },
-    {
-        method: 'GET',
-        path: '/api/docs/list',
-        description: 'Lists all available documentation files.',
-        auth: 'superadmin'
-    },
-    {
-        method: 'GET',
-        path: '/api/superadmin/kpis',
-        description: 'Retrieves key performance indicators.',
-        auth: 'superadmin'
     }
   ];
 
