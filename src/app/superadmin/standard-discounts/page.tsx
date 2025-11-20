@@ -2,7 +2,7 @@
 
 import { getStandardDiscounts } from './actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
-import { StandardDiscountsClientPage } from '@/components/superadmin/standard-discount-client-page';
+import { StandardDiscountsClientPage } from './client-page';
 import { getAllLocations } from '../locations/actions';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
