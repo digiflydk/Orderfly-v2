@@ -1,3 +1,4 @@
+
 // src/app/api/superadmin/docs/db-paths/route.ts
 import { NextResponse } from 'next/server';
 import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
@@ -32,6 +33,26 @@ export async function GET() {
       key: 'orderCollection',
       pathTemplate: 'orders',
       description: 'Global collection of all customer orders.',
+    },
+    {
+      key: 'customerCollection',
+      pathTemplate: 'customers',
+      description: 'Collection of unique customers across all brands.',
+    },
+    {
+      key: 'feedbackCollection',
+      pathTemplate: 'feedback',
+      description: 'Collection of all customer feedback entries.',
+    },
+    {
+      key: 'settingsDocument',
+      pathTemplate: 'platform_settings/{settingId}',
+      description: 'A document containing a specific global setting (e.g., "analytics", "payment_gateway").',
+    },
+    {
+      key: 'cookieTextsCollection',
+      pathTemplate: 'cookie_texts',
+      description: 'Stores versioned and localized texts for the cookie consent UI.',
     },
   ];
 

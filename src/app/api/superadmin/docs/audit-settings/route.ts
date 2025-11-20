@@ -1,3 +1,4 @@
+
 // src/app/api/superadmin/docs/audit-settings/route.ts
 import { NextResponse } from 'next/server';
 import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
@@ -23,12 +24,35 @@ const AUDIT_ACTIONS: AuditActionConfig[] = [
     level: 'info',
   },
   {
+    action: 'order.payment.failed',
+    description: 'A customer payment attempt failed.',
+    enabled: true,
+    level: 'warning',
+  },
+  {
+    action: 'superadmin.brand.created',
+    description: 'Superadmin created a new brand.',
+    enabled: true,
+    level: 'info',
+  },
+  {
     action: 'superadmin.brand.updated',
     description: 'Superadmin updated brand configuration.',
     enabled: true,
     level: 'info',
   },
-  // Extend with more as needed
+  {
+    action: 'superadmin.user.created',
+    description: 'A new user was created in the Superadmin panel.',
+    enabled: true,
+    level: 'info',
+  },
+  {
+    action: 'superadmin.settings.payment.updated',
+    description: 'Payment gateway settings were updated.',
+    enabled: true,
+    level: 'warning',
+  },
 ];
 
 export async function GET() {

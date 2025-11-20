@@ -1,56 +1,40 @@
+
 // src/app/api/superadmin/docs/superadmin-dump/route.ts
-import { NextResponse } from 'next/server';
-import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { NextResponse } from "next/server";
+import { isDebugSnapshotEnabled } from "@/lib/debug/flags";
+import { buildAllDebugPayload } from "@/lib/debug/all";
+import { requireSuperadminApi } from "@/lib/auth/superadmin-api";
 
-type LocationSummary = {
-  id: string;
-  name: string;
-  status: string;
-};
-
-type BrandSummary = {
-  id: string;
-  name: string;
-  status: string;
-  locationCount: number;
-  locations: LocationSummary[];
-};
+export const runtime = "nodejs";
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const authError = await requireSuperadminApi();
   if (authError) return authError;
 
-  const db = await getAdminDb();
-
-  const brandsSnap = await db.collection('brands').get();
-
-  const brands: BrandSummary[] = [];
-  for (const brandDoc of brandsSnap.docs) {
-    const brandData = brandDoc.data();
-    const locationsSnap = await db.collection('locations').where('brandId', '==', brandDoc.id).get();
-
-    const locations: LocationSummary[] = locationsSnap.docs.map((locDoc) => {
-      const locData = locDoc.data();
-      return {
-        id: locDoc.id,
-        name: String(locData.name ?? ''),
-        status: String(locData.isActive ? 'active' : 'inactive'),
-      };
-    });
-
-    brands.push({
-      id: brandDoc.id,
-      name: String(brandData.name ?? ''),
-      status: String(brandData.status ?? 'unknown'),
-      locationCount: locations.length,
-      locations,
-    });
+  // Re-use the debug snapshot logic for the data dump
+  const enabled = await isDebugSnapshotEnabled();
+  if (!enabled) {
+    return NextResponse.json(
+      { ok: false, error: "Debug snapshot export is disabled via settings." },
+      { status: 403 }
+    );
   }
 
-  return NextResponse.json({
-    generatedAt: new Date().toISOString(),
-    brandCount: brands.length,
-    brands,
+  const payload = await buildAllDebugPayload();
+
+  const body = JSON.stringify(
+    { ok: true, timestamp: new Date().toISOString(), data: payload },
+    null,
+    2
+  );
+
+  return new NextResponse(body, {
+    status: 200,
+    headers: {
+      "Content-Type": "application/json; charset=utf-8",
+      "Content-Disposition": 'attachment; filename="orderfly-superadmin-dump.json"',
+      "Cache-Control": "no-store",
+    },
   });
 }
