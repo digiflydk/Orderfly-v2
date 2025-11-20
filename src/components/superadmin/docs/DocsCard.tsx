@@ -1,5 +1,6 @@
 // src/components/superadmin/docs/DocsCard.tsx
 import React from 'react';
+import Link from 'next/link';
 
 type Props = {
   title: string;

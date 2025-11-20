@@ -1,10 +1,11 @@
 // src/app/superadmin/docs/page.tsx
+import React from 'react';
+import Link from 'next/link';
 import { DEV_DOCS, DEV_UTILITIES } from '@/lib/superadmin/docs-config';
 import DocsLayout from '@/components/superadmin/docs/DocsLayout';
 import DocsNav from '@/components/superadmin/docs/DocsNav';
 import DocsMarkdown from '@/components/superadmin/docs/DocsMarkdown';
 import DocsCard from '@/components/superadmin/docs/DocsCard';
-import Link from 'next/link';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 
 export default async function SuperadminDocsPage({
@@ -48,20 +49,12 @@ export default async function SuperadminDocsPage({
                 title={util.title}
                 description={util.description}
                 action={
-                  util.type === 'link' ? (
-                    <Link href={util.apiPath} className="text-sm underline">
-                      Open
-                    </Link>
-                  ) : (
-                    <a
-                      href={util.apiPath}
-                      className="text-sm underline"
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Download JSON
-                    </a>
-                  )
+                  <Link href={util.apiPath} className="text-sm underline"
+                    target={util.type.includes('download') ? '_blank' : undefined}
+                    rel={util.type.includes('download') ? 'noreferrer' : undefined}
+                  >
+                    {util.type === 'link' ? 'Open' : 'Download'}
+                  </Link>
                 }
               />
             ))}

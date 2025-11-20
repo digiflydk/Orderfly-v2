@@ -62,6 +62,8 @@ export default function DocsNav({ docs, utilities, activeDocId }: Props) {
               key={util.id}
               href={util.apiPath}
               className="block text-sm text-muted-foreground hover:underline"
+              target={util.type.includes('download') ? '_blank' : undefined}
+              rel={util.type.includes('download') ? 'noreferrer' : undefined}
             >
               {util.title}
             </Link>

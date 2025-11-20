@@ -11,7 +11,7 @@ export type DevUtilityMeta = {
   title: string;
   description: string;
   apiPath: string;  // or page path for simple links
-  type: 'json-download' | 'link';
+  type: 'json-download' | 'link' | 'markdown-download';
 };
 
 export const DEV_DOCS: DevDocMeta[] = [
@@ -83,5 +83,12 @@ export const DEV_UTILITIES: DevUtilityMeta[] = [
     description: 'Current audit actions and logging configuration.',
     apiPath: '/api/superadmin/docs/audit-settings',
     type: 'json-download',
+  },
+  {
+    id: 'docs-bundle',
+    title: 'Download Docs Bundle',
+    description: 'Download all documentation files as a single markdown file.',
+    apiPath: '/api/docs/bundle',
+    type: 'markdown-download',
   },
 ];
