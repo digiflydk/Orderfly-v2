@@ -164,6 +164,13 @@ export function SuperAdminSidebarClient({
       ],
     },
     {
+      key: 'brand_website',
+      title: 'Brand Website',
+      items: [
+        { href: '/superadmin/brands/settings', label: 'Settings', icon: SettingsIcon },
+      ]
+    },
+    {
       key: 'website',
       title: 'Orderfly Website',
       items: [
@@ -208,6 +215,7 @@ export function SuperAdminSidebarClient({
       quality: false,
       insights: true,
       billing: false,
+      brand_website: true,
       website: true,
       system: true,
     }
