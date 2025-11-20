@@ -2,10 +2,11 @@
 'use server';
 
 import { doc, getDoc, Timestamp, collection, query, where, limit, getDocs } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import type { OrderDetail } from '@/types';
 
 export async function getOrderById(orderId: string): Promise<OrderDetail | null> {
+  const db = getAdminDb();
   const ref = doc(db, 'orders', orderId);
   const snap = await getDoc(ref);
   if (!snap.exists()) return null;
@@ -19,6 +20,7 @@ export async function getOrderById(orderId: string): Promise<OrderDetail | null>
 }
 
 export async function getOrderByCheckoutSessionId(sessionId: string): Promise<OrderDetail | null> {
+    const db = getAdminDb();
     const q = query(
         collection(db, 'orders'),
         where('psp.checkoutSessionId', '==', sessionId),

@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db } from "@/lib/firebase";
+import { getAdminDb } from "@/lib/firebase-admin";
 import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
 import type { Brand, Location } from "@/types";
 
@@ -10,6 +10,7 @@ export type LocationDoc = Location | null;
 
 export async function getBrandBySlug(slug: string): Promise<BrandDoc> {
   if (!slug) return null;
+  const db = getAdminDb();
   try {
     const q = query(collection(db, "brands"), where("slug", "==", slug));
     const snap = await getDocs(q);
@@ -23,6 +24,7 @@ export async function getBrandBySlug(slug: string): Promise<BrandDoc> {
 }
 
 export async function getLocationsForBrand(brandId: string): Promise<Location[]> {
+    const db = getAdminDb();
     const q = query(collection(db, 'locations'), where('brandId', '==', brandId));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Location[];
@@ -30,6 +32,7 @@ export async function getLocationsForBrand(brandId: string): Promise<Location[]>
 
 
 export async function getLocationBySlug(brandId: string, locationSlug: string): Promise<LocationDoc> {
+  const db = getAdminDb();
   const q = query(
     collection(db, "locations"),
     where("brandId", "==", brandId)
