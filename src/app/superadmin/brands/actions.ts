@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import 'server-only';
@@ -198,7 +199,10 @@ export async function getBrandById(brandId: string): Promise<Brand | null> {
     return null;
 }
 
-export async function getBrandBySlug(brandSlug: string): Promise<Brand | null> {
+export async function getBrandBySlug(brandSlug?: string): Promise<Brand | null> {
+    if (!brandSlug) {
+      return null;
+    }
     const db = getAdminDb();
     const q = db.collection('brands').where('slug', '==', brandSlug);
     const querySnapshot = await q.get();
