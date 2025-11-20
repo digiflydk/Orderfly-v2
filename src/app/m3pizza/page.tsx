@@ -1,3 +1,4 @@
+
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
@@ -20,6 +21,7 @@ import StickyOrderChoice from './_components/StickyOrderChoice';
 export default function M3IndexPage() {
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const router = useRouter();
+  const esmeraldaUrl = "https://esmeraldacucina.dk/esmeralda-pizza-amager";
 
   if (!isM3Enabled()) {
     return (
@@ -33,10 +35,13 @@ export default function M3IndexPage() {
     );
   }
 
+  const handleOrderClick = () => {
+    window.open(esmeraldaUrl, '_blank');
+  };
+
   const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
     console.log(`Selected delivery method: ${method}`);
-    // Example navigation: router.push('/m3pizza/m3-pizza-hellerup?deliveryMethod=' + method);
-    router.push('/m3pizza/esmeralda/esmeralda-pizza-amager');
+    window.open(esmeraldaUrl, '_blank');
   };
 
   return (
@@ -45,19 +50,19 @@ export default function M3IndexPage() {
       <div className="md:hidden">
         <main className="bg-m3-dark min-h-dvh">
           <MobileHeader />
-          <MobileHero />
+          <MobileHero onOrderClick={handleOrderClick} />
           <div className="px-3 py-4">
             <MobileCardGrid />
           </div>
-          <StickyOrderChoice onOrderClick={() => setOrderModalOpen(true)} />
+          <StickyOrderChoice onOrderClick={handleOrderClick} />
         </main>
       </div>
       
       {/* Desktop View */}
       <div className="hidden md:block bg-m3-dark">
-        <Header onOrderClick={() => setOrderModalOpen(true)}/>
+        <Header onOrderClick={handleOrderClick}/>
         <main>
-          <Hero onOrderClick={() => setOrderModalOpen(true)} />
+          <Hero onOrderClick={handleOrderClick} />
           <CTADeck />
           <MenuGrid />
           <PromoBanner />

@@ -1,8 +1,14 @@
 
+"use client";
+
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
 
-export function MobileHero() {
+interface MobileHeroProps {
+  onOrderClick: () => void;
+}
+
+export function MobileHero({ onOrderClick }: MobileHeroProps) {
   return (
     <section className="relative h-[60vh] w-full flex items-end p-4 text-white">
       <Image
@@ -19,7 +25,9 @@ export function MobileHero() {
         <p className="mt-2 text-sm max-w-xs">
           Sprød, håndlavet bund med cremet trøffelmayo, parmesan, mozzarella og frisk rucola.
         </p>
-        <Button className="mt-4 bg-m3-orange text-m3-dark hover:bg-m3-orange/90 font-bold uppercase text-xs px-4 py-2 rounded-lg">
+        <Button 
+          onClick={onOrderClick}
+          className="mt-4 bg-m3-orange text-m3-dark hover:bg-m3-orange/90 font-bold uppercase text-xs px-4 py-2 rounded-lg">
           Bestil nu
         </Button>
       </div>
