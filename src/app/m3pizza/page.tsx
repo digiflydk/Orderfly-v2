@@ -36,12 +36,12 @@ export default function M3IndexPage() {
   }
 
   const handleOrderClick = () => {
-    window.open(esmeraldaUrl, '_blank');
+    window.location.href = esmeraldaUrl;
   };
 
   const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
     console.log(`Selected delivery method: ${method}`);
-    window.open(esmeraldaUrl, '_blank');
+    window.location.href = esmeraldaUrl;
   };
 
   return (
