@@ -1,6 +1,10 @@
 # Operations Log (seneste status & åbne punkter)
 
 ## Seneste leverancer
+* 1.0.240 • OF-509 — Updated operations log with recent changes.
+* 1.0.239 • OF-508 — Completed and corrected all documentation API endpoints (api-map, db-structure, etc.) and fixed data dump route.
+* 1.0.238 • OF-507 — Added "Brand Website" category to Superadmin sidebar for brand-specific CMS settings.
+* 1.0.237 • OF-506 — Implemented robust checks to prevent Firebase Admin SDK from running in build environments, resolving service account errors.
 * 1.0.236 • OF-459 — Finalized missing files (debug-ui-spec + examples) and cleanup.
 * 1.0.235 • OF-458 — Added Debug UI specification for a health status dashboard.
 * 1.0.234 • OF-457 — Added Firestore indexing and performance guide.
