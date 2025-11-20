@@ -1,4 +1,5 @@
 
+
 import { initializeApp, getApps, getApp } from "firebase/app";
 import { getFirestore } from "firebase/firestore";
 
@@ -25,6 +26,12 @@ if (firebaseConfig.projectId) {
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 
 // Initialize Firestore
-const db = getFirestore(app);
+let db: any = null;
+
+try {
+  db = getFirestore(app);
+} catch(e) {
+  console.error("Firestore could not be initialized on the client. This may be normal in a server-only context.");
+}
 
 export { db };

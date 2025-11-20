@@ -1,6 +1,6 @@
 
 
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { collection, getDocs, query, orderBy, Timestamp } from 'firebase/firestore';
 import { getBrands } from "@/app/superadmin/brands/actions";
 import { getAllLocations } from "@/app/superadmin/locations/actions";
@@ -10,6 +10,7 @@ import type { OrderSummary } from "@/types";
 export const revalidate = 0; // Force dynamic rendering
 
 async function getOrders(): Promise<OrderSummary[]> {
+  const db = getAdminDb();
   const q = query(collection(db, 'orders'), orderBy('createdAt', 'desc'));
   const querySnapshot = await getDocs(q);
   const orders = querySnapshot.docs.map(doc => {
@@ -47,4 +48,3 @@ export default async function OrdersPage() {
         />
     );
 }
-

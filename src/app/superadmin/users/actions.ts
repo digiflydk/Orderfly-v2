@@ -2,7 +2,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, getDoc } from 'firebase/firestore';
 import { z } from 'zod';
 import type { User } from '@/types';
@@ -40,6 +40,7 @@ export async function createOrUpdateUser(
   }
 
   const { id, ...userData } = validatedFields.data;
+  const db = getAdminDb();
   
   const userId = id || doc(collection(db, 'users')).id;
   
@@ -59,6 +60,7 @@ export async function createOrUpdateUser(
 
 export async function deleteUser(userId: string) {
     try {
+        const db = getAdminDb();
         await deleteDoc(doc(db, "users", userId));
         revalidatePath("/superadmin/users");
         revalidatePath('/superadmin/brands');
@@ -71,12 +73,14 @@ export async function deleteUser(userId: string) {
 }
 
 export async function getUsers(): Promise<User[]> {
+    const db = getAdminDb();
     const q = query(collection(db, 'users'), orderBy('name'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
 }
 
 export async function getUserById(id: string): Promise<User | null> {
+    const db = getAdminDb();
     const docRef = doc(db, 'users', id);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {

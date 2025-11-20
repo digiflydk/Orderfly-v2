@@ -2,8 +2,8 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { collection, doc, setDoc, deleteDoc, updateDoc } from 'firebase/firestore';
 import type { SubscriptionPlan } from '@/types';
 import { z } from 'zod';
 
@@ -41,6 +41,7 @@ export async function createOrUpdatePlan(
   }
 
   const { id, ...planData } = validatedFields.data;
+  const db = getAdminDb();
 
   try {
     const planRef = id ? doc(db, 'subscription_plans', id) : doc(collection(db, 'subscription_plans'));
@@ -57,6 +58,7 @@ export async function createOrUpdatePlan(
 
 export async function deletePlan(planId: string) {
     try {
+        const db = getAdminDb();
         await deleteDoc(doc(db, "subscription_plans", planId));
         revalidatePath("/superadmin/subscriptions");
         return { message: "Plan deleted successfully.", error: false };

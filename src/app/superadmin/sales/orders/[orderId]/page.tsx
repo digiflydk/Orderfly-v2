@@ -1,4 +1,5 @@
 
+
 import { notFound } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,6 +13,7 @@ import { Separator } from '@/components/ui/separator';
 import { sendFeedbackRequestEmail } from '@/app/superadmin/feedback/actions';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getOrderById } from '@/app/checkout/order-actions';
+import { getAdminDb } from '@/lib/firebase-admin';
 
 export const revalidate = 0; // Force dynamic rendering
 
@@ -53,9 +55,8 @@ function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType, la
     )
 }
 
-export default async function OrderDetailPage({ params }: { params: Promise<{ orderId: string }> }) {
-    const { orderId } = await params;
-    const order = await getOrderDetails(orderId);
+export default async function OrderDetailPage({ params }: { params: { orderId: string } }) {
+    const order = await getOrderDetails(params.orderId);
 
     if (!order) {
         notFound();

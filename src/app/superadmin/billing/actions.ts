@@ -1,9 +1,8 @@
 
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { collection, getDocs, doc, getDoc, query, where, updateDoc } from 'firebase/firestore';
 import type { Brand, Subscription, SubscriptionPlan, User, Invoice } from '@/types';
 import { getBrands } from '../brands/actions';
@@ -13,6 +12,7 @@ import { getActiveStripeKey } from '../settings/actions';
 import Stripe from 'stripe';
 
 async function getSubscriptions(): Promise<Subscription[]> {
+    const db = getAdminDb();
     const querySnapshot = await getDocs(collection(db, "subscriptions"));
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data(), currentPeriodStart: (doc.data().currentPeriodStart).toDate(), currentPeriodEnd: (doc.data().currentPeriodEnd).toDate() })) as Subscription[];
 }
@@ -59,6 +59,7 @@ export async function getBillingDashboardData() {
 
 
 export async function getBrandBillingDetails(brandId: string) {
+    const db = getAdminDb();
     const [brandDoc, subscriptionDocs] = await Promise.all([
         getDoc(doc(db, 'brands', brandId)),
         getDocs(query(collection(db, 'subscriptions'), where('brandId', '==', brandId)))
@@ -100,6 +101,7 @@ export async function getBrandBillingDetails(brandId: string) {
 
 export async function updateBrandStatus(brandId: string, status: Brand['status']) {
     try {
+        const db = getAdminDb();
         await updateDoc(doc(db, 'brands', brandId), { status });
         revalidatePath('/superadmin/billing');
         return { message: 'Brand status updated successfully.', error: false };
@@ -113,6 +115,7 @@ export async function updateBrandStatus(brandId: string, status: Brand['status']
 
 export async function createStripePortalLink(brandId: string) {
     try {
+        const db = getAdminDb();
         const stripeKey = await getActiveStripeKey();
         if (!stripeKey) throw new Error('Stripe API key is not configured.');
         

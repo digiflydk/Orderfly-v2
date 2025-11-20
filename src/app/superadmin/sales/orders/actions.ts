@@ -2,12 +2,13 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import type { OrderDetail, OrderStatus } from '@/types';
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
     try {
+        const db = getAdminDb();
         const orderRef = doc(db, 'orders', orderId);
         
         if (status === 'Delivered') {
