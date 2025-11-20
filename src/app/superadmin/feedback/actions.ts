@@ -6,8 +6,6 @@ import "server-only";
 import { revalidatePath } from "next/cache";
 import { getAdminDb, getAdminFieldValue } from "@/lib/firebase-admin";
 import type { Feedback, FeedbackQuestionsVersion, OrderDetail, LanguageSetting } from '@/types';
-import { doc, getDoc, getDocs, collection, query, where, Timestamp, writeBatch, deleteDoc, orderBy, setDoc, addDoc } from "firebase/firestore";
-import { db } from "@/lib/firebase";
 import { getOrderById } from "@/app/checkout/order-actions";
 
 /** RESULT TYPE FOR UI */
@@ -112,28 +110,30 @@ export async function createOrUpdateQuestionVersion(formData: FormData): Promise
 // --- Keep other exports from the file ---
 
 export async function getFeedbackEntries(): Promise<Feedback[]> {
-    const q = query(collection(db, 'feedback'), orderBy('receivedAt', 'desc'));
-    const querySnapshot = await getDocs(q);
+    const db = getAdminDb();
+    const q = db.collection('feedback').orderBy('receivedAt', 'desc');
+    const querySnapshot = await q.get();
     const feedbackEntries = querySnapshot.docs.map(doc => {
         const data = doc.data();
         return {
             ...data,
             id: doc.id,
-            receivedAt: (data.receivedAt as any).toDate(),
+            receivedAt: (data.receivedAt as admin.firestore.Timestamp).toDate(),
         } as Feedback;
     });
     return feedbackEntries;
 }
 
 export async function getFeedbackById(id: string): Promise<Feedback | null> {
-    const docRef = doc(db, 'feedback', id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const data = docSnap.data();
+    const db = getAdminDb();
+    const docRef = db.collection('feedback').doc(id);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
+        const data = docSnap.data()!;
         return { 
             id: docSnap.id, 
             ...data,
-            receivedAt: (data.receivedAt as any).toDate(),
+            receivedAt: (data.receivedAt as admin.firestore.Timestamp).toDate(),
         } as Feedback;
     }
     return null;
@@ -141,8 +141,9 @@ export async function getFeedbackById(id: string): Promise<Feedback | null> {
 
 export async function updateFeedback(feedbackId: string, data: Partial<Pick<Feedback, 'showPublicly' | 'maskCustomerName' | 'internalNote'>>) {
     try {
-        const feedbackRef = doc(db, 'feedback', feedbackId);
-        await setDoc(feedbackRef, data, { merge: true });
+        const db = getAdminDb();
+        const feedbackRef = db.collection('feedback').doc(feedbackId);
+        await feedbackRef.set(data, { merge: true });
         revalidatePath(`/superadmin/feedback`);
         revalidatePath(`/superadmin/feedback/${feedbackId}`);
         return { message: "Feedback updated successfully.", error: false };
@@ -154,7 +155,8 @@ export async function updateFeedback(feedbackId: string, data: Partial<Pick<Feed
 
 export async function deleteFeedback(id: string) {
     try {
-        await deleteDoc(doc(db, "feedback", id));
+        const db = getAdminDb();
+        await db.collection("feedback").doc(id).delete();
         revalidatePath("/superadmin/feedback");
         return { message: "Feedback deleted successfully.", error: false };
     } catch (e) {
@@ -207,13 +209,12 @@ export async function sendFeedbackRequestEmail(orderId: string) {
 export async function getActiveFeedbackQuestionsForOrder(
   deliveryType: 'Delivery' | 'Pickup'
 ): Promise<FeedbackQuestionsVersion | null> {
-  const q = query(
-    collection(db, 'feedbackQuestionsVersion'), 
-    where('isActive', '==', true),
-    where('orderTypes', 'array-contains', deliveryType.toLowerCase())
-  );
+  const db = getAdminDb();
+  const q = db.collection('feedbackQuestionsVersion')
+    .where('isActive', '==', true)
+    .where('orderTypes', 'array-contains', deliveryType.toLowerCase());
   
-  const snapshot = await getDocs(q);
+  const snapshot = await q.get();
   if (snapshot.empty) return null;
 
   const doc = snapshot.docs[0];
@@ -221,7 +222,8 @@ export async function getActiveFeedbackQuestionsForOrder(
 }
 
 export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionsVersion[]> {
-    const q = query(collection(db, 'feedbackQuestionsVersion'), orderBy('versionLabel', 'desc'));
-    const snapshot = await getDocs(q);
+    const db = getAdminDb();
+    const q = db.collection('feedbackQuestionsVersion').orderBy('versionLabel', 'desc');
+    const snapshot = await q.get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedbackQuestionsVersion));
 }
