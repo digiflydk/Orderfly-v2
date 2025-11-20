@@ -1,4 +1,5 @@
 
+
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 export const runtime = 'nodejs';
@@ -12,6 +13,18 @@ import { getSalesDashboardData } from '@/lib/superadmin/getSalesSummary';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DollarSign, ShoppingCart, Users, Activity, Clock, Store, Percent, Tag, Package, BarChart3, MessageSquareQuote, Cookie, UserCheck, MapPin } from 'lucide-react';
 import { redirect } from 'next/navigation';
+import { Button } from "@/components/ui/button";
+
+async function handleFilterChange(newFilters: SACommonFilters) {
+    'use server';
+     const params = new URLSearchParams({
+       from: newFilters.dateFrom,
+       to: newFilters.dateTo,
+       brand: newFilters.brandId || 'all',
+       loc: newFilters.locationIds?.join(',') || '',
+     });
+     redirect(`/superadmin/dashboard?${params.toString()}`);
+}
 
 export default async function SuperadminDashboardPage({ params, searchParams }: AsyncPageProps) {
   const routeParams = await resolveParams(params);
@@ -63,17 +76,6 @@ export default async function SuperadminDashboardPage({ params, searchParams }: 
   ]
 
 
-  const handleFilterChange = async (newFilters: SACommonFilters) => {
-    'use server';
-     const params = new URLSearchParams({
-       from: newFilters.dateFrom,
-       to: newFilters.dateTo,
-       brand: newFilters.brandId || 'all',
-       loc: newFilters.locationIds?.join(',') || '',
-     });
-     redirect(`/superadmin/dashboard?${params.toString()}`);
-  }
-
   const renderKpiCards = (cards: {label:string, value:string, icon:any}[]) => (
      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         {cards.map((c,i)=>(
@@ -98,7 +100,7 @@ export default async function SuperadminDashboardPage({ params, searchParams }: 
 
       {!kpis && (
         <div style={{marginBottom:12,padding:12,border:'1px solid #f0c',background:'#fff0fa',borderRadius:8}}>
-          Kunne ikke hente KPI-data. Viser tomme felter midlertidigt.
+          Could not fetch KPI data. Displaying empty cards.
         </div>
       )}
 

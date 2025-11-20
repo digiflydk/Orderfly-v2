@@ -1,4 +1,5 @@
 
+
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +9,7 @@ import { getSalesDashboardData } from "@/lib/superadmin/getSalesSummary";
 import { getBrands } from "@/app/superadmin/brands/actions";
 import { getAllLocations } from "@/app/superadmin/locations/actions";
 import { FiltersBar } from "@/components/superadmin/FiltersBar";
-import { ReadonlyURLSearchParams } from "next/navigation";
-import { SACommonFilters } from "@/types/superadmin";
+import type { SACommonFilters } from "@/types/superadmin";
 import { redirect } from "next/navigation";
 
 export const revalidate = 0; // Force dynamic rendering
@@ -27,7 +27,7 @@ export default async function SalesDashboardPage({ params, searchParams }: Async
         dateFrom: (query.from as string),
         dateTo: (query.to as string),
         brandId: (query.brand as string) || 'all',
-        locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc]) : [],
+        locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc as string]) : [],
     };
 
     const { kpis: kpiData } = await getSalesDashboardData(filters);
