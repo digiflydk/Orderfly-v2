@@ -1,6 +1,6 @@
 
 
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import {
   collection, query, where, getDocs, Timestamp,
 } from 'firebase/firestore';
@@ -37,6 +37,7 @@ export async function getFunnelData(filters: FunnelFilters, _user?: any): Promis
   const dateTo   = endOfDay(new Date(filters.dateTo));
   const dateFromKey = filters.dateFrom.slice(0,10);
   const dateToKey   = filters.dateTo.slice(0,10);
+  const db = getAdminDb();
 
   const totals:any = {
     sessions:0, view_menu:0, view_product:0, add_to_cart:0, start_checkout:0, click_purchase:0,

@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import {
   collection, query, where, getDocs, Timestamp, doc, setDoc,
 } from 'firebase/firestore';
@@ -34,6 +34,7 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
     const d1 = endOfDay(day);
     const dateKey = toDateKey(d0);
 
+    const db = getAdminDb();
     const q = query(
       collection(db, COL_EVENTS),
       where('ts', '>=', Timestamp.fromDate(d0)),

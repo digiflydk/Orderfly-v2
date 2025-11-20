@@ -3,7 +3,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy } from 'firebase/firestore';
 import type { Allergen } from '@/types';
 import { z } from 'zod';
@@ -40,6 +40,7 @@ export async function createOrUpdateAllergen(
   }
 
   const { id, ...allergenData } = validatedFields.data;
+  const db = getAdminDb();
 
   try {
     const allergenRef = id ? doc(db, 'allergens', id) : doc(collection(db, 'allergens'));
@@ -57,6 +58,7 @@ export async function createOrUpdateAllergen(
 
 export async function deleteAllergen(allergenId: string) {
     try {
+        const db = getAdminDb();
         await deleteDoc(doc(db, "allergens", allergenId));
         revalidatePath("/superadmin/allergens");
         return { message: "Allergen deleted successfully.", error: false };
@@ -68,6 +70,7 @@ export async function deleteAllergen(allergenId: string) {
 }
 
 export async function getAllergens(): Promise<Allergen[]> {
+  const db = getAdminDb();
   const q = query(collection(db, 'allergens'), orderBy('allergenName'));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Allergen[];

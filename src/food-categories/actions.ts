@@ -3,7 +3,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy } from 'firebase/firestore';
 import type { FoodCategory } from '@/types';
 import { z } from 'zod';
@@ -39,6 +39,7 @@ export async function createOrUpdateFoodCategory(
   }
 
   const { id, ...categoryData } = validatedFields.data;
+  const db = getAdminDb();
 
   try {
     const categoryRef = id ? doc(db, 'food_categories', id) : doc(collection(db, 'food_categories'));
@@ -56,6 +57,7 @@ export async function createOrUpdateFoodCategory(
 
 export async function deleteFoodCategory(categoryId: string) {
     try {
+        const db = getAdminDb();
         await deleteDoc(doc(db, "food_categories", categoryId));
         revalidatePath("/superadmin/food-categories");
         return { message: "Food Category deleted successfully.", error: false };
@@ -67,6 +69,7 @@ export async function deleteFoodCategory(categoryId: string) {
 }
 
 export async function getFoodCategories(): Promise<FoodCategory[]> {
+  const db = getAdminDb();
   const q = query(collection(db, 'food_categories'), orderBy('name'));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as FoodCategory[];

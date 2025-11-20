@@ -1,7 +1,7 @@
 
 'use server';
 
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import type { OrderDetail } from '@/types';
 
@@ -26,6 +26,7 @@ interface PurchaseResult {
 }
 
 export async function getPurchasesInRange(params: PurchaseParams): Promise<PurchaseResult[]> {
+    const db = getAdminDb();
     let q = query(
         collection(db, COL_ORDERS),
         where('createdAt', '>=', Timestamp.fromDate(params.startDate)),

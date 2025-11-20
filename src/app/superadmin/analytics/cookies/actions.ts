@@ -2,13 +2,14 @@
 
 'use server';
 
-import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { collection, getDocs, query, orderBy, Timestamp, doc, setDoc, getDoc, where } from 'firebase/firestore';
 import type { AnonymousCookieConsent, AnalyticsDaily } from '@/types';
 import { z } from 'zod';
 import { startOfDay, endOfDay } from 'date-fns';
 
 export async function getAnonymousCookieConsents(startDate?: Date, endDate?: Date): Promise<AnonymousCookieConsent[]> {
+  const db = getAdminDb();
   const consentsCollection = collection(db, 'anonymous_cookie_consents');
   let q;
 
@@ -50,6 +51,7 @@ const consentSchema = z.object({
 
 export async function saveAnonymousCookieConsent(data: Omit<AnonymousCookieConsent, 'id' | 'first_seen' | 'last_seen' | 'linked_to_customer'>) {
     try {
+        const db = getAdminDb();
         const validatedData = consentSchema.safeParse(data);
         if(!validatedData.success) {
             console.error('Invalid cookie consent data:', validatedData.error.flatten());
@@ -93,4 +95,3 @@ export async function getFunnelData(filters: {
   // Placeholder implementation. In a real app, this would query and aggregate from 'analytics_daily'
   return Promise.resolve([]);
 }
-
