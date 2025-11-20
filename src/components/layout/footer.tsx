@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import Link from "next/link";
@@ -25,7 +24,7 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
             <span>English</span>
           </button>
           <div className="flex items-center gap-2">
-            <span>1.0.247 • OF-517</span>
+            <span>1.0.248 • OF-518</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>
