@@ -1,6 +1,7 @@
 
+
 import { getUsers } from './actions';
-import { UsersClientPage } from './client-page';
+import { UsersClientPage } from '@/components/superadmin/user-client-page';
 import { getRoles } from '../roles/actions';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
