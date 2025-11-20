@@ -143,6 +143,42 @@ export async function GET() {
       path: '/api/env',
       description: 'Returns the current Node.js version and M3 preview flag status.',
       auth: 'public',
+    },
+    {
+        method: 'GET',
+        path: '/api/debug/diag-logs',
+        description: 'Retrieves diagnostic logs from Firestore.',
+        auth: 'superadmin'
+    },
+    {
+        method: 'GET',
+        path: '/api/debug/feedback',
+        description: 'Retrieves the latest 20 feedback entries.',
+        auth: 'superadmin'
+    },
+    {
+        method: 'GET',
+        path: '/api/docs/bundle',
+        description: 'Downloads a bundle of all markdown documentation.',
+        auth: 'superadmin'
+    },
+    {
+        method: 'GET',
+        path: '/api/docs/download',
+        description: 'Downloads a specific documentation file.',
+        auth: 'superadmin'
+    },
+    {
+        method: 'GET',
+        path: '/api/docs/list',
+        description: 'Lists all available documentation files.',
+        auth: 'superadmin'
+    },
+    {
+        method: 'GET',
+        path: '/api/superadmin/kpis',
+        description: 'Retrieves key performance indicators.',
+        auth: 'superadmin'
     }
   ];
 
