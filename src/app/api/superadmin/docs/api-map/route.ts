@@ -14,25 +14,68 @@ export async function GET() {
   if (authError) return authError;
 
   const endpoints: ApiEndpoint[] = [
+    // Public APIs
     {
       method: 'POST',
-      path: '/api/public/order',
-      description: 'Create a new customer order from the webshop.',
+      path: '/api/analytics/collect',
+      description: 'Collects a client-side analytics event.',
+      auth: 'public',
+    },
+    {
+      method: 'POST',
+      path: '/api/consent/save-anonymous',
+      description: 'Saves cookie consent choices for an anonymous user.',
       auth: 'public',
     },
     {
       method: 'GET',
-      path: '/api/restaurant/orders',
-      description: 'List current orders for a restaurant location.',
-      auth: 'restaurant',
+      path: '/api/orders/lookup-by-session',
+      description: 'Looks up an order ID using a Stripe session ID.',
+      auth: 'public',
+    },
+    {
+      method: 'POST',
+      path: '/api/payments/confirm-from-session',
+      description: 'Confirms payment status for an order from a Stripe session.',
+      auth: 'public',
+    },
+    {
+      method: 'POST',
+      path: '/api/stripe/webhook',
+      description: 'Handles incoming webhooks from Stripe to update order status.',
+      auth: 'public',
+    },
+    // Superadmin & Debug APIs
+    {
+      method: 'GET',
+      path: '/api/debug/all',
+      description: 'Retrieves a comprehensive debug snapshot of the system.',
+      auth: 'superadmin',
     },
     {
       method: 'GET',
-      path: '/api/superadmin/brands',
-      description: 'List brands available in superadmin.',
+      path: '/api/debug/snapshot',
+      description: 'Downloads the debug snapshot as a JSON file.',
       auth: 'superadmin',
     },
-    // Add the most important endpoints here
+    {
+      method: 'GET',
+      path: '/api/docs',
+      description: 'Renders the Swagger UI for API documentation.',
+      auth: 'superadmin',
+    },
+     {
+      method: 'GET',
+      path: '/api/redoc',
+      description: 'Renders the ReDoc UI for API documentation.',
+      auth: 'superadmin',
+    },
+    {
+      method: 'GET',
+      path: '/openapi.json',
+      description: 'Serves the OpenAPI specification file.',
+      auth: 'superadmin',
+    }
   ];
 
   return NextResponse.json({ endpoints });
