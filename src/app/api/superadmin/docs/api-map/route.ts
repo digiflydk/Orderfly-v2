@@ -1,3 +1,4 @@
+
 // src/app/api/superadmin/docs/api-map/route.ts
 import { NextResponse } from 'next/server';
 import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
@@ -6,7 +7,7 @@ type ApiEndpoint = {
   method: 'GET' | 'POST' | 'PUT' | 'DELETE';
   path: string;
   description: string;
-  auth: 'public' | 'customer' | 'restaurant' | 'superadmin';
+  auth: 'public' | 'customer' | 'restaurant' | 'superadmin' | 'debug';
 };
 
 export async function GET() {
@@ -14,7 +15,7 @@ export async function GET() {
   if (authError) return authError;
 
   const endpoints: ApiEndpoint[] = [
-    // Public APIs
+    // --- Public APIs ---
     {
       method: 'POST',
       path: '/api/analytics/collect',
@@ -45,7 +46,7 @@ export async function GET() {
       description: 'Handles incoming webhooks from Stripe to update order status.',
       auth: 'public',
     },
-    // Superadmin & Debug APIs
+    // --- Superadmin & Docs APIs ---
     {
       method: 'GET',
       path: '/api/debug/all',
@@ -75,6 +76,74 @@ export async function GET() {
       path: '/openapi.json',
       description: 'Serves the OpenAPI specification file.',
       auth: 'superadmin',
+    },
+    // --- Diagnostic APIs (require debug token) ---
+    {
+      method: 'GET',
+      path: '/api/diag/health',
+      description: 'Performs a health check of the Firebase Admin connection.',
+      auth: 'debug',
+    },
+    {
+      method: 'GET',
+      path: '/api/diag/brand-location',
+      description: 'Probes brand and location data for specified slugs.',
+      auth: 'debug',
+    },
+     {
+      method: 'POST',
+      path: '/api/diag/brand-location/seed',
+      description: 'Seeds a test brand and location for diagnostics.',
+      auth: 'debug',
+    },
+     {
+      method: 'GET',
+      path: '/api/diag/catalog',
+      description: 'Gets product and category counts for a brand.',
+      auth: 'debug',
+    },
+     {
+      method: 'POST',
+      path: '/api/diag/seed/catalog',
+      description: 'Ensures a default category exists and assigns it to products.',
+      auth: 'debug',
+    },
+    {
+      method: 'GET',
+      path: '/api/diag/imports',
+      description: 'Sweeps critical module imports to find build-time errors.',
+      auth: 'debug',
+    },
+     {
+      method: 'POST',
+      path: '/api/diag/log',
+      description: 'Endpoint for client-side logging during debug sessions.',
+      auth: 'debug',
+    },
+    // --- Simple Health Checks (Public) ---
+    {
+      method: 'GET',
+      path: '/api/ok',
+      description: 'Simple 200 OK response for load balancer health checks.',
+      auth: 'public',
+    },
+    {
+      method: 'GET',
+      path: '/api/ping',
+      description: 'Simple JSON response with timestamp for health checks.',
+      auth: 'public',
+    },
+    {
+      method: 'GET',
+      path: '/api/health',
+      description: 'Simple JSON response with timestamp for health checks.',
+      auth: 'public',
+    },
+    {
+      method: 'GET',
+      path: '/api/env',
+      description: 'Returns the current Node.js version and M3 preview flag status.',
+      auth: 'public',
     }
   ];
 
