@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -26,7 +27,7 @@ export async function getOrderByCheckoutSessionId(sessionId: string): Promise<Or
     if (snap.empty) return null;
     const doc = snap.docs[0];
     const data = doc.data();
-    return {
+    return { 
         id: doc.id,
         ...data,
         createdAt: (data.createdAt as Timestamp).toDate(),

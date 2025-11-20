@@ -48,7 +48,7 @@ export async function getMenuForRender({ brandId, locationId }: { brandId: strin
 
   if (categories.length===0){
     const FALLBACK_CAT_ID = "__virtual_menu__";
-    const fallbackCategories:MenuCategory[] = [{ id: FALLBACK_CAT_ID, name: "Menu", locationIds: [], brandId: '', isActive: true }];
+    const fallbackCategories:MenuCategory[] = [{ id: FALLBACK_CAT_ID, name: "Menu", categoryName: "Menu", locationIds: [], brandId: '', isActive: true }];
     const productsByCategory:Record<string, MenuProduct[]> = { [FALLBACK_CAT_ID]: allLocationProducts };
     return { categories: fallbackCategories, productsByCategory, fallbackUsed: true };
   }

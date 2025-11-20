@@ -1,6 +1,7 @@
 
-import { db } from "@/lib/firebase";
-import { collection, query, where, getDocs, doc, getDoc } from "firebase/firestore";
+'use server';
+
+import { getAdminDb } from "@/lib/firebase-admin";
 import type { Brand, Location } from "@/types";
 
 export type BrandDoc = Brand | null;
@@ -8,9 +9,10 @@ export type LocationDoc = Location | null;
 
 export async function getBrandBySlug(slug: string): Promise<BrandDoc> {
   if (!slug) return null;
+  const db = getAdminDb();
   try {
-    const q = query(collection(db, "brands"), where("slug", "==", slug));
-    const snap = await getDocs(q);
+    const q = db.collection("brands").where("slug", "==", slug);
+    const snap = await q.get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
     return { id: doc.id, ...doc.data() } as Brand;
@@ -21,18 +23,17 @@ export async function getBrandBySlug(slug: string): Promise<BrandDoc> {
 }
 
 export async function getLocationsForBrand(brandId: string): Promise<Location[]> {
-    const q = query(collection(db, 'locations'), where('brandId', '==', brandId));
-    const querySnapshot = await getDocs(q);
+    const db = getAdminDb();
+    const q = db.collection('locations').where('brandId', '==', brandId);
+    const querySnapshot = await q.get();
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Location[];
 }
 
 
 export async function getLocationBySlug(brandId: string, locationSlug: string): Promise<LocationDoc> {
-  const q = query(
-    collection(db, "locations"),
-    where("brandId", "==", brandId)
-  );
-  const querySnapshot = await getDocs(q);
+  const db = getAdminDb();
+  const q = db.collection("locations").where("brandId", "==", brandId);
+  const querySnapshot = await q.get();
   if (querySnapshot.empty) {
       return null;
   }

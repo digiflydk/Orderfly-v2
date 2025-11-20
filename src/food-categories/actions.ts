@@ -4,7 +4,6 @@
 
 import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy } from 'firebase/firestore';
 import type { FoodCategory } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
@@ -42,8 +41,8 @@ export async function createOrUpdateFoodCategory(
   const db = getAdminDb();
 
   try {
-    const categoryRef = id ? doc(db, 'food_categories', id) : doc(collection(db, 'food_categories'));
-    await setDoc(categoryRef, { ...categoryData, id: categoryRef.id }, { merge: true });
+    const categoryRef = id ? db.collection('food_categories').doc(id) : db.collection('food_categories').doc();
+    await categoryRef.set({ ...categoryData, id: categoryRef.id }, { merge: true });
 
   } catch (e) {
     console.error(e);
@@ -58,7 +57,7 @@ export async function createOrUpdateFoodCategory(
 export async function deleteFoodCategory(categoryId: string) {
     try {
         const db = getAdminDb();
-        await deleteDoc(doc(db, "food_categories", categoryId));
+        await db.collection("food_categories").doc(categoryId).delete();
         revalidatePath("/superadmin/food-categories");
         return { message: "Food Category deleted successfully.", error: false };
     } catch (e) {
@@ -70,7 +69,7 @@ export async function deleteFoodCategory(categoryId: string) {
 
 export async function getFoodCategories(): Promise<FoodCategory[]> {
   const db = getAdminDb();
-  const q = query(collection(db, 'food_categories'), orderBy('name'));
-  const querySnapshot = await getDocs(q);
+  const q = db.collection('food_categories').orderBy('name');
+  const querySnapshot = await q.get();
   return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as FoodCategory[];
 }

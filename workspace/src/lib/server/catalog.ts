@@ -2,7 +2,7 @@
 
 import "server-only";
 import { getAdminDb } from "@/lib/firebase-admin";
-import type { MenuForRender, MenuCategory, MenuProduct } from "@/types/menu";
+import type { MenuForRender, MenuCategory, MenuProduct, Category, Product } from "@/types/menu";
 
 
 export type CatalogCounts = {
@@ -33,9 +33,9 @@ export async function getMenuForRender(params: { brandId: string }): Promise<Men
 
   if (categories.length===0){
     const FALLBACK_CAT_ID = "__virtual_menu__";
-    const fallbackCategories = [{ id: FALLBACK_CAT_ID, name: "Menu" }];
+    const fallbackCategories = [{ id: FALLBACK_CAT_ID, name: "Menu", categoryName: "Menu" }];
     const productsByCategory = { [FALLBACK_CAT_ID]: allProducts };
-    return { categories: fallbackCategories, productsByCategory, fallbackUsed: true };
+    return { categories: fallbackCategories as Category[], productsByCategory, fallbackUsed: true };
   }
   const productsByCategory: Record<string,MenuProduct[]> = {};
   for(const c of categories) productsByCategory[c.id]=[];
