@@ -55,15 +55,9 @@ export async function GET() {
     },
     {
       method: 'GET',
-      path: '/api/debug/snapshot',
-      description: 'Downloads the debug snapshot as a JSON file.',
+      path: '/api/superadmin/docs/superadmin-dump',
+      description: 'Downloads a compact JSON dump of brands, locations, menus, and settings.',
       auth: 'superadmin',
-    },
-    {
-        method: 'GET',
-        path: '/api/superadmin/docs/superadmin-dump',
-        description: 'Alias for /api/debug/snapshot. Downloads a compact JSON dump.',
-        auth: 'superadmin',
     },
     {
       method: 'GET',
@@ -118,6 +112,30 @@ export async function GET() {
         path: '/api/superadmin/kpis',
         description: 'Retrieves key performance indicators.',
         auth: 'superadmin'
+    },
+    {
+      method: 'GET',
+      path: '/api/superadmin/docs/api-map',
+      description: 'Retrieves this list of all API endpoints.',
+      auth: 'superadmin',
+    },
+    {
+      method: 'GET',
+      path: '/api/superadmin/docs/db-structure',
+      description: 'Provides a high-level overview of the Firestore database schema.',
+      auth: 'superadmin',
+    },
+    {
+      method: 'GET',
+      path: '/api/superadmin/docs/db-paths',
+      description: 'Lists key Firestore path templates.',
+      auth: 'superadmin',
+    },
+    {
+      method: 'GET',
+      path: '/api/superadmin/docs/audit-settings',
+      description: 'Lists all auditable actions and their current configuration.',
+      auth: 'superadmin',
     },
     // --- Diagnostic APIs (require debug token) ---
     {

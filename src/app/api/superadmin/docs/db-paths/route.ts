@@ -15,9 +15,19 @@ export async function GET() {
 
   const paths: DbPath[] = [
     {
+      key: 'brandCollection',
+      pathTemplate: 'brands',
+      description: 'Top-level collection for all brands.',
+    },
+    {
       key: 'brandDocument',
       pathTemplate: 'brands/{brandId}',
       description: 'Brand level configuration and metadata.',
+    },
+    {
+      key: 'locationCollection',
+      pathTemplate: 'locations',
+      description: 'Top-level collection for all locations.',
     },
     {
       key: 'locationDocument',
@@ -53,6 +63,16 @@ export async function GET() {
       key: 'cookieTextsCollection',
       pathTemplate: 'cookie_texts',
       description: 'Stores versioned and localized texts for the cookie consent UI.',
+    },
+    {
+      key: 'rolesCollection',
+      pathTemplate: 'roles',
+      description: 'Global user roles and permissions.',
+    },
+    {
+      key: 'usersCollection',
+      pathTemplate: 'users',
+      description: 'Global collection of admin and brand users.',
     },
   ];
 

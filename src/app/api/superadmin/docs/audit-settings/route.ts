@@ -24,6 +24,12 @@ const AUDIT_ACTIONS: AuditActionConfig[] = [
     level: 'info',
   },
   {
+    action: 'order.payment.succeeded',
+    description: 'A customer payment was successfully processed.',
+    enabled: true,
+    level: 'info',
+  },
+  {
     action: 'order.payment.failed',
     description: 'A customer payment attempt failed.',
     enabled: true,
@@ -41,11 +47,23 @@ const AUDIT_ACTIONS: AuditActionConfig[] = [
     enabled: true,
     level: 'info',
   },
+    {
+    action: 'superadmin.brand.deleted',
+    description: 'Superadmin deleted a brand.',
+    enabled: true,
+    level: 'warning',
+  },
   {
     action: 'superadmin.user.created',
     description: 'A new user was created in the Superadmin panel.',
     enabled: true,
     level: 'info',
+  },
+    {
+    action: 'superadmin.user.deleted',
+    description: 'A user was deleted from the Superadmin panel.',
+    enabled: true,
+    level: 'warning',
   },
   {
     action: 'superadmin.settings.payment.updated',
@@ -53,6 +71,12 @@ const AUDIT_ACTIONS: AuditActionConfig[] = [
     enabled: true,
     level: 'warning',
   },
+  {
+    action: 'superadmin.settings.analytics.updated',
+    description: 'Global analytics settings were updated.',
+    enabled: true,
+    level: 'info',
+  }
 ];
 
 export async function GET() {

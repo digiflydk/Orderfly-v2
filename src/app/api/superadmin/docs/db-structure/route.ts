@@ -89,6 +89,23 @@ export async function GET() {
             { name: 'languages', type: 'document' },
             { name: 'loyalty', type: 'document' },
         ]
+    },
+    {
+        collection: 'users',
+        description: 'Admin users.',
+        keyFields: [
+            { name: 'name', type: 'string' },
+            { name: 'email', type: 'string' },
+            { name: 'roleIds', type: 'array' },
+        ]
+    },
+    {
+        collection: 'roles',
+        description: 'User roles and permissions.',
+        keyFields: [
+            { name: 'name', type: 'string' },
+            { name: 'permissions', type: 'array' },
+        ]
     }
   ];
 
