@@ -70,7 +70,6 @@ export async function deletePlan(planId: string) {
 
 export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
   const db = getAdminDb();
-  const q = db.collection('subscription_plans').orderBy('priceMonthly');
-  const querySnapshot = await q.get();
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SubscriptionPlan[];
+  const snapshot = await db.collection('subscription_plans').orderBy('priceMonthly').get();
+  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SubscriptionPlan[];
 }

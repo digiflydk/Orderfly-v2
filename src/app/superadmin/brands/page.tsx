@@ -1,7 +1,7 @@
 
 import { getBrands } from './actions';
 import type { Brand, SubscriptionPlan, User } from '@/types';
-import { getSubscriptionPlans } from '../subscriptions/page';
+import { getSubscriptionPlans } from '../subscriptions/actions';
 import { getUsers } from '../users/actions';
 import { BrandsClientPage } from './client-page';
 import { isAdminReady } from '@/lib/runtime';
