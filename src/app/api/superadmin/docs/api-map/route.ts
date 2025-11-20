@@ -54,10 +54,10 @@ export async function GET() {
       auth: 'superadmin',
     },
     {
-        method: 'GET',
-        path: '/api/debug/snapshot',
-        description: 'Downloads the debug snapshot as a JSON file.',
-        auth: 'superadmin',
+      method: 'GET',
+      path: '/api/debug/snapshot',
+      description: 'Downloads the debug snapshot as a JSON file.',
+      auth: 'superadmin',
     },
     {
         method: 'GET',
