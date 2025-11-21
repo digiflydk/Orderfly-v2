@@ -17,6 +17,7 @@ import {
   type LegalInput,
   type SaveBrandWebsiteConfigInput
 } from './config-schemas';
+import { requireSuperadmin } from '@/lib/auth/superadmin';
 
 const configPath = (brandId: string) => `brands/${brandId}/website/config`;
 
@@ -72,11 +73,12 @@ async function writeConfig(brandId: string, data: Partial<BrandWebsiteConfig>): 
 }
 
 export async function getBrandWebsiteConfig(brandId: string): Promise<BrandWebsiteConfig> {
-  // TODO: Add superadmin/brand-admin auth check
+  await requireSuperadmin();
   return readConfig(brandId);
 }
 
 export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWebsiteConfigInput): Promise<BrandWebsiteConfig> {
+  await requireSuperadmin();
   const validatedInput = brandWebsiteConfigBaseSchema.parse(input);
   const currentConfig = await readConfig(brandId);
 
@@ -89,6 +91,7 @@ export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWe
 }
 
 export async function saveBrandWebsiteDesignSystem(brandId: string, input: DesignSystemInput): Promise<BrandWebsiteConfig> {
+    await requireSuperadmin();
     const validatedInput = brandWebsiteDesignSystemSchema.parse(input);
     const currentConfig = await readConfig(brandId);
     
@@ -103,6 +106,7 @@ export async function saveBrandWebsiteDesignSystem(brandId: string, input: Desig
 }
 
 export async function saveBrandWebsiteSeo(brandId: string, input: SeoInput): Promise<BrandWebsiteConfig> {
+    await requireSuperadmin();
     const validatedInput = brandWebsiteSeoSchema.parse(input);
     const currentConfig = await readConfig(brandId);
     
@@ -117,6 +121,7 @@ export async function saveBrandWebsiteSeo(brandId: string, input: SeoInput): Pro
 }
 
 export async function saveBrandWebsiteSocial(brandId: string, input: SocialInput): Promise<BrandWebsiteConfig> {
+    await requireSuperadmin();
     const validatedInput = brandWebsiteSocialSchema.parse(input);
     const currentConfig = await readConfig(brandId);
     
@@ -131,6 +136,7 @@ export async function saveBrandWebsiteSocial(brandId: string, input: SocialInput
 }
 
 export async function saveBrandWebsiteTracking(brandId: string, input: TrackingInput): Promise<BrandWebsiteConfig> {
+    await requireSuperadmin();
     const validatedInput = brandWebsiteTrackingSchema.parse(input);
     const currentConfig = await readConfig(brandId);
 
@@ -145,6 +151,7 @@ export async function saveBrandWebsiteTracking(brandId: string, input: TrackingI
 }
 
 export async function saveBrandWebsiteLegal(brandId: string, input: LegalInput): Promise<BrandWebsiteConfig> {
+    await requireSuperadmin();
     const validatedInput = brandWebsiteLegalSchema.parse(input);
     const currentConfig = await readConfig(brandId);
     
