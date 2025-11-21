@@ -3,7 +3,7 @@ export type DevDocMeta = {
   id: string;
   title: string;
   filename: string; // relative to /developer/docs
-  category: 'overview' | 'api' | 'database' | 'logging';
+  category: 'overview' | 'api' | 'database' | 'logging' | 'modules';
 };
 
 export type DevUtilityMeta = {
@@ -20,6 +20,12 @@ export const DEV_DOCS: DevDocMeta[] = [
     title: 'System overview',
     filename: 'OVERVIEW.md',
     category: 'overview',
+  },
+  {
+    id: 'brand-website-module',
+    title: 'Brand Website Module',
+    filename: 'brand-website-module.md',
+    category: 'modules',
   },
   {
     id: 'api-map',
