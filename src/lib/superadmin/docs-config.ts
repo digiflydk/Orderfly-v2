@@ -32,15 +32,19 @@ export const DEV_DOCS: DevDocMeta[] = [
   },
    {
     id: 'brand-website-db-structure',
-    title: 'Brand Website DB Structure',
+    title: 'Brand Website — DB Structure',
     filename: 'BRAND-WEBSITE-DB-STRUCTURE.md',
     category: 'database',
+    // @ts-ignore
+    group: 'brand-website',
   },
   {
     id: 'brand-website-db-paths',
-    title: 'Brand Website DB Paths',
+    title: 'Brand Website — DB Paths',
     filename: 'BRAND-WEBSITE-DB-PATHS.md',
     category: 'database',
+    // @ts-ignore
+    group: 'brand-website',
   },
   {
     id: 'api-map',
