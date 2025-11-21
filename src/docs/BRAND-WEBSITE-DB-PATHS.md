@@ -1,9 +1,12 @@
+# Brand Website DB Paths
 
-# Brand Website Module - DB Paths
+Firestore paths used by the Brand Website Module:
 
-- **Config:** `brands/{brandId}/website/config`
-- **Homepage:** `brands/{brandId}/website/home`
-- **Custom Pages:** `brands/{brandId}/website/pages/{pageSlug}`
-- **Menu Settings:** `brands/{brandId}/website/menuSettings`
-- **Audit Logs:** `auditLogs/{logId}` (with `module: "brand-website"`)
-- **Dev Logs:** `dadmin/developer/logs/{logId}`
+- /brands/{brandId}/website
+- /brands/{brandId}/website/config
+- /brands/{brandId}/website/home
+- /brands/{brandId}/website/pages
+- /brands/{brandId}/website/pages/{slug}
+- /brands/{brandId}/website/menuSettings
+
+See the "DB Paths Dump" tool for a downloadable JSON list.

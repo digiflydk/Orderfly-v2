@@ -30,6 +30,18 @@ export const DEV_DOCS: DevDocMeta[] = [
     category: 'modules',
     href: '/superadmin/docs/brand-website-module', // Dedicated URL
   },
+   {
+    id: 'brand-website-db-structure',
+    title: 'Brand Website DB Structure',
+    filename: 'BRAND-WEBSITE-DB-STRUCTURE.md',
+    category: 'database',
+  },
+  {
+    id: 'brand-website-db-paths',
+    title: 'Brand Website DB Paths',
+    filename: 'BRAND-WEBSITE-DB-PATHS.md',
+    category: 'database',
+  },
   {
     id: 'api-map',
     title: 'API map',
