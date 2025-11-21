@@ -1,3 +1,4 @@
+
 export interface BrandWebsiteConfig {
   /** Whether the brand website is active and should be publicly available */
   active: boolean;
