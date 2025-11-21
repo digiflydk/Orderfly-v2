@@ -1,9 +1,11 @@
+
 // src/lib/superadmin/docs-config.ts
 export type DevDocMeta = {
   id: string;
   title: string;
   filename: string; // relative to /developer/docs
   category: 'overview' | 'api' | 'database' | 'logging' | 'modules';
+  href?: string; // Optional dedicated URL
 };
 
 export type DevUtilityMeta = {
@@ -26,6 +28,7 @@ export const DEV_DOCS: DevDocMeta[] = [
     title: 'Brand Website Module',
     filename: 'brand-website-module.md',
     category: 'modules',
+    href: '/superadmin/docs/brand-website-module', // Dedicated URL
   },
   {
     id: 'api-map',
@@ -52,7 +55,7 @@ export const DEV_UTILITIES: DevUtilityMeta[] = [
     id: 'audit-logs',
     title: 'Audit logs UI',
     description: 'Open the superadmin audit log viewer.',
-    apiPath: '/superadmin/logs',
+    apiPath: '/superadmin/logs/audit',
     type: 'link',
   },
   {

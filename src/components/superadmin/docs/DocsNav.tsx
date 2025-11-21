@@ -1,3 +1,4 @@
+
 // src/components/superadmin/docs/DocsNav.tsx
 import Link from 'next/link';
 import type { DevDocMeta, DevUtilityMeta } from '@/lib/superadmin/docs-config';
@@ -11,6 +12,7 @@ type Props = {
 export default function DocsNav({ docs, utilities, activeDocId }: Props) {
   const groupedDocs = {
     overview: docs.filter((d) => d.category === 'overview'),
+    modules: docs.filter((d) => d.category === 'modules'),
     api: docs.filter((d) => d.category === 'api'),
     database: docs.filter((d) => d.category === 'database'),
     logging: docs.filter((d) => d.category === 'logging'),
@@ -39,7 +41,7 @@ export default function DocsNav({ docs, utilities, activeDocId }: Props) {
                   {items.map((doc) => (
                     <Link
                       key={doc.id}
-                      href={`/superadmin/docs?doc=${doc.id}`}
+                      href={doc.href || `/superadmin/docs?doc=${doc.id}`}
                       className={navLinkClasses(doc.id === activeDocId)}
                     >
                       {doc.title}

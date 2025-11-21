@@ -1,12 +1,13 @@
+
 // src/app/superadmin/docs/page.tsx
 import React from 'react';
 import Link from 'next/link';
 import { DEV_DOCS, DEV_UTILITIES } from '@/lib/superadmin/docs-config';
 import DocsLayout from '@/components/superadmin/docs/DocsLayout';
 import DocsNav from '@/components/superadmin/docs/DocsNav';
-import DocsMarkdown from '@/components/superadmin/docs/DocsMarkdown';
 import DocsCard from '@/components/superadmin/docs/DocsCard';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
+import DocsMarkdown from '@/components/superadmin/docs/DocsMarkdown';
 
 export default async function SuperadminDocsPage({
   searchParams,
@@ -15,6 +16,7 @@ export default async function SuperadminDocsPage({
 }) {
   await requireSuperadmin();
 
+  // Default to overview if no doc is specified
   const activeDocId = searchParams?.doc ?? 'overview';
   const activeDocMeta = DEV_DOCS.find((d) => d.id === activeDocId) ?? DEV_DOCS[0];
 
@@ -30,7 +32,7 @@ export default async function SuperadminDocsPage({
     >
       <div className="space-y-6">
         <section>
-          <h1 className="text-2xl font-semibold mb-2">Developer docs</h1>
+          <h1 className="text-2xl font-semibold mb-2">{activeDocMeta.title}</h1>
           <p className="text-sm text-muted-foreground">
             Central place for Orderfly developer documentation, diagnostics and dumps.
           </p>
