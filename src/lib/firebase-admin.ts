@@ -22,7 +22,14 @@ function loadServiceAccount(): SA | null {
   }
 
   try {
-    const parsed = JSON.parse(raw.trim());
+    // Handle case where the JSON is wrapped in quotes (e.g., '{"type":...}')
+    let jsonString = raw.trim();
+    if ((jsonString.startsWith("'") && jsonString.endsWith("'")) || 
+        (jsonString.startsWith('"') && jsonString.endsWith('"'))) {
+      jsonString = jsonString.slice(1, -1);
+    }
+    
+    const parsed = JSON.parse(jsonString);
     if (!parsed.project_id || !parsed.client_email || !parsed.private_key) {
       throw new Error('Service account JSON is missing required fields (project_id, client_email, private_key).');
     }
