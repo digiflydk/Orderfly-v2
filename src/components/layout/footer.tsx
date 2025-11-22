@@ -24,7 +24,7 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
             <span>English</span>
           </button>
           <div className="flex items-center gap-2">
-            <span>v1.0.262 • 522-02</span>
+            <span>v1.0.267 • 522-07</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>
@@ -33,3 +33,4 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
     </footer>
   );
 }
+
