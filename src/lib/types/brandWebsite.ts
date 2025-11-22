@@ -1,3 +1,4 @@
+
 export interface BrandWebsiteConfig {
   active: boolean;
   template: string;
@@ -20,13 +21,39 @@ export interface BrandWebsiteHome {
   updatedAt: any;
 }
 
+export type BrandWebsitePageLayoutType = 'rich-text-left-image-right';
+
+export interface BrandWebsitePageCta {
+  label: string;
+  href: string;
+}
+
 export interface BrandWebsitePage {
   slug: string;
   title: string;
-  contentType: string;
-  content: Record<string, any>;
-  cta?: Record<string, any> | null;
-  seo: Record<string, any>;
+  subtitle?: string;
+  layout: BrandWebsitePageLayoutType;
+  body: string;
+  imageUrl?: string;
+  cta?: BrandWebsitePageCta | null;
+  seo?: {
+    title?: string;
+    description?: string;
+    ogImageUrl?: string;
+    canonicalUrl?: string;
+    index?: boolean;
+  };
+  sortOrder?: number;
+  isPublished: boolean;
+  createdAt: any;
+  updatedAt: any;
+}
+
+export interface BrandWebsitePageSummary {
+  slug: string;
+  title: string;
+  isPublished: boolean;
+  sortOrder?: number;
   updatedAt: any;
 }
 
