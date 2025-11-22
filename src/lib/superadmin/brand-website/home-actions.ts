@@ -16,6 +16,7 @@ import {
   type BrandWebsiteMenuPreviewItemInput,
   type BrandWebsiteFooterCtaInput,
 } from './home-schemas';
+import type { ZodSchema } from 'zod';
 
 const homePath = (brandId: string) => `brands/${brandId}/website/home`;
 
@@ -37,12 +38,10 @@ async function readHome(brandId: string): Promise<BrandWebsiteHome> {
     return VIRTUAL_HOME;
   }
 
-  const data = docSnap.data() as BrandWebsiteHome;
-
-  return {
-    ...VIRTUAL_HOME,
-    ...data,
-  };
+  const data = docSnap.data() ?? {};
+  const merged = { ...VIRTUAL_HOME, ...data };
+  const validated = brandWebsiteHomeSchema.parse(merged);
+  return validated;
 }
 
 async function writeHome(
@@ -72,7 +71,7 @@ async function savePartial<T>(
   brandId: string,
   field: keyof BrandWebsiteHome,
   data: T,
-  schema: Zod.Schema<T>
+  schema: ZodSchema<T>
 ): Promise<BrandWebsiteHome> {
   await requireSuperadmin();
   const validatedData = schema.parse(data);

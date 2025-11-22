@@ -1,4 +1,3 @@
-
 export interface BrandWebsiteConfig {
   active: boolean;
   template: string;

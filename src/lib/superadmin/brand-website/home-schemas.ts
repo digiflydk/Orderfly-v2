@@ -58,6 +58,7 @@ export const brandWebsiteHomeSchema = z.object({
   campaignBanner: brandWebsiteCampaignBannerSchema.nullable().default(null),
   menuPreview: z.array(brandWebsiteMenuPreviewItemSchema).default([]),
   footerCta: brandWebsiteFooterCtaSchema.nullable().default(null),
+  updatedAt: z.any().nullable().default(null),
 });
 
 export type BrandWebsiteHeroSlideInput = z.infer<
