@@ -18,8 +18,9 @@ import {
   type SaveBrandWebsiteConfigInput
 } from './config-schemas';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
+import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 
-const configPath = (brandId: string) => `brands/${brandId}/website/config`;
+const configPath = (brandId: string) => `/brands/${brandId}/website/config`;
 
 const VIRTUAL_CONFIG: BrandWebsiteConfig = {
   active: false,
@@ -68,7 +69,6 @@ async function writeConfig(brandId: string, data: Partial<BrandWebsiteConfig>): 
 
   await docRef.set(updatedData, { merge: true });
   
-  // Re-read to get the final state with server timestamp
   return readConfig(brandId);
 }
 
@@ -87,7 +87,18 @@ export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWe
     ...validatedInput,
   };
 
-  return writeConfig(brandId, mergedConfig);
+  const result = await writeConfig(brandId, mergedConfig);
+
+  await logBrandWebsiteAuditEntry({
+    brandId,
+    entity: 'config',
+    entityId: 'config',
+    action: 'update',
+    changedFields: ['config'],
+    path: configPath(brandId),
+  });
+
+  return result;
 }
 
 export async function saveBrandWebsiteDesignSystem(brandId: string, input: DesignSystemInput): Promise<BrandWebsiteConfig> {
@@ -102,7 +113,18 @@ export async function saveBrandWebsiteDesignSystem(brandId: string, input: Desig
             ...validatedInput,
         },
     };
-    return writeConfig(brandId, newConfig);
+    const result = await writeConfig(brandId, newConfig);
+
+    await logBrandWebsiteAuditEntry({
+        brandId,
+        entity: 'config',
+        entityId: 'config',
+        action: 'update',
+        changedFields: ['designSystem'],
+        path: configPath(brandId),
+    });
+
+    return result;
 }
 
 export async function saveBrandWebsiteSeo(brandId: string, input: SeoInput): Promise<BrandWebsiteConfig> {
@@ -117,7 +139,18 @@ export async function saveBrandWebsiteSeo(brandId: string, input: SeoInput): Pro
             ...validatedInput,
         },
     };
-    return writeConfig(brandId, newConfig);
+    const result = await writeConfig(brandId, newConfig);
+
+    await logBrandWebsiteAuditEntry({
+        brandId,
+        entity: 'config',
+        entityId: 'config',
+        action: 'update',
+        changedFields: ['seo'],
+        path: configPath(brandId),
+    });
+
+    return result;
 }
 
 export async function saveBrandWebsiteSocial(brandId: string, input: SocialInput): Promise<BrandWebsiteConfig> {
@@ -132,7 +165,18 @@ export async function saveBrandWebsiteSocial(brandId: string, input: SocialInput
             ...validatedInput,
         },
     };
-    return writeConfig(brandId, newConfig);
+    const result = await writeConfig(brandId, newConfig);
+
+    await logBrandWebsiteAuditEntry({
+        brandId,
+        entity: 'config',
+        entityId: 'config',
+        action: 'update',
+        changedFields: ['social'],
+        path: configPath(brandId),
+    });
+
+    return result;
 }
 
 export async function saveBrandWebsiteTracking(brandId: string, input: TrackingInput): Promise<BrandWebsiteConfig> {
@@ -147,7 +191,18 @@ export async function saveBrandWebsiteTracking(brandId: string, input: TrackingI
             ...validatedInput,
         },
     };
-    return writeConfig(brandId, newConfig);
+    const result = await writeConfig(brandId, newConfig);
+
+    await logBrandWebsiteAuditEntry({
+        brandId,
+        entity: 'config',
+        entityId: 'config',
+        action: 'update',
+        changedFields: ['tracking'],
+        path: configPath(brandId),
+    });
+    
+    return result;
 }
 
 export async function saveBrandWebsiteLegal(brandId: string, input: LegalInput): Promise<BrandWebsiteConfig> {
@@ -162,5 +217,16 @@ export async function saveBrandWebsiteLegal(brandId: string, input: LegalInput):
             ...validatedInput,
         },
     };
-    return writeConfig(brandId, newConfig);
+    const result = await writeConfig(brandId, newConfig);
+
+    await logBrandWebsiteAuditEntry({
+        brandId,
+        entity: 'config',
+        entityId: 'config',
+        action: 'update',
+        changedFields: ['legal'],
+        path: configPath(brandId),
+    });
+
+    return result;
 }

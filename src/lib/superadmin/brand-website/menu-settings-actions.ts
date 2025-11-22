@@ -12,6 +12,7 @@ import {
 } from './menu-settings-schemas';
 import type { ZodSchema } from 'zod';
 import { z } from 'zod';
+import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 
 const menuSettingsPath = (brandId: string) => `/brands/${brandId}/website/menuSettings`;
 
@@ -77,7 +78,18 @@ export async function saveBrandWebsiteMenuSettings(
     ...currentSettings,
     ...validatedInput,
   };
-  return writeMenuSettings(brandId, newSettings);
+  const result = await writeMenuSettings(brandId, newSettings);
+
+  await logBrandWebsiteAuditEntry({
+    brandId,
+    entity: 'menuSettings',
+    entityId: 'menuSettings',
+    action: 'update',
+    changedFields: ['settings'],
+    path: menuSettingsPath(brandId),
+  });
+
+  return result;
 }
 
 export async function saveBrandWebsiteMenuHero(
@@ -97,5 +109,16 @@ export async function saveBrandWebsiteMenuHero(
     hero: validatedHero,
   };
 
-  return writeMenuSettings(brandId, newSettings);
+  const result = await writeMenuSettings(brandId, newSettings);
+
+  await logBrandWebsiteAuditEntry({
+    brandId,
+    entity: 'menuSettings',
+    entityId: 'menuSettings',
+    action: 'update',
+    changedFields: ['hero'],
+    path: menuSettingsPath(brandId),
+  });
+
+  return result;
 }

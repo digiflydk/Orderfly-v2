@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
@@ -17,8 +18,9 @@ import {
   type BrandWebsiteFooterCtaInput,
 } from './home-schemas';
 import type { ZodSchema } from 'zod';
+import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 
-const homePath = (brandId: string) => `brands/${brandId}/website/home`;
+const homePath = (brandId: string) => `/brands/${brandId}/website/home`;
 
 const VIRTUAL_HOME: BrandWebsiteHome = {
   hero: [],
@@ -80,7 +82,18 @@ async function savePartial<T>(
     ...currentHome,
     [field]: validatedData,
   };
-  return writeHome(brandId, newHome);
+  const result = await writeHome(brandId, newHome);
+
+  await logBrandWebsiteAuditEntry({
+    brandId,
+    entity: 'home',
+    entityId: 'home',
+    action: 'update',
+    changedFields: [field],
+    path: homePath(brandId),
+  });
+
+  return result;
 }
 
 export async function saveBrandWebsiteHero(

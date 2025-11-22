@@ -5,6 +5,7 @@ import { getAdminDb, admin } from '@/lib/firebase-admin';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 import type { BrandWebsitePage, BrandWebsitePageSummary, BrandWebsitePageCreateInput, BrandWebsitePageUpdateInput } from '@/lib/types/brandWebsite';
 import { brandWebsitePageCreateSchema, brandWebsitePageSlugSchema, brandWebsitePageUpdateSchema } from './pages-schemas';
+import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 
 const pagesCollectionPath = (brandId: string) => `brands/${brandId}/website/pages`;
 
@@ -87,6 +88,15 @@ export async function createBrandWebsitePage(brandId: string, input: BrandWebsit
     };
 
     await docRef.set(newPage);
+
+    await logBrandWebsiteAuditEntry({
+        brandId,
+        entity: 'page',
+        entityId: validated.slug,
+        action: 'create',
+        path: docRef.path,
+        changedFields: Object.keys(validated),
+    });
     
     const createdDoc = await docRef.get();
     return createdDoc.data() as BrandWebsitePage;
@@ -109,7 +119,6 @@ export async function updateBrandWebsitePage(brandId: string, slug: string, inpu
     const newSlug = validatedInput.slug;
     
     if (newSlug && newSlug !== slug) {
-        // Handle rename
         const newDocRef = collectionRef.doc(newSlug);
         const newDoc = await newDocRef.get();
         if (newDoc.exists) {
@@ -126,16 +135,33 @@ export async function updateBrandWebsitePage(brandId: string, slug: string, inpu
         batch.set(newDocRef, updatedData);
         batch.delete(originalDocRef);
         await batch.commit();
+
+        await logBrandWebsiteAuditEntry({
+            brandId,
+            entity: 'page',
+            entityId: newSlug,
+            action: 'update',
+            path: newDocRef.path,
+            changedFields: Object.keys(validatedInput),
+        });
         
         const resultDoc = await newDocRef.get();
         return resultDoc.data() as BrandWebsitePage;
     } else {
-        // Handle update without rename
         const dataToUpdate = {
             ...validatedInput,
             updatedAt: admin.firestore.FieldValue.serverTimestamp(),
         };
         await originalDocRef.update(dataToUpdate);
+
+        await logBrandWebsiteAuditEntry({
+            brandId,
+            entity: 'page',
+            entityId: slug,
+            action: 'update',
+            path: originalDocRef.path,
+            changedFields: Object.keys(validatedInput),
+        });
         
         const updatedDoc = await originalDocRef.get();
         return updatedDoc.data() as BrandWebsitePage;
@@ -149,4 +175,12 @@ export async function deleteBrandWebsitePage(brandId: string, slug: string): Pro
     const db = getAdminDb();
     const docRef = db.doc(`${pagesCollectionPath(brandId)}/${slug}`);
     await docRef.delete();
+
+    await logBrandWebsiteAuditEntry({
+        brandId,
+        entity: 'page',
+        entityId: slug,
+        action: 'delete',
+        path: docRef.path,
+    });
 }
