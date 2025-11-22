@@ -11,8 +11,9 @@ import {
   type BrandWebsiteMenuSettingsInput,
 } from './menu-settings-schemas';
 import type { ZodSchema } from 'zod';
+import { z } from 'zod';
 
-const menuSettingsPath = (brandId: string) => `brands/${brandId}/website/menuSettings`;
+const menuSettingsPath = (brandId: string) => `/brands/${brandId}/website/menuSettings`;
 
 const VIRTUAL_MENU_SETTINGS: BrandWebsiteMenuSettings = {
   hero: null,
@@ -36,17 +37,12 @@ async function readMenuSettings(brandId: string): Promise<BrandWebsiteMenuSettin
   const data = docSnap.data() ?? {};
   const merged = { ...VIRTUAL_MENU_SETTINGS, ...data };
   
-  // Create a schema that includes `updatedAt` for validation purposes
-  const schemaWithTimestamp = brandWebsiteMenuSettingsSchema.extend({
-    updatedAt: z.any().optional(),
-  });
-
-  const validated = schemaWithTimestamp.parse(merged);
+  const validated = brandWebsiteMenuSettingsSchema.parse(merged);
   
   return {
     ...validated,
     updatedAt: data.updatedAt || null,
-  };
+  } as BrandWebsiteMenuSettings;
 }
 
 async function writeMenuSettings(

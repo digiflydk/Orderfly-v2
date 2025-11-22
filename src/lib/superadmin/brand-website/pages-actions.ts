@@ -71,19 +71,20 @@ export async function createBrandWebsitePage(brandId: string, input: BrandWebsit
     }
 
     const now = admin.firestore.FieldValue.serverTimestamp();
-    const newPage: Omit<BrandWebsitePage, 'createdAt' | 'updatedAt'> & { createdAt: any; updatedAt: any } = {
+    const newPage: Omit<BrandWebsitePage, 'createdAt' | 'updatedAt' | 'contentType'> & { createdAt: any; updatedAt: any, contentType: string } = {
         slug: validated.slug,
         title: validated.title,
-        subtitle: validated.subtitle,
+        subtitle: validated.subtitle ?? undefined,
         layout: validated.layout,
         body: validated.body,
-        imageUrl: validated.imageUrl,
-        cta: validated.cta,
-        seo: validated.seo,
-        sortOrder: validated.sortOrder,
-        isPublished: validated.isPublished,
+        imageUrl: validated.imageUrl ?? undefined,
+        cta: validated.cta ?? null,
+        seo: validated.seo ?? {},
+        sortOrder: validated.sortOrder ?? undefined,
+        isPublished: validated.isPublished ?? false,
         createdAt: now,
         updatedAt: now,
+        contentType: validated.layout, // Mirror layout to contentType for legacy
     };
 
     await docRef.set(newPage);

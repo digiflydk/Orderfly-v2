@@ -1,4 +1,5 @@
 
+
 export interface BrandWebsiteConfig {
   active: boolean;
   template: string;
@@ -24,9 +25,12 @@ export interface BrandWebsiteHome {
 export interface BrandWebsitePage {
   slug: string;
   title: string;
-  subtitle?: string;
   layout: BrandWebsitePageLayoutType;
   body: string;
+  isPublished: boolean;
+  createdAt: any;
+  updatedAt: any;
+  subtitle?: string;
   imageUrl?: string;
   cta?: BrandWebsitePageCta | null;
   seo?: {
@@ -37,9 +41,6 @@ export interface BrandWebsitePage {
     index?: boolean;
   };
   sortOrder?: number;
-  isPublished: boolean;
-  createdAt: any;
-  updatedAt: any;
 }
 
 export interface BrandWebsitePageSummary {
