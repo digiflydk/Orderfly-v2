@@ -57,7 +57,7 @@ export function BrandLayoutClient({
           <Footer 
             brand={brand} 
             location={location ?? undefined} 
-            version="v1.0.265 • 522-05"
+            version="v1.0.266 • 522-06"
             onOpenCookieSettings={() => setIsCookieModalOpen(true)} 
           />
         )}

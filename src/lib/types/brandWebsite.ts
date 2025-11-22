@@ -1,5 +1,4 @@
 
-
 export interface BrandWebsiteConfig {
   active: boolean;
   template: string;
@@ -25,18 +24,55 @@ export interface BrandWebsiteHome {
 export interface BrandWebsitePage {
   slug: string;
   title: string;
-  contentType: string;
-  content: Record<string, any>;
-  cta?: Record<string, any> | null;
-  seo: Record<string, any>;
+  subtitle?: string;
+  layout: BrandWebsitePageLayoutType;
+  body: string;
+  imageUrl?: string;
+  cta?: BrandWebsitePageCta | null;
+  seo?: {
+    title?: string;
+    description?: string;
+    ogImageUrl?: string;
+    canonicalUrl?: string;
+    index?: boolean;
+  };
+  sortOrder?: number;
+  isPublished: boolean;
+  createdAt: any;
   updatedAt: any;
 }
 
+export interface BrandWebsitePageSummary {
+  slug: string;
+  title: string;
+  isPublished: boolean;
+  sortOrder?: number;
+  updatedAt: any;
+}
+
+export type BrandWebsitePageLayoutType = 'rich-text-left-image-right';
+
+export interface BrandWebsitePageCta {
+  label: string;
+  href: string;
+}
+
+export type BrandWebsiteMenuGridLayout = 2 | 3 | 4;
+
+export interface BrandWebsiteMenuHero {
+  title: string;
+  subtitle?: string;
+  imageUrl?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+}
+
 export interface BrandWebsiteMenuSettings {
-  menuHero: Record<string, any>;
-  gridColumns: number; // 2, 3, or 4
+  hero: BrandWebsiteMenuHero | null;
+  gridLayout: BrandWebsiteMenuGridLayout;
   showPrice: boolean;
   showDescription: boolean;
   stickyCategories: boolean;
+  defaultLocationId?: string | null;
   updatedAt: any;
 }
