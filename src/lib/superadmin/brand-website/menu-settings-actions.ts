@@ -62,7 +62,9 @@ async function writeMenuSettings(
   return readMenuSettings(brandId);
 }
 
-export async function getBrandWebsiteMenuSettings(brandId: string): Promise<BrandWebsiteMenuSettings> {
+export async function getBrandWebsiteMenuSettings(
+  brandId: string
+): Promise<BrandWebsiteMenuSettings> {
   await requireSuperadmin();
   return readMenuSettings(brandId);
 }

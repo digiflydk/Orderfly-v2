@@ -18,6 +18,7 @@ import {
   type BrandWebsiteFooterCtaInput,
 } from './home-schemas';
 import type { ZodSchema } from 'zod';
+import { z } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 
 const homePath = (brandId: string) => `/brands/${brandId}/website/home`;
@@ -43,7 +44,11 @@ async function readHome(brandId: string): Promise<BrandWebsiteHome> {
   const data = docSnap.data() ?? {};
   const merged = { ...VIRTUAL_HOME, ...data };
   const validated = brandWebsiteHomeSchema.parse(merged);
-  return validated;
+
+  return {
+      ...validated,
+      updatedAt: data.updatedAt || null,
+  } as BrandWebsiteHome;
 }
 
 async function writeHome(

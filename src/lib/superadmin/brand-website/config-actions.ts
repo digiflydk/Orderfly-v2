@@ -18,7 +18,9 @@ import {
   type SaveBrandWebsiteConfigInput
 } from './config-schemas';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
+import type { ZodSchema } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
+
 
 const configPath = (brandId: string) => `/brands/${brandId}/website/config`;
 
@@ -101,15 +103,20 @@ export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWe
   return result;
 }
 
-export async function saveBrandWebsiteDesignSystem(brandId: string, input: DesignSystemInput): Promise<BrandWebsiteConfig> {
+async function savePartial<T>(
+    brandId: string,
+    field: keyof BrandWebsiteConfig,
+    data: T,
+    schema: ZodSchema<T>
+): Promise<BrandWebsiteConfig> {
     await requireSuperadmin();
-    const validatedInput = brandWebsiteDesignSystemSchema.parse(input);
+    const validatedInput = schema.parse(data);
     const currentConfig = await readConfig(brandId);
     
     const newConfig: BrandWebsiteConfig = {
         ...currentConfig,
-        designSystem: {
-            ...currentConfig.designSystem,
+        [field]: {
+            ...(currentConfig[field] as object || {}),
             ...validatedInput,
         },
     };
@@ -120,113 +127,30 @@ export async function saveBrandWebsiteDesignSystem(brandId: string, input: Desig
         entity: 'config',
         entityId: 'config',
         action: 'update',
-        changedFields: ['designSystem'],
+        changedFields: [field],
         path: configPath(brandId),
     });
 
     return result;
+}
+
+
+export async function saveBrandWebsiteDesignSystem(brandId: string, input: DesignSystemInput): Promise<BrandWebsiteConfig> {
+  return savePartial(brandId, 'designSystem', input, brandWebsiteDesignSystemSchema);
 }
 
 export async function saveBrandWebsiteSeo(brandId: string, input: SeoInput): Promise<BrandWebsiteConfig> {
-    await requireSuperadmin();
-    const validatedInput = brandWebsiteSeoSchema.parse(input);
-    const currentConfig = await readConfig(brandId);
-    
-    const newConfig: BrandWebsiteConfig = {
-        ...currentConfig,
-        seo: {
-            ...currentConfig.seo,
-            ...validatedInput,
-        },
-    };
-    const result = await writeConfig(brandId, newConfig);
-
-    await logBrandWebsiteAuditEntry({
-        brandId,
-        entity: 'config',
-        entityId: 'config',
-        action: 'update',
-        changedFields: ['seo'],
-        path: configPath(brandId),
-    });
-
-    return result;
+  return savePartial(brandId, 'seo', input, brandWebsiteSeoSchema);
 }
 
 export async function saveBrandWebsiteSocial(brandId: string, input: SocialInput): Promise<BrandWebsiteConfig> {
-    await requireSuperadmin();
-    const validatedInput = brandWebsiteSocialSchema.parse(input);
-    const currentConfig = await readConfig(brandId);
-    
-    const newConfig: BrandWebsiteConfig = {
-        ...currentConfig,
-        social: {
-            ...currentConfig.social,
-            ...validatedInput,
-        },
-    };
-    const result = await writeConfig(brandId, newConfig);
-
-    await logBrandWebsiteAuditEntry({
-        brandId,
-        entity: 'config',
-        entityId: 'config',
-        action: 'update',
-        changedFields: ['social'],
-        path: configPath(brandId),
-    });
-
-    return result;
+  return savePartial(brandId, 'social', input, brandWebsiteSocialSchema);
 }
 
 export async function saveBrandWebsiteTracking(brandId: string, input: TrackingInput): Promise<BrandWebsiteConfig> {
-    await requireSuperadmin();
-    const validatedInput = brandWebsiteTrackingSchema.parse(input);
-    const currentConfig = await readConfig(brandId);
-
-    const newConfig: BrandWebsiteConfig = {
-        ...currentConfig,
-        tracking: {
-            ...currentConfig.tracking,
-            ...validatedInput,
-        },
-    };
-    const result = await writeConfig(brandId, newConfig);
-
-    await logBrandWebsiteAuditEntry({
-        brandId,
-        entity: 'config',
-        entityId: 'config',
-        action: 'update',
-        changedFields: ['tracking'],
-        path: configPath(brandId),
-    });
-    
-    return result;
+  return savePartial(brandId, 'tracking', input, brandWebsiteTrackingSchema);
 }
 
 export async function saveBrandWebsiteLegal(brandId: string, input: LegalInput): Promise<BrandWebsiteConfig> {
-    await requireSuperadmin();
-    const validatedInput = brandWebsiteLegalSchema.parse(input);
-    const currentConfig = await readConfig(brandId);
-    
-    const newConfig: BrandWebsiteConfig = {
-        ...currentConfig,
-        legal: {
-            ...currentConfig.legal,
-            ...validatedInput,
-        },
-    };
-    const result = await writeConfig(brandId, newConfig);
-
-    await logBrandWebsiteAuditEntry({
-        brandId,
-        entity: 'config',
-        entityId: 'config',
-        action: 'update',
-        changedFields: ['legal'],
-        path: configPath(brandId),
-    });
-
-    return result;
+  return savePartial(brandId, 'legal', input, brandWebsiteLegalSchema);
 }

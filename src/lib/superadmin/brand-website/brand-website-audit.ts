@@ -1,4 +1,3 @@
-
 'use server';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
@@ -23,6 +22,7 @@ export async function logBrandWebsiteAuditEntry(entry: {
       ...entry,
       module: 'brand-website',
       timestamp: admin.firestore.FieldValue.serverTimestamp(),
+      performedBy: entry.performedBy ?? { userId: null, email: null, role: 'superadmin' }
     };
     await ref.set(payload);
   } catch (error) {
