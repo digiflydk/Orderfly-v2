@@ -1,8 +1,7 @@
 'use server';
 
 import 'server-only';
-import { hasPermission } from './superadmin';
-import type { User } from '@/types';
+import { hasPermission } from '@/lib/permissions';
 
 export interface SuperadminUser {
   id: string | null;
@@ -16,7 +15,7 @@ export interface SuperadminUser {
  * For now, it leverages the mock implementation in hasPermission.
  */
 export async function getSuperadminUserContext(): Promise<SuperadminUser> {
-  const isSuperadmin = await hasPermission('users:view'); // Example permission
+  const isSuperadmin = hasPermission('users:view'); // Example permission
   if (isSuperadmin) {
     // This is a placeholder. A real implementation would fetch user details.
     return {
@@ -26,6 +25,10 @@ export async function getSuperadminUserContext(): Promise<SuperadminUser> {
     };
   }
 
-  // Fallback if not a superadmin (though requireSuperadmin would usually throw first)
-  return { id: null, email: null, role: null };
+  // Fallback if not a superadmin
+  return {
+    id: null,
+    email: null,
+    role: 'superadmin',
+  };
 }

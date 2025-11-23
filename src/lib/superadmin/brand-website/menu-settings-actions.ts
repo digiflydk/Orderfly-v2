@@ -67,16 +67,17 @@ export async function getBrandWebsiteMenuSettings(
   brandId: string
 ): Promise<BrandWebsiteMenuSettings> {
   const start = Date.now();
+  const action = 'getBrandWebsiteMenuSettings';
   try {
     await requireSuperadmin();
     const result = await readMenuSettings(brandId);
      await logBrandWebsiteApiCall({
-        layer: 'cms', action: 'getBrandWebsiteMenuSettings', brandId, status: 'success', durationMs: Date.now() - start, path: menuSettingsPath(brandId)
+        layer: 'cms', action, brandId, status: 'success', durationMs: Date.now() - start, path: menuSettingsPath(brandId)
     });
     return result;
   } catch(error: any) {
      await logBrandWebsiteApiCall({
-        layer: 'cms', action: 'getBrandWebsiteMenuSettings', brandId, status: 'error', durationMs: Date.now() - start, path: menuSettingsPath(brandId), errorMessage: error?.message ?? 'Unknown error'
+        layer: 'cms', action, brandId, status: 'error', durationMs: Date.now() - start, path: menuSettingsPath(brandId), errorMessage: error?.message ?? 'Unknown error'
     });
     throw error;
   }
@@ -87,6 +88,7 @@ export async function saveBrandWebsiteMenuSettings(
   input: BrandWebsiteMenuSettingsInput
 ): Promise<BrandWebsiteMenuSettings> {
     const start = Date.now();
+    const actionName = 'saveBrandWebsiteMenuSettings';
     try {
         await requireSuperadmin();
         const validatedInput = brandWebsiteMenuSettingsSchema.parse(input);
@@ -107,13 +109,13 @@ export async function saveBrandWebsiteMenuSettings(
         });
 
          await logBrandWebsiteApiCall({
-            layer: 'cms', action: 'saveBrandWebsiteMenuSettings', brandId, status: 'success', durationMs: Date.now() - start, path: menuSettingsPath(brandId)
+            layer: 'cms', action: actionName, brandId, status: 'success', durationMs: Date.now() - start, path: menuSettingsPath(brandId)
         });
 
         return result;
     } catch (error: any) {
         await logBrandWebsiteApiCall({
-            layer: 'cms', action: 'saveBrandWebsiteMenuSettings', brandId, status: 'error', durationMs: Date.now() - start, path: menuSettingsPath(brandId), errorMessage: error?.message ?? 'Unknown error'
+            layer: 'cms', action: actionName, brandId, status: 'error', durationMs: Date.now() - start, path: menuSettingsPath(brandId), errorMessage: error?.message ?? 'Unknown error'
         });
         throw error;
     }
@@ -124,6 +126,7 @@ export async function saveBrandWebsiteMenuHero(
   hero: BrandWebsiteMenuHeroInput | null
 ): Promise<BrandWebsiteMenuSettings> {
     const start = Date.now();
+    const actionName = 'saveBrandWebsiteMenuHero';
     try {
         await requireSuperadmin();
 
@@ -150,13 +153,13 @@ export async function saveBrandWebsiteMenuHero(
         });
 
         await logBrandWebsiteApiCall({
-            layer: 'cms', action: 'saveBrandWebsiteMenuHero', brandId, status: 'success', durationMs: Date.now() - start, path: menuSettingsPath(brandId)
+            layer: 'cms', action: actionName, brandId, status: 'success', durationMs: Date.now() - start, path: menuSettingsPath(brandId)
         });
 
         return result;
     } catch(error: any) {
         await logBrandWebsiteApiCall({
-            layer: 'cms', action: 'saveBrandWebsiteMenuHero', brandId, status: 'error', durationMs: Date.now() - start, path: menuSettingsPath(brandId), errorMessage: error?.message ?? 'Unknown error'
+            layer: 'cms', action: actionName, brandId, status: 'error', durationMs: Date.now() - start, path: menuSettingsPath(brandId), errorMessage: error?.message ?? 'Unknown error'
         });
         throw error;
     }

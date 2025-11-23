@@ -92,7 +92,7 @@ export async function createBrandWebsitePage(brandId: string, input: BrandWebsit
     const action = 'createBrandWebsitePage';
     let slug = '';
     try {
-        const user = await requireSuperadmin();
+        await requireSuperadmin();
         const validated = brandWebsitePageCreateSchema.parse(input);
         slug = validated.slug;
         const db = getAdminDb();

@@ -18,6 +18,7 @@ import {
   type BrandWebsiteFooterCtaInput,
 } from './home-schemas';
 import type { ZodSchema } from 'zod';
+import { z } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
@@ -72,16 +73,17 @@ export async function getBrandWebsiteHome(
   brandId: string
 ): Promise<BrandWebsiteHome> {
   const start = Date.now();
+  const action = 'getBrandWebsiteHome';
   try {
     await requireSuperadmin();
     const result = await readHome(brandId);
     await logBrandWebsiteApiCall({
-        layer: 'cms', action: 'getBrandWebsiteHome', brandId, status: 'success', durationMs: Date.now() - start, path: homePath(brandId)
+        layer: 'cms', action, brandId, status: 'success', durationMs: Date.now() - start, path: homePath(brandId)
     });
     return result;
   } catch(error: any) {
     await logBrandWebsiteApiCall({
-        layer: 'cms', action: 'getBrandWebsiteHome', brandId, status: 'error', durationMs: Date.now() - start, path: homePath(brandId), errorMessage: error?.message ?? 'Unknown error'
+        layer: 'cms', action, brandId, status: 'error', durationMs: Date.now() - start, path: homePath(brandId), errorMessage: error?.message ?? 'Unknown error'
     });
     throw error;
   }
