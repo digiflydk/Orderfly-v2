@@ -13,6 +13,7 @@ const pagesCollectionPath = (brandId: string) => `brands/${brandId}/website/page
 export async function listBrandWebsitePages(brandId: string): Promise<BrandWebsitePageSummary[]> {
     const start = Date.now();
     const action = 'listBrandWebsitePages';
+    const path = `/brands/${brandId}/website/pages`;
     try {
         await requireSuperadmin();
         const db = getAdminDb();
@@ -39,13 +40,13 @@ export async function listBrandWebsitePages(brandId: string): Promise<BrandWebsi
         });
 
         await logBrandWebsiteApiCall({
-            layer: 'cms', action, brandId, status: 'success', durationMs: Date.now() - start, path: pagesCollectionPath(brandId)
+            layer: 'cms', action, brandId, status: 'success', durationMs: Date.now() - start, path
         });
         return sortedPages;
 
     } catch (error: any) {
         await logBrandWebsiteApiCall({
-            layer: 'cms', action, brandId, status: 'error', durationMs: Date.now() - start, path: pagesCollectionPath(brandId), errorMessage: error?.message ?? 'Unknown error'
+            layer: 'cms', action, brandId, status: 'error', durationMs: Date.now() - start, path, errorMessage: error?.message ?? 'Unknown error'
         });
         throw error;
     }
@@ -88,15 +89,19 @@ export async function getBrandWebsitePage(brandId: string, slug: string): Promis
 }
 
 export async function createBrandWebsitePage(brandId: string, input: BrandWebsitePageCreateInput): Promise<BrandWebsitePage> {
-    const start = Date.now();
     const action = 'createBrandWebsitePage';
-    let slug = '';
+    // Define slug early for consistent logging
+    const validatedSlug = brandWebsitePageSlugSchema.safeParse(input.slug);
+    const slug = validatedSlug.success ? validatedSlug.data : 'invalid-slug';
+    const path = `/brands/${brandId}/website/pages/${slug}`;
+    const start = Date.now();
+
     try {
         await requireSuperadmin();
         const validated = brandWebsitePageCreateSchema.parse(input);
-        slug = validated.slug;
+        
         const db = getAdminDb();
-        const docRef = db.doc(`${pagesCollectionPath(brandId)}/${slug}`);
+        const docRef = db.doc(path);
 
         const existingDoc = await docRef.get();
         if (existingDoc.exists) {
@@ -130,13 +135,13 @@ export async function createBrandWebsitePage(brandId: string, input: BrandWebsit
             path: `/brands/${brandId}/website/pages/${validated.slug}`,
         });
         
-        await logBrandWebsiteApiCall({ layer: 'cms', action, brandId, status: 'success', durationMs: Date.now() - start, path: `/brands/${brandId}/website/pages/${slug}` });
+        await logBrandWebsiteApiCall({ layer: 'cms', action, brandId, status: 'success', durationMs: Date.now() - start, path });
         
         const createdDoc = await docRef.get();
         return createdDoc.data() as BrandWebsitePage;
 
     } catch(error: any) {
-        await logBrandWebsiteApiCall({ layer: 'cms', action, brandId, status: 'error', durationMs: Date.now() - start, path: slug ? `/brands/${brandId}/website/pages/${slug}`: undefined, errorMessage: error?.message ?? 'Unknown error'});
+        await logBrandWebsiteApiCall({ layer: 'cms', action, brandId, status: 'error', durationMs: Date.now() - start, path, errorMessage: error?.message ?? 'Unknown error'});
         throw error;
     }
 }
@@ -244,3 +249,5 @@ export async function deleteBrandWebsitePage(brandId: string, slug: string): Pro
         throw error;
     }
 }
+
+    
