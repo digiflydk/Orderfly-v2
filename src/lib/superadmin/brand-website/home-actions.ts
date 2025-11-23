@@ -18,7 +18,6 @@ import {
   type BrandWebsiteFooterCtaInput,
 } from './home-schemas';
 import type { ZodSchema } from 'zod';
-import { z } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 
 const homePath = (brandId: string) => `/brands/${brandId}/website/home`;
@@ -46,8 +45,8 @@ async function readHome(brandId: string): Promise<BrandWebsiteHome> {
   const validated = brandWebsiteHomeSchema.parse(merged);
 
   return {
-      ...validated,
-      updatedAt: data.updatedAt || null,
+    ...validated,
+    updatedAt: data.updatedAt || null,
   } as BrandWebsiteHome;
 }
 
@@ -80,7 +79,7 @@ async function savePartial<T>(
   data: T,
   schema: ZodSchema<T>
 ): Promise<BrandWebsiteHome> {
-  await requireSuperadmin();
+  const user = await requireSuperadmin();
   const validatedData = schema.parse(data);
   const currentHome = await readHome(brandId);
   const newHome = {
@@ -94,6 +93,7 @@ async function savePartial<T>(
     entity: 'home',
     entityId: 'home',
     action: 'update',
+    user,
     changedFields: [field],
     path: homePath(brandId),
   });

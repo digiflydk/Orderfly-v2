@@ -80,7 +80,7 @@ export async function getBrandWebsiteConfig(brandId: string): Promise<BrandWebsi
 }
 
 export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWebsiteConfigInput): Promise<BrandWebsiteConfig> {
-  await requireSuperadmin();
+  const user = await requireSuperadmin();
   const validatedInput = brandWebsiteConfigBaseSchema.parse(input);
   const currentConfig = await readConfig(brandId);
 
@@ -96,6 +96,7 @@ export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWe
     entity: 'config',
     entityId: 'config',
     action: 'update',
+    user,
     changedFields: ['config'],
     path: configPath(brandId),
   });
@@ -109,7 +110,7 @@ async function savePartial<T>(
     data: T,
     schema: ZodSchema<T>
 ): Promise<BrandWebsiteConfig> {
-    await requireSuperadmin();
+    const user = await requireSuperadmin();
     const validatedInput = schema.parse(data);
     const currentConfig = await readConfig(brandId);
     
@@ -127,6 +128,7 @@ async function savePartial<T>(
         entity: 'config',
         entityId: 'config',
         action: 'update',
+        user,
         changedFields: [field],
         path: configPath(brandId),
     });
