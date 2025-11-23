@@ -1,41 +1,41 @@
+
 'use server';
 
-import 'server-only';
-import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { brandWebsiteConfigBaseSchema, brandWebsiteDesignSystemSchema, brandWebsiteLegalSchema, brandWebsiteSeoSchema, brandWebsiteSocialSchema, brandWebsiteTrackingSchema } from '@/lib/superadmin/brand-website/config-schemas';
+import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
+import { brandWebsiteConfigBaseSchema, brandWebsiteDesignSystemSchema, brandWebsiteSeoSchema, brandWebsiteSocialSchema, brandWebsiteTrackingSchema, brandWebsiteLegalSchema } from '@/lib/superadmin/brand-website/config-schemas';
+import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 import { z } from 'zod';
 
 const publicConfigSchema = z.object({
-  domains: z.array(z.string()).optional(),
-  designSystem: brandWebsiteDesignSystemSchema.optional(),
-  seo: brandWebsiteSeoSchema.optional(),
-  social: brandWebsiteSocialSchema.optional(),
-  tracking: brandWebsiteTrackingSchema.optional(),
-  legal: brandWebsiteLegalSchema.optional(),
+  domains: z.array(z.string()).optional().default([]),
+  designSystem: brandWebsiteDesignSystemSchema.optional().default({}),
+  seo: brandWebsiteSeoSchema.optional().default({}),
+  social: brandWebsiteSocialSchema.optional().default({}),
+  tracking: brandWebsiteTrackingSchema.optional().default({}),
+  legal: brandWebsiteLegalSchema.optional().default({}),
 });
 
+export async function getPublicBrandWebsiteConfig(brandId: string): Promise<Partial<BrandWebsiteConfig> | null> {
+    const start = Date.now();
+    const path = `/brands/${brandId}/website/config`;
+    try {
+        const db = getAdminDb();
+        const docSnap = await db.doc(path).get();
+        if (!docSnap.exists) {
+            await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteConfig', brandId, status: 'success', durationMs: Date.now() - start, path });
+            return null;
+        }
 
-export async function getPublicBrandWebsiteConfig(
-  brandId: string
-): Promise<Partial<BrandWebsiteConfig> | null> {
-  const db = getAdminDb();
-  const docRef = db.doc(`/brands/${brandId}/website/config`);
-  const docSnap = await docRef.get();
+        const data = docSnap.data();
+        const validated = publicConfigSchema.parse(data);
 
-  if (!docSnap.exists) {
-    return null;
-  }
+        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteConfig', brandId, status: 'success', durationMs: Date.now() - start, path });
+        return validated;
 
-  const data = docSnap.data();
-  const validated = publicConfigSchema.parse(data);
-
-  return {
-    domains: validated.domains || [],
-    designSystem: validated.designSystem || {},
-    seo: validated.seo || {},
-    social: validated.social || {},
-    tracking: validated.tracking || {},
-    legal: validated.legal || {},
-  };
+    } catch (error: any) {
+        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteConfig', brandId, status: 'error', durationMs: Date.now() - start, path, errorMessage: error?.message ?? 'Unknown error' });
+        // Don't throw in public API, just return null
+        return null;
+    }
 }

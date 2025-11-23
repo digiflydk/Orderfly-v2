@@ -13,6 +13,7 @@ import {
 import type { ZodSchema } from 'zod';
 import { z } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
+import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
 const menuSettingsPath = (brandId: string) => `/brands/${brandId}/website/menuSettings`;
 
@@ -65,64 +66,100 @@ async function writeMenuSettings(
 export async function getBrandWebsiteMenuSettings(
   brandId: string
 ): Promise<BrandWebsiteMenuSettings> {
-  await requireSuperadmin();
-  return readMenuSettings(brandId);
+  const start = Date.now();
+  try {
+    await requireSuperadmin();
+    const result = await readMenuSettings(brandId);
+     await logBrandWebsiteApiCall({
+        layer: 'cms', action: 'getBrandWebsiteMenuSettings', brandId, status: 'success', durationMs: Date.now() - start, path: menuSettingsPath(brandId)
+    });
+    return result;
+  } catch(error: any) {
+     await logBrandWebsiteApiCall({
+        layer: 'cms', action: 'getBrandWebsiteMenuSettings', brandId, status: 'error', durationMs: Date.now() - start, path: menuSettingsPath(brandId), errorMessage: error?.message ?? 'Unknown error'
+    });
+    throw error;
+  }
 }
 
 export async function saveBrandWebsiteMenuSettings(
   brandId: string,
   input: BrandWebsiteMenuSettingsInput
 ): Promise<BrandWebsiteMenuSettings> {
-  const user = await requireSuperadmin();
-  const validatedInput = brandWebsiteMenuSettingsSchema.parse(input);
-  const currentSettings = await readMenuSettings(brandId);
-  const newSettings = {
-    ...currentSettings,
-    ...validatedInput,
-  };
-  const result = await writeMenuSettings(brandId, newSettings);
+    const start = Date.now();
+    try {
+        const user = await requireSuperadmin();
+        const validatedInput = brandWebsiteMenuSettingsSchema.parse(input);
+        const currentSettings = await readMenuSettings(brandId);
+        const newSettings = {
+            ...currentSettings,
+            ...validatedInput,
+        };
+        const result = await writeMenuSettings(brandId, newSettings);
 
-  await logBrandWebsiteAuditEntry({
-    brandId,
-    entity: 'menuSettings',
-    entityId: 'menuSettings',
-    action: 'update',
-    user,
-    changedFields: ['settings'],
-    path: menuSettingsPath(brandId),
-  });
+        await logBrandWebsiteAuditEntry({
+            brandId,
+            entity: 'menuSettings',
+            entityId: 'menuSettings',
+            action: 'update',
+            user,
+            changedFields: ['settings'],
+            path: menuSettingsPath(brandId),
+        });
 
-  return result;
+         await logBrandWebsiteApiCall({
+            layer: 'cms', action: 'saveBrandWebsiteMenuSettings', brandId, status: 'success', durationMs: Date.now() - start, path: menuSettingsPath(brandId)
+        });
+
+        return result;
+    } catch (error: any) {
+        await logBrandWebsiteApiCall({
+            layer: 'cms', action: 'saveBrandWebsiteMenuSettings', brandId, status: 'error', durationMs: Date.now() - start, path: menuSettingsPath(brandId), errorMessage: error?.message ?? 'Unknown error'
+        });
+        throw error;
+    }
 }
 
 export async function saveBrandWebsiteMenuHero(
   brandId: string,
   hero: BrandWebsiteMenuHeroInput | null
 ): Promise<BrandWebsiteMenuSettings> {
-  const user = await requireSuperadmin();
+    const start = Date.now();
+    try {
+        const user = await requireSuperadmin();
 
-  let validatedHero: BrandWebsiteMenuHero | null = null;
-  if (hero) {
-    validatedHero = brandWebsiteMenuHeroSchema.parse(hero);
-  }
+        let validatedHero: BrandWebsiteMenuHero | null = null;
+        if (hero) {
+            validatedHero = brandWebsiteMenuHeroSchema.parse(hero);
+        }
 
-  const currentSettings = await readMenuSettings(brandId);
-  const newSettings = {
-    ...currentSettings,
-    hero: validatedHero,
-  };
+        const currentSettings = await readMenuSettings(brandId);
+        const newSettings = {
+            ...currentSettings,
+            hero: validatedHero,
+        };
 
-  const result = await writeMenuSettings(brandId, newSettings);
+        const result = await writeMenuSettings(brandId, newSettings);
 
-  await logBrandWebsiteAuditEntry({
-    brandId,
-    entity: 'menuSettings',
-    entityId: 'menuSettings',
-    action: 'update',
-    user,
-    changedFields: ['hero'],
-    path: menuSettingsPath(brandId),
-  });
+        await logBrandWebsiteAuditEntry({
+            brandId,
+            entity: 'menuSettings',
+            entityId: 'menuSettings',
+            action: 'update',
+            user,
+            changedFields: ['hero'],
+            path: menuSettingsPath(brandId),
+        });
 
-  return result;
+        await logBrandWebsiteApiCall({
+            layer: 'cms', action: 'saveBrandWebsiteMenuHero', brandId, status: 'success', durationMs: Date.now() - start, path: menuSettingsPath(brandId)
+        });
+
+        return result;
+    } catch(error: any) {
+        await logBrandWebsiteApiCall({
+            layer: 'cms', action: 'saveBrandWebsiteMenuHero', brandId, status: 'error', durationMs: Date.now() - start, path: menuSettingsPath(brandId), errorMessage: error?.message ?? 'Unknown error'
+        });
+        throw error;
+    }
 }

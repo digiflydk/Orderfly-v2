@@ -1,48 +1,30 @@
+
 'use server';
 
-import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { BrandWebsiteMenuSettings } from '@/lib/types/brandWebsite';
 import { brandWebsiteMenuSettingsSchema } from '@/lib/superadmin/brand-website/menu-settings-schemas';
+import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
-const menuSettingsPath = (brandId: string) => `/brands/${brandId}/website/menuSettings`;
-
-const VIRTUAL_MENU_SETTINGS: BrandWebsiteMenuSettings = {
-  hero: null,
-  gridLayout: 3,
-  showPrice: true,
-  showDescription: true,
-  stickyCategories: true,
-  defaultLocationId: null,
-  updatedAt: null,
-};
-
-
-/**
- * Fetches and validates the public menu settings for a brand.
- *
- * @param brandId The ID of the brand.
- * @returns The validated menu settings, or null if the document doesn't exist.
- */
 export async function getPublicBrandWebsiteMenuSettings(brandId: string): Promise<BrandWebsiteMenuSettings | null> {
-  const db = getAdminDb();
-  const docRef = db.doc(menuSettingsPath(brandId));
-  const docSnap = await docRef.get();
+    const start = Date.now();
+    const path = `/brands/${brandId}/website/menuSettings`;
+    try {
+        const db = getAdminDb();
+        const docSnap = await db.doc(path).get();
+        if (!docSnap.exists) {
+            await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteMenuSettings', brandId, status: 'success', durationMs: Date.now() - start, path });
+            return null;
+        }
 
-  if (!docSnap.exists) {
-    return null; // Per spec, return null if no settings document exists.
-  }
+        const data = docSnap.data();
+        const validated = brandWebsiteMenuSettingsSchema.parse(data);
 
-  try {
-    const data = docSnap.data() ?? {};
-    const merged = { ...VIRTUAL_MENU_SETTINGS, ...data };
-    const validated = brandWebsiteMenuSettingsSchema.parse(merged);
-    return {
-      ...validated,
-      updatedAt: data.updatedAt || null,
-    } as BrandWebsiteMenuSettings;
-  } catch (error) {
-    console.error(`[public-menu-settings-api] Validation failed for brand ${brandId}:`, error);
-    return null;
-  }
+        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteMenuSettings', brandId, status: 'success', durationMs: Date.now() - start, path });
+        return validated as BrandWebsiteMenuSettings;
+
+    } catch (error: any) {
+        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteMenuSettings', brandId, status: 'error', durationMs: Date.now() - start, path, errorMessage: error?.message ?? 'Unknown error' });
+        return null;
+    }
 }

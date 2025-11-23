@@ -20,6 +20,7 @@ import {
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 import type { ZodSchema } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
+import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
 
 const configPath = (brandId: string) => `/brands/${brandId}/website/config`;
@@ -75,33 +76,56 @@ async function writeConfig(brandId: string, data: Partial<BrandWebsiteConfig>): 
 }
 
 export async function getBrandWebsiteConfig(brandId: string): Promise<BrandWebsiteConfig> {
-  await requireSuperadmin();
-  return readConfig(brandId);
+  const start = Date.now();
+  try {
+    const user = await requireSuperadmin();
+    const result = await readConfig(brandId);
+    await logBrandWebsiteApiCall({
+        layer: 'cms', action: 'getBrandWebsiteConfig', brandId, status: 'success', durationMs: Date.now() - start, path: configPath(brandId)
+    });
+    return result;
+  } catch (error: any) {
+    await logBrandWebsiteApiCall({
+        layer: 'cms', action: 'getBrandWebsiteConfig', brandId, status: 'error', durationMs: Date.now() - start, path: configPath(brandId), errorMessage: error?.message ?? 'Unknown error'
+    });
+    throw error;
+  }
 }
 
 export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWebsiteConfigInput): Promise<BrandWebsiteConfig> {
-  const user = await requireSuperadmin();
-  const validatedInput = brandWebsiteConfigBaseSchema.parse(input);
-  const currentConfig = await readConfig(brandId);
+  const start = Date.now();
+  try {
+    const user = await requireSuperadmin();
+    const validatedInput = brandWebsiteConfigBaseSchema.parse(input);
+    const currentConfig = await readConfig(brandId);
 
-  const mergedConfig: Partial<BrandWebsiteConfig> = {
-    ...currentConfig,
-    ...validatedInput,
-  };
+    const mergedConfig: Partial<BrandWebsiteConfig> = {
+        ...currentConfig,
+        ...validatedInput,
+    };
 
-  const result = await writeConfig(brandId, mergedConfig);
+    const result = await writeConfig(brandId, mergedConfig);
 
-  await logBrandWebsiteAuditEntry({
-    brandId,
-    entity: 'config',
-    entityId: 'config',
-    action: 'update',
-    user,
-    changedFields: ['config'],
-    path: configPath(brandId),
-  });
+    await logBrandWebsiteAuditEntry({
+        brandId,
+        entity: 'config',
+        entityId: 'config',
+        action: 'update',
+        user,
+        changedFields: ['config'],
+        path: configPath(brandId),
+    });
 
-  return result;
+    await logBrandWebsiteApiCall({
+        layer: 'cms', action: 'saveBrandWebsiteConfig', brandId, status: 'success', durationMs: Date.now() - start, path: configPath(brandId)
+    });
+    return result;
+  } catch (error: any) {
+     await logBrandWebsiteApiCall({
+        layer: 'cms', action: 'saveBrandWebsiteConfig', brandId, status: 'error', durationMs: Date.now() - start, path: configPath(brandId), errorMessage: error?.message ?? 'Unknown error'
+    });
+    throw error;
+  }
 }
 
 async function savePartial<T>(
@@ -110,30 +134,41 @@ async function savePartial<T>(
     data: T,
     schema: ZodSchema<T>
 ): Promise<BrandWebsiteConfig> {
-    const user = await requireSuperadmin();
-    const validatedInput = schema.parse(data);
-    const currentConfig = await readConfig(brandId);
-    
-    const newConfig: BrandWebsiteConfig = {
-        ...currentConfig,
-        [field]: {
-            ...(currentConfig[field] as object || {}),
-            ...validatedInput,
-        },
-    };
-    const result = await writeConfig(brandId, newConfig);
+    const start = Date.now();
+    const actionName = `saveBrandWebsite${field.charAt(0).toUpperCase() + field.slice(1)}`;
+    try {
+        const user = await requireSuperadmin();
+        const validatedInput = schema.parse(data);
+        const currentConfig = await readConfig(brandId);
+        
+        const newConfig: BrandWebsiteConfig = {
+            ...currentConfig,
+            [field]: {
+                ...(currentConfig[field] as object || {}),
+                ...validatedInput,
+            },
+        };
+        const result = await writeConfig(brandId, newConfig);
 
-    await logBrandWebsiteAuditEntry({
-        brandId,
-        entity: 'config',
-        entityId: 'config',
-        action: 'update',
-        user,
-        changedFields: [field],
-        path: configPath(brandId),
-    });
-
-    return result;
+        await logBrandWebsiteAuditEntry({
+            brandId,
+            entity: 'config',
+            entityId: 'config',
+            action: 'update',
+            user,
+            changedFields: [field],
+            path: configPath(brandId),
+        });
+        await logBrandWebsiteApiCall({
+            layer: 'cms', action: actionName, brandId, status: 'success', durationMs: Date.now() - start, path: configPath(brandId)
+        });
+        return result;
+    } catch(error: any) {
+        await logBrandWebsiteApiCall({
+            layer: 'cms', action: actionName, brandId, status: 'error', durationMs: Date.now() - start, path: configPath(brandId), errorMessage: error?.message ?? 'Unknown error'
+        });
+        throw error;
+    }
 }
 
 

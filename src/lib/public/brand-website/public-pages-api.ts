@@ -1,73 +1,75 @@
+
 'use server';
 
-import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { BrandWebsitePage, BrandWebsitePageSummary } from '@/lib/types/brandWebsite';
-import { brandWebsitePageSlugSchema, brandWebsitePageBaseSchema } from '@/lib/superadmin/brand-website/pages-schemas';
-import type { Timestamp } from 'firebase-admin/firestore';
-
-const pagesCollectionPath = (brandId: string) => `brands/${brandId}/website/pages`;
+import { brandWebsitePageSlugSchema } from '@/lib/superadmin/brand-website/pages-schemas';
+import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
 export async function getPublicBrandWebsitePages(brandId: string): Promise<BrandWebsitePageSummary[]> {
-    const db = getAdminDb();
-    const q = db.collection(pagesCollectionPath(brandId)).where('isPublished', '==', true);
-    const snapshot = await q.get();
+    const start = Date.now();
+    const path = `/brands/${brandId}/website/pages`;
+    try {
+        const db = getAdminDb();
+        const snapshot = await db.collection(path).where('isPublished', '==', true).get();
+        
+        const pages = snapshot.docs.map(doc => {
+            const data = doc.data();
+            return {
+                slug: doc.id,
+                title: data.title || 'Untitled',
+                isPublished: data.isPublished || false,
+                sortOrder: data.sortOrder,
+                updatedAt: data.updatedAt,
+            };
+        });
 
-    const pages: BrandWebsitePageSummary[] = snapshot.docs.map(doc => {
-        const data = doc.data();
-        return {
-            slug: doc.id,
-            title: data.title || 'Untitled',
-            isPublished: data.isPublished,
-            sortOrder: data.sortOrder,
-            updatedAt: (data.updatedAt as Timestamp)?.toDate() || null,
-        };
-    });
+        pages.sort((a, b) => (a.sortOrder ?? Infinity) - (b.sortOrder ?? Infinity) || a.title.localeCompare(b.title));
 
-    return pages.sort((a, b) => {
-        const orderA = a.sortOrder ?? Infinity;
-        const orderB = b.sortOrder ?? Infinity;
-        if (orderA !== orderB) {
-            return orderA - orderB;
-        }
-        return a.title.localeCompare(b.title);
-    });
+        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsitePages', brandId, status: 'success', durationMs: Date.now() - start, path });
+        return pages;
+    } catch(error: any) {
+        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsitePages', brandId, status: 'error', durationMs: Date.now() - start, path, errorMessage: error?.message ?? 'Unknown error' });
+        return [];
+    }
 }
 
 export async function getPublicBrandWebsitePageBySlug(brandId: string, slug: string): Promise<BrandWebsitePage | null> {
-    const slugValidation = brandWebsitePageSlugSchema.safeParse(slug);
-    if (!slugValidation.success) {
+    const start = Date.now();
+    const path = `/brands/${brandId}/website/pages/${slug}`;
+    try {
+        brandWebsitePageSlugSchema.parse(slug);
+
+        const db = getAdminDb();
+        const docSnap = await db.doc(path).get();
+
+        if (!docSnap.exists || docSnap.data()?.isPublished !== true) {
+            await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsitePageBySlug', brandId, status: 'success', durationMs: Date.now() - start, path });
+            return null;
+        }
+
+        const data = docSnap.data() as Partial<BrandWebsitePage>;
+        
+        const page: BrandWebsitePage = {
+            slug: docSnap.id,
+            title: data.title || '',
+            layout: data.layout || 'rich-text-left-image-right',
+            body: data.body || '',
+            isPublished: data.isPublished || false,
+            createdAt: data.createdAt || null,
+            updatedAt: data.updatedAt || null,
+            subtitle: data.subtitle,
+            imageUrl: data.imageUrl,
+            cta: data.cta,
+            seo: data.seo,
+            sortOrder: data.sortOrder,
+        };
+        
+        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsitePageBySlug', brandId, status: 'success', durationMs: Date.now() - start, path });
+        return page;
+
+    } catch(error: any) {
+        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsitePageBySlug', brandId, status: 'error', durationMs: Date.now() - start, path, errorMessage: error?.message ?? 'Unknown error' });
         return null;
     }
-
-    const db = getAdminDb();
-    const docRef = db.doc(`${pagesCollectionPath(brandId)}/${slug}`);
-    const docSnap = await docRef.get();
-
-    if (!docSnap.exists) {
-        return null;
-    }
-
-    const data = docSnap.data();
-
-    if (data?.isPublished !== true) {
-        return null;
-    }
-    
-    const validatedData = brandWebsitePageBaseSchema.partial().parse(data);
-
-    return {
-        slug: validatedData.slug || slug,
-        title: validatedData.title || '',
-        subtitle: validatedData.subtitle,
-        layout: validatedData.layout || 'rich-text-left-image-right',
-        body: validatedData.body || '',
-        imageUrl: validatedData.imageUrl,
-        cta: validatedData.cta,
-        seo: validatedData.seo,
-        sortOrder: validatedData.sortOrder,
-        isPublished: validatedData.isPublished || false,
-        createdAt: (data?.createdAt as Timestamp)?.toDate() || null,
-        updatedAt: (data?.updatedAt as Timestamp)?.toDate() || null,
-    };
 }

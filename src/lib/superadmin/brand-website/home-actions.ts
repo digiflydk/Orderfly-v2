@@ -19,6 +19,7 @@ import {
 } from './home-schemas';
 import type { ZodSchema } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
+import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
 const homePath = (brandId: string) => `/brands/${brandId}/website/home`;
 
@@ -39,11 +40,12 @@ async function readHome(brandId: string): Promise<BrandWebsiteHome> {
   if (!docSnap.exists) {
     return VIRTUAL_HOME;
   }
-
+  
   const data = docSnap.data() ?? {};
   const merged = { ...VIRTUAL_HOME, ...data };
+  
   const validated = brandWebsiteHomeSchema.parse(merged);
-
+  
   return {
     ...validated,
     updatedAt: data.updatedAt || null,
@@ -69,8 +71,20 @@ async function writeHome(
 export async function getBrandWebsiteHome(
   brandId: string
 ): Promise<BrandWebsiteHome> {
-  await requireSuperadmin();
-  return readHome(brandId);
+  const start = Date.now();
+  try {
+    await requireSuperadmin();
+    const result = await readHome(brandId);
+    await logBrandWebsiteApiCall({
+        layer: 'cms', action: 'getBrandWebsiteHome', brandId, status: 'success', durationMs: Date.now() - start, path: homePath(brandId)
+    });
+    return result;
+  } catch(error: any) {
+    await logBrandWebsiteApiCall({
+        layer: 'cms', action: 'getBrandWebsiteHome', brandId, status: 'error', durationMs: Date.now() - start, path: homePath(brandId), errorMessage: error?.message ?? 'Unknown error'
+    });
+    throw error;
+  }
 }
 
 async function savePartial<T>(
@@ -79,26 +93,39 @@ async function savePartial<T>(
   data: T,
   schema: ZodSchema<T>
 ): Promise<BrandWebsiteHome> {
-  const user = await requireSuperadmin();
-  const validatedData = schema.parse(data);
-  const currentHome = await readHome(brandId);
-  const newHome = {
-    ...currentHome,
-    [field]: validatedData,
-  };
-  const result = await writeHome(brandId, newHome);
+    const start = Date.now();
+    const actionName = `saveBrandWebsite${field.charAt(0).toUpperCase() + field.slice(1)}`;
+    try {
+        const user = await requireSuperadmin();
+        const validatedData = schema.parse(data);
+        const currentHome = await readHome(brandId);
+        const newHome = {
+            ...currentHome,
+            [field]: validatedData,
+        };
+        const result = await writeHome(brandId, newHome);
 
-  await logBrandWebsiteAuditEntry({
-    brandId,
-    entity: 'home',
-    entityId: 'home',
-    action: 'update',
-    user,
-    changedFields: [field],
-    path: homePath(brandId),
-  });
+        await logBrandWebsiteAuditEntry({
+            brandId,
+            entity: 'home',
+            entityId: 'home',
+            action: 'update',
+            user,
+            changedFields: [field],
+            path: homePath(brandId),
+        });
 
-  return result;
+        await logBrandWebsiteApiCall({
+            layer: 'cms', action: actionName, brandId, status: 'success', durationMs: Date.now() - start, path: homePath(brandId)
+        });
+
+        return result;
+    } catch(error: any) {
+        await logBrandWebsiteApiCall({
+            layer: 'cms', action: actionName, brandId, status: 'error', durationMs: Date.now() - start, path: homePath(brandId), errorMessage: error?.message ?? 'Unknown error'
+        });
+        throw error;
+    }
 }
 
 export async function saveBrandWebsiteHero(

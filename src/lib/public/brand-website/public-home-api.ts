@@ -1,33 +1,31 @@
+
 'use server';
 
-import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { BrandWebsiteHome } from '@/lib/types/brandWebsite';
 import { brandWebsiteHomeSchema } from '@/lib/superadmin/brand-website/home-schemas';
+import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
-const homePath = (brandId: string) => `brands/${brandId}/website/home`;
-
-/**
- * Fetches and validates the homepage content for a given brand.
- *
- * @param brandId The ID of the brand.
- * @returns The validated homepage content, or null if the document doesn't exist.
- */
 export async function getPublicBrandWebsiteHome(brandId: string): Promise<BrandWebsiteHome | null> {
-  const db = getAdminDb();
-  const docRef = db.doc(homePath(brandId));
-  const docSnap = await docRef.get();
+    const start = Date.now();
+    const path = `/brands/${brandId}/website/home`;
+    try {
+        const db = getAdminDb();
+        const docSnap = await db.doc(path).get();
 
-  if (!docSnap.exists) {
-    return null;
-  }
+        if (!docSnap.exists) {
+            await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteHome', brandId, status: 'success', durationMs: Date.now() - start, path });
+            return null;
+        }
 
-  try {
-    const data = docSnap.data() as Partial<BrandWebsiteHome>;
-    const validatedData = brandWebsiteHomeSchema.parse(data);
-    return { ...validatedData, updatedAt: data.updatedAt || null };
-  } catch (error) {
-    console.error(`[public-home-api] Validation failed for brand ${brandId}:`, error);
-    return null;
-  }
+        const data = docSnap.data() as BrandWebsiteHome;
+        const validated = brandWebsiteHomeSchema.parse(data);
+        
+        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteHome', brandId, status: 'success', durationMs: Date.now() - start, path });
+        return validated;
+
+    } catch (error: any) {
+        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteHome', brandId, status: 'error', durationMs: Date.now() - start, path, errorMessage: error?.message ?? 'Unknown error' });
+        return null;
+    }
 }
