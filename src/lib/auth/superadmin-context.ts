@@ -1,8 +1,7 @@
-
 'use server';
 
 import 'server-only';
-import { hasPermission } from '@/lib/permissions';
+import { requireSuperadmin } from '@/lib/auth/superadmin';
 
 export interface SuperadminUser {
   id: string | null;
@@ -16,17 +15,24 @@ export interface SuperadminUser {
  * For now, it leverages the mock implementation in hasPermission.
  */
 export async function getSuperadminUserContext(): Promise<SuperadminUser> {
-  const isSuperadmin = hasPermission('users:view'); // Example permission
-  if (isSuperadmin) {
-    // This is a placeholder. A real implementation would fetch user details.
-    return {
-      id: 'superadmin-mock-id',
-      email: 'superadmin@orderfly.app',
-      role: 'superadmin',
-    };
+  try {
+    // This is a placeholder for a real session check.
+    // In a real app, you would replace this with something like:
+    // const session = await getSession();
+    // const user = session?.user;
+    const user = await requireSuperadmin();
+
+    if (user) {
+      return {
+        id: (user as any).id ?? null,
+        email: (user as any).email ?? null,
+        role: 'superadmin',
+      };
+    }
+  } catch {
+    // If requireSuperadmin throws (or session is null), we fall back.
   }
 
-  // Fallback if not a superadmin
   return {
     id: null,
     email: null,
