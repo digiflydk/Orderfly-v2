@@ -6,6 +6,7 @@ import { requireSuperadmin } from '@/lib/auth/superadmin';
 import type { BrandWebsitePage, BrandWebsitePageSummary, BrandWebsitePageCreateInput, BrandWebsitePageUpdateInput } from '@/lib/types/brandWebsite';
 import { brandWebsitePageCreateSchema, brandWebsitePageSlugSchema, brandWebsitePageUpdateSchema } from './pages-schemas';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
+import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
 const pagesCollectionPath = (brandId: string) => `brands/${brandId}/website/pages`;
 
@@ -94,7 +95,6 @@ export async function createBrandWebsitePage(brandId: string, input: BrandWebsit
         entity: 'page',
         entityId: validated.slug,
         action: 'create',
-        user,
         changedFields: Object.keys(validated),
         path: `/brands/${brandId}/website/pages/${validated.slug}`,
     });
@@ -104,7 +104,7 @@ export async function createBrandWebsitePage(brandId: string, input: BrandWebsit
 }
 
 export async function updateBrandWebsitePage(brandId: string, slug: string, input: BrandWebsitePageUpdateInput): Promise<BrandWebsitePage> {
-    const user = await requireSuperadmin();
+    await requireSuperadmin();
     brandWebsitePageSlugSchema.parse(slug);
     const validatedInput = brandWebsitePageUpdateSchema.parse(input);
     
@@ -142,7 +142,6 @@ export async function updateBrandWebsitePage(brandId: string, slug: string, inpu
             entity: 'page',
             entityId: newSlug,
             action: 'update',
-            user,
             changedFields: Object.keys(validatedInput),
             path: `/brands/${brandId}/website/pages/${newSlug}`,
         });
@@ -161,7 +160,6 @@ export async function updateBrandWebsitePage(brandId: string, slug: string, inpu
             entity: 'page',
             entityId: slug,
             action: 'update',
-            user,
             changedFields: Object.keys(validatedInput),
             path: `/brands/${brandId}/website/pages/${slug}`,
         });
@@ -172,7 +170,7 @@ export async function updateBrandWebsitePage(brandId: string, slug: string, inpu
 }
 
 export async function deleteBrandWebsitePage(brandId: string, slug: string): Promise<void> {
-    const user = await requireSuperadmin();
+    await requireSuperadmin();
     brandWebsitePageSlugSchema.parse(slug);
 
     const db = getAdminDb();
@@ -184,7 +182,7 @@ export async function deleteBrandWebsitePage(brandId: string, slug: string): Pro
         entity: 'page',
         entityId: slug,
         action: 'delete',
-        user,
+        changedFields: [],
         path: `/brands/${brandId}/website/pages/${slug}`,
     });
 }

@@ -49,7 +49,6 @@ async function readConfig(brandId: string): Promise<BrandWebsiteConfig> {
 
   const data = docSnap.data() as Partial<BrandWebsiteConfig>;
 
-  // Ensure all sub-objects exist
   return {
     ...VIRTUAL_CONFIG,
     ...data,
@@ -78,7 +77,7 @@ async function writeConfig(brandId: string, data: Partial<BrandWebsiteConfig>): 
 export async function getBrandWebsiteConfig(brandId: string): Promise<BrandWebsiteConfig> {
   const start = Date.now();
   try {
-    const user = await requireSuperadmin();
+    await requireSuperadmin();
     const result = await readConfig(brandId);
     await logBrandWebsiteApiCall({
         layer: 'cms', action: 'getBrandWebsiteConfig', brandId, status: 'success', durationMs: Date.now() - start, path: configPath(brandId)
@@ -95,7 +94,7 @@ export async function getBrandWebsiteConfig(brandId: string): Promise<BrandWebsi
 export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWebsiteConfigInput): Promise<BrandWebsiteConfig> {
   const start = Date.now();
   try {
-    const user = await requireSuperadmin();
+    await requireSuperadmin();
     const validatedInput = brandWebsiteConfigBaseSchema.parse(input);
     const currentConfig = await readConfig(brandId);
 
@@ -111,7 +110,6 @@ export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWe
         entity: 'config',
         entityId: 'config',
         action: 'update',
-        user,
         changedFields: ['config'],
         path: configPath(brandId),
     });
@@ -137,7 +135,7 @@ async function savePartial<T>(
     const start = Date.now();
     const actionName = `saveBrandWebsite${field.charAt(0).toUpperCase() + field.slice(1)}`;
     try {
-        const user = await requireSuperadmin();
+        await requireSuperadmin();
         const validatedInput = schema.parse(data);
         const currentConfig = await readConfig(brandId);
         
@@ -155,7 +153,6 @@ async function savePartial<T>(
             entity: 'config',
             entityId: 'config',
             action: 'update',
-            user,
             changedFields: [field],
             path: configPath(brandId),
         });

@@ -88,7 +88,7 @@ export async function saveBrandWebsiteMenuSettings(
 ): Promise<BrandWebsiteMenuSettings> {
     const start = Date.now();
     try {
-        const user = await requireSuperadmin();
+        await requireSuperadmin();
         const validatedInput = brandWebsiteMenuSettingsSchema.parse(input);
         const currentSettings = await readMenuSettings(brandId);
         const newSettings = {
@@ -102,7 +102,6 @@ export async function saveBrandWebsiteMenuSettings(
             entity: 'menuSettings',
             entityId: 'menuSettings',
             action: 'update',
-            user,
             changedFields: ['settings'],
             path: menuSettingsPath(brandId),
         });
@@ -126,7 +125,7 @@ export async function saveBrandWebsiteMenuHero(
 ): Promise<BrandWebsiteMenuSettings> {
     const start = Date.now();
     try {
-        const user = await requireSuperadmin();
+        await requireSuperadmin();
 
         let validatedHero: BrandWebsiteMenuHero | null = null;
         if (hero) {
@@ -146,7 +145,6 @@ export async function saveBrandWebsiteMenuHero(
             entity: 'menuSettings',
             entityId: 'menuSettings',
             action: 'update',
-            user,
             changedFields: ['hero'],
             path: menuSettingsPath(brandId),
         });

@@ -96,7 +96,7 @@ async function savePartial<T>(
     const start = Date.now();
     const actionName = `saveBrandWebsite${field.charAt(0).toUpperCase() + field.slice(1)}`;
     try {
-        const user = await requireSuperadmin();
+        await requireSuperadmin();
         const validatedData = schema.parse(data);
         const currentHome = await readHome(brandId);
         const newHome = {
@@ -110,7 +110,6 @@ async function savePartial<T>(
             entity: 'home',
             entityId: 'home',
             action: 'update',
-            user,
             changedFields: [field],
             path: homePath(brandId),
         });
