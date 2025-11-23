@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
@@ -30,12 +31,13 @@ const brandWebsiteApiLoggingConfig = {
 };
 
 export async function logBrandWebsiteAuditEntry(
-  entry: Omit<BrandWebsiteAuditEntry, 'module' | 'timestamp'>
+  entry: Omit<BrandWebsiteAuditEntry, 'module' | 'timestamp' | 'performedBy'> & { performedBy?: BrandWebsiteAuditEntry['performedBy']}
 ): Promise<void> {
   if (!brandWebsiteApiLoggingConfig.enabled) return;
 
-  if (entry.layer === 'cms' && !brandWebsiteApiLoggingConfig.cmsEnabled) return;
-  if (entry.layer === 'public' && !brandWebsiteApiLoggingConfig.publicEnabled) return;
+  // This is a placeholder for more granular config if needed later
+  // if (entry.layer === 'cms' && !brandWebsiteApiLoggingConfig.cmsEnabled) return;
+  // if (entry.layer === 'public' && !brandWebsiteApiLoggingConfig.publicEnabled) return;
 
   const actionEnabled = brandWebsiteApiLoggingConfig.actions[entry.action];
   if (actionEnabled === false) return;
