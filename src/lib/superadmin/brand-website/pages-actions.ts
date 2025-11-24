@@ -8,16 +8,16 @@ import { brandWebsitePageCreateSchema, brandWebsitePageSlugSchema, brandWebsiteP
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
-const pagesCollectionPath = (brandId: string) => `brands/${brandId}/website/pages`;
+const pagesCollectionPath = (brandId: string) => `brands/${brandId}/websitePages`;
 
 export async function listBrandWebsitePages(brandId: string): Promise<BrandWebsitePageSummary[]> {
     const start = Date.now();
     const action = 'listBrandWebsitePages';
-    const path = `/brands/${brandId}/website/pages`;
+    const path = pagesCollectionPath(brandId);
     try {
         await requireSuperadmin();
         const db = getAdminDb();
-        const snapshot = await db.collection(pagesCollectionPath(brandId)).get();
+        const snapshot = await db.collection(path).get();
 
         const pages = snapshot.docs.map(doc => {
             const data = doc.data();
@@ -55,7 +55,7 @@ export async function listBrandWebsitePages(brandId: string): Promise<BrandWebsi
 export async function getBrandWebsitePage(brandId: string, slug: string): Promise<BrandWebsitePage | null> {
     const start = Date.now();
     const action = 'getBrandWebsitePage';
-    const path = `/brands/${brandId}/website/pages/${slug}`;
+    const path = `${pagesCollectionPath(brandId)}/${slug}`;
     try {
         await requireSuperadmin();
         brandWebsitePageSlugSchema.parse(slug);
@@ -90,10 +90,9 @@ export async function getBrandWebsitePage(brandId: string, slug: string): Promis
 
 export async function createBrandWebsitePage(brandId: string, input: BrandWebsitePageCreateInput): Promise<BrandWebsitePage> {
     const action = 'createBrandWebsitePage';
-    // Define slug early for consistent logging
     const validatedSlug = brandWebsitePageSlugSchema.safeParse(input.slug);
     const slug = validatedSlug.success ? validatedSlug.data : 'invalid-slug';
-    const path = `/brands/${brandId}/website/pages/${slug}`;
+    const path = `${pagesCollectionPath(brandId)}/${slug}`;
     const start = Date.now();
 
     try {
@@ -132,7 +131,7 @@ export async function createBrandWebsitePage(brandId: string, input: BrandWebsit
             entityId: validated.slug,
             action: 'create',
             changedFields: Object.keys(validated),
-            path: `/brands/${brandId}/website/pages/${validated.slug}`,
+            path: path,
         });
         
         await logBrandWebsiteApiCall({ layer: 'cms', action, brandId, status: 'success', durationMs: Date.now() - start, path });
@@ -149,7 +148,7 @@ export async function createBrandWebsitePage(brandId: string, input: BrandWebsit
 export async function updateBrandWebsitePage(brandId: string, slug: string, input: BrandWebsitePageUpdateInput): Promise<BrandWebsitePage> {
     const start = Date.now();
     const action = 'updateBrandWebsitePage';
-    let path = `/brands/${brandId}/website/pages/${slug}`;
+    let path = `${pagesCollectionPath(brandId)}/${slug}`;
     try {
         await requireSuperadmin();
         brandWebsitePageSlugSchema.parse(slug);
@@ -167,7 +166,7 @@ export async function updateBrandWebsitePage(brandId: string, slug: string, inpu
         const newSlug = validatedInput.slug;
         
         if (newSlug && newSlug !== slug) {
-            path = `/brands/${brandId}/website/pages/${newSlug}`;
+            path = `${pagesCollectionPath(brandId)}/${newSlug}`;
             const newDocRef = collectionRef.doc(newSlug);
             const newDoc = await newDocRef.get();
             if (newDoc.exists) {
@@ -226,7 +225,7 @@ export async function updateBrandWebsitePage(brandId: string, slug: string, inpu
 export async function deleteBrandWebsitePage(brandId: string, slug: string): Promise<void> {
     const start = Date.now();
     const action = 'deleteBrandWebsitePage';
-    const path = `/brands/${brandId}/website/pages/${slug}`;
+    const path = `${pagesCollectionPath(brandId)}/${slug}`;
     try {
         await requireSuperadmin();
         brandWebsitePageSlugSchema.parse(slug);
@@ -249,5 +248,3 @@ export async function deleteBrandWebsitePage(brandId: string, slug: string): Pro
         throw error;
     }
 }
-
-    
