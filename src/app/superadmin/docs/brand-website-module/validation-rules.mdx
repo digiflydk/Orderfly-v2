@@ -1,68 +1,356 @@
+# Brand Website — Validation Rules
 
-# Brand Website: CMS Validation Rules
+This document describes the validation rules used by the Brand Website CMS UI for EPIC 522.
 
-This document defines the validation behavior for the Brand Website CMS, matching the backend Zod schemas.
+The rules are based on the Brand Website schemas in `config-schemas.ts`:
 
-## Domain Validation (`config.domains`)
+- `brandWebsiteConfigBaseSchema`
+- `brandWebsiteDesignSystemSchema`
+- `brandWebsiteSeoSchema`
+- `brandWebsiteSocialSchema`
+- `brandWebsiteTrackingSchema`
+- `brandWebsiteLegalSchema`
 
-*   **Rule:** Must be non-empty strings.
-*   **Rule:** Must NOT contain `http://` or `https://`.
-*   **Rule:** Must NOT contain spaces.
-*   **Rule:** Must contain at least one dot (`.`).
-*   **Rule:** Empty domain rows are not submitted.
+The goal is to make validation behavior explicit and predictable for both Studio and reviewers (Codex).
 
-## URL Validation (SEO, Social, Legal)
+> If any of these schemas change, this document must be updated in the same task.
 
-Applies to fields like `seo.canonicalUrl`, `social.facebook`, `legal.customPrivacyPolicy`, etc.
+---
 
-*   **Rule:** Non-empty values must be valid URLs starting with `http://` or `https://`.
-*   **Rule:** Optional fields can be left empty.
+## 1. Domains (config.domains)
 
-## Typography & Fonts (`designSystem.typography`)
+**Schema:** `brandWebsiteConfigBaseSchema`  
+**Fields:** `config.domains` (array of strings, where `domains[0]` is primary)
 
-*   **Fields:** `headingFont`, `bodyFont`, `h1Size`, `h2Size`, `h3Size`, `bodySize`.
-*   **Rule:** All are optional but must be non-empty strings if provided.
-*   **Rule:** `headingFont` and `bodyFont` should match an allowed font preset in the UI dropdown.
+Validation rules:
 
-## Colors (`designSystem.colors`)
+- **Non-empty**  
+  - Each domain entry must be a non-empty string.
+  - Empty rows must not be submitted.
 
-*   **Fields:** `primary`, `secondary`, `background`, `textPrimary`, etc.
-*   **Rule:** Must be non-empty strings. The UI uses a color picker, which ensures a valid hex code.
+- **No protocol**  
+  - Domains must not include `http://` or `https://`.
+  - Example of invalid: `https://example.com`.
 
-## Header & Transparency (`designSystem.header`)
+- **No spaces**  
+  - Domains must not contain spaces.
+  - Example of invalid: `my domain.com`.
 
-*   **Field:** `header.sticky`
-    *   **Rule:** Must be a boolean.
-*   **Field:** `header.height`
-    *   **Rule:** Must be a non-empty string (e.g., "80px").
-*   **Field:** `header.transparencyPercent`
-    *   **Rule:** Must be a number between 0 and 100 (inclusive).
+- **Must contain at least one dot**  
+  - Domains must contain a `.` to be considered valid hostnames.
+  - Examples:
+    - Valid: `example.com`, `pizza.example.dk`
+    - Invalid: `localhost`, `example`
 
-## Spacing (`designSystem.spacing`)
+- **Uniqueness**  
+  - All domains for a brand should be unique (no duplicates in the array).
 
-*   **Fields:** `xs`, `sm`, `md`, `lg`, `xl`.
-*   **Rule:** Must be non-negative numbers.
+- **Primary vs additional**  
+  - `domains[0]` is treated as the primary domain.
+  - `domains[1..]` are treated as additional domains.
 
-## Buttons (`designSystem.buttons`)
+On validation failure:
 
-*   **Field:** `shape`
-    *   **Rule:** Must be one of `'pill'`, `'rounded'`, or `'square'`.
-*   **Field:** `defaultVariant`
-    *   **Rule:** Must be a valid variant string (e.g., "solid", "outline").
+- Saving the Config section must be blocked.
+- The UI should show a clear error message near the domains field(s), not a raw Zod error.
 
-## Tracking IDs (`tracking`)
+---
 
-*   **Fields:** `ga4MeasurementId`, `gtmId`, `metaPixelId`, etc.
-*   **Rule:** All are optional strings. No strict format is enforced by the schema, but the UI may provide placeholders as hints.
+## 2. URL Fields (SEO, Social, Legal, Share Image)
 
-## Legal (`legal`)
+These rules apply to all URL fields in the Brand Website config.
 
-*   **Field:** `usePlatformDefaults`
-    *   **Rule:** Must be a boolean.
-*   **Rule:** If `usePlatformDefaults` is `false`, the custom URL fields may become effectively required by the UI logic, although they are optional in the schema.
+**Schemas:**
 
-## General Error Handling
+- `brandWebsiteSeoSchema`
+- `brandWebsiteSocialSchema`
+- `brandWebsiteLegalSchema` (if any URLs are used)
+- Any share/OG image URLs
 
-*   **Rule:** Invalid fields must block the save operation for that specific section.
-*   **Rule:** Errors must be displayed as user-friendly messages next to the respective fields.
-*   **Rule:** No raw stack traces or JSON error dumps are shown to the user.
+### 2.1 Affected fields
+
+- **SEO**
+  - `seo.ogImageUrl`
+  - `seo.canonicalUrl`
+
+- **Social**
+  - `social.facebook`
+  - `social.instagram`
+  - `social.tiktok`
+  - `social.linkedin`
+  - `social.x`
+  - `social.shareImageUrl`
+
+- **Legal (if modeled as URLs)**  
+  - If any legal fields are URLs (e.g. external policy links), they must follow the same rules.
+
+### 2.2 Rules
+
+- **HTTP/HTTPS only**
+  - Non-empty values must be valid HTTP or HTTPS URLs.
+  - Schemas should use `z.string().url()` for URL validation.
+  - Examples:
+    - Valid: `https://example.com`, `http://example.com/page`
+    - Invalid: `ftp://example.com`, `example.com`, `not-a-url`
+
+- **Optional vs required**
+  - Most URLs (social, share image, canonical) are **optional**:
+    - If the field is empty in the UI, it should be treated as “not set” and either omitted or passed as `undefined`.
+    - UI must not submit `""` (empty string) as a value if the backend does not accept that.
+  - If any URL is required in the UI, this must be enforced by the form:
+    - The field cannot be left empty.
+    - An error is shown if user attempts to save without a valid URL.
+
+On validation failure:
+
+- Saving the relevant section (SEO or Social) must be blocked.
+- A clear, user-friendly error message should indicate which URL is invalid and why.
+
+---
+
+## 3. Typography (designSystem.typography)
+
+**Schema:** `brandWebsiteDesignSystemSchema`  
+**Fields:**
+
+- `designSystem.typography.headingFont`
+- `designSystem.typography.bodyFont`
+- `designSystem.typography.h1Size`
+- `designSystem.typography.h2Size`
+- `designSystem.typography.h3Size`
+- `designSystem.typography.bodySize`
+
+Validation rules:
+
+- **Font fields**
+  - `headingFont` and `bodyFont` are strings.
+  - When set, they must be non-empty.
+  - The UI may optionally restrict them to a preset list of font families.
+
+- **Size fields**
+  - `h1Size`, `h2Size`, `h3Size`, `bodySize` are strings representing CSS sizes.
+  - When set, they must:
+    - Be non-empty.
+    - Use CSS-compatible values like `2.25rem`, `1.5rem`, `1rem`, or `24px`.
+  - The UI may optionally restrict them to a preset list of sizes.
+
+On validation failure:
+
+- Saving the Design System section must be blocked.
+- Errors should clearly highlight which typography field is invalid.
+
+---
+
+## 4. Colors (designSystem.colors)
+
+**Schema:** `brandWebsiteDesignSystemSchema`  
+**Fields:**
+
+- `designSystem.colors.primary`
+- `designSystem.colors.secondary`
+- `designSystem.colors.background`
+- `designSystem.colors.textPrimary`
+- `designSystem.colors.textSecondary`
+- `designSystem.colors.headerBackground`
+- `designSystem.colors.footerBackground`
+
+Validation rules:
+
+- Colors are strings.
+- When set, they must be non-empty.
+- The UI may enforce:
+  - Hex format (e.g. `#RRGGBB`), or
+  - CSS color values (e.g. `rgb(…)`, CSS variables, etc.).
+- At minimum, primary and background colors should be set for a production-ready brand website.
+
+On validation failure:
+
+- Saving the Design System section must be blocked.
+- Error messages should indicate which color field is invalid.
+
+---
+
+## 5. Header & Transparency (designSystem.header)
+
+**Schema:** `brandWebsiteDesignSystemSchema`  
+**Fields:**
+
+- `designSystem.header.sticky`
+- `designSystem.header.height`
+- `designSystem.header.transparencyPercent`
+
+Validation rules:
+
+- **Sticky**
+  - `sticky` is a boolean toggle.
+  - No additional constraints beyond being a valid boolean.
+
+- **Height**
+  - `height` is a string, typically a CSS dimension (e.g. `64px`, `4rem`).
+  - When set, it must be non-empty and valid as a CSS height.
+
+- **Transparency**
+  - `transparencyPercent` is a number between `0` and `100` (inclusive).
+  - Values below 0 or above 100 must be rejected.
+
+On validation failure:
+
+- Saving the Design System section must be blocked.
+- Errors should clearly indicate when header transparency is out of range.
+
+---
+
+## 6. Spacing (designSystem.spacing)
+
+**Schema:** `brandWebsiteDesignSystemSchema`  
+**Fields:**
+
+- `designSystem.spacing.xs`
+- `designSystem.spacing.sm`
+- `designSystem.spacing.md`
+- `designSystem.spacing.lg`
+- `designSystem.spacing.xl`
+
+Validation rules:
+
+- Spacing values are numeric.
+- When set, they must:
+  - Be valid numbers.
+  - Not be negative.
+- The project may recommend a standard scale (e.g. 4, 8, 12, 16, 24), but that is a UX convention rather than a strict validation requirement.
+
+On validation failure:
+
+- Saving the Design System section must be blocked.
+- Errors should indicate which spacing field is invalid.
+
+---
+
+## 7. Buttons (designSystem.buttons)
+
+**Schema:** `brandWebsiteDesignSystemSchema`  
+**Fields:**
+
+- `designSystem.buttons.shape`
+- `designSystem.buttons.defaultVariant`
+
+Validation rules:
+
+- **Shape**
+  - `shape` is an enum-like field.
+  - Allowed values: `pill`, `rounded`, `square`.
+  - Any other value must be rejected by the UI (e.g. via select options).
+
+- **Default variant**
+  - `defaultVariant` is a string.
+  - The UI should restrict this to one of the supported button variants (e.g. `primary`, `secondary`, `ghost`, etc.).
+  - Arbitrary values should not be allowed if the public design system only supports a fixed set of variants.
+
+On validation failure:
+
+- Saving the Design System section must be blocked.
+- Errors should indicate which button property is invalid (shape or variant).
+
+---
+
+## 8. Tracking IDs (tracking.*)
+
+**Schema:** `brandWebsiteTrackingSchema`  
+**Fields:**
+
+- `tracking.ga4MeasurementId`
+- `tracking.gtmId`
+- `tracking.metaPixelId`
+- `tracking.tiktokPixelId`
+- `tracking.googleAdsConversionId`
+
+All tracking fields are **optional strings**, but when set they must follow basic provider-specific expectations.
+
+Recommended rules (can be enforced in UI or noted as guidance):
+
+- **GA4 Measurement ID (`ga4MeasurementId`)**
+  - Typically starts with `G-`.
+  - Example: `G-XXXXXXXXXX`.
+
+- **Google Tag Manager ID (`gtmId`)**
+  - Typically starts with `GTM-`.
+  - Example: `GTM-XXXXXXX`.
+
+- **Meta Pixel ID (`metaPixelId`)**
+  - Numeric string.
+  - Example: `123456789012345`.
+
+- **TikTok Pixel ID (`tiktokPixelId`)**
+  - Follows TikTok’s pixel ID format (often alphanumeric).
+  - Example: `C123ABC456DEF789`.
+
+- **Google Ads Conversion ID (`googleAdsConversionId`)**
+  - Numeric identifier or tag-specific ID used by Google Ads.
+
+If the UI enforces stricter patterns via regex or custom validators, those patterns must be aligned with this document.
+
+On validation failure:
+
+- Saving the Tracking section must be blocked.
+- Errors should indicate which tracking ID is invalid.
+
+---
+
+## 9. Legal (legal.*)
+
+**Schema:** `brandWebsiteLegalSchema`  
+**Fields:**
+
+- `legal.usePlatformDefaults`
+- `legal.customCookiePolicy`
+- `legal.customPrivacyPolicy`
+- `legal.customTerms`
+
+Validation rules:
+
+- **usePlatformDefaults**
+  - Boolean toggle.
+  - When `true`, the platform’s default legal texts may be used and custom fields may be left empty.
+
+- **Custom legal texts**
+  - `customCookiePolicy`, `customPrivacyPolicy`, `customTerms` are free-text fields.
+  - When `usePlatformDefaults` is `false`, the project may require one or more of these to be non-empty, depending on legal requirements for the brand.
+  - Text should be human-readable; no specific format (plain text or markdown) is enforced by schema.
+
+On validation failure:
+
+- Saving the Legal section must be blocked if required legal texts are missing when `usePlatformDefaults` is turned off.
+- Errors should clearly indicate which legal text is required.
+
+---
+
+## 10. Error Handling Expectations
+
+Across all Brand Website CMS forms (Config, Design System, SEO, Social, Tracking, Legal):
+
+- Invalid input values **must block** saving that section.
+- Errors must be presented as **user-friendly messages**, ideally:
+  - Next to the invalid field(s), and/or
+  - As a form-level error summarizing the problem.
+- The UI must not show:
+  - Raw Zod error structures
+  - Raw stack traces
+  - Low-level exception messages
+
+Success and failure notifications (toasts) should be consistent across all Brand Website forms:
+
+- Success toast on successful save.
+- Error toast (plus inline field errors) when validation fails.
+
+---
+
+## 11. Maintenance
+
+Whenever a new field is added to any of the Brand Website schemas:
+
+- Add the field to the relevant CMS form.
+- Update the **Schema → UI Mapping** document.
+- Update this **Validation Rules** document with:
+  - Which fields are affected.
+  - What is considered valid vs invalid.
+  - How errors should be surfaced in the UI.
