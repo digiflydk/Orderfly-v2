@@ -4,12 +4,12 @@
 import Link from "next/link";
 import type { Brand, Location } from "@/types";
 import { Globe } from 'lucide-react';
-import { FooterTheme } from '@/types/settings';
+import type { FooterTheme } from '@/types/settings';
 
 interface FooterProps {
-  brand: Brand;
+  brand?: Brand;
   location?: Location;
-  version: string;
+  version: string; // Made required as per instruction
   onOpenCookieSettings?: () => void;
   theme?: FooterTheme;
 }
