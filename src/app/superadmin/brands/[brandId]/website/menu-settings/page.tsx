@@ -1,14 +1,22 @@
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+'use server';
+import 'server-only';
+import { requireSuperadmin } from '@/lib/auth/superadmin';
+import { getBrandWebsiteMenuSettings } from '@/lib/superadmin/brand-website/menu-settings-actions';
+import { notFound } from 'next/navigation';
+import { BrandWebsiteMenuSettingsForm } from '@/components/superadmin/brand-website/menu-settings/BrandWebsiteMenuSettingsForm';
 
-export default function BrandWebsiteMenuSettingsPage() {
-    return (
-        <Card>
-            <CardHeader>
-                <CardTitle>Brand Website Menu Settings</CardTitle>
-            </CardHeader>
-            <CardContent>
-                <p className="text-muted-foreground">This is a placeholder for the Brand Website Menu Settings page.</p>
-            </CardContent>
-        </Card>
-    )
+export default async function BrandWebsiteMenuSettingsPage({ params }: { params: { brandId: string } }) {
+  await requireSuperadmin();
+  
+  const settings = await getBrandWebsiteMenuSettings(params.brandId);
+
+  if (!settings) {
+    notFound();
+  }
+
+  return (
+    <div className="space-y-6">
+      <BrandWebsiteMenuSettingsForm brandId={params.brandId} initialSettings={settings} />
+    </div>
+  );
 }
