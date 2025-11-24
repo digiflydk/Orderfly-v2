@@ -1,3 +1,4 @@
+
 'use server';
 import 'server-only';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
@@ -11,6 +12,18 @@ import { BrandWebsiteTrackingForm } from '@/components/superadmin/brand-website/
 import { BrandWebsiteLegalForm } from '@/components/superadmin/brand-website/config/BrandWebsiteLegalForm';
 import { BrandWebsiteDesignSystemForm } from '@/components/superadmin/brand-website/config/BrandWebsiteDesignSystemForm';
 
+// Helper to ensure all parts of the config are serializable
+function makeConfigSerializable(config: any) {
+    if (!config) return null;
+    const safeConfig = { ...config };
+    if (config.updatedAt) {
+        safeConfig.updatedAt = String(config.updatedAt);
+    }
+    // Add any other necessary serializations here in the future
+    return safeConfig;
+}
+
+
 export default async function BrandWebsiteConfigPage({ params }: { params: { brandId: string } }) {
   await requireSuperadmin();
   
@@ -19,6 +32,8 @@ export default async function BrandWebsiteConfigPage({ params }: { params: { bra
   if (!config) {
     notFound();
   }
+  
+  const safeConfig = makeConfigSerializable(config);
 
   return (
     <div className="space-y-6">
@@ -32,22 +47,22 @@ export default async function BrandWebsiteConfigPage({ params }: { params: { bra
           <TabsTrigger value="legal">Legal</TabsTrigger>
         </TabsList>
         <TabsContent value="general">
-          <BrandWebsiteConfigForm brandId={params.brandId} initialConfig={config} />
+          <BrandWebsiteConfigForm brandId={params.brandId} initialConfig={safeConfig} />
         </TabsContent>
         <TabsContent value="design">
-          <BrandWebsiteDesignSystemForm brandId={params.brandId} initialDesignConfig={config.designSystem} />
+          <BrandWebsiteDesignSystemForm brandId={params.brandId} initialDesignConfig={safeConfig.designSystem} />
         </TabsContent>
         <TabsContent value="seo">
-            <BrandWebsiteSeoForm brandId={params.brandId} initialSeoConfig={config.seo} />
+            <BrandWebsiteSeoForm brandId={params.brandId} initialSeoConfig={safeConfig.seo} />
         </TabsContent>
         <TabsContent value="social">
-            <BrandWebsiteSocialForm brandId={params.brandId} initialSocialConfig={config.social} />
+            <BrandWebsiteSocialForm brandId={params.brandId} initialSocialConfig={safeConfig.social} />
         </TabsContent>
          <TabsContent value="tracking">
-            <BrandWebsiteTrackingForm brandId={params.brandId} initialTrackingConfig={config.tracking} />
+            <BrandWebsiteTrackingForm brandId={params.brandId} initialTrackingConfig={safeConfig.tracking} />
         </TabsContent>
         <TabsContent value="legal">
-            <BrandWebsiteLegalForm brandId={params.brandId} initialLegalConfig={config.legal} />
+            <BrandWebsiteLegalForm brandId={params.brandId} initialLegalConfig={safeConfig.legal} />
         </TabsContent>
       </Tabs>
     </div>
