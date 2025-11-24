@@ -1,92 +1,68 @@
 
 # Brand Website: CMS Validation Rules
 
-This document defines the expected validation behavior for the Brand Website CMS UI. The rules apply to both client-side form validation and server-side Zod schemas.
+This document defines the validation behavior for the Brand Website CMS, matching the backend Zod schemas.
 
----
+## Domain Validation (`config.domains`)
 
-## Domain Validation
+*   **Rule:** Must be non-empty strings.
+*   **Rule:** Must NOT contain `http://` or `https://`.
+*   **Rule:** Must NOT contain spaces.
+*   **Rule:** Must contain at least one dot (`.`).
+*   **Rule:** Empty domain rows are not submitted.
 
-**Applies to:** `config.domains` array in the "Config" tab.
+## URL Validation (SEO, Social, Legal)
 
-- Must be a valid hostname (no spaces, no protocol).
-- Must **not** start with `http://` or `https://`.
-- Must contain at least one dot (e.g., `example.com`).
-- Empty entries are not allowed and will be filtered out before submission.
-- All domains must be unique for the current brand.
+Applies to fields like `seo.canonicalUrl`, `social.facebook`, `legal.customPrivacyPolicy`, etc.
 
----
+*   **Rule:** Non-empty values must be valid URLs starting with `http://` or `https://`.
+*   **Rule:** Optional fields can be left empty.
 
-## URL Validation
+## Typography & Fonts (`designSystem.typography`)
 
-**Applies to:**
-- **SEO:** `canonicalUrl`, `ogImageUrl`
-- **Social:** `facebook`, `instagram`, `tiktok`, `linkedin`, `x`, `shareImageUrl`
-- **Legal:** `customCookiePolicy`, `customPrivacyPolicy`, `customTerms`
+*   **Fields:** `headingFont`, `bodyFont`, `h1Size`, `h2Size`, `h3Size`, `bodySize`.
+*   **Rule:** All are optional but must be non-empty strings if provided.
+*   **Rule:** `headingFont` and `bodyFont` should match an allowed font preset in the UI dropdown.
 
-**Rules:**
-- Must start with `http://` or `https://`.
-- Must be a valid URL string according to Zod's `.url()` validation.
-- If a field is optional, an empty string is allowed and treated as "not set".
+## Colors (`designSystem.colors`)
 
----
+*   **Fields:** `primary`, `secondary`, `background`, `textPrimary`, etc.
+*   **Rule:** Must be non-empty strings. The UI uses a color picker, which ensures a valid hex code.
 
-## Typography & Sizes
+## Header & Transparency (`designSystem.header`)
 
-**Applies to:** "Design System" tab.
+*   **Field:** `header.sticky`
+    *   **Rule:** Must be a boolean.
+*   **Field:** `header.height`
+    *   **Rule:** Must be a non-empty string (e.g., "80px").
+*   **Field:** `header.transparencyPercent`
+    *   **Rule:** Must be a number between 0 and 100 (inclusive).
 
-- **Font Families:**
-  - `typography.headingFont` and `typography.bodyFont` must match one of the allowed values from the font whitelist (e.g., 'Inter', 'Roboto').
-- **Sizes:**
-  - All font size fields (e.g., `h1Size`, `bodySize`) are expected to be numeric and will be converted to `rem` units.
-  - No negative values are allowed.
+## Spacing (`designSystem.spacing`)
 
----
+*   **Fields:** `xs`, `sm`, `md`, `lg`, `xl`.
+*   **Rule:** Must be non-negative numbers.
 
-## Colors
+## Buttons (`designSystem.buttons`)
 
-**Applies to:** "Design System" tab.
+*   **Field:** `shape`
+    *   **Rule:** Must be one of `'pill'`, `'rounded'`, or `'square'`.
+*   **Field:** `defaultVariant`
+    *   **Rule:** Must be a valid variant string (e.g., "solid", "outline").
 
-- All color fields (`primary`, `secondary`, etc.) must be non-empty strings.
-- The UI uses a color picker that outputs a valid hex string (e.g., `#RRGGBB`).
-- Primary, secondary, background, and text colors are required.
+## Tracking IDs (`tracking`)
 
----
+*   **Fields:** `ga4MeasurementId`, `gtmId`, `metaPixelId`, etc.
+*   **Rule:** All are optional strings. No strict format is enforced by the schema, but the UI may provide placeholders as hints.
 
-## Header / Footer & Transparency
+## Legal (`legal`)
 
-**Applies to:** "Design System" tab.
+*   **Field:** `usePlatformDefaults`
+    *   **Rule:** Must be a boolean.
+*   **Rule:** If `usePlatformDefaults` is `false`, the custom URL fields may become effectively required by the UI logic, although they are optional in the schema.
 
-- `header.transparencyPercent` must be a number between 0 and 100 (inclusive).
-- `header.sticky` must be a boolean.
-- `header.height` is a string but is expected to be a valid CSS value (e.g., "80px").
+## General Error Handling
 
----
-
-## Spacing
-
-**Applies to:** "Design System" tab.
-
-- All spacing scale fields (`xs`, `sm`, `md`, `lg`, `xl`) must be numeric.
-- Values cannot be negative.
-
----
-
-## Tracking IDs
-
-**Applies to:** "Tracking" tab.
-
-- All fields are optional strings.
-- Basic pattern validation is applied for common formats:
-  - **GA4:** Must start with `G-`.
-  - **GTM:** Must start with `GTM-`.
-
----
-
-## Error Handling UX
-
-- Invalid values must block the save operation for the specific section where the error occurs.
-- Validation errors must be displayed clearly next to the corresponding form field.
-- Raw JSON errors or stack traces must never be shown to the user.
-- A success toast is displayed on successful save.
-- An error toast is displayed on failed save, showing a user-friendly message.
+*   **Rule:** Invalid fields must block the save operation for that specific section.
+*   **Rule:** Errors must be displayed as user-friendly messages next to the respective fields.
+*   **Rule:** No raw stack traces or JSON error dumps are shown to the user.

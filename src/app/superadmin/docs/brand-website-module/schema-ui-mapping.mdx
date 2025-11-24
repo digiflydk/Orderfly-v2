@@ -1,91 +1,124 @@
 
 # Brand Website: Schema → UI Mapping
 
-This document provides a one-to-one mapping between the Brand Website's Firestore schema fields, their corresponding UI elements in the Superadmin CMS, and the server actions used to save them.
+This document provides a one-to-one mapping between the Brand Website's Firestore schema fields and their corresponding UI elements in the Superadmin CMS. It clarifies which save action is responsible for persisting the data.
 
-## Introduction
-
-This reference is intended for developers to ensure that the CMS UI stays in sync with the backend data model. Every field defined in the `website.config` and `website.designSystem` schemas should have a corresponding editable field in the UI.
-
----
+This mapping is based on the Zod schemas found in `src/lib/superadmin/brand-website/config-schemas.ts`.
 
 ## Core Config Mapping
 
-**File:** `src/components/superadmin/brand-website/config/BrandWebsiteConfigForm.tsx`  
-**Save Action:** `saveBrandWebsiteConfig(brandId, data)`
+**UI Location:** `/superadmin/brands/{brandId}/website/config` (General Tab)
+**Save Action:** `saveBrandWebsiteConfig`
 
-| Schema Path             | UI Section              | UI Field Label             | Input Type            |
-| ----------------------- | ----------------------- | -------------------------- | --------------------- |
-| `config.active`         | Config tab              | "Website Active"           | Switch                |
-| `config.template`       | Config tab              | "Template"                 | Text input (disabled) |
-| `config.domains[]`      | Config tab              | "Domains"                  | Dynamic list of inputs|
-| `config.defaultLocationId` | Config tab           | "Default Location ID"      | Text input            |
-
----
+| Schema Path             | UI Label              | Input Type       | Notes                               |
+| ----------------------- | --------------------- | ---------------- | ----------------------------------- |
+| `active`                | "Website active"      | Toggle (Switch)  | Toggles the entire public website.  |
+| `template`              | "Website template"    | Text (disabled)  | Currently locked to `template-1`.   |
+| `domains[0]`            | "Primary domain"      | Text input       | The main domain for the website.    |
+| `domains[1...]`         | "Additional domains"  | Repeating inputs | For domain aliases.                 |
+| `defaultLocationId`     | "Default location"    | Select (Location)| Fallback for "Order Now" links.     |
 
 ## Design System Mapping
 
-**File:** `src/components/superadmin/brand-website/config/BrandWebsiteDesignSystemForm.tsx`  
-**Save Action:** `saveBrandWebsiteDesignSystem(brandId, data)`
+**UI Location:** `/superadmin/brands/{brandId}/website/config` (Design System Tab)
+**Save Action:** `saveBrandWebsiteDesignSystem`
 
-| Schema Path                      | UI Section              | UI Field Label          | Input Type    |
-| -------------------------------- | ----------------------- | ----------------------- | ------------- |
-| `designSystem.colors.primary`    | Design System tab       | "Primary"               | Color picker  |
-| `designSystem.colors.secondary`  | Design System tab       | "Secondary"             | Color picker  |
-| `designSystem.colors.background` | Design System tab       | "Background"            | Color picker  |
-| `designSystem.colors.textPrimary`| Design System tab       | "Text Primary"          | Color picker  |
-| `designSystem.colors.textSecondary`| Design System tab      | "Text Secondary"        | Color picker  |
-| `designSystem.colors.headerBackground`| Design System tab | "Header Background"     | Color picker  |
-| `designSystem.colors.footerBackground`| Design System tab | "Footer Background"     | Color picker  |
-| `designSystem.typography.*`      | Design System tab       | "Typography"            | Select        |
-| `designSystem.buttons.shape`     | Design System tab       | "Button Shape"          | Select        |
-| `designSystem.header.sticky`     | Design System tab       | "Sticky Header"         | Switch        |
-| `designSystem.header.height`     | Design System tab       | "Header Height (px)"    | Text input    |
-| `designSystem.header.transparencyPercent` | Design System tab | "Header Transparency" | Slider        |
-| `designSystem.spacing.*`         | Design System tab       | "Spacing (xs, sm...)"   | Number inputs |
+### Typography
 
----
+| Schema Path                    | UI Label     | Input Type |
+| ------------------------------ | ------------ | ---------- |
+| `typography.headingFont`       | Heading Font | Select     |
+| `typography.bodyFont`          | Body Font    | Select     |
+| `typography.h1Size`            | H1 Size      | Text input |
+| `typography.h2Size`            | H2 Size      | Text input |
+| `typography.h3Size`            | H3 Size      | Text input |
+| `typography.bodySize`          | Body Size    | Text input |
+
+### Colors
+
+| Schema Path                     | UI Label           | Input Type |
+| ------------------------------- | ------------------ | ---------- |
+| `colors.primary`                | Primary            | Color      |
+| `colors.secondary`              | Secondary          | Color      |
+| `colors.background`             | Background         | Color      |
+| `colors.textPrimary`            | Text Primary       | Color      |
+| `colors.textSecondary`          | Text Secondary     | Color      |
+| `colors.headerBackground`       | Header Background  | Color      |
+| `colors.footerBackground`       | Footer Background  | Color      |
+
+### Buttons
+
+| Schema Path                  | UI Label         | Input Type |
+| ---------------------------- | ---------------- | ---------- |
+| `buttons.shape`              | Button Shape     | Select     |
+| `buttons.defaultVariant`     | Default Variant  | Select     |
+
+### Header
+
+| Schema Path                     | UI Label                | Input Type      |
+| ------------------------------- | ----------------------- | --------------- |
+| `header.sticky`                 | Sticky Header           | Toggle (Switch) |
+| `header.height`                 | Header Height (px)      | Text input      |
+| `header.transparencyPercent`    | Header Transparency (%) | Slider          |
+
+### Spacing
+
+| Schema Path      | UI Label       | Input Type |
+| ---------------- | -------------- | ---------- |
+| `spacing.xs`     | Extra Small    | Number     |
+| `spacing.sm`     | Small          | Number     |
+| `spacing.md`     | Medium         | Number     |
+| `spacing.lg`     | Large          | Number     |
+| `spacing.xl`     | Extra Large    | Number     |
 
 ## SEO Mapping
 
-**File:** `src/components/superadmin/brand-website/config/BrandWebsiteSeoForm.tsx`  
-**Save Action:** `saveBrandWebsiteSeo(brandId, data)`
+**UI Location:** `/superadmin/brands/{brandId}/website/config` (SEO Tab)
+**Save Action:** `saveBrandWebsiteSeo`
 
-| Schema Path                     | UI Section | UI Field Label                   | Input Type |
-| ------------------------------- | ---------- | -------------------------------- | ---------- |
-| `seo.defaultTitle`              | SEO tab    | "Default SEO Title"              | Text input |
-| `seo.defaultDescription`        | SEO tab    | "Default Meta Description"       | Textarea   |
-| `seo.ogImageUrl`                | SEO tab    | "Default Social Share Image URL" | Text input |
-| `seo.canonicalUrl`              | SEO tab    | "Canonical URL"                  | Text input |
-| `seo.index`                     | SEO tab    | "Allow Search Indexing"          | Switch     |
-
----
+| Schema Path                   | UI Label                          | Input Type      |
+| ----------------------------- | --------------------------------- | --------------- |
+| `seo.defaultTitle`            | Default SEO Title                 | Text input      |
+| `seo.defaultDescription`      | Default Meta Description          | Textarea        |
+| `seo.ogImageUrl`              | Default Social Share Image URL    | Text input (URL)|
+| `seo.canonicalUrl`            | Canonical URL                     | Text input (URL)|
+| `seo.index`                   | Allow Search Indexing             | Toggle (Switch) |
 
 ## Social Mapping
 
-**File:** `src/components/superadmin/brand-website/config/BrandWebsiteSocialForm.tsx`  
-**Save Action:** `saveBrandWebsiteSocial(brandId, data)`
+**UI Location:** `/superadmin/brands/{brandId}/website/config` (Social Tab)
+**Save Action:** `saveBrandWebsiteSocial`
 
-| Schema Path             | UI Section | UI Field Label        | Input Type |
-| ----------------------- | ---------- | --------------------- | ---------- |
-| `social.facebook`       | Social tab | "Facebook URL"        | Text input |
-| `social.instagram`      | Social tab | "Instagram URL"       | Text input |
-| `social.tiktok`         | Social tab | "TikTok URL"          | Text input |
-| `social.linkedin`       | Social tab | "LinkedIn URL"        | Text input |
-| `social.x`              | Social tab | "X (Twitter) URL"     | Text input |
-| `social.shareImageUrl`  | Social tab | "Default Social Share Image" | Text input |
+| Schema Path                   | UI Label                          | Input Type |
+| ----------------------------- | --------------------------------- | ---------- |
+| `social.facebook`             | Facebook URL                      | Text (URL) |
+| `social.instagram`            | Instagram URL                     | Text (URL) |
+| `social.tiktok`               | TikTok URL                        | Text (URL) |
+| `social.linkedin`             | LinkedIn URL                      | Text (URL) |
+| `social.x`                    | X (Twitter) URL                   | Text (URL) |
+| `social.shareImageUrl`        | Default Social Share Image (OG)   | Text (URL) |
 
----
+## Tracking Mapping
 
-## Tracking & Legal Mapping
+**UI Location:** `/superadmin/brands/{brandId}/website/config` (Tracking Tab)
+**Save Action:** `saveBrandWebsiteTracking`
 
-**Tracking Save Action:** `saveBrandWebsiteTracking(brandId, data)`  
-**Legal Save Action:** `saveBrandWebsiteLegal(brandId, data)`
+| Schema Path                        | UI Label                      | Input Type |
+| ---------------------------------- | ----------------------------- | ---------- |
+| `tracking.ga4MeasurementId`        | GA4 Measurement ID            | Text       |
+| `tracking.gtmId`                   | Google Tag Manager ID         | Text       |
+| `tracking.metaPixelId`             | Meta Pixel ID                 | Text       |
+| `tracking.tiktokPixelId`           | TikTok Pixel ID               | Text       |
+| `tracking.googleAdsConversionId`   | Google Ads Conversion ID      | Text       |
 
-| Schema Path                     | UI Section    | UI Field Label               | Input Type |
-| ------------------------------- | ------------- | ---------------------------- | ---------- |
-| `tracking.*`                    | Tracking tab  | (Various tracking IDs)       | Text input |
-| `legal.usePlatformDefaults`     | Legal tab     | "Use Platform Defaults"      | Switch     |
-| `legal.customCookiePolicy`      | Legal tab     | "Custom Cookie Policy URL"   | Text input |
-| `legal.customPrivacyPolicy`     | Legal tab     | "Custom Privacy Policy URL"  | Text input |
-| `legal.customTerms`             | Legal tab     | "Custom Terms of Service URL"| Text input |
+## Legal Mapping
+
+**UI Location:** `/superadmin/brands/{brandId}/website/config` (Legal Tab)
+**Save Action:** `saveBrandWebsiteLegal`
+
+| Schema Path                     | UI Label                       | Input Type |
+| ------------------------------- | ------------------------------ | ---------- |
+| `legal.usePlatformDefaults`     | Use Platform Defaults          | Toggle     |
+| `legal.customCookiePolicy`      | Custom Cookie Policy URL       | Text (URL) |
+| `legal.customPrivacyPolicy`     | Custom Privacy Policy URL      | Text (URL) |
+| `legal.customTerms`             | Custom Terms of Service URL    | Text (URL) |
