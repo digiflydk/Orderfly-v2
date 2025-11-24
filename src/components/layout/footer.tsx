@@ -1,4 +1,3 @@
-
 'use client';
 
 import Link from "next/link";
@@ -7,9 +6,9 @@ import { Globe } from 'lucide-react';
 import type { FooterTheme } from '@/types/settings';
 
 interface FooterProps {
-  brand?: Brand;
+  brand: Brand;
   location?: Location;
-  version: string; // Made required as per instruction
+  version: string;
   onOpenCookieSettings?: () => void;
   theme?: FooterTheme;
 }
