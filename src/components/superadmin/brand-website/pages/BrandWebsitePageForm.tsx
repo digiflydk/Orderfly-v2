@@ -1,3 +1,4 @@
+
 'use client';
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -126,7 +127,22 @@ export function BrandWebsitePageForm({ brandId, page }: BrandWebsitePageFormProp
                 render={({ field }) => (
                   <FormItem>
                     <FormLabel>Sort Order</FormLabel>
-                    <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                    <FormControl>
+                        <Input 
+                            type="number"
+                            placeholder="0"
+                            {...field}
+                            onChange={e => {
+                                const value = e.target.value;
+                                const numeric = e.target.valueAsNumber;
+                                if (value === '') {
+                                    field.onChange(undefined);
+                                } else {
+                                    field.onChange(Number.isNaN(numeric) ? undefined : numeric);
+                                }
+                            }}
+                        />
+                    </FormControl>
                     <FormDescription>Determines the order of the page in navigation lists.</FormDescription>
                     <FormMessage />
                   </FormItem>
