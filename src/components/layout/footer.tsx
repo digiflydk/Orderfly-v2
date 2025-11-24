@@ -23,7 +23,7 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
             <span>English</span>
           </button>
           <div className="flex items-center gap-2">
-            <span>{version}</span>
+            <span>v1.0.193 • OF-522-10-11</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>
