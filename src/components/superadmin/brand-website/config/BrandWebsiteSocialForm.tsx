@@ -13,13 +13,15 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
 
+const validUrlOrEmpty = z.string().url({ message: "Must be a valid URL" }).or(z.literal('')).optional();
+
 const socialFormSchema = z.object({
-  facebook: z.string().url().or(z.literal('')).optional(),
-  instagram: z.string().url().or(z.literal('')).optional(),
-  tiktok: z.string().url().or(z.literal('')).optional(),
-  linkedin: z.string().url().or(z.literal('')).optional(),
-  x: z.string().url().or(z.literal('')).optional(),
-  shareImageUrl: z.string().url({ message: "Must be a valid URL"}).or(z.literal('')).optional(),
+  facebook: validUrlOrEmpty,
+  instagram: validUrlOrEmpty,
+  tiktok: validUrlOrEmpty,
+  linkedin: validUrlOrEmpty,
+  x: validUrlOrEmpty,
+  shareImageUrl: validUrlOrEmpty,
 });
 
 type SocialFormValues = z.infer<typeof socialFormSchema>;
@@ -46,9 +48,14 @@ export function BrandWebsiteSocialForm({ brandId, initialSocialConfig }: BrandWe
   });
 
   const onSubmit = (data: SocialFormValues) => {
+    // Filter out empty strings and send them as undefined
+    const payload = Object.fromEntries(
+        Object.entries(data).map(([key, value]) => [key, value === '' ? undefined : value])
+    );
+    
     startTransition(async () => {
       try {
-        await saveBrandWebsiteSocial(brandId, data);
+        await saveBrandWebsiteSocial(brandId, payload);
         toast({ title: 'Success', description: 'Social media settings saved successfully.' });
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to save social settings.' });

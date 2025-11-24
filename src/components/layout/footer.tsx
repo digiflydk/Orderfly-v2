@@ -21,7 +21,7 @@ export function Footer({ brand, location, onOpenCookieSettings }: FooterProps) {
             <span>English</span>
           </button>
           <div className="flex items-center gap-2">
-            <span>v1.0.202 • 522-10-02-FIX-2</span>
+            <span>v1.0.268 • 522-08</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>
