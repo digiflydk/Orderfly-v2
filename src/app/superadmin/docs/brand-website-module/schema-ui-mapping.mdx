@@ -1,124 +1,192 @@
+# Brand Website — Schema → UI Mapping
 
-# Brand Website: Schema → UI Mapping
+This document describes how the Brand Website configuration schemas map to the Superadmin CMS UI for EPIC 522.
 
-This document provides a one-to-one mapping between the Brand Website's Firestore schema fields and their corresponding UI elements in the Superadmin CMS. It clarifies which save action is responsible for persisting the data.
+For each field, we document:
 
-This mapping is based on the Zod schemas found in `src/lib/superadmin/brand-website/config-schemas.ts`.
+- The **schema path**
+- The **UI section/tab**
+- The **UI label**
+- The **input type**
+- The **save action** used by the CMS
 
-## Core Config Mapping
+The mappings below are based on:
 
-**UI Location:** `/superadmin/brands/{brandId}/website/config` (General Tab)
-**Save Action:** `saveBrandWebsiteConfig`
+- `brandWebsiteConfigBaseSchema`
+- `brandWebsiteDesignSystemSchema`
+- `brandWebsiteSeoSchema`
+- `brandWebsiteSocialSchema`
+- `brandWebsiteTrackingSchema`
+- `brandWebsiteLegalSchema`
 
-| Schema Path             | UI Label              | Input Type       | Notes                               |
-| ----------------------- | --------------------- | ---------------- | ----------------------------------- |
-| `active`                | "Website active"      | Toggle (Switch)  | Toggles the entire public website.  |
-| `template`              | "Website template"    | Text (disabled)  | Currently locked to `template-1`.   |
-| `domains[0]`            | "Primary domain"      | Text input       | The main domain for the website.    |
-| `domains[1...]`         | "Additional domains"  | Repeating inputs | For domain aliases.                 |
-| `defaultLocationId`     | "Default location"    | Select (Location)| Fallback for "Order Now" links.     |
+> Note: Field names must always be kept in sync with the actual TypeScript schemas.  
+> If a schema is extended, this document must be updated in the same task.
 
-## Design System Mapping
+---
 
-**UI Location:** `/superadmin/brands/{brandId}/website/config` (Design System Tab)
-**Save Action:** `saveBrandWebsiteDesignSystem`
+## 1. Core Config (brandWebsiteConfigBaseSchema)
 
-### Typography
+These fields define the high-level website configuration that applies to the whole brand website.
 
-| Schema Path                    | UI Label     | Input Type |
-| ------------------------------ | ------------ | ---------- |
-| `typography.headingFont`       | Heading Font | Select     |
-| `typography.bodyFont`          | Body Font    | Select     |
-| `typography.h1Size`            | H1 Size      | Text input |
-| `typography.h2Size`            | H2 Size      | Text input |
-| `typography.h3Size`            | H3 Size      | Text input |
-| `typography.bodySize`          | Body Size    | Text input |
+**Schema:** `brandWebsiteConfigBaseSchema`  
+**Save action:** `saveBrandWebsiteConfig`
 
-### Colors
+| Schema path                | UI section / tab | UI label           | Input type        | Save action                |
+|----------------------------|------------------|--------------------|-------------------|----------------------------|
+| `config.active`            | Config           | Website active      | Toggle            | `saveBrandWebsiteConfig`   |
+| `config.template`          | Config           | Website template    | Select            | `saveBrandWebsiteConfig`   |
+| `config.domains[0]`        | Config           | Primary domain      | Text input        | `saveBrandWebsiteConfig`   |
+| `config.domains[1..]`      | Config           | Additional domains  | Repeating inputs  | `saveBrandWebsiteConfig`   |
+| `config.defaultLocationId` | Config           | Default location    | Location select   | `saveBrandWebsiteConfig`   |
 
-| Schema Path                     | UI Label           | Input Type |
-| ------------------------------- | ------------------ | ---------- |
-| `colors.primary`                | Primary            | Color      |
-| `colors.secondary`              | Secondary          | Color      |
-| `colors.background`             | Background         | Color      |
-| `colors.textPrimary`            | Text Primary       | Color      |
-| `colors.textSecondary`          | Text Secondary     | Color      |
-| `colors.headerBackground`       | Header Background  | Color      |
-| `colors.footerBackground`       | Footer Background  | Color      |
+Notes:
 
-### Buttons
+- `domains[0]` is treated as the primary domain for public resolution.
+- `domains[1..]` are additional domains that also resolve to the same brand website.
+- `defaultLocationId` is used by public endpoints to pick a default store/location when needed.
 
-| Schema Path                  | UI Label         | Input Type |
-| ---------------------------- | ---------------- | ---------- |
-| `buttons.shape`              | Button Shape     | Select     |
-| `buttons.defaultVariant`     | Default Variant  | Select     |
+---
 
-### Header
+## 2. Design System (brandWebsiteDesignSystemSchema)
 
-| Schema Path                     | UI Label                | Input Type      |
-| ------------------------------- | ----------------------- | --------------- |
-| `header.sticky`                 | Sticky Header           | Toggle (Switch) |
-| `header.height`                 | Header Height (px)      | Text input      |
-| `header.transparencyPercent`    | Header Transparency (%) | Slider          |
+The design system stores brand-specific design tokens used by the public Brand Website template.
 
-### Spacing
+**Schema:** `brandWebsiteDesignSystemSchema`  
+**UI section:** Design System tab  
+**Save action:** `saveBrandWebsiteDesignSystem`  
 
-| Schema Path      | UI Label       | Input Type |
-| ---------------- | -------------- | ---------- |
-| `spacing.xs`     | Extra Small    | Number     |
-| `spacing.sm`     | Small          | Number     |
-| `spacing.md`     | Medium         | Number     |
-| `spacing.lg`     | Large          | Number     |
-| `spacing.xl`     | Extra Large    | Number     |
+### 2.1 Typography
 
-## SEO Mapping
+| Schema path                               | UI label            | Input type                | Save action                     |
+|-------------------------------------------|---------------------|---------------------------|---------------------------------|
+| `designSystem.typography.headingFont`     | Heading font family | Text input or select      | `saveBrandWebsiteDesignSystem` |
+| `designSystem.typography.bodyFont`        | Body font family    | Text input or select      | `saveBrandWebsiteDesignSystem` |
+| `designSystem.typography.h1Size`          | H1 font size        | Text input (CSS size)     | `saveBrandWebsiteDesignSystem` |
+| `designSystem.typography.h2Size`          | H2 font size        | Text input (CSS size)     | `saveBrandWebsiteDesignSystem` |
+| `designSystem.typography.h3Size`          | H3 font size        | Text input (CSS size)     | `saveBrandWebsiteDesignSystem` |
+| `designSystem.typography.bodySize`        | Body font size      | Text input (CSS size)     | `saveBrandWebsiteDesignSystem` |
 
-**UI Location:** `/superadmin/brands/{brandId}/website/config` (SEO Tab)
-**Save Action:** `saveBrandWebsiteSeo`
+> Typical values are CSS-friendly sizes such as `2.25rem`, `1.5rem`, `1rem`, etc.  
+> The UI may optionally constrain these to a preset list.
 
-| Schema Path                   | UI Label                          | Input Type      |
-| ----------------------------- | --------------------------------- | --------------- |
-| `seo.defaultTitle`            | Default SEO Title                 | Text input      |
-| `seo.defaultDescription`      | Default Meta Description          | Textarea        |
-| `seo.ogImageUrl`              | Default Social Share Image URL    | Text input (URL)|
-| `seo.canonicalUrl`            | Canonical URL                     | Text input (URL)|
-| `seo.index`                   | Allow Search Indexing             | Toggle (Switch) |
+### 2.2 Colors
 
-## Social Mapping
+| Schema path                               | UI label                 | Input type  | Save action                     |
+|-------------------------------------------|--------------------------|-------------|---------------------------------|
+| `designSystem.colors.primary`             | Primary color            | Color input | `saveBrandWebsiteDesignSystem` |
+| `designSystem.colors.secondary`           | Secondary color          | Color input | `saveBrandWebsiteDesignSystem` |
+| `designSystem.colors.background`          | Page background color    | Color input | `saveBrandWebsiteDesignSystem` |
+| `designSystem.colors.textPrimary`         | Primary text color       | Color input | `saveBrandWebsiteDesignSystem` |
+| `designSystem.colors.textSecondary`       | Secondary text color     | Color input | `saveBrandWebsiteDesignSystem` |
+| `designSystem.colors.headerBackground`    | Header background color  | Color input | `saveBrandWebsiteDesignSystem` |
+| `designSystem.colors.footerBackground`    | Footer background color  | Color input | `saveBrandWebsiteDesignSystem` |
 
-**UI Location:** `/superadmin/brands/{brandId}/website/config` (Social Tab)
-**Save Action:** `saveBrandWebsiteSocial`
+### 2.3 Buttons
 
-| Schema Path                   | UI Label                          | Input Type |
-| ----------------------------- | --------------------------------- | ---------- |
-| `social.facebook`             | Facebook URL                      | Text (URL) |
-| `social.instagram`            | Instagram URL                     | Text (URL) |
-| `social.tiktok`               | TikTok URL                        | Text (URL) |
-| `social.linkedin`             | LinkedIn URL                      | Text (URL) |
-| `social.x`                    | X (Twitter) URL                   | Text (URL) |
-| `social.shareImageUrl`        | Default Social Share Image (OG)   | Text (URL) |
+| Schema path                               | UI label                | Input type                                           | Save action                     |
+|-------------------------------------------|-------------------------|------------------------------------------------------|---------------------------------|
+| `designSystem.buttons.shape`              | Button shape            | Select (`pill` / `rounded` / `square`)              | `saveBrandWebsiteDesignSystem` |
+| `designSystem.buttons.defaultVariant`     | Default button variant  | Select (e.g. `primary`, `secondary`, `ghost`, etc.) | `saveBrandWebsiteDesignSystem` |
 
-## Tracking Mapping
+### 2.4 Header
 
-**UI Location:** `/superadmin/brands/{brandId}/website/config` (Tracking Tab)
-**Save Action:** `saveBrandWebsiteTracking`
+| Schema path                               | UI label                    | Input type             | Save action                     |
+|-------------------------------------------|-----------------------------|------------------------|---------------------------------|
+| `designSystem.header.sticky`              | Sticky header               | Toggle                 | `saveBrandWebsiteDesignSystem` |
+| `designSystem.header.height`              | Header height               | Text input (e.g. `64px`)| `saveBrandWebsiteDesignSystem` |
+| `designSystem.header.transparencyPercent` | Header transparency (0–100) | Slider / number input  | `saveBrandWebsiteDesignSystem` |
 
-| Schema Path                        | UI Label                      | Input Type |
-| ---------------------------------- | ----------------------------- | ---------- |
-| `tracking.ga4MeasurementId`        | GA4 Measurement ID            | Text       |
-| `tracking.gtmId`                   | Google Tag Manager ID         | Text       |
-| `tracking.metaPixelId`             | Meta Pixel ID                 | Text       |
-| `tracking.tiktokPixelId`           | TikTok Pixel ID               | Text       |
-| `tracking.googleAdsConversionId`   | Google Ads Conversion ID      | Text       |
+### 2.5 Spacing
 
-## Legal Mapping
+| Schema path                               | UI label    | Input type   | Save action                     |
+|-------------------------------------------|-------------|--------------|---------------------------------|
+| `designSystem.spacing.xs`                 | Spacing XS  | Number input | `saveBrandWebsiteDesignSystem` |
+| `designSystem.spacing.sm`                 | Spacing SM  | Number input | `saveBrandWebsiteDesignSystem` |
+| `designSystem.spacing.md`                 | Spacing MD  | Number input | `saveBrandWebsiteDesignSystem` |
+| `designSystem.spacing.lg`                 | Spacing LG  | Number input | `saveBrandWebsiteDesignSystem` |
+| `designSystem.spacing.xl`                 | Spacing XL  | Number input | `saveBrandWebsiteDesignSystem` |
 
-**UI Location:** `/superadmin/brands/{brandId}/website/config` (Legal Tab)
-**Save Action:** `saveBrandWebsiteLegal`
+---
 
-| Schema Path                     | UI Label                       | Input Type |
-| ------------------------------- | ------------------------------ | ---------- |
-| `legal.usePlatformDefaults`     | Use Platform Defaults          | Toggle     |
-| `legal.customCookiePolicy`      | Custom Cookie Policy URL       | Text (URL) |
-| `legal.customPrivacyPolicy`     | Custom Privacy Policy URL      | Text (URL) |
-| `legal.customTerms`             | Custom Terms of Service URL    | Text (URL) |
+## 3. SEO (brandWebsiteSeoSchema)
+
+SEO config controls default meta information for the public Brand Website.
+
+**Schema:** `brandWebsiteSeoSchema`  
+**UI section:** SEO tab or SEO section under Config  
+**Save action:** `saveBrandWebsiteSeo`
+
+| Schema path              | UI label                     | Input type        | Save action           |
+|--------------------------|------------------------------|-------------------|-----------------------|
+| `seo.defaultTitle`       | Default page title           | Text input        | `saveBrandWebsiteSeo` |
+| `seo.defaultDescription` | Default meta description     | Text area         | `saveBrandWebsiteSeo` |
+| `seo.ogImageUrl`         | Default OG/share image URL   | Text input (URL)  | `saveBrandWebsiteSeo` |
+| `seo.canonicalUrl`       | Canonical URL                | Text input (URL)  | `saveBrandWebsiteSeo` |
+| `seo.index`              | Allow search indexing        | Toggle            | `saveBrandWebsiteSeo` |
+
+---
+
+## 4. Social (brandWebsiteSocialSchema)
+
+Social links and default share image used by the Brand Website.
+
+**Schema:** `brandWebsiteSocialSchema`  
+**UI section:** Social tab  
+**Save action:** `saveBrandWebsiteSocial`
+
+| Schema path            | UI label                              | Input type       | Save action              |
+|------------------------|---------------------------------------|------------------|--------------------------|
+| `social.facebook`      | Facebook URL                          | Text input (URL) | `saveBrandWebsiteSocial` |
+| `social.instagram`     | Instagram URL                         | Text input (URL) | `saveBrandWebsiteSocial` |
+| `social.tiktok`        | TikTok URL                            | Text input (URL) | `saveBrandWebsiteSocial` |
+| `social.linkedin`      | LinkedIn URL                          | Text input (URL) | `saveBrandWebsiteSocial` |
+| `social.x`             | X (Twitter) URL                       | Text input (URL) | `saveBrandWebsiteSocial` |
+| `social.shareImageUrl` | Default social share image (OG image) | Text input (URL) | `saveBrandWebsiteSocial` |
+
+---
+
+## 5. Tracking (brandWebsiteTrackingSchema)
+
+Tracking and analytics IDs for the Brand Website.
+
+**Schema:** `brandWebsiteTrackingSchema`  
+**UI section:** Tracking tab  
+**Save action:** `saveBrandWebsiteTracking`
+
+| Schema path                      | UI label                          | Input type  | Save action                |
+|----------------------------------|-----------------------------------|------------|----------------------------|
+| `tracking.ga4MeasurementId`      | Google Analytics 4 Measurement ID | Text input | `saveBrandWebsiteTracking` |
+| `tracking.gtmId`                 | Google Tag Manager ID             | Text input | `saveBrandWebsiteTracking` |
+| `tracking.metaPixelId`           | Meta Pixel ID                     | Text input | `saveBrandWebsiteTracking` |
+| `tracking.tiktokPixelId`         | TikTok Pixel ID                   | Text input | `saveBrandWebsiteTracking` |
+| `tracking.googleAdsConversionId` | Google Ads Conversion ID          | Text input | `saveBrandWebsiteTracking` |
+
+---
+
+## 6. Legal (brandWebsiteLegalSchema)
+
+Legal content and platform-default vs custom legal texts.
+
+**Schema:** `brandWebsiteLegalSchema`  
+**UI section:** Legal tab  
+**Save action:** `saveBrandWebsiteLegal`
+
+| Schema path                 | UI label                           | Input type | Save action              |
+|-----------------------------|------------------------------------|-----------|--------------------------|
+| `legal.usePlatformDefaults` | Use platform default legal texts   | Toggle    | `saveBrandWebsiteLegal`  |
+| `legal.customCookiePolicy`  | Custom cookie policy               | Text area | `saveBrandWebsiteLegal`  |
+| `legal.customPrivacyPolicy` | Custom privacy policy              | Text area | `saveBrandWebsiteLegal`  |
+| `legal.customTerms`         | Custom terms and conditions        | Text area | `saveBrandWebsiteLegal`  |
+
+> When `usePlatformDefaults` is enabled, custom legal fields may be left empty.  
+> When it is disabled, the project may require custom texts according to brand/legal requirements.
+
+---
+
+## 7. Maintenance
+
+Whenever any of the Brand Website schemas are changed:
+
+- `config-schemas.ts` must be updated.
+- The CMS UI must be adjusted to expose the new fields.
+- This **Schema → UI Mapping** document must be updated in the **same** task so Codex and Studio can rely on it as the single source of truth.
