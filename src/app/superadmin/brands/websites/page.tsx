@@ -1,6 +1,4 @@
 
-'use server';
-
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
 import { getBrands } from '@/app/superadmin/brands/actions';
@@ -76,7 +74,7 @@ async function BrandWebsitesOverviewContent() {
                       {primaryDomain ? (
                         <code className="text-xs bg-muted p-1 rounded-sm">{primaryDomain}</code>
                       ) : (
-                        <span className="text-muted-foreground text-sm">No domain configured</span>
+                        <span className="text-sm text-muted-foreground">No domain configured</span>
                       )}
                     </TableCell>
                     <TableCell className="text-right">
@@ -108,7 +106,7 @@ async function BrandWebsitesOverviewContent() {
   );
 }
 
-export default function BrandWebsitesPage() {
+export default async function BrandWebsitesPage() {
     if (!isAdminReady()) {
         return (
             <EmptyState
