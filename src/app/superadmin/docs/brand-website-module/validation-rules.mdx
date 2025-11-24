@@ -19,33 +19,33 @@ The goal is to make validation behavior explicit and predictable for both Studio
 
 ## 1. Domains (config.domains)
 
-**Schema:** `brandWebsiteConfigBaseSchema`  
+**Schema:** `brandWebsiteConfigBaseSchema`
 **Fields:** `config.domains` (array of strings, where `domains[0]` is primary)
 
 Validation rules:
 
-- **Non-empty**  
+- **Non-empty**
   - Each domain entry must be a non-empty string.
   - Empty rows must not be submitted.
 
-- **No protocol**  
+- **No protocol**
   - Domains must not include `http://` or `https://`.
   - Example of invalid: `https://example.com`.
 
-- **No spaces**  
+- **No spaces**
   - Domains must not contain spaces.
   - Example of invalid: `my domain.com`.
 
-- **Must contain at least one dot**  
+- **Must contain at least one dot**
   - Domains must contain a `.` to be considered valid hostnames.
   - Examples:
     - Valid: `example.com`, `pizza.example.dk`
     - Invalid: `localhost`, `example`
 
-- **Uniqueness**  
+- **Uniqueness**
   - All domains for a brand should be unique (no duplicates in the array).
 
-- **Primary vs additional**  
+- **Primary vs additional**
   - `domains[0]` is treated as the primary domain.
   - `domains[1..]` are treated as additional domains.
 
@@ -81,7 +81,7 @@ These rules apply to all URL fields in the Brand Website config.
   - `social.x`
   - `social.shareImageUrl`
 
-- **Legal (if modeled as URLs)**  
+- **Legal (if modeled as URLs)**
   - If any legal fields are URLs (e.g. external policy links), they must follow the same rules.
 
 ### 2.2 Rules
@@ -110,7 +110,7 @@ On validation failure:
 
 ## 3. Typography (designSystem.typography)
 
-**Schema:** `brandWebsiteDesignSystemSchema`  
+**Schema:** `brandWebsiteDesignSystemSchema`
 **Fields:**
 
 - `designSystem.typography.headingFont`
@@ -143,7 +143,7 @@ On validation failure:
 
 ## 4. Colors (designSystem.colors)
 
-**Schema:** `brandWebsiteDesignSystemSchema`  
+**Schema:** `brandWebsiteDesignSystemSchema`
 **Fields:**
 
 - `designSystem.colors.primary`
@@ -172,7 +172,7 @@ On validation failure:
 
 ## 5. Header & Transparency (designSystem.header)
 
-**Schema:** `brandWebsiteDesignSystemSchema`  
+**Schema:** `brandWebsiteDesignSystemSchema`
 **Fields:**
 
 - `designSystem.header.sticky`
@@ -202,7 +202,7 @@ On validation failure:
 
 ## 6. Spacing (designSystem.spacing)
 
-**Schema:** `brandWebsiteDesignSystemSchema`  
+**Schema:** `brandWebsiteDesignSystemSchema`
 **Fields:**
 
 - `designSystem.spacing.xs`
@@ -213,11 +213,8 @@ On validation failure:
 
 Validation rules:
 
-- Spacing values are numeric.
-- When set, they must:
-  - Be valid numbers.
-  - Not be negative.
-- The project may recommend a standard scale (e.g. 4, 8, 12, 16, 24), but that is a UX convention rather than a strict validation requirement.
+- Spacing values are numeric. The schema does not enforce non-negative values, but the UI may guide toward non-negative spacing for consistency.
+- If you use a specific scale (e.g. 4, 8, 12, 16, 24), document recommended values.
 
 On validation failure:
 
@@ -228,7 +225,7 @@ On validation failure:
 
 ## 7. Buttons (designSystem.buttons)
 
-**Schema:** `brandWebsiteDesignSystemSchema`  
+**Schema:** `brandWebsiteDesignSystemSchema`
 **Fields:**
 
 - `designSystem.buttons.shape`
@@ -255,7 +252,7 @@ On validation failure:
 
 ## 8. Tracking IDs (tracking.*)
 
-**Schema:** `brandWebsiteTrackingSchema`  
+**Schema:** `brandWebsiteTrackingSchema`
 **Fields:**
 
 - `tracking.ga4MeasurementId`
@@ -298,7 +295,7 @@ On validation failure:
 
 ## 9. Legal (legal.*)
 
-**Schema:** `brandWebsiteLegalSchema`  
+**Schema:** `brandWebsiteLegalSchema`
 **Fields:**
 
 - `legal.usePlatformDefaults`
