@@ -167,7 +167,7 @@ export function SuperAdminSidebarClient({
       key: 'brand_website',
       title: 'Brand Website',
       items: [
-        { href: '/superadmin/brands/settings', label: 'Settings', icon: SettingsIcon },
+        { href: '/superadmin/brands/websites', label: 'Brands web.', icon: LayoutTemplate },
       ]
     },
     {
