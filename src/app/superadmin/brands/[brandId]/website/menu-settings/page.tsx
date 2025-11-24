@@ -13,10 +13,15 @@ export default async function BrandWebsiteMenuSettingsPage({ params }: { params:
   if (!settings) {
     notFound();
   }
+  
+  const initialSettings = {
+    ...settings,
+    hero: settings.hero || null, // Ensure hero is explicitly null if not present
+  };
 
   return (
     <div className="space-y-6">
-      <BrandWebsiteMenuSettingsForm brandId={params.brandId} initialSettings={settings} />
+      <BrandWebsiteMenuSettingsForm brandId={params.brandId} initialSettings={initialSettings} />
     </div>
   );
 }

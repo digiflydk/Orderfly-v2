@@ -21,22 +21,41 @@ import type { BrandWebsiteMenuSettings } from '@/lib/types/brandWebsite';
 import { Select, SelectTrigger, SelectValue, SelectContent, SelectItem } from '@/components/ui/select';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
 
-const menuHeroSchema = z.object({
+const brandWebsiteMenuHeroSchema = z.object({
   title: z.string().min(1, "Title is required."),
   subtitle: z.string().optional(),
-  imageUrl: z.string().url({ message: "Must be a valid URL"}).or(z.literal('')).optional(),
+  imageUrl: z.string().url({ message: "Must be a valid URL"}).optional().or(z.literal('')),
   ctaLabel: z.string().optional(),
   ctaHref: z.string().optional(),
 });
 
 const menuSettingsSchema = z.object({
-  gridLayout: z.coerce.number().min(2).max(4),
+  gridLayout: z.coerce.number().refine(val => [2,3,4].includes(val), 'Invalid grid layout'),
   showPrice: z.boolean(),
   showDescription: z.boolean(),
   stickyCategories: z.boolean(),
   defaultLocationId: z.string().nullable().optional(),
-  hero: menuHeroSchema.nullable().optional(),
+  heroEnabled: z.boolean(),
+  hero: brandWebsiteMenuHeroSchema.nullable().optional(),
+}).superRefine((data, ctx) => {
+    if (data.heroEnabled) {
+        if (!data.hero?.title) {
+            ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['hero.title'],
+                message: 'Hero title is required when enabled.',
+            });
+        }
+        if (data.hero?.imageUrl && !data.hero.imageUrl.startsWith('http')) {
+             ctx.addIssue({
+                code: z.ZodIssueCode.custom,
+                path: ['hero.imageUrl'],
+                message: 'Must be a valid URL.',
+            });
+        }
+    }
 });
+
 
 type MenuSettingsFormValues = z.infer<typeof menuSettingsSchema>;
 
@@ -54,18 +73,21 @@ export function BrandWebsiteMenuSettingsForm({ brandId, initialSettings }: Brand
     defaultValues: {
       ...initialSettings,
       defaultLocationId: initialSettings.defaultLocationId || null,
+      heroEnabled: !!initialSettings.hero,
       hero: initialSettings.hero || { title: '', subtitle: '', imageUrl: '', ctaLabel: '', ctaHref: '' },
     },
   });
 
+  const watchHeroEnabled = form.watch('heroEnabled');
+
   const onSubmit = (data: MenuSettingsFormValues) => {
     startTransition(async () => {
       try {
-        const { hero, ...settings } = data;
+        const { heroEnabled, hero, ...settings } = data;
         
         await Promise.all([
             saveBrandWebsiteMenuSettings(brandId, settings),
-            saveBrandWebsiteMenuHero(brandId, hero)
+            saveBrandWebsiteMenuHero(brandId, heroEnabled ? hero : null)
         ]);
 
         toast({ title: 'Success', description: 'Menu settings saved successfully.' });
@@ -153,23 +175,44 @@ export function BrandWebsiteMenuSettingsForm({ brandId, initialSettings }: Brand
                         <CardDescription>Optional hero section displayed at the top of the menu page.</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                        <FormField control={form.control} name="hero.title" render={({ field }) => (
-                            <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                        )}/>
-                        <FormField control={form.control} name="hero.subtitle" render={({ field }) => (
-                            <FormItem><FormLabel>Subtitle</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                        )}/>
-                         <FormField control={form.control} name="hero.imageUrl" render={({ field }) => (
-                            <FormItem><FormLabel>Background Image URL</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                        )}/>
-                         <div className="grid grid-cols-2 gap-4">
-                             <FormField control={form.control} name="hero.ctaLabel" render={({ field }) => (
-                                <FormItem><FormLabel>CTA Button Label</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                            )}/>
-                            <FormField control={form.control} name="hero.ctaHref" render={({ field }) => (
-                                <FormItem><FormLabel>CTA Button Link</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-                            )}/>
-                         </div>
+                        <FormField
+                            control={form.control}
+                            name="heroEnabled"
+                            render={({ field }) => (
+                                <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
+                                <div className="space-y-0.5">
+                                    <FormLabel className="text-base">Enable Hero Section</FormLabel>
+                                </div>
+                                <FormControl>
+                                    <Switch
+                                    checked={field.value}
+                                    onCheckedChange={field.onChange}
+                                    />
+                                </FormControl>
+                                </FormItem>
+                            )}
+                        />
+                        {watchHeroEnabled && (
+                            <div className="space-y-4 pt-4 border-t">
+                                <FormField control={form.control} name="hero.title" render={({ field }) => (
+                                    <FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                                )}/>
+                                <FormField control={form.control} name="hero.subtitle" render={({ field }) => (
+                                    <FormItem><FormLabel>Subtitle</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                                )}/>
+                                <FormField control={form.control} name="hero.imageUrl" render={({ field }) => (
+                                    <FormItem><FormLabel>Background Image URL</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                                )}/>
+                                <div className="grid grid-cols-2 gap-4">
+                                    <FormField control={form.control} name="hero.ctaLabel" render={({ field }) => (
+                                        <FormItem><FormLabel>CTA Button Label</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                                    )}/>
+                                    <FormField control={form.control} name="hero.ctaHref" render={({ field }) => (
+                                        <FormItem><FormLabel>CTA Button Link</FormLabel><FormControl><Input {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
+                                    )}/>
+                                </div>
+                            </div>
+                        )}
                     </CardContent>
                 </Card>
             </div>
