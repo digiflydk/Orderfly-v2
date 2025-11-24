@@ -4,15 +4,17 @@
 import Link from "next/link";
 import type { Brand, Location } from "@/types";
 import { Globe } from 'lucide-react';
+import { FooterTheme } from '@/types/settings';
 
 interface FooterProps {
-  brand?: Brand | null;
+  brand: Brand;
   location?: Location;
-  version?: string;
+  version: string;
   onOpenCookieSettings?: () => void;
+  theme?: FooterTheme;
 }
 
-export function Footer({ brand, location, onOpenCookieSettings }: FooterProps) {
+export function Footer({ brand, location, version, onOpenCookieSettings, theme }: FooterProps) {
   return (
     <footer className="w-full border-t bg-muted/30" style={{'--border': 'hsl(var(--border))'} as React.CSSProperties}>
       <div className="mx-auto max-w-[1140px] px-4 py-3">
@@ -22,7 +24,7 @@ export function Footer({ brand, location, onOpenCookieSettings }: FooterProps) {
             <span>English</span>
           </button>
           <div className="flex items-center gap-2">
-            <span>v1.0.202 • OF-522-10-02-FIX-2</span>
+            <span>{version}</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>
