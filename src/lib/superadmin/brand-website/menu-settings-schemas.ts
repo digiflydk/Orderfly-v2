@@ -1,6 +1,4 @@
 
-'use server';
-
 import { z } from 'zod';
 
 export const brandWebsiteMenuGridLayoutSchema = z.union([
