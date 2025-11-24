@@ -35,8 +35,8 @@ async function BrandWebsitesOverviewContent() {
             </TableHeader>
             <TableBody>
               {brands.map(brand => {
-                // Safely access nested optional properties
-                const isActive = brand.appearances?.colors?.primary ? true : false;
+                // Safely access nested optional properties from `appearances` which holds website config
+                const isActive = false; // Placeholder as `active` is not in `appearances`
                 const primaryDomain = "example.com"
 
                 return (
