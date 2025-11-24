@@ -1,4 +1,5 @@
 
+'use server';
 import 'server-only';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 import { getBrandWebsiteConfig } from '@/lib/superadmin/brand-website/config-actions';

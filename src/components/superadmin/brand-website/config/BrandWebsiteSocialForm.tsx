@@ -1,3 +1,4 @@
+
 'use client';
 
 import { z } from 'zod';
@@ -18,7 +19,7 @@ const socialFormSchema = z.object({
   tiktok: z.string().url().or(z.literal('')).optional(),
   linkedin: z.string().url().or(z.literal('')).optional(),
   x: z.string().url().or(z.literal('')).optional(),
-  shareImageUrl: z.string().url().or(z.literal('')).optional(),
+  shareImageUrl: z.string().url({ message: "Must be a valid URL"}).or(z.literal('')).optional(),
 });
 
 type SocialFormValues = z.infer<typeof socialFormSchema>;
@@ -60,10 +61,11 @@ export function BrandWebsiteSocialForm({ brandId, initialSocialConfig }: BrandWe
       <form onSubmit={form.handleSubmit(onSubmit)}>
         <Card>
           <CardHeader>
-            <CardTitle>Social Media Links</CardTitle>
-            <CardDescription>Add links to your brand's social media profiles.</CardDescription>
+            <CardTitle>Social Media</CardTitle>
+            <CardDescription>Manage social media links and default sharing image.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
+            <FormField control={form.control} name="shareImageUrl" render={({ field }) => (<FormItem><FormLabel>Default Social Share Image (og:image)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
             <FormField control={form.control} name="facebook" render={({ field }) => (<FormItem><FormLabel>Facebook URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
             <FormField control={form.control} name="instagram" render={({ field }) => (<FormItem><FormLabel>Instagram URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
             <FormField control={form.control} name="tiktok" render={({ field }) => (<FormItem><FormLabel>TikTok URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>

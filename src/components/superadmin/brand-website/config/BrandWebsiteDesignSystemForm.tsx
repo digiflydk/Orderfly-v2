@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import { Slider } from '@/components/ui/slider';
 
 const designSystemSchema = z.object({
   typography: z.object({
@@ -91,7 +92,6 @@ export function BrandWebsiteDesignSystemForm({ brandId, initialDesignConfig }: B
           </CardHeader>
           <CardContent className="space-y-6">
             
-            {/* Colors */}
             <Card>
                 <CardHeader><CardTitle className="text-lg">Colors</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -105,7 +105,6 @@ export function BrandWebsiteDesignSystemForm({ brandId, initialDesignConfig }: B
                 </CardContent>
             </Card>
 
-             {/* Typography */}
             <Card>
                 <CardHeader><CardTitle className="text-lg">Typography</CardTitle></CardHeader>
                 <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -118,15 +117,58 @@ export function BrandWebsiteDesignSystemForm({ brandId, initialDesignConfig }: B
                 </CardContent>
             </Card>
             
-            {/* Header */}
             <Card>
                  <CardHeader><CardTitle className="text-lg">Header</CardTitle></CardHeader>
                  <CardContent className="space-y-4">
                     <FormField control={form.control} name="header.sticky" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><FormLabel>Sticky Header</FormLabel><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl></FormItem>)}/>
                     <FormField control={form.control} name="header.height" render={({ field }) => (<FormItem><FormLabel>Header Height (px)</FormLabel><FormControl><Input type="text" {...field} /></FormControl></FormItem>)}/>
+                    <FormField
+                        control={form.control}
+                        name="header.transparencyPercent"
+                        render={({ field }) => (
+                            <FormItem>
+                                <FormLabel>Header Transparency ({field.value}%)</FormLabel>
+                                <FormControl>
+                                    <Slider
+                                        value={[field.value]}
+                                        onValueChange={(value) => field.onChange(value[0])}
+                                        max={100}
+                                        step={1}
+                                    />
+                                </FormControl>
+                            </FormItem>
+                        )}
+                        />
                  </CardContent>
             </Card>
-
+            <Card>
+                <CardHeader><CardTitle className="text-lg">Buttons</CardTitle></CardHeader>
+                <CardContent>
+                    <FormField control={form.control} name="buttons.shape" render={({ field }) => (
+                        <FormItem>
+                            <FormLabel>Button Shape</FormLabel>
+                            <Select onValueChange={field.onChange} value={field.value}>
+                                <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
+                                <SelectContent>
+                                    <SelectItem value="rounded">Rounded</SelectItem>
+                                    <SelectItem value="pill">Pill</SelectItem>
+                                    <SelectItem value="square">Square</SelectItem>
+                                </SelectContent>
+                            </Select>
+                        </FormItem>
+                    )}/>
+                </CardContent>
+            </Card>
+             <Card>
+                <CardHeader><CardTitle className="text-lg">Spacing (px)</CardTitle></CardHeader>
+                <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
+                    <FormField control={form.control} name="spacing.xs" render={({ field }) => (<FormItem><FormLabel>Extra Small</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)}/>
+                    <FormField control={form.control} name="spacing.sm" render={({ field }) => (<FormItem><FormLabel>Small</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)}/>
+                    <FormField control={form.control} name="spacing.md" render={({ field }) => (<FormItem><FormLabel>Medium</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)}/>
+                    <FormField control={form.control} name="spacing.lg" render={({ field }) => (<FormItem><FormLabel>Large</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)}/>
+                    <FormField control={form.control} name="spacing.xl" render={({ field }) => (<FormItem><FormLabel>Extra Large</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)}/>
+                </CardContent>
+            </Card>
           </CardContent>
           <CardFooter className="border-t px-6 py-4">
             <Button type="submit" disabled={isPending}>
