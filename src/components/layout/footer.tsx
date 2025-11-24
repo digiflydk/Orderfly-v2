@@ -8,10 +8,11 @@ import { Globe } from 'lucide-react';
 interface FooterProps {
   brand?: Brand | null;
   location?: Location;
+  version: string;
   onOpenCookieSettings?: () => void;
 }
 
-export function Footer({ brand, location, onOpenCookieSettings }: FooterProps) {
+export function Footer({ brand, location, version, onOpenCookieSettings }: FooterProps) {
   return (
     <footer className="w-full border-t bg-muted/30" style={{'--border': 'hsl(var(--border))'} as React.CSSProperties}>
       <div className="mx-auto max-w-[1140px] px-4 py-3">
@@ -21,7 +22,7 @@ export function Footer({ brand, location, onOpenCookieSettings }: FooterProps) {
             <span>English</span>
           </button>
           <div className="flex items-center gap-2">
-            <span>v1.0.268 • 522-08</span>
+            <span>{version}</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>
