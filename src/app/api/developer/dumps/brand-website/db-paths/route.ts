@@ -11,12 +11,15 @@ export async function GET() {
     {
       module: 'brand-website',
       paths: [
-        '/brands/{brandId}/website',
         '/brands/{brandId}/website/config',
         '/brands/{brandId}/website/home',
-        '/brands/{brandId}/website/pages',
         '/brands/{brandId}/website/pages/{slug}',
         '/brands/{brandId}/website/menuSettings',
+        '/brands/{brandId}/categories',
+        '/brands/{brandId}/menu',
+        '/brands/{brandId}/locations/{locationId}',
+        '/auditLogs/{autoId}',
+        '/dadmin/developer/logs/{autoId}',
       ],
     },
     null,

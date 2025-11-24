@@ -63,7 +63,6 @@ export const brandWebsiteApiMap: ApiMapConfig = {
         actions: [
           'getBrandWebsiteMenuSettings',
           'saveBrandWebsiteMenuSettings',
-          'saveBrandWebsiteMenuHero',
         ],
         firestorePaths: [
           'brands/{brandId}/website/menuSettings',
@@ -124,7 +123,7 @@ export const brandWebsiteApiMap: ApiMapConfig = {
         ],
         firestorePaths: [
           'brands/{brandId}/categories',
-          'brands/{brandId}/menus', // Note: this path is illustrative, uses products collection
+          'brands/{brandId}/menu',
         ],
       },
       {
@@ -134,7 +133,7 @@ export const brandWebsiteApiMap: ApiMapConfig = {
           'getPublicBrandLocationData',
         ],
         firestorePaths: [
-          'brands/{brandId}/locations/{locationId}', // Note: this is illustrative
+          'brands/{brandId}/locations/{locationId}',
         ],
       },
     ],
@@ -146,7 +145,7 @@ export const brandWebsiteApiMap: ApiMapConfig = {
     firestorePaths: [
       'brands/{brandId}/website/config (domains array)',
     ],
-    notes: 'Resolves request hostname to brandId using website.config.domains.',
+    notes: 'Resolves request hostname → brandId using website.config.domains.',
   },
 
   logging: {
@@ -158,7 +157,7 @@ export const brandWebsiteApiMap: ApiMapConfig = {
     api: {
       label: 'Developer API Logs',
       firestorePath: 'dadmin/developer/logs/{autoId}',
-      notes: 'Performance and error logs for all brand-website APIs (layer=cms/public, module=brand-website).',
+      notes: 'Performance and error logs for public and CMS brand-website APIs (layer=cms/public, module=brand-website).',
     },
   },
 };

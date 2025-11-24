@@ -1,4 +1,5 @@
 
+
 export interface ApiMapArea {
   id: string;
   label: string;

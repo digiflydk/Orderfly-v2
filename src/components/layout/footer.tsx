@@ -9,11 +9,12 @@ import { Globe } from 'lucide-react';
 interface FooterProps {
   brand?: Brand | null;
   location?: Location;
+  version?: string;
   theme?: FooterTheme;
   onOpenCookieSettings?: () => void;
 }
 
-export function Footer({ brand, location, onOpenCookieSettings, theme }: FooterProps) {
+export function Footer({ brand, location, version, onOpenCookieSettings, theme }: FooterProps) {
   return (
     <footer className="w-full border-t bg-muted/30" style={{'--border': 'hsl(var(--border))'} as React.CSSProperties}>
       <div className="mx-auto max-w-[1140px] px-4 py-3">

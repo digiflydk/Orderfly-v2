@@ -1,4 +1,5 @@
 
+// src/app/superadmin/docs/api-map/page.tsx
 'use server';
 
 import type { AsyncPageProps } from '@/types/next-async-props';
@@ -97,4 +98,3 @@ export default async function ApiMapPage({ searchParams }: AsyncPageProps<{}, { 
         </DocsLayout>
     );
 }
-
