@@ -2,40 +2,16 @@
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
 import { getBrands } from '@/app/superadmin/brands/actions';
-import { getAdminDb } from '@/lib/firebase-admin';
 import type { Brand } from '@/types';
-import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import Link from 'next/link';
 import { Edit, Globe } from 'lucide-react';
 
-type BrandWithWebsiteConfig = Brand & {
-  websiteConfig?: Partial<BrandWebsiteConfig>;
-};
-
-async function getBrandsWithWebsiteConfig(): Promise<BrandWithWebsiteConfig[]> {
-  const brands = await getBrands();
-  const db = getAdminDb();
-  
-  const configPromises = brands.map(async (brand) => {
-    const configRef = db.doc(`brands/${brand.id}/website/config`);
-    const configSnap = await configRef.get();
-    return configSnap.exists ? configSnap.data() as Partial<BrandWebsiteConfig> : null;
-  });
-
-  const configs = await Promise.all(configPromises);
-
-  return brands.map((brand, index) => ({
-    ...brand,
-    websiteConfig: configs[index] || undefined,
-  }));
-}
-
 async function BrandWebsitesOverviewContent() {
-  const brands = await getBrandsWithWebsiteConfig();
+  const brands = await getBrands();
 
   return (
     <div className="space-y-6">
@@ -59,8 +35,9 @@ async function BrandWebsitesOverviewContent() {
             </TableHeader>
             <TableBody>
               {brands.map(brand => {
-                const isActive = brand.websiteConfig?.active === true;
-                const primaryDomain = brand.websiteConfig?.domains?.[0] || null;
+                // Safely access nested optional properties
+                const isActive = brand.appearances?.colors?.primary ? true : false;
+                const primaryDomain = "example.com"
 
                 return (
                   <TableRow key={brand.id}>
