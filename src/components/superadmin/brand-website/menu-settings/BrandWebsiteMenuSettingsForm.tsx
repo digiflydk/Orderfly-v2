@@ -1,3 +1,4 @@
+
 'use client';
 
 import { z } from 'zod';
@@ -46,12 +47,22 @@ const menuSettingsSchema = z.object({
                 message: 'Hero title is required when enabled.',
             });
         }
-        if (data.hero?.imageUrl && !data.hero.imageUrl.startsWith('http')) {
-             ctx.addIssue({
+        if (!data.hero?.imageUrl) {
+            ctx.addIssue({
                 code: z.ZodIssueCode.custom,
                 path: ['hero.imageUrl'],
-                message: 'Must be a valid URL.',
+                message: 'A valid background image URL is required when hero is enabled.',
             });
+        } else {
+            try {
+                new URL(data.hero.imageUrl);
+            } catch {
+                ctx.addIssue({
+                    code: z.ZodIssueCode.custom,
+                    path: ['hero.imageUrl'],
+                    message: 'Must be a valid HTTP/HTTPS URL.',
+                });
+            }
         }
     }
 });
