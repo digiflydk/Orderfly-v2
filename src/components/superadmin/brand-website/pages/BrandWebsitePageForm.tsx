@@ -18,7 +18,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2 } from 'lucide-react';
+import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
 import Link from 'next/link';
 
 type PageFormValues = z.infer<typeof brandWebsitePageCreateSchema>;
@@ -43,6 +43,7 @@ export function BrandWebsitePageForm({ brandId, page }: BrandWebsitePageFormProp
       body: '',
       imageUrl: '',
       isPublished: false,
+      sortOrder: 0,
     },
   });
 
@@ -83,11 +84,18 @@ export function BrandWebsitePageForm({ brandId, page }: BrandWebsitePageFormProp
     });
   };
 
+  const title = page ? 'Edit Page' : 'Create New Page';
+  const description = page ? `Editing details for page: "${page.title}"` : 'Fill out the form to create a new custom page.';
+
   return (
     <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
         <Card>
-          <CardContent className="pt-6 space-y-4">
+          <CardHeader>
+              <CardTitle>{title}</CardTitle>
+              <CardDescription>{description}</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
             <FormField
               control={form.control}
               name="title"
@@ -99,18 +107,32 @@ export function BrandWebsitePageForm({ brandId, page }: BrandWebsitePageFormProp
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="slug"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Slug</FormLabel>
-                  <FormControl><Input placeholder="about-us" {...field} /></FormControl>
-                  <FormDescription>URL-friendly identifier for the page.</FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <FormField
+                control={form.control}
+                name="slug"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Slug</FormLabel>
+                    <FormControl><Input placeholder="about-us" {...field} /></FormControl>
+                    <FormDescription>URL-friendly identifier for the page.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+               <FormField
+                control={form.control}
+                name="sortOrder"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Sort Order</FormLabel>
+                    <FormControl><Input type="number" placeholder="0" {...field} /></FormControl>
+                    <FormDescription>Determines the order of the page in navigation lists.</FormDescription>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+            </div>
              <FormField
                 control={form.control}
                 name="isPublished"

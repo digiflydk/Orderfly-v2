@@ -46,6 +46,7 @@ export function BrandWebsitePagesClient({ brandId, initialPages }: BrandWebsiteP
               <TableRow>
                 <TableHead>Title</TableHead>
                 <TableHead>Slug</TableHead>
+                <TableHead>Sort Order</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
@@ -55,6 +56,7 @@ export function BrandWebsitePagesClient({ brandId, initialPages }: BrandWebsiteP
                 <TableRow key={page.slug}>
                   <TableCell className="font-medium">{page.title}</TableCell>
                   <TableCell><code className="text-xs bg-muted p-1 rounded-sm">{page.slug}</code></TableCell>
+                  <TableCell>{page.sortOrder ?? '—'}</TableCell>
                   <TableCell>
                     <Badge variant={page.isPublished ? 'default' : 'secondary'}>
                       {page.isPublished ? 'Published' : 'Draft'}
@@ -83,7 +85,7 @@ export function BrandWebsitePagesClient({ brandId, initialPages }: BrandWebsiteP
               ))}
                {pages.length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={4} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={5} className="h-24 text-center text-muted-foreground">
                         No pages created yet.
                     </TableCell>
                 </TableRow>
