@@ -1,3 +1,4 @@
+
 'use client';
 
 import { z } from 'zod';
@@ -17,8 +18,8 @@ import { Switch } from '@/components/ui/switch';
 const seoFormSchema = z.object({
   defaultTitle: z.string().optional(),
   defaultDescription: z.string().optional(),
-  ogImageUrl: z.string().url().or(z.literal('')).optional(),
-  canonicalUrl: z.string().url().or(z.literal('')).optional(),
+  ogImageUrl: z.string().url({ message: "Must be a valid URL"}).or(z.literal('')).optional(),
+  canonicalUrl: z.string().url({ message: "Must be a valid URL"}).or(z.literal('')).optional(),
   index: z.boolean().optional(),
 });
 
@@ -91,8 +92,20 @@ export function BrandWebsiteSeoForm({ brandId, initialSeoConfig }: BrandWebsiteS
               name="ogImageUrl"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Default Open Graph Image URL</FormLabel>
+                  <FormLabel>Default Social Share Image URL (og:image)</FormLabel>
                   <FormControl><Input {...field} /></FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="canonicalUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Canonical URL</FormLabel>
+                  <FormControl><Input {...field} /></FormControl>
+                  <FormDescription>The preferred URL for the main page, to avoid duplicate content issues.</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}

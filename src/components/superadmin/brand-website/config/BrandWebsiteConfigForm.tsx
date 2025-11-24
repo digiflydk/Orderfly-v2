@@ -1,3 +1,4 @@
+
 'use client';
 
 import { z } from 'zod';
@@ -14,10 +15,21 @@ import { Switch } from '@/components/ui/switch';
 import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
 import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
 
+const isHostname = (value: string) => {
+    if (!value) return true; // Allow empty strings for optional fields initially
+    try {
+        const url = new URL(`http://${value}`);
+        // Basic check: it has a TLD and no path/protocol
+        return url.hostname === value && value.includes('.') && !value.includes('/') && !value.includes(':');
+    } catch {
+        return false;
+    }
+}
+
 const configFormSchema = z.object({
   active: z.boolean(),
   template: z.string().min(1, "Template is required."),
-  domains: z.array(z.string().min(1, "Domain cannot be empty.")).min(1, "At least one domain is required."),
+  domains: z.array(z.string().refine(isHostname, "Must be a valid hostname (e.g., brand.com), without http/https.")).min(1, "At least one domain is required."),
   defaultLocationId: z.string().nullable(),
 });
 
@@ -50,7 +62,10 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
   const onSubmit = (data: ConfigFormValues) => {
     startTransition(async () => {
       try {
-        await saveBrandWebsiteConfig(brandId, data);
+        await saveBrandWebsiteConfig(brandId, {
+            ...data,
+            domains: data.domains.filter(d => d.trim() !== '')
+        });
         toast({ title: 'Success', description: 'General settings saved successfully.' });
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to save settings.' });
@@ -107,29 +122,45 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
                 <FormDescription>Enter all domains associated with this brand website, including the primary one.</FormDescription>
                 <div className="space-y-2">
                     {fields.map((field, index) => (
-                        <div key={field.id} className="flex items-center gap-2">
-                            <FormField
+                         <FormField
+                                key={field.id}
                                 control={form.control}
                                 name={`domains.${index}`}
                                 render={({ field }) => (
-                                    <FormItem className="flex-1">
-                                        <FormControl>
-                                            <Input placeholder="e.g., brand.com" {...field} />
-                                        </FormControl>
+                                   <FormItem>
+                                        <div className="flex items-center gap-2">
+                                            <FormControl>
+                                                <Input placeholder="e.g., brand.com" {...field} />
+                                            </FormControl>
+                                            <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
+                                                <Trash2 className="h-4 w-4 text-destructive" />
+                                            </Button>
+                                        </div>
                                         <FormMessage />
                                     </FormItem>
                                 )}
                             />
-                            <Button type="button" variant="ghost" size="icon" onClick={() => remove(index)}>
-                                <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
-                        </div>
                     ))}
                 </div>
                  <Button type="button" variant="outline" size="sm" onClick={() => append('')}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Domain
                 </Button>
             </FormItem>
+
+            <FormField
+              control={form.control}
+              name="defaultLocationId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Default Location ID (Optional)</FormLabel>
+                  <FormControl>
+                    <Input {...field} value={field.value ?? ''} />
+                  </FormControl>
+                   <FormDescription>The default location to use for "Order Now" links.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
           </CardContent>
           <CardFooter className="border-t px-6 py-4">

@@ -1,3 +1,4 @@
+
 import 'server-only';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 import { getBrandWebsiteConfig } from '@/lib/superadmin/brand-website/config-actions';
@@ -8,6 +9,7 @@ import { BrandWebsiteSeoForm } from '@/components/superadmin/brand-website/confi
 import { BrandWebsiteSocialForm } from '@/components/superadmin/brand-website/config/BrandWebsiteSocialForm';
 import { BrandWebsiteTrackingForm } from '@/components/superadmin/brand-website/config/BrandWebsiteTrackingForm';
 import { BrandWebsiteLegalForm } from '@/components/superadmin/brand-website/config/BrandWebsiteLegalForm';
+import { BrandWebsiteDesignSystemForm } from '@/components/superadmin/brand-website/config/BrandWebsiteDesignSystemForm';
 
 export default async function BrandWebsiteConfigPage({ params }: { params: { brandId: string } }) {
   await requireSuperadmin();
@@ -21,8 +23,9 @@ export default async function BrandWebsiteConfigPage({ params }: { params: { bra
   return (
     <div className="space-y-6">
       <Tabs defaultValue="general" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="general">General</TabsTrigger>
+          <TabsTrigger value="design">Design System</TabsTrigger>
           <TabsTrigger value="seo">SEO</TabsTrigger>
           <TabsTrigger value="social">Social</TabsTrigger>
           <TabsTrigger value="tracking">Tracking</TabsTrigger>
@@ -30,6 +33,9 @@ export default async function BrandWebsiteConfigPage({ params }: { params: { bra
         </TabsList>
         <TabsContent value="general">
           <BrandWebsiteConfigForm brandId={params.brandId} initialConfig={config} />
+        </TabsContent>
+        <TabsContent value="design">
+          <BrandWebsiteDesignSystemForm brandId={params.brandId} initialDesignConfig={config.designSystem} />
         </TabsContent>
         <TabsContent value="seo">
             <BrandWebsiteSeoForm brandId={params.brandId} initialSeoConfig={config.seo} />
