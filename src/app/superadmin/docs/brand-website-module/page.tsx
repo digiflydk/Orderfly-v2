@@ -1,4 +1,6 @@
 
+'use server';
+
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 import DocsLayout from '@/components/superadmin/docs/DocsLayout';
 import DocsNav from '@/components/superadmin/docs/DocsNav';
@@ -18,7 +20,7 @@ const TOOLS_AND_VIEWS = [
     {
         title: "API Map",
         description: "Structured overview of all CMS and public APIs used by the Brand Website Module.",
-        href: `/superadmin/api-map?module=${MODULE_KEY}`,
+        href: `/superadmin/docs/api-map?module=${MODULE_KEY}`,
         cta: "View API Map",
     },
     {
@@ -84,6 +86,18 @@ const DEVELOPER_DOCS = [
         description: "Markdown documentation for the Brand Website Module, stored in the /docs directory.",
         href: `/superadmin/docs?group=${MODULE_KEY}`,
         cta: "View Docs",
+    },
+    {
+        title: "Schema → UI Mapping",
+        description: "Canonical mapping of Firestore schema fields to the Brand Website CMS UI.",
+        href: `/superadmin/docs/brand-website-module/schema-ui-mapping`,
+        cta: "View Mapping",
+    },
+    {
+        title: "Validation Rules",
+        description: "A complete reference of all validation rules for the Brand Website CMS.",
+        href: `/superadmin/docs/brand-website-module/validation-rules`,
+        cta: "View Rules",
     }
 ]
 

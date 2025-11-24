@@ -1,0 +1,92 @@
+
+# Brand Website: CMS Validation Rules
+
+This document defines the expected validation behavior for the Brand Website CMS UI. The rules apply to both client-side form validation and server-side Zod schemas.
+
+---
+
+## Domain Validation
+
+**Applies to:** `config.domains` array in the "Config" tab.
+
+- Must be a valid hostname (no spaces, no protocol).
+- Must **not** start with `http://` or `https://`.
+- Must contain at least one dot (e.g., `example.com`).
+- Empty entries are not allowed and will be filtered out before submission.
+- All domains must be unique for the current brand.
+
+---
+
+## URL Validation
+
+**Applies to:**
+- **SEO:** `canonicalUrl`, `ogImageUrl`
+- **Social:** `facebook`, `instagram`, `tiktok`, `linkedin`, `x`, `shareImageUrl`
+- **Legal:** `customCookiePolicy`, `customPrivacyPolicy`, `customTerms`
+
+**Rules:**
+- Must start with `http://` or `https://`.
+- Must be a valid URL string according to Zod's `.url()` validation.
+- If a field is optional, an empty string is allowed and treated as "not set".
+
+---
+
+## Typography & Sizes
+
+**Applies to:** "Design System" tab.
+
+- **Font Families:**
+  - `typography.headingFont` and `typography.bodyFont` must match one of the allowed values from the font whitelist (e.g., 'Inter', 'Roboto').
+- **Sizes:**
+  - All font size fields (e.g., `h1Size`, `bodySize`) are expected to be numeric and will be converted to `rem` units.
+  - No negative values are allowed.
+
+---
+
+## Colors
+
+**Applies to:** "Design System" tab.
+
+- All color fields (`primary`, `secondary`, etc.) must be non-empty strings.
+- The UI uses a color picker that outputs a valid hex string (e.g., `#RRGGBB`).
+- Primary, secondary, background, and text colors are required.
+
+---
+
+## Header / Footer & Transparency
+
+**Applies to:** "Design System" tab.
+
+- `header.transparencyPercent` must be a number between 0 and 100 (inclusive).
+- `header.sticky` must be a boolean.
+- `header.height` is a string but is expected to be a valid CSS value (e.g., "80px").
+
+---
+
+## Spacing
+
+**Applies to:** "Design System" tab.
+
+- All spacing scale fields (`xs`, `sm`, `md`, `lg`, `xl`) must be numeric.
+- Values cannot be negative.
+
+---
+
+## Tracking IDs
+
+**Applies to:** "Tracking" tab.
+
+- All fields are optional strings.
+- Basic pattern validation is applied for common formats:
+  - **GA4:** Must start with `G-`.
+  - **GTM:** Must start with `GTM-`.
+
+---
+
+## Error Handling UX
+
+- Invalid values must block the save operation for the specific section where the error occurs.
+- Validation errors must be displayed clearly next to the corresponding form field.
+- Raw JSON errors or stack traces must never be shown to the user.
+- A success toast is displayed on successful save.
+- An error toast is displayed on failed save, showing a user-friendly message.
