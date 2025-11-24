@@ -8,6 +8,14 @@ import { brandWebsitePageCreateSchema, brandWebsitePageSlugSchema, brandWebsiteP
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
+function serializeTimestamp(value: any): string | null {
+  if (!value) return null;
+  if (value instanceof admin.firestore.Timestamp) {
+    return value.toDate().toISOString();
+  }
+  return value as any;
+}
+
 const pagesCollectionPath = (brandId: string) => `brands/${brandId}/websitePages`;
 
 export async function listBrandWebsitePages(brandId: string): Promise<BrandWebsitePageSummary[]> {
@@ -26,7 +34,7 @@ export async function listBrandWebsitePages(brandId: string): Promise<BrandWebsi
                 title: data.title || 'Untitled',
                 isPublished: data.isPublished || false,
                 sortOrder: data.sortOrder,
-                updatedAt: data.updatedAt,
+                updatedAt: serializeTimestamp(data.updatedAt),
             } as BrandWebsitePageSummary;
         });
 

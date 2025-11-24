@@ -22,6 +22,13 @@ import type { ZodSchema } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
+function serializeTimestamp(value: any): string | null {
+  if (!value) return null;
+  if (value instanceof admin.firestore.Timestamp) {
+    return value.toDate().toISOString();
+  }
+  return value as any;
+}
 
 const configPath = (brandId: string) => `/brands/${brandId}/website/config`;
 
@@ -57,6 +64,7 @@ async function readConfig(brandId: string): Promise<BrandWebsiteConfig> {
     social: data.social || {},
     tracking: data.tracking || {},
     legal: data.legal || {},
+    updatedAt: serializeTimestamp(data.updatedAt),
   };
 }
 

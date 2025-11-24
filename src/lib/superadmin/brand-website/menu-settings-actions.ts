@@ -15,6 +15,14 @@ import { z } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
+function serializeTimestamp(value: any): string | null {
+  if (!value) return null;
+  if (value instanceof admin.firestore.Timestamp) {
+    return value.toDate().toISOString();
+  }
+  return value as any;
+}
+
 const menuSettingsPath = (brandId: string) => `/brands/${brandId}/website/menuSettings`;
 
 const VIRTUAL_MENU_SETTINGS: BrandWebsiteMenuSettings = {
@@ -43,7 +51,7 @@ async function readMenuSettings(brandId: string): Promise<BrandWebsiteMenuSettin
   
   return {
     ...validated,
-    updatedAt: data.updatedAt || null,
+    updatedAt: serializeTimestamp(data.updatedAt),
   } as BrandWebsiteMenuSettings;
 }
 

@@ -22,6 +22,14 @@ import { z } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
+function serializeTimestamp(value: any): string | null {
+  if (!value) return null;
+  if (value instanceof admin.firestore.Timestamp) {
+    return value.toDate().toISOString();
+  }
+  return value as any;
+}
+
 const homePath = (brandId: string) => `/brands/${brandId}/website/home`;
 
 const VIRTUAL_HOME: BrandWebsiteHome = {
@@ -49,7 +57,7 @@ async function readHome(brandId: string): Promise<BrandWebsiteHome> {
   
   return {
     ...validated,
-    updatedAt: data.updatedAt || null,
+    updatedAt: serializeTimestamp(data.updatedAt),
   } as BrandWebsiteHome;
 }
 
