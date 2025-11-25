@@ -1,60 +1,64 @@
 
 'use client';
-import { type BrandWebsiteConfig } from '@/lib/types/brandWebsite';
-import React, { useMemo } from 'react';
 
-type ThemeProviderProps = {
+import { createContext, useContext, useCallback, useEffect } from 'react';
+import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
+import { defaultTheme } from './theme';
+
+interface ThemeProviderProps {
   config: Partial<BrandWebsiteConfig>;
   children: React.ReactNode;
-};
+}
 
-const defaultColors = {
-  primary: '#000000',
-  secondary: '#F0F0F0',
-  background: '#FFFFFF',
-  textPrimary: '#111111',
-  textSecondary: '#666666',
-  headerBackground: '#FFFFFF',
-  footerBackground: '#111111',
-};
+const ThemeContext = createContext({});
 
-const defaultTypography = {
-  headingFont: 'system-ui, sans-serif',
-  bodyFont: 'system-ui, sans-serif',
-  h1Size: '3rem',
-  h2Size: '2.25rem',
-  h3Size: '1.875rem',
-  bodySize: '1rem',
-  buttonSize: '0.875rem',
-};
+export function useTheme() {
+  return useContext(ThemeContext);
+}
 
 export function ThemeProvider({ config, children }: ThemeProviderProps) {
-  const cssVariables = useMemo(() => {
-    const typography = { ...defaultTypography, ...config.designSystem?.typography };
-    const colors = { ...defaultColors, ...config.designSystem?.colors };
+    
+  const applyTheme = useCallback(() => {
+    const root = document.documentElement;
+    const design = { ...defaultTheme, ...config.designSystem };
+    
+    // Colors
+    if (design.colors) {
+        Object.entries(design.colors).forEach(([name, value]) => {
+            if (value) root.style.setProperty(`--template1-color-${name}`, value);
+        });
+    }
 
-    return {
-      '--template1-font-family-heading': typography.headingFont,
-      '--template1-font-family-body': typography.bodyFont,
-      '--template1-font-size-h1': typography.h1Size,
-      '--template1-font-size-h2': typography.h2Size,
-      '--template1-font-size-h3': typography.h3Size,
-      '--template1-font-size-body': typography.bodySize,
-      '--template1-font-size-button': typography.buttonSize,
+    // Typography
+    if (design.typography) {
+        const typo = { ...defaultTheme.typography, ...design.typography };
+        root.style.setProperty('--template1-font-family-heading', typo.headingFont);
+        root.style.setProperty('--template1-font-family-body', typo.bodyFont);
+        root.style.setProperty('--template1-font-size-h1', typo.h1Size);
+        root.style.setProperty('--template1-font-size-h2', typo.h2Size);
+        root.style.setProperty('--template1-font-size-h3', typo.h3Size);
+        root.style.setProperty('--template1-font-size-body', typo.bodySize);
+        root.style.setProperty('--template1-font-size-button', typo.buttonSize);
+    }
+    
+    // Buttons
+    if (design.buttons) {
+        const buttons = { ...defaultTheme.buttons, ...design.buttons };
+        root.style.setProperty('--template1-button-radius', buttons.borderRadius);
+        root.style.setProperty('--template1-button-padding-x', buttons.paddingX);
+        root.style.setProperty('--template1-button-padding-y', buttons.paddingY);
+        root.style.setProperty('--template1-button-font-weight', buttons.fontWeight);
+        if (buttons.primaryVariant) {
+            root.style.setProperty('--template1-button-primary-bg', buttons.primaryVariant.background);
+            root.style.setProperty('--template1-button-primary-text', buttons.primaryVariant.text);
+        }
+    }
 
-      '--template1-color-primary': colors.primary,
-      '--template1-color-secondary': colors.secondary,
-      '--template1-color-background': colors.background,
-      '--template1-color-text-primary': colors.textPrimary,
-      '--template1-color-text-secondary': colors.textSecondary,
-      '--template1-color-header-background': colors.headerBackground,
-      '--template1-color-footer-background': colors.footerBackground,
-    } as React.CSSProperties;
   }, [config]);
 
-  return (
-    <div style={cssVariables} className="font-body">
-      {children}
-    </div>
-  );
+  useEffect(() => {
+    applyTheme();
+  }, [applyTheme]);
+
+  return <ThemeContext.Provider value={{}}>{children}</ThemeContext.Provider>;
 }

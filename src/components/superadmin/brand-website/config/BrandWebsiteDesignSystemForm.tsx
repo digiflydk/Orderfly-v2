@@ -15,46 +15,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Loader2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
+import { brandWebsiteDesignSystemSchema } from '@/lib/superadmin/brand-website/config-schemas';
 
-const designSystemSchema = z.object({
-  typography: z.object({
-    headingFont: z.string().min(1),
-    bodyFont: z.string().min(1),
-    h1Size: z.string().min(1),
-    h2Size: z.string().min(1),
-    h3Size: z.string().min(1),
-    bodySize: z.string().min(1),
-    buttonSize: z.string().min(1),
-  }),
-  colors: z.object({
-    primary: z.string().min(1),
-    secondary: z.string().min(1),
-    background: z.string().min(1),
-    textPrimary: z.string().min(1),
-    textSecondary: z.string().min(1),
-    headerBackground: z.string().min(1),
-    footerBackground: z.string().min(1),
-  }).optional(),
-  buttons: z.object({
-    shape: z.enum(['pill', 'rounded', 'square']),
-    defaultVariant: z.string().optional(),
-  }).partial().optional(),
-  header: z.object({
-    sticky: z.boolean(),
-    height: z.string(),
-    transparencyPercent: z.number().min(0).max(100),
-  }).partial().optional(),
-  spacing: z.object({
-      xs: z.number(),
-      sm: z.number(),
-      md: z.number(),
-      lg: z.number(),
-      xl: z.number(),
-    }).partial().optional(),
-});
-
-
-type DesignSystemFormValues = z.infer<typeof designSystemSchema>;
+type DesignSystemFormValues = z.infer<typeof brandWebsiteDesignSystemSchema>;
 
 interface BrandWebsiteDesignSystemFormProps {
   brandId: string;
@@ -68,11 +31,11 @@ export function BrandWebsiteDesignSystemForm({ brandId, initialDesignConfig }: B
   const { toast } = useToast();
 
   const form = useForm<DesignSystemFormValues>({
-    resolver: zodResolver(designSystemSchema),
+    resolver: zodResolver(brandWebsiteDesignSystemSchema),
     defaultValues: {
       typography: initialDesignConfig.typography || { headingFont: 'Inter', bodyFont: 'Inter', h1Size: '3rem', h2Size: '2.25rem', h3Size: '1.875rem', bodySize: '1rem', buttonSize: '0.875rem' },
       colors: initialDesignConfig.colors || { primary: '#000000', secondary: '#F0F0F0', background: '#FFFFFF', textPrimary: '#111111', textSecondary: '#666666', headerBackground: '#FFFFFF', footerBackground: '#111111' },
-      buttons: initialDesignConfig.buttons || { shape: 'rounded', defaultVariant: 'solid' },
+      buttons: initialDesignConfig.buttons || { borderRadius: '0.5rem', paddingX: '1rem', paddingY: '0.5rem', fontWeight: '600', uppercase: false },
       header: initialDesignConfig.header || { sticky: true, height: '80px', transparencyPercent: 0 },
       spacing: initialDesignConfig.spacing || { xs: 4, sm: 8, md: 16, lg: 32, xl: 64 },
     },
@@ -134,6 +97,26 @@ export function BrandWebsiteDesignSystemForm({ brandId, initialDesignConfig }: B
             </Card>
             
             <Card>
+                <CardHeader><CardTitle className="text-lg">Buttons</CardTitle></CardHeader>
+                <CardContent className="space-y-4">
+                    <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                        <FormField control={form.control} name="buttons.borderRadius" render={({ field }) => (<FormItem><FormLabel>Border Radius</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+                        <FormField control={form.control} name="buttons.paddingX" render={({ field }) => (<FormItem><FormLabel>Padding X</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+                        <FormField control={form.control} name="buttons.paddingY" render={({ field }) => (<FormItem><FormLabel>Padding Y</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+                         <FormField control={form.control} name="buttons.fontWeight" render={({ field }) => (
+                            <FormItem><FormLabel>Font Weight</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>
+                                <SelectItem value="400">Normal</SelectItem>
+                                <SelectItem value="500">Medium</SelectItem>
+                                <SelectItem value="600">Semibold</SelectItem>
+                                <SelectItem value="700">Bold</SelectItem>
+                            </SelectContent></Select></FormItem>
+                        )}/>
+                    </div>
+                    <FormField control={form.control} name="buttons.uppercase" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><FormLabel>Uppercase Text</FormLabel><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl></FormItem>)}/>
+                </CardContent>
+            </Card>
+
+             <Card>
                  <CardHeader><CardTitle className="text-lg">Header</CardTitle></CardHeader>
                  <CardContent className="space-y-4">
                     <FormField control={form.control} name="header.sticky" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><FormLabel>Sticky Header</FormLabel><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl></FormItem>)}/>
@@ -156,47 +139,6 @@ export function BrandWebsiteDesignSystemForm({ brandId, initialDesignConfig }: B
                         )}
                         />
                  </CardContent>
-            </Card>
-            <Card>
-                <CardHeader><CardTitle className="text-lg">Buttons</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <FormField control={form.control} name="buttons.shape" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Button Shape</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                <SelectContent>
-                                    <SelectItem value="rounded">Rounded</SelectItem>
-                                    <SelectItem value="pill">Pill</SelectItem>
-                                    <SelectItem value="square">Square</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </FormItem>
-                    )}/>
-                     <FormField control={form.control} name="buttons.defaultVariant" render={({ field }) => (
-                        <FormItem>
-                            <FormLabel>Default Variant</FormLabel>
-                            <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl>
-                                <SelectContent>
-                                    <SelectItem value="solid">Solid</SelectItem>
-                                    <SelectItem value="outline">Outline</SelectItem>
-                                    <SelectItem value="ghost">Ghost</SelectItem>
-                                </SelectContent>
-                            </Select>
-                        </FormItem>
-                    )}/>
-                </CardContent>
-            </Card>
-             <Card>
-                <CardHeader><CardTitle className="text-lg">Spacing (px)</CardTitle></CardHeader>
-                <CardContent className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
-                    <FormField control={form.control} name="spacing.xs" render={({ field }) => (<FormItem><FormLabel>Extra Small</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)}/>
-                    <FormField control={form.control} name="spacing.sm" render={({ field }) => (<FormItem><FormLabel>Small</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)}/>
-                    <FormField control={form.control} name="spacing.md" render={({ field }) => (<FormItem><FormLabel>Medium</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)}/>
-                    <FormField control={form.control} name="spacing.lg" render={({ field }) => (<FormItem><FormLabel>Large</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)}/>
-                    <FormField control={form.control} name="spacing.xl" render={({ field }) => (<FormItem><FormLabel>Extra Large</FormLabel><FormControl><Input type="number" {...field} /></FormControl></FormItem>)}/>
-                </CardContent>
             </Card>
           </CardContent>
           <CardFooter className="border-t px-6 py-4">

@@ -11,15 +11,14 @@ export const brandWebsiteNavLinkSchema = z.object({
 const defaultTypography = {
   headingFont: 'system-ui, sans-serif',
   bodyFont: 'system-ui, sans-serif',
-  h1Size: '3rem',
-  h2Size: '2.25rem',
-  h3Size: '1.875rem',
-  bodySize: '1rem',
-  buttonSize: '0.875rem',
+  h1Size: "2rem",
+  h2Size: "1.5rem",
+  h3Size: "1.25rem",
+  bodySize: "1rem",
+  buttonSize: "0.875rem",
 };
 
-export const brandWebsiteDesignSystemSchema = z.object({
-  typography: z.object({
+const typographySchema = z.object({
       headingFont: z.string().min(1),
       bodyFont: z.string().min(1),
       h1Size: z.string().min(1),
@@ -27,7 +26,42 @@ export const brandWebsiteDesignSystemSchema = z.object({
       h3Size: z.string().min(1),
       bodySize: z.string().min(1),
       buttonSize: z.string().min(1),
-    }).default(defaultTypography),
+    }).default(defaultTypography);
+
+const defaultButtonStyles = {
+  borderRadius: "0.5rem",
+  paddingX: "1.25rem",
+  paddingY: "0.5rem",
+  fontWeight: "600",
+  uppercase: false,
+  primaryVariant: {
+    background: "#000000",
+    text: "#FFFFFF",
+  },
+  secondaryVariant: {
+    background: "#FFFFFF",
+    text: "#000000",
+  },
+};
+
+const buttonVariantSchema = z.object({
+  background: z.string(),
+  text: z.string(),
+});
+
+const brandWebsiteButtonSchema = z.object({
+    borderRadius: z.string().default(defaultButtonStyles.borderRadius),
+    paddingX: z.string().default(defaultButtonStyles.paddingX),
+    paddingY: z.string().default(defaultButtonStyles.paddingY),
+    fontWeight: z.string().default(defaultButtonStyles.fontWeight),
+    uppercase: z.boolean().default(defaultButtonStyles.uppercase),
+    primaryVariant: buttonVariantSchema.default(defaultButtonStyles.primaryVariant),
+    secondaryVariant: buttonVariantSchema.default(defaultButtonStyles.secondaryVariant),
+}).default(defaultButtonStyles);
+
+
+export const brandWebsiteDesignSystemSchema = z.object({
+  typography: typographySchema,
   colors: z.object({
     primary: z.string().min(1),
     secondary: z.string().min(1),
@@ -37,10 +71,7 @@ export const brandWebsiteDesignSystemSchema = z.object({
     headerBackground: z.string().min(1),
     footerBackground: z.string().min(1),
   }).optional(),
-  buttons: z.object({
-    shape: z.enum(['pill', 'rounded', 'square']).optional(),
-    defaultVariant: z.string().optional(),
-  }).partial().optional(),
+  buttons: brandWebsiteButtonSchema,
   header: z.object({
     sticky: z.boolean().optional(),
     height: z.string().optional(),
