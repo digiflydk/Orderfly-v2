@@ -1,9 +1,10 @@
-"use client";
+'use client';
 
 import { useEffect, useState } from 'react';
-import { Template1Page } from '@/components/public/brand-website/template-1/Template1Page';
-import type { Template1HeaderProps } from '@/components/public/brand-website/template-1/Header';
+import { Template1Page, type Template1PageProps } from '@/components/public/brand-website/template-1/Template1Page';
 import { Skeleton } from '@/components/ui/skeleton';
+import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
+
 
 function HeaderSkeleton() {
   return (
@@ -21,33 +22,41 @@ function HeaderSkeleton() {
 }
 
 export default function EsmeraldaPage() {
-  const [headerProps, setHeaderProps] = useState<Template1HeaderProps | null>(null);
+  const [headerProps, setHeaderProps] = useState<Template1PageProps['header'] | null>(null);
+  const [designSystem, setDesignSystem] = useState<Template1PageProps['designSystem']>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     let isMounted = true;
 
-    async function loadHeader() {
+    async function loadData() {
       setIsLoading(true);
       try {
         const res = await fetch(
           "/api/public/brand-website/template-1/header?brandSlug=esmeralda"
         );
         if (!res.ok) {
-            console.error("Failed to fetch header props", res.status, res.statusText);
-            if(isMounted) setHeaderProps(null);
+            console.error("Failed to fetch page data", res.status, res.statusText);
+            if(isMounted) {
+                setHeaderProps(null);
+                setDesignSystem(null);
+            }
             return;
         };
         const data = await res.json();
-        if (isMounted) setHeaderProps(data);
+        if (isMounted) {
+            const { designSystem, ...headerData } = data;
+            setHeaderProps(headerData);
+            setDesignSystem(designSystem);
+        }
       } catch (e) {
-        console.error("Failed to load header props", e);
+        console.error("Failed to load page data", e);
       } finally {
         if(isMounted) setIsLoading(false);
       }
     }
 
-    loadHeader();
+    loadData();
     return () => { isMounted = false; };
   }, []);
   
@@ -64,7 +73,7 @@ export default function EsmeraldaPage() {
   }
 
   return (
-    <Template1Page header={headerProps}>
+    <Template1Page header={headerProps} designSystem={designSystem}>
       <section className="py-16 text-center">
        <h1 className="text-3xl font-bold">Esmeralda – Template 1 Preview</h1>
        <p className="mt-4 text-muted-foreground">

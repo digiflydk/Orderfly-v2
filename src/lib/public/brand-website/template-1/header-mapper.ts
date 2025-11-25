@@ -1,95 +1,72 @@
 'use server';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
-import type { Brand } from '@/types';
+import type { Brand, NavLink } from '@/types';
 import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
 import type { Template1HeaderProps } from '@/components/public/brand-website/template-1/Header';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 
-// --- Pure Mapping Function ---
-function buildTemplate1HeaderProps(params: {
+// Default navigation items if none are defined in the config
+const defaultNavItems: NavLink[] = [
+  { label: 'Menu', href: '#menu' },
+  { label: 'About', href: '#about' },
+  { label: 'Contact', href: '#contact' },
+];
+
+/**
+ * Maps Brand and Config data to the props required by the Template 1 Header component.
+ */
+export function buildTemplate1HeaderProps(params: {
   brand: Brand;
-  config: BrandWebsiteConfig;
+  config: Partial<BrandWebsiteConfig>;
 }): Template1HeaderProps {
   const { brand, config } = params;
-
-  // Use config nav links if available, otherwise default
-  const navItems =
-    config.headerNavLinks && config.headerNavLinks.length > 0
-      ? config.headerNavLinks
-      : [
-          { label: 'Menu', href: '#menu' },
-          { label: 'About', href: '#about' },
-          { label: 'Contact', href: '#contact' },
-        ];
-
-  const orderHref = `/${brand.slug}/order`;
-
+  
   return {
     logoUrl: brand.logoUrl || null,
-    navItems,
-    orderHref,
+    logoAlt: brand.name,
+    navItems: config.headerNavLinks && config.headerNavLinks.length > 0 ? config.headerNavLinks : defaultNavItems,
+    orderHref: `/${brand.slug}/order`,
   };
 }
 
 
-// --- Data Loading Helper ---
-export async function getTemplate1HeaderPropsForBrandSlug(
-  brandSlug: string
-): Promise<Template1HeaderProps | null> {
-  const start = Date.now();
-  const action = 'template1-header';
-  const path = `virtual:/template1/header/by-brandSlug`;
-  let brandId: string | undefined;
+/**
+ * Fetches the necessary data for a given brand and returns the props for the Template 1 Header.
+ */
+export async function getTemplate1HeaderPropsForBrandSlug(brandSlug: string): Promise<(Template1HeaderProps & { designSystem: Partial<BrandWebsiteConfig['designSystem']> }) | null> {
+    const start = Date.now();
+    const action = 'getTemplate1HeaderPropsForBrandSlug';
+    let brand: Brand | null = null;
+    try {
+        const db = getAdminDb();
+        const brandQuery = await db.collection('brands').where('slug', '==', brandSlug).limit(1).get();
+        if (brandQuery.empty) {
+            throw new Error(`Brand with slug "${brandSlug}" not found.`);
+        }
+        brand = { id: brandQuery.docs[0].id, ...brandQuery.docs[0].data() } as Brand;
 
-  try {
-    const db = getAdminDb();
+        const configRef = db.doc(`/brands/${brand.id}/website/config`);
+        const configSnap = await configRef.get();
+        const config: Partial<BrandWebsiteConfig> = configSnap.exists() ? configSnap.data() as Partial<BrandWebsiteConfig> : {};
+        
+        const headerProps = buildTemplate1HeaderProps({ brand, config });
+        
+        const result = {
+            ...headerProps,
+            designSystem: config.designSystem || {},
+        };
+        
+        await logBrandWebsiteApiCall({
+            layer: 'public', action, brandId: brand.id, status: 'success', durationMs: Date.now() - start, path: `virtual:/template1/header/by-brandSlug`
+        });
+        
+        return result;
 
-    // 1. Find brand by slug
-    const brandQuery = db.collection('brands').where('slug', '==', brandSlug).limit(1);
-    const brandSnap = await brandQuery.get();
-    if (brandSnap.empty) {
-      return null;
+    } catch (error: any) {
+        await logBrandWebsiteApiCall({
+            layer: 'public', action, brandId: brand?.id || null, status: 'error', durationMs: Date.now() - start, path: `virtual:/template1/header/by-brandSlug`, errorMessage: error?.message ?? 'Unknown error'
+        });
+        return null;
     }
-    const brand = { id: brandSnap.docs[0].id, ...brandSnap.docs[0].data() } as Brand;
-    brandId = brand.id;
-
-    // 2. Fetch website config for the brand
-    const configPath = `brands/${brandId}/website/config`;
-    const configDoc = await db.doc(configPath).get();
-    
-    let config: BrandWebsiteConfig = {
-      active: false,
-      template: 'template-1',
-      domains: [],
-      defaultLocationId: null,
-      headerNavLinks: [],
-      updatedAt: null,
-    };
-
-    if (configDoc.exists) {
-        const data = configDoc.data();
-        // Simple merge, more complex validation could be added
-        config = { ...config, ...data };
-    }
-
-    // 3. Build props
-    const headerProps = buildTemplate1HeaderProps({ brand, config });
-    
-    await logBrandWebsiteApiCall({ layer: 'public', action, brandId, status: 'success', durationMs: Date.now() - start, path });
-    return headerProps;
-
-  } catch (error: any) {
-    await logBrandWebsiteApiCall({
-      layer: 'public',
-      action,
-      brandId,
-      status: 'error',
-      durationMs: Date.now() - start,
-      path,
-      errorMessage: error?.message ?? 'Unknown error',
-    });
-    console.error(`[HeaderMapper] Failed for brandSlug "${brandSlug}":`, error);
-    return null;
-  }
 }

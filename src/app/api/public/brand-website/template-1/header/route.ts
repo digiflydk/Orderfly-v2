@@ -1,29 +1,24 @@
-// src/app/api/public/brand-website/template-1/header/route.ts
-import { NextResponse, type NextRequest } from 'next/server';
+'use server';
+
+import { NextResponse } from 'next/server';
 import { getTemplate1HeaderPropsForBrandSlug } from '@/lib/public/brand-website/template-1/header-mapper';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-export async function GET(req: NextRequest) {
-  const { searchParams } = new URL(req.url);
+export async function GET(request: Request) {
+  const { searchParams } = new URL(request.url);
   const brandSlug = searchParams.get('brandSlug');
 
   if (!brandSlug) {
-    return NextResponse.json(
-      { ok: false, error: 'Missing brandSlug parameter' },
-      { status: 400 }
-    );
+    return NextResponse.json({ ok: false, error: 'brandSlug parameter is required.' }, { status: 400 });
   }
 
-  const headerProps = await getTemplate1HeaderPropsForBrandSlug(brandSlug);
+  const props = await getTemplate1HeaderPropsForBrandSlug(brandSlug);
 
-  if (!headerProps) {
-    return NextResponse.json(
-      { ok: false, error: `Brand not found or configured for slug: ${brandSlug}` },
-      { status: 404 }
-    );
+  if (!props) {
+    return NextResponse.json({ ok: false, error: `Could not retrieve header data for brand '${brandSlug}'.` }, { status: 404 });
   }
 
-  return NextResponse.json(headerProps);
+  return NextResponse.json(props);
 }
