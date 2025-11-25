@@ -1,4 +1,5 @@
 
+'use server';
 import { z } from 'zod';
 
 export const brandWebsiteNavLinkSchema = z.object({
@@ -34,10 +35,10 @@ const buttonVariantSchema = z.object({
 });
 
 const defaultButtonStyles = {
-  borderRadius: '9999px',
-  paddingX: '1.25rem',
-  paddingY: '0.75rem',
-  fontWeight: '600',
+  borderRadius: "9999px",
+  paddingX: "1.25rem",
+  paddingY: "0.75rem",
+  fontWeight: "600",
   uppercase: false,
   primaryVariant: {
     background: '#FFBD02', // m3-orange
@@ -108,8 +109,8 @@ export const brandWebsiteSeoSchema = z
   .object({
     defaultTitle: z.string().optional(),
     defaultDescription: z.string().optional(),
-    ogImageUrl: z.string().url({ message: 'Must be a valid URL' }).or(z.literal('')).optional(),
-    canonicalUrl: z.string().url({ message: 'Must be a valid URL' }).or(z.literal('')).optional(),
+    ogImageUrl: z.string().url({ message: "Must be a valid URL" }).or(z.literal('')).optional(),
+    canonicalUrl: z.string().url({ message: "Must be a valid URL"}).or(z.literal('')).optional(),
     index: z.boolean().optional().default(true),
   })
   .partial()
@@ -154,6 +155,7 @@ export const brandWebsiteConfigBaseSchema = z.object({
   domains: z.array(z.string().min(1)).default([]),
   defaultLocationId: z.string().nullable().default(null),
   headerNavLinks: z.array(brandWebsiteNavLinkSchema).optional(),
+  logoUrl: z.string().url().or(z.literal('')).optional(),
   faviconUrl: z.string().url().or(z.literal('')).optional(),
 });
 

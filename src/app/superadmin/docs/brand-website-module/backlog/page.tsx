@@ -47,19 +47,19 @@ const backlog: BacklogCategory[] = [
       { id: "522-11-24", name: "Theme Modes (Optional)", description: "Optional support for light/dark theme modes for Template 1", status: "Planned" },
     ],
   },
-  {
+   {
     title: "Favicon & Metadata",
     tasks: [
         { id: "522-11-30", name: "Favicon System", description: "Load brand-specific favicon from Website Config and inject into the document head", status: "Done" },
-        { id: "522-11-31", name: "Page Title & Meta Description", description: "Set page titles and meta descriptions based on Website Config for SEO", status: "Done" },
-        { id: "522-11-32", name: "Social Open Graph", description: "Configure Open Graph image, title and description for social sharing", status: "Planned" },
+        { id: "522-11-31", name: "Metadata & SEO System", description: "Set page titles and meta descriptions based on Website Config for SEO", status: "In Progress" },
+        { id: "522-11-32", name: "Social Open Graph", description: "Configure Open Graph image, title and description for social sharing", status: "In Progress" },
     ]
   },
   {
     title: "Homepage System (Template 1)",
     tasks: [
-      { id: "522-11-06", name: "Homepage CMS Editor", description: "Create CMS editor for managing Template 1 homepage sections for a brand", status: "Done" },
-      { id: "522-11-07", name: "Homepage Schema", description: "Define Zod schema for homepage sections (Hero, Promo, CTADeck, MenuGrid, etc.)", status: "Done" },
+      { id: "522-11-06", name: "Homepage CMS Editor", description: "Create CMS editor for managing Template 1 homepage sections for a brand", status: "Planned" },
+      { id: "522-11-07", name: "Homepage Schema", description: "Define Zod schema for homepage sections (Hero, Promo, CTADeck, MenuGrid, etc.)", status: "Planned" },
       { id: "522-11-08", name: "Homepage Public API", description: "Expose a public API that returns fully resolved Homepage data for Template 1", status: "Planned" },
       { id: "522-11-09", name: "Hero Section", description: "Implement Template 1 Hero section with title, subtitle, image(s) and CTA", status: "Planned" },
       { id: "522-11-10", name: "PromoBanner Section", description: "Implement top/bottom promo banner with CMS-controlled text and styling", status: "Planned" },
@@ -77,6 +77,7 @@ const backlog: BacklogCategory[] = [
     title: "Technical Fixes & Refactoring",
     tasks: [
         { id: "522-11-90", name: 'Fix "use server" in config-schemas', description: 'Removed invalid directive from schema file to resolve build error.', status: "Done" },
+        { id: "522-11-32", name: "Template 1 / m3pizza integration fixes", description: "Fix logo, sticky CTA, and color theming for the m3pizza preview page.", status: "In Progress" },
     ]
   },
    {

@@ -1,61 +1,63 @@
+
 'use client';
-import { useState, useEffect } from 'react';
+
+import { useEffect, useState } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
 import { Menu, X } from 'lucide-react';
+import type { Template1HeaderProps } from '@/types/website';
 import { cn } from '@/lib/utils';
 import { Template1Button } from './Template1Button';
 
-export type Template1HeaderProps = {
-  logoUrl: string | null;
-  logoAlt?: string;
-  navItems: Array<{ label: string; href: string }>;
-  orderHref: string;
-  linkClass: string;
-};
-
-export function Header({ logoUrl, logoAlt, navItems, orderHref, linkClass }: Template1HeaderProps) {
+export function Header({
+  logoUrl,
+  logoAlt,
+  navItems,
+  orderHref,
+  ctaLabel,
+}: Template1HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [isScrolled, setIsScrolled] = useState(false);
-
-  useEffect(() => {
-    const handleScroll = () => {
-      setIsScrolled(window.scrollY > 10);
-    };
-    window.addEventListener('scroll', handleScroll);
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, []);
-
-  const finalLogoAlt = logoAlt || 'Company Logo';
-  const finalLinkClass = linkClass || 'text-white hover:text-primary';
-
+  
   return (
-    <header
-      className={`sticky top-0 z-50 transition-all duration-300 ${
-        isScrolled ? 'bg-m3-cream shadow-md' : 'bg-transparent'
-      }`}
-    >
-      <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 flex items-center justify-between h-20">
-        <Link href="/m3" className="z-50">
-          <Image src={logoUrl ?? "https://i.postimg.cc/PqYpW1s1/logo.png"} alt={finalLogoAlt} width={80} height={40} priority data-ai-hint="logo" />
+    <header data-header>
+      <div
+        className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"
+        style={{
+          fontFamily: 'var(--template1-font-family-body)',
+        }}
+      >
+        <Link href="/" className="flex items-center gap-2" aria-label={logoAlt}>
+          {logoUrl ? (
+             <div className="relative flex items-center" style={{ width: 'var(--logo-width)' }}>
+                 <Image
+                  src={logoUrl}
+                  alt={logoAlt || 'Brand Logo'}
+                  width={120}
+                  height={40}
+                  style={{ width: '100%', height: 'auto' }}
+                  priority
+                />
+            </div>
+          ) : (
+            <span className="text-xl font-bold">{logoAlt}</span>
+          )}
         </Link>
-        <nav className="hidden md:flex items-center gap-8">
-          {navItems.map(item => (
-             <Link key={item.label} href={item.href} className={cn('text-sm font-semibold transition-colors', finalLinkClass)}>
-              {item.label}
+        <nav className="hidden items-center gap-6 md:flex">
+          {navItems.map((link) => (
+            <Link key={link.label} href={link.href} className="text-sm" style={{
+                color: 'var(--template1-color-text-primary)',
+                fontFamily: 'var(--template1-font-family-body)',
+            }}>
+              {link.label}
             </Link>
           ))}
         </nav>
         <div className="flex items-center gap-4">
-          <Template1Button
-            href={orderHref}
-            variant="primary"
-            className="hidden md:flex"
-          >
-            Bestil her
+          <Template1Button asChild className="hidden md:flex" variant="primary">
+            <Link href={orderHref}>{ctaLabel}</Link>
           </Template1Button>
           <button
-            className="md:hidden z-50"
+            className="z-50 md:hidden"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             aria-label="Toggle menu"
           >
@@ -63,23 +65,22 @@ export function Header({ logoUrl, logoAlt, navItems, orderHref, linkClass }: Tem
           </button>
         </div>
       </div>
-      {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="md:hidden absolute top-0 left-0 w-full h-screen bg-m3-cream flex flex-col items-center justify-center gap-8">
+        <div className="absolute left-0 top-0 flex h-screen w-full flex-col items-center justify-center gap-8 bg-background md:hidden">
           <nav className="flex flex-col items-center gap-8">
-             {navItems.map(item => (
-                <Link key={item.label} href={item.href} className={cn("text-xl font-semibold transition-colors", finalLinkClass)} onClick={() => setIsMenuOpen(false)}>
-                    {item.label}
-                </Link>
+            {navItems.map((link) => (
+              <Link
+                key={link.label}
+                href={link.href}
+                className="text-xl font-semibold"
+                onClick={() => setIsMenuOpen(false)}
+              >
+                {link.label}
+              </Link>
             ))}
           </nav>
-          <Template1Button 
-            href={orderHref}
-            variant="primary"
-            className="mt-8"
-            onClick={() => setIsMenuOpen(false)}
-            >
-            Bestil her
+          <Template1Button asChild size="lg" variant="primary">
+            <Link href={orderHref}>{ctaLabel}</Link>
           </Template1Button>
         </div>
       )}

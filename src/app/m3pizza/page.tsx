@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { isM3Enabled } from "@/lib/feature-flags";
-import { Header, type Template1HeaderProps } from "@/components/public/brand-website/template-1/Header";
+import { Header } from "@/components/public/brand-website/template-1/Header";
+import type { Template1HeaderProps } from '@/types/website';
 import { Hero } from "./_components/Hero";
 import { CTADeck } from "./_components/CTADeck";
 import { MenuGrid } from "./_components/MenuGrid";
@@ -12,10 +13,27 @@ import { FooterCTA } from "./_components/FooterCTA";
 import M3Footer from "@/components/layout/M3Footer";
 import { OrderModal } from './_components/OrderModal';
 import { Button } from '@/components/ui/button';
+import { Template1Page } from '@/components/public/brand-website/template-1/Template1Page';
+import { getPublicBrandWebsiteConfig } from '@/lib/public/brand-website/public-config-api';
+import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
+import StickyOrderChoice from '@/app/m3/_components/StickyOrderChoice';
 
 export default function M3IndexPage() {
   const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const [config, setConfig] = useState<BrandWebsiteConfig | null>(null);
   const router = useRouter();
+
+  useEffect(() => {
+    async function fetchConfig() {
+        try {
+            const result = await getPublicBrandWebsiteConfig('m3pizza');
+            setConfig(result);
+        } catch (error) {
+            console.error("Failed to fetch M3Pizza config:", error);
+        }
+    }
+    fetchConfig();
+  }, []);
 
   if (!isM3Enabled()) {
     return (
@@ -28,27 +46,17 @@ export default function M3IndexPage() {
       </main>
     );
   }
-  
+
   const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
-    console.log(`Selected delivery method: ${method}`);
     router.push(`/m3pizza/order?deliveryMethod=${method}`);
   };
+
+  if (!config) {
+      return <div>Loading...</div>;
+  }
   
-  const headerNavItems = [
-    { label: "Menu", href: "#menu" },
-    { label: "Om os", href: "#about" },
-    { label: "Kontakt", href: "#contact" },
-  ];
-
-  const headerProps: Template1HeaderProps = {
-    logoUrl: "/m3pizza-logo.svg",
-    navItems: headerNavItems,
-    orderHref: "/m3pizza/order",
-  };
-
   return (
-    <>
-      <Header {...headerProps} />
+    <Template1Page config={config}>
       <main className="bg-m3-dark">
         <Hero onOrderClick={() => setOrderModalOpen(true)} />
         <CTADeck />
@@ -57,12 +65,16 @@ export default function M3IndexPage() {
         <FooterCTA />
       </main>
       <M3Footer />
+      
+      <div className="md:hidden">
+        <StickyOrderChoice onOrderClick={() => setOrderModalOpen(true)} />
+      </div>
 
-      <OrderModal 
+      <OrderModal
         open={orderModalOpen}
         onOpenChange={setOrderModalOpen}
         onDeliveryMethodSelected={handleDeliveryMethodSelected}
       />
-    </>
+    </Template1Page>
   );
 }

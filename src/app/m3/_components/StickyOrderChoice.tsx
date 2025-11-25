@@ -1,3 +1,4 @@
+
 "use client";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
@@ -21,7 +22,7 @@ export default function StickyOrderChoice({ onOrderClick }: StickyOrderChoicePro
       >
         <Button
           size="lg"
-          className="w-full h-14 bg-m3-orange text-m3-dark hover:bg-m3-orange/90 font-bold uppercase text-base rounded-none"
+          className="w-full h-14 bg-m3-button text-m3-dark hover:bg-m3-button-hover font-bold uppercase text-base rounded-none"
           onClick={onOrderClick}
         >
           BESTIL HER

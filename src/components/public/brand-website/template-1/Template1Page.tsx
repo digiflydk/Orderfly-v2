@@ -1,36 +1,57 @@
 
 'use client';
-import { ReactNode } from "react";
-import { Header, Template1HeaderProps } from "./Header";
-import { ThemeProvider } from "./ThemeProvider";
+
+import { useEffect, useState } from 'react';
+import type { ReactNode } from 'react';
+import type { WebsiteHeaderConfig, BrandWebsiteConfig } from '@/types/website';
+import { Header } from './Header';
 import { Template1Head } from './Template1Head';
+import { ThemeProvider } from './ThemeProvider';
+import { usePathname } from 'next/navigation';
+import M3Footer from '@/components/layout/M3Footer';
 
-export type Template1PageProps = {
-  header: Template1HeaderProps;
-  children?: ReactNode;
-};
+interface Template1PageProps {
+  config: BrandWebsiteConfig;
+  children: ReactNode;
+}
 
-export function Template1Page({ header, children }: Template1PageProps) {
-    if (!header?.designSystem) {
-        return <div className="bg-m3-cream min-h-screen">Loading theme...</div>;
-    }
+export function Template1Page({ config, children }: Template1PageProps) {
+  const pathname = usePathname();
+  const [isClient, setIsClient] = useState(false);
 
-    return (
-        <ThemeProvider designSystem={header.designSystem}>
-            <Template1Head {...header} />
-            <div
-                className="min-h-screen flex flex-col"
-                style={{
-                    backgroundColor: 'var(--template1-color-background)',
-                    color: 'var(--template1-color-text-primary)',
-                    fontFamily: 'var(--template1-font-family-body)',
-                }}
-            >
-                <Header {...header} />
-                <main className="flex-1">
-                    {children}
-                </main>
-            </div>
-        </ThemeProvider>
-    );
+  useEffect(() => {
+    setIsClient(true);
+  }, []);
+
+  const headerConfig = {
+    logoUrl: config.logoUrl,
+    logoAlt: 'Brand Logo',
+    navItems: config.headerNavLinks || [],
+    orderHref: '#',
+    ctaLabel: 'Order Now',
+    config, // Pass the full config
+  };
+
+  return (
+    <>
+      <Template1Head
+        title={config.seo?.defaultTitle || 'My Brand'}
+        description={config.seo?.defaultDescription || ''}
+        faviconUrl={config.faviconUrl || '/favicon.ico'}
+        ogImageUrl={config.seo?.ogImageUrl}
+        canonicalUrl={config.seo?.canonicalUrl}
+        robotsNoIndex={!config.seo?.index}
+      />
+      <ThemeProvider designSystem={config.designSystem}>
+        <div 
+          className="min-h-screen"
+          style={{ backgroundColor: 'var(--template1-color-background)' }}
+        >
+          {isClient && <Header {...headerConfig} />}
+          <main>{children}</main>
+          {pathname.startsWith('/m3pizza') && <M3Footer />}
+        </div>
+      </ThemeProvider>
+    </>
+  );
 }
