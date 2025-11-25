@@ -1,16 +1,17 @@
 
 
+export interface NavLink {
+    label: string;
+    href: string;
+}
+
 export interface BrandWebsiteConfig {
   active: boolean;
   template: string;
   domains: string[];
   defaultLocationId: string | null;
-  designSystem: Record<string, any>;
-  seo: Record<string, any>;
-  social: Record<string, any>;
-  tracking: Record<string, any>;
-  legal: Record<string, any>;
-  updatedAt: any; // TODO: replace with shared Timestamp type if available
+  headerNavLinks?: NavLink[];
+  updatedAt: any;
 }
 
 export interface BrandWebsiteHome {

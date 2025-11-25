@@ -1,9 +1,13 @@
 
+
 import { z } from 'zod';
 
+export const brandWebsiteNavLinkSchema = z.object({
+  label: z.string().min(1, 'Label cannot be empty'),
+  href: z.string().min(1, 'Link URL cannot be empty'),
+});
+
 export const brandWebsiteDesignSystemSchema = z.object({
-  // keep flexible but structured: brand-specific design tokens
-  // Example fields (extendable in future tasks):
   typography: z
     .object({
       headingFont: z.string().min(1),
@@ -103,6 +107,7 @@ export const brandWebsiteConfigBaseSchema = z.object({
   template: z.string().min(1),
   domains: z.array(z.string().min(1)).default([]),
   defaultLocationId: z.string().nullable().default(null),
+  headerNavLinks: z.array(brandWebsiteNavLinkSchema).optional(),
 });
 
 export type DesignSystemInput = z.infer<typeof brandWebsiteDesignSystemSchema>;

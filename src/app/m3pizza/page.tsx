@@ -1,5 +1,6 @@
+
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { isM3Enabled } from "@/lib/feature-flags";
 import { Header, type Template1HeaderProps } from "@/components/public/brand-website/template-1/Header";
@@ -11,8 +12,6 @@ import { FooterCTA } from "./_components/FooterCTA";
 import M3Footer from "@/components/layout/M3Footer";
 import { OrderModal } from './_components/OrderModal';
 import { Button } from '@/components/ui/button';
-import { MobileHero } from './_components/MobileHero';
-import { MobileCardGrid } from './_components/MobileCardGrid';
 
 export default function M3IndexPage() {
   const [orderModalOpen, setOrderModalOpen] = useState(false);
