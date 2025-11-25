@@ -1,7 +1,5 @@
+// This file is now free of 'use server' and can be safely imported anywhere.
 
-'use server';
-
-import type { WebsiteHeaderConfig } from "@/types/website";
 import type { GeneralSettings, NavLink } from '@/types/settings';
 import type { BrandWebsiteConfig } from "@/lib/types/brandWebsite";
 
@@ -24,13 +22,12 @@ export function resolveLinkClass(input?: string): string {
   }
 }
 
-
 export const VIRTUAL_CONFIG: BrandWebsiteConfig = {
   active: false,
   template: 'template-1',
   domains: [],
   defaultLocationId: null,
-  faviconUrl: '/favicon.ico',
+  faviconUrl: '/favicon.ico', // Default fallback
   designSystem: {},
   seo: {},
   social: {},

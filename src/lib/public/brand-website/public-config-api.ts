@@ -2,13 +2,13 @@
 'use server';
 
 import 'server-only';
-import { getAdminDb, admin } from '@/lib/firebase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
 import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
-import { VIRTUAL_CONFIG } from './public-config-helpers';
+import { VIRTUAL_CONFIG, resolveLinkClass } from '@/lib/brand-website/utils/public-config-helpers';
 
 function serializeTimestamp(value: any): string | null {
   if (!value) return null;
-
+  // Runtime-safe check for Firestore Timestamp
   if (typeof value.toDate === 'function') {
     return value.toDate().toISOString();
   }
@@ -40,14 +40,13 @@ async function readConfig(brandId: string): Promise<BrandWebsiteConfig> {
   };
 }
 
+
 export async function getPublicBrandWebsiteConfig(brandId: string): Promise<BrandWebsiteConfig> {
   // Public-facing API should not throw errors, but return defaults.
-  // It also does NOT require superadmin access.
   try {
-    const result = await readConfig(brandId);
-    return result;
-  } catch (error: any) {
-    console.error(`[public-config-api] Failed to read config for brand ${brandId}:`, error.message);
+    return await readConfig(brandId);
+  } catch (error) {
+    console.error(`Failed to get public brand config for ${brandId}:`, error);
     return VIRTUAL_CONFIG;
   }
 }
