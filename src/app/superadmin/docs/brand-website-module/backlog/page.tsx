@@ -58,8 +58,8 @@ const backlog: BacklogCategory[] = [
   {
     title: "Homepage System (Template 1)",
     tasks: [
-      { id: "522-11-06", name: "Homepage CMS Editor", description: "Create CMS editor for managing Template 1 homepage sections for a brand", status: "Planned" },
-      { id: "522-11-07", name: "Homepage Schema", description: "Define Zod schema for homepage sections (Hero, Promo, CTADeck, MenuGrid, etc.)", status: "Planned" },
+      { id: "522-11-06", name: "Homepage CMS Editor", description: "Create CMS editor for managing Template 1 homepage sections for a brand", status: "In Progress" },
+      { id: "522-11-07", name: "Homepage Schema", description: "Define Zod schema for homepage sections (Hero, Promo, CTADeck, MenuGrid, etc.)", status: "In Progress" },
       { id: "522-11-08", name: "Homepage Public API", description: "Expose a public API that returns fully resolved Homepage data for Template 1", status: "Planned" },
       { id: "522-11-09", name: "Hero Section", description: "Implement Template 1 Hero section with title, subtitle, image(s) and CTA", status: "Planned" },
       { id: "522-11-10", name: "PromoBanner Section", description: "Implement top/bottom promo banner with CMS-controlled text and styling", status: "Planned" },
@@ -72,6 +72,12 @@ const backlog: BacklogCategory[] = [
       { id: "522-11-18", name: "Template 1 Homepage Final Polish", description: "Visual and UX polish pass on Template 1 homepage", status: "Planned" },
       { id: "522-11-19", name: "Homepage Playwright Tests", description: "End-to-end tests for Template 1 homepage flows (basic navigation and rendering)", status: "Planned" },
     ],
+  },
+  {
+    title: "Technical Fixes & Refactoring",
+    tasks: [
+        { id: "522-11-90", name: 'Fix "use server" in config-schemas', description: 'Removed invalid directive from schema file to resolve build error.', status: "Done" },
+    ]
   },
    {
     title: "Testing",

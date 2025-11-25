@@ -1,6 +1,4 @@
 
-'use server';
-
 import { z } from 'zod';
 
 export const brandWebsiteNavLinkSchema = z.object({
@@ -18,15 +16,17 @@ const defaultTypography = {
   buttonSize: '0.875rem',
 };
 
-const typographySchema = z.object({
-      headingFont: z.string().min(1),
-      bodyFont: z.string().min(1),
-      h1Size: z.string().min(1),
-      h2Size: z.string().min(1),
-      h3Size: z.string().min(1),
-      bodySize: z.string().min(1),
-      buttonSize: z.string().min(1),
-    }).default(defaultTypography);
+const typographySchema = z
+  .object({
+    headingFont: z.string().min(1).default(defaultTypography.headingFont),
+    bodyFont: z.string().min(1).default(defaultTypography.bodyFont),
+    h1Size: z.string().min(1).default(defaultTypography.h1Size),
+    h2Size: z.string().min(1).default(defaultTypography.h2Size),
+    h3Size: z.string().min(1).default(defaultTypography.h3Size),
+    bodySize: z.string().min(1).default(defaultTypography.bodySize),
+    buttonSize: z.string().min(1).default(defaultTypography.buttonSize),
+  })
+  .default(defaultTypography);
 
 const buttonVariantSchema = z.object({
   background: z.string(),
@@ -34,64 +34,82 @@ const buttonVariantSchema = z.object({
 });
 
 const defaultButtonStyles = {
-  borderRadius: "9999px",
-  paddingX: "1.25rem",
-  paddingY: "0.75rem",
-  fontWeight: "600",
+  borderRadius: '9999px',
+  paddingX: '1.25rem',
+  paddingY: '0.75rem',
+  fontWeight: '600',
   uppercase: false,
   primaryVariant: {
-    background: "#FFBD02", // m3-orange
-    text: "#000000",       // m3-dark
+    background: '#FFBD02', // m3-orange
+    text: '#000000', // m3-dark
   },
   secondaryVariant: {
-    background: "#333333",
-    text: "#FFFFFF",
+    background: '#333333',
+    text: '#FFFFFF',
   },
 };
 
-const brandWebsiteButtonSchema = z.object({
+const brandWebsiteButtonSchema = z
+  .object({
     borderRadius: z.string().default(defaultButtonStyles.borderRadius),
     paddingX: z.string().default(defaultButtonStyles.paddingX),
     paddingY: z.string().default(defaultButtonStyles.paddingY),
     fontWeight: z.string().default(defaultButtonStyles.fontWeight),
     uppercase: z.boolean().default(defaultButtonStyles.uppercase),
-    primaryVariant: buttonVariantSchema.default(defaultButtonStyles.primaryVariant),
-    secondaryVariant: buttonVariantSchema.default(defaultButtonStyles.secondaryVariant),
-}).default(defaultButtonStyles);
+    primaryVariant: buttonVariantSchema.default(
+      defaultButtonStyles.primaryVariant
+    ),
+    secondaryVariant: buttonVariantSchema.default(
+      defaultButtonStyles.secondaryVariant
+    ),
+  })
+  .default(defaultButtonStyles);
 
-
-export const brandWebsiteDesignSystemSchema = z.object({
-  typography: typographySchema,
-  colors: z.object({
-    primary: z.string().min(1),
-    secondary: z.string().min(1),
-    background: z.string().min(1),
-    textPrimary: z.string().min(1),
-    textSecondary: z.string().min(1),
-    headerBackground: z.string().min(1),
-    footerBackground: z.string().min(1),
-  }).optional(),
-  buttons: brandWebsiteButtonSchema,
-  header: z.object({
-    sticky: z.boolean().optional(),
-    height: z.string().optional(),
-    transparencyPercent: z.number().min(0).max(100).optional(),
-  }).partial().optional(),
-  spacing: z.object({
-      xs: z.number().optional(),
-      sm: z.number().optional(),
-      md: z.number().optional(),
-      lg: z.number().optional(),
-      xl: z.number().optional(),
-    }).partial().optional(),
-});
+export const brandWebsiteDesignSystemSchema = z
+  .object({
+    typography: typographySchema,
+    colors: z
+      .object({
+        primary: z.string().min(1),
+        secondary: z.string().min(1),
+        background: z.string().min(1),
+        textPrimary: z.string().min(1),
+        textSecondary: z.string().min(1),
+        headerBackground: z.string().min(1),
+        footerBackground: z.string().min(1),
+      })
+      .optional(),
+    buttons: brandWebsiteButtonSchema,
+    header: z
+      .object({
+        sticky: z.boolean().optional(),
+        height: z.string().optional(),
+        transparencyPercent: z.number().min(0).max(100).optional(),
+      })
+      .partial()
+      .optional(),
+    spacing: z
+      .object({
+        xs: z.number().optional(),
+        sm: z.number().optional(),
+        md: z.number().optional(),
+        lg: z.number().optional(),
+        xl: z.number().optional(),
+      })
+      .partial()
+      .optional(),
+  })
+  .default({
+    typography: defaultTypography,
+    buttons: defaultButtonStyles,
+  });
 
 export const brandWebsiteSeoSchema = z
   .object({
-    defaultTitle: z.string().min(1),
-    defaultDescription: z.string().min(1),
-    ogImageUrl: z.string().url().optional(),
-    canonicalUrl: z.string().url().optional(),
+    defaultTitle: z.string().optional(),
+    defaultDescription: z.string().optional(),
+    ogImageUrl: z.string().url({ message: 'Must be a valid URL' }).or(z.literal('')).optional(),
+    canonicalUrl: z.string().url({ message: 'Must be a valid URL' }).or(z.literal('')).optional(),
     index: z.boolean().optional(),
   })
   .partial()
@@ -143,4 +161,6 @@ export type SeoInput = z.infer<typeof brandWebsiteSeoSchema>;
 export type SocialInput = z.infer<typeof brandWebsiteSocialSchema>;
 export type TrackingInput = z.infer<typeof brandWebsiteTrackingSchema>;
 export type LegalInput = z.infer<typeof brandWebsiteLegalSchema>;
-export type SaveBrandWebsiteConfigInput = z.infer<typeof brandWebsiteConfigBaseSchema>;
+export type SaveBrandWebsiteConfigInput = z.infer<
+  typeof brandWebsiteConfigBaseSchema
+>;
