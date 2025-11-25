@@ -96,7 +96,7 @@ const BRAND_WEBSITE_UTILITIES: DevUtilityMeta[] = [
 ];
 
 
-export default function BrandWebsiteModuleLayout({ children }: { children: React.ReactNode }) {
+export default async function BrandWebsiteModuleLayout({ children }: { children: React.ReactNode }) {
     return (
         <DocsLayout
             sidebar={<DocsNav docs={BRAND_WEBSITE_DOCS} utilities={BRAND_WEBSITE_UTILITIES} activeDocId={''} />}
