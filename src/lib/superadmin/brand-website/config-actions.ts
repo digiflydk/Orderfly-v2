@@ -31,7 +31,7 @@ function serializeTimestamp(value: any): string | null {
   return value as any;
 }
 
-const configPath = (brandId: string) => `/brands/${brandId}/website/config`;
+const configPath = (brandId: string) => `brands/${brandId}/website/config`;
 
 const VIRTUAL_CONFIG: BrandWebsiteConfig = {
   active: false,
