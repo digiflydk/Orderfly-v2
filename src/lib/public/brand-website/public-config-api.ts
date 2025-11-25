@@ -3,13 +3,17 @@
 
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
+import {
+  VIRTUAL_CONFIG,
+  serializeTimestamp,
+} from '@/lib/brand-website/utils/public-config-helpers';
 import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
-import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
-import { serializeTimestamp, VIRTUAL_CONFIG } from '@/lib/brand-website/utils/public-config-helpers';
+
+const configPath = (brandId: string) => `brands/${brandId}/website/config`;
 
 async function readConfig(brandId: string): Promise<BrandWebsiteConfig> {
   const db = getAdminDb();
-  const docRef = db.doc(`brands/${brandId}/website/config`);
+  const docRef = db.doc(configPath(brandId));
   const docSnap = await docRef.get();
 
   if (!docSnap.exists) {
@@ -21,25 +25,24 @@ async function readConfig(brandId: string): Promise<BrandWebsiteConfig> {
   return {
     ...VIRTUAL_CONFIG,
     ...data,
+    designSystem: data.designSystem || {},
+    seo: data.seo || {},
+    social: data.social || {},
+    tracking: data.tracking || {},
+    legal: data.legal || {},
     updatedAt: serializeTimestamp(data.updatedAt),
   };
 }
 
-
-export async function getPublicBrandWebsiteConfig(brandId: string): Promise<BrandWebsiteConfig> {
-  const start = Date.now();
-  const action = 'getPublicBrandWebsiteConfig';
+export async function getPublicBrandWebsiteConfig(
+  brandId: string
+): Promise<BrandWebsiteConfig> {
   try {
     const result = await readConfig(brandId);
-    await logBrandWebsiteApiCall({
-        layer: 'public', action, brandId, status: 'success', durationMs: Date.now() - start
-    });
     return result;
   } catch (error: any) {
-    await logBrandWebsiteApiCall({
-        layer: 'public', action, brandId, status: 'error', durationMs: Date.now() - start, errorMessage: error?.message ?? 'Unknown error'
-    });
-    throw error;
+    console.error('getPublicBrandWebsiteConfig failed:', error);
+    // Return a safe fallback to prevent crashes on public pages
+    return { ...VIRTUAL_CONFIG, domains: [brandId] };
   }
 }
-

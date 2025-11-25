@@ -1,4 +1,3 @@
-
 'use server';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
@@ -13,16 +12,9 @@ import type { ZodSchema } from 'zod';
 import { z } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
+import { serializeTimestamp } from './config-utils';
 
-function serializeTimestamp(value: any): string | null {
-  if (!value) return null;
-  if (value instanceof admin.firestore.Timestamp) {
-    return value.toDate().toISOString();
-  }
-  return value as any;
-}
-
-const homePath = (brandId: string) => `/brands/${brandId}/website/home`;
+const homePath = (brandId: string) => `brands/${brandId}/website/homepage`;
 
 const VIRTUAL_HOME: BrandWebsiteHome = {
   hero: [],
@@ -110,7 +102,7 @@ async function savePartial<T>(
         await logBrandWebsiteAuditEntry({
             brandId,
             entity: 'home',
-            entityId: 'home',
+            entityId: 'homepage',
             action: 'update',
             changedFields: [field],
             path: homePath(brandId),

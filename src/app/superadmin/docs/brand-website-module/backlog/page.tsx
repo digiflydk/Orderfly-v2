@@ -51,8 +51,8 @@ const backlog: BacklogCategory[] = [
     title: "Favicon & Metadata",
     tasks: [
         { id: "522-11-30", name: "Favicon System", description: "Load brand-specific favicon from Website Config and inject into the document head", status: "Done" },
-        { id: "522-11-31", name: "Metadata & SEO System", description: "Set page titles and meta descriptions based on Website Config for SEO", status: "In Progress" },
-        { id: "522-11-32", name: "Template 1 / m3pizza integration fixes", description: "Fix logo, CTA and color system for m3pizza preview", status: "In Progress" },
+        { id: "522-11-31", name: "Metadata & SEO System", description: "Set page titles and meta descriptions based on Website Config for SEO", status: "Done" },
+        { id: "522-11-32", name: "Template 1 / m3pizza integration fixes", description: "Fix logo, CTA and color system for m3pizza preview", status: "Done" },
     ]
   },
   {
@@ -79,7 +79,9 @@ const backlog: BacklogCategory[] = [
         { id: "522-11-90", name: 'Fix invalid "use server" in brand website config', description: 'Removed invalid directive from schema file to resolve build error.', status: "Done" },
         { id: "522-11-91", name: '“use server” hardening for public config API', description: 'Final fix for all public-facing config API server action errors.', status: 'Done' },
         { id: "522-11-92", name: 'Final cleanup of brand-website config-schemas “use server” error', description: 'Final fix for all public-facing config API server action errors.', status: 'Done' },
-        { id: "522-11-93", name: 'Fix Server Action classification for public-config-helpers', description: "Moved helper file to a safe directory to prevent mis-classification by Next.js.", status: "In Progress" },
+        { id: "522-11-93", name: 'Fix Server Action classification for public-config-helpers', description: "Moved helper file to a safe directory to prevent mis-classification by Next.js.", status: "Done" },
+        { id: "522-11-94", name: 'Fix public-config-api re-exports and module boundaries', description: 'Ensured that no non-async functions or objects are exported from server action files.', status: 'Done' },
+        { id: "522-11-95", name: 'Full Brand Website Stability Fix (Critical)', description: 'Fixes all known issues with paths, exports, and component integration for the Brand Website module.', status: 'In Progress' },
     ]
   },
    {
