@@ -1,48 +1,59 @@
+
 'use client';
 
-import type { BrandWebsiteDesignSystem } from '@/lib/types/brandWebsite';
-import React, { createContext, useContext, useMemo } from 'react';
+import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import type { BrandWebsiteConfig, DesignSystem } from '@/lib/types/brandWebsite';
 
-// Define a default theme for fallback
-const defaultColors: BrandWebsiteDesignSystem['colors'] = {
-  primary: '#E94F26', // OrderFly Orange
-  secondary: '#FF7A29',
-  background: '#FFF8F0',
-  textPrimary: '#2D2D2D',
-  textSecondary: '#444444',
-  headerBackground: '#2D2D2D',
-  footerBackground: '#2D2D2D',
+interface ThemeContextType {
+  designSystem: DesignSystem | null;
+}
+
+const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
+
+export const useTemplate1Theme = () => {
+  const context = useContext(ThemeContext);
+  if (!context) {
+    throw new Error('useTemplate1Theme must be used within a Template1ThemeProvider');
+  }
+  return context;
 };
 
-const ThemeContext = createContext<BrandWebsiteDesignSystem['colors']>(defaultColors);
-
-export function useTemplate1Theme() {
-  return useContext(ThemeContext);
-}
-
 interface ThemeProviderProps {
-  designSystem: Partial<BrandWebsiteDesignSystem> | null;
   children: React.ReactNode;
+  designSystem: DesignSystem | null;
 }
 
-export function ThemeProvider({ designSystem, children }: ThemeProviderProps) {
-  const colors = useMemo(() => ({
-    ...defaultColors,
-    ...designSystem?.colors,
-  }), [designSystem]);
+export function Template1ThemeProvider({ children, designSystem }: ThemeProviderProps) {
+  const cssVariables = useMemo(() => {
+    if (!designSystem) return {};
 
-  const cssVariables = {
-    '--template1-color-primary': colors.primary,
-    '--template1-color-secondary': colors.secondary,
-    '--template1-color-background': colors.background,
-    '--template1-color-text-primary': colors.textPrimary,
-    '--template1-color-text-secondary': colors.textSecondary,
-    '--template1-color-header-bg': colors.headerBackground,
-    '--template1-color-footer-bg': colors.footerBackground,
-  } as React.CSSProperties;
+    const variables: React.CSSProperties & { [key: string]: string } = {};
+
+    // Colors
+    if (designSystem.colors) {
+      for (const [key, value] of Object.entries(designSystem.colors)) {
+        if (value) {
+          variables[`--template1-color-${key}`] = value;
+        }
+      }
+    }
+
+    // Typography
+    if (designSystem.typography) {
+        if(designSystem.typography.headingFont) variables['--template1-font-family-heading'] = designSystem.typography.headingFont;
+        if(designSystem.typography.bodyFont) variables['--template1-font-family-body'] = designSystem.typography.bodyFont;
+        if(designSystem.typography.h1Size) variables['--template1-font-size-h1'] = designSystem.typography.h1Size;
+        if(designSystem.typography.h2Size) variables['--template1-font-size-h2'] = designSystem.typography.h2Size;
+        if(designSystem.typography.h3Size) variables['--template1-font-size-h3'] = designSystem.typography.h3Size;
+        if(designSystem.typography.bodySize) variables['--template1-font-size-body'] = designSystem.typography.bodySize;
+        if(designSystem.typography.buttonSize) variables['--template1-font-size-button'] = designSystem.typography.buttonSize;
+    }
+
+    return variables;
+  }, [designSystem]);
 
   return (
-    <ThemeContext.Provider value={colors}>
+    <ThemeContext.Provider value={{ designSystem }}>
       <div style={cssVariables}>
         {children}
       </div>

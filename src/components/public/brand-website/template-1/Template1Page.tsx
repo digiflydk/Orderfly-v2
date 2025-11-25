@@ -1,25 +1,32 @@
 
-import type { ReactNode } from "react";
-import type { Template1HeaderProps } from "./Header";
-import { Header } from "./Header";
-import type { BrandWebsiteDesignSystem } from "@/lib/types/brandWebsite";
-import { ThemeProvider } from "./ThemeProvider";
+'use client';
+
+import { ReactNode } from "react";
+import { Header, type Template1HeaderProps } from "./Header";
+import { Template1ThemeProvider } from './ThemeProvider';
+import type { DesignSystem } from "@/lib/types/brandWebsite";
 
 export type Template1PageProps = {
   header: Template1HeaderProps;
-  designSystem: Partial<BrandWebsiteDesignSystem> | null;
+  designSystem: DesignSystem | null;
   children?: ReactNode;
 };
 
 export function Template1Page({ header, designSystem, children }: Template1PageProps) {
   return (
-    <ThemeProvider designSystem={designSystem}>
-        <div className="min-h-screen flex flex-col bg-[var(--template1-color-background)] text-[var(--template1-color-text-primary)]">
-            <Header {...header} />
-            <main className="flex-1">
-                {children}
-            </main>
-        </div>
-    </ThemeProvider>
+    <Template1ThemeProvider designSystem={designSystem}>
+      <div
+        className="min-h-screen flex flex-col text-foreground"
+        style={{
+          backgroundColor: 'var(--template1-color-background)',
+          fontFamily: 'var(--template1-font-family-body, sans-serif)',
+        }}
+      >
+        <Header {...header} />
+        <main className="flex-1">
+          {children}
+        </main>
+      </div>
+    </Template1ThemeProvider>
   );
 }

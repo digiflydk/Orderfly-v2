@@ -1,10 +1,10 @@
+
 'use client';
 
 import { useEffect, useState } from 'react';
 import { Template1Page, type Template1PageProps } from '@/components/public/brand-website/template-1/Template1Page';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
-
+import type { BrandWebsiteConfig, DesignSystem } from '@/lib/types/brandWebsite';
 
 function HeaderSkeleton() {
   return (
@@ -21,9 +21,10 @@ function HeaderSkeleton() {
   );
 }
 
+type HeaderData = Omit<Template1PageProps, 'children'>;
+
 export default function EsmeraldaPage() {
-  const [headerProps, setHeaderProps] = useState<Template1PageProps['header'] | null>(null);
-  const [designSystem, setDesignSystem] = useState<Template1PageProps['designSystem']>(null);
+  const [pageProps, setPageProps] = useState<HeaderData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -38,16 +39,14 @@ export default function EsmeraldaPage() {
         if (!res.ok) {
             console.error("Failed to fetch page data", res.status, res.statusText);
             if(isMounted) {
-                setHeaderProps(null);
-                setDesignSystem(null);
+                setPageProps(null);
             }
             return;
         };
         const data = await res.json();
         if (isMounted) {
             const { designSystem, ...headerData } = data;
-            setHeaderProps(headerData);
-            setDesignSystem(designSystem);
+            setPageProps({ header: headerData, designSystem });
         }
       } catch (e) {
         console.error("Failed to load page data", e);
@@ -60,7 +59,7 @@ export default function EsmeraldaPage() {
     return () => { isMounted = false; };
   }, []);
   
-  if (isLoading || !headerProps) {
+  if (isLoading || !pageProps) {
       return (
           <div className="bg-gray-900 text-white min-h-screen">
               <HeaderSkeleton />
@@ -73,7 +72,7 @@ export default function EsmeraldaPage() {
   }
 
   return (
-    <Template1Page header={headerProps} designSystem={designSystem}>
+    <Template1Page {...pageProps}>
       <section className="py-16 text-center">
        <h1 className="text-3xl font-bold">Esmeralda – Template 1 Preview</h1>
        <p className="mt-4 text-muted-foreground">

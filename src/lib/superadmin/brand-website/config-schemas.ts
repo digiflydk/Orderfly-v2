@@ -1,4 +1,5 @@
 
+'use server';
 
 import { z } from 'zod';
 
@@ -16,8 +17,8 @@ export const brandWebsiteDesignSystemSchema = z.object({
       h2Size: z.string().min(1),
       h3Size: z.string().min(1),
       bodySize: z.string().min(1),
+      buttonSize: z.string().min(1).optional(), // New field
     })
-    .partial()
     .optional(),
   colors: z
     .object({
@@ -29,7 +30,6 @@ export const brandWebsiteDesignSystemSchema = z.object({
       headerBackground: z.string().min(1),
       footerBackground: z.string().min(1),
     })
-    .partial()
     .optional(),
   buttons: z
     .object({
@@ -56,7 +56,7 @@ export const brandWebsiteDesignSystemSchema = z.object({
     })
     .partial()
     .optional(),
-}).strict();
+});
 
 export const brandWebsiteSeoSchema = z
   .object({
