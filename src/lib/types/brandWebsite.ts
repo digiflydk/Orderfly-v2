@@ -1,5 +1,4 @@
 
-
 export interface NavLink {
     label: string;
     href: string;
@@ -11,6 +10,12 @@ export interface BrandWebsiteConfig {
   domains: string[];
   defaultLocationId: string | null;
   headerNavLinks?: NavLink[];
+  faviconUrl?: string;
+  designSystem: any;
+  seo: any;
+  social: any;
+  tracking: any;
+  legal: any;
   updatedAt: any;
 }
 

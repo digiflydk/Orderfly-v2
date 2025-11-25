@@ -1,3 +1,4 @@
+
 'use client';
 
 import { z } from 'zod';
@@ -5,7 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { saveBrandWebsiteSeo, type SeoInput } from '@/lib/superadmin/brand-website/config-actions';
+import { saveBrandWebsiteSeo } from '@/lib/superadmin/brand-website/config-actions';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
@@ -13,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Loader2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
+import type { SeoInput } from '@/lib/superadmin/brand-website/config-schemas';
 
 const seoFormSchema = z.object({
   defaultTitle: z.string().optional(),
@@ -20,6 +22,7 @@ const seoFormSchema = z.object({
   ogImageUrl: z.string().url({ message: "Must be a valid URL"}).or(z.literal('')).optional(),
   canonicalUrl: z.string().url({ message: "Must be a valid URL"}).or(z.literal('')).optional(),
   index: z.boolean().optional(),
+  ogImage: z.any().optional(), // For file upload
 });
 
 type SeoFormValues = z.infer<typeof seoFormSchema>;
@@ -47,7 +50,7 @@ export function BrandWebsiteSeoForm({ brandId, initialSeoConfig }: BrandWebsiteS
   const onSubmit = (data: SeoFormValues) => {
     startTransition(async () => {
       try {
-        await saveBrandWebsiteSeo(brandId, data);
+        await saveBrandWebsiteSeo(brandId, data, data.ogImage);
         toast({ title: 'Success', description: 'SEO settings saved successfully.' });
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to save SEO settings.' });
@@ -86,16 +89,19 @@ export function BrandWebsiteSeoForm({ brandId, initialSeoConfig }: BrandWebsiteS
                 </FormItem>
               )}
             />
-            <FormField
-              control={form.control}
-              name="ogImageUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Default Social Share Image URL (og:image)</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
+             <FormField
+                control={form.control}
+                name="ogImage"
+                render={({ field: { onChange, value, ...rest }}) => (
+                    <FormItem>
+                        <FormLabel>Default Social Share Image (og:image)</FormLabel>
+                        <FormControl>
+                            <Input type="file" {...rest} onChange={e => onChange(e.target.files?.[0])} />
+                        </FormControl>
+                        <FormDescription>Upload a new image or leave empty to keep the existing one. Recommended: 1200x630px.</FormDescription>
+                        <FormMessage />
+                    </FormItem>
+                )}
             />
             <FormField
               control={form.control}

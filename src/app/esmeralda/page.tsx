@@ -21,10 +21,8 @@ function HeaderSkeleton() {
   );
 }
 
-type HeaderData = Omit<Template1PageProps, 'children'>;
-
 export default function EsmeraldaPage() {
-  const [pageProps, setPageProps] = useState<HeaderData | null>(null);
+  const [headerProps, setHeaderProps] = useState<Template1PageProps['header'] | null>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -39,20 +37,13 @@ export default function EsmeraldaPage() {
         if (!res.ok) {
             console.error("Failed to fetch page data", res.status, res.statusText);
             if(isMounted) {
-                setPageProps(null);
+                setHeaderProps(null);
             }
             return;
         };
         const data = await res.json();
         if (isMounted) {
-            const { designSystem, ...headerData } = data;
-            
-            // Construct the full header props object expected by Template1Page
-            const finalProps: HeaderData = {
-                header: headerData,
-                designSystem: designSystem,
-            };
-            setPageProps(finalProps);
+            setHeaderProps(data);
         }
       } catch (e) {
         console.error("Failed to load page data", e);
@@ -65,7 +56,7 @@ export default function EsmeraldaPage() {
     return () => { isMounted = false; };
   }, []);
   
-  if (isLoading || !pageProps) {
+  if (isLoading || !headerProps) {
       return (
           <div className="bg-gray-900 text-white min-h-screen">
               <HeaderSkeleton />
@@ -78,7 +69,7 @@ export default function EsmeraldaPage() {
   }
 
   return (
-    <Template1Page {...pageProps}>
+    <Template1Page header={headerProps}>
       <section className="py-16 text-center">
        <h1 className="text-3xl font-bold">Esmeralda – Template 1 Preview</h1>
        <p className="mt-4 text-muted-foreground">
