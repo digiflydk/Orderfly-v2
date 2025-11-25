@@ -1,15 +1,18 @@
+
 'use server';
 
-import { getAdminDb } from '@/lib/firebase-admin';
+import 'server-only';
+import { getAdminDb, admin } from '@/lib/firebase-admin';
 import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
 import { VIRTUAL_CONFIG } from './public-config-helpers';
 
 function serializeTimestamp(value: any): string | null {
   if (!value) return null;
-  if (value instanceof admin.firestore.Timestamp) {
+
+  if (typeof value.toDate === 'function') {
     return value.toDate().toISOString();
   }
-  return value as any;
+  return null;
 }
 
 const configPath = (brandId: string) => `brands/${brandId}/website/config`;
@@ -37,12 +40,14 @@ async function readConfig(brandId: string): Promise<BrandWebsiteConfig> {
   };
 }
 
-export async function getPublicBrandWebsiteConfig(brandSlug: string): Promise<BrandWebsiteConfig> {
-    const db = getAdminDb();
-    const brandQuery = await db.collection('brands').where('slug', '==', brandSlug).limit(1).get();
-    if (brandQuery.empty) {
-        throw new Error(`Brand with slug "${brandSlug}" not found.`);
-    }
-    const brandId = brandQuery.docs[0].id;
-    return readConfig(brandId);
+export async function getPublicBrandWebsiteConfig(brandId: string): Promise<BrandWebsiteConfig> {
+  // Public-facing API should not throw errors, but return defaults.
+  // It also does NOT require superadmin access.
+  try {
+    const result = await readConfig(brandId);
+    return result;
+  } catch (error: any) {
+    console.error(`[public-config-api] Failed to read config for brand ${brandId}:`, error.message);
+    return VIRTUAL_CONFIG;
+  }
 }
