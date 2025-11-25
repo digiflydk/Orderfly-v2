@@ -1,62 +1,60 @@
 
 'use client';
+import { type BrandWebsiteConfig } from '@/lib/types/brandWebsite';
+import React, { useMemo } from 'react';
 
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import type { BrandWebsiteConfig, DesignSystem } from '@/lib/types/brandWebsite';
-
-interface ThemeContextType {
-  designSystem: DesignSystem | null;
-}
-
-const ThemeContext = createContext<ThemeContextType | undefined>(undefined);
-
-export const useTemplate1Theme = () => {
-  const context = useContext(ThemeContext);
-  if (!context) {
-    throw new Error('useTemplate1Theme must be used within a Template1ThemeProvider');
-  }
-  return context;
+type ThemeProviderProps = {
+  config: Partial<BrandWebsiteConfig>;
+  children: React.ReactNode;
 };
 
-interface ThemeProviderProps {
-  children: React.ReactNode;
-  designSystem: DesignSystem | null;
-}
+const defaultColors = {
+  primary: '#000000',
+  secondary: '#F0F0F0',
+  background: '#FFFFFF',
+  textPrimary: '#111111',
+  textSecondary: '#666666',
+  headerBackground: '#FFFFFF',
+  footerBackground: '#111111',
+};
 
-export function Template1ThemeProvider({ children, designSystem }: ThemeProviderProps) {
+const defaultTypography = {
+  headingFont: 'system-ui, sans-serif',
+  bodyFont: 'system-ui, sans-serif',
+  h1Size: '3rem',
+  h2Size: '2.25rem',
+  h3Size: '1.875rem',
+  bodySize: '1rem',
+  buttonSize: '0.875rem',
+};
+
+export function ThemeProvider({ config, children }: ThemeProviderProps) {
   const cssVariables = useMemo(() => {
-    if (!designSystem) return {};
+    const typography = { ...defaultTypography, ...config.designSystem?.typography };
+    const colors = { ...defaultColors, ...config.designSystem?.colors };
 
-    const variables: React.CSSProperties & { [key: string]: string } = {};
+    return {
+      '--template1-font-family-heading': typography.headingFont,
+      '--template1-font-family-body': typography.bodyFont,
+      '--template1-font-size-h1': typography.h1Size,
+      '--template1-font-size-h2': typography.h2Size,
+      '--template1-font-size-h3': typography.h3Size,
+      '--template1-font-size-body': typography.bodySize,
+      '--template1-font-size-button': typography.buttonSize,
 
-    // Colors
-    if (designSystem.colors) {
-      for (const [key, value] of Object.entries(designSystem.colors)) {
-        if (value) {
-          variables[`--template1-color-${key}`] = value;
-        }
-      }
-    }
-
-    // Typography
-    if (designSystem.typography) {
-        if(designSystem.typography.headingFont) variables['--template1-font-family-heading'] = designSystem.typography.headingFont;
-        if(designSystem.typography.bodyFont) variables['--template1-font-family-body'] = designSystem.typography.bodyFont;
-        if(designSystem.typography.h1Size) variables['--template1-font-size-h1'] = designSystem.typography.h1Size;
-        if(designSystem.typography.h2Size) variables['--template1-font-size-h2'] = designSystem.typography.h2Size;
-        if(designSystem.typography.h3Size) variables['--template1-font-size-h3'] = designSystem.typography.h3Size;
-        if(designSystem.typography.bodySize) variables['--template1-font-size-body'] = designSystem.typography.bodySize;
-        if(designSystem.typography.buttonSize) variables['--template1-font-size-button'] = designSystem.typography.buttonSize;
-    }
-
-    return variables;
-  }, [designSystem]);
+      '--template1-color-primary': colors.primary,
+      '--template1-color-secondary': colors.secondary,
+      '--template1-color-background': colors.background,
+      '--template1-color-text-primary': colors.textPrimary,
+      '--template1-color-text-secondary': colors.textSecondary,
+      '--template1-color-header-background': colors.headerBackground,
+      '--template1-color-footer-background': colors.footerBackground,
+    } as React.CSSProperties;
+  }, [config]);
 
   return (
-    <ThemeContext.Provider value={{ designSystem }}>
-      <div style={cssVariables}>
-        {children}
-      </div>
-    </ThemeContext.Provider>
+    <div style={cssVariables} className="font-body">
+      {children}
+    </div>
   );
 }

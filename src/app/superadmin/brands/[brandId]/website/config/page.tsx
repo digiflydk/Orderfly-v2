@@ -14,15 +14,14 @@ import { BrandWebsiteDesignSystemForm } from '@/components/superadmin/brand-webs
 
 // Helper to ensure all parts of the config are serializable
 function makeConfigSerializable(config: any) {
-    if (!config) return null;
-    const safeConfig = { ...config };
-    if (config.updatedAt) {
-        safeConfig.updatedAt = String(config.updatedAt);
-    }
-    // Add any other necessary serializations here in the future
-    return safeConfig;
+  if (!config) return null;
+  const safeConfig = { ...config };
+  if (config.updatedAt) {
+    safeConfig.updatedAt = String(config.updatedAt);
+  }
+  // Add any other necessary serializations here in the future
+  return safeConfig;
 }
-
 
 export default async function BrandWebsiteConfigPage({ params }: { params: { brandId: string } }) {
   await requireSuperadmin();

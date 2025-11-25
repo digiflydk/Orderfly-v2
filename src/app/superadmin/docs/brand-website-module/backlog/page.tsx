@@ -40,8 +40,8 @@ const backlog: BacklogCategory[] = [
   {
     title: "Global Design System",
     tasks: [
-      { id: "522-11-20", name: "Color System", description: "Implement CMS controls and design tokens for primary, secondary, and background colors", status: "Planned" },
-      { id: "522-11-21", name: "Typography System", description: "CMS controls and tokens for fonts, font sizes, and text styles (headings, body, labels)", status: "Planned" },
+      { id: "522-11-20", name: "Color System", description: "Implement CMS controls and design tokens for primary, secondary, and background colors", status: "Done" },
+      { id: "522-11-21", name: "Typography System", description: "CMS controls and tokens for fonts, font sizes, and text styles (headings, body, labels)", status: "In progress" },
       { id: "522-11-22", name: "Button System", description: "CMS-driven button styles (shape, radius, variants) wired into Template 1 components", status: "Planned" },
       { id: "522-11-23", name: "Spacing System", description: "Define spacing scale for sections and paddings, and expose CMS knobs where needed", status: "Planned" },
       { id: "522-11-24", name: "Theme Modes (Optional)", description: "Optional support for light/dark theme modes for Template 1", status: "Planned" },

@@ -8,54 +8,51 @@ export const brandWebsiteNavLinkSchema = z.object({
   href: z.string().min(1, 'Link URL cannot be empty'),
 });
 
+const defaultTypography = {
+  headingFont: 'system-ui, sans-serif',
+  bodyFont: 'system-ui, sans-serif',
+  h1Size: '3rem',
+  h2Size: '2.25rem',
+  h3Size: '1.875rem',
+  bodySize: '1rem',
+  buttonSize: '0.875rem',
+};
+
 export const brandWebsiteDesignSystemSchema = z.object({
-  typography: z
-    .object({
+  typography: z.object({
       headingFont: z.string().min(1),
       bodyFont: z.string().min(1),
       h1Size: z.string().min(1),
       h2Size: z.string().min(1),
       h3Size: z.string().min(1),
       bodySize: z.string().min(1),
-      buttonSize: z.string().min(1).optional(), // New field
-    })
-    .optional(),
-  colors: z
-    .object({
-      primary: z.string().min(1),
-      secondary: z.string().min(1),
-      background: z.string().min(1),
-      textPrimary: z.string().min(1),
-      textSecondary: z.string().min(1),
-      headerBackground: z.string().min(1),
-      footerBackground: z.string().min(1),
-    })
-    .optional(),
-  buttons: z
-    .object({
-      shape: z.enum(['pill', 'rounded', 'square']).optional(),
-      defaultVariant: z.string().optional(),
-    })
-    .partial()
-    .optional(),
-  header: z
-    .object({
-      sticky: z.boolean().optional(),
-      height: z.string().optional(),
-      transparencyPercent: z.number().min(0).max(100).optional(),
-    })
-    .partial()
-    .optional(),
-  spacing: z
-    .object({
+      buttonSize: z.string().min(1),
+    }).default(defaultTypography),
+  colors: z.object({
+    primary: z.string().min(1),
+    secondary: z.string().min(1),
+    background: z.string().min(1),
+    textPrimary: z.string().min(1),
+    textSecondary: z.string().min(1),
+    headerBackground: z.string().min(1),
+    footerBackground: z.string().min(1),
+  }).optional(),
+  buttons: z.object({
+    shape: z.enum(['pill', 'rounded', 'square']).optional(),
+    defaultVariant: z.string().optional(),
+  }).partial().optional(),
+  header: z.object({
+    sticky: z.boolean().optional(),
+    height: z.string().optional(),
+    transparencyPercent: z.number().min(0).max(100).optional(),
+  }).partial().optional(),
+  spacing: z.object({
       xs: z.number().optional(),
       sm: z.number().optional(),
       md: z.number().optional(),
       lg: z.number().optional(),
       xl: z.number().optional(),
-    })
-    .partial()
-    .optional(),
+    }).partial().optional(),
 });
 
 export const brandWebsiteSeoSchema = z

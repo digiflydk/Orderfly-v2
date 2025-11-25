@@ -1,70 +1,128 @@
 
-"use client";
-
-import { useState, useEffect } from "react";
-import Image from "next/image";
-import Link from "next/link";
-import { Button } from "@/components/ui/button";
-import { Menu, X } from "lucide-react";
-import type { DesignSystem } from "@/lib/types/brandWebsite";
+'use client';
+import { useState, useEffect } from 'react';
+import Image from 'next/image';
+import Link from 'next/link';
+import { Button } from '@/components/ui/button';
+import { Menu, X } from 'lucide-react';
+import {
+  Drawer,
+  DrawerContent,
+  DrawerTrigger,
+  DrawerClose,
+} from '@/components/ui/drawer';
+import { cn } from '@/lib/utils';
+import SiteLogo from '@/components/common/SiteLogo';
 
 export type Template1HeaderProps = {
   logoUrl: string | null;
+  logoAlt?: string;
   navItems: Array<{ label: string; href: string }>;
   orderHref: string;
 };
 
-export function Header({ logoUrl, navItems, orderHref }: Template1HeaderProps) {
+export function Header({ logoUrl, logoAlt, navItems, orderHref }: Template1HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  
+  const headerStyle = {
+    fontFamily: 'var(--template1-font-family)',
+  } as React.CSSProperties;
+
+  const navLinkStyle = {
+    fontSize: 'var(--template1-font-size-nav)',
+  } as React.CSSProperties;
+
+  const buttonStyle = {
+    fontSize: 'var(--template1-font-size-button)',
+  } as React.CSSProperties;
 
   return (
-    <header className="sticky top-0 z-50 transition-all duration-300 bg-[var(--template1-color-headerBackground)] text-[var(--template1-color-textPrimary)]">
-      <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 flex items-center justify-between h-20">
-        <Link href="/esmeralda" className="z-50">
-          {logoUrl ? (
-            <Image src={logoUrl} alt="Logo" width={90} height={45} priority data-ai-hint="logo" />
-          ) : (
-            <span className="text-xl font-bold">Brand</span>
-          )}
-        </Link>
-        <nav className="hidden md:flex items-center gap-8">
-          {navItems.map(item => (
-            <Link key={item.label} href={item.href} className="text-sm font-semibold hover:text-[var(--template1-color-primary)] transition-colors">
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <div className="flex items-center gap-4">
-          <Button
-            asChild
-            className="hidden md:flex bg-[var(--template1-color-primary)] hover:bg-[var(--template1-color-primary)]/90 text-[var(--template1-color-buttonText,white)] rounded-full font-bold uppercase text-sm px-8 py-3 transition-colors">
-            <a href={orderHref}>Order now</a>
-          </Button>
-          <button
-            className="md:hidden z-50"
-            onClick={() => setIsMenuOpen(!isMenuOpen)}
-            aria-label="Toggle menu"
-          >
-            {isMenuOpen ? <X size={24} /> : <Menu size={24} />}
-          </button>
-        </div>
-      </div>
-      {isMenuOpen && (
-        <div className="md:hidden absolute top-0 left-0 w-full h-screen bg-[var(--template1-color-background)] flex flex-col items-center justify-center gap-8">
-          <nav className="flex flex-col items-center gap-8">
-            {navItems.map(item => (
-              <Link key={item.label} href={item.href} className="text-xl font-semibold hover:text-m3-orange transition-colors" onClick={() => setIsMenuOpen(false)}>
+    <>
+      <header className="h-[var(--header-height)]" style={headerStyle}>
+        <div className="container mx-auto flex h-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8">
+          <Link href="/" className="relative flex items-center" style={{ width: 'var(--logo-width)' }}>
+            {logoUrl ? (
+              <Image
+                src={logoUrl}
+                alt={logoAlt || 'Logo'}
+                fill
+                priority
+                className="object-contain"
+              />
+            ) : (
+              <SiteLogo text={logoAlt} className="text-2xl font-bold" />
+            )}
+          </Link>
+
+          {/* Desktop Navigation */}
+          <nav className="hidden items-center gap-8 md:flex">
+            {navItems.map((item) => (
+              <Link
+                key={item.label}
+                href={item.href}
+                className="transition-colors"
+                style={navLinkStyle}
+              >
                 {item.label}
               </Link>
             ))}
           </nav>
-          <Button
-            asChild
-            className="bg-[var(--template1-color-primary)] hover:bg-[var(--template1-color-primary)]/90 text-primary-foreground rounded-full font-bold uppercase text-sm px-8 py-3 transition-colors mt-8">
-            <a href={orderHref}>Order now</a>
-          </Button>
+
+          {/* Desktop CTA */}
+          <div className="hidden items-center gap-4 md:flex">
+            <Button asChild style={buttonStyle}>
+              <a href={orderHref}>Bestil Nu</a>
+            </Button>
+          </div>
+
+          {/* Mobile Burger Menu */}
+          <div className="md:hidden">
+            <Drawer direction="right" open={isMenuOpen} onOpenChange={setIsMenuOpen}>
+              <DrawerTrigger asChild>
+                <Button variant="ghost" size="icon">
+                  <Menu className="h-6 w-6" />
+                  <span className="sr-only">Open menu</span>
+                </Button>
+              </DrawerTrigger>
+              <DrawerContent className="h-full w-[85%] max-w-sm bg-background p-6">
+                <div className="flex items-center justify-between">
+                  <h2 className="text-lg font-semibold">Menu</h2>
+                   <DrawerClose asChild>
+                    <Button variant="ghost" size="icon">
+                        <X className="h-6 w-6" />
+                        <span className="sr-only">Close menu</span>
+                    </Button>
+                   </DrawerClose>
+                </div>
+                 <nav className="mt-8 flex flex-col gap-6">
+                    {navItems.map((item) => (
+                        <DrawerClose key={item.label} asChild>
+                            <Link
+                                href={item.href}
+                                className="text-lg font-medium transition-colors hover:text-primary"
+                            >
+                                {item.label}
+                            </Link>
+                        </DrawerClose>
+                    ))}
+                </nav>
+              </DrawerContent>
+            </Drawer>
+          </div>
         </div>
-      )}
-    </header>
+      </header>
+
+      {/* Mobile Sticky CTA */}
+      <div className="md:hidden">
+          <div className="h-16" aria-hidden="true" />
+          <div
+            className="fixed bottom-0 left-0 right-0 z-40 bg-background/80 p-2 backdrop-blur-sm"
+          >
+            <Button asChild size="lg" className="w-full" style={buttonStyle}>
+                <a href={orderHref}>Bestil Nu</a>
+            </Button>
+          </div>
+      </div>
+    </>
   );
 }

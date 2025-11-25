@@ -1,3 +1,4 @@
+
 'use client';
 
 import { z } from 'zod';
@@ -23,7 +24,8 @@ const designSystemSchema = z.object({
     h2Size: z.string().min(1),
     h3Size: z.string().min(1),
     bodySize: z.string().min(1),
-  }).optional(),
+    buttonSize: z.string().min(1),
+  }),
   colors: z.object({
     primary: z.string().min(1),
     secondary: z.string().min(1),
@@ -36,20 +38,21 @@ const designSystemSchema = z.object({
   buttons: z.object({
     shape: z.enum(['pill', 'rounded', 'square']),
     defaultVariant: z.string().optional(),
-  }).optional(),
+  }).partial().optional(),
   header: z.object({
     sticky: z.boolean(),
     height: z.string(),
     transparencyPercent: z.number().min(0).max(100),
-  }).optional(),
+  }).partial().optional(),
   spacing: z.object({
       xs: z.number(),
       sm: z.number(),
       md: z.number(),
       lg: z.number(),
       xl: z.number(),
-    }).optional(),
+    }).partial().optional(),
 });
+
 
 type DesignSystemFormValues = z.infer<typeof designSystemSchema>;
 
@@ -67,7 +70,7 @@ export function BrandWebsiteDesignSystemForm({ brandId, initialDesignConfig }: B
   const form = useForm<DesignSystemFormValues>({
     resolver: zodResolver(designSystemSchema),
     defaultValues: {
-      typography: initialDesignConfig.typography || { headingFont: 'Inter', bodyFont: 'Inter', h1Size: '3rem', h2Size: '2.25rem', h3Size: '1.875rem', bodySize: '1rem' },
+      typography: initialDesignConfig.typography || { headingFont: 'Inter', bodyFont: 'Inter', h1Size: '3rem', h2Size: '2.25rem', h3Size: '1.875rem', bodySize: '1rem', buttonSize: '0.875rem' },
       colors: initialDesignConfig.colors || { primary: '#000000', secondary: '#F0F0F0', background: '#FFFFFF', textPrimary: '#111111', textSecondary: '#666666', headerBackground: '#FFFFFF', footerBackground: '#111111' },
       buttons: initialDesignConfig.buttons || { shape: 'rounded', defaultVariant: 'solid' },
       header: initialDesignConfig.header || { sticky: true, height: '80px', transparencyPercent: 0 },
@@ -120,11 +123,12 @@ export function BrandWebsiteDesignSystemForm({ brandId, initialDesignConfig }: B
                             <FormItem><FormLabel>Body Font</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue/></SelectTrigger></FormControl><SelectContent>{FONT_WHITELIST.map(font=><SelectItem key={font} value={font}>{font}</SelectItem>)}</SelectContent></Select><FormMessage/></FormItem>
                         )}/>
                     </div>
-                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                     <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
                         <FormField control={form.control} name="typography.h1Size" render={({ field }) => (<FormItem><FormLabel>H1 Size</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
                         <FormField control={form.control} name="typography.h2Size" render={({ field }) => (<FormItem><FormLabel>H2 Size</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
                         <FormField control={form.control} name="typography.h3Size" render={({ field }) => (<FormItem><FormLabel>H3 Size</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
                         <FormField control={form.control} name="typography.bodySize" render={({ field }) => (<FormItem><FormLabel>Body Size</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+                        <FormField control={form.control} name="typography.buttonSize" render={({ field }) => (<FormItem><FormLabel>Button Size</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
                     </div>
                 </CardContent>
             </Card>
