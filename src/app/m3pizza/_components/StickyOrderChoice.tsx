@@ -23,7 +23,7 @@ export default function StickyOrderChoice({ onOrderClick }: StickyOrderChoicePro
           className="w-full h-14 bg-m3-orange text-m3-dark hover:bg-m3-orange/90 font-bold uppercase text-base rounded-none"
           onClick={onOrderClick}
         >
-          BESTIL HER
+          BESTIL NU
         </Button>
       </div>
     </>

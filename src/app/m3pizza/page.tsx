@@ -1,8 +1,6 @@
-
 'use client';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link';
 import { isM3Enabled } from "@/lib/feature-flags";
 import Header from "./_components/Header";
 import { Hero } from "./_components/Hero";
@@ -21,7 +19,6 @@ import StickyOrderChoice from './_components/StickyOrderChoice';
 export default function M3IndexPage() {
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const router = useRouter();
-  const esmeraldaUrl = "https://esmeraldacucina.dk/esmeralda-pizza-amager";
 
   if (!isM3Enabled()) {
     return (
@@ -36,12 +33,25 @@ export default function M3IndexPage() {
   }
 
   const handleOrderClick = () => {
-    window.location.href = esmeraldaUrl;
+    router.push("/m3pizza/order");
   };
-
+  
   const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
     console.log(`Selected delivery method: ${method}`);
-    window.location.href = esmeraldaUrl;
+    // Example navigation: router.push('/m3pizza/esmeralda-pizza-amager?deliveryMethod=' + method);
+  };
+  
+  const headerNavItems = [
+    { label: "Menu", href: "#menu" },
+    { label: "Om os", href: "#about" },
+    { label: "Kontakt", href: "#contact" },
+  ];
+
+  const headerProps = {
+    logoUrl: "/m3pizza-logo.svg",
+    navItems: headerNavItems,
+    orderHref: "/m3pizza/order",
+    onOrderClick: handleOrderClick,
   };
 
   return (
@@ -60,7 +70,7 @@ export default function M3IndexPage() {
       
       {/* Desktop View */}
       <div className="hidden md:block bg-m3-dark">
-        <Header onOrderClick={handleOrderClick}/>
+        <Header {...headerProps} />
         <main>
           <Hero onOrderClick={handleOrderClick} />
           <CTADeck />
