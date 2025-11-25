@@ -1,41 +1,48 @@
-
 'use server';
 
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
-import { brandWebsiteConfigBaseSchema, brandWebsiteDesignSystemSchema, brandWebsiteSeoSchema, brandWebsiteSocialSchema, brandWebsiteTrackingSchema, brandWebsiteLegalSchema } from '@/lib/superadmin/brand-website/config-schemas';
-import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
-import { z } from 'zod';
+import { VIRTUAL_CONFIG } from './public-config-helpers';
 
-const publicConfigSchema = z.object({
-  domains: z.array(z.string()).optional().default([]),
-  designSystem: brandWebsiteDesignSystemSchema.optional().default({}),
-  seo: brandWebsiteSeoSchema.optional().default({}),
-  social: brandWebsiteSocialSchema.optional().default({}),
-  tracking: brandWebsiteTrackingSchema.optional().default({}),
-  legal: brandWebsiteLegalSchema.optional().default({}),
-});
+function serializeTimestamp(value: any): string | null {
+  if (!value) return null;
+  if (value instanceof admin.firestore.Timestamp) {
+    return value.toDate().toISOString();
+  }
+  return value as any;
+}
 
-export async function getPublicBrandWebsiteConfig(brandId: string): Promise<Partial<BrandWebsiteConfig> | null> {
-    const start = Date.now();
-    const path = `/brands/${brandId}/website/config`;
-    try {
-        const db = getAdminDb();
-        const docSnap = await db.doc(path).get();
-        if (!docSnap.exists) {
-            await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteConfig', brandId, status: 'success', durationMs: Date.now() - start, path });
-            return null;
-        }
+const configPath = (brandId: string) => `brands/${brandId}/website/config`;
 
-        const data = docSnap.data();
-        const validated = publicConfigSchema.parse(data);
+async function readConfig(brandId: string): Promise<BrandWebsiteConfig> {
+  const db = getAdminDb();
+  const docRef = db.doc(configPath(brandId));
+  const docSnap = await docRef.get();
 
-        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteConfig', brandId, status: 'success', durationMs: Date.now() - start, path });
-        return validated;
+  if (!docSnap.exists) {
+    return VIRTUAL_CONFIG;
+  }
 
-    } catch (error: any) {
-        await logBrandWebsiteApiCall({ layer: 'public', action: 'getPublicBrandWebsiteConfig', brandId, status: 'error', durationMs: Date.now() - start, path, errorMessage: error?.message ?? 'Unknown error' });
-        // Don't throw in public API, just return null
-        return null;
+  const data = docSnap.data() as Partial<BrandWebsiteConfig>;
+
+  return {
+    ...VIRTUAL_CONFIG,
+    ...data,
+    designSystem: data.designSystem || {},
+    seo: data.seo || {},
+    social: data.social || {},
+    tracking: data.tracking || {},
+    legal: data.legal || {},
+    updatedAt: serializeTimestamp(data.updatedAt),
+  };
+}
+
+export async function getPublicBrandWebsiteConfig(brandSlug: string): Promise<BrandWebsiteConfig> {
+    const db = getAdminDb();
+    const brandQuery = await db.collection('brands').where('slug', '==', brandSlug).limit(1).get();
+    if (brandQuery.empty) {
+        throw new Error(`Brand with slug "${brandSlug}" not found.`);
     }
+    const brandId = brandQuery.docs[0].id;
+    return readConfig(brandId);
 }
