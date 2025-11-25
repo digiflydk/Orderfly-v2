@@ -3,7 +3,7 @@
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
 import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
-import { 
+import {
   brandWebsiteConfigBaseSchema,
   brandWebsiteDesignSystemSchema,
   brandWebsiteSeoSchema,
@@ -15,7 +15,7 @@ import {
   type SocialInput,
   type TrackingInput,
   type LegalInput,
-  type SaveBrandWebsiteConfigInput
+  type SaveBrandWebsiteConfigInput,
 } from './config-schemas';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 import type { ZodSchema } from 'zod';
@@ -189,8 +189,13 @@ export async function saveBrandWebsiteDesignSystem(brandId: string, input: Desig
   return savePartial(brandId, 'designSystem', input, brandWebsiteDesignSystemSchema);
 }
 
-export async function saveBrandWebsiteSeo(brandId: string, input: SeoInput): Promise<BrandWebsiteConfig> {
-  return savePartial(brandId, 'seo', input, brandWebsiteSeoSchema);
+export async function saveBrandWebsiteSeo(brandId: string, input: SeoInput, ogImageFile?: File): Promise<BrandWebsiteConfig> {
+  let ogImageUrl = input.ogImageUrl;
+  if (ogImageFile) {
+    ogImageUrl = await uploadFileToFirebaseStorage(ogImageFile, `brands/${brandId}/website/og-image`);
+  }
+  const finalInput = { ...input, ogImageUrl };
+  return savePartial(brandId, 'seo', finalInput, brandWebsiteSeoSchema);
 }
 
 export async function saveBrandWebsiteSocial(brandId: string, input: SocialInput): Promise<BrandWebsiteConfig> {

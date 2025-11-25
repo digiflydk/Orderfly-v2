@@ -1,6 +1,4 @@
 
-'use server';
-
 import { z } from 'zod';
 
 export const brandWebsiteNavLinkSchema = z.object({
@@ -110,8 +108,8 @@ export const brandWebsiteSeoSchema = z
   .object({
     defaultTitle: z.string().optional(),
     defaultDescription: z.string().optional(),
-    ogImageUrl: z.string().url({ message: "Must be a valid URL" }).or(z.literal('')).optional(),
-    canonicalUrl: z.string().url({ message: "Must be a valid URL" }).or(z.literal('')).optional(),
+    ogImageUrl: z.string().url({ message: 'Must be a valid URL' }).or(z.literal('')).optional(),
+    canonicalUrl: z.string().url({ message: 'Must be a valid URL' }).or(z.literal('')).optional(),
     index: z.boolean().optional().default(true),
   })
   .partial()
