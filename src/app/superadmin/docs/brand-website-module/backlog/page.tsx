@@ -1,4 +1,3 @@
-
 'use server';
 
 import { requireSuperadmin } from '@/lib/auth/superadmin';
@@ -42,7 +41,7 @@ const backlog: BacklogCategory[] = [
     tasks: [
       { id: "522-11-20", name: "Global Color System", description: "Implement CMS controls and design tokens for primary, secondary, and background colors", status: "Done" },
       { id: "522-11-21", name: "Typography System", description: "CMS controls and tokens for fonts, font sizes, and text styles (headings, body, labels)", status: "Done" },
-      { id: "522-11-22", name: "Button System", description: "CMS-driven button styles (shape, radius, variants) wired into Template 1 components", status: "Done" },
+      { id: "522-11-22", name: "Button System", description: "CMS-driven button styles (shape, radius, variants) wired into Template 1 components", status: "In Progress" },
       { id: "522-11-23", name: "Spacing System", description: "Define spacing scale for sections and paddings, and expose CMS knobs where needed", status: "Done" },
       { id: "522-11-24", name: "Theme Modes (Optional)", description: "Optional support for light/dark theme modes for Template 1", status: "Planned" },
     ],
@@ -52,7 +51,6 @@ const backlog: BacklogCategory[] = [
     tasks: [
         { id: "522-11-30", name: "Favicon System", description: "Load brand-specific favicon from Website Config and inject into the document head", status: "Done" },
         { id: "522-11-31", name: "Metadata & SEO System", description: "Set page titles and meta descriptions based on Website Config for SEO", status: "In Progress" },
-        { id: "522-11-32", name: "Social Open Graph", description: "Configure Open Graph image, title and description for social sharing", status: "In Progress" },
         { id: "522-11-32", name: "Template 1 / m3pizza integration fixes", description: "Fix logo, CTA and color system for m3pizza preview", status: "In Progress" },
     ]
   },
@@ -78,8 +76,8 @@ const backlog: BacklogCategory[] = [
     title: "Technical Fixes & Refactoring",
     tasks: [
         { id: "522-11-90", name: 'Fix invalid "use server" in brand website config', description: 'Removed invalid directive from schema file to resolve build error.', status: "Done" },
-        { id: "522-11-91", name: '“use server” hardening for public config API', description: 'Final fix for all public-facing config API server action errors.', status: 'In Progress' },
-        { id: "522-11-92", name: 'Fix Timestamp serialization in public-config-api', description: "Replaced admin.firestore.Timestamp with a runtime-safe check.", status: "Done" },
+        { id: "522-11-91", name: '“use server” hardening for public config API', description: 'Final fix for all public-facing config API server action errors.', status: 'Done' },
+        { id: "522-11-92", name: 'Final cleanup of brand-website config-schemas “use server” error', description: 'Final fix for all public-facing config API server action errors.', status: 'In Progress' },
         { id: "522-11-93", name: 'Fix Server Action classification for public-config-helpers', description: "Moved helper file to a safe directory to prevent mis-classification by Next.js.", status: "In Progress" },
     ]
   },
