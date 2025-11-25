@@ -1,32 +1,31 @@
 
 'use client';
-
 import { ReactNode } from "react";
-import { Header, type Template1HeaderProps } from "./Header";
-import { Template1ThemeProvider } from './ThemeProvider';
+import type { Template1HeaderProps } from "./Header";
+import Header from "./Header";
+import { ThemeProvider } from "./ThemeProvider";
 import type { DesignSystem } from "@/lib/types/brandWebsite";
+import Template1Head from "./head";
 
 export type Template1PageProps = {
   header: Template1HeaderProps;
-  designSystem: DesignSystem | null;
   children?: ReactNode;
+  designSystem?: DesignSystem;
 };
 
-export function Template1Page({ header, designSystem, children }: Template1PageProps) {
+export function Template1Page({ header, children, designSystem }: Template1PageProps) {
   return (
-    <Template1ThemeProvider designSystem={designSystem}>
-      <div
-        className="min-h-screen flex flex-col text-foreground"
-        style={{
-          backgroundColor: 'var(--template1-color-background)',
-          fontFamily: 'var(--template1-font-family-body, sans-serif)',
-        }}
+    <ThemeProvider designSystem={designSystem}>
+      <Template1Head faviconUrl={header.faviconUrl} />
+      <div 
+        className="min-h-screen flex flex-col text-foreground transition-colors"
+        style={{ backgroundColor: 'var(--template1-color-background)'}}
       >
         <Header {...header} />
         <main className="flex-1">
           {children}
         </main>
       </div>
-    </Template1ThemeProvider>
+    </ThemeProvider>
   );
 }

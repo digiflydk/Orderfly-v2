@@ -1,4 +1,4 @@
-
+'use server';
 import { z } from 'zod';
 
 export const brandWebsiteNavLinkSchema = z.object({
@@ -34,10 +34,10 @@ const buttonVariantSchema = z.object({
 });
 
 const defaultButtonStyles = {
-  borderRadius: '9999px',
-  paddingX: '1.25rem',
-  paddingY: '0.75rem',
-  fontWeight: '600',
+  borderRadius: "9999px",
+  paddingX: "1.25rem",
+  paddingY: "0.75rem",
+  fontWeight: "600",
   uppercase: false,
   primaryVariant: {
     background: '#FFBD02', // m3-orange
@@ -154,6 +154,7 @@ export const brandWebsiteConfigBaseSchema = z.object({
   domains: z.array(z.string().min(1)).default([]),
   defaultLocationId: z.string().nullable().default(null),
   headerNavLinks: z.array(brandWebsiteNavLinkSchema).optional(),
+  faviconUrl: z.string().url().or(z.literal('')).optional(),
 });
 
 export type DesignSystemInput = z.infer<typeof brandWebsiteDesignSystemSchema>;

@@ -1,54 +1,59 @@
-
 'use client';
-
-import { Slot } from "@radix-ui/react-slot";
-import { cva, type VariantProps } from "class-variance-authority";
-import * as React from "react";
+import { Button as ShadcnButton, buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import type { VariantProps } from "class-variance-authority";
+import Link from "next/link";
+import * as React from "react";
 
-const template1ButtonVariants = cva(
-  "inline-flex items-center justify-center whitespace-nowrap text-sm ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50",
-  {
-    variants: {
-      variant: {
-        primary: "bg-[var(--template1-button-primary-bg)] text-[var(--template1-button-primary-text)] hover:opacity-90",
-        secondary: "bg-[var(--template1-button-secondary-bg)] text-[var(--template1-button-secondary-text)] hover:opacity-90",
-      },
-    },
-    defaultVariants: {
-      variant: "primary",
-    },
-  }
-);
-
-export interface Template1ButtonProps
+interface Template1ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
-    VariantProps<typeof template1ButtonVariants> {
+    VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  href?: string;
 }
 
 const Template1Button = React.forwardRef<HTMLButtonElement, Template1ButtonProps>(
-  ({ className, variant, asChild = false, style, ...props }, ref) => {
-    const Comp = asChild ? Slot : "button";
-
-    const buttonStyle: React.CSSProperties = {
-      ...style,
+  ({ className, variant, size, asChild = false, href, ...props }, ref) => {
+    const customStyles: React.CSSProperties = {
       borderRadius: 'var(--template1-button-radius)',
-      padding: 'var(--template1-button-padding-y) var(--template1-button-padding-x)',
+      padding: `var(--template1-button-padding-y) var(--template1-button-padding-x)`,
       fontWeight: 'var(--template1-button-font-weight)',
       textTransform: 'var(--template1-button-uppercase)' as 'uppercase' | 'none',
     };
 
+    if (variant === 'default') {
+        customStyles.backgroundColor = 'var(--template1-button-primary-bg)';
+        customStyles.color = 'var(--template1-button-primary-text)';
+    } else if (variant === 'secondary') {
+        customStyles.backgroundColor = 'var(--template1-button-secondary-bg)';
+        customStyles.color = 'var(--template1-button-secondary-text)';
+    }
+
+    const Comp = asChild && href ? Link : 'button';
+
+    if (asChild && href) {
+      return (
+        <Link href={href} passHref>
+          <ShadcnButton
+            className={cn(className)}
+            style={customStyles}
+            ref={ref}
+            {...props}
+          />
+        </Link>
+      );
+    }
+    
     return (
-      <Comp
-        className={cn(template1ButtonVariants({ variant, className }))}
+      <ShadcnButton
+        className={cn(className)}
+        style={customStyles}
         ref={ref}
-        style={buttonStyle}
         {...props}
       />
     );
   }
 );
-Template1Button.displayName = "Template1Button";
+Template1Button.displayName = 'Template1Button';
 
-export { Template1Button, template1ButtonVariants };
+export { Template1Button };

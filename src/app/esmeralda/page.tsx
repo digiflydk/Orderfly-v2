@@ -4,7 +4,7 @@
 import { useEffect, useState } from 'react';
 import { Template1Page, type Template1PageProps } from '@/components/public/brand-website/template-1/Template1Page';
 import { Skeleton } from '@/components/ui/skeleton';
-import type { BrandWebsiteConfig, DesignSystem } from '@/lib/types/brandWebsite';
+import type { WebsiteHeaderConfig } from '@/types/website';
 
 function HeaderSkeleton() {
   return (
@@ -46,7 +46,13 @@ export default function EsmeraldaPage() {
         const data = await res.json();
         if (isMounted) {
             const { designSystem, ...headerData } = data;
-            setPageProps({ header: headerData, designSystem });
+            
+            // Construct the full header props object expected by Template1Page
+            const finalProps: HeaderData = {
+                header: headerData,
+                designSystem: designSystem,
+            };
+            setPageProps(finalProps);
         }
       } catch (e) {
         console.error("Failed to load page data", e);

@@ -21,6 +21,7 @@ import { requireSuperadmin } from '@/lib/auth/superadmin';
 import type { ZodSchema } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
+import { uploadFileToFirebaseStorage } from './storage';
 
 function serializeTimestamp(value: any): string | null {
   if (!value) return null;
@@ -37,6 +38,7 @@ const VIRTUAL_CONFIG: BrandWebsiteConfig = {
   template: 'template-1',
   domains: [],
   defaultLocationId: null,
+  faviconUrl: '/favicon.ico', // Default fallback
   designSystem: {},
   seo: {},
   social: {},
@@ -99,16 +101,22 @@ export async function getBrandWebsiteConfig(brandId: string): Promise<BrandWebsi
   }
 }
 
-export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWebsiteConfigInput): Promise<BrandWebsiteConfig> {
+export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWebsiteConfigInput, faviconFile?: File): Promise<BrandWebsiteConfig> {
   const start = Date.now();
   try {
     await requireSuperadmin();
     const validatedInput = brandWebsiteConfigBaseSchema.parse(input);
     const currentConfig = await readConfig(brandId);
+    
+    let faviconUrl = validatedInput.faviconUrl;
+    if (faviconFile) {
+        faviconUrl = await uploadFileToFirebaseStorage(faviconFile, `brands/${brandId}/website/favicon`);
+    }
 
     const mergedConfig: Partial<BrandWebsiteConfig> = {
         ...currentConfig,
         ...validatedInput,
+        faviconUrl,
     };
 
     const result = await writeConfig(brandId, mergedConfig);
@@ -118,7 +126,7 @@ export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWe
         entity: 'config',
         entityId: 'config',
         action: 'update',
-        changedFields: ['config'],
+        changedFields: ['config', ... (faviconFile ? ['favicon'] : [])],
         path: configPath(brandId),
     });
 
