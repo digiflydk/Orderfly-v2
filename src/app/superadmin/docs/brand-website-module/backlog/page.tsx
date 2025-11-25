@@ -30,46 +30,54 @@ const backlog: BacklogCategory[] = [
   {
     title: "Header & Template 1 Structure",
     tasks: [
-      { id: "522-11-01", name: "Template 1 Page Layout", description: "Create base layout component for Template 1", status: "Done" },
-      { id: "522-11-02", name: "Template 1 Header", description: "Implement responsive header with mobile/desktop variants", status: "Done" },
-      { id: "522-11-03", name: "Template 1 Footer", description: "Implement footer with CMS-driven columns and links", status: "Planned" },
+      { id: "522-11-01", name: "Template 1 Page Layout", description: "Create base layout wrapper component for Template 1", status: "Done" },
+      { id: "522-11-02", name: "Template 1 Header", description: "Implement responsive Template 1 header with desktop/mobile variants", status: "Done" },
+      { id: "522-11-03", name: "Header from Brand Config", description: "Bind Template 1 Header to Brand + Website Config via public API (Esmeralda)", status: "Done" },
+      { id: "522-11-04", name: "Template 1 Page + Esmeralda Preview", description: "Introduce Template1Page layout component and use it for the Esmeralda preview route", status: "Done" },
+      { id: "522-11-05", name: "Template 1 Footer", description: "Implement Template 1 footer with CMS-driven columns and links", status: "Planned" },
     ],
   },
   {
     title: "Global Design System",
     tasks: [
-      { id: "522-12-01", name: "Color System", description: "Implement CMS controls for primary, secondary, and background colors", status: "Planned" },
-      { id: "522-12-02", name: "Typography System", description: "CMS controls for fonts and text sizes (h1, p, etc.)", status: "Planned" },
-      { id: "522-12-03", name: "Button System", description: "CMS controls for button shapes and variants", status: "Planned" },
-      { id: "522-12-04", name: "Spacing System", description: "CMS controls for section padding and margins", status: "Planned" },
+      { id: "522-11-20", name: "Color System", description: "Implement CMS controls and design tokens for primary, secondary, and background colors", status: "Planned" },
+      { id: "522-11-21", name: "Typography System", description: "CMS controls and tokens for fonts, font sizes, and text styles (headings, body, labels)", status: "Planned" },
+      { id: "522-11-22", name: "Button System", description: "CMS-driven button styles (shape, radius, variants) wired into Template 1 components", status: "Planned" },
+      { id: "522-11-23", name: "Spacing System", description: "Define spacing scale for sections and paddings, and expose CMS knobs where needed", status: "Planned" },
+      { id: "522-11-24", name: "Theme Modes (Optional)", description: "Optional support for light/dark theme modes for Template 1", status: "Planned" },
     ],
   },
   {
     title: "Favicon & Metadata",
     tasks: [
-        { id: "522-13-01", name: "Dynamic Favicon", description: "Load brand-specific favicon from CMS config", status: "Planned" },
-        { id: "522-13-02", name: "Dynamic Page Title", description: "Set page titles based on CMS config for SEO", status: "Planned" },
+        { id: "522-11-30", name: "Dynamic Favicon", description: "Load brand-specific favicon from Website Config and inject into the document head", status: "Planned" },
+        { id: "522-11-31", name: "Page Title & Meta Description", description: "Set page titles and meta descriptions based on Website Config for SEO", status: "Planned" },
+        { id: "522-11-32", name: "Social Open Graph", description: "Configure Open Graph image, title and description for social sharing", status: "Planned" },
     ]
   },
   {
-    title: "Homepage System",
+    title: "Homepage System (Template 1)",
     tasks: [
-      { id: "522-14-01", name: "Hero Section", description: "Implement editable Hero section", status: "Planned" },
-      { id: "522-14-02", name: "Feature Section", description: "Implement editable Feature section", status: "Planned" },
-      { id: "522-14-03", name: "Services Section", description: "Implement editable Services/icons section", status: "Planned" },
-      { id: "522-14-04", name: "AI Project Section", description: "Implement AI chat/lead gen section", status: "Planned" },
-      { id: "522-14-05", name: "Cases Section", description: "Implement editable customer cases section", status: "Planned" },
-      { id: "522-14-06", name: "About Section", description: "Implement 'About Us' and 'Team' sections", status: "Planned" },
-      { id: "522-14-07", name: "Customers Section", description: "Implement customer logo carousel", status: "Planned" },
-      { id: "522-14-08", name: "Contact Section", description: "Implement contact form section", status: "Planned" },
-      { id: "522-14-09", name: "Homepage Section Order", description: "Allow drag-and-drop reordering of all sections", status: "Planned" },
+      { id: "522-11-06", name: "Homepage CMS Editor", description: "Create CMS editor for managing Template 1 homepage sections for a brand", status: "Planned" },
+      { id: "522-11-07", name: "Homepage Schema", description: "Define Zod schema for homepage sections (Hero, Promo, CTADeck, MenuGrid, etc.)", status: "Planned" },
+      { id: "522-11-08", name: "Homepage Public API", description: "Expose a public API that returns fully resolved Homepage data for Template 1", status: "Planned" },
+      { id: "522-11-09", name: "Hero Section", description: "Implement Template 1 Hero section with title, subtitle, image(s) and CTA", status: "Planned" },
+      { id: "522-11-10", name: "PromoBanner Section", description: "Implement top/bottom promo banner with CMS-controlled text and styling", status: "Planned" },
+      { id: "522-11-11", name: "CTADeck Section", description: "Implement a deck of CTAs (e.g. Delivery, Pickup, Reservation) for the homepage", status: "Planned" },
+      { id: "522-11-12", name: "MenuGrid Section", description: "Implement Template 1 MenuGrid section that links to the brand’s menu configuration", status: "Planned" },
+      { id: "522-11-13", name: "Footer CTA Section", description: "Implement a footer CTA strip for ordering / contact", status: "Planned" },
+      { id: "522-11-14", name: "Mobile Homepage UX", description: "Polish mobile scrolling, sticky elements and section spacing for the homepage", status: "Planned" },
+      { id: "522-11-15", name: "Multi-Section Structure", description: "Enable composing multiple sections into a single homepage config", status: "Planned" },
+      { id: "522-11-16", name: "Section Sorting", description: "Allow drag-and-drop reordering of homepage sections in the CMS", status: "Planned" },
+      { id: "522-11-18", name: "Template 1 Homepage Final Polish", description: "Visual and UX polish pass on Template 1 homepage", status: "Planned" },
+      { id: "522-11-19", name: "Homepage Playwright Tests", description: "End-to-end tests for Template 1 homepage flows (basic navigation and rendering)", status: "Planned" },
     ],
   },
    {
     title: "Testing",
     tasks: [
-      { id: "522-90-01", name: "Acceptance Test Suite", description: "Create end-to-end tests for all public APIs", status: "Planned" },
-      { id: "522-90-02", name: "QA Testcase Runner", description: "Build a QA runner for manual test execution", status: "Planned" },
+      { id: "522-90-01", name: "Acceptance Test Suite", description: "Create end-to-end tests for all public Brand Website APIs", status: "Planned" },
+      { id: "522-90-02", name: "QA Testcase Runner", description: "Build or document a QA runner/checklist for manual Brand Website tests", status: "Planned" },
     ],
   },
 ];
@@ -149,4 +157,3 @@ export default async function BrandWebsiteBacklogPage() {
         </DocsLayout>
     );
 }
-
