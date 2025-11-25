@@ -26,6 +26,16 @@ interface BrandWebsiteDesignSystemFormProps {
 
 const FONT_WHITELIST = ['Inter', 'Roboto', 'Lato', 'Open Sans', 'Nunito', 'PT Sans'];
 
+const defaultButtonStyles = {
+  borderRadius: "9999px",
+  paddingX: "1.25rem",
+  paddingY: "0.75rem",
+  fontWeight: "600",
+  uppercase: false,
+  primaryVariant: { background: '#FFBD02', text: '#000000' },
+  secondaryVariant: { background: '#333333', text: '#FFFFFF' },
+};
+
 export function BrandWebsiteDesignSystemForm({ brandId, initialDesignConfig }: BrandWebsiteDesignSystemFormProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -35,7 +45,7 @@ export function BrandWebsiteDesignSystemForm({ brandId, initialDesignConfig }: B
     defaultValues: {
       typography: initialDesignConfig.typography || { headingFont: 'Inter', bodyFont: 'Inter', h1Size: '3rem', h2Size: '2.25rem', h3Size: '1.875rem', bodySize: '1rem', buttonSize: '0.875rem' },
       colors: initialDesignConfig.colors || { primary: '#000000', secondary: '#F0F0F0', background: '#FFFFFF', textPrimary: '#111111', textSecondary: '#666666', headerBackground: '#FFFFFF', footerBackground: '#111111' },
-      buttons: initialDesignConfig.buttons || { borderRadius: '0.5rem', paddingX: '1rem', paddingY: '0.5rem', fontWeight: '600', uppercase: false },
+      buttons: initialDesignConfig.buttons || defaultButtonStyles,
       header: initialDesignConfig.header || { sticky: true, height: '80px', transparencyPercent: 0 },
       spacing: initialDesignConfig.spacing || { xs: 4, sm: 8, md: 16, lg: 32, xl: 64 },
     },
@@ -113,6 +123,12 @@ export function BrandWebsiteDesignSystemForm({ brandId, initialDesignConfig }: B
                         )}/>
                     </div>
                     <FormField control={form.control} name="buttons.uppercase" render={({ field }) => (<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><FormLabel>Uppercase Text</FormLabel><FormControl><Switch checked={field.value} onCheckedChange={field.onChange}/></FormControl></FormItem>)}/>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <FormField control={form.control} name="buttons.primaryVariant.background" render={({ field }) => (<FormItem><FormLabel>Primary BG</FormLabel><FormControl><Input type="color" {...field} /></FormControl></FormItem>)}/>
+                        <FormField control={form.control} name="buttons.primaryVariant.text" render={({ field }) => (<FormItem><FormLabel>Primary Text</FormLabel><FormControl><Input type="color" {...field} /></FormControl></FormItem>)}/>
+                        <FormField control={form.control} name="buttons.secondaryVariant.background" render={({ field }) => (<FormItem><FormLabel>Secondary BG</FormLabel><FormControl><Input type="color" {...field} /></FormControl></FormItem>)}/>
+                        <FormField control={form.control} name="buttons.secondaryVariant.text" render={({ field }) => (<FormItem><FormLabel>Secondary Text</FormLabel><FormControl><Input type="color" {...field} /></FormControl></FormItem>)}/>
+                    </div>
                 </CardContent>
             </Card>
 

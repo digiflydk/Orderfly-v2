@@ -9,13 +9,13 @@ export const brandWebsiteNavLinkSchema = z.object({
 });
 
 const defaultTypography = {
-  headingFont: 'system-ui, sans-serif',
-  bodyFont: 'system-ui, sans-serif',
-  h1Size: "2rem",
-  h2Size: "1.5rem",
-  h3Size: "1.25rem",
-  bodySize: "1rem",
-  buttonSize: "0.875rem",
+  headingFont: 'Inter, sans-serif',
+  bodyFont: 'Inter, sans-serif',
+  h1Size: '3rem',
+  h2Size: '2.25rem',
+  h3Size: '1.875rem',
+  bodySize: '1rem',
+  buttonSize: '0.875rem',
 };
 
 const typographySchema = z.object({
@@ -28,26 +28,26 @@ const typographySchema = z.object({
       buttonSize: z.string().min(1),
     }).default(defaultTypography);
 
-const defaultButtonStyles = {
-  borderRadius: "0.5rem",
-  paddingX: "1.25rem",
-  paddingY: "0.5rem",
-  fontWeight: "600",
-  uppercase: false,
-  primaryVariant: {
-    background: "#000000",
-    text: "#FFFFFF",
-  },
-  secondaryVariant: {
-    background: "#FFFFFF",
-    text: "#000000",
-  },
-};
-
 const buttonVariantSchema = z.object({
   background: z.string(),
   text: z.string(),
 });
+
+const defaultButtonStyles = {
+  borderRadius: "9999px",
+  paddingX: "1.25rem",
+  paddingY: "0.75rem",
+  fontWeight: "600",
+  uppercase: false,
+  primaryVariant: {
+    background: "#FFBD02", // m3-orange
+    text: "#000000",       // m3-dark
+  },
+  secondaryVariant: {
+    background: "#333333",
+    text: "#FFFFFF",
+  },
+};
 
 const brandWebsiteButtonSchema = z.object({
     borderRadius: z.string().default(defaultButtonStyles.borderRadius),

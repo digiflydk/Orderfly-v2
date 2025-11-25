@@ -1,64 +1,91 @@
 
 'use client';
 
-import { createContext, useContext, useCallback, useEffect } from 'react';
-import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
-import { defaultTheme } from './theme';
+import * as React from 'react';
+import type { BrandWebsiteConfig, DesignSystemInput } from '@/lib/types/brandWebsite';
 
-interface ThemeProviderProps {
-  config: Partial<BrandWebsiteConfig>;
+type ThemeProviderProps = {
+  designSystem: Partial<DesignSystemInput>;
   children: React.ReactNode;
-}
+};
 
-const ThemeContext = createContext({});
-
-export function useTheme() {
-  return useContext(ThemeContext);
-}
-
-export function ThemeProvider({ config, children }: ThemeProviderProps) {
-    
-  const applyTheme = useCallback(() => {
-    const root = document.documentElement;
-    const design = { ...defaultTheme, ...config.designSystem };
-    
-    // Colors
-    if (design.colors) {
-        Object.entries(design.colors).forEach(([name, value]) => {
-            if (value) root.style.setProperty(`--template1-color-${name}`, value);
-        });
+// Define default values for the entire design system to ensure no variable is ever undefined.
+const defaultDesignSystem: DesignSystemInput = {
+    typography: {
+      headingFont: 'Inter, sans-serif',
+      bodyFont: 'Inter, sans-serif',
+      h1Size: '3rem',
+      h2Size: '2.25rem',
+      h3Size: '1.875rem',
+      bodySize: '1rem',
+      buttonSize: '0.875rem',
+    },
+    colors: {
+        primary: '#FFBD02',
+        secondary: '#E0A800',
+        background: '#000000',
+        textPrimary: '#FFFFFF',
+        textSecondary: '#CCCCCC',
+        headerBackground: '#111111',
+        footerBackground: '#0B0B0B',
+    },
+    buttons: {
+      borderRadius: '9999px',
+      paddingX: '1.25rem',
+      paddingY: '0.75rem',
+      fontWeight: '600',
+      uppercase: false,
+      primaryVariant: { background: '#FFBD02', text: '#000000' },
+      secondaryVariant: { background: '#333333', text: '#FFFFFF' },
     }
+};
 
-    // Typography
-    if (design.typography) {
-        const typo = { ...defaultTheme.typography, ...design.typography };
-        root.style.setProperty('--template1-font-family-heading', typo.headingFont);
-        root.style.setProperty('--template1-font-family-body', typo.bodyFont);
-        root.style.setProperty('--template1-font-size-h1', typo.h1Size);
-        root.style.setProperty('--template1-font-size-h2', typo.h2Size);
-        root.style.setProperty('--template1-font-size-h3', typo.h3Size);
-        root.style.setProperty('--template1-font-size-body', typo.bodySize);
-        root.style.setProperty('--template1-font-size-button', typo.buttonSize);
-    }
-    
-    // Buttons
-    if (design.buttons) {
-        const buttons = { ...defaultTheme.buttons, ...design.buttons };
-        root.style.setProperty('--template1-button-radius', buttons.borderRadius);
-        root.style.setProperty('--template1-button-padding-x', buttons.paddingX);
-        root.style.setProperty('--template1-button-padding-y', buttons.paddingY);
-        root.style.setProperty('--template1-button-font-weight', buttons.fontWeight);
-        if (buttons.primaryVariant) {
-            root.style.setProperty('--template1-button-primary-bg', buttons.primaryVariant.background);
-            root.style.setProperty('--template1-button-primary-text', buttons.primaryVariant.text);
-        }
-    }
+export function ThemeProvider({ designSystem, children }: ThemeProviderProps) {
+  const cssVariables = React.useMemo(() => {
+    // Merge provided designSystem with defaults to ensure all values are present
+    const finalDesignSystem = {
+        ...defaultDesignSystem,
+        ...designSystem,
+        typography: { ...defaultDesignSystem.typography, ...designSystem.typography },
+        colors: { ...defaultDesignSystem.colors, ...designSystem.colors },
+        buttons: { ...defaultDesignSystem.buttons, ...designSystem.buttons },
+    };
 
-  }, [config]);
+    const { typography, colors, buttons } = finalDesignSystem;
 
-  useEffect(() => {
-    applyTheme();
-  }, [applyTheme]);
+    return {
+      '--template1-font-family-heading': typography.headingFont,
+      '--template1-font-family-body': typography.bodyFont,
+      '--template1-font-size-h1': typography.h1Size,
+      '--template1-font-size-h2': typography.h2Size,
+      '--template1-font-size-h3': typography.h3Size,
+      '--template1-font-size-body': typography.bodySize,
+      '--template1-font-size-button': typography.buttonSize,
+      
+      '--template1-color-primary': colors.primary,
+      '--template1-color-secondary': colors.secondary,
+      '--template1-color-background': colors.background,
+      '--template1-color-text-primary': colors.textPrimary,
+      '--template1-color-text-secondary': colors.textSecondary,
+      '--template1-color-header-background': colors.headerBackground,
+      '--template1-color-footer-background': colors.footerBackground,
 
-  return <ThemeContext.Provider value={{}}>{children}</ThemeContext.Provider>;
+      '--template1-button-radius': buttons.borderRadius,
+      '--template1-button-padding-x': buttons.paddingX,
+      '--template1-button-padding-y': buttons.paddingY,
+      '--template1-button-font-weight': buttons.fontWeight,
+      '--template1-button-uppercase': buttons.uppercase ? 'uppercase' : 'none',
+      '--template1-button-primary-bg': buttons.primaryVariant.background,
+      '--template1-button-primary-text': buttons.primaryVariant.text,
+      '--template1-button-secondary-bg': buttons.secondaryVariant.background,
+      '--template1-button-secondary-text': buttons.secondaryVariant.text,
+
+    } as React.CSSProperties;
+  }, [designSystem]);
+
+  return (
+    <div style={cssVariables}>
+      {children}
+    </div>
+  );
 }
