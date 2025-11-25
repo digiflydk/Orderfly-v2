@@ -1,3 +1,4 @@
+
 'use server';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
@@ -15,36 +16,16 @@ import {
   type TrackingInput,
   type LegalInput,
   type SaveBrandWebsiteConfigInput,
+  VIRTUAL_CONFIG,
 } from './config-schemas';
+import { serializeTimestamp } from './config-utils';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 import type { ZodSchema } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 import { uploadFileToFirebaseStorage } from './storage';
 
-function serializeTimestamp(value: any): string | null {
-  if (!value) return null;
-  if (value instanceof admin.firestore.Timestamp) {
-    return value.toDate().toISOString();
-  }
-  return value as any;
-}
-
 const configPath = (brandId: string) => `brands/${brandId}/website/config`;
-
-const VIRTUAL_CONFIG: BrandWebsiteConfig = {
-  active: false,
-  template: 'template-1',
-  domains: [],
-  defaultLocationId: null,
-  faviconUrl: '/favicon.ico', // Default fallback
-  designSystem: {},
-  seo: {},
-  social: {},
-  tracking: {},
-  legal: {},
-  updatedAt: null,
-};
 
 async function readConfig(brandId: string): Promise<BrandWebsiteConfig> {
   const db = getAdminDb();

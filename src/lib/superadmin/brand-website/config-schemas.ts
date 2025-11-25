@@ -1,4 +1,6 @@
+
 import { z } from 'zod';
+import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
 
 export const brandWebsiteNavLinkSchema = z.object({
   label: z.string().min(1, 'Label cannot be empty'),
@@ -165,3 +167,17 @@ export type LegalInput = z.infer<typeof brandWebsiteLegalSchema>;
 export type SaveBrandWebsiteConfigInput = z.infer<
   typeof brandWebsiteConfigBaseSchema
 >;
+
+export const VIRTUAL_CONFIG: BrandWebsiteConfig = {
+  active: false,
+  template: 'template-1',
+  domains: [],
+  defaultLocationId: null,
+  faviconUrl: '/favicon.ico', // Default fallback
+  designSystem: {},
+  seo: {},
+  social: {},
+  tracking: {},
+  legal: {},
+  updatedAt: null,
+};

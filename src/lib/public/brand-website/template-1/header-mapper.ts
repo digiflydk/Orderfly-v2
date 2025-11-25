@@ -1,85 +1,48 @@
 
 'use server';
 
-import 'server-only';
-import { getAdminDb } from '@/lib/firebase-admin';
-import type { Brand } from '@/types';
-import type { BrandWebsiteConfig, DesignSystem } from '@/lib/types/brandWebsite';
-import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
-import { type Template1HeaderProps } from '@/components/public/brand-website/template-1/Header';
+import { getPublicBrandWebsiteConfig } from '@/lib/public/brand-website/public-config-api';
+import type { Brand, NavLink } from '@/types';
+import type { WebsiteHeaderConfig } from '@/types/website';
+import { resolveLinkClass } from '@/lib/brand-website/utils/public-config-helpers';
 
-function buildTemplate1HeaderProps(params: {
-  brand: Brand;
-  config: BrandWebsiteConfig;
-}): Omit<Template1HeaderProps, 'designSystem'> {
-  const { brand, config } = params;
-  return {
-    logoUrl: brand.logoUrl || null,
-    navItems: [
-      { label: 'Menu', href: '#menu' },
-      { label: 'About', href: '#about' },
-      { label: 'Contact', href: '#contact' },
-    ],
-    orderHref: `/${brand.slug || 'order'}`,
+export async function getTemplate1HeaderPropsByBrandSlug(
+  slug: string
+): Promise<WebsiteHeaderConfig & { navLinks: NavLink[] }> {
+  // This is a placeholder for brand resolution logic
+  const MOCK_BRAND_MAP: Record<string, { id: string; name: string }> = {
+    esmeralda: { id: 'brand-esmeralda', name: 'Esmeralda Pizza' },
+    m3pizza: { id: 'brand-m3pizza', name: 'M3Pizza' },
   };
-}
 
-const VIRTUAL_CONFIG: BrandWebsiteConfig = {
-  active: false,
-  template: 'template-1',
-  domains: [],
-  defaultLocationId: null,
-  designSystem: {},
-  seo: {},
-  social: {},
-  tracking: {},
-  legal: {},
-  updatedAt: null,
-};
+  const brand = MOCK_BRAND_MAP[slug];
+  if (!brand) throw new Error('Brand not found');
 
-export async function getTemplate1HeaderPropsForBrandSlug(brandSlug: string): Promise<(Omit<Template1HeaderProps, 'children'> & { designSystem: DesignSystem | null }) | null> {
-  const start = Date.now();
-  const db = getAdminDb();
-  let brand: Brand | null = null;
-  let brandId: string | null = null;
+  const config = await getPublicBrandWebsiteConfig(brand.id);
 
-  try {
-    const brandQuery = await db.collection('brands').where('slug', '==', brandSlug).limit(1).get();
-    if (brandQuery.empty) return null;
-    
-    const brandDoc = brandQuery.docs[0];
-    brandId = brandDoc.id;
-    brand = { id: brandId, ...brandDoc.data() } as Brand;
-    
-    const configRef = db.doc(`/brands/${brandId}/website/config`);
-    const configSnap = await configRef.get();
-    
-    const configData = configSnap.exists() ? configSnap.data() : {};
-    const config = { ...VIRTUAL_CONFIG, ...configData };
+  const headerSettings = config?.designSystem?.header;
+  const navLinks = config?.headerNavLinks || [];
 
-    const headerProps = buildTemplate1HeaderProps({ brand, config });
-    
-    await logBrandWebsiteApiCall({
-      layer: 'public',
-      action: 'template1-header',
-      brandId,
-      status: 'success',
-      durationMs: Date.now() - start,
-      path: `virtual:/template1/header/by-brandSlug?slug=${brandSlug}`,
-    });
-    
-    return { ...headerProps, designSystem: config.designSystem ?? null };
-
-  } catch (error: any) {
-    await logBrandWebsiteApiCall({
-      layer: 'public',
-      action: 'template1-header',
-      brandId,
-      status: 'error',
-      durationMs: Date.now() - start,
-      path: `virtual:/template1/header/by-brandSlug?slug=${brandSlug}`,
-      errorMessage: error.message,
-    });
-    return null;
-  }
+  return {
+    isOverlay: true,
+    sticky: headerSettings?.sticky ?? true,
+    heightPx: headerSettings?.height ? parseInt(headerSettings.height, 10) : 80,
+    logoWidthPx: headerSettings?.logoWidth ? parseInt(headerSettings.logoWidth, 10) : 120,
+    topBg: {
+      h: headerSettings?.transparencyPercent || 0,
+      s: 0,
+      l: 0,
+      opacity: 0, // Placeholder
+    },
+    scrolledBg: {
+      h: 0,
+      s: 0,
+      l: 100,
+      opacity: 95, // Placeholder
+    },
+    linkClass: resolveLinkClass(headerSettings?.linkColor),
+    logoUrl: config.logoUrl || null,
+    navLinks: navLinks,
+    faviconUrl: config.faviconUrl || '/favicon.ico',
+  };
 }

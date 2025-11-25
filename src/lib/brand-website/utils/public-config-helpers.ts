@@ -1,4 +1,3 @@
-// This file is now free of 'use server' and can be safely imported anywhere.
 
 import type { GeneralSettings, NavLink } from '@/types/settings';
 import type { BrandWebsiteConfig } from "@/lib/types/brandWebsite";
@@ -27,7 +26,7 @@ export const VIRTUAL_CONFIG: BrandWebsiteConfig = {
   template: 'template-1',
   domains: [],
   defaultLocationId: null,
-  faviconUrl: '/favicon.ico', // Default fallback
+  faviconUrl: '/favicon.ico',
   designSystem: {},
   seo: {},
   social: {},
@@ -35,3 +34,11 @@ export const VIRTUAL_CONFIG: BrandWebsiteConfig = {
   legal: {},
   updatedAt: null,
 };
+
+export function serializeTimestamp(value: any): string | null {
+  if (!value) return null;
+  if (typeof value.toDate === 'function') {
+    return value.toDate().toISOString();
+  }
+  return null;
+}

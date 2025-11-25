@@ -1,3 +1,4 @@
+
 'use server';
 
 import { requireSuperadmin } from '@/lib/auth/superadmin';
@@ -77,7 +78,7 @@ const backlog: BacklogCategory[] = [
     tasks: [
         { id: "522-11-90", name: 'Fix invalid "use server" in brand website config', description: 'Removed invalid directive from schema file to resolve build error.', status: "Done" },
         { id: "522-11-91", name: '“use server” hardening for public config API', description: 'Final fix for all public-facing config API server action errors.', status: 'Done' },
-        { id: "522-11-92", name: 'Final cleanup of brand-website config-schemas “use server” error', description: 'Final fix for all public-facing config API server action errors.', status: 'In Progress' },
+        { id: "522-11-92", name: 'Final cleanup of brand-website config-schemas “use server” error', description: 'Final fix for all public-facing config API server action errors.', status: 'Done' },
         { id: "522-11-93", name: 'Fix Server Action classification for public-config-helpers', description: "Moved helper file to a safe directory to prevent mis-classification by Next.js.", status: "In Progress" },
     ]
   },
