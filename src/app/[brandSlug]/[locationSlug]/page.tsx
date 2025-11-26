@@ -58,14 +58,6 @@ function normalizeProbe(raw: any) {
 export default async function Page({
   params,
 }: AsyncPageProps) {
-  if (!isAdminReady()) {
-    return (
-      <div className="bg-amber-100 text-amber-900 text-sm px-3 py-2 text-center">
-        Running in limited mode (no Admin credentials). Public pages are available; Superadmin requires configuration.
-      </div>
-    );
-  }
-
   const { brandSlug, locationSlug } = await resolveParams(params);
   
   try {
