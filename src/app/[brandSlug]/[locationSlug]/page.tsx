@@ -6,7 +6,7 @@ import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
 import type { AsyncPageProps } from "@/types/next-async-props";
-import { resolveParams } from "@/lib/next/resolve-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import BrandPageClient from "./BrandPageClient";
 import { getActiveCombosForLocation } from "@/app/superadmin/combos/actions";
 import { getActiveStandardDiscounts } from "@/app/superadmin/standard-discounts/actions";
