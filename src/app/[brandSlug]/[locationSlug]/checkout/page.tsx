@@ -1,5 +1,4 @@
 
-
 import { notFound, redirect } from "next/navigation";
 import { CheckoutClient } from "@/components/checkout/checkout-client";
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
