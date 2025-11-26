@@ -45,7 +45,7 @@ const backlog: BacklogCategory[] = [
       { id: "522-11-22", name: "Button System", description: "CMS-driven button styles (shape, radius, variants) wired into Template 1 components", status: "Done" },
       { id: "522-11-23", name: "Spacing System", description: "Define spacing scale for sections and paddings, and expose CMS knobs where needed", status: "Done" },
       { id: "522-11-24", name: "Theme Modes (Optional)", description: "Optional support for light/dark theme modes for Template 1", status: "Planned" },
-    ],
+    ]
   },
    {
     title: "Favicon & Metadata",
@@ -87,9 +87,9 @@ const backlog: BacklogCategory[] = [
    {
     title: "Testing",
     tasks: [
+      { id: "522-11-99", name: "CMS Config & Template 1 Smoke Tests", description: "Add automated Playwright tests for core Template 1 rendering and CMS config flow.", status: "In Progress" },
       { id: "522-90-01", name: "Acceptance Test Suite", description: "Create end-to-end tests for all public Brand Website APIs", status: "Planned" },
       { id: "522-90-02", name: "QA Testcase Runner", description: "Build or document a QA runner/checklist for manual Brand Website tests", status: "Planned" },
-      { id: "522-11-99", name: "CMS Config & Template 1 Smoke Tests", description: "Add automated Playwright tests for core Template 1 rendering and CMS config flow.", status: "In Progress" },
     ],
   },
 ];

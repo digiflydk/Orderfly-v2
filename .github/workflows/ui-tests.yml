@@ -1,4 +1,3 @@
-
 name: Playwright UI Tests
 
 on:
@@ -14,7 +13,7 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup Node
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
@@ -25,6 +24,12 @@ jobs:
       - name: Install Playwright Browsers
         run: npx playwright install --with-deps
 
-      - name: Run Playwright tests
+      - name: Run Playwright UI tests
         run: npx playwright test
 
+      - name: Upload Playwright test report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: playwright-report/
