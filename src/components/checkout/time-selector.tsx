@@ -6,11 +6,11 @@ import { useCart } from "@/context/cart-context";
 import { Button } from "../ui/button";
 import { Truck, Clock, Store } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useMemo } from "react";
 import type { TimeSlotResponse } from "@/types";
 import { Skeleton } from "../ui/skeleton";
 import { TimeSlotDialog } from "./timeslot-dialog";
-import { calculateTimeSlots } from "@/app/superadmin/locations/client-actions";
+import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
 
 
 function TimeSlotSkeleton() {
@@ -29,23 +29,26 @@ function TimeSlotSkeleton() {
 export function TimeSelector() {
     const { deliveryType, setDeliveryType, location, selectedTime } = useCart();
     const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
-    const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
     const [isLoadingTimes, setIsLoadingTimes] = useState(true);
 
+    const timeSlots = useMemo(() => {
+        if (!location) return null;
+        return calculateTimeSlots(location);
+    }, [location]);
+    
     useEffect(() => {
-        if (location?.id) {
-            setIsLoadingTimes(true);
-            const slots = calculateTimeSlots(location);
-            setTimeSlots(slots);
+        if(location) {
             setIsLoadingTimes(false);
         }
-    }, [location]);
+    }, [location])
     
     if (!location) return null;
     
-    const asapText = timeSlots ? (deliveryType === 'delivery' 
-        ? timeSlots.asap_delivery
-        : timeSlots.asap_pickup) : "Loading...";
+    const asapText = useMemo(() => {
+        if (!timeSlots) return "Loading...";
+        const text = deliveryType === 'delivery' ? timeSlots.asap_delivery : timeSlots.asap_pickup;
+        return text || "Currently unavailable";
+    }, [timeSlots, deliveryType]);
     
     const displayTime = selectedTime === 'asap' ? asapText : selectedTime;
 

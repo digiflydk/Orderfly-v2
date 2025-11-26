@@ -1,12 +1,8 @@
 
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useMemo } from 'react';
 import type { Brand, Category, ComboMenu, Location, ProductForMenu, StandardDiscount } from '@/types';
-import { useCart } from '@/context/cart-context';
-import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
-import { getProductsByIds } from '@/app/superadmin/products/actions';
-import { useAnalytics } from '@/context/analytics-context';
 import { MenuClient } from './menu-client';
 
 interface BrandPageClientProps {
@@ -29,12 +25,10 @@ export default function BrandPageClient({
   activeStandardDiscounts,
 }: BrandPageClientProps) {
     
-    // Create a flat list of all products from the menu structure
     const allProductsForLocation = useMemo(() => {
         return Object.values(menu.productsByCategory).flat();
     }, [menu.productsByCategory]);
 
-    // Create a placeholder for the "Offers" category if needed later on the client.
     const offerCategoryPlaceholder: Category = {
         id: 'offers',
         categoryName: brand.offersHeading || 'Offers',

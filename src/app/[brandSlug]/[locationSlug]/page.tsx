@@ -2,7 +2,6 @@
 
 import type { AsyncPageProps } from '@/types/next-async-props';
 import { isAdminReady } from '@/lib/runtime';
-import { getProductsForLocation } from '@/app/superadmin/products/actions';
 import { getActiveCombosForLocation } from '@/app/superadmin/combos/actions';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import BrandPageClient from "./BrandPageClient";
@@ -33,8 +32,7 @@ export default async function LocationPage({ params }: AsyncPageProps<{brandSlug
       return <EmptyState title="Not Found" hint="The requested brand or location could not be found." />;
   }
 
-  const [products, combos, discounts, menu] = await Promise.all([
-    getProductsForLocation(location.id),
+  const [combos, discounts, menu] = await Promise.all([
     getActiveCombosForLocation(location.id),
     getActiveStandardDiscounts({brandId: brand.id, locationId: location.id, deliveryType: 'pickup'}), // Default to pickup
     getMenuForRender({brandId: brand.id, locationId: location.id}),

@@ -7,11 +7,11 @@ import type { Location, TimeSlotResponse } from '@/types';
 
 // This function needs to be in a client-safe file because it's imported by client components.
 // We pass the location object to it instead of fetching it here.
-export function calculateTimeSlots(location: Location): TimeSlotResponse {
+export function calculateTimeSlots(location: Location, forDateStr?: string): TimeSlotResponse {
     const tidsinterval = 5;
     const timeZone = 'Europe/Copenhagen';
     const now = toZonedTime(new Date(), timeZone);
-    const forDate = startOfDay(now);
+    const forDate = forDateStr ? startOfDay(toZonedTime(parseISO(forDateStr), timeZone)) : startOfDay(now);
 
     const getDayInfo = (date: Date) => {
         const dayOfWeek = format(date, 'eeee').toLowerCase() as keyof Location['openingHours'];
