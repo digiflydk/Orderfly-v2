@@ -42,7 +42,7 @@ const backlog: BacklogCategory[] = [
     tasks: [
       { id: "522-11-20", name: "Global Color System", description: "Implement CMS controls and design tokens for primary, secondary, and background colors", status: "Done" },
       { id: "522-11-21", name: "Typography System", description: "CMS controls and tokens for fonts, font sizes, and text styles (headings, body, labels)", status: "Done" },
-      { id: "522-11-22", name: "Button System", description: "CMS-driven button styles (shape, radius, variants) wired into Template 1 components", status: "In Progress" },
+      { id: "522-11-22", name: "Button System", description: "CMS-driven button styles (shape, radius, variants) wired into Template 1 components", status: "Done" },
       { id: "522-11-23", name: "Spacing System", description: "Define spacing scale for sections and paddings, and expose CMS knobs where needed", status: "Done" },
       { id: "522-11-24", name: "Theme Modes (Optional)", description: "Optional support for light/dark theme modes for Template 1", status: "Planned" },
     ],
@@ -80,8 +80,8 @@ const backlog: BacklogCategory[] = [
         { id: "522-11-91", name: '“use server” hardening for public config API', description: 'Final fix for all public-facing config API server action errors.', status: 'Done' },
         { id: "522-11-92", name: 'Final cleanup of brand-website config-schemas “use server” error', description: 'Final fix for all public-facing config API server action errors.', status: 'Done' },
         { id: "522-11-93", name: 'Fix Server Action classification for public-config-helpers', description: "Moved helper file to a safe directory to prevent mis-classification by Next.js.", status: "Done" },
-        { id: "522-11-94", name: 'Fix public-config-api re-exports and module boundaries', description: 'Ensured that no non-async functions or objects are exported from server action files.', status: 'Done' },
-        { id: "522-11-95", name: 'Full Brand Website Stability Fix (Critical)', description: 'Fixes all known issues with paths, exports, and component integration for the Brand Website module.', status: 'In Progress' },
+        { id: "522-11-94", name: 'Fix re-export of VIRTUAL_CONFIG from server action file', description: 'Cleaned up module boundaries between actions and helpers.', status: 'Done' },
+        { id: "522-11-95", name: 'Full Brand Website Stability Fix (Critical)', description: 'Fixes all known issues with paths, exports, and component integration for the Brand Website module.', status: 'Done' },
     ]
   },
    {
