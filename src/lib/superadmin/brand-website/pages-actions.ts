@@ -3,7 +3,7 @@
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
-import type { BrandWebsitePage, BrandWebsitePageSummary, BrandWebsitePageCreateInput, BrandWebsitePageUpdateInput } from '@/lib/types/brandWebsite';
+import type { BrandWebsitePage, BrandWebsitePageSummary, BrandWebsitePageCreateInput, BrandWebsitePageUpdateInput } from '@/types';
 import { brandWebsitePageCreateSchema, brandWebsitePageSlugSchema, brandWebsitePageUpdateSchema } from './pages-schemas';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';

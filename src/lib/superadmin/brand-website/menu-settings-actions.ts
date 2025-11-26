@@ -3,7 +3,7 @@
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
-import type { BrandWebsiteMenuSettings, BrandWebsiteMenuHero } from '@/lib/types/brandWebsite';
+import type { BrandWebsiteMenuSettings, BrandWebsiteMenuHero } from '@/types';
 import {
   brandWebsiteMenuSettingsSchema,
   brandWebsiteMenuHeroSchema,

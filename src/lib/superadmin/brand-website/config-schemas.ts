@@ -1,6 +1,6 @@
 
 import { z } from 'zod';
-import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
+import type { BrandWebsiteConfig } from '@/types';
 
 export const brandWebsiteNavLinkSchema = z.object({
   label: z.string().min(1, 'Label cannot be empty'),

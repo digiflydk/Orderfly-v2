@@ -30,9 +30,6 @@ export function SuperAdminLayoutClient({ children, brandingSettings }: Props) {
   return (
     <S.SidebarProvider>
       <S.Sidebar collapsible="icon" className="border-r">
-        <div className="p-4 text-sm font-medium">
-          {brandingSettings?.platformHeading ?? 'Orderfly Studio'}
-        </div>
         <SuperAdminSidebarClient
           brandingSettings={
             brandingSettings ?? { platformHeading: 'Orderfly Studio' }
@@ -40,7 +37,6 @@ export function SuperAdminLayoutClient({ children, brandingSettings }: Props) {
         />
       </S.Sidebar>
 
-      {/* The bg-background class here is the key fix */}
       <S.SidebarInset className="bg-background">
         <MobileHeader
           brandingSettings={

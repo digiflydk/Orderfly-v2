@@ -2,7 +2,7 @@
 'use server';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
-import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
+import type { BrandWebsiteConfig } from '@/types';
 import {
   brandWebsiteConfigBaseSchema,
   brandWebsiteDesignSystemSchema,

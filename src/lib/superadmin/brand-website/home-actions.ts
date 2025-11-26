@@ -1,8 +1,9 @@
+
 'use server';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
-import type { BrandWebsiteHome } from '@/lib/types/brandWebsite';
+import type { BrandWebsiteHome } from '@/types';
 import {
   brandWebsiteHomeSchema,
   brandWebsiteHeroSlideSchema,
