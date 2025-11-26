@@ -1,57 +1,76 @@
 
 'use client';
-
-import { useEffect, useState } from 'react';
-import type { ReactNode } from 'react';
-import type { WebsiteHeaderConfig, BrandWebsiteConfig } from '@/types/website';
+import { useMemo, useState } from 'react';
+import type { GeneralSettings } from '@/types/settings';
+import type { BrandWebsiteConfig, WebsiteHeaderConfig } from '@/lib/types/brandWebsite';
 import { Header } from './Header';
-import { Template1Head } from './Template1Head';
-import { ThemeProvider } from './ThemeProvider';
-import { usePathname } from 'next/navigation';
 import M3Footer from '@/components/layout/M3Footer';
+import StickyOrderChoice from '@/app/m3/_components/StickyOrderChoice';
+import { OrderModal } from '@/app/m3/_components/OrderModal';
+import { useRouter } from 'next/navigation';
+
+function toHsla({ h, s, l, opacity }: { h: number; s: number; l: number; opacity: number }) {
+    const a = Math.max(0, Math.min(1, opacity / 100));
+    return `hsla(${h} ${s}% ${l}% / ${a})`;
+}
 
 interface Template1PageProps {
   config: BrandWebsiteConfig;
-  children: ReactNode;
+  headerProps: WebsiteHeaderConfig;
+  children: React.ReactNode;
 }
 
-export function Template1Page({ config, children }: Template1PageProps) {
-  const pathname = usePathname();
-  const [isClient, setIsClient] = useState(false);
+export function Template1Page({ config, headerProps, children }: Template1PageProps) {
+  const [orderModalOpen, setOrderModalOpen] = useState(false);
+  const router = useRouter();
 
-  useEffect(() => {
-    setIsClient(true);
-  }, []);
-
-  const headerConfig = {
-    logoUrl: config.logoUrl,
-    logoAlt: 'Brand Logo',
-    navItems: config.headerNavLinks || [],
-    orderHref: '#',
-    ctaLabel: 'Order Now',
-    config, // Pass the full config
+  const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
+    // In a real scenario, this would likely update cart context and then navigate
+    console.log(`Selected delivery method: ${method}`);
+    const orderHref = config.defaultLocationId ? `/m3pizza/${config.defaultLocationId}` : '/m3pizza';
+    router.push(orderHref);
   };
+  
+  const handleOrderClick = () => {
+      setOrderModalOpen(true);
+  }
+
+  const themeVars = useMemo(() => {
+    const ds = config.designSystem;
+    const vars: React.CSSProperties = {};
+
+    if (ds?.colors) {
+      vars['--color-primary'] = ds.colors.primary;
+      vars['--color-secondary'] = ds.colors.secondary;
+      vars['--color-background'] = ds.colors.background;
+      vars['--color-foreground'] = ds.colors.textPrimary;
+      vars['--color-muted-foreground'] = ds.colors.textSecondary;
+    }
+    if (ds?.buttons?.primaryVariant) {
+      vars['--color-m3-button'] = ds.buttons.primaryVariant.background;
+      vars['--color-m3-button-hover'] = ds.buttons.secondaryVariant.background;
+    }
+     if (ds?.typography) {
+      vars['--font-heading'] = ds.typography.headingFont;
+      vars['--font-body'] = ds.typography.bodyFont;
+    }
+
+    return vars;
+  }, [config.designSystem]);
 
   return (
-    <>
-      <Template1Head
-        title={config.seo?.defaultTitle || 'My Brand'}
-        description={config.seo?.defaultDescription || ''}
-        faviconUrl={config.faviconUrl || '/favicon.ico'}
-        ogImageUrl={config.seo?.ogImageUrl}
-        canonicalUrl={config.seo?.canonicalUrl}
-        robotsNoIndex={!config.seo?.index}
+    <div style={themeVars}>
+      <Header {...headerProps} onOrderClick={handleOrderClick} />
+      <main>{children}</main>
+      <M3Footer />
+      <div data-testid="template1-sticky-cta">
+        <StickyOrderChoice onOrderClick={handleOrderClick} />
+      </div>
+      <OrderModal
+        open={orderModalOpen}
+        onOpenChange={setOrderModalOpen}
+        onDeliveryMethodSelected={handleDeliveryMethodSelected}
       />
-      <ThemeProvider designSystem={config.designSystem}>
-        <div 
-          className="min-h-screen"
-          style={{ backgroundColor: 'var(--template1-color-background)' }}
-        >
-          {isClient && <Header {...headerConfig} />}
-          <main>{children}</main>
-          {pathname.startsWith('/m3pizza') && <M3Footer />}
-        </div>
-      </ThemeProvider>
-    </>
+    </div>
   );
 }

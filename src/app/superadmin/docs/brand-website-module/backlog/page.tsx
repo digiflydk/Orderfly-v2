@@ -89,6 +89,7 @@ const backlog: BacklogCategory[] = [
     tasks: [
       { id: "522-90-01", name: "Acceptance Test Suite", description: "Create end-to-end tests for all public Brand Website APIs", status: "Planned" },
       { id: "522-90-02", name: "QA Testcase Runner", description: "Build or document a QA runner/checklist for manual Brand Website tests", status: "Planned" },
+      { id: "522-11-99", name: "CMS Config & Template 1 Smoke Tests", description: "Add automated Playwright tests for core Template 1 rendering and CMS config flow.", status: "In Progress" },
     ],
   },
 ];
