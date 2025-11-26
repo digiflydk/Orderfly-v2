@@ -87,6 +87,15 @@ export default async function Page({
       getActiveStandardDiscounts({ brandId: brand.id, locationId: location.id, deliveryType: 'pickup' }), // Default to pickup
     ]);
 
+    if (!menu || !menu.categories || !menu.productsByCategory) {
+      return (
+        <EmptyState
+          title="Menu er ikke sat op endnu"
+          hint="Der er ingen aktive produkter eller kategorier."
+        />
+      );
+    }
+    
     return (
       <BrandPageClient 
         brand={brand}
