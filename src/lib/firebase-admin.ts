@@ -64,7 +64,7 @@ function initializeAdminApp(): admin.app.App {
   }, appName);
 }
 
-function getAdminApp(): admin.app.App {
+export function getAdminApp(): admin.app.App {
   if (!adminApp) {
     // Check if an app is already initialized (e.g., by another part of Firebase)
     if (admin.apps.length > 0 && admin.apps[0]) {
