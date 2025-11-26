@@ -1,10 +1,11 @@
 
 
 import { getUsers } from './actions';
-import { UsersClientPage } from './client-page';
+import { RolesClientPage } from '../roles/client-page';
 import { getRoles } from '../roles/actions';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
+import { UsersClientPage } from './client-page';
 
 async function UsersPageContent() {
   const [users, roles] = await Promise.all([
