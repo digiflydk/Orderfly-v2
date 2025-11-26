@@ -1,29 +1,23 @@
 
 'use client';
 
-import { ReactNode } from "react";
-import type { BrandWebsiteConfig, WebsiteHeaderConfig } from "@/types/website";
-import { Header } from "./Header";
-import M3Footer from "@/components/layout/M3Footer";
-import StickyOrderChoice from "@/app/m3/_components/StickyOrderChoice"; // Assuming this is a generic CTA now
+import { Suspense } from 'react';
+import type { WebsiteHeaderConfig, BrandWebsiteHome } from '@/lib/types/brandWebsite';
+import { Header } from '@/components/public/brand-website/template-1/Header';
+import M3Footer from '@/components/layout/M3Footer';
+import StickyOrderChoice from '@/app/m3/_components/StickyOrderChoice'; // Assuming this is the correct path
 
-interface Template1PageProps {
-  config: BrandWebsiteConfig;
-  headerProps: {
+export interface Template1PageProps {
+  children: React.ReactNode;
+  headerProps?: {
     header: WebsiteHeaderConfig;
     ctaText: string;
     orderHref: string;
   };
-  children: ReactNode;
+  homeProps?: BrandWebsiteHome;
 }
 
-export function Template1Page({ config, headerProps, children }: Template1PageProps) {
-  
-  const mainStyle: React.CSSProperties = {};
-  if (config?.designSystem?.header?.sticky) {
-    mainStyle.paddingTop = config.designSystem.header.height || '80px';
-  }
-
+export function Template1Page({ children, headerProps = { header: {}, ctaText: '', orderHref: '' } as any }: Template1PageProps) {
   return (
     <div className="bg-m3-dark">
       <Header
@@ -31,15 +25,16 @@ export function Template1Page({ config, headerProps, children }: Template1PagePr
         ctaText={headerProps.ctaText}
         orderHref={headerProps.orderHref}
       />
-      <main style={mainStyle}>
-        {children}
-      </main>
+      <main>{children}</main>
       <M3Footer />
-      {config.designSystem.header?.sticky && (
-        <div data-testid="template1-sticky-cta">
-          <StickyOrderChoice onOrderClick={() => window.location.href = headerProps.orderHref} />
-        </div>
-      )}
+      {/* Sticky CTA for mobile */}
+      <div className="md:hidden" data-testid="template1-sticky-cta">
+        <StickyOrderChoice onOrderClick={() => {
+            if (headerProps.orderHref) {
+                window.location.href = headerProps.orderHref;
+            }
+        }} />
+      </div>
     </div>
   );
 }
