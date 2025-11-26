@@ -18,17 +18,37 @@ test.describe('Brand Website Smoke Tests', () => {
     await expect(stickyCta).toBeVisible();
   });
 
-  test('Test 3: CTA Label Matches Public Config', async ({ page, request }) => {
+  test('Test 3: CTA Label Matches CMS Config', async ({ page, request }) => {
     const response = await request.get(`${BASE_URL}/api/public/brand-website/template-1/header-props?brandSlug=m3pizza`);
     expect(response.ok()).toBeTruthy();
-    const config: { header: WebsiteHeaderConfig, ctaText: string } = await response.json();
-    const expectedCtaLabel = config.ctaText || 'Bestil her';
+    const config: { header: WebsiteHeaderConfig, ctaText: string, orderHref: string } = await response.json();
+    const expectedCtaLabel = config.ctaText || 'Bestil nu';
 
     await page.goto('/m3pizza');
     await expect(page.locator('header[data-header] button')).toContainText(expectedCtaLabel);
   });
+  
+  test('Test 4: Header is sticky on scroll', async ({ page }) => {
+    await page.goto('/m3pizza');
+    const header = page.locator('[data-testid="template1-header"]');
+    
+    // Check initial position
+    let initialBoundingBox = await header.boundingBox();
+    expect(initialBoundingBox?.y).toBeGreaterThanOrEqual(0);
 
-  test('CMS Config pages load without runtime errors', async ({ page }) => {
+    // Scroll down
+    await page.evaluate(() => window.scrollBy(0, 500));
+    await page.waitForTimeout(100); // Wait for scroll and sticky positioning to apply
+
+    // Check position after scroll
+    let scrolledBoundingBox = await header.boundingBox();
+    expect(scrolledBoundingBox?.y).toBe(0);
+    
+    // Check for sticky class
+    await expect(header).toHaveClass(/sticky/);
+  });
+
+  test('Test 5: CMS Config pages load without runtime errors', async ({ page }) => {
     const paths = [
       '/superadmin/brands/esmeralda/website',
       '/superadmin/brands/esmeralda/website/config',

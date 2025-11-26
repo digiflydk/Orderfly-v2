@@ -1,63 +1,64 @@
 
 'use client';
+import { useState, useEffect } from "react";
+import Image from "next/image";
+import Link from "next/link";
+import { Button } from "@/components/ui/button";
+import { Menu, X } from "lucide-react";
+import type { WebsiteHeaderConfig } from "@/types/website";
+import { cn } from "@/lib/utils";
 
-import { useEffect, useState } from 'react';
-import Image from 'next/image';
-import Link from 'next/link';
-import { Menu, X } from 'lucide-react';
-import type { Template1HeaderProps } from '@/types/website';
-import { cn } from '@/lib/utils';
-import { Template1Button } from './Template1Button';
+interface HeaderProps {
+  header: WebsiteHeaderConfig;
+  logoUrl?: string | null;
+  ctaText: string;
+  orderHref: string;
+}
 
-export function Header({
-  logoUrl,
-  logoAlt,
-  navItems,
-  orderHref,
-  ctaLabel,
-}: Template1HeaderProps) {
+export function Header({ header, logoUrl, ctaText, orderHref }: HeaderProps) {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  
+  const [isScrolled, setIsScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleScroll = () => {
+      setIsScrolled(window.scrollY > 10);
+    };
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  const headerClasses = cn(
+    "transition-all duration-300",
+    header.sticky ? "sticky top-0 z-50" : "",
+    isScrolled ? "bg-m3-cream shadow-md" : "bg-transparent"
+  );
+
   return (
-    <header data-header>
-      <div
-        className="mx-auto flex h-full max-w-7xl items-center justify-between px-4 sm:px-6 lg:px-8"
-        style={{
-          fontFamily: 'var(--template1-font-family-body)',
-        }}
-      >
-        <Link href="/" className="flex items-center gap-2" aria-label={logoAlt}>
-          {logoUrl ? (
-             <div className="relative flex items-center" style={{ width: 'var(--logo-width)' }}>
-                 <Image
-                  src={logoUrl}
-                  alt={logoAlt || 'Brand Logo'}
-                  width={120}
-                  height={40}
-                  style={{ width: '100%', height: 'auto' }}
-                  priority
-                />
-            </div>
-          ) : (
-            <span className="text-xl font-bold">{logoAlt}</span>
-          )}
+    <header data-testid="template1-header" className={headerClasses} style={{ height: `${header.heightPx}px` }}>
+      <div className="container mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 flex items-center justify-between h-full">
+        <Link href="/m3pizza" className="z-50">
+           {logoUrl ? (
+             <Image src={logoUrl} alt="Brand Logo" width={header.logoWidthPx} height={header.heightPx / 2} priority data-ai-hint="logo" style={{height: 'auto'}}/>
+           ) : (
+             <span className="font-bold text-lg">M3Pizza</span>
+           )}
         </Link>
-        <nav className="hidden items-center gap-6 md:flex">
-          {navItems.map((link) => (
-            <Link key={link.label} href={link.href} className="text-sm" style={{
-                color: 'var(--template1-color-text-primary)',
-                fontFamily: 'var(--template1-font-family-body)',
-            }}>
-              {link.label}
-            </Link>
-          ))}
+        <nav className="hidden md:flex items-center gap-8">
+          <Link href="#" className={cn("text-sm font-semibold", header.linkClass)}>Menu</Link>
+          <Link href="#" className={cn("text-sm font-semibold", header.linkClass)}>Byg selv</Link>
+          <Link href="#" className={cn("text-sm font-semibold", header.linkClass)}>Rewards</Link>
+          <Link href="#" className={cn("text-sm font-semibold", header.linkClass)}>Kontakt</Link>
         </nav>
         <div className="flex items-center gap-4">
-          <Template1Button asChild className="hidden md:flex" variant="primary">
-            <Link href={orderHref}>{ctaLabel}</Link>
-          </Template1Button>
+          <Button
+            asChild
+            className="hidden md:flex bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] rounded-full font-bold uppercase text-sm px-8 py-3 transition-colors">
+            <Link href={orderHref}>
+                {ctaText}
+            </Link>
+          </Button>
           <button
-            className="z-50 md:hidden"
+            className="md:hidden z-50"
             onClick={() => setIsMenuOpen(!isMenuOpen)}
             aria-label="Toggle menu"
           >
@@ -65,23 +66,23 @@ export function Header({
           </button>
         </div>
       </div>
+      {/* Mobile Menu */}
       {isMenuOpen && (
-        <div className="absolute left-0 top-0 flex h-screen w-full flex-col items-center justify-center gap-8 bg-background md:hidden">
+        <div className="md:hidden absolute top-0 left-0 w-full h-screen bg-m3-cream flex flex-col items-center justify-center gap-8">
           <nav className="flex flex-col items-center gap-8">
-            {navItems.map((link) => (
-              <Link
-                key={link.label}
-                href={link.href}
-                className="text-xl font-semibold"
-                onClick={() => setIsMenuOpen(false)}
-              >
-                {link.label}
-              </Link>
-            ))}
+            <Link href="#" className="text-xl font-semibold hover:text-m3-orange transition-colors" onClick={() => setIsMenuOpen(false)}>Menu</Link>
+            <Link href="#" className="text-xl font-semibold hover:text-m3-orange transition-colors" onClick={() => setIsMenuOpen(false)}>Byg selv</Link>
+            <Link href="#" className="text-xl font-semibold hover:text-m3-orange transition-colors" onClick={() => setIsMenuOpen(false)}>Rewards</Link>
+            <Link href="#" className="text-xl font-semibold hover:text-m3-orange transition-colors" onClick={() => setIsMenuOpen(false)}>Kontakt</Link>
           </nav>
-          <Template1Button asChild size="lg" variant="primary">
-            <Link href={orderHref}>{ctaLabel}</Link>
-          </Template1Button>
+          <Button
+            asChild
+            onClick={() => setIsMenuOpen(false)}
+            className="bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] rounded-full font-bold uppercase text-sm px-8 py-3 transition-colors mt-8">
+            <Link href={orderHref}>
+                {ctaText}
+            </Link>
+          </Button>
         </div>
       )}
     </header>
