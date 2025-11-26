@@ -1,10 +1,9 @@
-
 // src/types/menu.ts
 import type { Category as FullCategory, Product as FullProduct } from '@/types';
 
 // Types specific to menu rendering
 export type MenuCategory = Omit<FullCategory, 'brandId' | 'locationIds'> & { name: string };
-export type MenuProduct = Omit<FullProduct, 'name' | 'title'>;
+export type MenuProduct = FullProduct;
 export type Product = FullProduct;
 export type Category = FullCategory;
 

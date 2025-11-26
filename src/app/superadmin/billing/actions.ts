@@ -7,7 +7,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import type { Brand, Subscription, SubscriptionPlan, User, Invoice } from '@/types';
 import { getBrands } from '../brands/actions';
 import { getUsers } from '../users/actions';
-import { getSubscriptionPlans } from '../subscriptions/page';
+import { getSubscriptionPlans } from '../subscriptions/actions';
 import { getActiveStripeKey } from '../settings/actions';
 import Stripe from 'stripe';
 

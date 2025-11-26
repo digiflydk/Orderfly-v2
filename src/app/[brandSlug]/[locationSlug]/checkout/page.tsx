@@ -4,9 +4,19 @@ import { CheckoutClient } from "@/components/checkout/checkout-client";
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
 import { getActiveLocationBySlug } from "@/app/superadmin/locations/actions";
 
+type CheckoutPageProps = {
+  params: {
+    brandSlug: string;
+    locationSlug: string;
+  };
+  searchParams?: Record<string, string | string[] | undefined>;
+};
+
+export const runtime = "nodejs";
+
 export default async function CheckoutPage({
   params,
-}: { params: { brandSlug: string; locationSlug: string } }) {
+}: CheckoutPageProps) {
   const brand = await getBrandBySlug(params.brandSlug);
   if (!brand) notFound();
 
