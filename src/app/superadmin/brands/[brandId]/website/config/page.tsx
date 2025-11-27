@@ -11,6 +11,8 @@ import { BrandWebsiteSocialForm } from '@/components/superadmin/brand-website/co
 import { BrandWebsiteTrackingForm } from '@/components/superadmin/brand-website/config/BrandWebsiteTrackingForm';
 import { BrandWebsiteLegalForm } from '@/components/superadmin/brand-website/config/BrandWebsiteLegalForm';
 import { BrandWebsiteDesignSystemForm } from '@/components/superadmin/brand-website/config/BrandWebsiteDesignSystemForm';
+import type { AsyncPageProps } from "@/types/next-async-props";
+import { resolveParams } from "@/lib/next/resolve-props";
 
 // Helper to ensure all parts of the config are serializable
 function makeConfigSerializable(config: any) {
@@ -23,10 +25,15 @@ function makeConfigSerializable(config: any) {
   return safeConfig;
 }
 
-export default async function BrandWebsiteConfigPage({ params }: { params: { brandId: string } }) {
+type BrandConfigParams = {
+  brandId: string;
+};
+
+export default async function BrandWebsiteConfigPage({ params }: AsyncPageProps<BrandConfigParams>) {
   await requireSuperadmin();
+  const { brandId } = await resolveParams(params);
   
-  const config = await getBrandWebsiteConfig(params.brandId);
+  const config = await getBrandWebsiteConfig(brandId);
 
   if (!config) {
     notFound();
@@ -46,22 +53,22 @@ export default async function BrandWebsiteConfigPage({ params }: { params: { bra
           <TabsTrigger value="legal">Legal</TabsTrigger>
         </TabsList>
         <TabsContent value="general">
-          <BrandWebsiteConfigForm brandId={params.brandId} initialConfig={safeConfig} />
+          <BrandWebsiteConfigForm brandId={brandId} initialConfig={safeConfig} />
         </TabsContent>
         <TabsContent value="design">
-          <BrandWebsiteDesignSystemForm brandId={params.brandId} initialDesignConfig={safeConfig.designSystem} />
+          <BrandWebsiteDesignSystemForm brandId={brandId} initialDesignConfig={safeConfig.designSystem} />
         </TabsContent>
         <TabsContent value="seo">
-            <BrandWebsiteSeoForm brandId={params.brandId} initialSeoConfig={safeConfig.seo} />
+            <BrandWebsiteSeoForm brandId={brandId} initialSeoConfig={safeConfig.seo} />
         </TabsContent>
         <TabsContent value="social">
-            <BrandWebsiteSocialForm brandId={params.brandId} initialSocialConfig={safeConfig.social} />
+            <BrandWebsiteSocialForm brandId={brandId} initialSocialConfig={safeConfig.social} />
         </TabsContent>
          <TabsContent value="tracking">
-            <BrandWebsiteTrackingForm brandId={params.brandId} initialTrackingConfig={safeConfig.tracking} />
+            <BrandWebsiteTrackingForm brandId={brandId} initialTrackingConfig={safeConfig.tracking} />
         </TabsContent>
         <TabsContent value="legal">
-            <BrandWebsiteLegalForm brandId={params.brandId} initialLegalConfig={safeConfig.legal} />
+            <BrandWebsiteLegalForm brandId={brandId} initialLegalConfig={safeConfig.legal} />
         </TabsContent>
       </Tabs>
     </div>
