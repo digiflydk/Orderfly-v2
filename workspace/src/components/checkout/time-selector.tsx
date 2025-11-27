@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useCart } from "@/context/cart-context";
@@ -23,14 +24,20 @@ function TimeSlotSkeleton() {
     )
 }
 
-interface TimeSelectorProps {
-    timeSlots: TimeSlotResponse | null;
-}
-
-
-export function TimeSelector({ timeSlots }: TimeSelectorProps) {
+export function TimeSelector() {
     const { deliveryType, setDeliveryType, location, selectedTime } = useCart();
     const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
+    const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
+    const [isLoading, setIsLoading] = useState(true);
+    
+    useEffect(() => {
+        if (location) {
+            setIsLoading(true);
+            const slots = calculateTimeSlots(location);
+            setTimeSlots(slots);
+            setIsLoading(false);
+        }
+    }, [location, deliveryType]);
     
     if (!location) return null;
     
@@ -71,8 +78,8 @@ export function TimeSelector({ timeSlots }: TimeSelectorProps) {
                 </Button>
             </div>
             <div className="flex items-center justify-between border rounded-lg bg-card p-2 px-3 flex-1">
-                 {!timeSlots ? (
-                    <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-muted-foreground" /><Skeleton className="h-5 w-24" /></div>
+                 {isLoading ? (
+                    <TimeSlotSkeleton/>
                  ) : (
                     <>
                         <div className="flex items-center gap-2">

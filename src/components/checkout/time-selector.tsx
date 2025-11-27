@@ -29,10 +29,13 @@ interface TimeSelectorProps {
 }
 
 
-export function TimeSelector({ timeSlots }: TimeSelectorProps) {
+export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
     const { deliveryType, setDeliveryType, location, selectedTime } = useCart();
     const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
     
+    // OF-522-126 - Use the prop directly, no internal fetching.
+    const timeSlots = timeSlotsProp;
+
     if (!location) return null;
     
     const asapText = useMemo(() => {
