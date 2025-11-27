@@ -83,6 +83,7 @@ const backlog: BacklogCategory[] = [
         { id: "522-11-94", name: 'Fix re-export of VIRTUAL_CONFIG from server action file', description: 'Cleaned up module boundaries between actions and helpers.', status: "Done" },
         { id: "522-11-95", name: 'Full Brand Website Stability Fix (Critical)', description: 'Fixes all known issues with paths, exports, and component integration for the Brand Website module.', status: "Done" },
         { id: "522-11-111", name: 'Brand/location page props build fix', description: 'Remove invalid PageProps/AsyncPageProps from route to unblock build.', status: "Done" },
+        { id: "522-11-113", name: 'Root app layout reset (build blocking)', description: 'Reset root layout to fix "doesn’t have a root layout" error.', status: 'Done' },
     ]
   },
    {
