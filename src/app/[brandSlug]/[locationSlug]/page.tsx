@@ -3,10 +3,13 @@
 // src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
-import { getMenuForRender } from "@/lib/server/catalog";
+import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
+import ProductGrid from "@/components/catalog/product-grid";
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
+import type { MenuData, Category, Product } from "@/types/menu";
+import { productsForCategory } from "@/lib/menu-helpers";
 import BrandPageClient from "./BrandPageClient";
 import { getActiveCombosForLocation } from "@/app/superadmin/combos/actions";
 import { getActiveStandardDiscounts } from "@/app/superadmin/standard-discounts/actions";
