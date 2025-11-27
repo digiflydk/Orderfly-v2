@@ -14,17 +14,6 @@ import { BrandWebsiteDesignSystemForm } from '@/components/superadmin/brand-webs
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams } from "@/lib/next/resolve-props";
 
-// Helper to ensure all parts of the config are serializable
-function makeConfigSerializable(config: any) {
-  if (!config) return null;
-  const safeConfig = { ...config };
-  if (config.updatedAt) {
-    safeConfig.updatedAt = String(config.updatedAt);
-  }
-  // Add any other necessary serializations here in the future
-  return safeConfig;
-}
-
 type BrandConfigParams = {
   brandId: string;
 };
@@ -38,8 +27,6 @@ export default async function BrandWebsiteConfigPage({ params }: AsyncPageProps<
   if (!config) {
     notFound();
   }
-  
-  const safeConfig = makeConfigSerializable(config);
 
   return (
     <div className="space-y-6">
@@ -53,22 +40,22 @@ export default async function BrandWebsiteConfigPage({ params }: AsyncPageProps<
           <TabsTrigger value="legal">Legal</TabsTrigger>
         </TabsList>
         <TabsContent value="general">
-          <BrandWebsiteConfigForm brandId={brandId} initialConfig={safeConfig} />
+          <BrandWebsiteConfigForm brandId={brandId} initialConfig={config} />
         </TabsContent>
         <TabsContent value="design">
-          <BrandWebsiteDesignSystemForm brandId={brandId} initialDesignConfig={safeConfig.designSystem} />
+          <BrandWebsiteDesignSystemForm brandId={brandId} initialDesignConfig={config.designSystem} />
         </TabsContent>
         <TabsContent value="seo">
-            <BrandWebsiteSeoForm brandId={brandId} initialSeoConfig={safeConfig.seo} />
+            <BrandWebsiteSeoForm brandId={brandId} initialSeoConfig={config.seo} />
         </TabsContent>
         <TabsContent value="social">
-            <BrandWebsiteSocialForm brandId={brandId} initialSocialConfig={safeConfig.social} />
+            <BrandWebsiteSocialForm brandId={brandId} initialSocialConfig={config.social} />
         </TabsContent>
          <TabsContent value="tracking">
-            <BrandWebsiteTrackingForm brandId={brandId} initialTrackingConfig={safeConfig.tracking} />
+            <BrandWebsiteTrackingForm brandId={brandId} initialTrackingConfig={config.tracking} />
         </TabsContent>
         <TabsContent value="legal">
-            <BrandWebsiteLegalForm brandId={brandId} initialLegalConfig={safeConfig.legal} />
+            <BrandWebsiteLegalForm brandId={brandId} initialLegalConfig={config.legal} />
         </TabsContent>
       </Tabs>
     </div>
