@@ -60,8 +60,7 @@ function normalizeProbe(raw: any) {
   return { brand, location, ok: hasBrand && hasLocation && brandMatchesLocation, flags: { hasBrand, hasLocation, hasBrandIdField, brandMatchesLocation }, hints };
 }
 
-export default async function Page(props: any) {
-  const { params, searchParams } = props as BrandLocationPageProps;
+export default async function Page({ params, searchParams }: BrandLocationPageProps) {
   const { brandSlug, locationSlug } = params;
   
   try {
