@@ -15,16 +15,20 @@ import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
+import type { AsyncPageProps } from '@/types/next-async-props';
+import { resolveParams } from '@/lib/next/resolve-props';
+
+type BrandWebsiteLayoutParams = {
+    brandId: string;
+};
 
 export default async function BrandWebsiteLayout({
   children,
   params,
-}: {
-  children: React.ReactNode;
-  params: { brandId: string };
-}) {
+}: AsyncPageProps<BrandWebsiteLayoutParams>) {
   await requireSuperadmin();
-  const brand = await getBrandById(params.brandId);
+  const { brandId } = await resolveParams(params);
+  const brand = await getBrandById(brandId);
 
   if (!brand) {
     notFound();
@@ -32,10 +36,10 @@ export default async function BrandWebsiteLayout({
 
   // Fetch all necessary data for status checks
   const [config, home, pages, menuSettings] = await Promise.all([
-    getBrandWebsiteConfig(params.brandId),
-    getBrandWebsiteHome(params.brandId),
-    listBrandWebsitePages(params.brandId),
-    getBrandWebsiteMenuSettings(params.brandId),
+    getBrandWebsiteConfig(brandId),
+    getBrandWebsiteHome(brandId),
+    listBrandWebsitePages(brandId),
+    getBrandWebsiteMenuSettings(brandId),
   ]);
 
   // Compute completion status
