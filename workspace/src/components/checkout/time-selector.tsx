@@ -11,7 +11,6 @@ import { Skeleton } from "../ui/skeleton";
 import { TimeSlotDialog } from "./timeslot-dialog";
 import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
 
-
 function TimeSlotSkeleton() {
     return (
         <div className="flex items-center justify-between rounded-lg border bg-card p-2 px-3">
