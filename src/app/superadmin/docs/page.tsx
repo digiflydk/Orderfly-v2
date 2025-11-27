@@ -8,16 +8,22 @@ import DocsNav from '@/components/superadmin/docs/DocsNav';
 import DocsCard from '@/components/superadmin/docs/DocsCard';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 import DocsMarkdown from '@/components/superadmin/docs/DocsMarkdown';
+import type { AsyncPageProps } from "@/types/next-async-props";
+import { resolveSearchParams } from "@/lib/next/resolve-props";
+
+type DocsSearchParams = {
+  doc?: string;
+};
 
 export default async function SuperadminDocsPage({
   searchParams,
-}: {
-  searchParams?: { doc?: string };
-}) {
+}: AsyncPageProps<{}, DocsSearchParams>) {
   await requireSuperadmin();
+  const query = await resolveSearchParams<DocsSearchParams>(searchParams);
+  const doc = query?.doc;
 
   // Default to overview if no doc is specified
-  const activeDocId = searchParams?.doc ?? 'overview';
+  const activeDocId = doc ?? 'overview';
   const activeDocMeta = DEV_DOCS.find((d) => d.id === activeDocId) ?? DEV_DOCS[0];
 
   return (
