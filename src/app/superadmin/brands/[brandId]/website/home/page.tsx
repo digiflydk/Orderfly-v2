@@ -1,13 +1,21 @@
-
 'use server';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 import { getBrandWebsiteHome } from '@/lib/superadmin/brand-website/home-actions';
 import { notFound } from 'next/navigation';
 import { BrandWebsiteHomeForm } from '@/components/superadmin/brand-website/home/BrandWebsiteHomeForm';
+import type { AsyncPageProps } from "@/types/next-async-props";
+import { resolveParams } from "@/lib/next/resolve-props";
 
-export default async function BrandWebsiteHomePage({ params }: { params: { brandId: string } }) {
+type BrandHomeParams = {
+  brandId: string;
+};
+
+export default async function BrandWebsiteHomePage({
+  params,
+}: AsyncPageProps<BrandHomeParams>) {
   await requireSuperadmin();
-  const homeConfig = await getBrandWebsiteHome(params.brandId);
+  const { brandId } = await resolveParams(params);
+  const homeConfig = await getBrandWebsiteHome(brandId);
 
   if (!homeConfig) {
     notFound();
@@ -15,7 +23,7 @@ export default async function BrandWebsiteHomePage({ params }: { params: { brand
 
   return (
     <div className="space-y-6">
-        <BrandWebsiteHomeForm brandId={params.brandId} initialHomeConfig={homeConfig} />
+        <BrandWebsiteHomeForm brandId={brandId} initialHomeConfig={homeConfig} />
     </div>
   );
 }

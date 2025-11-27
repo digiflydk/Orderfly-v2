@@ -15,7 +15,7 @@ import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 import { serializeTimestamp } from './config-utils';
 
-const homePath = (brandId: string) => `brands/${brandId}/website/homepage`;
+const homePath = (brandId: string) => `brands/${brandId}/website/home`;
 
 const VIRTUAL_HOME: BrandWebsiteHome = {
   hero: [],
