@@ -1,13 +1,13 @@
+
 # Operations Log (seneste status & åbne punkter)
 
 ## Seneste leverancer
-* 1.0.240 • OF-509 — Updated operations log with recent changes.
-* 1.0.239 • OF-508 — Completed and corrected all documentation API endpoints (api-map, db-structure, etc.) and fixed data dump route.
-* 1.0.238 • OF-507 — Added "Brand Website" category to Superadmin sidebar for brand-specific CMS settings.
-* 1.0.237 • OF-506 — Implemented robust checks to prevent Firebase Admin SDK from running in build environments, resolving service account errors.
-* 1.0.236 • OF-459 — Finalized missing files (debug-ui-spec + examples) and cleanup.
-* 1.0.235 • OF-458 — Added Debug UI specification for a health status dashboard.
-* 1.0.234 • OF-457 — Added Firestore indexing and performance guide.
+* 1.0.239 • 522-11-122 - Normalized Superadmin Brand Website pages to use AsyncPageProps.
+* 1.0.238 • 522-11-121 - Fixed Superadmin brand website home page props for Next 15.
+* 1.0.237 • 522-11-120 - Fixed Superadmin brand website config page props for Next 15.
+* 1.0.236 • 522-11-119 - Fixed build error by correcting prop handling.
+* 1.0.235 • 522-11-118 - Fixed M3 Pizza page props for Next 15.
+* 1.0.234 • 522-11-117 - A — Removed legacy `app/src/app` from build.
 * 1.0.233 • OF-456 — Added security and RBAC documentation.
 * 1.0.232 • OF-455 — Completed Firestore schema documentation for all key collections.
 * 1.0.231 • OF-454 — Expanded API contract with OpenAPI specs and example payloads.

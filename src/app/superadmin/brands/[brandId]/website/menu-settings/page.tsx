@@ -1,27 +1,39 @@
+
 'use server';
 import 'server-only';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 import { getBrandWebsiteMenuSettings } from '@/lib/superadmin/brand-website/menu-settings-actions';
 import { notFound } from 'next/navigation';
 import { BrandWebsiteMenuSettingsForm } from '@/components/superadmin/brand-website/menu-settings/BrandWebsiteMenuSettingsForm';
+import type { AsyncPageProps } from "@/types/next-async-props";
+import { resolveParams } from "@/lib/next/resolve-props";
+import type { BrandWebsiteMenuSettings } from '@/lib/types/brandWebsite';
 
-export default async function BrandWebsiteMenuSettingsPage({ params }: { params: { brandId: string } }) {
+type BrandWebsiteParams = {
+  brandId: string;
+};
+
+export default async function BrandWebsiteMenuSettingsPage({ params }: AsyncPageProps<BrandWebsiteParams>) {
   await requireSuperadmin();
+  const { brandId } = await resolveParams(params);
   
-  const settings = await getBrandWebsiteMenuSettings(params.brandId);
+  const settings = await getBrandWebsiteMenuSettings(brandId);
 
-  if (!settings) {
-    notFound();
-  }
-  
-  const initialSettings = {
-    ...settings,
-    hero: settings.hero || null, // Ensure hero is explicitly null if not present
+  // If settings are null, it means no document exists yet.
+  // We should provide a safe default to the form instead of crashing.
+  const initialSettings: BrandWebsiteMenuSettings = settings || {
+    hero: null,
+    gridLayout: 3,
+    showPrice: true,
+    showDescription: true,
+    stickyCategories: true,
+    defaultLocationId: null,
+    updatedAt: null,
   };
 
   return (
     <div className="space-y-6">
-      <BrandWebsiteMenuSettingsForm brandId={params.brandId} initialSettings={initialSettings} />
+      <BrandWebsiteMenuSettingsForm brandId={brandId} initialSettings={initialSettings} />
     </div>
   );
 }

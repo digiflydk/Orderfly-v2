@@ -1,4 +1,6 @@
+
 'use server';
+import 'server-only';
 import { requireSuperadmin } from '@/lib/auth/superadmin';
 import { getBrandWebsiteHome } from '@/lib/superadmin/brand-website/home-actions';
 import { notFound } from 'next/navigation';
@@ -10,9 +12,7 @@ type BrandHomeParams = {
   brandId: string;
 };
 
-export default async function BrandWebsiteHomePage({
-  params,
-}: AsyncPageProps<BrandHomeParams>) {
+export default async function BrandWebsiteHomePage({ params }: AsyncPageProps<BrandHomeParams>) {
   await requireSuperadmin();
   const { brandId } = await resolveParams(params);
   const homeConfig = await getBrandWebsiteHome(brandId);
