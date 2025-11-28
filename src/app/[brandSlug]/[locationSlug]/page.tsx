@@ -1,6 +1,3 @@
-
-
-// src/app/[brandSlug]/[locationSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
@@ -20,11 +17,17 @@ function normalizeProbe(raw: any) {
     return {
       brand: null,
       location: null,
-      flags: { hasBrand: false, hasLocation: false, hasBrandIdField: false, brandMatchesLocation: false },
+      flags: {
+        hasBrand: false,
+        hasLocation: false,
+        hasBrandIdField: false,
+        brandMatchesLocation: false,
+      },
       hints: { missing: "Mangler brand og location." },
       ok: false,
     };
   }
+
   const brand = raw.brand ?? null;
   const location = raw.location ?? null;
 
@@ -45,30 +48,55 @@ function normalizeProbe(raw: any) {
 
   const hasBrand = !!brand?.id;
   const hasLocation = !!location?.id;
-  const hasBrandIdField = typeof location?.brandId === "string" && !!location?.brandId;
-  const brandMatchesLocation = hasBrand && hasLocation ? (hasBrandIdField ? location.brandId === brand.id : true) : false;
+  const hasBrandIdField =
+    typeof location?.brandId === "string" && !!location?.brandId;
+  const brandMatchesLocation = hasBrand && hasLocation
+    ? hasBrandIdField
+      ? location.brandId === brand.id
+      : true
+    : false;
 
   const hints: any = {};
-  if (!hasBrand && !hasLocation) hints.missing = "Mangler både brand og location.";
+  if (!hasBrand && !hasLocation)
+    hints.missing = "Mangler både brand og location.";
   else if (!hasBrand) hints.missing = "Mangler brand.";
   else if (!hasLocation) hints.missing = "Mangler location.";
-  if (hasLocation && !hasBrandIdField) hints.link = "location.brandId mangler (tilføj brandId).";
-  else if (hasLocation && hasBrand && !brandMatchesLocation) hints.link = `location.brandId matcher ikke brand.id (${location.brandId} ≠ ${brand.id}).`;
+  if (hasLocation && !hasBrandIdField)
+    hints.link = "location.brandId mangler (tilføj brandId).";
+  else if (hasLocation && hasBrand && !brandMatchesLocation)
+    hints.link = `location.brandId matcher ikke brand.id (${location.brandId} ≠ ${brand.id}).`;
 
-  return { brand, location, ok: hasBrand && hasLocation && brandMatchesLocation, flags: { hasBrand, hasLocation, hasBrandIdField, brandMatchesLocation }, hints };
+  return {
+    brand,
+    location,
+    ok: hasBrand && hasLocation && brandMatchesLocation,
+    flags: {
+      hasBrand,
+      hasLocation,
+      hasBrandIdField,
+      brandMatchesLocation,
+    },
+    hints,
+  };
 }
 
 export default async function Page({
   params,
 }: AsyncPageProps) {
   const { brandSlug, locationSlug } = await resolveParams(params);
-  
+
   try {
     const raw = await getBrandAndLocation(brandSlug, locationSlug);
     const probe = normalizeProbe(raw);
 
-    if(!probe.brand || !probe.location || !probe.ok){
-      return <EmptyState title="Butik ikke konfigureret" hint={probe.hints.missing || "Mangler data."} details={`brand=${brandSlug}\nlocation=${locationSlug}`}/>;
+    if (!probe.brand || !probe.location || !probe.ok) {
+      return (
+        <EmptyState
+          title="Butik ikke konfigureret"
+          hint={probe.hints.missing || "Mangler data."}
+          details={`brand=${brandSlug}\nlocation=${locationSlug}`}
+        />
+      );
     }
 
     const { brand, location } = probe;
@@ -76,7 +104,11 @@ export default async function Page({
     const [menu, activeCombos, activeStandardDiscounts] = await Promise.all([
       getMenuForRender({ brandId: brand.id, locationId: location.id }),
       getActiveCombosForLocation(location.id),
-      getActiveStandardDiscounts({ brandId: brand.id, locationId: location.id, deliveryType: 'pickup' }), // Default to pickup
+      getActiveStandardDiscounts({
+        brandId: brand.id,
+        locationId: location.id,
+        deliveryType: "pickup", // Default to pickup
+      }),
     ]);
 
     if (!menu || !menu.categories || !menu.productsByCategory) {
@@ -87,9 +119,9 @@ export default async function Page({
         />
       );
     }
-    
+
     return (
-      <BrandPageClient 
+      <BrandPageClient
         brand={brand}
         location={location}
         menu={menu}
@@ -97,8 +129,29 @@ export default async function Page({
         activeStandardDiscounts={activeStandardDiscounts}
       />
     );
-  } catch(e:any){
-    await logDiag?.({ scope:"brand-page", message:"Top-level render failure (wrapper)", details:{ brandSlug, locationSlug, error:String(e?.message??e), stack:e?.stack??null } }).catch(()=>{});
-    return <EmptyState title="Noget gik galt på brand-siden" hint="Der opstod en fejl under renderingen." details={process.env.NEXT_PUBLIC_ENABLE_ENV_DEBUG ? String(e?.stack ?? e) : undefined}/>;
+  } catch (e: any) {
+    await logDiag
+      ?.({
+        scope: "brand-page",
+        message: "Top-level render failure (wrapper)",
+        details: {
+          brandSlug,
+          locationSlug,
+          error: String(e?.message ?? e),
+          stack: e?.stack ?? null,
+        },
+      })
+      .catch(() => {});
+    return (
+      <EmptyState
+        title="Noget gik galt på brand-siden"
+        hint="Der opstod en fejl under renderingen."
+        details={
+          process.env.NEXT_PUBLIC_ENABLE_ENV_DEBUG
+            ? String(e?.stack ?? e)
+            : undefined
+        }
+      />
+    );
   }
 }
