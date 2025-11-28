@@ -5,12 +5,12 @@ import { logDiag } from "@/lib/log";
 import BrandPageClient from "./BrandPageClient";
 import { getActiveCombosForLocation } from "@/app/superadmin/combos/actions";
 import { getActiveStandardDiscounts } from "@/app/superadmin/standard-discounts/actions";
+import type { AsyncPageProps } from "@/types/next-async-props";
+import { resolveParams } from "@/lib/next/resolve-props";
 
-type PageProps = {
-  params: {
-    brandSlug: string;
-    locationSlug: string;
-  };
+type BrandLocationParams = {
+  brandSlug: string;
+  locationSlug: string;
 };
 
 function normalizeProbe(raw: any) {
@@ -87,8 +87,10 @@ function normalizeProbe(raw: any) {
   };
 }
 
-export default async function Page({ params }: PageProps) {
-  const { brandSlug, locationSlug } = params;
+export default async function Page({
+  params,
+}: AsyncPageProps<BrandLocationParams>) {
+  const { brandSlug, locationSlug } = await resolveParams(params);
 
   try {
     const raw = await getBrandAndLocation(brandSlug, locationSlug);
