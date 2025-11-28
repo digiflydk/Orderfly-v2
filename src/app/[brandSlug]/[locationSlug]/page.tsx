@@ -1,3 +1,4 @@
+
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
