@@ -2,11 +2,16 @@ import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
-import type { AsyncPageProps } from "@/types/next-async-props";
-import { resolveParams } from "@/lib/next/resolve-props";
 import BrandPageClient from "./BrandPageClient";
 import { getActiveCombosForLocation } from "@/app/superadmin/combos/actions";
 import { getActiveStandardDiscounts } from "@/app/superadmin/standard-discounts/actions";
+
+type PageProps = {
+  params: {
+    brandSlug: string;
+    locationSlug: string;
+  };
+};
 
 function normalizeProbe(raw: any) {
   if (!raw || typeof raw !== "object") {
@@ -54,14 +59,19 @@ function normalizeProbe(raw: any) {
       : false;
 
   const hints: any = {};
-  if (!hasBrand && !hasLocation)
+  if (!hasBrand && !hasLocation) {
     hints.missing = "Mangler både brand og location.";
-  else if (!hasBrand) hints.missing = "Mangler brand.";
-  else if (!hasLocation) hints.missing = "Mangler location.";
-  if (hasLocation && !hasBrandIdField)
+  } else if (!hasBrand) {
+    hints.missing = "Mangler brand.";
+  } else if (!hasLocation) {
+    hints.missing = "Mangler location.";
+  }
+
+  if (hasLocation && !hasBrandIdField) {
     hints.link = "location.brandId mangler (tilføj brandId).";
-  else if (hasLocation && hasBrand && !brandMatchesLocation)
+  } else if (hasLocation && hasBrand && !brandMatchesLocation) {
     hints.link = `location.brandId matcher ikke brand.id (${location.brandId} ≠ ${brand.id}).`;
+  }
 
   return {
     brand,
@@ -77,10 +87,8 @@ function normalizeProbe(raw: any) {
   };
 }
 
-export default async function Page({
-  params,
-}: AsyncPageProps) {
-  const { brandSlug, locationSlug } = await resolveParams(params);
+export default async function Page({ params }: PageProps) {
+  const { brandSlug, locationSlug } = params;
 
   try {
     const raw = await getBrandAndLocation(brandSlug, locationSlug);
@@ -99,12 +107,15 @@ export default async function Page({
     const { brand, location } = probe;
 
     const [menu, activeCombos, activeStandardDiscounts] = await Promise.all([
-      getMenuForRender({ brandId: brand.id, locationId: location.id }),
+      getMenuForRender({
+        brandId: brand.id,
+        locationId: location.id,
+      }),
       getActiveCombosForLocation(location.id),
       getActiveStandardDiscounts({
         brandId: brand.id,
         locationId: location.id,
-        deliveryType: "pickup", // Default to pickup
+        deliveryType: "pickup",
       }),
     ]);
 
@@ -139,6 +150,7 @@ export default async function Page({
         },
       })
       .catch(() => {});
+
     return (
       <EmptyState
         title="Noget gik galt på brand-siden"
