@@ -1,17 +1,13 @@
 
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
-import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
+import { getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
-import ProductGrid from "@/components/catalog/product-grid";
 import type { AsyncPageProps } from "@/types/next-async-props";
-import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
-import type { MenuData, Category, Product } from "@/types/menu";
-import { productsForCategory } from "@/lib/menu-helpers";
+import { resolveParams } from "@/lib/next/resolve-props";
 import BrandPageClient from "./BrandPageClient";
 import { getActiveCombosForLocation } from "@/app/superadmin/combos/actions";
 import { getActiveStandardDiscounts } from "@/app/superadmin/standard-discounts/actions";
-import { isAdminReady } from "@/lib/runtime";
 
 function normalizeProbe(raw: any) {
   if (!raw || typeof raw !== "object") {
