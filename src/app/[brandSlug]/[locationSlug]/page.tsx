@@ -1,4 +1,3 @@
-
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getMenuForRender } from "@/lib/server/catalog";
@@ -47,11 +46,12 @@ function normalizeProbe(raw: any) {
   const hasLocation = !!location?.id;
   const hasBrandIdField =
     typeof location?.brandId === "string" && !!location?.brandId;
-  const brandMatchesLocation = hasBrand && hasLocation
-    ? hasBrandIdField
-      ? location.brandId === brand.id
-      : true
-    : false;
+  const brandMatchesLocation =
+    hasBrand && hasLocation
+      ? hasBrandIdField
+        ? location.brandId === brand.id
+        : true
+      : false;
 
   const hints: any = {};
   if (!hasBrand && !hasLocation)
