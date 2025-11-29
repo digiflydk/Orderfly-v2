@@ -190,14 +190,20 @@ export async function createStripeCheckoutSessionAction(
     });
 
 
-    const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => ({
-        price_data: {
-            currency: 'dkk',
-            product_data: { name: item.name, description: item.toppings?.join(', ') || undefined },
-            unit_amount: Math.round(item.unitPrice * 100),
-        },
-        quantity: item.quantity,
-    }));
+    const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => {
+        if (item.unitPrice == null) {
+            throw new Error(`Missing unitPrice for cart item: ${item.id ?? item.name ?? 'unknown'}`);
+        }
+
+        return {
+            price_data: {
+                currency: 'dkk',
+                product_data: { name: item.name, description: item.toppings?.join(', ') || undefined },
+                unit_amount: Math.round(item.unitPrice! * 100),
+            },
+            quantity: item.quantity,
+        };
+    });
 
     if (deliveryType === 'delivery' && paymentDetails.deliveryFee > 0) {
         line_items.push({
