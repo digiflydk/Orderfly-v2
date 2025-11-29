@@ -1,4 +1,5 @@
 
+
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { getOrders } from "@/lib/superadmin/getOrders";
@@ -37,7 +38,6 @@ export default async function OrdersPage({ params, searchParams }: AsyncPageProp
         ...order,
         createdAt: order.createdAt.toISOString(),
         paidAt: order.paidAt?.toISOString(),
-        updatedAt: order.updatedAt?.toISOString(),
     }));
 
     return (

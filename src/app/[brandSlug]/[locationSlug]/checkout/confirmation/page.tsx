@@ -1,6 +1,7 @@
 
+
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
-import { getLocationBySlug } from '@/app/superadmin/locations/actions';
+import { getLocationBySlug } from '@/lib/data/brand-location';
 import { getOrderById } from '@/app/checkout/order-actions';
 import { ConfirmationClient } from './confirmation-client';
 import { OrderDetail } from '@/types';
@@ -11,7 +12,6 @@ function serializeOrder(order: OrderDetail | null): any {
         ...order,
         createdAt: order.createdAt instanceof Date ? order.createdAt.toISOString() : new Date().toISOString(),
         paidAt: order.paidAt instanceof Date ? order.paidAt.toISOString() : undefined,
-        updatedAt: order.updatedAt instanceof Date ? order.updatedAt.toISOString() : undefined,
     }
 }
 
