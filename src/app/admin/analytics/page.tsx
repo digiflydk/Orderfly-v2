@@ -28,7 +28,7 @@ async function AnalyticsData({ searchParams }: { searchParams: FunnelFilters }) 
     dateTo,
   };
   
-  const initialData = await getFunnelDataForBrand(MOCK_BRAND_ID, filters);
+  const initialData = await getFunnelDataForBrand(MOCK_BRAND_ID, filters as any);
 
   return (
       <AnalyticsDashboardClient
