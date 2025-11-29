@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import type { FunnelFilters, FunnelOutput } from '@/types';
@@ -19,7 +20,10 @@ export async function runAggregationForDates(startDate: string, endDate: string)
     try {
         const result = await aggregateDailyData(startDate, endDate);
         revalidatePath('/superadmin/analytics/cust-funnel');
-        return { success: true, message: `Successfully aggregated ${result.processedEventsCount} events across ${result.daysProcessed} days.` };
+        return {
+          success: true,
+          message: `Successfully aggregated ${result.eventsProcessed} events across ${result.daysProcessed} days.`,
+        };
     } catch(e) {
         const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred';
         console.error("Aggregation failed:", errorMessage);
