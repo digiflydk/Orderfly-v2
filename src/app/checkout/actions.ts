@@ -45,7 +45,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                     marketing: data.marketing,
                     statistics: data.statistics,
                     functional: data.functional,
-                    timestamp: data.last_seen,
+                    timestamp: (data.last_seen as any).toDate(),
                     consent_version: data.consent_version,
                     linked_anon_id: anonymousConsentId,
                     origin_brand: data.origin_brand,
@@ -66,7 +66,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 // These will be updated by the webhook to prevent race conditions
                 // totalOrders: (customerData.totalOrders || 0) + 1,
                 // totalSpend: (customerData.totalSpend || 0) + newOrderTotal,
-                // lastOrderDate: Timestamp.now(),
+                // lastOrderDate: new Date(),
                 locationIds: Array.from(new Set([...(customerData.locationIds || []), locationId])),
                 marketingConsent: customerData.marketingConsent || customerInfo.subscribeToNewsletter,
             };
@@ -317,5 +317,7 @@ export async function waitForOrderBySessionId(sessionId: string, timeoutMs = 200
     }
     return null;
 }
+
+    
 
     
