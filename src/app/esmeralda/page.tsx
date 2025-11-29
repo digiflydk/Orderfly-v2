@@ -69,7 +69,7 @@ export default function EsmeraldaPage() {
   }
 
   return (
-    <Template1Page header={headerProps}>
+    <Template1Page>
       <section className="py-16 text-center">
        <h1 className="text-3xl font-bold">Esmeralda – Template 1 Preview</h1>
        <p className="mt-4 text-muted-foreground">
