@@ -3,8 +3,6 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { isM3Enabled } from "@/lib/feature-flags";
-import { Header } from "@/components/public/brand-website/template-1/Header";
-import type { WebsiteHeaderConfig } from '@/types/website';
 import { Hero } from "./_components/Hero";
 import { CTADeck } from "./_components/CTADeck";
 import { MenuGrid } from "./_components/MenuGrid";
@@ -15,12 +13,11 @@ import { OrderModal } from './_components/OrderModal';
 import { Button } from '@/components/ui/button';
 import { Template1Page } from '@/components/public/brand-website/template-1/Template1Page';
 import { getPublicBrandWebsiteConfig } from '@/lib/public/brand-website/public-config-api';
-import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
 import StickyOrderChoice from '@/app/m3/_components/StickyOrderChoice';
 
 export default function M3IndexPage() {
   const [orderModalOpen, setOrderModalOpen] = useState(false);
-  const [config, setConfig] = useState<BrandWebsiteConfig | null>(null);
+  const [config, setConfig] = useState<any | null>(null);
   const router = useRouter();
 
   useEffect(() => {
