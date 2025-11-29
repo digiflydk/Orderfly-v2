@@ -13,7 +13,8 @@ import { trackServerEvent } from '@/lib/analytics-server';
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const sig = headers().get('stripe-signature');
+  const headerList = await headers();
+  const sig = headerList.get('stripe-signature');
   const rawBody = await req.text();
   
   let event: Stripe.Event;
