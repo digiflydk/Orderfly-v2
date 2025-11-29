@@ -1,19 +1,41 @@
 
 'use server';
 import { z } from 'zod';
-import { aiProjectQualification, type AIProjectQualificationInput, type AIProjectQualificationOutput } from '@/ai/flows/ai-project-qualification';
+// Removed: import { aiProjectQualification, type AIProjectQualificationInput, type AIProjectQualificationOutput } from '@/ai/flows/ai-project-qualification';
 import { getGeneralSettings, saveGeneralSettings } from '@/services/settings';
 import type { GeneralSettings, Customer } from '@/types/settings';
 import { revalidatePath } from 'next/cache';
 import { getAllLeads, Lead } from '@/services/leads';
 import { v4 as uuidv4 } from 'uuid';
 
+// Types are moved here since the original file is disabled.
+export const AIProjectQualificationInputSchema = z.object({
+  conversationHistory: z.array(z.object({
+    role: z.enum(['user', 'assistant']),
+    content: z.string(),
+  })),
+});
+export type AIProjectQualificationInput = z.infer<typeof AIProjectQualificationInputSchema>;
+
+export const AIProjectQualificationOutputSchema = z.object({
+  qualified: z.boolean(),
+  shouldBookMeeting: z.boolean(),
+  nextQuestion: z.string(),
+  collectedInfo: z.object({
+    name: z.string().optional(),
+    email: z.string().optional(),
+    phone: z.string().optional(),
+    projectIdea: z.string().optional(),
+  }),
+});
+export type AIProjectQualificationOutput = z.infer<typeof AIProjectQualificationOutputSchema>;
+
 
 export async function qualifyProjectAction(input: AIProjectQualificationInput): Promise<AIProjectQualificationOutput> {
   // Here you could add server-side validation or logging if needed
   try {
-    const result = await aiProjectQualification(input);
-    return result;
+    // aiProjectQualification is disabled. Throw an error if called.
+    return await Promise.reject(new Error("aiProjectQualification is disabled"));
   } catch (error) {
     console.error("Error in AI qualification flow:", error);
     throw new Error("Failed to get response from AI assistant.");
