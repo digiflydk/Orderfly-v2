@@ -22,7 +22,7 @@ function HeaderSkeleton() {
 }
 
 export default function EsmeraldaPage() {
-  const [headerProps, setHeaderProps] = useState<Template1PageProps['header'] | null>(null);
+  const [headerProps, setHeaderProps] = useState<any>(null);
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
