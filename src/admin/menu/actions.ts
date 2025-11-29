@@ -1,8 +1,6 @@
-
-
 'use server';
 
-import { menuImportFromImage, type MenuImportOutput } from '@/ai/flows/menu-import';
+import { menuImportFromImage } from '@/ai/flows/menu-import';
 
 async function fileToDataUri(file: File): Promise<string> {
     const buffer = await file.arrayBuffer();
@@ -12,7 +10,7 @@ async function fileToDataUri(file: File): Promise<string> {
 
 export type FormState = {
   message: string | null;
-  data: MenuImportOutput | null;
+  data: any | null;
   error: string | null;
 };
 
