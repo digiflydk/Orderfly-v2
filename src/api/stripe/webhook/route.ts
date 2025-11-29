@@ -7,13 +7,14 @@ import { getActiveStripeSecretKey, getActiveStripeWebhookSecret } from '@/app/su
 import { headers } from 'next/headers';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp, runTransaction, collection, where, query } from 'firebase/firestore';
-import { trackServerEvent } from '@/lib/analytics';
+import { trackServerEvent } from '@/lib/analytics-server';
 
 
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const sig = headers().get('stripe-signature');
+  const headerList = await headers();
+  const sig = headerList.get('stripe-signature');
   const rawBody = await req.text();
   
   let event: Stripe.Event;
