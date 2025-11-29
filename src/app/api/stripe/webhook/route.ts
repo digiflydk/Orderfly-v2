@@ -1,5 +1,4 @@
 
-
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
@@ -34,7 +33,7 @@ export async function POST(req: Request) {
         return new Response('No signature', { status: 400 });
     }
     
-    stripe = new Stripe(stripeKey, { apiVersion: "2024-06-20" });
+    stripe = new Stripe(stripeKey);
     event = await stripe.webhooks.constructEventAsync(rawBody, sig, webhookSecret);
 
   } catch (err) {
