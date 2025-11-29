@@ -1,11 +1,14 @@
-export const runtime = 'nodejs';
-import { getKpis } from '@/lib/kpis.server';
+// src/app/api/superadmin/kpis/route.ts
+// Legacy superadmin KPIs endpoint disabled for this build.
+// Kept as a no-op placeholder to avoid breaking the route path.
+
+import { NextResponse } from "next/server";
+
+export const runtime = "nodejs";
 
 export async function GET() {
-  try {
-    const data = await getKpis();
-    return Response.json({ ok: true, data });
-  } catch (e: any) {
-    return Response.json({ ok: false, error: e?.message || 'Failed to load KPIs' }, { status: 500 });
-  }
+  return NextResponse.json(
+    { error: "KPIs endpoint is disabled in this build." },
+    { status: 501 }
+  );
 }
