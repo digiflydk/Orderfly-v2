@@ -7,6 +7,7 @@ import { getActiveCombosForLocation } from "@/app/superadmin/combos/actions";
 import { getActiveStandardDiscounts } from "@/app/superadmin/standard-discounts/actions";
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams } from "@/lib/next/resolve-props";
+import type { MenuData } from "@/types/menu";
 
 type BrandLocationParams = {
   brandSlug: string;
@@ -108,7 +109,7 @@ export default async function Page({
 
     const { brand, location } = probe;
 
-    const [menu, activeCombos, activeStandardDiscounts] = await Promise.all([
+    const [menuRaw, activeCombos, activeStandardDiscounts] = await Promise.all([
       getMenuForRender({
         brandId: brand.id,
         locationId: location.id,
@@ -120,6 +121,8 @@ export default async function Page({
         deliveryType: "pickup",
       }),
     ]);
+
+    const menu = menuRaw as unknown as MenuData;
 
     if (!menu || !menu.categories || !menu.productsByCategory) {
       return (
