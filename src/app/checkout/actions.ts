@@ -5,7 +5,7 @@
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, Timestamp, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from 'firebase/firestore';
 import type { CartItem, Discount, OrderDetail, Brand, Location, CustomerInfo, Customer, StandardDiscount, PaymentDetails, MinimalCartItem, Product, ComboMenu, Topping, ComboSelection, LoyaltySettings, AnonymousCookieConsent } from '@/types';
 import { getDiscountByCode } from '@/app/superadmin/discounts/actions';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
@@ -91,7 +91,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 country: 'DK',
                 marketingConsent: customerInfo.subscribeToNewsletter,
                 status: 'active',
-                createdAt: Timestamp.now(),
+                createdAt: new Date(),
                 totalOrders: 0, // Initial creation, will be updated by webhook
                 totalSpend: 0,  // Initial creation
                 locationIds: [locationId],
@@ -148,7 +148,7 @@ export async function createStripeCheckoutSessionAction(
     if (!stripeSecretKey) {
         throw new Error('Stripe API key is not configured.');
     }
-    const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
+    const stripe = new Stripe(stripeSecretKey);
 
     const origin = await getOrigin();
     
