@@ -43,7 +43,7 @@ export async function GET(req: NextRequest) {
     if (!stripeKey) {
         throw new Error("Stripe is not configured.");
     }
-    const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' });
+    const stripe = new Stripe(stripeKey);
     const session = await stripe.checkout.sessions.retrieve(sessionId);
     
     if (!session.metadata?.orderId) {
