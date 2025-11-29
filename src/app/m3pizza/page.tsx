@@ -53,7 +53,7 @@ export default function M3IndexPage() {
   }
   
   return (
-    <Template1Page config={config}>
+    <Template1Page>
       <main className="bg-m3-dark">
         <Hero onOrderClick={() => setOrderModalOpen(true)} />
         <CTADeck />
