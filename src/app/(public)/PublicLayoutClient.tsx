@@ -4,7 +4,7 @@
 import { useState } from 'react';
 import { Footer } from "@/components/layout/footer";
 import { CookieConsent } from '@/components/cookie-consent';
-import type { Brand, GeneralSettings } from '@/types';
+import type { Brand } from '@/types';
 import type { WebsiteHeaderConfig } from '@/types/website';
 
 export function PublicLayoutClient({
@@ -15,7 +15,7 @@ export function PublicLayoutClient({
 }: {
   children: React.ReactNode;
   brand: Brand;
-  settings: GeneralSettings | null;
+  settings: any | null;
   headerConfig: WebsiteHeaderConfig;
 }) {
   const [isCookieModalOpen, setIsCookieModalOpen] = useState(false);
@@ -25,7 +25,7 @@ export function PublicLayoutClient({
       {children}
       <Footer 
         brand={brand} 
-        version="1.0.221 • OF-521"
+        version="1.0.265 • 522-11-149"
         onOpenCookieSettings={() => setIsCookieModalOpen(true)}
       />
       <CookieConsent brandId={brand.id} isModalOpen={isCookieModalOpen} setIsModalOpen={setIsCookieModalOpen} />
