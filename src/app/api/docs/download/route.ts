@@ -24,7 +24,7 @@ export async function GET(req: Request) {
   const filePath = path.resolve(process.cwd(), DOCS_DIR, name);
   const data = await readFile(filePath);
 
-  return new NextResponse(data, {
+  return new NextResponse(data as any, {
     status: 200,
     headers: {
       "Content-Type": contentType(name),
