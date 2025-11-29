@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { isM3Enabled } from "@/lib/feature-flags";
 import { Header } from "@/components/public/brand-website/template-1/Header";
-import type { Template1HeaderProps } from '@/types/website';
+import type { WebsiteHeaderConfig } from '@/types/website';
 import { Hero } from "./_components/Hero";
 import { CTADeck } from "./_components/CTADeck";
 import { MenuGrid } from "./_components/MenuGrid";
