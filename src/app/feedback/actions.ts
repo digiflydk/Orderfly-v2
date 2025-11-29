@@ -77,7 +77,7 @@ export async function submitFeedbackAction(prevState: any, formData: FormData) {
             receivedAt: new Date(),
             rating,
             npsScore,
-            comment,
+            comment: comment ?? undefined,
             tags,
             responses, // Now storing the full responses object
             showPublicly: false, // Default to private
