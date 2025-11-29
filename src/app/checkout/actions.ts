@@ -192,7 +192,7 @@ export async function createStripeCheckoutSessionAction(
 
     const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => {
         if (item.unitPrice == null) {
-            throw new Error(`Missing unitPrice for cart item: ${item.id ?? item.name ?? 'unknown'}`);
+            throw new Error(`Missing unitPrice for cart item: ${item.name ?? 'unknown'}`);
         }
 
         return {
