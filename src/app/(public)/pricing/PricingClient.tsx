@@ -33,6 +33,7 @@ import {
 } from "@/components/ui/tooltip"
 import { Switch } from '@/components/ui/switch';
 import { useState } from 'react';
+import { Badge } from '@/components/ui/badge';
 
 const pricingTiers = [
   {
