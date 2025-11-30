@@ -90,12 +90,19 @@ export default async function SuperadminDashboardPage({ params, searchParams }: 
         ))}
       </div>
   );
+  
+  const filtersBarProps = {
+    value: filters,
+    brands,
+    locations,
+    onFilterChange: handleFilterChange as any,
+  } as any;
 
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Superadmin Dashboard</h1>
       
-      <FiltersBar value={filters} brands={brands} locations={locations} onFilterChange={handleFilterChange as any}/>
+      <FiltersBar {...filtersBarProps} />
 
       {!kpis && (
         <div style={{marginBottom:12,padding:12,border:'1px solid #f0c',background:'#fff0fa',borderRadius:8}}>
