@@ -15,17 +15,22 @@ import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import type { AsyncPageProps } from '@/types/next-async-props';
-import { resolveParams } from '@/lib/next/resolve-props';
+import type { AsyncPageProps } from "@/types/next-async-props";
+import { resolveParams } from "@/lib/next/resolve-props";
+import type { ReactNode } from 'react';
 
 type BrandWebsiteLayoutParams = {
     brandId: string;
 };
 
+type BrandWebsiteLayoutProps = AsyncPageProps<BrandWebsiteLayoutParams> & {
+  children: ReactNode;
+};
+
 export default async function BrandWebsiteLayout({
   children,
   params,
-}: AsyncPageProps<BrandWebsiteLayoutParams>) {
+}: BrandWebsiteLayoutProps) {
   await requireSuperadmin();
   const { brandId } = await resolveParams(params);
   const brand = await getBrandById(brandId);
