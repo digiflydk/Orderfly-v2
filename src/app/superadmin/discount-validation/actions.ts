@@ -95,10 +95,11 @@ function calculateDiscountForTest(
     if (cartDiscounts.length > 0) {
         const autoCartDiscount = cartDiscounts[0]; // Assume first one wins
         let autoCartDiscountAmount = 0;
+        const discountValue = autoCartDiscount.discountValue ?? 0;
         if (autoCartDiscount.discountMethod === 'percentage') {
-            autoCartDiscountAmount = subtotalIncludingToppings * (autoCartDiscount.discountValue / 100);
+            autoCartDiscountAmount = subtotalIncludingToppings * (discountValue / 100);
         } else {
-            autoCartDiscountAmount = Math.min(subtotalIncludingToppings, autoCartDiscount.discountValue);
+            autoCartDiscountAmount = Math.min(subtotalIncludingToppings, discountValue);
         }
         if(autoCartDiscountAmount > bestCartLevelDiscountAmount) {
             bestCartLevelDiscountAmount = autoCartDiscountAmount;
