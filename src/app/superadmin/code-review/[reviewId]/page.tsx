@@ -17,7 +17,7 @@ function getReviewDetails(reviewId: string): CodeReview | null {
     if (!review) {
         return null;
     }
-    return review;
+    return review as any;
 }
 
 function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) {
