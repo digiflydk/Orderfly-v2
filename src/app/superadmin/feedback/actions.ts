@@ -113,12 +113,28 @@ export async function getFeedbackEntries(): Promise<Feedback[]> {
     const db = getAdminDb();
     const q = db.collection('feedback').orderBy('receivedAt', 'desc');
     const querySnapshot = await q.get();
-    const feedbackEntries = querySnapshot.docs.map(doc => {
-        const data = doc.data();
+    const feedbackEntries: Feedback[] = querySnapshot.docs.map(doc => {
+        const data = doc.data() as any;
+
+        let receivedAt: Date | undefined;
+        const rawReceivedAt = data.receivedAt;
+
+        if (rawReceivedAt instanceof Date) {
+            receivedAt = rawReceivedAt;
+        } else if (rawReceivedAt && typeof (rawReceivedAt as any).toDate === 'function') {
+            // Firestore Timestamp-like object
+            receivedAt = (rawReceivedAt as any).toDate();
+        } else if (rawReceivedAt) {
+            // Fallback: attempt to construct a Date from string/number
+            receivedAt = new Date(rawReceivedAt);
+        } else {
+            receivedAt = undefined;
+        }
+
         return {
             ...data,
             id: doc.id,
-            receivedAt: (data.receivedAt as admin.firestore.Timestamp).toDate(),
+            receivedAt,
         } as Feedback;
     });
     return feedbackEntries;
@@ -130,10 +146,22 @@ export async function getFeedbackById(id: string): Promise<Feedback | null> {
     const docSnap = await docRef.get();
     if (docSnap.exists) {
         const data = docSnap.data()!;
+        
+        let receivedAt: Date | undefined;
+        const rawReceivedAt = data.receivedAt;
+
+        if (rawReceivedAt instanceof Date) {
+            receivedAt = rawReceivedAt;
+        } else if (rawReceivedAt && typeof (rawReceivedAt as any).toDate === 'function') {
+            receivedAt = (rawReceivedAt as any).toDate();
+        } else if (rawReceivedAt) {
+            receivedAt = new Date(rawReceivedAt);
+        }
+
         return { 
             id: docSnap.id, 
             ...data,
-            receivedAt: (data.receivedAt as admin.firestore.Timestamp).toDate(),
+            receivedAt,
         } as Feedback;
     }
     return null;
