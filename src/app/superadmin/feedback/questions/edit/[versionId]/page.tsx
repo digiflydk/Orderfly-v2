@@ -1,3 +1,4 @@
+
 // __OF542_INIT__
 // __OF541_PARAMS_INIT__
 import type { AsyncPageProps } from "@/types/next-async-props";
@@ -50,5 +51,11 @@ export default async function EditFeedbackQuestionVersionPage(props: any){
   ]);
   if (!version) notFound();
   const supportedLanguages = resolveSupportedLanguages(settings);
-  return <FeedbackQuestionVersionForm version={version as FeedbackQuestionsVersion} supportedLanguages={supportedLanguages} />;
+  return (
+    <FeedbackQuestionVersionForm
+      mode="edit"
+      version={version as FeedbackQuestionsVersion}
+      supportedLanguages={supportedLanguages}
+    />
+  );
 }
