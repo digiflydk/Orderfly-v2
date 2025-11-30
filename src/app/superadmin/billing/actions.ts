@@ -86,7 +86,7 @@ export async function getBrandBillingDetails(brandId: string) {
     let plan: SubscriptionPlan | null = null;
     if (brand.subscriptionPlanId) {
         const planDoc = await db.collection('subscription_plans').doc(brand.subscriptionPlanId).get();
-        if (planDoc.exists()) {
+        if (planDoc.exists) {
             plan = { id: planDoc.id, ...planDoc.data() } as SubscriptionPlan;
         }
     }
