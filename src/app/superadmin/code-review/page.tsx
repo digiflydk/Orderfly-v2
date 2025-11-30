@@ -9,7 +9,9 @@ import { Button } from "@/components/ui/button";
 
 export default async function CodeReviewListPage() {
     // In a real app, this would be a Firestore query with pagination
-    const reviews = MOCK_CODE_REVIEWS.sort((a, b) => b.reviewedAt.getTime() - a.reviewedAt.getTime());
+    const reviews = (MOCK_CODE_REVIEWS as any[]).sort(
+        (a, b) => (b.reviewedAt as Date).getTime() - (a.reviewedAt as Date).getTime()
+    );
 
     return (
         <div className="space-y-6">
