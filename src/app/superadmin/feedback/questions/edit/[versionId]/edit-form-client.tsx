@@ -1,7 +1,9 @@
+
 'use client';
 
 import dynamic from 'next/dynamic';
 import { createOrUpdateQuestionVersion } from '@/app/superadmin/feedback/actions';
+import type { FeedbackQuestionVersionFormProps } from '@/components/superadmin/feedback-question-version-form';
 
 const FeedbackQuestionVersionForm = dynamic(
   () =>

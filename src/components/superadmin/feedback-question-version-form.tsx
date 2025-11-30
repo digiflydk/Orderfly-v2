@@ -1,3 +1,4 @@
+
 'use client';
 
 import { z } from 'zod';
@@ -45,12 +46,19 @@ const feedbackQuestionVersionSchema = z.object({
 
 type VersionFormValues = z.infer<typeof feedbackQuestionVersionSchema>;
 
-interface FeedbackQuestionVersionFormProps {
-  version?: FeedbackQuestionsVersion;
-  supportedLanguages: LanguageSetting[];
+export interface FeedbackQuestionVersionFormProps {
+    mode: "create" | "edit";
+    id?: string;
+    initialData?: Record<string, any> | null;
+    version?: FeedbackQuestionsVersion;
+    supportedLanguages: LanguageSetting[];
+    action?: (formData: FormData) => Promise<any>;
 }
 
-export default function FeedbackQuestionVersionForm({ version, supportedLanguages }: FeedbackQuestionVersionFormProps) {
+export default function FeedbackQuestionVersionForm({
+    version,
+    supportedLanguages,
+}: FeedbackQuestionVersionFormProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
 
