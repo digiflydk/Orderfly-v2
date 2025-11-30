@@ -1,19 +1,23 @@
-
 'use client';
 
-import dynamic from 'next/dynamic';
-import { createOrUpdateQuestionVersion } from '@/app/superadmin/feedback/actions';
-import type { FeedbackQuestionVersionFormProps } from '@/components/superadmin/feedback-question-version-form';
+import * as React from 'react';
+import BaseFeedbackQuestionVersionForm from '../../FeedbackQuestionVersionForm';
+import { createOrUpdateQuestionVersion } from '../../actions';
 
-const FeedbackQuestionVersionForm = dynamic(
-  () =>
-    import('@/components/superadmin/feedback-question-version-form').then(
-      (m: any) => m.default ?? m.FeedbackQuestionVersionForm
-    ),
-  { ssr: false }
-);
+// Local wrapper type: treat the base form as a React component that accepts props.
+// This avoids the IntrinsicAttributes error in this client wrapper.
+const FeedbackQuestionVersionForm =
+  BaseFeedbackQuestionVersionForm as unknown as React.ComponentType<any>;
 
-export function EditFormClient({ versionId, initialData }: { versionId: string; initialData: any }) {
+interface EditFeedbackQuestionVersionFormClientProps {
+  versionId: string;
+  initialData: any;
+}
+
+export default function EditFeedbackQuestionVersionFormClient({
+  versionId,
+  initialData,
+}: EditFeedbackQuestionVersionFormClientProps) {
   return (
     <FeedbackQuestionVersionForm
       mode="edit"
