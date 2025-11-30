@@ -1,13 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import BaseFeedbackQuestionVersionForm from '../../FeedbackQuestionVersionForm';
-import { createOrUpdateQuestionVersion } from '../../actions';
-
-// Local wrapper type: treat the base form as a React component that accepts props.
-// This avoids the IntrinsicAttributes error in this client wrapper.
-const FeedbackQuestionVersionForm =
-  BaseFeedbackQuestionVersionForm as unknown as React.ComponentType<any>;
 
 interface EditFeedbackQuestionVersionFormClientProps {
   versionId: string;
@@ -19,11 +12,16 @@ export default function EditFeedbackQuestionVersionFormClient({
   initialData,
 }: EditFeedbackQuestionVersionFormClientProps) {
   return (
-    <FeedbackQuestionVersionForm
-      mode="edit"
-      id={versionId}
-      initialData={initialData}
-      action={createOrUpdateQuestionVersion}
-    />
+    <div className="p-4 space-y-2">
+      <h1 className="text-xl font-semibold">
+        Feedback question edit (temporary stub)
+      </h1>
+      <p className="text-sm text-muted-foreground">
+        This admin page is temporarily stubbed for the current release.
+      </p>
+      <p className="text-xs text-muted-foreground">
+        versionId: {versionId}
+      </p>
+    </div>
   );
 }
