@@ -1,4 +1,5 @@
 
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -165,14 +166,14 @@ export async function createOrUpdateCombo(
     const priceDifferencePickup = typeof comboData.pickupPrice === 'number' ? calculatedNormalPricePickup - comboData.pickupPrice : undefined;
     const priceDifferenceDelivery = typeof comboData.deliveryPrice === 'number' ? calculatedNormalPriceDelivery - comboData.deliveryPrice : undefined;
 
-    const dataToSave: Omit<ComboMenu, 'createdAt' | 'updatedAt'> & { createdAt?: Timestamp, updatedAt: Timestamp, startDate?: Timestamp, endDate?: Timestamp } = {
-      ...comboData,
-      calculatedNormalPricePickup,
-      calculatedNormalPriceDelivery,
-      priceDifferencePickup,
-      priceDifferenceDelivery,
-      updatedAt: Timestamp.now(),
-    };
+      const dataToSave = {
+        ...comboData,
+        calculatedNormalPricePickup,
+        calculatedNormalPriceDelivery,
+        priceDifferencePickup,
+        priceDifferenceDelivery,
+        updatedAt: Timestamp.now(),
+      } as any;
     
     if (comboData.startDate) dataToSave.startDate = Timestamp.fromDate(comboData.startDate);
     if (comboData.endDate) dataToSave.endDate = Timestamp.fromDate(comboData.endDate);
