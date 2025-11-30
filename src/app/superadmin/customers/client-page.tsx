@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -235,7 +236,7 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
                                     <Edit className="mr-2 h-4 w-4" />
                                     Edit
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={(e) => confirmDelete(e, customer.id)} className="text-destructive">
+                                <DropdownMenuItem onSelect={(e) => confirmDelete(e as any, customer.id)} className="text-destructive">
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Delete
                                 </DropdownMenuItem>
