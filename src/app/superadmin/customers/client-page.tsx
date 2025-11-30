@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { useState, useMemo } from 'react';
@@ -90,7 +89,7 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
 
   const handleEdit = (e: React.MouseEvent, customer: CustomerWithDetails) => {
     e.stopPropagation(); // Prevent row click navigation
-    setSelectedCustomer(customer as Customer);
+    setSelectedCustomer(customer as unknown as Customer);
     setIsFormOpen(true);
   };
   
