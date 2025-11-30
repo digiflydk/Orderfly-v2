@@ -7,7 +7,6 @@ import { notFound } from 'next/navigation';
 import { BrandWebsiteMenuSettingsForm } from '@/components/superadmin/brand-website/menu-settings/BrandWebsiteMenuSettingsForm';
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams } from "@/lib/next/resolve-props";
-import type { BrandWebsiteMenuSettings } from '@/lib/types/brandWebsite';
 
 type BrandWebsiteParams = {
   brandId: string;
@@ -21,7 +20,7 @@ export default async function BrandWebsiteMenuSettingsPage({ params }: AsyncPage
 
   // If settings are null, it means no document exists yet.
   // We should provide a safe default to the form instead of crashing.
-  const initialSettings: BrandWebsiteMenuSettings = settings || {
+  const initialSettings: any = settings || {
     hero: null,
     gridLayout: 3,
     showPrice: true,
