@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, Timestamp, getDoc } from 'firebase/firestore';
 import type { Discount } from '@/types';
-import { z } from 'zod';
+import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
 
 const activeTimeSlotSchema = z.object({
@@ -95,7 +95,17 @@ export async function createOrUpdateDiscount(
     if (!existingSnapshot.empty) {
         const existingDoc = existingSnapshot.docs[0];
         if (existingDoc.id !== validatedId) {
-            return { message: 'This discount code already exists for this brand.', error: true, errors: [{path: ['code'], message: 'This code is already in use.'}]};
+            const duplicateCodeIssue: ZodIssue = {
+                code: 'custom',
+                path: ['code'],
+                message: 'This code is already in use.',
+            };
+
+            return {
+                message: 'This discount code already exists for this brand.',
+                error: true,
+                errors: [duplicateCodeIssue],
+            };
         }
     }
     
@@ -211,4 +221,3 @@ export async function getDiscountByCode(code: string, brandId: string): Promise<
     updatedAt: data.updatedAt.toDate(),
   } as Discount;
 }
-
