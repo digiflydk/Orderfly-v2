@@ -1,4 +1,5 @@
 
+
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getCategories } from './actions';
@@ -43,7 +44,7 @@ async function CategoriesPageContent() {
 
     return (
         <CategoriesClientPage 
-            initialCategories={categoriesWithDetails}
+            initialCategories={categoriesWithDetails as any}
             locations={locations}
             brands={brands}
         />
