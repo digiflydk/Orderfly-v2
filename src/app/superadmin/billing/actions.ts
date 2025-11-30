@@ -78,7 +78,7 @@ export async function getBrandBillingDetails(brandId: string) {
     let owner: User | null = null;
     if (brand.ownerId) {
         const ownerDoc = await db.collection('users').doc(brand.ownerId).get();
-        if (ownerDoc.exists()) {
+        if (ownerDoc.exists) {
             owner = ownerDoc.data() as User;
         }
     }
