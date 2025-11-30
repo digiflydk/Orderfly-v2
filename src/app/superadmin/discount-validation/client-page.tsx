@@ -5,7 +5,7 @@
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { CheckCircle2, XCircle, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, Loader2, CircleHelp } from "lucide-react";
 import { type TestResult } from "./actions";
 import { useState, useTransition } from "react";
 import { runDiscountValidationTests } from "./actions";
@@ -64,7 +64,16 @@ export function DiscountValidationClientPage({ initialTestResults }: ClientPageP
                                 <TableRow key={result.id} className={result.status === 'Fail' ? 'bg-destructive/10' : ''}>
                                     <TableCell>
                                         <div className="flex items-center gap-2">
-                                            <StatusIcon status={result.status} />
+                                             {/*
+                                                Narrow the status type for the icon:
+                                                - "Pass"  -> "Pass"
+                                                - anything else (e.g. "Fail", "Not Implemented") -> "Fail"
+                                            */}
+                                            {(() => {
+                                                const iconStatus: 'Pass' | 'Fail' =
+                                                    result.status === 'Pass' ? 'Pass' : 'Fail';
+                                                return <StatusIcon status={iconStatus} />;
+                                            })()}
                                             <span className="font-bold">{result.status}</span>
                                         </div>
                                     </TableCell>
