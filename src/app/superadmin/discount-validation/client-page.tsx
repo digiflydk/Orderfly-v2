@@ -52,7 +52,7 @@ export function DiscountValidationClientPage({ initialTestResults }: ClientPageP
                     <Table>
                         <TableHeader>
                             <TableRow>
-                                <TableHead className="w-[80px]">Status</TableHead>
+                                <TableHead className="w-[120px]">Status</TableHead>
                                 <TableHead className="w-[120px]">Test Case ID</TableHead>
                                 <TableHead>Scenario</TableHead>
                                 <TableHead>Expected Result</TableHead>
