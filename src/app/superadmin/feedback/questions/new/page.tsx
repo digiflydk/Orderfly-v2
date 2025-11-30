@@ -3,6 +3,7 @@ export const runtime = "nodejs";
 
 import FeedbackQuestionVersionForm from "@/components/superadmin/feedback-question-version-form";
 import { getPlatformSettings } from "@/app/superadmin/settings/actions";
+import { requireSuperadmin } from "@/lib/auth/superadmin";
 
 type Lang = { code: string; name: string };
 
@@ -16,7 +17,13 @@ function resolveSupportedLanguages(settings: any): Lang[] {
 }
 
 export default async function NewFeedbackQuestionVersionPage() {
+  await requireSuperadmin();
   const settings = await getPlatformSettings();
   const supportedLanguages = resolveSupportedLanguages(settings);
-  return <FeedbackQuestionVersionForm supportedLanguages={supportedLanguages} />;
+  return (
+    <FeedbackQuestionVersionForm
+      mode="create"
+      supportedLanguages={supportedLanguages}
+    />
+  );
 }
