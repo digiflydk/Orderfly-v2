@@ -96,6 +96,7 @@ function calculateDiscountForTest(
         const autoCartDiscount = cartDiscounts[0]; // Assume first one wins
         let autoCartDiscountAmount = 0;
         const discountValue = autoCartDiscount.discountValue ?? 0;
+
         if (autoCartDiscount.discountMethod === 'percentage') {
             autoCartDiscountAmount = subtotalIncludingToppings * (discountValue / 100);
         } else {
@@ -149,16 +150,16 @@ export async function runDiscountValidationTests(): Promise<TestResult[]> {
     const results: TestResult[] = [];
     
     // --- Mocks for tests ---
-    const pizzaItem: CartItem = { cartItemId: 'cart-pizza-1', id: 'pizza-1', productName: 'Hawaii Pizza', price: 100, basePrice: 100, categoryId: 'cat-pizza', quantity: 1, itemTotal: 100, toppings: [] } as CartItem;
-    const pizzaItemDelivery: CartItem = { ...pizzaItem, price: 110, basePrice: 110 };
-    const pastaItem: CartItem = { cartItemId: 'cart-pasta-1', id: 'pasta-1', productName: 'Carbonara', price: 120, basePrice: 120, categoryId: 'cat-pasta', quantity: 1, itemTotal: 120, toppings: [] } as CartItem;
-    const drinkItem: CartItem = { cartItemId: 'cart-drink-1', id: 'drink-1', productName: 'Cola', price: 25, basePrice: 25, categoryId: 'cat-drinks', quantity: 2, itemTotal: 25, toppings: [] } as CartItem;
-    const pizza2Item: CartItem = { cartItemId: 'cart-pizza-2', id: 'pizza-2', productName: 'Pepperoni Pizza', price: 105, basePrice: 105, categoryId: 'cat-pizza', quantity: 1, itemTotal: 105, toppings: [] } as CartItem;
-    const comboItem: CartItem = { cartItemId: 'cart-combo-1', id: 'combo-1', productName: 'Pizza Combo', price: 150, basePrice: 150, itemType: 'combo', quantity: 1, itemTotal: 150, toppings: [] } as CartItem;
-    const upsellItem: CartItem = { cartItemId: 'cart-upsell-1', id: 'drink-1', productName: 'Upsell Cola', price: 15, basePrice: 25, itemType: 'product', quantity: 1, itemTotal: 15, toppings: [] } as CartItem;
+    const pizzaItem: CartItem = { cartItemId: 'cart-pizza-1', id: 'pizza-1', productName: 'Hawaii Pizza', price: 100, basePrice: 100, categoryId: 'cat-pizza', quantity: 1, itemTotal: 100, toppings: [] } as unknown as CartItem;
+    const pizzaItemDelivery: CartItem = { ...pizzaItem, price: 110, basePrice: 110 } as unknown as CartItem;
+    const pastaItem: CartItem = { cartItemId: 'cart-pasta-1', id: 'pasta-1', productName: 'Carbonara', price: 120, basePrice: 120, categoryId: 'cat-pasta', quantity: 1, itemTotal: 120, toppings: [] } as unknown as CartItem;
+    const drinkItem: CartItem = { cartItemId: 'cart-drink-1', id: 'drink-1', productName: 'Cola', price: 25, basePrice: 25, categoryId: 'cat-drinks', quantity: 2, itemTotal: 25, toppings: [] } as unknown as CartItem;
+    const pizza2Item: CartItem = { cartItemId: 'cart-pizza-2', id: 'pizza-2', productName: 'Pepperoni Pizza', price: 105, categoryId: 'cat-pizza', quantity: 1, itemTotal: 105, toppings: [] } as unknown as CartItem;
+    const comboItem: CartItem = { cartItemId: 'cart-combo-1', id: 'combo-1', productName: 'Pizza Combo', price: 150, basePrice: 150, itemType: 'combo', quantity: 1, itemTotal: 150, toppings: [] } as unknown as CartItem;
+    const upsellItem: CartItem = { cartItemId: 'cart-upsell-1', id: 'drink-1', productName: 'Upsell Cola', price: 15, basePrice: 25, itemType: 'product', quantity: 1, itemTotal: 15, toppings: [] } as unknown as CartItem;
     const checkoutItemDiscount = { id: 'sd-42-item', discountType: 'product', referenceIds: ['pizza-1'], discountMethod: 'fixed_amount', discountValue: 20, orderTypes: ['pickup'] } as StandardDiscount;
     const cartDiscountHighThreshold = { id: 'sd-43-cart', discountName: 'High spender', discountType: 'cart', discountMethod: 'percentage', discountValue: 15, minOrderValue: 250, orderTypes: ['pickup'] } as StandardDiscount;
-    const lowBaseHighToppingItem = { cartItemId: 'cart-lowbase-1', id: 'base-1', productName: 'Low Base', price: 10, basePrice: 10, categoryId: 'cat-other', quantity: 1, itemTotal: 100, toppings: [{name: 'Gold Flakes', price: 90}] } as CartItem;
+    const lowBaseHighToppingItem = { cartItemId: 'cart-lowbase-1', id: 'base-1', productName: 'Low Base', price: 10, basePrice: 10, categoryId: 'cat-other', quantity: 1, itemTotal: 100, toppings: [{name: 'Gold Flakes', price: 90}] } as unknown as CartItem;
 
     // --- TEST CASES START ---
 
@@ -236,7 +237,7 @@ export async function runDiscountValidationTests(): Promise<TestResult[]> {
     });
     
     // SD-28: Cart Discount - Applied Above Threshold
-    testResultCart = calculateDiscountForTest([pizzaItem, pastaItem], [cartDiscount], null);
+    testResultCart = calculateDiscountForTest([pastaItem, pizzaItem], [cartDiscount], null);
     results.push({
         id: 'SD-28', scenario: 'Cart discount IS applied if subtotal is above threshold.',
         expected: 'Total discount amount is 22.00',
@@ -254,7 +255,7 @@ export async function runDiscountValidationTests(): Promise<TestResult[]> {
 
     // SD-30: Cart Discount - Fixed Amount Calculation
     const cartDiscountFixed = { id: 'sd-30', discountType: 'cart', discountMethod: 'fixed_amount', discountValue: 50, minOrderValue: 200, orderTypes: ['pickup'] } as StandardDiscount;
-    testResultCart = calculateDiscountForTest([pizzaItem, pastaItem], [cartDiscountFixed], null);
+    testResultCart = calculateDiscountForTest([pastaItem, pizzaItem], [cartDiscountFixed], null);
     results.push({
         id: 'SD-30', scenario: 'Correct fixed amount calculation for cart-level discount.',
         expected: 'Cart total is 170.00 (220 - 50)',
@@ -264,7 +265,7 @@ export async function runDiscountValidationTests(): Promise<TestResult[]> {
 
     // SD-31: Cart Discount - Interaction with Item Discounts (Updated Logic)
     const itemDiscountForInteraction = { id: 'sd-31-item', discountName: "Pizza Deal", discountType: 'product', referenceIds: ['pizza-1'], discountMethod: 'percentage', discountValue: 20, orderTypes: ['pickup'] } as StandardDiscount;
-    const pizzaWithStandardDiscount = { ...pizzaItem, price: 80 }; // basePrice is still 100
+    const pizzaWithStandardDiscount = { ...pizzaItem, price: 80 } as unknown as CartItem; // basePrice is still 100
     const cartDiscountForInteraction = { id: 'sd-31-cart', discountType: 'cart', discountMethod: 'percentage', discountValue: 10, minOrderValue: 100, orderTypes: ['pickup'] } as StandardDiscount;
     // Cart: Pizza (100 -> 80) + Pasta (120). Pizza is "locked". Subtotal of normal items = 120 (Pasta). Cart discount = 10% of 120 = 12. Total discount = 20 (item) + 12 (cart) = 32.
     testResultCart = calculateDiscountForTest([pizzaWithStandardDiscount, pastaItem], [itemDiscountForInteraction, cartDiscountForInteraction], null);
@@ -322,7 +323,7 @@ export async function runDiscountValidationTests(): Promise<TestResult[]> {
     // SD-36: Standard Discount vs. another Standard Discount (Best one wins)
     const itemDiscount1 = { id: 'sd-36-1', discountType: 'product', referenceIds: ['pizza-1'], discountMethod: 'percentage', discountValue: 10, orderTypes: ['pickup'] } as StandardDiscount;
     const itemDiscount2 = { id: 'sd-36-2', discountType: 'product', referenceIds: ['pizza-1'], discountMethod: 'fixed_amount', discountValue: 15, orderTypes: ['pickup'] } as StandardDiscount;
-    const pizzaWithTwoDiscounts = { ...pizzaItem, price: 85 }; // base 100, final 85 (15kr off is better than 10%)
+    const pizzaWithTwoDiscounts = { ...pizzaItem, price: 85 } as unknown as CartItem; // base 100, final 85 (15kr off is better than 10%)
     testResultCart = calculateDiscountForTest([pizzaWithTwoDiscounts], [itemDiscount1, itemDiscount2], null);
      results.push({ 
         id: 'SD-36', scenario: 'Best standard discount is chosen when multiple apply to one item.',
@@ -351,7 +352,7 @@ export async function runDiscountValidationTests(): Promise<TestResult[]> {
     });
     
     // SD-42: Checkout page data verification
-    const pizzaWithDiscountForCheckout = { ...pizzaItem, price: 80 }; // base 100
+    const pizzaWithDiscountForCheckout = { ...pizzaItem, price: 80 } as unknown as CartItem; // base 100
     const cartDiscountForCheckout = { id: 'sd-42-cart', discountName: "Cart Deal", discountType: 'cart', discountMethod: 'fixed_amount', discountValue: 10, minOrderValue: 100, orderTypes: ['pickup'] } as StandardDiscount;
     // Pizza (100) gets 20 off. Item discount = 20. Pasta (120) is normal. Cart discount = 10 off normal items. Total discount = 20 + 10 = 30.
     testResultCart = calculateDiscountForTest([pizzaWithDiscountForCheckout, pastaItem], [checkoutItemDiscount, cartDiscountForCheckout], null);
@@ -368,7 +369,7 @@ export async function runDiscountValidationTests(): Promise<TestResult[]> {
     // SD-43: Cart Discount with Toppings (threshold NOT met)
     // Cart: Pasta (120) + Pizza (100) with Toppings (10). Normal item subtotal = 120 + 100 = 220. Toppings = 10.
     // Discountable total = 220 + 10 = 230. Threshold (250) NOT met. No discount.
-    const cartWithToppings = [ pastaItem, { ...pizzaItem, toppings: [{ name: 'Extra Cheese', price: 10 }] } as CartItem ];
+    const cartWithToppings = [ pastaItem, { ...pizzaItem, toppings: [{ name: 'Extra Cheese', price: 10 }] } as unknown as CartItem ];
     testResultCart = calculateDiscountForTest(cartWithToppings, [cartDiscountHighThreshold], null);
     results.push({
         id: 'SD-43', scenario: 'Topping prices are INCLUDED in cart discount calculation (threshold not met).',
@@ -380,7 +381,7 @@ export async function runDiscountValidationTests(): Promise<TestResult[]> {
     // SD-44: Cart Discount with Toppings (threshold IS met)
     // Cart: 2x Pasta(120), 1x Pizza(100) + Topping(10) -> Normal subtotal=340, Toppings=10. Discountable = 350.
     // 15% of 350 = 52.50. Total price = 240+100+10=350. Final price = 350-52.50 = 297.50
-    const cartWithToppingsOverThreshold = [ { ...pastaItem, quantity: 2 }, { ...pizzaItem, toppings: [{ name: 'Extra Cheese', price: 10 }] } as CartItem ];
+    const cartWithToppingsOverThreshold = [ { ...pastaItem, quantity: 2 }, { ...pizzaItem, toppings: [{ name: 'Extra Cheese', price: 10 }] } as unknown as CartItem ];
     testResultCart = calculateDiscountForTest(cartWithToppingsOverThreshold, [cartDiscountHighThreshold], null);
     results.push({
         id: 'SD-44', scenario: 'Topping prices are INCLUDED in cart discount calculation (threshold met).',
