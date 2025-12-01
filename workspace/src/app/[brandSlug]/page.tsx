@@ -1,11 +1,19 @@
-
-
-import { LocationCard } from "@/components/location-card";
-import type { Brand, Location } from "@/types";
-import { getBrandBySlug } from "../superadmin/brands/actions";
+// src/app/[brandSlug]/page.tsx
+import EmptyState from "@/components/ui/empty-state";
+import { getBrandAndLocation } from "@/lib/data/brand-location";
+import { getCatalogCounts, getMenuForRender } from "@/lib/server/catalog";
+import { logDiag } from "@/lib/log";
+import ProductGrid from "@/components/catalog/product-grid";
+import type { AsyncPageProps } from "@/types/next-async-props";
+import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
+import type { MenuData, Category, Product } from "@/types/menu";
+import { productsForCategory } from "@/lib/menu-helpers";
+import { getBrandBySlug } from "@/app/superadmin/brands/actions";
 import { getLocationsForBrand } from "@/lib/data/brand-location";
-import { notFound } from "next/navigation";
+import type { Brand, Location } from "@/types";
 import { BrandLayoutClient } from "@/components/layout/BrandLayoutClient";
+import { LocationCard } from "@/components/location-card";
+import { notFound } from "next/navigation";
 
 interface PageProps {
   brand: Brand;
@@ -58,4 +66,3 @@ export default async function BrandPage({ params }: { params: Promise<{ brandSlu
 
   return <BrandPageComponent brand={brand} locations={locations} />;
 }
-
