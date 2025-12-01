@@ -13,6 +13,7 @@
 //
 
 import { z } from 'zod';
+export type { GeneralSettings } from './settings';
 
 /**
  * @description Contains master data for each brand/company on the platform.
