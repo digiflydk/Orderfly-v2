@@ -1,5 +1,3 @@
-
-
 'use client';
 
 import { useEffect, useState, useTransition } from 'react';
@@ -71,6 +69,11 @@ function ThresholdInput({ control, name, label, description }: { control: any, n
     )
 }
 
+const initialFormState: FormState = {
+  message: '',
+  error: false,
+};
+
 export function LoyaltySettingsClientPage({ initialSettings }: LoyaltySettingsClientPageProps) {
     const { toast } = useToast();
     const [isPending, startTransition] = useTransition();
@@ -108,7 +111,7 @@ export function LoyaltySettingsClientPage({ initialSettings }: LoyaltySettingsCl
         });
 
         startTransition(async () => {
-            const result = await updateLoyaltySettings(null, formData);
+            const result = await updateLoyaltySettings(initialFormState, formData);
              if (result?.error) {
                 toast({ variant: 'destructive', title: 'Error', description: result.message });
             } else if (result?.message) {
