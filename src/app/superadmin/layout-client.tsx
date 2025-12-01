@@ -55,16 +55,14 @@ export function BrandLayoutClient({
             {children}
         </main>
         {showFooter && brand && (
-          <Footer 
-            brand={brand} 
-            location={location} 
-            version="1.0.206 • OF-483"
-            onOpenCookieSettings={() => setIsCookieModalOpen(true)} 
+          <Footer
+            brand={brand}
+            location={location ?? undefined}
+            version="1.0.208 • OF-484"
+            onOpenCookieSettings={() => setIsCookieModalOpen(true)}
           />
         )}
         <CookieConsent brandId={brand.id} isModalOpen={isCookieModalOpen} setIsModalOpen={setIsCookieModalOpen} />
       </div>
   );
 }
-
-
