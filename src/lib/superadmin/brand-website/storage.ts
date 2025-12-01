@@ -5,7 +5,11 @@ import { getAdminApp } from '@/lib/firebase-admin';
 
 export async function uploadFileToFirebaseStorage(file: File, destinationPath: string): Promise<string> {
     const app = getAdminApp();
-    const bucket = getStorage(app).bucket(`gs://${process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET}`);
+    const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+    if (!bucketName) {
+        throw new Error("Firebase Storage bucket name is not configured.");
+    }
+    const bucket = getStorage(app).bucket(bucketName);
     
     // Check if the file already exists and delete it if so.
     const fileRef = bucket.file(destinationPath);
@@ -26,3 +30,4 @@ export async function uploadFileToFirebaseStorage(file: File, destinationPath: s
     await fileRef.makePublic();
     return fileRef.publicUrl();
 }
+

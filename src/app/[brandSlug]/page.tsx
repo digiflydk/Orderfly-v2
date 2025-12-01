@@ -1,3 +1,4 @@
+
 // src/app/[brandSlug]/page.tsx
 import EmptyState from "@/components/ui/empty-state";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
@@ -9,8 +10,10 @@ import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import type { MenuData, Category, Product } from "@/types/menu";
 import { productsForCategory } from "@/lib/menu-helpers";
 import { getBrandBySlug } from "@/app/superadmin/brands/actions";
+import { getLocationsForBrand } from "@/lib/data/brand-location";
 import type { Brand, Location } from "@/types";
 import { BrandLayoutClient } from "@/components/layout/BrandLayoutClient";
+import { LocationCard } from "@/components/location-card";
 import { notFound } from "next/navigation";
 
 interface PageProps {

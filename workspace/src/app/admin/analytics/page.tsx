@@ -6,7 +6,7 @@ import { Suspense } from 'react';
 import { getFunnelDataForBrand } from "@/lib/analytics/actions";
 import { AnalyticsDashboardClient } from '@/components/superadmin/analytics-dashboard-client';
 import { getBrandById } from '@/app/superadmin/brands/actions';
-import { getLocationsForBrand } from '@/app/superadmin/locations/actions';
+import { getLocationsForBrand } from '@/lib/data/brand-location';
 import type { FunnelFilters } from '@/types';
 
 export const revalidate = 0;
