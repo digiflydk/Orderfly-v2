@@ -6,7 +6,7 @@ import { db } from '@/lib/firebase';
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, orderBy, query, runTransaction
 } from 'firebase/firestore';
-import { type QaStepTemplate } from '@/app/superadmin/qa/qa-utils';
+export type { QaStepTemplate } from '@/app/superadmin/qa/qa-utils';
 
 export type QaStatus = 'Draft' | 'Ready' | 'Deprecated';
 export type QaContext = 'public' | 'superadmin';
@@ -17,7 +17,7 @@ export type QaTestcase = {
   title: string;
   acceptanceCriteria: string;
   status: QaStatus;
-  stepsTemplate: QaStepTemplate[];
+  stepsTemplate: import('@/app/superadmin/qa/qa-utils').QaStepTemplate[];
   context: QaContext;
   startPath: string;              // fx "/esmeralda" eller "/sales/orders"
   proofUrl?: string;
