@@ -11,13 +11,14 @@ import { getAllLocations } from "@/app/superadmin/locations/actions";
 import { FiltersBar } from "@/components/superadmin/FiltersBar";
 import type { SACommonFilters } from "@/types/superadmin";
 import { redirect } from "next/navigation";
+import { Button } from "@/components/ui/button";
 
 export const revalidate = 0; // Force dynamic rendering
 
 export default async function SalesDashboardPage({ params, searchParams }: AsyncPageProps) {
     const routeParams = await resolveParams(params);
     const query = await resolveSearchParams(searchParams);
-
+    
     if (!query.from || !query.to) {
         const today = new Date().toISOString().slice(0, 10);
         redirect(`/superadmin/sales/dashboard?from=${today}&to=${today}`);
@@ -70,7 +71,12 @@ export default async function SalesDashboardPage({ params, searchParams }: Async
                 </p>
             </div>
             
-            <FiltersBar value={filters} brands={brands} locations={locations} onFilterChange={handleFilterChange as any}/>
+            <FiltersBar
+                filters={filters}
+                brands={brands}
+                locations={locations}
+                onChange={handleFilterChange}
+            />
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {kpis.map((kpi) => (
