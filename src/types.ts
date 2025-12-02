@@ -558,7 +558,7 @@ export type Upsell = {
   brandId: string;
   locationIds: string[];
   upsellName: string;
-  description?: string;
+  description?: string | null;
   imageUrl?: string | null;
 
   // Offer Details

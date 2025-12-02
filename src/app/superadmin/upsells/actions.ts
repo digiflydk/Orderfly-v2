@@ -1,27 +1,12 @@
 
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
 import { getAdminDb, admin } from '@/lib/firebase-admin';
-import type { Upsell, Product, Category, CartItem, ProductForMenu } from '@/types';
+import type { Upsell, Product, Category, CartItem, ProductForMenu, Brand, Location } from '@/types';
 import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
-import { getProductsByIds } from '../products/actions';
-import {
-  collection,
-  doc,
-  setDoc,
-  deleteDoc,
-  getDocs,
-  query,
-  orderBy,
-  getDoc,
-  where,
-  documentId,
-  runTransaction,
-  writeBatch,
-} from 'firebase/firestore';
+import { getProductsByIds as getProductsByIdsFromProductsModule } from '../products/actions';
 
 const activeTimeSlotSchema = z.object({
   start: z.string(),
@@ -40,86 +25,47 @@ const triggerConditionSchema = z.object({
   referenceId: z.string().min(1, 'A reference value is required.'),
 });
 
-const upsellSchema = z
-  .object({
+const upsellSchema = z.object({
     id: z.string().optional(),
     brandId: z.string().min(1, 'A brand must be selected.'),
-    locationIds: z
-      .array(z.string())
-      .min(1, 'At least one location must be selected.'),
+    locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
     upsellName: z.string().min(2, 'Upsell name must be at least 2 characters.'),
     description: z.string().optional().nullable(),
-    imageUrl: z
-      .string()
-      .url({ message: 'Please enter a valid URL.' })
-      .optional()
-      .or(z.literal(''))
-      .nullable(),
+    imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')).nullable(),
 
     offerType: z.enum(['product', 'category']),
     offerProductIds: z.array(z.string()).optional().default([]),
     offerCategoryIds: z.array(z.string()).optional().default([]),
 
     discountType: z.enum(['none', 'percentage', 'fixed_amount']),
-    discountValue: z.coerce
-      .number()
-      .positive('Discount value must be positive.')
-      .optional(),
+    discountValue: z.coerce.number().positive('Discount value must be positive.').optional(),
 
-    triggerConditions: z
-      .array(triggerConditionSchema)
-      .min(1, 'At least one trigger condition is required.'),
+    triggerConditions: z.array(triggerConditionSchema).min(1, 'At least one trigger condition is required.'),
 
-    orderTypes: z
-      .array(z.enum(['pickup', 'delivery']))
-      .min(1, 'At least one order type must be selected.'),
+    orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
     activeDays: z.array(z.string()).optional().default([]),
     activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
     startDate: z.date().optional(),
     endDate: z.date().optional(),
     isActive: z.boolean().default(true),
-    tags: z
-      .array(z.enum(['Popular', 'Recommended', 'Campaign']))
-      .optional()
-      .default([]),
-  })
-  .refine(
-    (data) => {
-      return !(
-        data.offerType === 'product' &&
-        (!data.offerProductIds || data.offerProductIds.length === 0)
-      );
-    },
-    {
-      message: 'At least one product must be selected for a product-based offer.',
-      path: ['offerProductIds'],
-    }
-  )
-  .refine(
-    (data) => {
-      return !(
-        data.offerType === 'category' &&
-        (!data.offerCategoryIds || data.offerCategoryIds.length === 0)
-      );
-    },
-    {
-      message: 'At least one category must be selected for a category-based offer.',
-      path: ['offerCategoryIds'],
-    }
-  )
-  .refine(
-    (data) => {
-      return !(
-        (data.discountType === 'percentage' ||
-          data.discountType === 'fixed_amount') &&
-        (data.discountValue === undefined || data.discountValue <= 0)
-      );
-    },
-    {
-      message: 'A positive discount value is required for this discount type.',
-      path: ['discountValue'],
-    }
-  );
+    tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])).optional().default([]),
+  }).refine(data => {
+      return !(data.offerType === 'product' && (!data.offerProductIds || data.offerProductIds.length === 0));
+  }, {
+      message: "At least one product must be selected for a product-based offer.",
+      path: ["offerProductIds"],
+  }).refine(data => {
+      return !(data.offerType === 'category' && (!data.offerCategoryIds || data.offerCategoryIds.length === 0));
+  }, {
+      message: "At least one category must be selected for a category-based offer.",
+      path: ["offerCategoryIds"],
+  }).refine(data => {
+      return !((data.discountType === 'percentage' || data.discountType === 'fixed_amount') && (data.discountValue === undefined || data.discountValue <= 0));
+  }, {
+      message: "A positive discount value is required for this discount type.",
+      path: ["discountValue"],
+  });
+
 
 export type FormState = {
   message: string;
@@ -135,11 +81,11 @@ export async function createOrUpdateUpsell(
     const id = formData.get('id') as string | null;
 
     const safeParseFloat = (value: FormDataEntryValue | null): number | undefined => {
-      if (value === null || typeof value !== 'string' || value.trim() === '') {
-        return undefined;
-      }
-      const num = parseFloat(value.replace(',', '.'));
-      return isNaN(num) ? undefined : num;
+        if (value === null || typeof value !== 'string' || value.trim() === '') {
+            return undefined;
+        }
+        const num = parseFloat(value.replace(',', '.'));
+        return isNaN(num) ? undefined : num;
     };
 
     const rawData: Record<string, any> = {
@@ -192,14 +138,14 @@ export async function createOrUpdateUpsell(
       };
     }
     
-    const { id: _ignoredId, startDate, endDate, ...rest } = validatedFields.data;
-
-    const normalised = {
-      ...rest,
-      description: rest.description ?? undefined,
-      imageUrl: rest.imageUrl ?? undefined,
-    };
+    const { id: _ignoredId, startDate, endDate, description, imageUrl, ...rest } = validatedFields.data;
     
+    const normalised = {
+        ...rest,
+        description: description ?? undefined,
+        imageUrl: imageUrl ?? undefined,
+    };
+
     const db = getAdminDb();
     const existing = id ? await getUpsellById(id) : null;
     
@@ -213,11 +159,10 @@ export async function createOrUpdateUpsell(
     if (startDate) dataToSave.startDate = admin.firestore.Timestamp.fromDate(startDate);
     if (endDate) dataToSave.endDate = admin.firestore.Timestamp.fromDate(endDate);
 
+    const upsellRef = id ? db.collection('upsells').doc(id) : db.collection('upsells').doc();
+    const upsellIdToSave = upsellRef.id;
 
-    const upsellIdToSave = id || doc(collection(db, 'upsells')).id;
-    const upsellRef = db.collection('upsells').doc(upsellIdToSave);
-
-    await upsellRef.set({ ...dataToSave, id: upsellRef.id }, { merge: true });
+    await upsellRef.set({ ...dataToSave, id: upsellIdToSave }, { merge: true });
     
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -247,7 +192,7 @@ export async function getUpsells(): Promise<Upsell[]> {
   const q = db.collection('upsells').orderBy('upsellName');
   const querySnapshot = await q.get();
   return querySnapshot.docs.map(doc => {
-    const data = doc.data() as Upsell;
+    const data = doc.data();
     return {
       ...data,
       id: doc.id,
@@ -259,12 +204,12 @@ export async function getUpsellById(upsellId: string): Promise<Upsell | null> {
     const db = getAdminDb();
     const docRef = db.collection('upsells').doc(upsellId);
     const docSnap = await docRef.get();
-    if (docSnap.exists()) {
+    if (docSnap.exists) {
         const data = docSnap.data() as Upsell;
         return {
-            ...data,
             id: docSnap.id,
-        } as Upsell;
+            ...data,
+        };
     }
     return null;
 }
@@ -420,8 +365,6 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
     if (locationsSnapshot.empty) return [];
     const locationIds = locationsSnapshot.docs.map(doc => doc.id);
 
-    // Firestore 'array-contains-any' is limited to 30 values in a single query.
-    // If a brand has more than 30 locations, we need to batch the queries.
     const categoryPromises: Promise<admin.firestore.QuerySnapshot>[] = [];
     for (let i = 0; i < locationIds.length; i += 30) {
         const chunk = locationIds.slice(i, i + 30);
@@ -443,4 +386,9 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
     });
 
     return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
+}
+
+// Re-aliasing for local use.
+async function getProductsByIds(productIds: string[], brandId?: string): Promise<ProductForMenu[]> {
+    return getProductsByIdsFromProductsModule(productIds, brandId);
 }
