@@ -1,5 +1,3 @@
-
-
 //
 // ========================================
 // Orderfly - Data Models & Type Definitions
@@ -993,5 +991,3 @@ export const AIProjectQualificationOutputSchema = z.object({
   }).describe("The information collected from the user so far."),
 });
 export type AIProjectQualificationOutput = z.infer<typeof AIProjectQualificationOutputSchema>;
-
-    
