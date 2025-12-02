@@ -6,13 +6,13 @@ import { CookieTextsFormPage } from '../../form-page';
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
 type EditCookieTextsPageProps = {
-  params: {
+  params: Promise<{
     textId: string;
-  };
+  }>;
 };
 
 export default async function EditCookieTextsPage({ params }: EditCookieTextsPageProps) {
-  const { textId } = params;
+  const { textId } = await params;
 
   if (!textId) {
     notFound();
