@@ -13,7 +13,7 @@
 //
 
 import { z } from 'zod';
-import type { Timestamp } from 'firebase/firestore';
+import type { FirebaseFirestore } from 'firebase-admin';
 export type { GeneralSettings } from './settings';
 
 /**
@@ -558,7 +558,7 @@ export type Upsell = {
   brandId: string;
   locationIds: string[];
   upsellName: string;
-  description?: string | undefined;
+  description?: string;
   imageUrl?: string | null;
 
   // Offer Details
@@ -577,9 +577,9 @@ export type Upsell = {
   // Availability
   orderTypes: ('pickup' | 'delivery')[];
   activeDays: string[];
-  activeTimeSlots: { start: string, end: string }[];
-  startDate?: Timestamp | null;
-  endDate?: Timestamp | null;
+  activeTimeSlots: { start: string; end: string }[];
+  startDate?: FirebaseFirestore.Timestamp | null;
+  endDate?: FirebaseFirestore.Timestamp | null;
   isActive: boolean;
 
   // Tracking
@@ -587,8 +587,8 @@ export type Upsell = {
   conversions: number;
   
   // Timestamps
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: FirebaseFirestore.Timestamp;
+  updatedAt: FirebaseFirestore.Timestamp;
 };
 
 
@@ -904,7 +904,7 @@ export type AnalyticsDaily = {
 
   // Meta
   agg_version: number;
-  updated_at: Timestamp;
+  updated_at: FirebaseFirestore.Timestamp;
 };
 
 export type FunnelOutput = {
@@ -993,7 +993,5 @@ export const AIProjectQualificationOutputSchema = z.object({
   }).describe("The information collected from the user so far."),
 });
 export type AIProjectQualificationOutput = z.infer<typeof AIProjectQualificationOutputSchema>;
-
-    
 
     
