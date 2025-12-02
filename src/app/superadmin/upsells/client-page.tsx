@@ -1,9 +1,9 @@
 
+
 'use client';
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
-import { format } from 'date-fns';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -30,7 +30,7 @@ import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { toZonedTime } from 'date-fns-tz';
+import { toZonedTime, format } from 'date-fns-tz';
 
 type UpsellWithDetails = Upsell & { brandName: string };
 
@@ -85,11 +85,12 @@ export function UpsellsClientPage({ initialUpsells, brands }: UpsellsClientPageP
 
   const isFiltered = searchQuery !== '' || brandFilter !== 'all' || statusFilter !== 'all';
   
-  const formatDate = (dateString?: string) => {
+  function formatDate(dateString: string | Date | null | undefined) {
     if (!dateString) return 'N/A';
     try {
-        const utcDate = toZonedTime(dateString, 'UTC');
-        return format(utcDate, 'dd MMM yyyy, HH:mm', { timeZone: 'UTC' });
+        const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+        const utcDate = toZonedTime(date, 'UTC');
+        return format(utcDate, 'dd MMM yyyy, HH:mm');
     } catch (e) {
         return 'Invalid Date';
     }

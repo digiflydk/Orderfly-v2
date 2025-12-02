@@ -3,7 +3,6 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
 import {
   collection,
   doc,
@@ -12,14 +11,13 @@ import {
   getDocs,
   query,
   orderBy,
-  Timestamp,
   getDoc,
   where,
   documentId,
   runTransaction,
   writeBatch,
-  updateDoc,
 } from 'firebase/firestore';
+import { getAdminDb, admin } from '@/lib/firebase-admin';
 import type { Upsell, Product, Category, CartItem, ProductForMenu } from '@/types';
 import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
@@ -149,38 +147,30 @@ export async function createOrUpdateUpsell(
       };
     }
     
-    const { id: _ignoredId, startDate, endDate, description, imageUrl, ...rest } = validatedFields.data;
+    const { id: _ignoredId, startDate, endDate, ...rest } = validatedFields.data;
 
-    const allProductIds = rest.offerProductIds || [];
-    if (rest.offerType === 'category') {
-      // In a real app, you'd fetch products for these categories.
-      // For now, we assume this is handled or not needed for this action's scope.
-    }
-    
-    const upsellIdToSave = id || doc(collection(db, 'upsells')).id;
-    const existing = id ? await getUpsellById(id) : null;
-    
     const normalised = {
         ...rest,
-        description: description ?? undefined,
-        imageUrl: imageUrl ?? undefined,
-    }
-
-    const dataToSave: Omit<Upsell, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'conversions'> & { createdAt?: Timestamp; updatedAt: Timestamp; startDate?: Timestamp | null; endDate?: Timestamp | null; views: number; conversions: number; } = {
+        description: rest.description ?? undefined,
+        imageUrl: rest.imageUrl ?? undefined,
+    };
+    
+    const db = getAdminDb();
+    const existing = id ? await getUpsellById(id) : null;
+    
+    const dataToSave: Omit<Upsell, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'conversions'> & { createdAt?: admin.firestore.Timestamp; updatedAt: admin.firestore.Timestamp; startDate?: admin.firestore.Timestamp | null; endDate?: admin.firestore.Timestamp | null; views: number; conversions: number; } = {
       ...normalised,
-      updatedAt: Timestamp.now(),
+      updatedAt: admin.firestore.FieldValue.serverTimestamp() as admin.firestore.Timestamp,
       views: existing?.views ?? 0,
       conversions: existing?.conversions ?? 0,
     };
     
-    if (startDate) dataToSave.startDate = Timestamp.fromDate(startDate);
-    if (endDate) dataToSave.endDate = Timestamp.fromDate(endDate);
+    if (startDate) dataToSave.startDate = admin.firestore.Timestamp.fromDate(startDate);
+    if (endDate) dataToSave.endDate = admin.firestore.Timestamp.fromDate(endDate);
 
-    if (!id) {
-      dataToSave.createdAt = Timestamp.now();
-    }
-    
+    const upsellIdToSave = id || doc(collection(db, 'upsells')).id;
     const upsellRef = doc(db, 'upsells', upsellIdToSave);
+
     await setDoc(upsellRef, { ...dataToSave, id: upsellRef.id }, { merge: true });
     
   } catch (e) {
@@ -195,6 +185,7 @@ export async function createOrUpdateUpsell(
 
 export async function deleteUpsell(upsellId: string) {
     try {
+        const db = getAdminDb();
         await deleteDoc(doc(db, "upsells", upsellId));
         revalidatePath("/superadmin/upsells");
         return { message: "Upsell deleted successfully.", error: false };
@@ -206,11 +197,12 @@ export async function deleteUpsell(upsellId: string) {
 }
 
 export async function getUpsells(): Promise<Upsell[]> {
+  const db = getAdminDb();
   const q = query(collection(db, 'upsells'), orderBy('upsellName'));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => {
-    const data = doc.data();
-    return { 
+    const data = doc.data() as Upsell;
+    return {
       ...data,
       id: doc.id,
     } as Upsell;
@@ -218,13 +210,14 @@ export async function getUpsells(): Promise<Upsell[]> {
 }
 
 export async function getUpsellById(upsellId: string): Promise<Upsell | null> {
+    const db = getAdminDb();
     const docRef = doc(db, 'upsells', upsellId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-        const data = docSnap.data();
-        return { 
-            id: docSnap.id,
+        const data = docSnap.data() as Upsell;
+        return {
             ...data,
+            id: docSnap.id,
         } as Upsell;
     }
     return null;
@@ -237,106 +230,117 @@ type GetActiveUpsellParams = {
   cartItems: { id: string; categoryId?: string }[];
   cartTotal: number;
 };
-export async function getActiveUpsellForCart({ brandId, locationId, cartItems, cartTotal }: GetActiveUpsellParams): Promise<{upsell: Upsell, products: ProductForMenu[]} | null> {
-    const now = new Date();
-    const currentDay = now.toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
+export async function getActiveUpsellForCart({
+  brandId,
+  locationId,
+  cartItems,
+  cartTotal,
+}: GetActiveUpsellParams): Promise<{
+  upsell: Upsell;
+  products: ProductForMenu[];
+} | null> {
+  const now = new Date();
+  const currentDay = now.toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
+  const db = getAdminDb();
 
-    // 1. Fetch all potentially active upsells for the brand and location
-    const q = query(collection(db, 'upsells'), 
-        where('brandId', '==', brandId),
-        where('locationIds', 'array-contains', locationId),
-        where('isActive', '==', true),
-    );
-    const snapshot = await getDocs(q);
-    
-    const allUpsells = snapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-        ...data,
-        id: doc.id,
-      } as Upsell
-    });
-    
-    // 2. Filter by date, day, and time in code
-    const activeNowUpsells = allUpsells.filter(upsell => {
-        const startDate = upsell.startDate ? (upsell.startDate as unknown as Timestamp).toDate() : null;
-        const endDate = upsell.endDate ? (upsell.endDate as unknown as Timestamp).toDate() : null;
-        if (startDate && now < startDate) return false;
-        if (endDate && now > endDate) return false;
+  // 1. Fetch all potentially active upsells for the brand and location
+  const q = query(
+    collection(db, 'upsells'), 
+    where('brandId', '==', brandId),
+    where('locationIds', 'array-contains', locationId),
+    where('isActive', '==', true)
+  );
+  const snapshot = await getDocs(q);
+  
+  const allUpsells = snapshot.docs.map(doc => {
+    const data = doc.data() as Upsell;
+    return {
+      ...data,
+      id: doc.id,
+    } as Upsell
+  });
+  
+  // 2. Filter by date, day, and time in code
+  const activeNowUpsells = allUpsells.filter(upsell => {
+      const startDate = upsell.startDate ? (upsell.startDate as unknown as admin.firestore.Timestamp).toDate() : null;
+      const endDate = upsell.endDate ? (upsell.endDate as unknown as admin.firestore.Timestamp).toDate() : null;
+      if (startDate && now < startDate) return false;
+      if (endDate && now > endDate) return false;
 
-        if (upsell.activeDays.length > 0 && !upsell.activeDays.includes(currentDay)) return false;
+      if (upsell.activeDays.length > 0 && !upsell.activeDays.includes(currentDay)) return false;
 
-        if (upsell.activeTimeSlots.length > 0) {
-            const currentTime = now.toTimeString().slice(0,5);
-            const inActiveTime = upsell.activeTimeSlots.some(slot => currentTime >= slot.start && currentTime <= slot.end);
-            if(!inActiveTime) return false;
-        }
-        return true;
-    });
-    
-    if (activeNowUpsells.length === 0) return null;
+      if (upsell.activeTimeSlots.length > 0) {
+          const currentTime = now.toTimeString().slice(0,5);
+          const inActiveTime = upsell.activeTimeSlots.some(slot => currentTime >= slot.start && currentTime <= slot.end);
+          if(!inActiveTime) return false;
+      }
+      return true;
+  });
+  
+  if (activeNowUpsells.length === 0) return null;
 
-    const cartProductIds = cartItems.map(item => item.id);
-    const cartCategoryIds = new Set(cartItems.map(item => item.categoryId).filter(Boolean));
-    
-    // 3. Check trigger conditions for each active upsell
-    for (const upsell of activeNowUpsells) {
-        let isTriggered = false;
-        for (const condition of upsell.triggerConditions) {
-            if (condition.type === 'cart_value_over') {
-                if (cartTotal > parseFloat(condition.referenceId)) isTriggered = true;
-            } else if (condition.type === 'product_in_cart') {
-                if (cartProductIds.includes(condition.referenceId)) isTriggered = true;
-            } else if (condition.type === 'category_in_cart') {
-                 if (cartCategoryIds.has(condition.referenceId)) isTriggered = true;
-            }
-            if (isTriggered) break; // If any condition is met, we don't need to check others for this upsell
-        }
+  const cartProductIds = cartItems.map(item => item.id);
+  const cartCategoryIds = new Set(cartItems.map(item => item.categoryId).filter(Boolean));
+  
+  // 3. Check trigger conditions for each active upsell
+  for (const upsell of activeNowUpsells) {
+      let isTriggered = false;
+      for (const condition of upsell.triggerConditions) {
+          if (condition.type === 'cart_value_over') {
+              if (cartTotal > parseFloat(condition.referenceId)) isTriggered = true;
+          } else if (condition.type === 'product_in_cart') {
+              if (cartProductIds.includes(condition.referenceId)) isTriggered = true;
+          } else if (condition.type === 'category_in_cart') {
+               if (cartCategoryIds.has(condition.referenceId)) isTriggered = true;
+          }
+          if (isTriggered) break; // If any condition is met, we don't need to check others for this upsell
+      }
 
-        if (isTriggered) {
-             // 4. If triggered, fetch the offered products
-            let offeredProductIds: string[] = [];
-            if (upsell.offerType === 'product') {
-                offeredProductIds = upsell.offerProductIds;
-            } else { // offerType is 'category'
-                const catProductsQuery = query(collection(db, 'products'), where('categoryId', 'in', upsell.offerCategoryIds));
-                const catProductsSnapshot = await getDocs(catProductsQuery);
-                offeredProductIds = catProductsSnapshot.docs.map(doc => doc.id);
-            }
-            
-            // 5. Suppression Logic: Filter out products already in the cart
-            const currentCartProductIds = new Set(cartItems.map(item => item.id));
-            const finalProductIds = offeredProductIds.filter(id => !currentCartProductIds.has(id));
+      if (isTriggered) {
+           // 4. If triggered, fetch the offered products
+          let offeredProductIds: string[] = [];
+          if (upsell.offerType === 'product') {
+              offeredProductIds = upsell.offerProductIds;
+          } else { // offerType is 'category'
+              const catProductsQuery = query(collection(db, 'products'), where('categoryId', 'in', upsell.offerCategoryIds));
+              const catProductsSnapshot = await getDocs(catProductsQuery);
+              offeredProductIds = catProductsSnapshot.docs.map(doc => doc.id);
+          }
+          
+          // 5. Suppression Logic: Filter out products already in the cart
+          const currentCartProductIds = new Set(cartItems.map(item => item.id));
+          const finalProductIds = offeredProductIds.filter(id => !currentCartProductIds.has(id));
 
-            if (finalProductIds.length > 0) {
-                // Fetch full product details
-                const products = await getProductsByIds(finalProductIds, brandId);
-                
-                if (products.length > 0) {
-                    // Increment the views count
-                    try {
-                        const upsellRef = doc(db, 'upsells', upsell.id);
-                        await runTransaction(db, async (transaction) => {
-                            const sfDoc = await transaction.get(upsellRef);
-                            if (!sfDoc.exists()) { throw "Document does not exist!"; }
-                            const newViews = (sfDoc.data().views || 0) + 1;
-                            transaction.update(upsellRef, { views: newViews });
-                        });
-                    } catch(e) {
-                        console.error("Failed to increment upsell views:", e);
-                    }
-                    
-                    return { upsell: upsell as Upsell, products: products as ProductForMenu[] }; // Return the first valid upsell found
-                }
-            }
-        }
-    }
+          if (finalProductIds.length > 0) {
+              // Fetch full product details
+              const products = await getProductsByIds(finalProductIds, brandId);
+              
+              if (products.length > 0) {
+                  // Increment the views count
+                  try {
+                      const upsellRef = doc(db, 'upsells', upsell.id);
+                      await runTransaction(db, async (transaction) => {
+                          const sfDoc = await transaction.get(upsellRef);
+                          if (!sfDoc.exists()) { throw "Document does not exist!"; }
+                          const newViews = (sfDoc.data().views || 0) + 1;
+                          transaction.update(upsellRef, { views: newViews });
+                      });
+                  } catch(e) {
+                      console.error("Failed to increment upsell views:", e);
+                  }
+                  
+                  return { upsell: upsell as Upsell, products: products as ProductForMenu[] }; // Return the first valid upsell found
+              }
+          }
+      }
+  }
 
-    return null; // No valid upsell found
+  return null; // No valid upsell found
 }
 
 
 export async function incrementUpsellConversion(upsellId: string): Promise<{ success: boolean }> {
+    const db = getAdminDb();
     try {
         const upsellRef = doc(db, 'upsells', upsellId);
         await runTransaction(db, async (transaction) => {
@@ -354,6 +358,7 @@ export async function incrementUpsellConversion(upsellId: string): Promise<{ suc
 
 export async function getProductsForBrand(brandId: string): Promise<ProductForMenu[]> {
   if (!brandId) return [];
+  const db = getAdminDb();
   const q = query(collection(db, 'products'), where('brandId', '==', brandId));
   const querySnapshot = await getDocs(q);
   const products = querySnapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Product[];
@@ -363,6 +368,7 @@ export async function getProductsForBrand(brandId: string): Promise<ProductForMe
 
 export async function getCategoriesForBrand(brandId: string): Promise<Category[]> {
     if (!brandId) return [];
+    const db = getAdminDb();
     
     const locationsQuery = query(collection(db, 'locations'), where('brandId', '==', brandId));
     const locationsSnapshot = await getDocs(locationsQuery);
@@ -383,7 +389,7 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
     const categoryIds = new Set<string>();
 
     categorySnapshots.forEach(snapshot => {
-        snapshot.forEach((doc: any) => {
+        snapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
             if (!categoryIds.has(doc.id)) {
                 categories.push({ id: doc.id, ...doc.data() } as Category);
                 categoryIds.add(doc.id);
@@ -393,5 +399,3 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
 
     return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
 }
-
-    

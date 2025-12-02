@@ -355,7 +355,7 @@ export type PaymentDetails = {
     vatAmount?: number;
     discountTotal: number;
     itemDiscountTotal?: number;
-    cartDiscountTotal?: string;
+    cartDiscountTotal?: number;
     cartDiscountName?: string;
     upsellAmount?: number;
     tips: number;
@@ -558,17 +558,17 @@ export type Upsell = {
   brandId: string;
   locationIds: string[];
   upsellName: string;
-  description?: string;
+  description?: string | undefined;
   imageUrl?: string | null;
 
   // Offer Details
   offerType: 'product' | 'category';
-  offerProductIds: string[]; // Used if offerType is 'product'
-  offerCategoryIds: string[]; // Used if offerType is 'category'
+  offerProductIds: string[];
+  offerCategoryIds: string[];
 
   // Discount Details
   discountType: 'none' | 'percentage' | 'fixed_amount';
-  discountValue?: number; // The percentage or fixed amount
+  discountValue?: number;
   tags: ('Popular' | 'Recommended' | 'Campaign')[];
 
   // Trigger Logic
