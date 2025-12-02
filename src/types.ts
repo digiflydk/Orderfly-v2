@@ -355,7 +355,7 @@ export type PaymentDetails = {
     vatAmount?: number;
     discountTotal: number;
     itemDiscountTotal?: number;
-    cartDiscountTotal?: number;
+    cartDiscountTotal?: string;
     cartDiscountName?: string;
     upsellAmount?: number;
     tips: number;
@@ -993,5 +993,7 @@ export const AIProjectQualificationOutputSchema = z.object({
   }).describe("The information collected from the user so far."),
 });
 export type AIProjectQualificationOutput = z.infer<typeof AIProjectQualificationOutputSchema>;
+
+    
 
     

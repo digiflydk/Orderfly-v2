@@ -209,7 +209,7 @@ export async function getUpsells(): Promise<Upsell[]> {
   const q = query(collection(db, 'upsells'), orderBy('upsellName'));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => {
-    const data = doc.data() as Upsell;
+    const data = doc.data();
     return { 
       ...data,
       id: doc.id,
@@ -221,10 +221,10 @@ export async function getUpsellById(upsellId: string): Promise<Upsell | null> {
     const docRef = doc(db, 'upsells', upsellId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-        const data = docSnap.data() as Upsell;
+        const data = docSnap.data();
         return { 
-            ...data,
             id: docSnap.id,
+            ...data,
         } as Upsell;
     }
     return null;
@@ -383,7 +383,7 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
     const categoryIds = new Set<string>();
 
     categorySnapshots.forEach(snapshot => {
-        snapshot.forEach(doc => {
+        snapshot.forEach((doc: any) => {
             if (!categoryIds.has(doc.id)) {
                 categories.push({ id: doc.id, ...doc.data() } as Category);
                 categoryIds.add(doc.id);
@@ -394,3 +394,4 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
     return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
 }
 
+    
