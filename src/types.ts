@@ -537,7 +537,7 @@ export interface CartItem {
 export type MinimalCartItem = {
     name: string;
     quantity: number;
-    unitPrice?: number;
+    unitPrice: number;
     totalPrice: number;
     toppings?: string[];
 }
@@ -558,7 +558,7 @@ export type Upsell = {
   brandId: string;
   locationIds: string[];
   upsellName: string;
-  description?: string | undefined;
+  description?: string;
   imageUrl?: string | null;
 
   // Offer Details

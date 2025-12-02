@@ -4,7 +4,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, documentId, runTransaction, writeBatch } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, where, documentId, runTransaction, writeBatch } from 'firebase/firestore';
 import type { Upsell, Product, Category, CartItem, ProductForMenu } from '@/types';
 import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
@@ -194,7 +194,7 @@ export async function getUpsells(): Promise<Upsell[]> {
   const q = query(collection(db, 'upsells'), orderBy('upsellName'));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => {
-    const data = doc.data() as Omit<Upsell, 'id'>;
+    const data = doc.data() as Upsell;
     return { 
       ...data,
       id: doc.id,
@@ -206,7 +206,7 @@ export async function getUpsellById(upsellId: string): Promise<Upsell | null> {
     const docRef = doc(db, 'upsells', upsellId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-        const data = docSnap.data();
+        const data = docSnap.data() as Upsell;
         return { 
             id: docSnap.id, 
             ...data
@@ -311,7 +311,7 @@ export async function getActiveUpsellForCart({ brandId, locationId, cartItems, c
                         console.error("Failed to increment upsell views:", e);
                     }
                     
-                    return { upsell: upsell, products: products as ProductForMenu[] }; // Return the first valid upsell found
+                    return { upsell: upsell as Upsell, products: products as ProductForMenu[] }; // Return the first valid upsell found
                 }
             }
         }
@@ -378,6 +378,4 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
 
     return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
 }
-    
 
-    
