@@ -27,12 +27,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
-import { deleteStandardDiscount, updateStandardDiscountStatus } from './actions';
+import { deleteStandardDiscount, updateStandardDiscountStatus, type StandardDiscountActionResult } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
+
 
 type DiscountWithDetails = StandardDiscount & { brandName: string };
 
@@ -73,10 +74,9 @@ export function StandardDiscountsClientPage({ initialDiscounts, brands, location
   const handleDelete = async () => {
     if (!discountToDelete) return;
     const result = await deleteStandardDiscount(discountToDelete);
-    if(result.success) {
+    if (result.success) {
         toast({ title: 'Success!', description: result.message ?? 'Discount deleted successfully.' });
         setLocalDiscounts(prev => prev.filter(d => d.id !== discountToDelete));
-        router.refresh();
     } else {
         toast({ variant: 'destructive', title: 'Error', description: result.error ?? 'Failed to delete discount.' });
     }
@@ -104,15 +104,15 @@ export function StandardDiscountsClientPage({ initialDiscounts, brands, location
 
   const isFiltered = searchQuery !== '' || brandFilter !== 'all' || statusFilter !== 'all';
   
-  const formatDate = (dateString?: string | Date) => {
-    if (!dateString) return 'N/A';
-    try {
-        const utcDate = toZonedTime(dateString, 'UTC');
-        return format(utcDate, 'dd MMM yyyy, HH:mm', { timeZone: 'UTC' });
-    } catch (e) {
-        return 'Invalid Date';
-    }
-  }
+  function formatDate(dateString: string | null | undefined) {
+       if (!dateString) return 'N/A';
+       try {
+           const utcDate = toZonedTime(dateString, 'UTC');
+           return format(utcDate, 'dd MMM yyyy, HH:mm');
+       } catch (e) {
+           return 'Invalid Date';
+       }
+   }
 
   return (
     <>
