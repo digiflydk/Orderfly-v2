@@ -1,5 +1,4 @@
 
-
 import { getStandardDiscounts } from './actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { StandardDiscountsClientPage } from './client-page';

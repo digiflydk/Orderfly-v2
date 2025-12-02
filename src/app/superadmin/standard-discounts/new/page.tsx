@@ -1,5 +1,4 @@
 
-
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { StandardDiscountFormPage } from '@/components/superadmin/standard-discount-form-page';
@@ -23,4 +22,3 @@ export default async function NewStandardDiscountPage() {
         />
     );
 }
-

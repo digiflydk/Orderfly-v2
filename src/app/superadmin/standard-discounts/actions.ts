@@ -1,11 +1,10 @@
 
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, where, documentId, updateDoc } from 'firebase/firestore';
-import type { StandardDiscount, CartItem, Product } from '@/types';
+import type { StandardDiscount, CartItem, Product, ProductForMenu } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 
@@ -75,6 +74,12 @@ export type FormState = {
   errors?: z.ZodIssue[];
 };
 
+export type StandardDiscountActionResult = {
+  success: boolean;
+  message?: string;
+  error?: string;
+};
+
 export async function createOrUpdateStandardDiscount(
   prevState: FormState | null,
   formData: FormData
@@ -141,15 +146,15 @@ export async function createOrUpdateStandardDiscount(
   redirect('/superadmin/standard-discounts');
 }
 
-export async function deleteStandardDiscount(id: string) {
+export async function deleteStandardDiscount(id: string): Promise<StandardDiscountActionResult> {
     try {
         await deleteDoc(doc(db, "standard_discounts", id));
         revalidatePath("/superadmin/standard-discounts");
-        return { message: "Discount deleted successfully.", error: false };
+        return { success: true, message: "Discount deleted successfully." };
     } catch (e) {
         console.error(e);
         const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-        return { message: `Failed to delete discount: ${errorMessage}`, error: true };
+        return { success: false, error: `Failed to delete discount: ${errorMessage}` };
     }
 }
 
@@ -269,12 +274,12 @@ export async function getActiveStandardDiscounts({ brandId, locationId, delivery
   return activeNowDiscounts;
 }
 
-export async function updateStandardDiscountStatus(id: string, isActive: boolean) {
+export async function updateStandardDiscountStatus(id: string, isActive: boolean): Promise<StandardDiscountActionResult> {
     try {
         const discountRef = doc(db, "standard_discounts", id);
         await updateDoc(discountRef, { isActive });
         revalidatePath('/superadmin/standard-discounts');
-        return { success: true };
+        return { success: true, message: 'Standard discount status updated successfully.' };
     } catch(e) {
         const errorMessage = e instanceof Error ? e.message : 'Failed to update status.';
         return { success: false, error: errorMessage };

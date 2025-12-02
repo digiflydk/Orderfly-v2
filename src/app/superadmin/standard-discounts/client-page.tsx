@@ -1,9 +1,11 @@
 
-
 'use client';
 
 import { useState, useMemo } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
+import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -31,7 +33,6 @@ import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { toZonedTime, format } from 'date-fns-tz';
 
 type DiscountWithDetails = StandardDiscount & { brandName: string };
 
@@ -43,6 +44,7 @@ interface StandardDiscountsClientPageProps {
 
 export function StandardDiscountsClientPage({ initialDiscounts, brands, locations }: StandardDiscountsClientPageProps) {
   const { toast } = useToast();
+  const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
   const [brandFilter, setBrandFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
@@ -71,11 +73,12 @@ export function StandardDiscountsClientPage({ initialDiscounts, brands, location
   const handleDelete = async () => {
     if (!discountToDelete) return;
     const result = await deleteStandardDiscount(discountToDelete);
-    if(result.error) {
-        toast({ variant: 'destructive', title: 'Error', description: result.message });
-    } else {
-        toast({ title: 'Success!', description: result.message });
+    if(result.success) {
+        toast({ title: 'Success!', description: result.message ?? 'Discount deleted successfully.' });
         setLocalDiscounts(prev => prev.filter(d => d.id !== discountToDelete));
+        router.refresh();
+    } else {
+        toast({ variant: 'destructive', title: 'Error', description: result.error ?? 'Failed to delete discount.' });
     }
     setIsAlertOpen(false);
     setDiscountToDelete(null);
@@ -84,9 +87,12 @@ export function StandardDiscountsClientPage({ initialDiscounts, brands, location
     const handleToggleActive = async (id: string, currentValue: boolean) => {
         setLocalDiscounts(prev => prev.map(d => d.id === id ? { ...d, isActive: !currentValue } : d));
         const result = await updateStandardDiscountStatus(id, !currentValue);
-        if (result.error) {
-            toast({ variant: 'destructive', title: 'Error', description: result.message });
-            setLocalDiscounts(prev => prev.map(d => d.id === id ? { ...d, isActive: currentValue } : d)); // Revert on error
+        if (result.success) {
+            toast({ title: 'Success', description: result.message ?? 'Discount status updated.' });
+        } else {
+            toast({ variant: 'destructive', title: 'Error', description: result.error ?? 'Failed to update status.' });
+            // Revert UI change on error
+            setLocalDiscounts(prev => prev.map(d => d.id === id ? { ...d, isActive: currentValue } : d));
         }
     }
 
@@ -98,7 +104,7 @@ export function StandardDiscountsClientPage({ initialDiscounts, brands, location
 
   const isFiltered = searchQuery !== '' || brandFilter !== 'all' || statusFilter !== 'all';
   
-  const formatDate = (dateString?: string) => {
+  const formatDate = (dateString?: string | Date) => {
     if (!dateString) return 'N/A';
     try {
         const utcDate = toZonedTime(dateString, 'UTC');

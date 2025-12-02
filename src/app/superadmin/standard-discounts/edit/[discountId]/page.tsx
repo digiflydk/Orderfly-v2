@@ -1,6 +1,7 @@
 
-
 import { notFound } from 'next/navigation';
+import type { AsyncPageProps } from "@/types/next-async-props";
+import { resolveParams } from "@/lib/next/resolve-props";
 import { getStandardDiscountById } from '@/app/superadmin/standard-discounts/actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
@@ -8,8 +9,8 @@ import { StandardDiscountFormPage } from '@/components/superadmin/standard-disco
 import { getProducts } from '@/app/superadmin/products/actions';
 import { getCategories } from '@/app/superadmin/categories/actions';
 
-export default async function EditStandardDiscountPage({ params }: { params: Promise<{ discountId: string }> }) {
-    const { discountId } = await params;
+export default async function EditStandardDiscountPage({ params }: AsyncPageProps<{ discountId: string }>) {
+    const { discountId } = await resolveParams(params);
     
     if (!discountId) {
         notFound();
