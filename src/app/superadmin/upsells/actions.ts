@@ -1,8 +1,10 @@
+
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, documentId, runTransaction, where } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, documentId, runTransaction, writeBatch } from 'firebase/firestore';
 import type { Upsell, Product, Category, CartItem, ProductForMenu } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
@@ -132,7 +134,7 @@ export async function createOrUpdateUpsell(
       };
     }
     
-    const { id: validatedId, ...upsellData } = validatedFields.data;
+    const { id: validatedId, startDate, endDate, description, imageUrl, ...upsellData } = validatedFields.data;
 
     const allProductIds = upsellData.offerProductIds || [];
     if (upsellData.offerType === 'category') {
@@ -143,6 +145,12 @@ export async function createOrUpdateUpsell(
     const upsellIdToSave = id || doc(collection(db, 'upsells')).id;
     const existing = id ? await getUpsellById(id) : null;
 
+    const normalised = {
+        ...upsellData,
+        description: description ?? undefined,
+        imageUrl: imageUrl ?? undefined,
+    }
+
     const dataToSave: Omit<Upsell, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'conversions'> & {
         createdAt?: Timestamp;
         updatedAt: Timestamp;
@@ -151,14 +159,14 @@ export async function createOrUpdateUpsell(
         views: number;
         conversions: number;
       } = {
-      ...upsellData,
+      ...normalised,
       updatedAt: Timestamp.now(),
       views: existing?.views ?? 0,
       conversions: existing?.conversions ?? 0,
     };
     
-    if (upsellData.startDate) dataToSave.startDate = Timestamp.fromDate(upsellData.startDate);
-    if (upsellData.endDate) dataToSave.endDate = Timestamp.fromDate(upsellData.endDate);
+    if (startDate) dataToSave.startDate = Timestamp.fromDate(startDate);
+    if (endDate) dataToSave.endDate = Timestamp.fromDate(endDate);
 
     if (!id) {
       dataToSave.createdAt = Timestamp.now();
