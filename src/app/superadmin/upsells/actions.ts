@@ -1,4 +1,3 @@
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
@@ -133,27 +132,40 @@ export async function createOrUpdateUpsell(
       };
     }
     
-    const upsellData = validatedFields.data;
+    const { id: validatedId, ...upsellData } = validatedFields.data;
 
-    const dataToSave: Omit<Upsell, 'createdAt' | 'updatedAt' | 'views' | 'conversions'> & { createdAt?: Timestamp, updatedAt: Timestamp, startDate?: Timestamp, endDate?: Timestamp, views: number, conversions: number } = {
+    const allProductIds = upsellData.offerProductIds || [];
+    if (upsellData.offerType === 'category') {
+      // In a real app, you'd fetch products for these categories.
+      // For now, we assume this is handled or not needed for this action's scope.
+    }
+    
+    const upsellIdToSave = id || doc(collection(db, 'upsells')).id;
+    const existing = id ? await getUpsellById(id) : null;
+
+    const dataToSave: Omit<Upsell, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'conversions'> & {
+        createdAt?: Timestamp;
+        updatedAt: Timestamp;
+        startDate?: Timestamp;
+        endDate?: Timestamp;
+        views: number;
+        conversions: number;
+      } = {
       ...upsellData,
       updatedAt: Timestamp.now(),
-      views: id ? (await getUpsellById(id))?.views ?? 0 : 0,
-      conversions: id ? (await getUpsellById(id))?.conversions ?? 0 : 0,
+      views: existing?.views ?? 0,
+      conversions: existing?.conversions ?? 0,
     };
     
     if (upsellData.startDate) dataToSave.startDate = Timestamp.fromDate(upsellData.startDate);
     if (upsellData.endDate) dataToSave.endDate = Timestamp.fromDate(upsellData.endDate);
-
-    const upsellIdToSave = id || doc(collection(db, 'upsells')).id;
-    dataToSave.id = upsellIdToSave;
 
     if (!id) {
       dataToSave.createdAt = Timestamp.now();
     }
     
     const upsellRef = doc(db, 'upsells', upsellIdToSave);
-    await setDoc(upsellRef, dataToSave, { merge: true });
+    await setDoc(upsellRef, { ...dataToSave, id: upsellRef.id }, { merge: true });
     
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -241,7 +253,7 @@ export async function getActiveUpsellForCart({ brandId, locationId, cartItems, c
       } as Upsell
     });
     
-    // 2. Filter by date, day, and time
+    // 2. Filter by date, day, and time in code
     const activeNowUpsells = allUpsells.filter(upsell => {
         const startDate = upsell.startDate;
         const endDate = upsell.endDate;
