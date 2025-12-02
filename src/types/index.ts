@@ -13,6 +13,7 @@
 //
 
 import { z } from 'zod';
+import type { Timestamp } from 'firebase/firestore';
 export type { GeneralSettings } from './settings';
 
 /**
@@ -577,8 +578,8 @@ export type Upsell = {
   orderTypes: ('pickup' | 'delivery')[];
   activeDays: string[];
   activeTimeSlots: { start: string, end: string }[];
-  startDate?: Date;
-  endDate?: Date;
+  startDate?: Timestamp;
+  endDate?: Timestamp;
   isActive: boolean;
 
   // Tracking
@@ -586,8 +587,8 @@ export type Upsell = {
   conversions: number;
   
   // Timestamps
-  createdAt: Date;
-  updatedAt: Date;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 };
 
 
@@ -992,3 +993,5 @@ export const AIProjectQualificationOutputSchema = z.object({
   }).describe("The information collected from the user so far."),
 });
 export type AIProjectQualificationOutput = z.infer<typeof AIProjectQualificationOutputSchema>;
+
+    

@@ -6,7 +6,7 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, documentId, runTransaction, writeBatch } from 'firebase/firestore';
 import type { Upsell, Product, Category, CartItem, ProductForMenu } from '@/types';
-import { z } from 'zod';
+import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
 import { getProductsByIds } from '../products/actions';
 
@@ -134,31 +134,24 @@ export async function createOrUpdateUpsell(
       };
     }
     
-    const { id: validatedId, startDate, endDate, description, imageUrl, ...upsellData } = validatedFields.data;
+    const { id: _ignoredId, startDate, endDate, description, imageUrl, ...rest } = validatedFields.data;
 
-    const allProductIds = upsellData.offerProductIds || [];
-    if (upsellData.offerType === 'category') {
+    const allProductIds = rest.offerProductIds || [];
+    if (rest.offerType === 'category') {
       // In a real app, you'd fetch products for these categories.
       // For now, we assume this is handled or not needed for this action's scope.
     }
     
     const upsellIdToSave = id || doc(collection(db, 'upsells')).id;
     const existing = id ? await getUpsellById(id) : null;
-
+    
     const normalised = {
-        ...upsellData,
+        ...rest,
         description: description ?? undefined,
         imageUrl: imageUrl ?? undefined,
     }
 
-    const dataToSave: Omit<Upsell, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'conversions'> & {
-        createdAt?: Timestamp;
-        updatedAt: Timestamp;
-        startDate?: Timestamp;
-        endDate?: Timestamp;
-        views: number;
-        conversions: number;
-      } = {
+    const dataToSave: Omit<Upsell, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'conversions'> & { createdAt?: Timestamp; updatedAt: Timestamp; startDate?: Timestamp | null; endDate?: Timestamp | null; views: number; conversions: number; } = {
       ...normalised,
       updatedAt: Timestamp.now(),
       views: existing?.views ?? 0,
@@ -330,16 +323,7 @@ export async function getActiveUpsellForCart({ brandId, locationId, cartItems, c
                         console.error("Failed to increment upsell views:", e);
                     }
                     
-                    // Convert Date objects to ISO strings before returning
-                    const serializableUpsell = {
-                        ...upsell,
-                        startDate: upsell.startDate?.toISOString(),
-                        endDate: upsell.endDate?.toISOString(),
-                        createdAt: upsell.createdAt?.toISOString(),
-                        updatedAt: upsell.updatedAt?.toISOString(),
-                    };
-
-                    return { upsell: serializableUpsell as unknown as Upsell, products: products as ProductForMenu[] }; // Return the first valid upsell found
+                    return { upsell: upsell, products: products as ProductForMenu[] }; // Return the first valid upsell found
                 }
             }
         }
@@ -406,4 +390,6 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
 
     return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
 }
+    
+
     
