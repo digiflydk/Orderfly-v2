@@ -5,7 +5,7 @@ import { useEffect } from 'react';
 import Link from "next/link";
 import { format as formatDate, toZonedTime } from 'date-fns-tz';
 
-import type { Brand, Location, OrderDetail } from "@/types";
+import type { Brand, Location, OrderDetail, PaymentDetails } from "@/types";
 import { useCart } from '@/context/cart-context';
 
 import { Button } from "@/components/ui/button";
@@ -50,6 +50,17 @@ interface ConfirmationClientProps {
     location: Location | null;
 }
 
+// Helper to safely convert potentially stringified numbers from Firestore
+const asNumber = (value: string | number | undefined | null): number => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string' && value.trim() !== '') {
+        const num = parseFloat(value);
+        if (!isNaN(num)) return num;
+    }
+    return 0;
+};
+
+
 export function ConfirmationClient({ order, brand, location }: ConfirmationClientProps) {
     const { clearCart } = useCart();
 
@@ -89,6 +100,18 @@ export function ConfirmationClient({ order, brand, location }: ConfirmationClien
         deliveryType, status, productItems, totalAmount,
         paymentDetails, customerDetails, deliveryTime,
     } = order;
+
+    // Normalize payment details to ensure they are numbers for safe calculation and formatting
+    const numericPaymentDetails = {
+        subtotal: asNumber(paymentDetails.subtotal),
+        itemDiscountTotal: asNumber(paymentDetails.itemDiscountTotal),
+        cartDiscountTotal: asNumber(paymentDetails.cartDiscountTotal),
+        deliveryFee: asNumber(paymentDetails.deliveryFee),
+        bagFee: asNumber(paymentDetails.bagFee),
+        adminFee: asNumber(paymentDetails.adminFee),
+        vatAmount: asNumber(paymentDetails.vatAmount),
+    };
+
 
     // Convert the ISO string back to a Date object and specify the timezone for formatting
     const zonedDate = toZonedTime(new Date(createdAt), 'Europe/Copenhagen');
@@ -169,42 +192,42 @@ export function ConfirmationClient({ order, brand, location }: ConfirmationClien
                             <div className="space-y-2 text-sm">
                                 <div className="flex justify-between">
                                     <span className="text-muted-foreground">Subtotal</span>
-                                    <span>kr. {paymentDetails.subtotal.toFixed(2)}</span>
+                                    <span>kr. {numericPaymentDetails.subtotal.toFixed(2)}</span>
                                 </div>
-                                {(paymentDetails.itemDiscountTotal ?? 0) > 0 && (
+                                {numericPaymentDetails.itemDiscountTotal > 0 && (
                                     <div className="flex justify-between text-green-600">
                                         <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-4 w-4"/>Product Discounts</span>
-                                        <span>- kr. {paymentDetails.itemDiscountTotal!.toFixed(2)}</span>
+                                        <span>- kr. {numericPaymentDetails.itemDiscountTotal.toFixed(2)}</span>
                                     </div>
                                 )}
-                                {(paymentDetails.cartDiscountTotal ?? 0) > 0 && (
+                                {numericPaymentDetails.cartDiscountTotal > 0 && (
                                     <div className="flex justify-between text-green-600">
                                         <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-4 w-4"/>{paymentDetails.cartDiscountName || 'Cart Discount'}</span>
-                                        <span>- kr. {paymentDetails.cartDiscountTotal!.toFixed(2)}</span>
+                                        <span>- kr. {numericPaymentDetails.cartDiscountTotal.toFixed(2)}</span>
                                     </div>
                                 )}
-                                {deliveryType === 'Delivery' && paymentDetails.deliveryFee > 0 && (
+                                {deliveryType === 'Delivery' && numericPaymentDetails.deliveryFee > 0 && (
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Delivery Fee</span>
-                                        <span>kr. {paymentDetails.deliveryFee.toFixed(2)}</span>
+                                        <span>kr. {numericPaymentDetails.deliveryFee.toFixed(2)}</span>
                                     </div>
                                 )}
-                                 {deliveryType === 'Delivery' && paymentDetails.deliveryFee === 0 && (paymentDetails.itemDiscountTotal || 0 > 0 || paymentDetails.cartDiscountTotal || 0 > 0) && (
+                                 {deliveryType === 'Delivery' && numericPaymentDetails.deliveryFee === 0 && (numericPaymentDetails.itemDiscountTotal > 0 || numericPaymentDetails.cartDiscountTotal > 0) && (
                                     <div className="flex justify-between text-green-600">
                                         <span className="text-muted-foreground">Delivery Fee</span>
                                         <span>Free</span>
                                     </div>
                                 )}
-                                {(paymentDetails.bagFee ?? 0) > 0 && (
+                                {numericPaymentDetails.bagFee > 0 && (
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Bag Fee</span>
-                                        <span>kr. {paymentDetails.bagFee!.toFixed(2)}</span>
+                                        <span>kr. {numericPaymentDetails.bagFee.toFixed(2)}</span>
                                     </div>
                                 )}
-                                {(paymentDetails.adminFee ?? 0) > 0 && (
+                                {numericPaymentDetails.adminFee > 0 && (
                                     <div className="flex justify-between">
                                         <span className="text-muted-foreground">Admin Fee</span>
-                                        <span>kr. {paymentDetails.adminFee!.toFixed(2)}</span>
+                                        <span>kr. {numericPaymentDetails.adminFee.toFixed(2)}</span>
                                     </div>
                                 )}
                                  <Separator className="my-2" />
@@ -212,10 +235,10 @@ export function ConfirmationClient({ order, brand, location }: ConfirmationClien
                                     <span>Total</span>
                                     <span>kr. {totalAmount.toFixed(2)}</span>
                                 </div>
-                                {(paymentDetails.vatAmount ?? 0) > 0 && (
+                                {numericPaymentDetails.vatAmount > 0 && (
                                 <div className="flex justify-between text-xs text-muted-foreground pt-1">
                                     <span>VAT Included</span>
-                                    <span>kr. {paymentDetails.vatAmount!.toFixed(2)}</span>
+                                    <span>kr. {numericPaymentDetails.vatAmount.toFixed(2)}</span>
                                 </div>
                                 )}
                             </div>
