@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useEffect, useState, useTransition, useActionState } from 'react';
@@ -22,12 +23,21 @@ interface SettingsFormProps {
   initialAnalyticsSettings: AnalyticsSettings;
   initialPaymentGatewaySettings: PaymentGatewaySettings;
   initialLanguageSettings: LanguageSettings;
-  initialBrandingSettings: PlatformBrandingSettings;
+  initialBrandingSettings: PlatformBrandingSettings | null;
 }
 
-function SubmitButton({ children }: { children: React.ReactNode }) {
-    const { pending } = useFormStatus();
-    return <Button type="submit" disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : children}</Button>;
+type SubmitButtonProps = {
+  children: React.ReactNode;
+};
+
+function SubmitButton({ children }: SubmitButtonProps) {
+  const { pending } = useFormStatus();
+
+  return (
+    <Button type="submit" disabled={pending}>
+      {pending ? <Loader2 className="animate-spin" /> : children}
+    </Button>
+  );
 }
 
 
@@ -89,7 +99,7 @@ function LanguageSettingsForm({ initialSettings }: { initialSettings: LanguageSe
     )
 }
 
-function BrandingSettingsForm({ initialSettings }: { initialSettings: PlatformBrandingSettings }) {
+function BrandingSettingsForm({ initialSettings }: { initialSettings: PlatformBrandingSettings | null }) {
   const [state, formAction] = useActionState(updateBrandingSettings, null);
   const { toast } = useToast();
 
@@ -113,13 +123,13 @@ function BrandingSettingsForm({ initialSettings }: { initialSettings: PlatformBr
               <CardContent className="space-y-4">
                   <div className="space-y-2">
                       <Label htmlFor="platformLogoUrl">Platform Logo URL</Label>
-                      <Input id="platformLogoUrl" name="platformLogoUrl" placeholder="https://example.com/logo.png" defaultValue={initialSettings.platformLogoUrl || ''} />
-                      {initialSettings.platformLogoUrl && <Image src={initialSettings.platformLogoUrl} alt="Logo Preview" width={120} height={40} className="mt-2 rounded-md border p-2 object-contain" data-ai-hint="logo" />}
+                      <Input id="platformLogoUrl" name="platformLogoUrl" placeholder="https://example.com/logo.png" defaultValue={initialSettings?.platformLogoUrl || ''} />
+                      {initialSettings?.platformLogoUrl && <Image src={initialSettings.platformLogoUrl} alt="Logo Preview" width={120} height={40} className="mt-2 rounded-md border p-2 object-contain" data-ai-hint="logo" />}
                   </div>
                    <div className="space-y-2">
                       <Label htmlFor="platformFaviconUrl">Platform Favicon URL</Label>
-                      <Input id="platformFaviconUrl" name="platformFaviconUrl" placeholder="https://example.com/favicon.ico" defaultValue={initialSettings.platformFaviconUrl || ''} />
-                      {initialSettings.platformFaviconUrl?.startsWith('https://') && (
+                      <Input id="platformFaviconUrl" name="platformFaviconUrl" placeholder="https://example.com/favicon.ico" defaultValue={initialSettings?.platformFaviconUrl || ''} />
+                      {initialSettings?.platformFaviconUrl?.startsWith('https://') && (
                           <Image src={initialSettings.platformFaviconUrl} alt="Favicon Preview" width={32} height={32} className="mt-2 rounded-md border p-1 object-contain" data-ai-hint="favicon"/>
                       )}
                       <p className="text-sm text-muted-foreground">
@@ -128,7 +138,7 @@ function BrandingSettingsForm({ initialSettings }: { initialSettings: PlatformBr
                   </div>
                   <div className="space-y-2">
                       <Label htmlFor="platformHeading">Browser Heading (tab title)</Label>
-                      <Input id="platformHeading" name="platformHeading" placeholder="OrderFly" defaultValue={initialSettings.platformHeading || 'OrderFly'} />
+                      <Input id="platformHeading" name="platformHeading" placeholder="OrderFly" defaultValue={initialSettings?.platformHeading || 'OrderFly'} />
                       <p className="text-sm text-muted-foreground">
                         This is the browser title (tab text) - not a general headline in the UI.
                       </p>
@@ -265,7 +275,7 @@ export function SettingsForm({ initialAnalyticsSettings, initialPaymentGatewaySe
                     </Tabs>
                 </CardContent>
                 <CardFooter className="border-t px-6 py-4">
-                    <SubmitButton pending={isPending}>Save Payment Settings</SubmitButton>
+                    <SubmitButton>Save Payment Settings</SubmitButton>
                 </CardFooter>
                 </Card>
             </form>
@@ -294,7 +304,7 @@ export function SettingsForm({ initialAnalyticsSettings, initialPaymentGatewaySe
                     </div>
                 </CardContent>
                 <CardFooter className="border-t px-6 py-4">
-                    <SubmitButton pending={isPending}>Save Analytics Settings</SubmitButton>
+                    <SubmitButton>Save Analytics Settings</SubmitButton>
                 </CardFooter>
                 </Card>
             </form>
