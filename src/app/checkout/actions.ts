@@ -120,6 +120,15 @@ function simpleHash(str: string): number {
     return Math.abs(hash);
 }
 
+const toNumber = (value: number | string | null | undefined): number => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+};
+
 
 // This function is now obsolete. The logic has been integrated into the Stripe checkout action.
 // We keep it here to avoid breaking any potential old references, but it should be considered deprecated.
@@ -224,6 +233,7 @@ export async function createStripeCheckoutSessionAction(
         });
     }
 
+    const cartDiscountTotal = toNumber(paymentDetails.cartDiscountTotal);
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ['card'],
         line_items,
@@ -245,9 +255,9 @@ export async function createStripeCheckoutSessionAction(
         },
     };
 
-    if (paymentDetails.cartDiscountTotal && paymentDetails.cartDiscountTotal > 0) {
+    if (cartDiscountTotal > 0) {
         const coupon = await stripe.coupons.create({
-            amount_off: Math.round(paymentDetails.cartDiscountTotal * 100),
+            amount_off: Math.round(cartDiscountTotal * 100),
             currency: 'dkk',
             duration: 'once',
             name: paymentDetails.cartDiscountName || 'Discount',
