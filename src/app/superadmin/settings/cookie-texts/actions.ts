@@ -57,8 +57,8 @@ export async function createOrUpdateCookieTexts(formData: FormData) {
             functional: { title: formData.get('cat_functional_title'), description: formData.get('cat_functional_desc') },
             analytics: { title: formData.get('cat_analytics_title'), description: formData.get('cat_analytics_desc') },
             performance: { title: formData.get('cat_performance_title'), description: formData.get('cat_performance_desc') },
-            marketing: { title: formData.get('cat_marketing_title'), description: formData.get('cat_marketing_desc') },
             statistics: { title: formData.get('cat_statistics_title'), description: formData.get('cat_statistics_desc') },
+            marketing: { title: formData.get('cat_marketing_title'), description: formData.get('cat_marketing_desc') },
         }
     }
 
@@ -69,7 +69,7 @@ export async function createOrUpdateCookieTexts(formData: FormData) {
     
     const docId = rawData.id || doc(collection(db, 'cookie_texts')).id;
     
-    const dataToSave: Omit<CookieTexts, 'id' | 'last_updated'> & {last_updated: Timestamp} = {
+    const dataToSave: Omit<CookieTexts, 'id' | 'last_updated'> = {
         consent_version: rawData.consent_version as string,
         language: rawData.language as string,
         brand_id: rawData.brand_id as string | undefined,
