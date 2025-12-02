@@ -62,7 +62,10 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
         notFound();
     }
 
-    const sendFeedbackEmailWithId = sendFeedbackRequestEmail.bind(null, order.id);
+    const sendFeedbackEmailWithId = async (formData: FormData) => {
+      'use server';
+      await sendFeedbackRequestEmail(order.id);
+    };
 
     return (
         <div className="space-y-6">
