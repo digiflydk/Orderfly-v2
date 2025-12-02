@@ -4,7 +4,22 @@
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, where, documentId, runTransaction, writeBatch } from 'firebase/firestore';
+import {
+  collection,
+  doc,
+  setDoc,
+  deleteDoc,
+  getDocs,
+  query,
+  orderBy,
+  Timestamp,
+  getDoc,
+  where,
+  documentId,
+  runTransaction,
+  writeBatch,
+  updateDoc,
+} from 'firebase/firestore';
 import type { Upsell, Product, Category, CartItem, ProductForMenu } from '@/types';
 import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
@@ -208,8 +223,8 @@ export async function getUpsellById(upsellId: string): Promise<Upsell | null> {
     if (docSnap.exists()) {
         const data = docSnap.data() as Upsell;
         return { 
-            id: docSnap.id, 
-            ...data
+            ...data,
+            id: docSnap.id,
         } as Upsell;
     }
     return null;
