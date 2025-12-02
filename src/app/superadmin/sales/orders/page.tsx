@@ -1,53 +1,29 @@
 
-
 import type { AsyncPageProps } from "@/types/next-async-props";
-import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
+import { resolveSearchParams } from "@/lib/next/resolve-props";
 import { getOrders } from "@/lib/superadmin/getOrders";
-import { getBrands } from "@/app/superadmin/brands/actions";
-import { getAllLocations } from "@/app/superadmin/locations/actions";
 import { OrdersClientPage, type ClientOrderSummary } from "@/components/superadmin/sales/orders-client-page";
 import type { OrderSummary } from "@/types";
-import { SACommonFilters } from "@/types/superadmin";
-import { redirect } from 'next/navigation';
+import type { SACommonFilters } from "@/types/superadmin";
 
 export const revalidate = 0; // Force dynamic rendering
 
-export default async function OrdersPage({ params, searchParams }: AsyncPageProps) {
-    const routeParams = await resolveParams(params);
-    const query = await resolveSearchParams(searchParams);
-    
-    if (!query.from || !query.to) {
-        const today = new Date().toISOString().slice(0, 10);
-        redirect(`/superadmin/sales/orders?from=${today}&to=${today}`);
-    }
+export default async function OrdersPage({ searchParams }: AsyncPageProps) {
+  // Læs evt. filtrering fra querystring, typed som SACommonFilters (partial)
+  const filters = await resolveSearchParams<Partial<SACommonFilters>>(searchParams);
 
-    const filters: SACommonFilters = {
-        dateFrom: (query.from as string),
-        dateTo: (query.to as string),
-        brandId: (query.brand as string) || 'all',
-        locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc as string]) : [],
-    };
-    
-    const [orders, brands, locations] = await Promise.all([
-        getOrders(filters),
-        getBrands(),
-        getAllLocations(),
-    ]);
-    
-    const serializedOrders: ClientOrderSummary[] = orders.map(order => ({
-        ...order,
-        total: order.totalAmount,
-        createdAt: order.createdAt.toISOString(),
-        paidAt: order.paidAt?.toISOString(),
-        updatedAt: order.updatedAt?.toISOString(),
-    }));
+  // Hent ordrer via admin-API
+  const orders: OrderSummary[] = await getOrders(filters);
 
-    return (
-        <OrdersClientPage 
-            initialOrders={serializedOrders}
-            brands={brands}
-            locations={locations}
-            initialFilters={filters}
-        />
-    );
+  // Map til ClientOrderSummary, som OrdersClientPage forventer:
+  //   id: string;
+  //   total: number;
+  //   createdAt?: string;
+  const serializedOrders: ClientOrderSummary[] = orders.map((order) => ({
+    id: order.id,
+    total: order.totalAmount,
+    createdAt: order.createdAt.toISOString(),
+  }));
+
+  return <OrdersClientPage data={serializedOrders} />;
 }
