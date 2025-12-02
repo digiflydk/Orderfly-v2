@@ -88,8 +88,8 @@ export async function createOrUpdateUpsell(
       brandId: formData.get('brandId'),
       locationIds: formData.getAll('locationIds'),
       upsellName: formData.get('upsellName'),
-      description: formData.get('description') || null,
-      imageUrl: formData.get('imageUrl') || null,
+      description: formData.get('description'),
+      imageUrl: formData.get('imageUrl'),
       offerType: formData.get('offerType'),
       offerProductIds: formData.getAll('offerProductIds'),
       offerCategoryIds: formData.getAll('offerCategoryIds'),
@@ -194,16 +194,12 @@ export async function getUpsells(): Promise<Upsell[]> {
   const q = query(collection(db, 'upsells'), orderBy('upsellName'));
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => {
-    const data = doc.data();
+    const data = doc.data() as Omit<Upsell, 'id'>;
     return { 
       ...data,
       id: doc.id,
-      startDate: data.startDate ? (data.startDate as Timestamp).toDate() : undefined,
-      endDate: data.endDate ? (data.endDate as Timestamp).toDate() : undefined,
-      createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
-      updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : new Date(),
-    }
-  }) as Upsell[];
+    } as Upsell;
+  });
 }
 
 export async function getUpsellById(upsellId: string): Promise<Upsell | null> {
@@ -212,12 +208,8 @@ export async function getUpsellById(upsellId: string): Promise<Upsell | null> {
     if (docSnap.exists()) {
         const data = docSnap.data();
         return { 
-            ...data,
-            id: docSnap.id,
-            startDate: data.startDate ? (data.startDate as Timestamp).toDate() : undefined,
-            endDate: data.endDate ? (data.endDate as Timestamp).toDate() : undefined,
-            createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
-            updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : new Date(),
+            id: docSnap.id, 
+            ...data
         } as Upsell;
     }
     return null;
@@ -247,17 +239,13 @@ export async function getActiveUpsellForCart({ brandId, locationId, cartItems, c
       return {
         ...data,
         id: doc.id,
-        startDate: data.startDate ? (data.startDate as Timestamp).toDate() : undefined,
-        endDate: data.endDate ? (data.endDate as Timestamp).toDate() : undefined,
-        createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : undefined,
-        updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : undefined,
       } as Upsell
     });
     
     // 2. Filter by date, day, and time in code
     const activeNowUpsells = allUpsells.filter(upsell => {
-        const startDate = upsell.startDate;
-        const endDate = upsell.endDate;
+        const startDate = upsell.startDate ? (upsell.startDate as unknown as Timestamp).toDate() : null;
+        const endDate = upsell.endDate ? (upsell.endDate as unknown as Timestamp).toDate() : null;
         if (startDate && now < startDate) return false;
         if (endDate && now > endDate) return false;
 
