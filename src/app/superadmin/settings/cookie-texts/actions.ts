@@ -58,6 +58,7 @@ export async function createOrUpdateCookieTexts(formData: FormData) {
             analytics: { title: formData.get('cat_analytics_title'), description: formData.get('cat_analytics_desc') },
             performance: { title: formData.get('cat_performance_title'), description: formData.get('cat_performance_desc') },
             marketing: { title: formData.get('cat_marketing_title'), description: formData.get('cat_marketing_desc') },
+            statistics: { title: formData.get('cat_statistics_title'), description: formData.get('cat_statistics_desc') },
         }
     }
 
@@ -82,11 +83,30 @@ export async function createOrUpdateCookieTexts(formData: FormData) {
         save_preferences_button: rawData.save_preferences_button as string,
         modal_accept_all_button: rawData.modal_accept_all_button as string,
         categories: {
-            necessary: { title: rawData.categories.necessary.title as string, description: rawData.categories.necessary.description as string},
-            functional: { title: rawData.categories.functional.title as string, description: rawData.categories.functional.description as string },
-            analytics: { title: rawData.categories.analytics.title as string, description: rawData.categories.analytics.description as string},
-            performance: { title: rawData.categories.performance.title as string, description: rawData.categories.performance.description as string},
-            marketing: { title: rawData.categories.marketing.title as string, description: rawData.categories.marketing.description as string},
+          necessary: {
+            title: rawData.categories.necessary.title as string,
+            description: rawData.categories.necessary.description as string,
+          },
+          functional: {
+            title: rawData.categories.functional.title as string,
+            description: rawData.categories.functional.description as string,
+          },
+          analytics: {
+            title: rawData.categories.analytics.title as string,
+            description: rawData.categories.analytics.description as string,
+          },
+          statistics: {
+            title: rawData.categories.statistics.title as string,
+            description: rawData.categories.statistics.description as string,
+          },
+          performance: {
+            title: rawData.categories.performance.title as string,
+            description: rawData.categories.performance.description as string,
+          },
+          marketing: {
+            title: rawData.categories.marketing.title as string,
+            description: rawData.categories.marketing.description as string,
+          },
         },
     };
     
