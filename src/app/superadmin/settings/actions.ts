@@ -4,7 +4,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import type { PaymentGatewaySettings, LanguageSettings, Brand, PlatformBrandingSettings } from '@/types';
+import type { AnalyticsSettings, PaymentGatewaySettings, LanguageSettings, Brand, PlatformBrandingSettings } from '@/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getPlatformBrandingSettings } from './queries';
@@ -90,7 +90,7 @@ const defaultLanguageSettings: LanguageSettings = {
   supportedLanguages: [{ code: 'en', name: 'English' }, { code: 'da', name: 'Dansk' }],
 };
 
-const defaultAnalyticsSettings = { ga4TrackingId: '', gtmContainerId: '' };
+const defaultAnalyticsSettings: AnalyticsSettings = { ga4TrackingId: '', gtmContainerId: '' };
 
 async function saveBranding(data: PlatformBrandingSettings) {
     const settingsRef = doc(db, 'platform_settings', 'branding');
@@ -234,16 +234,33 @@ export async function updateBrandingSettings(
 
 
 // Function to get all settings
-export async function getPlatformSettings() {
+export async function getPlatformSettings(): Promise<{
+  analyticsSettings: AnalyticsSettings;
+  paymentGatewaySettings: PaymentGatewaySettings;
+  languageSettings: LanguageSettings;
+  brandingSettings: PlatformBrandingSettings | null;
+}> {
   const analyticsDoc = await getDoc(doc(db, 'platform_settings', 'analytics'));
   const paymentDoc = await getDoc(doc(db, 'platform_settings', 'payment_gateway'));
   const languagesDoc = await getDoc(doc(db, 'platform_settings', 'languages'));
   const brandingSettings = await getPlatformBrandingSettings();
 
+  const analyticsSettings: AnalyticsSettings = analyticsDoc.exists()
+    ? (analyticsDoc.data() as AnalyticsSettings)
+    : defaultAnalyticsSettings;
+
+  const paymentGatewaySettings: PaymentGatewaySettings = paymentDoc.exists()
+    ? (paymentDoc.data() as PaymentGatewaySettings)
+    : defaultPaymentGatewaySettings;
+
+  const languageSettings: LanguageSettings = languagesDoc.exists()
+    ? (languagesDoc.data() as LanguageSettings)
+    : defaultLanguageSettings;
+
   return {
-    analyticsSettings: analyticsDoc.exists() ? analyticsDoc.data() : defaultAnalyticsSettings,
-    paymentGatewaySettings: paymentDoc.exists() ? paymentDoc.data() as PaymentGatewaySettings : defaultPaymentGatewaySettings,
-    languageSettings: languagesDoc.exists() ? languagesDoc.data() as LanguageSettings : defaultLanguageSettings,
+    analyticsSettings,
+    paymentGatewaySettings,
+    languageSettings,
     brandingSettings,
   };
 }
@@ -267,5 +284,3 @@ export async function getActiveStripeWebhookSecret(): Promise<string | null> {
     const mode = settings.paymentGatewaySettings.activeMode;
     return settings.paymentGatewaySettings[mode]?.webhookSecret || null;
 }
-
-

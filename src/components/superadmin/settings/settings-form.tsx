@@ -1,7 +1,8 @@
 
 'use client';
 
-import { useEffect, useState, useTransition } from 'react';
+import { useEffect, useState, useTransition, useActionState } from 'react';
+import { useFormStatus } from 'react-dom';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
@@ -9,7 +10,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
-import { updateAnalyticsSettings, updatePaymentGatewaySettings, updateLanguageSettings, updateBrandingSettings } from '@/app/superadmin/settings/actions';
+import { updateAnalyticsSettings, updatePaymentGatewaySettings, updateLanguageSettings, updateBrandingSettings, type FormState } from '@/app/superadmin/settings/actions';
 import type { AnalyticsSettings, PaymentGatewaySettings, LanguageSettings, LanguageSetting, PlatformBrandingSettings } from '@/types';
 import { Loader2, Copy, Trash2, Cookie } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
@@ -22,7 +23,7 @@ interface SettingsFormProps {
   initialAnalyticsSettings: AnalyticsSettings;
   initialPaymentGatewaySettings: PaymentGatewaySettings;
   initialLanguageSettings: LanguageSettings;
-  initialBrandingSettings: PlatformBrandingSettings;
+  initialBrandingSettings: PlatformBrandingSettings | null;
 }
 
 function SubmitButton({ children, pending }: { children: React.ReactNode, pending?: boolean }) {
@@ -88,25 +89,22 @@ function LanguageSettingsForm({ initialSettings }: { initialSettings: LanguageSe
     )
 }
 
-function BrandingSettingsForm({ initialSettings }: { initialSettings: PlatformBrandingSettings }) {
-  const [isPending, startTransition] = useTransition();
+function BrandingSettingsForm({ initialSettings }: { initialSettings: PlatformBrandingSettings | null }) {
+  const [state, formAction] = useActionState(updateBrandingSettings, null);
   const { toast } = useToast();
 
-  const handleBrandingAction = async (formData: FormData) => {
-      startTransition(async () => {
-        const result = await updateBrandingSettings(null, formData);
-        if (result?.message) {
-            if (result.error) {
-                toast({ variant: 'destructive', title: 'Error', description: result.message });
-            } else {
-                toast({ title: 'Success!', description: result.message });
-            }
-        }
-      });
-  }
+  useEffect(() => {
+    if (state?.message) {
+      if (state.error) {
+        toast({ variant: 'destructive', title: 'Error', description: state.message });
+      } else {
+        toast({ title: 'Success!', description: state.message });
+      }
+    }
+  }, [state, toast]);
 
   return (
-      <form action={handleBrandingAction}>
+      <form action={formAction}>
           <Card>
               <CardHeader>
                   <CardTitle>Platform Branding</CardTitle>
@@ -115,29 +113,29 @@ function BrandingSettingsForm({ initialSettings }: { initialSettings: PlatformBr
               <CardContent className="space-y-4">
                   <div className="space-y-2">
                       <Label htmlFor="platformLogoUrl">Platform Logo URL</Label>
-                      <Input id="platformLogoUrl" name="platformLogoUrl" placeholder="https://example.com/logo.png" defaultValue={initialSettings.platformLogoUrl || ''} />
-                      {initialSettings.platformLogoUrl && <Image src={initialSettings.platformLogoUrl} alt="Logo Preview" width={120} height={40} className="mt-2 rounded-md border p-2 object-contain" data-ai-hint="logo" />}
+                      <Input id="platformLogoUrl" name="platformLogoUrl" placeholder="https://example.com/logo.png" defaultValue={initialSettings?.platformLogoUrl || ''} />
+                      {initialSettings?.platformLogoUrl && <Image src={initialSettings.platformLogoUrl} alt="Logo Preview" width={120} height={40} className="mt-2 rounded-md border p-2 object-contain" data-ai-hint="logo" />}
                   </div>
                    <div className="space-y-2">
                       <Label htmlFor="platformFaviconUrl">Platform Favicon URL</Label>
-                      <Input id="platformFaviconUrl" name="platformFaviconUrl" placeholder="https://example.com/favicon.ico" defaultValue={initialSettings.platformFaviconUrl || ''} />
-                      {initialSettings.platformFaviconUrl?.startsWith('https://') && (
+                      <Input id="platformFaviconUrl" name="platformFaviconUrl" placeholder="https://example.com/favicon.ico" defaultValue={initialSettings?.platformFaviconUrl || ''} />
+                      {initialSettings?.platformFaviconUrl?.startsWith('https://') && (
                           <Image src={initialSettings.platformFaviconUrl} alt="Favicon Preview" width={32} height={32} className="mt-2 rounded-md border p-1 object-contain" data-ai-hint="favicon"/>
                       )}
                       <p className="text-sm text-muted-foreground">
-                          Anbefalet: <code>.ico</code>, <code>.png</code> eller <code>.svg</code> i 16×16, 32×32 eller 48×48 px. Tomt felt er tilladt. Kun <code>https</code> accepteres.
+                          Recommended: <code>.ico</code>, <code>.png</code> or <code>.svg</code> in 16×16, 32×32 or 48×48 px. Empty field is allowed. Only <code>https</code> is accepted.
                       </p>
                   </div>
                   <div className="space-y-2">
                       <Label htmlFor="platformHeading">Browser Heading (tab title)</Label>
-                      <Input id="platformHeading" name="platformHeading" placeholder="OrderFly" defaultValue={initialSettings.platformHeading || 'OrderFly'} />
+                      <Input id="platformHeading" name="platformHeading" placeholder="OrderFly" defaultValue={initialSettings?.platformHeading || 'OrderFly'} />
                       <p className="text-sm text-muted-foreground">
-                        Dette er <strong>browserens titel</strong> (tab‑tekst) – ikke en generel overskrift i brugerfladen.
+                        This is the browser title (tab text) - not a general headline in the UI.
                       </p>
                   </div>
               </CardContent>
               <CardFooter className="border-t px-6 py-4">
-                  <SubmitButton pending={isPending}>Save Branding Settings</SubmitButton>
+                  <SubmitButton>Save Branding Settings</SubmitButton>
               </CardFooter>
           </Card>
       </form>
