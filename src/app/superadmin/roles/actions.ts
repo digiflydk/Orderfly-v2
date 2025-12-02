@@ -1,8 +1,9 @@
 
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, getDoc } from 'firebase/firestore';
 import type { Role } from '@/types';
 import { z } from 'zod';
@@ -30,7 +31,6 @@ export async function createOrUpdateRole(
 ): Promise<FormState> {
   const rawData: Record<string, any> = Object.fromEntries(formData.entries());
   rawData.permissions = formData.getAll('permissions');
-  const db = getAdminDb();
 
   const validatedFields = roleSchema.safeParse(rawData);
 
@@ -64,7 +64,6 @@ export async function createOrUpdateRole(
 export async function deleteRole(roleId: string) {
     // Note: In a real app, you'd check if this role is assigned to any users before deleting.
     try {
-        const db = getAdminDb();
         await deleteDoc(doc(db, "roles", roleId));
         revalidatePath("/superadmin/roles");
         return { message: "Role deleted successfully.", error: false };
@@ -76,14 +75,12 @@ export async function deleteRole(roleId: string) {
 }
 
 export async function getRoles(): Promise<Role[]> {
-    const db = getAdminDb();
     const q = query(collection(db, 'roles'), orderBy('name'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Role[];
 }
 
 export async function getRoleById(roleId: string): Promise<Role | null> {
-    const db = getAdminDb();
     const docRef = doc(db, 'roles', roleId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
