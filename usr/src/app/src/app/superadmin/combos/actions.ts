@@ -131,7 +131,7 @@ export async function createOrUpdateCombo(
       };
     }
     
-    const { id: validatedId, ...comboData } = validatedFields.data;
+    const comboData = validatedFields.data;
 
     const allProductIds = comboData.productGroups.flatMap(g => g.productIds);
     if (allProductIds.length === 0) {
