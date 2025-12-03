@@ -4,15 +4,15 @@ import { notFound } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { MOCK_CODE_REVIEWS } from '@/lib/code-review-mock-data';
-import type { CodeReview } from '@/types';
 import { ArrowLeft, CheckCircle, FileDiff, GitBranch, GitCommit, User, Calendar, Tag } from 'lucide-react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
+type MockCodeReview = (typeof MOCK_CODE_REVIEWS)[number];
 
-function getReviewDetails(reviewId: string): CodeReview | null {
+function getReviewDetails(reviewId: string): MockCodeReview | null {
     const review = MOCK_CODE_REVIEWS.find(r => r.id === reviewId);
     if (!review) {
         return null;
