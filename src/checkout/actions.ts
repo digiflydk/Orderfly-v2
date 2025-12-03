@@ -5,15 +5,15 @@
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, Timestamp, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from 'firebase/firestore';
+import { collection, doc, setDoc, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from 'firebase/firestore';
 import type { CartItem, Discount, OrderDetail, Brand, Location, CustomerInfo, Customer, StandardDiscount, PaymentDetails, MinimalCartItem, Product, ComboMenu, Topping, ComboSelection, LoyaltySettings, AnonymousCookieConsent } from '@/types';
 import { getDiscountByCode } from '@/app/superadmin/discounts/actions';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
-import { getToppings } from '../superadmin/toppings/actions';
-import { getLoyaltySettings } from '../superadmin/loyalty/actions';
-import { getActiveStripeSecretKey } from '../superadmin/settings/actions';
+import { getToppings } from '@/app/superadmin/toppings/actions';
+import { getLoyaltySettings } from '@/app/superadmin/loyalty/actions';
+import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
 import { getOrigin } from '@/lib/url';
 import { generateOrderId } from '@/lib/order-id';
 import { getOrderById, getOrderByCheckoutSessionId as getOrderBySessionId } from './order-actions';
@@ -45,7 +45,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                     marketing: data.marketing,
                     statistics: data.statistics,
                     functional: data.functional,
-                    timestamp: data.last_seen,
+                    timestamp: (data.last_seen as any).toDate(),
                     consent_version: data.consent_version,
                     linked_anon_id: anonymousConsentId,
                     origin_brand: data.origin_brand,
@@ -66,7 +66,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 // These will be updated by the webhook to prevent race conditions
                 // totalOrders: (customerData.totalOrders || 0) + 1,
                 // totalSpend: (customerData.totalSpend || 0) + newOrderTotal,
-                // lastOrderDate: Timestamp.now(),
+                // lastOrderDate: new Date(),
                 locationIds: Array.from(new Set([...(customerData.locationIds || []), locationId])),
                 marketingConsent: customerData.marketingConsent || customerInfo.subscribeToNewsletter,
             };
@@ -91,7 +91,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 country: 'DK',
                 marketingConsent: customerInfo.subscribeToNewsletter,
                 status: 'active',
-                createdAt: Timestamp.now(),
+                createdAt: new Date(),
                 totalOrders: 0, // Initial creation, will be updated by webhook
                 totalSpend: 0,  // Initial creation
                 locationIds: [locationId],
@@ -119,6 +119,15 @@ function simpleHash(str: string): number {
     }
     return Math.abs(hash);
 }
+
+const toNumber = (value: number | string | null | undefined): number => {
+    if (typeof value === 'number') return value;
+    if (typeof value === 'string' && value.trim() !== '') {
+        const parsed = Number(value);
+        return Number.isNaN(parsed) ? 0 : parsed;
+    }
+    return 0;
+};
 
 
 // This function is now obsolete. The logic has been integrated into the Stripe checkout action.
@@ -148,7 +157,7 @@ export async function createStripeCheckoutSessionAction(
     if (!stripeSecretKey) {
         throw new Error('Stripe API key is not configured.');
     }
-    const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
+    const stripe = new Stripe(stripeSecretKey);
 
     const origin = await getOrigin();
     
@@ -190,14 +199,20 @@ export async function createStripeCheckoutSessionAction(
     });
 
 
-    const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => ({
-        price_data: {
-            currency: 'dkk',
-            product_data: { name: item.name, description: item.toppings?.join(', ') || undefined },
-            unit_amount: Math.round(item.unitPrice * 100),
-        },
-        quantity: item.quantity,
-    }));
+    const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => {
+        if (item.unitPrice == null) {
+            throw new Error(`Missing unitPrice for cart item: ${item.name ?? 'unknown'}`);
+        }
+
+        return {
+            price_data: {
+                currency: 'dkk',
+                product_data: { name: item.name, description: item.toppings?.join(', ') || undefined },
+                unit_amount: Math.round(item.unitPrice! * 100),
+            },
+            quantity: item.quantity,
+        };
+    });
 
     if (deliveryType === 'delivery' && paymentDetails.deliveryFee > 0) {
         line_items.push({
@@ -218,31 +233,14 @@ export async function createStripeCheckoutSessionAction(
         });
     }
 
-    const coupons: Stripe.Checkout.SessionCreateParams.Coupon[] = [];
-    if (paymentDetails.cartDiscountTotal && paymentDetails.cartDiscountTotal > 0) {
-        const coupon = await stripe.coupons.create({
-            amount_off: Math.round(paymentDetails.cartDiscountTotal * 100),
-            currency: 'dkk',
-            duration: 'once',
-            name: paymentDetails.cartDiscountName,
-        });
-        coupons.push(coupon.id);
-    }
-    
-    // Step 2: Create Stripe session with orderId in metadata
-    const success_url = `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}`;
-    const cancel_url = `${origin}/${brandSlug}/${locationSlug}/checkout/cancel`;
-
-    const statement_descriptor = makeDescriptorPrefix(brand.name);
-    const statement_descriptor_suffix = makeDescriptorSuffix(location.city);
-
-    const session = await stripe.checkout.sessions.create({
+    const cartDiscountTotal = toNumber(paymentDetails.cartDiscountTotal);
+    const sessionParams: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ['card'],
         line_items,
         mode: 'payment',
         customer_email: customerInfo.email,
-        success_url: success_url,
-        cancel_url: cancel_url,
+        success_url: `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
+        cancel_url: `${origin}/${brandSlug}/${locationSlug}/checkout/cancel`,
         metadata: {
             orderId,
             brandId,
@@ -250,13 +248,25 @@ export async function createStripeCheckoutSessionAction(
             appliedDiscountId: appliedDiscountId || '',
             anonymousConsentId: anonymousConsentId || '',
         },
-        discounts: coupons,
         payment_intent_data: {
-            statement_descriptor: statement_descriptor,
-            statement_descriptor_suffix: statement_descriptor_suffix,
+            statement_descriptor: makeDescriptorPrefix(brand.name),
+            statement_descriptor_suffix: makeDescriptorSuffix(location.city),
             metadata: { orderId, brandId, locationId },
         },
-    });
+    };
+
+    if (cartDiscountTotal > 0) {
+        const coupon = await stripe.coupons.create({
+            amount_off: Math.round(cartDiscountTotal * 100),
+            currency: 'dkk',
+            duration: 'once',
+            name: paymentDetails.cartDiscountName || 'Discount',
+        });
+        sessionParams.discounts = [{ coupon: coupon.id }];
+    }
+    
+    // Step 2: Create Stripe session with orderId in metadata
+    const session = await stripe.checkout.sessions.create(sessionParams);
     
     // Step 3: Patch order with session ID
     await updateDoc(orderRef, {
@@ -323,5 +333,7 @@ export async function waitForOrderBySessionId(sessionId: string, timeoutMs = 200
     }
     return null;
 }
+
+    
 
     
