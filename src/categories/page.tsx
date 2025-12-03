@@ -18,27 +18,16 @@ export default async function CategoriesPage() {
     const brandMap = new Map(brands.map(b => [b.id, b.name]));
 
     const categoriesWithDetails = categories.map((category, index) => {
-        let brandId: string | undefined;
-        let brandName: string | undefined;
-
-        // Iterate through all locationIds until a valid brand is found
-        for (const locId of category.locationIds) {
-            const locInfo = locationMap.get(locId);
-            if (locInfo && locInfo.brandId) {
-                brandId = locInfo.brandId;
-                brandName = brandMap.get(brandId) || 'Unknown Brand';
-                break; // Found a valid brand, no need to look further
-            }
-        }
+        // Correctly find brandName without overwriting brandId
+        const brandName = brandMap.get(category.brandId) || 'Unknown Brand';
         
         return {
             ...category,
             sortOrder: category.sortOrder ?? index, // Fallback sortOrder
+            brandName: brandName,
             locationNames: category.locationIds?.map(id => locationMap.get(id)?.name || 'Unknown Location').join(', ') || '',
-            brandId: brandId,
-            brandName: brandName || 'Unknown Brand'
         };
-    }).sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));
+    });
 
     return (
         <CategoriesClientPage 
@@ -48,3 +37,4 @@ export default async function CategoriesPage() {
         />
     );
 }
+
