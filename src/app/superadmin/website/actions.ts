@@ -6,7 +6,13 @@ import { getGeneralSettings, saveGeneralSettings } from '@/services/settings';
 import type { GeneralSettings, Customer } from '@/types/settings';
 import { revalidatePath } from 'next/cache';
 import { getAllLeads, Lead } from '@/services/leads';
-import { v4 as uuidv4 } from 'uuid';
+
+const generateId = () => {
+    if (typeof crypto !== 'undefined' && 'randomUUID' in crypto) {
+      return crypto.randomUUID();
+    }
+    return Math.random().toString(36).slice(2);
+};
 
 // Types are moved here since the original file is disabled.
 export const AIProjectQualificationInputSchema = z.object({
@@ -111,7 +117,7 @@ export async function saveCustomerAction(customerData: Omit<Customer, 'id'>): Pr
     try {
         const settings = await getGeneralSettings();
         const customers = settings?.customers || [];
-        const newCustomer: Customer = { ...customerData, id: uuidv4() };
+        const newCustomer: Customer = { ...customerData, id: generateId() };
         const updatedCustomers = [...customers, newCustomer];
         await saveGeneralSettings({ customers: updatedCustomers });
         revalidatePath('/cms/customers');
