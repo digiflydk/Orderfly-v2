@@ -1,5 +1,4 @@
 
-
 import { notFound } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -10,9 +9,9 @@ import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';
 
-type MockCodeReview = (typeof MOCK_CODE_REVIEWS)[number];
+type CodeReviewDetail = (typeof MOCK_CODE_REVIEWS)[number];
 
-function getReviewDetails(reviewId: string): MockCodeReview | null {
+function getReviewDetails(reviewId: string): CodeReviewDetail | null {
     const review = MOCK_CODE_REVIEWS.find(r => r.id === reviewId);
     if (!review) {
         return null;
