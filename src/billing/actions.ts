@@ -7,7 +7,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import type { Brand, Subscription, SubscriptionPlan, User, Invoice } from '@/types';
 import { getBrands } from '../app/superadmin/brands/actions';
 import { getUsers } from '../app/superadmin/users/actions';
-import { getSubscriptionPlans } from '../app/superadmin/subscriptions/page';
+import { getSubscriptionPlans } from '../app/superadmin/subscriptions/actions';
 import { getActiveStripeKey } from '../app/superadmin/settings/actions';
 import Stripe from 'stripe';
 
@@ -78,7 +78,7 @@ export async function getBrandBillingDetails(brandId: string) {
     let owner: User | null = null;
     if (brand.ownerId) {
         const ownerDoc = await db.collection('users').doc(brand.ownerId).get();
-        if (ownerDoc.exists()) {
+        if (ownerDoc.exists) {
             owner = ownerDoc.data() as User;
         }
     }
@@ -86,7 +86,7 @@ export async function getBrandBillingDetails(brandId: string) {
     let plan: SubscriptionPlan | null = null;
     if (brand.subscriptionPlanId) {
         const planDoc = await db.collection('subscription_plans').doc(brand.subscriptionPlanId).get();
-        if (planDoc.exists()) {
+        if (planDoc.exists) {
             plan = { id: planDoc.id, ...planDoc.data() } as SubscriptionPlan;
         }
     }
