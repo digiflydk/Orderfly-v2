@@ -1,3 +1,4 @@
+
 //
 // ========================================
 // Orderfly - Data Models & Type Definitions
@@ -991,3 +992,109 @@ export const AIProjectQualificationOutputSchema = z.object({
   }).describe("The information collected from the user so far."),
 });
 export type AIProjectQualificationOutput = z.infer<typeof AIProjectQualificationOutputSchema>;
+    
+export type BrandWebsiteConfig = {
+    active: boolean;
+    template: 'template-1';
+    domains: string[];
+    defaultLocationId: string | null;
+    faviconUrl: string | null;
+    designSystem: any;
+    seo: any;
+    social: any;
+    tracking: any;
+    legal: any;
+    updatedAt: string | null;
+};
+
+export type BrandWebsitePage = {
+    slug: string;
+    title: string;
+    subtitle?: string;
+    layout: 'rich-text-left-image-right';
+    body: string;
+    imageUrl?: string;
+    cta?: { label: string; href: string } | null;
+    seo: any;
+    sortOrder?: number;
+    isPublished: boolean;
+    createdAt: any;
+    updatedAt: any;
+}
+export type BrandWebsitePageSummary = Pick<BrandWebsitePage, 'slug' | 'title' | 'isPublished' | 'sortOrder' | 'updatedAt'>;
+
+export type BrandWebsitePageCreateInput = Omit<BrandWebsitePage, 'createdAt' | 'updatedAt'>;
+export type BrandWebsitePageUpdateInput = Partial<BrandWebsitePageCreateInput>;
+
+export type BrandWebsiteMenuHero = {
+    title: string;
+    subtitle?: string;
+    imageUrl?: string;
+    ctaLabel?: string;
+    ctaHref?: string;
+};
+
+export type BrandWebsiteMenuSettings = {
+    hero: BrandWebsiteMenuHero | null;
+    gridLayout: 2 | 3 | 4;
+    showPrice: boolean;
+    showDescription: boolean;
+    stickyCategories: boolean;
+    defaultLocationId: string | null;
+    updatedAt: string | null;
+}
+
+export type BrandWebsiteHeroSlide = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  body?: string;
+  imageUrl?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  highlight?: boolean;
+  sortOrder?: number;
+};
+export type BrandWebsitePromoTile = {
+  id: string;
+  title: string;
+  body?: string;
+  icon?: string;
+  imageUrl?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  sortOrder?: number;
+};
+export type BrandWebsiteCampaignBanner = {
+  id: string;
+  title: string;
+  body?: string;
+  imageUrl?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  active: boolean;
+};
+export type BrandWebsiteMenuPreviewItem = {
+  id: string;
+  productId: string;
+  title: string;
+  description?: string;
+  price?: number;
+  sortOrder?: number;
+};
+export type BrandWebsiteFooterCta = {
+  id: string;
+  title: string;
+  body?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+};
+
+export type BrandWebsiteHome = {
+  hero: BrandWebsiteHeroSlide[];
+  promoTiles: BrandWebsitePromoTile[];
+  campaignBanner: BrandWebsiteCampaignBanner | null;
+  menuPreview: BrandWebsiteMenuPreviewItem[];
+  footerCta: BrandWebsiteFooterCta | null;
+  updatedAt: string | null;
+};
