@@ -1,7 +1,8 @@
 
+
 import { getBrands } from './actions';
 import type { Brand, SubscriptionPlan, User } from '@/types';
-import { getSubscriptionPlans } from '../subscriptions/page';
+import { getSubscriptionPlans } from '../app/superadmin/subscriptions/actions';
 import { getUsers } from '../users/actions';
 import { BrandsClientPage } from './client-page';
 
