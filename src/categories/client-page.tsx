@@ -63,18 +63,12 @@ interface CategoriesClientPageProps {
 }
 
 
-function SortableCategoryRow({ category }: { category: CategoryWithDetails }) {
+function SortableCategoryRow({ category, onConfirmDelete }: { category: CategoryWithDetails, onConfirmDelete: (id: string) => void }) {
     const { attributes, listeners, setNodeRef, transform, transition } = useSortable({ id: category.id });
-    const { toast } = useToast();
     
     const style = {
         transform: CSS.Transform.toString(transform),
         transition,
-    };
-
-    const confirmDelete = () => {
-        const button = document.getElementById(`delete-btn-${category.id}`);
-        button?.click();
     };
 
     return (
@@ -111,7 +105,7 @@ function SortableCategoryRow({ category }: { category: CategoryWithDetails }) {
                         Edit
                         </Link>
                     </DropdownMenuItem>
-                    <DropdownMenuItem onSelect={(e) => e.preventDefault()} onClick={confirmDelete} className="text-destructive">
+                    <DropdownMenuItem onSelect={(e) => { e.preventDefault(); onConfirmDelete(category.id); }} className="text-destructive">
                         <Trash2 className="mr-2 h-4 w-4" />
                         Delete
                     </DropdownMenuItem>
@@ -124,8 +118,6 @@ function SortableCategoryRow({ category }: { category: CategoryWithDetails }) {
 
 
 export function CategoriesClientPage({ initialCategories, locations, brands }: CategoriesClientPageProps) {
-  const [isAlertOpen, setIsAlertOpen] = useState(false);
-  const [categoryToDelete, setCategoryToDelete] = useState<string | null>(null);
   const { toast } = useToast();
   const router = useRouter();
 
@@ -161,22 +153,14 @@ export function CategoriesClientPage({ initialCategories, locations, brands }: C
     });
   }, [orderedCategories, searchQuery, brandFilter]);
 
-  const confirmDelete = (categoryId: string) => {
-    setCategoryToDelete(categoryId);
-    setIsAlertOpen(true);
-  }
-  
-  const handleDelete = async () => {
-    if (!categoryToDelete) return;
-    const result = await deleteCategory(categoryToDelete);
+  const handleDelete = async (categoryId: string) => {
+    const result = await deleteCategory(categoryId);
     if(result.error) {
         toast({ variant: 'destructive', title: 'Error', description: result.message });
     } else {
         toast({ title: 'Success!', description: result.message });
         router.refresh();
     }
-    setIsAlertOpen(false);
-    setCategoryToDelete(null);
   }
 
   const handleDragEnd = (event: DragEndEvent) => {
@@ -275,7 +259,7 @@ export function CategoriesClientPage({ initialCategories, locations, brands }: C
                     <SortableContext items={filteredCategories.map(c => c.id)} strategy={verticalListSortingStrategy}>
                         <TableBody>
                             {filteredCategories.map((category) => (
-                                <SortableCategoryRow key={category.id} category={category} />
+                                <SortableCategoryRow key={category.id} category={category} onConfirmDelete={handleDelete}/>
                             ))}
                             {filteredCategories.length === 0 && (
                                 <TableRow>
