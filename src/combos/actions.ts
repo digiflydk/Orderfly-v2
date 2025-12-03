@@ -1,10 +1,11 @@
 
+
 'use server';
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, Timestamp, getDoc, documentId } from 'firebase/firestore';
-import type { ComboMenu, Product, Category } from '@/types';
+import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, Timestamp, getDoc, documentId, runTransaction } from 'firebase/firestore';
+import type { ComboMenu, Product, Category, ProductForMenu } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { getProductsByIds } from '../products/actions';
@@ -35,8 +36,8 @@ const comboMenuSchema = z.object({
     pickupPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
     deliveryPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
     isActive: z.boolean().default(true),
-    startDate: z.string().optional(),
-    endDate: z.string().optional(),
+    startDate: z.date().optional(),
+    endDate: z.date().optional(),
     activeDays: z.array(z.string()).optional().default([]),
     activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
     orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
@@ -96,12 +97,12 @@ export async function createOrUpdateCombo(
     if (id) rawData.id = id;
 
     const startDate = formData.get('startDate');
-    if (startDate) rawData.startDate = startDate as string;
+    if (startDate) rawData.startDate = new Date(startDate as string);
     const endDate = formData.get('endDate');
-    if (endDate) rawData.endDate = endDate as string;
+    if (endDate) rawData.endDate = new Date(endDate as string);
     
-    const productGroupsJSON = formData.get('productGroups') as string;
-    if (productGroupsJSON) {
+    const productGroupsJSON = formData.get('productGroups');
+    if (typeof productGroupsJSON === 'string' && productGroupsJSON.trim() !== '') {
         let parsedGroups = JSON.parse(productGroupsJSON);
         rawData.productGroups = parsedGroups.map((group: any) => ({
             ...group,
@@ -112,8 +113,8 @@ export async function createOrUpdateCombo(
         rawData.productGroups = [];
     }
 
-    const activeTimeSlotsJSON = formData.get('activeTimeSlots') as string;
-    if (activeTimeSlotsJSON) {
+    const activeTimeSlotsJSON = formData.get('activeTimeSlots');
+    if (typeof activeTimeSlotsJSON === 'string' && activeTimeSlotsJSON.trim() !== '') {
         rawData.activeTimeSlots = JSON.parse(activeTimeSlotsJSON);
     } else {
         rawData.activeTimeSlots = [];
@@ -130,7 +131,7 @@ export async function createOrUpdateCombo(
       };
     }
     
-    const comboData = validatedFields.data;
+    const { id: validatedId, ...comboData } = validatedFields.data;
 
     const allProductIds = comboData.productGroups.flatMap(g => g.productIds);
     if (allProductIds.length === 0) {
@@ -141,7 +142,7 @@ export async function createOrUpdateCombo(
         return { message: "Cannot fetch more than 30 products for a combo.", error: true };
     }
     
-    const products = await getProductsByIds(allProductIds);
+    const products = await getProductsByIds(allProductIds, comboData.brandId);
 
     if(products.some(p => p.brandId !== comboData.brandId)) {
       return { message: "Error: All selected products must belong to the selected brand.", error: true };
@@ -165,27 +166,26 @@ export async function createOrUpdateCombo(
     const priceDifferencePickup = typeof comboData.pickupPrice === 'number' ? calculatedNormalPricePickup - comboData.pickupPrice : undefined;
     const priceDifferenceDelivery = typeof comboData.deliveryPrice === 'number' ? calculatedNormalPriceDelivery - comboData.deliveryPrice : undefined;
 
-    const dataToSave: Omit<ComboMenu, 'createdAt' | 'updatedAt'> & { createdAt?: Timestamp, updatedAt: Timestamp, startDate?: Timestamp, endDate?: Timestamp } = {
-      ...comboData,
-      calculatedNormalPricePickup,
-      calculatedNormalPriceDelivery,
-      priceDifferencePickup,
-      priceDifferenceDelivery,
-      updatedAt: Timestamp.now(),
-    };
+      const dataToSave: Omit<ComboMenu, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: Timestamp, updatedAt: Timestamp, startDate?: Timestamp, endDate?: Timestamp } = {
+        ...comboData,
+        calculatedNormalPricePickup,
+        calculatedNormalPriceDelivery,
+        priceDifferencePickup,
+        priceDifferenceDelivery,
+        updatedAt: Timestamp.now(),
+      } as any;
     
-    if (comboData.startDate) dataToSave.startDate = Timestamp.fromDate(new Date(comboData.startDate));
+    if (comboData.startDate) dataToSave.startDate = Timestamp.fromDate(comboData.startDate);
     if (comboData.endDate) dataToSave.endDate = Timestamp.fromDate(new Date(comboData.endDate));
 
     const comboIdToSave = id || doc(collection(db, 'comboMenus')).id;
-    dataToSave.id = comboIdToSave;
 
     if (!id) {
       dataToSave.createdAt = Timestamp.now();
     }
     
     const comboRef = doc(db, 'comboMenus', comboIdToSave);
-    await setDoc(comboRef, dataToSave, { merge: true });
+    await setDoc(comboRef, { ...dataToSave, id: comboIdToSave }, { merge: true });
     
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -242,30 +242,28 @@ export async function getComboById(comboId: string): Promise<ComboMenu | null> {
     return null;
 }
 
-export async function getProductsForBrand(brandId: string): Promise<Product[]> {
+export async function getProductsForBrand(brandId: string): Promise<ProductForMenu[]> {
   if (!brandId) return [];
   const q = query(collection(db, 'products'), where('brandId', '==', brandId));
   const querySnapshot = await getDocs(q);
-  const products = querySnapshot.docs.map(doc => doc.data() as Product);
+  const products = querySnapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Product[];
   // Sort in memory to avoid needing a composite index for sorting
-  return products.sort((a, b) => (a.sortOrder || 999) - (b.sortOrder || 999));
+  return products.sort((a,b) => (a.sortOrder || 999) - (b.sortOrder || 999));
 }
 
 export async function getCategoriesForBrand(brandId: string): Promise<Category[]> {
     if (!brandId) return [];
     
-    // First, find all locations for the brand
     const locationsQuery = query(collection(db, 'locations'), where('brandId', '==', brandId));
     const locationsSnapshot = await getDocs(locationsQuery);
     if (locationsSnapshot.empty) return [];
     const locationIds = locationsSnapshot.docs.map(doc => doc.id);
 
-    // Then, find all categories linked to those locations
-    // Firestore 'array-contains-any' can query up to 10 values at a time.
-    // If a brand has more than 10 locations, we need to do multiple queries.
+    // Firestore 'array-contains-any' is limited to 30 values in a single query.
+    // If a brand has more than 30 locations, we need to batch the queries.
     const categoryPromises: Promise<any>[] = [];
-    for (let i = 0; i < locationIds.length; i += 10) {
-        const chunk = locationIds.slice(i, i + 10);
+    for (let i = 0; i < locationIds.length; i += 30) {
+        const chunk = locationIds.slice(i, i + 30);
         const categoriesQuery = query(collection(db, 'categories'), where('locationIds', 'array-contains-any', chunk));
         categoryPromises.push(getDocs(categoriesQuery));
     }
@@ -275,7 +273,7 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
     const categoryIds = new Set<string>();
 
     categorySnapshots.forEach(snapshot => {
-        snapshot.forEach(doc => {
+        snapshot.forEach((doc: any) => {
             if (!categoryIds.has(doc.id)) {
                 categories.push({ id: doc.id, ...doc.data() } as Category);
                 categoryIds.add(doc.id);
@@ -328,3 +326,5 @@ export async function getActiveCombosForLocation(locationId: string): Promise<Co
 
     return activeNowCombos;
 }
+
+    
