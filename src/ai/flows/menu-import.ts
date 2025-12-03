@@ -10,7 +10,9 @@
  */
 
 import {ai} from '@/ai/genkit';
-import { MenuImportInputSchema, MenuImportOutputSchema, type MenuImportInput, type MenuImportOutput } from '@/types';
+import { MenuImportInputSchema, MenuImportOutputSchema, type MenuImportInput } from '@/types';
+
+export type { MenuImportOutput } from '@/types';
 
 
 export async function menuImportFromImage(input: MenuImportInput): Promise<MenuImportOutput> {
