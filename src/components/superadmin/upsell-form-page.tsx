@@ -1,4 +1,3 @@
-
 'use client';
 
 import { z } from 'zod';
@@ -8,7 +7,7 @@ import { useEffect, useMemo, useState, useTransition, useActionState } from 'rea
 import Link from 'next/link';
 import Image from 'next/image';
 import { format } from 'date-fns';
-import { CalendarIcon, Loader2, PlusCircle, Trash2, X, Clock } from 'lucide-react';
+import { CalendarIcon, Loader2, PlusCircle, Trash2, Clock } from 'lucide-react';
 import { useFormStatus } from 'react-dom';
 
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -16,7 +15,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import type { Upsell, Brand, Product, Location, Category, ProductForMenu } from '@/types';
-import { createOrUpdateUpsell, getProductsForBrand, getCategoriesForBrand, type FormState } from '@/app/superadmin/upsells/actions';
+import { createOrUpdateUpsell, type FormState } from '@/app/superadmin/upsells/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -64,22 +63,22 @@ const upsellSchema = z.object({
     endDate: z.date().optional(),
     isActive: z.boolean().default(true),
     tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])).optional().default([]),
-}).refine(data => {
-    return !(data.offerType === 'product' && (!data.offerProductIds || data.offerProductIds.length === 0));
-}, {
-    message: "At least one product must be selected for a product-based offer.",
-    path: ["offerProductIds"],
-}).refine(data => {
-    return !(data.offerType === 'category' && (!data.offerCategoryIds || data.offerCategoryIds.length === 0));
-}, {
-    message: "At least one category must be selected for a category-based offer.",
-    path: ["offerCategoryIds"],
-}).refine(data => {
-    return !((data.discountType === 'percentage' || data.discountType === 'fixed_amount') && (data.discountValue === undefined || data.discountValue <= 0));
-}, {
-    message: "A positive discount value is required for this discount type.",
-    path: ["discountValue"],
-});
+  }).refine(data => {
+      return !(data.offerType === 'product' && (!data.offerProductIds || data.offerProductIds.length === 0));
+  }, {
+      message: "At least one product must be selected for a product-based offer.",
+      path: ["offerProductIds"],
+  }).refine(data => {
+      return !(data.offerType === 'category' && (!data.offerCategoryIds || data.offerCategoryIds.length === 0));
+  }, {
+      message: "At least one category must be selected for a category-based offer.",
+      path: ["offerCategoryIds"],
+  }).refine(data => {
+      return !((data.discountType === 'percentage' || data.discountType === 'fixed_amount') && (data.discountValue === undefined || data.discountValue <= 0));
+  }, {
+      message: "A positive discount value is required for this discount type.",
+      path: ["discountValue"],
+  });
 
 
 type UpsellFormValues = z.infer<typeof upsellSchema>;
@@ -88,6 +87,8 @@ interface UpsellFormPageProps {
   upsell?: Upsell;
   brands: Brand[];
   locations: Location[];
+  products: Product[];
+  categories: Category[];
 }
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -168,13 +169,12 @@ function ProductGroupCard({ index, control, remove, brandProducts, brandCategori
 }
 
 
-export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProps) {
+export function UpsellFormPage({ upsell, brands, locations, products, categories }: UpsellFormPageProps) {
     const { toast } = useToast();
     const [state, formAction] = useActionState(createOrUpdateUpsell, null);
-    const [isPending, startTransition] = useTransition();
-
-    const [brandProducts, setBrandProducts] = useState<ProductForMenu[]>([]);
-    const [brandCategories, setBrandCategories] = useState<Category[]>([]);
+    
+    const [brandProducts, setBrandProducts] = useState<ProductForMenu[]>(products || []);
+    const [brandCategories, setBrandCategories] = useState<Category[]>(categories || []);
     const [isProductsLoading, setIsProductsLoading] = useState(false);
     const [categoryFilter, setCategoryFilter] = useState('all');
 
@@ -260,6 +260,14 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
     }, [brandProducts, categoryFilter]);
     
     useEffect(() => {
+        if (offerType === 'product') {
+            setValue('offerCategoryIds', []);
+        } else if (offerType === 'category') {
+            setValue('offerProductIds', []);
+        }
+    }, [offerType, setValue]);
+    
+    useEffect(() => {
         if (state?.message) {
             if (state.error) {
                 toast({ variant: 'destructive', title: 'Error', description: state.message });
@@ -275,45 +283,10 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
 
     const title = upsell ? 'Edit Upsell' : 'Create New Upsell';
     const description = upsell ? `Editing details for ${upsell.upsellName}.` : 'Fill in the details for the new upsell campaign.';
-    
-    const onSubmit = (data: UpsellFormValues) => {
-        const formData = new FormData();
-
-        if (upsell?.id) formData.append('id', upsell.id);
-        
-        Object.entries(data).forEach(([key, value]) => {
-            if (key === 'activeTimeSlots' || key === 'triggerConditions' || value === undefined || value === null) return;
-            
-            if (key === 'startDate' || key === 'endDate') {
-                if (value) formData.append(key, (value as Date).toISOString());
-                return;
-            }
-
-            if (key === 'isActive' || key === 'allowStacking' || key === 'assignToOfferCategory') {
-                if (value === true) {
-                    formData.append(key, 'on');
-                }
-                return;
-            }
-
-            if (Array.isArray(value)) {
-                value.forEach(item => formData.append(key, String(item)));
-            } else {
-                formData.append(key, String(value));
-            }
-        });
-        
-        formData.append('triggerConditions', JSON.stringify(data.triggerConditions || []));
-        formData.append('activeTimeSlots', JSON.stringify(data.activeTimeSlots || []));
-
-        startTransition(async () => {
-            await formAction(formData);
-        });
-    };
 
   return (
     <Form {...form}>
-      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-6">
+      <form action={formAction} className="space-y-6">
         {upsell?.id && <input type="hidden" name="id" value={upsell.id} />}
         <div className="flex items-center justify-between">
             <div><h1 className="text-2xl font-bold tracking-tight">{title}</h1><p className="text-muted-foreground">{description}</p></div>
@@ -347,7 +320,7 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
                         <Separator/>
 
                         <FormField control={control} name="upsellName" render={({ field }) => (
-                            <FormItem><FormLabel>Upsell Name</FormLabel><FormControl><Input placeholder="e.g., Add Fries & Soda" {...field} /></FormControl><FormMessage /></FormItem>
+                            <FormItem><FormLabel>Upsell Name</FormLabel><FormControl><Input placeholder="e.g., Friday Burger Deal" {...field} /></FormControl><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="description" render={({ field }) => (
                             <FormItem><FormLabel>Description (Optional)</FormLabel><FormControl><Textarea placeholder="A short description of the upsell offer." {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
@@ -357,7 +330,7 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
                             <FormItem>
                                 <FormLabel>Upsell Image URL (Optional)</FormLabel>
                                 <FormControl><Input placeholder="https://example.com/image.png" {...field} value={field.value ?? ''} /></FormControl>
-                                {imageUrl && (<div className="relative mt-2 h-32 w-48"><Image src={imageUrl} alt="Upsell preview" fill className="rounded-md border object-cover" data-ai-hint="food deal"/></div>)}
+                                {imageUrl && (<div className="relative mt-2 h-32 w-48"><Image src={imageUrl} alt="Upsell preview" fill className="rounded-md border object-cover" data-ai-hint="delicious food"/></div>)}
                                 <FormDescription>If no URL is provided, the image of the first offered product will be used.</FormDescription>
                                 <FormMessage />
                             </FormItem>
@@ -388,7 +361,25 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
                                         {brandCategories.map(cat => (<SelectItem key={cat.id} value={cat.id}>{cat.categoryName}</SelectItem>))}
                                     </SelectContent>
                                 </Select>
-                                <ScrollArea className="h-40 rounded-md border"><div className="p-4">{filteredBrandProducts.map((p) => (<FormField key={p.id} control={control} name="offerProductIds" render={({ field }) => (<FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value?.includes(p.id)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), p.id]) : field.onChange((field.value || [])?.filter(id => id !== p.id))}/></FormControl><FormLabel className="font-normal text-sm">{p.productName}</FormLabel></FormItem>)}/>))}</div></ScrollArea><FormMessage/></FormItem>
+                                <ScrollArea className="h-40 rounded-md border">
+                                  <div className="p-4 space-y-2">
+                                    {filteredBrandProducts.map((p) => (
+                                        <FormField key={p.id} control={control} name="offerProductIds" render={({ field }) => (
+                                            <FormItem className="flex items-center space-x-2">
+                                                <FormControl>
+                                                    <Checkbox
+                                                        checked={field.value?.includes(p.id)}
+                                                        onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), p.id]) : field.onChange((field.value || [])?.filter(id => id !== p.id))}
+                                                    />
+                                                </FormControl>
+                                                <FormLabel className="font-normal text-sm">{p.productName}</FormLabel>
+                                            </FormItem>
+                                        )}/>
+                                    ))}
+                                  </div>
+                                </ScrollArea>
+                                <FormMessage/>
+                                </FormItem>
                             )}/>
                         )}
 
@@ -548,5 +539,3 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
     </Form>
   );
 }
-
-    
