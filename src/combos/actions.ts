@@ -142,7 +142,7 @@ export async function createOrUpdateCombo(
         return { message: "Cannot fetch more than 30 products for a combo.", error: true };
     }
     
-    const products = await getProductsByIds(allProductIds, comboData.brandId);
+    const products = await getProductsByIds(allProductIds);
 
     if(products.some(p => p.brandId !== comboData.brandId)) {
       return { message: "Error: All selected products must belong to the selected brand.", error: true };
@@ -156,7 +156,7 @@ export async function createOrUpdateCombo(
               const price = priceType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price;
               return Math.max(maxPrice, price);
           }, 0);
-          return total + (highestPricedProductInGroup * group.minSelection); // Using minSelection for this calculation
+          return total + (highestPricedProductInGroup * (group.minSelection || 1));
       }, 0);
     }
 
@@ -166,7 +166,7 @@ export async function createOrUpdateCombo(
     const priceDifferencePickup = typeof comboData.pickupPrice === 'number' ? calculatedNormalPricePickup - comboData.pickupPrice : undefined;
     const priceDifferenceDelivery = typeof comboData.deliveryPrice === 'number' ? calculatedNormalPriceDelivery - comboData.deliveryPrice : undefined;
 
-      const dataToSave: Omit<ComboMenu, 'id' | 'createdAt' | 'updatedAt'> & { createdAt?: Timestamp, updatedAt: Timestamp, startDate?: Timestamp, endDate?: Timestamp } = {
+      const dataToSave = {
         ...comboData,
         calculatedNormalPricePickup,
         calculatedNormalPriceDelivery,
@@ -179,6 +179,7 @@ export async function createOrUpdateCombo(
     if (comboData.endDate) dataToSave.endDate = Timestamp.fromDate(new Date(comboData.endDate));
 
     const comboIdToSave = id || doc(collection(db, 'comboMenus')).id;
+    dataToSave.id = comboIdToSave;
 
     if (!id) {
       dataToSave.createdAt = Timestamp.now();
@@ -326,5 +327,7 @@ export async function getActiveCombosForLocation(locationId: string): Promise<Co
 
     return activeNowCombos;
 }
+
+    
 
     
