@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
@@ -31,6 +32,7 @@ import {
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 import { isLockedItem } from '@/lib/cart-utils';
+import { safeImage } from '@/lib/images';
 
 function CartContents() {
     const { cartItems, removeFromCart, updateQuantity, cartTotal, subtotal, itemDiscount, cartDiscount, voucherDiscount, deliveryFee, freeDeliveryDiscountApplied, bagFee, adminFee, vatAmount, brand } = useCart();
@@ -49,7 +51,7 @@ function CartContents() {
                             <div key={item.cartItemId} className="flex items-start gap-4">
                                 <div className="relative h-16 w-16 shrink-0">
                                 <Image
-                                    src={item.imageUrl || 'https://placehold.co/100x100.png'}
+                                    src={safeImage(item.imageUrl)}
                                     alt={item.productName}
                                     fill
                                     className="rounded-md object-cover"
@@ -172,7 +174,7 @@ export function MobileFloatingCart() {
   const { cartItems, itemCount, cartTotal, checkoutTotal, brand, location, subtotal, itemDiscount, cartDiscount, voucherDiscount, deliveryType } = useCart();
   const [isPending, startTransition] = useTransition();
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = React.useState(false);
-  const [activeUpsell, setActiveUpsell] = React.useState<any>(null);
+  const [activeUpsell, setActiveUpsell] = React.useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
   const router = useRouter();
   const { toast } = useToast();
   const { trackEvent } = useAnalytics();
