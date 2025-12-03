@@ -1,4 +1,3 @@
-
 'use server';
 
 /**
@@ -10,7 +9,7 @@
  */
 
 import {ai} from '@/ai/genkit';
-import { MenuImportInputSchema, MenuImportOutputSchema, type MenuImportInput } from '@/types';
+import { MenuImportInputSchema, MenuImportOutputSchema, type MenuImportInput, type MenuImportOutput } from '@/types';
 
 export type { MenuImportOutput } from '@/types';
 
