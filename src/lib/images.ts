@@ -1,7 +1,8 @@
+
 // src/lib/images.ts
 export function safeImage(
   src?: string | null,
-  fallback: string = '/placeholder/64x64.png'
+  fallback: string = 'https://placehold.co/128x128/EFEFEF/7F7F7F?text=Image'
 ) {
   if (!src) return fallback;
   try {

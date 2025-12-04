@@ -10,12 +10,11 @@ import type { FooterTheme } from '@/types/settings';
 interface FooterProps {
   brand: Brand;
   location?: Location;
-  version: string;
   onOpenCookieSettings?: () => void;
   theme?: FooterTheme;
 }
 
-export function Footer({ brand, location, version, onOpenCookieSettings, theme }: FooterProps) {
+export function Footer({ brand, location, onOpenCookieSettings, theme }: FooterProps) {
   return (
     <footer className="w-full border-t bg-muted/30" style={{'--border': 'hsl(var(--border))'} as React.CSSProperties}>
       <div className="mx-auto max-w-[1140px] px-4 py-3">
@@ -25,7 +24,7 @@ export function Footer({ brand, location, version, onOpenCookieSettings, theme }
             <span>English</span>
           </button>
           <div className="flex items-center gap-2">
-            <span>1.0.232 • OF-502</span>
+            <span>1.0.242 • OF-512</span>
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>

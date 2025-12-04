@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import * as React from 'react';
@@ -36,6 +37,7 @@ import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
 import { UpsellDialog } from './upsell-dialog';
 import { isLockedItem } from '@/lib/cart-utils';
 import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
+import { safeImage } from '@/lib/images';
 
 const checkoutSchema = z.object({
     name: z.string().min(2, "Name is required"),
@@ -162,7 +164,7 @@ function OrderSummaryContent() {
                 
                 {itemDiscount > 0 && (
                    <div className="flex justify-between text-green-600">
-                        <span>Product Discounts</span>
+                        <span>Item Discounts</span>
                         <span>- kr.{itemDiscount.toFixed(2)}</span>
                     </div>
                 )}
