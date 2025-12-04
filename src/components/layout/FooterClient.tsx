@@ -7,7 +7,7 @@ import { CookieConsent } from '../cookie-consent';
 import type { Brand, Location } from '@/types';
 import type { FooterTheme } from '@/types/settings';
 
-export default function FooterClient({ brand, location, theme }: { brand: Brand; location?: Location, theme?: FooterTheme }) {
+export default function FooterClient({ brand, location, theme, version }: { brand: Brand; location?: Location, theme?: FooterTheme, version?: string }) {
     const [isCookieModalOpen, setIsCookieModalOpen] = useState(false);
     
     return (
@@ -15,7 +15,7 @@ export default function FooterClient({ brand, location, theme }: { brand: Brand;
             <Footer
                 brand={brand}
                 location={location}
-                version="1.0.223 • OF-523"
+                version={version}
                 onOpenCookieSettings={() => setIsCookieModalOpen(true)}
                 theme={theme}
             />

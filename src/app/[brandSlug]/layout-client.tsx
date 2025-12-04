@@ -2,14 +2,15 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import type { Brand, Location } from '@/types';
+import type { Brand, Location, GeneralSettings } from '@/types';
+import { CookieConsent } from '@/components/cookie-consent';
 import { useState } from 'react';
+import { useRouter } from 'next/navigation';
+import { useEffect } from 'react';
+import { useCart } from '@/context/cart-context';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { MenuHeader } from '@/components/layout/menu-header';
-import { CookieConsent } from '@/components/cookie-consent';
-import { CartProvider } from '@/context/cart-context';
-import DeliveryMethodModal from '@/components/modals/DeliveryMethodModal';
 
 export function BrandLayoutClient({
   children,
@@ -20,52 +21,47 @@ export function BrandLayoutClient({
   children: React.ReactNode;
   brand: Brand | null;
   location?: Location | null;
-  settings?: any | null;
+  settings?: GeneralSettings | null;
 }) {
   const pathname = usePathname();
   const [isCookieModalOpen, setIsCookieModalOpen] = useState(false);
-
+  
   if (!brand) {
     return (
-      <div className="flex flex-col min-h-screen items-center justify-center">
-        <p>Loading brand information...</p>
-      </div>
+        <div className="flex flex-col min-h-screen items-center justify-center">
+            <p>Loading brand information...</p>
+        </div>
     );
   }
-
+  
   const isCheckoutPage = pathname?.includes('/checkout');
   const isMenuPage = !!location && !isCheckoutPage;
   const isBrandHomePage = !location;
 
   const showGlobalHeader = isBrandHomePage || isCheckoutPage;
   const showMenuHeader = isMenuPage;
-
+  
   const isConfirmationPage = pathname?.includes('/checkout/confirmation');
   const showFooter = isBrandHomePage || isMenuPage || isConfirmationPage;
 
   return (
-    <CartProvider>
-      <div className="flex flex-col min-h-screen">
-        {showGlobalHeader && <Header brand={brand} settings={settings} />}
-        {showMenuHeader && <MenuHeader brand={brand} />}
+      <div
+        className="flex flex-col min-h-screen"
+      >
+        {showGlobalHeader && <Header brand={brand} settings={settings || null} />}
+        {showMenuHeader && location && <MenuHeader brand={brand} />}
         <main className="flex-1 w-full">
-          {children}
+            {children}
         </main>
         {showFooter && (
           <Footer
             brand={brand}
             location={location ?? undefined}
-            version="Version 1.0.95 • OF-273"
+            version="1.0.243 • OF-513"
             onOpenCookieSettings={() => setIsCookieModalOpen(true)}
           />
         )}
-        <CookieConsent
-          brandId={brand.id}
-          isModalOpen={isCookieModalOpen}
-          setIsModalOpen={setIsCookieModalOpen}
-        />
-        <DeliveryMethodModal />
+        <CookieConsent brandId={brand.id} isModalOpen={isCookieModalOpen} setIsModalOpen={setIsCookieModalOpen} />
       </div>
-    </CartProvider>
   );
 }

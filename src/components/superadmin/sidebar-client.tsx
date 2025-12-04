@@ -53,6 +53,7 @@ import {
   Beaker,
   Eye,
 } from 'lucide-react'
+import { getSuperadminUserContext, type SuperadminUser } from '@/lib/auth/superadmin-context'
 
 type MenuIcon = React.ComponentType<{ className?: string }>
 
@@ -81,6 +82,11 @@ export function SuperAdminSidebarClient({
   brandingSettings?: PlatformBrandingSettings
 }) {
   const pathname = usePathname()
+  const [user, setUser] = React.useState<SuperadminUser | null>(null);
+
+  React.useEffect(() => {
+    getSuperadminUserContext().then(setUser);
+  }, []);
 
   const logoUrl =
     brandingSettings?.platformLogoUrl ||
