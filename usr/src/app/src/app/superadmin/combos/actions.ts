@@ -8,7 +8,7 @@ import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, Tim
 import type { ComboMenu, Product, Category, ProductForMenu } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
-import { getProductsByIds } from '../products/actions';
+import { getProductsByIds } from '@/app/superadmin/products/actions';
 
 const productGroupSchema = z.object({
   id: z.string(),
