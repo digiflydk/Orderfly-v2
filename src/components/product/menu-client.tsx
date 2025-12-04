@@ -1,4 +1,5 @@
 
+
 'use client';
 
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -40,6 +41,7 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
     const [activeStandardDiscounts, setActiveStandardDiscounts] = useState<StandardDiscount[]>(initialActiveStandardDiscounts);
     const [comboProducts, setComboProducts] = useState<ProductForMenu[]>([]);
     const [showPreorderAlert, setShowPreorderAlert] = useState(false);
+    const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
 
 
     useEffect(() => {
@@ -48,6 +50,7 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
         async function fetchInitialData() {
             setIsLoading(true);
             const fetchedTimeSlots = calculateTimeSlots(location);
+            setTimeSlots(fetchedTimeSlots);
             
              // Fetch products for combos if they exist
             if (initialActiveCombos.length > 0) {
@@ -144,7 +147,7 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
                     </Alert>
                 )}
                 <div className="lg:hidden py-4">
-                   <TimeSelector />
+                   <TimeSelector timeSlots={timeSlots} />
                 </div>
                 
                  <div className="sticky top-16 z-30 bg-[#FFF8F0]/90 backdrop-blur-sm -mx-4 px-4 py-2 border-t border-b">
