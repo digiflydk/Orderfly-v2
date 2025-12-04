@@ -1,12 +1,19 @@
+
 'use client';
 
 import Image from 'next/image';
 import Link from 'next/link';
-import type { Brand, GeneralSettings, NavLink } from '@/types';
+import type { Brand, GeneralSettings } from '@/types';
 import type { WebsiteHeaderConfig } from '@/types/website';
 import { cn } from '@/lib/utils';
 import { useEffect, useState } from 'react';
 import SiteLogo from '../common/SiteLogo';
+
+type NavLink = {
+  label: string;
+  href: string;
+  type?: "default" | "primary" | "secondary";
+};
 
 type Props = {
   brand?: Brand | null;

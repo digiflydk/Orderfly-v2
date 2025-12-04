@@ -1,9 +1,16 @@
+
 "use client";
 import { useEffect, useState, useMemo } from "react";
 import { Header } from "./header";
 import type { WebsiteHeaderConfig } from "@/types/website";
-import type { GeneralSettings, Brand, NavLink } from "@/types";
+import type { GeneralSettings, Brand } from "@/types";
 import { usePathname } from "next/navigation";
+
+type NavLink = {
+  label: string;
+  href: string;
+  type?: "default" | "primary" | "secondary";
+};
 
 function toHsla({
   h,

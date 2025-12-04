@@ -53,11 +53,12 @@ export function BrandLayoutClient({
         <main className="flex-1 w-full">
             {children}
         </main>
-        {showFooter && (
-          <Footer 
-            brand={brand} 
-            location={location ?? undefined} 
-            onOpenCookieSettings={() => setIsCookieModalOpen(true)} 
+        {showFooter && brand && (
+          <Footer
+            brand={brand}
+            location={location ?? undefined}
+            version="1.0.194 • DGF-082"
+            onOpenCookieSettings={() => setIsCookieModalOpen(true)}
           />
         )}
         <CookieConsent brandId={brand.id} isModalOpen={isCookieModalOpen} setIsModalOpen={setIsCookieModalOpen} />
