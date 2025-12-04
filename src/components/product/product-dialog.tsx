@@ -1,12 +1,10 @@
 
-
 'use client';
 
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { Minus, Plus, X } from 'lucide-react';
-import type { Topping, ToppingGroup, CartItemTopping, StandardDiscount, Allergen } from '@/types';
-import type { ProductForMenu } from '@/app/superadmin/products/actions';
+import type { Topping, ToppingGroup, CartItemTopping, StandardDiscount, Allergen, ProductForMenu } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -77,6 +75,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
         .filter(group => group.toppings.length > 0);
   }, [product.toppingGroupIds, allToppingGroups, allToppings]);
 
+  const finalPrice = product.price;
+
   useEffect(() => {
     if (isOpen && location) {
       setQuantity(1);
@@ -111,13 +111,12 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
       });
 
     }
-  }, [isOpen, product, relevantToppingGroups, trackEvent, location]);
+  }, [isOpen, product, relevantToppingGroups, trackEvent, location, finalPrice]);
   
   const basePrice = useMemo(() => {
     return (product as any).basePrice ?? (deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price);
   }, [product, deliveryType]);
   
-  const finalPrice = product.price;
 
   const handleToppingChange = (topping: Topping, isChecked: boolean, isSingleSelect: boolean) => {
     setSelectedToppings(prev => {

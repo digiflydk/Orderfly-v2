@@ -1,10 +1,8 @@
 
 'use client';
 
-import type { Category } from '@/types';
-import { ProductCard } from "@/components/product/product-card";
-import type { ProductForMenu } from '@/app/superadmin/products/actions';
-import type { StandardDiscount } from '@/types';
+import type { Category, ProductForMenu, StandardDiscount } from '@/types';
+import { ProductCard, ProductCardSkeleton } from "@/components/product/product-card";
 
 interface CategorySectionProps {
   category: Category;
