@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -713,3 +712,5 @@ export function CheckoutClient({ location }: CheckoutClientProps) {
     </Elements>
   );
 }
+
+    
