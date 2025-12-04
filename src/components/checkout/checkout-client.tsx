@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import * as React from 'react';
@@ -13,7 +12,6 @@ import Link from "next/link";
 import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from "@/components/ui/form";
 import { useEffect, useState, useMemo, useCallback, useTransition } from "react";
 import { createStripeCheckoutSessionAction, validateDiscountAction } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
@@ -38,6 +36,7 @@ import { UpsellDialog } from './upsell-dialog';
 import { isLockedItem } from '@/lib/cart-utils';
 import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
 import { safeImage } from '@/lib/images';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 
 const checkoutSchema = z.object({
     name: z.string().min(2, "Name is required"),
@@ -53,6 +52,7 @@ const checkoutSchema = z.object({
 });
 
 type CheckoutFormValues = z.infer<typeof checkoutSchema>;
+
 
 interface CheckoutClientProps {
     location: Location;
@@ -714,3 +714,5 @@ export function CheckoutClient({ location }: CheckoutClientProps) {
     </Elements>
   );
 }
+
+    
