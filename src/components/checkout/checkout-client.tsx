@@ -121,7 +121,7 @@ function OrderSummaryContent() {
                 <div key={item.cartItemId} className="flex items-start justify-between">
                     <div className="flex items-start gap-4">
                          <div className="relative h-16 w-16 shrink-0">
-                             <Image src={item.imageUrl || 'https://placehold.co/100x100.png'} alt={item.productName} fill className="rounded-md object-cover" data-ai-hint="delicious food"/>
+                             <Image src={safeImage(item.imageUrl)} alt={item.productName} fill className="rounded-md object-cover" data-ai-hint="delicious food"/>
                         </div>
                         <div>
                             <div className="font-medium">{item.productName} {item.itemType === 'combo' && <Badge>Combo</Badge>}</div>
@@ -712,5 +712,3 @@ export function CheckoutClient({ location }: CheckoutClientProps) {
     </Elements>
   );
 }
-
-    
