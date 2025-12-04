@@ -27,7 +27,7 @@ type Props = {
 
 export function Header({ brand, settings, config, navLinks, linkClass, logoUrl, logoAlt }: Props) {
   const [scrolled, setScrolled] = useState(false);
-  const effectiveNavLinks = navLinks || settings?.headerNavLinks || [];
+  const effectiveNavLinks: NavLink[] = navLinks || settings?.headerNavLinks || [];
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -61,7 +61,7 @@ export function Header({ brand, settings, config, navLinks, linkClass, logoUrl, 
         </Link>
 
         <nav className="hidden items-center gap-6 md:flex">
-          {effectiveNavLinks.map(link => (
+          {effectiveNavLinks.map((link: NavLink) => (
             <Link key={link.label} href={link.href} className={cn('text-sm', finalLinkClass)}>
               {link.label}
             </Link>
