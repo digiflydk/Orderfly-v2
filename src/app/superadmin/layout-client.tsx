@@ -1,5 +1,4 @@
 
-
 'use client';
 
 import { usePathname } from 'next/navigation';
@@ -54,11 +53,11 @@ export function BrandLayoutClient({
         <main className="flex-1 w-full">
             {children}
         </main>
-        {showFooter && brand && (
+        {showFooter && (
           <Footer
             brand={brand}
             location={location ?? undefined}
-            version="1.0.208 • OF-484"
+            version="1.0.227 • OF-509"
             onOpenCookieSettings={() => setIsCookieModalOpen(true)}
           />
         )}

@@ -1,9 +1,8 @@
 
-
 'use client';
 
 import Link from "next/link";
-import type { Brand, Location, FooterTheme } from "@/types";
+import type { Brand, Location } from "@/types";
 import { Globe } from 'lucide-react';
 
 interface FooterProps {
@@ -11,7 +10,7 @@ interface FooterProps {
   location?: Location;
   onOpenCookieSettings?: () => void;
   version?: string;
-  theme?: FooterTheme;
+  theme?: any;
 }
 
 export function Footer({ brand, location, onOpenCookieSettings, version }: FooterProps) {
@@ -24,7 +23,7 @@ export function Footer({ brand, location, onOpenCookieSettings, version }: Foote
             <span>English</span>
           </button>
           <div className="flex items-center gap-2">
-            {version && <span>1.0.227 • OF-509</span>}
+            {version && <span>{version}</span>}
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>
