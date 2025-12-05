@@ -1,3 +1,4 @@
+
 'use client';
 
 import { useState, useRef, useEffect, useTransition } from 'react';
@@ -10,7 +11,7 @@ import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
 import type { GeneralSettings } from '@/types/settings';
-import type { AIProjectQualificationOutput, AIProjectQualificationInput } from '@/ai/flows/ai-project-qualification';
+import type { AIProjectQualificationOutput, AIProjectQualificationInput } from '@/app/superadmin/website/actions';
 
 type Message = {
   role: 'user' | 'assistant';
@@ -36,10 +37,10 @@ export default function AiProjectSection({ settings }: { settings: GeneralSettin
   const alignment = settings?.aiProjectSectionAlignment || 'left';
 
   const titleStyle: React.CSSProperties = {
-    fontSize: settings?.aiProjectSectionTitleSize ? `${settings.aiProjectSectionTitleSize}px` : undefined,
+    fontSize: settings?.aiProjectSectionTitleSize ? `${''}${settings.aiProjectSectionTitleSize}px` : undefined,
   };
   const descriptionStyle: React.CSSProperties = {
-    fontSize: settings?.aiProjectSectionDescriptionSize ? `${settings.aiProjectSectionDescriptionSize}px` : undefined,
+    fontSize: settings?.aiProjectSectionDescriptionSize ? `${''}${settings.aiProjectSectionDescriptionSize}px` : undefined,
   };
 
   useEffect(() => {
@@ -116,16 +117,16 @@ export default function AiProjectSection({ settings }: { settings: GeneralSettin
   };
 
   const sectionPadding = settings?.sectionPadding?.aiProject;
-  const backgroundColor = settings?.aiProjectSectionBackgroundColor ? `hsl(${settings.aiProjectSectionBackgroundColor.h}, ${settings.aiProjectSectionBackgroundColor.s}%, ${settings.aiProjectSectionBackgroundColor.l}%)` : 'rgb(17 24 39)'; // fallback to gray-900
+  const backgroundColor = settings?.aiProjectSectionBackgroundColor ? `hsl(${''}${settings.aiProjectSectionBackgroundColor.h}, ${''}${settings.aiProjectSectionBackgroundColor.s}%, ${''}${settings.aiProjectSectionBackgroundColor.l}%)` : 'rgb(17 24 39)'; // fallback to gray-900
 
   const style: React.CSSProperties & { [key: string]: string } = {
-    '--padding-top-mobile': sectionPadding?.topMobile !== undefined ? `${sectionPadding.topMobile}px` : '48px',
-    '--padding-bottom-mobile': sectionPadding?.bottomMobile !== undefined ? `${sectionPadding.bottomMobile}px` : '48px',
-    '--padding-top': sectionPadding?.top !== undefined ? `${sectionPadding.top}px` : '96px',
-    '--padding-bottom': sectionPadding?.bottom !== undefined ? `${sectionPadding.bottom}px` : '96px',
+    '--padding-top-mobile': sectionPadding?.topMobile !== undefined ? `${''}${sectionPadding.topMobile}px` : '48px',
+    '--padding-bottom-mobile': sectionPadding?.bottomMobile !== undefined ? `${''}${sectionPadding.bottomMobile}px` : '48px',
+    '--padding-top': sectionPadding?.top !== undefined ? `${''}${sectionPadding.top}px` : '96px',
+    '--padding-bottom': sectionPadding?.bottom !== undefined ? `${''}${sectionPadding.bottom}px` : '96px',
     '--bg-color': backgroundColor,
-    '--bg-gradient-from': `hsl(${settings?.aiProjectSectionBackgroundColor?.h || 211}, ${settings?.aiProjectSectionBackgroundColor?.s || 100}%, ${Math.max(0, (settings?.aiProjectSectionBackgroundColor?.l || 50) - 20)}%)`,
-    '--bg-gradient-to': `hsl(${settings?.aiProjectSectionBackgroundColor?.h || 211}, ${settings?.aiProjectSectionBackgroundColor?.s || 100}%, ${Math.max(0, (settings?.aiProjectSectionBackgroundColor?.l || 40) - 20)}%)`
+    '--bg-gradient-from': `hsl(${''}${settings?.aiProjectSectionBackgroundColor?.h || 211}, ${''}${settings?.aiProjectSectionBackgroundColor?.s || 100}%, ${''}${Math.max(0, (settings?.aiProjectSectionBackgroundColor?.l || 50) - 20)}%)`,
+    '--bg-gradient-to': `hsl(${''}${settings?.aiProjectSectionBackgroundColor?.h || 211}, ${''}${settings?.aiProjectSectionBackgroundColor?.s || 100}%, ${''}${Math.max(0, (settings?.aiProjectSectionBackgroundColor?.l || 40) - 20)}%)`
   };
   
   const alignmentClasses = {
