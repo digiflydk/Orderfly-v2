@@ -537,7 +537,7 @@ export interface CartItem {
 export type MinimalCartItem = {
     name: string;
     quantity: number;
-    unitPrice?: number;
+    unitPrice: number;
     totalPrice: number;
     toppings?: string[];
 }
@@ -558,17 +558,17 @@ export type Upsell = {
   brandId: string;
   locationIds: string[];
   upsellName: string;
-  description?: string;
+  description?: string | null;
   imageUrl?: string | null;
 
   // Offer Details
   offerType: 'product' | 'category';
-  offerProductIds: string[]; // Used if offerType is 'product'
-  offerCategoryIds: string[]; // Used if offerType is 'category'
+  offerProductIds: string[];
+  offerCategoryIds: string[];
 
   // Discount Details
   discountType: 'none' | 'percentage' | 'fixed_amount';
-  discountValue?: number; // The percentage or fixed amount
+  discountValue?: number;
   tags: ('Popular' | 'Recommended' | 'Campaign')[];
 
   // Trigger Logic
@@ -577,9 +577,9 @@ export type Upsell = {
   // Availability
   orderTypes: ('pickup' | 'delivery')[];
   activeDays: string[];
-  activeTimeSlots: { start: string, end: string }[];
-  startDate?: Timestamp;
-  endDate?: Timestamp;
+  activeTimeSlots: { start: string; end: string }[];
+  startDate?: FirebaseFirestore.Timestamp | null;
+  endDate?: FirebaseFirestore.Timestamp | null;
   isActive: boolean;
 
   // Tracking
@@ -587,8 +587,8 @@ export type Upsell = {
   conversions: number;
   
   // Timestamps
-  createdAt: Timestamp;
-  updatedAt: Timestamp;
+  createdAt: FirebaseFirestore.Timestamp;
+  updatedAt: FirebaseFirestore.Timestamp;
 };
 
 
@@ -855,9 +855,9 @@ export type FunnelFilters = {
   dateTo: string;
   brandId?: string;
   locationId?: string;
-  device?: 'desktop' | 'mobile';
+  device?: 'all' | 'desktop' | 'mobile';
   utmSource?: string;
-  counting?: FunnelCounting; // NEW
+  counting?: FunnelCounting;
 };
 
 /**
@@ -904,7 +904,7 @@ export type AnalyticsDaily = {
 
   // Meta
   agg_version: number;
-  updated_at: Timestamp;
+  updated_at: FirebaseFirestore.Timestamp;
 };
 
 export type FunnelOutput = {
@@ -993,5 +993,109 @@ export const AIProjectQualificationOutputSchema = z.object({
   }).describe("The information collected from the user so far."),
 });
 export type AIProjectQualificationOutput = z.infer<typeof AIProjectQualificationOutputSchema>;
-
     
+export type BrandWebsiteConfig = {
+    active: boolean;
+    template: 'template-1';
+    domains: string[];
+    defaultLocationId: string | null;
+    faviconUrl: string | null;
+    designSystem: any;
+    seo: any;
+    social: any;
+    tracking: any;
+    legal: any;
+    updatedAt: string | null;
+};
+
+export type BrandWebsitePage = {
+    slug: string;
+    title: string;
+    subtitle?: string;
+    layout: 'rich-text-left-image-right';
+    body: string;
+    imageUrl?: string;
+    cta?: { label: string; href: string } | null;
+    seo: any;
+    sortOrder?: number;
+    isPublished: boolean;
+    createdAt: any;
+    updatedAt: any;
+}
+export type BrandWebsitePageSummary = Pick<BrandWebsitePage, 'slug' | 'title' | 'isPublished' | 'sortOrder' | 'updatedAt'>;
+
+export type BrandWebsitePageCreateInput = Omit<BrandWebsitePage, 'createdAt' | 'updatedAt'>;
+export type BrandWebsitePageUpdateInput = Partial<BrandWebsitePageCreateInput>;
+
+export type BrandWebsiteMenuHero = {
+    title: string;
+    subtitle?: string;
+    imageUrl?: string;
+    ctaLabel?: string;
+    ctaHref?: string;
+};
+
+export type BrandWebsiteMenuSettings = {
+    hero: BrandWebsiteMenuHero | null;
+    gridLayout: 2 | 3 | 4;
+    showPrice: boolean;
+    showDescription: boolean;
+    stickyCategories: boolean;
+    defaultLocationId: string | null;
+    updatedAt: string | null;
+}
+
+export type BrandWebsiteHeroSlide = {
+  id: string;
+  title: string;
+  subtitle?: string;
+  body?: string;
+  imageUrl?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  highlight?: boolean;
+  sortOrder?: number;
+};
+export type BrandWebsitePromoTile = {
+  id: string;
+  title: string;
+  body?: string;
+  icon?: string;
+  imageUrl?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  sortOrder?: number;
+};
+export type BrandWebsiteCampaignBanner = {
+  id: string;
+  title: string;
+  body?: string;
+  imageUrl?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+  active: boolean;
+};
+export type BrandWebsiteMenuPreviewItem = {
+  id: string;
+  productId: string;
+  title: string;
+  description?: string;
+  price?: number;
+  sortOrder?: number;
+};
+export type BrandWebsiteFooterCta = {
+  id: string;
+  title: string;
+  body?: string;
+  ctaLabel?: string;
+  ctaHref?: string;
+};
+
+export type BrandWebsiteHome = {
+  hero: BrandWebsiteHeroSlide[];
+  promoTiles: BrandWebsitePromoTile[];
+  campaignBanner: BrandWebsiteCampaignBanner | null;
+  menuPreview: BrandWebsiteMenuPreviewItem[];
+  footerCta: BrandWebsiteFooterCta | null;
+  updatedAt: string | null;
+};
