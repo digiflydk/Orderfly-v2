@@ -1,16 +1,15 @@
 
-
 'use client';
 
 import { useMemo, useState, useTransition } from 'react';
-import { useRouter, usePathname, useSearchParams } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation';
 import type { Brand, Location, FunnelFilters, FunnelOutput, FunnelCounting } from '@/types';
+import type { SACommonFilters } from '@/types/superadmin';
 import { runAggregationForDates } from '@/app/superadmin/analytics/cust-funnel/actions';
 import { BarChart3, CheckCircle2 } from 'lucide-react';
 
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import type { DateRange } from 'react-day-picker';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { ChartContainer, ChartTooltipContent } from '../ui/chart';
@@ -20,7 +19,6 @@ import { Tooltip as TooltipUI, TooltipContent, TooltipProvider, TooltipTrigger }
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { FiltersBar } from './FiltersBar';
 import { Label } from '../ui/label';
-import { useRouter as useNextRouter } from 'next/navigation';
 
 type Props = {
   initialData: FunnelOutput;
@@ -61,8 +59,19 @@ function KpiCard({ title, value, rate, tooltipText }: { title: string; value: st
     return cardContent;
 }
 
+const toSACommonFilters = (filters: FunnelFilters): SACommonFilters => ({
+    dateFrom: filters.dateFrom,
+    dateTo: filters.dateTo,
+    brandId: (filters.brandId as string | 'all') ?? 'all',
+    locationIds:
+      filters.locationId && filters.locationId !== 'all'
+        ? [filters.locationId]
+        : undefined,
+});
+
+
 export function AnalyticsDashboardClient({ initialData, brands, locations, searchParams }: Props) {
-  const router = useNextRouter();
+  const router = useRouter();
   const pathname = usePathname();
   const [data, setData] = useState<FunnelOutput>(initialData);
   const [currentFilters, setCurrentFilters] = useState<FunnelFilters>(searchParams);
@@ -70,22 +79,34 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
   const [status, setStatus] = useState<string | null>(null);
 
   
-  const handleFilterChange = (newFilters: FunnelFilters) => {
-    const params = new URLSearchParams();
-    params.set('dateFrom', newFilters.dateFrom);
-    params.set('dateTo', newFilters.dateTo);
+  const handleFilterChange = (common: SACommonFilters) => {
+    const next: FunnelFilters = {
+        ...currentFilters,
+        dateFrom: common.dateFrom,
+        dateTo: common.dateTo,
+        brandId: common.brandId === 'all' ? 'all' : common.brandId,
+        locationId:
+        common.locationIds && common.locationIds.length > 0
+            ? common.locationIds[0]
+            : 'all',
+    };
+    setCurrentFilters(next);
 
-    if (newFilters.brandId && newFilters.brandId !== 'all') {
-      params.set('brandId', newFilters.brandId);
+    const params = new URLSearchParams();
+    params.set('dateFrom', next.dateFrom);
+    params.set('dateTo', next.dateTo);
+
+    if (next.brandId && next.brandId !== 'all') {
+      params.set('brandId', next.brandId);
     }
-    if (newFilters.locationId && newFilters.locationId !== 'all') {
-        params.set('locationId', newFilters.locationId);
+    if (next.locationId && next.locationId !== 'all') {
+        params.set('locationId', next.locationId);
     }
-    if (newFilters.device && newFilters.device !== 'all') {
-      params.set('device', newFilters.device);
+    if (next.device && next.device !== 'all') {
+      params.set('device', next.device);
     }
-    if (newFilters.counting && newFilters.counting !== 'events') {
-      params.set('counting', newFilters.counting);
+    if (next.counting && next.counting !== 'events') {
+      params.set('counting', next.counting);
     }
     
     router.push(`${pathname}?${params.toString()}`);
@@ -106,13 +127,15 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
   const totalCR = totals.sessions > 0 ? ((totals.payment_succeeded / totals.sessions) * 100).toFixed(2) + '%' : '0.00%';
   const tooltipText = isUniqueCount ? "Antal unikke sessions der nåede dette trin." : "Samlet antal hændelser for dette trin.";
 
+  const currentSAFilters = toSACommonFilters(currentFilters);
+
   return (
     <div className="space-y-6">
       <Card>
         <CardContent className="p-4 flex flex-col gap-4">
              <FiltersBar 
-                value={currentFilters}
-                onFilterChange={handleFilterChange}
+                filters={currentSAFilters}
+                onChange={handleFilterChange}
                 brands={brands || []}
                 locations={locations}
             />
