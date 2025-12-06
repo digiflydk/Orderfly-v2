@@ -100,10 +100,10 @@ export interface CustomerInfo {
     name: string;
     email: string;
     phone: string;
+    subscribeToNewsletter: boolean;
     street?: string;
     zipCode?: string;
     city?: string;
-    subscribeToNewsletter: boolean;
 }
 
 /**
@@ -849,13 +849,14 @@ export type AnalyticsEvent = {
 };
 
 export type FunnelCounting = 'events' | 'unique';
+export type FunnelDeviceFilter = 'all' | 'desktop' | 'mobile';
 
 export type FunnelFilters = {
   dateFrom: string;
   dateTo: string;
   brandId?: string;
   locationId?: string;
-  device?: 'all' | 'desktop' | 'mobile';
+  device?: FunnelDeviceFilter;
   utmSource?: string;
   counting?: FunnelCounting;
 };

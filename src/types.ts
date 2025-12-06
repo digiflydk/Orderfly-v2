@@ -1,4 +1,5 @@
 
+
 //
 // ========================================
 // Orderfly - Data Models & Type Definitions
@@ -13,7 +14,7 @@
 
 import { z } from 'zod';
 import type { FirebaseFirestore } from 'firebase-admin';
-export type { GeneralSettings } from './settings';
+export type { GeneralSettings } from './types/settings';
 
 /**
  * @description Contains master data for each brand/company on the platform.
@@ -848,15 +849,16 @@ export type AnalyticsEvent = {
 };
 
 export type FunnelCounting = 'events' | 'unique';
+export type FunnelDeviceFilter = 'all' | 'desktop' | 'mobile';
 
 export type FunnelFilters = {
   dateFrom: string;
   dateTo: string;
   brandId?: string;
   locationId?: string;
-  device?: 'desktop' | 'mobile';
+  device?: FunnelDeviceFilter;
   utmSource?: string;
-  counting?: FunnelCounting; // NEW
+  counting?: FunnelCounting;
 };
 
 /**
