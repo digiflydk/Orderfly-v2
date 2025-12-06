@@ -1,3 +1,4 @@
+
 'use client';
 
 import { z } from 'zod';
@@ -5,9 +6,9 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { saveBrandWebsiteConfig, type SaveBrandWebsiteConfigInput } from '@/lib/superadmin/brand-website/config-actions';
+import { saveBrandWebsiteConfig } from '@/lib/superadmin/brand-website/config-actions';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage, FormDescription } from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -30,6 +31,7 @@ const configFormSchema = z.object({
   template: z.string().min(1, "Template is required."),
   domains: z.array(z.string().refine(isHostname, "Must be a valid hostname (e.g., brand.com), without http/https.")).min(1, "At least one domain is required."),
   defaultLocationId: z.string().nullable(),
+  faviconUrl: z.string().url({ message: "Must be a valid URL" }).or(z.literal('')).optional(),
 });
 
 type ConfigFormValues = z.infer<typeof configFormSchema>;
@@ -50,6 +52,7 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
       template: initialConfig.template || 'template-1',
       domains: initialConfig.domains.length > 0 ? initialConfig.domains : [''],
       defaultLocationId: initialConfig.defaultLocationId || null,
+      faviconUrl: initialConfig.faviconUrl || '',
     },
   });
 
@@ -59,12 +62,13 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
   });
 
   const onSubmit = (data: ConfigFormValues) => {
+    const formData = new FormData();
+    const faviconInput = document.querySelector('input[name="faviconFile"]') as HTMLInputElement;
+    const faviconFile = faviconInput?.files?.[0];
+
     startTransition(async () => {
       try {
-        await saveBrandWebsiteConfig(brandId, {
-            ...data,
-            domains: data.domains.filter(d => d.trim() !== '')
-        });
+        await saveBrandWebsiteConfig(brandId, data, faviconFile);
         toast({ title: 'Success', description: 'General settings saved successfully.' });
       } catch (error: any) {
         toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to save settings.' });
@@ -144,6 +148,24 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
                  <Button type="button" variant="outline" size="sm" onClick={() => append('')}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Domain
                 </Button>
+            </FormItem>
+            
+            <FormField
+              control={form.control}
+              name="faviconUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Favicon URL</FormLabel>
+                  <FormControl><Input {...field} /></FormControl>
+                  <FormDescription>URL for the website's favicon. Will be overridden by file upload if provided.</FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+             <FormItem>
+                <FormLabel>Upload Favicon</FormLabel>
+                <FormControl><Input name="faviconFile" type="file" /></FormControl>
+                <FormDescription>Upload a new favicon file. This will override the URL above.</FormDescription>
             </FormItem>
 
             <FormField
