@@ -1,10 +1,11 @@
 
+      
 'use client';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm } from 'react-hook-form';
-import { useEffect, useTransition, useState, useCallback } from 'react';
+import { useForm, type Resolver } from 'react-hook-form';
+import { useEffect, useTransition, useState, useCallback, useActionState } from 'react';
 import Image from 'next/image';
 import {
   Form,
@@ -18,12 +19,12 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Brand, User, SubscriptionPlan, FoodCategory, BrandAppearances } from '@/types';
 import { createOrUpdateBrand } from '@/app/superadmin/brands/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { countries } from '@/lib/countries';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Separator } from '../ui/separator';
 import Link from 'next/link';
@@ -34,9 +35,11 @@ import { BrandAppearancesForm } from './brand-appearances-form';
 const brandSchema = z.object({
   id: z.string().optional(),
   
+  // Step 1: User Info
   ownerName: z.string().min(2, 'Owner name is required.'),
   ownerEmail: z.string().email('A valid email for the owner is required.'),
 
+  // Step 2: Brand Info
   companyName: z.string().min(2, 'Company name is required.'),
   name: z.string().min(2, 'Brand name must be at least 2 characters.'),
   slug: z.string().min(2, 'Brand slug is required.').regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug can only contain lowercase letters, numbers, and hyphens.'),
@@ -47,6 +50,7 @@ const brandSchema = z.object({
   currency: z.string().min(3, 'Currency is required.'),
   companyRegNo: z.string().regex(/^\d{8}$/, 'Company Registration No. must be an 8-digit number.'),
   
+  // Step 3: Plan & Details
   subscriptionPlanId: z.string().optional(),
   foodCategories: z.array(z.string()).optional().default([]),
   locationsCount: z.coerce.number().min(1, 'Number of locations is required.'),
@@ -88,7 +92,7 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
   const { toast } = useToast();
   
   const form = useForm<BrandFormValues>({
-    resolver: zodResolver(brandSchema),
+    resolver: zodResolver(brandSchema) as Resolver<BrandFormValues>,
     defaultValues: brand ? {
         ...brand,
         ownerName: users.find(u => u.id === brand.ownerId)?.name || '',
@@ -619,3 +623,5 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
     </div>
   );
 }
+
+    
