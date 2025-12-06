@@ -3,7 +3,7 @@
 
 import { useMemo, useState, useTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
-import type { Brand, Location, FunnelFilters, FunnelOutput, FunnelCounting } from '@/types';
+import type { Brand, Location, FunnelFilters, FunnelOutput, FunnelCounting, FunnelDeviceFilter } from '@/types';
 import type { SACommonFilters } from '@/types/superadmin';
 import { runAggregationForDates } from '@/app/superadmin/analytics/cust-funnel/actions';
 import { BarChart3, CheckCircle2 } from 'lucide-react';
@@ -11,8 +11,7 @@ import { BarChart3, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
-import { ChartContainer, ChartTooltipContent } from '../ui/chart';
+import { ChartContainer } from '../ui/chart';
 import { Button } from '../ui/button';
 import { Badge } from '../ui/badge';
 import { Tooltip as TooltipUI, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -59,7 +58,7 @@ function KpiCard({ title, value, rate, tooltipText }: { title: string; value: st
     return cardContent;
 }
 
-const toSACommonFilters = (filters: FunnelFilters): SACommonFilters => ({
+const mapFunnelToCommon = (filters: FunnelFilters): SACommonFilters => ({
     dateFrom: filters.dateFrom,
     dateTo: filters.dateTo,
     brandId: (filters.brandId as string | 'all') ?? 'all',
@@ -67,6 +66,20 @@ const toSACommonFilters = (filters: FunnelFilters): SACommonFilters => ({
       filters.locationId && filters.locationId !== 'all'
         ? [filters.locationId]
         : undefined,
+});
+
+const mapCommonToFunnel = (
+    common: SACommonFilters,
+    prev: FunnelFilters,
+): FunnelFilters => ({
+    ...prev,
+    dateFrom: common.dateFrom,
+    dateTo: common.dateTo,
+    brandId: common.brandId ?? 'all',
+    locationId:
+      common.locationIds && common.locationIds.length > 0
+        ? common.locationIds[0]
+        : 'all',
 });
 
 
@@ -79,19 +92,8 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
   const [status, setStatus] = useState<string | null>(null);
 
   
-  const handleFilterChange = (common: SACommonFilters) => {
-    const next: FunnelFilters = {
-        ...currentFilters,
-        dateFrom: common.dateFrom,
-        dateTo: common.dateTo,
-        brandId: common.brandId === 'all' ? 'all' : common.brandId,
-        locationId:
-        common.locationIds && common.locationIds.length > 0
-            ? common.locationIds[0]
-            : 'all',
-    };
+  const handleFilterChange = (next: FunnelFilters) => {
     setCurrentFilters(next);
-
     const params = new URLSearchParams();
     params.set('dateFrom', next.dateFrom);
     params.set('dateTo', next.dateTo);
@@ -127,7 +129,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
   const totalCR = totals.sessions > 0 ? ((totals.payment_succeeded / totals.sessions) * 100).toFixed(2) + '%' : '0.00%';
   const tooltipText = isUniqueCount ? "Antal unikke sessions der nåede dette trin." : "Samlet antal hændelser for dette trin.";
 
-  const currentSAFilters = toSACommonFilters(currentFilters);
+  const currentSAFilters = mapFunnelToCommon(currentFilters);
 
   return (
     <div className="space-y-6">
@@ -135,7 +137,10 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
         <CardContent className="p-4 flex flex-col gap-4">
              <FiltersBar 
                 filters={currentSAFilters}
-                onChange={handleFilterChange}
+                onChange={(common) => {
+                    const next = mapCommonToFunnel(common, currentFilters);
+                    handleFilterChange(next);
+                }}
                 brands={brands || []}
                 locations={locations}
             />
