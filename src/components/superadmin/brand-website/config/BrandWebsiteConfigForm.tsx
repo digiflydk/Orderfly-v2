@@ -3,7 +3,7 @@
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { useForm, useFieldArray } from 'react-hook-form';
+import { useForm, useFieldArray, type Resolver } from 'react-hook-form';
 import { useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
 import { saveBrandWebsiteConfig } from '@/lib/superadmin/brand-website/config-actions';
@@ -46,7 +46,7 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
   const { toast } = useToast();
 
   const form = useForm<ConfigFormValues>({
-    resolver: zodResolver(configFormSchema),
+    resolver: zodResolver(configFormSchema) as Resolver<ConfigFormValues>,
     defaultValues: {
       active: initialConfig.active || false,
       template: initialConfig.template || 'template-1',
@@ -56,7 +56,7 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
     },
   });
 
-  const { fields, append, remove } = useFieldArray({
+  const { fields, append, remove } = useFieldArray<ConfigFormValues, "domains">({
     control: form.control,
     name: 'domains'
   });
@@ -156,7 +156,7 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Favicon URL</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
+                  <FormControl><Input {...field} value={field.value ?? ''} /></FormControl>
                   <FormDescription>URL for the website's favicon. Will be overridden by file upload if provided.</FormDescription>
                   <FormMessage />
                 </FormItem>
