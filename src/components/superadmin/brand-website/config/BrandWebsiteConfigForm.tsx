@@ -35,6 +35,7 @@ const configFormSchema = z.object({
 });
 
 type ConfigFormValues = z.infer<typeof configFormSchema>;
+type BrandWebsiteConfig = ConfigFormValues;
 
 interface BrandWebsiteConfigFormProps {
   brandId: string;
@@ -56,7 +57,7 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
     },
   });
 
-  const { fields, append, remove } = useFieldArray<ConfigFormValues, "domains">({
+  const { fields, append, remove } = useFieldArray({
     control: form.control,
     name: 'domains'
   });
