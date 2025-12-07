@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
+import type { BrandWebsiteConfigFormInput } from './types';
 
 const isHostname = (value: string) => {
     if (!value) return true; // Allow empty strings for optional fields initially
@@ -34,11 +35,10 @@ const configFormSchema = z.object({
 });
 
 type ConfigFormValues = z.infer<typeof configFormSchema>;
-type BrandWebsiteConfig = ConfigFormValues;
 
 interface BrandWebsiteConfigFormProps {
   brandId: string;
-  initialConfig: BrandWebsiteConfig;
+  initialConfig: BrandWebsiteConfigFormInput;
 }
 
 export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteConfigFormProps) {

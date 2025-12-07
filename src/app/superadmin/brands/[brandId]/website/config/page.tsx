@@ -13,10 +13,22 @@ import { BrandWebsiteLegalForm } from '@/components/superadmin/brand-website/con
 import { BrandWebsiteDesignSystemForm } from '@/components/superadmin/brand-website/config/BrandWebsiteDesignSystemForm';
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams } from "@/lib/next/resolve-props";
+import type { BrandWebsiteConfig } from '@/types';
+import type { BrandWebsiteConfigFormInput } from '@/components/superadmin/brand-website/config/types';
 
 type BrandConfigParams = {
   brandId: string;
 };
+
+function mapBackendToUiConfig(c: BrandWebsiteConfig): BrandWebsiteConfigFormInput {
+  return {
+    active: c.active,
+    template: c.template,
+    defaultLocationId: c.defaultLocationId ?? null,
+    domains: c.domains ?? [],
+    faviconUrl: c.faviconUrl ?? undefined,
+  };
+}
 
 export default async function BrandWebsiteConfigPage({ params }: AsyncPageProps<BrandConfigParams>) {
   await requireSuperadmin();
@@ -27,6 +39,8 @@ export default async function BrandWebsiteConfigPage({ params }: AsyncPageProps<
   if (!config) {
     notFound();
   }
+
+  const uiConfig = mapBackendToUiConfig(config);
 
   return (
     <div className="space-y-6">
@@ -40,7 +54,7 @@ export default async function BrandWebsiteConfigPage({ params }: AsyncPageProps<
           <TabsTrigger value="legal">Legal</TabsTrigger>
         </TabsList>
         <TabsContent value="general">
-          <BrandWebsiteConfigForm brandId={brandId} initialConfig={config} />
+          <BrandWebsiteConfigForm brandId={brandId} initialConfig={uiConfig} />
         </TabsContent>
         <TabsContent value="design">
           <BrandWebsiteDesignSystemForm brandId={brandId} initialDesignConfig={config.designSystem} />
