@@ -34,7 +34,7 @@ const configFormSchema = z.object({
 });
 
 type ConfigFormValues = z.infer<typeof configFormSchema>;
-type BrandWebsiteConfig = z.infer<typeof configFormSchema>;
+type BrandWebsiteConfig = ConfigFormValues;
 
 interface BrandWebsiteConfigFormProps {
   brandId: string;
@@ -156,7 +156,7 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Favicon URL</FormLabel>
-                  <FormControl><Input {...field} /></FormControl>
+                  <FormControl><Input {...field} value={field.value ?? ''} /></FormControl>
                   <FormDescription>URL for the website's favicon. Will be overridden by file upload if provided.</FormDescription>
                   <FormMessage />
                 </FormItem>
