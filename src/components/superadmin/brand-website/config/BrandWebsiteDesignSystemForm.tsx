@@ -1,7 +1,5 @@
 'use client';
 
-import { z } from 'zod';
-import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
@@ -37,8 +35,6 @@ import { Loader2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
 
-import { brandWebsiteDesignSystemSchema } from '@/lib/superadmin/brand-website/config-schemas';
-
 const FONT_WHITELIST = [
   'Inter',
   'Roboto',
@@ -60,7 +56,6 @@ const defaultButtonStyles = {
 
 interface BrandWebsiteDesignSystemFormProps {
   brandId: string;
-  // Vi dropper stram typing her for at undgå TS-støj
   initialDesignConfig: any;
 }
 
@@ -71,9 +66,8 @@ export function BrandWebsiteDesignSystemForm({
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
 
-  // Ingen generics – vi tager det hele som any, så TS ikke blander sig
-  const form = useForm({
-    resolver: zodResolver(brandWebsiteDesignSystemSchema) as any,
+  // Ingen zodResolver – kun plain react-hook-form
+  const form = useForm<any>({
     defaultValues: {
       typography:
         initialDesignConfig?.typography || {
@@ -110,8 +104,8 @@ export function BrandWebsiteDesignSystemForm({
           lg: 32,
           xl: 64,
         },
-    } as any,
-  } as any);
+    },
+  });
 
   const onSubmit = (data: any) => {
     startTransition(async () => {
@@ -132,7 +126,7 @@ export function BrandWebsiteDesignSystemForm({
   };
 
   return (
-    <Form {...(form as any)}>
+    <Form {...form}>
       <form onSubmit={form.handleSubmit(onSubmit)}>
         <Card>
           <CardHeader>
@@ -532,7 +526,9 @@ export function BrandWebsiteDesignSystemForm({
                   name="header.transparencyPercent"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Header Transparency ({field.value}%)</FormLabel>
+                      <FormLabel>
+                        Header Transparency ({field.value}%)
+                      </FormLabel>
                       <FormControl>
                         <Slider
                           value={[field.value ?? 0]}
