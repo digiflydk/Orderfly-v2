@@ -13,6 +13,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
+import type { BrandWebsiteConfigFormInput } from './types';
 
 const isHostname = (value: string) => {
     if (!value) return true; // Allow empty strings for optional fields initially
@@ -27,18 +28,17 @@ const isHostname = (value: string) => {
 
 const configFormSchema = z.object({
   active: z.boolean(),
-  template: z.string().min(1, "Template is required."),
-  domains: z.array(z.string().refine(isHostname, "Must be a valid hostname (e.g., brand.com), without http/https.")).min(1, "At least one domain is required."),
+  template: z.string(),
   defaultLocationId: z.string().nullable(),
-  faviconUrl: z.string().url({ message: "Must be a valid URL" }).or(z.literal('')).optional(),
+  domains: z.array(z.string().refine(isHostname, "Must be a valid hostname (e.g., brand.com), without http/https.")).default([]),
+  faviconUrl: z.string().optional(),
 });
 
 type ConfigFormValues = z.infer<typeof configFormSchema>;
-type BrandWebsiteConfig = ConfigFormValues;
 
 interface BrandWebsiteConfigFormProps {
   brandId: string;
-  initialConfig: BrandWebsiteConfig;
+  initialConfig: BrandWebsiteConfigFormInput;
 }
 
 export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteConfigFormProps) {
@@ -50,9 +50,9 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
     defaultValues: {
       active: initialConfig.active || false,
       template: initialConfig.template || 'template-1',
-      domains: initialConfig.domains.length > 0 ? initialConfig.domains : [''],
-      defaultLocationId: initialConfig.defaultLocationId || null,
-      faviconUrl: initialConfig.faviconUrl || '',
+      domains: initialConfig.domains ?? [],
+      defaultLocationId: initialConfig.defaultLocationId ?? null,
+      faviconUrl: initialConfig.faviconUrl ?? "",
     },
   });
 
@@ -145,7 +145,7 @@ export function BrandWebsiteConfigForm({ brandId, initialConfig }: BrandWebsiteC
                             />
                     ))}
                 </div>
-                 <Button type="button" variant="outline" size="sm" onClick={() => append('')}>
+                 <Button type="button" variant="outline" size="sm" onClick={() => append("")}>
                     <PlusCircle className="mr-2 h-4 w-4" /> Add Domain
                 </Button>
             </FormItem>
