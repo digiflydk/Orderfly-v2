@@ -49,7 +49,7 @@ type PageFormValues = z.infer<typeof brandWebsitePageCreateSchema>;
 
 interface BrandWebsitePageFormProps {
   brandId: string;
-  // Vi holder den løs for at undgå type-fejl – Zod validerer data
+  // Løs type – Zod validerer data runtime
   page?: any;
 }
 
@@ -116,7 +116,11 @@ export function BrandWebsitePageForm({
     startTransition(async () => {
       try {
         if (page) {
-          await updateBrandWebsitePage(brandId, page.slug, data);
+          await (updateBrandWebsitePage as any)(
+            brandId,
+            page.slug,
+            data as any,
+          );
           toast({
             title: 'Success',
             description: 'Page updated successfully.',
@@ -127,7 +131,10 @@ export function BrandWebsitePageForm({
             );
           }
         } else {
-          await createBrandWebsitePage(brandId, data);
+          await (createBrandWebsitePage as any)(
+            brandId,
+            data as any,
+          );
           toast({
             title: 'Success',
             description: 'Page created successfully.',
