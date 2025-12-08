@@ -5,14 +5,32 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { useTransition } from 'react';
 import { useToast } from '@/hooks/use-toast';
-import { saveBrandWebsiteSocial, type SocialInput } from '@/lib/superadmin/brand-website/config-actions';
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form, FormControl, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
+import { saveBrandWebsiteSocial } from '@/lib/superadmin/brand-website/config-actions';
+import {
+  Card,
+  CardContent,
+  CardDescription,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card';
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/ui/form';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Loader2 } from 'lucide-react';
 
-const validUrlOrEmpty = z.string().url({ message: "Must be a valid URL" }).or(z.literal('')).optional();
+const validUrlOrEmpty = z
+  .string()
+  .url({ message: 'Must be a valid URL' })
+  .or(z.literal(''))
+  .optional();
 
 const socialFormSchema = z.object({
   facebook: validUrlOrEmpty,
@@ -25,12 +43,24 @@ const socialFormSchema = z.object({
 
 type SocialFormValues = z.infer<typeof socialFormSchema>;
 
+type InitialSocialConfig = {
+  facebook?: string | null;
+  instagram?: string | null;
+  tiktok?: string | null;
+  linkedin?: string | null;
+  x?: string | null;
+  shareImageUrl?: string | null;
+};
+
 interface BrandWebsiteSocialFormProps {
   brandId: string;
-  initialSocialConfig: Partial<SocialInput>;
+  initialSocialConfig: InitialSocialConfig;
 }
 
-export function BrandWebsiteSocialForm({ brandId, initialSocialConfig }: BrandWebsiteSocialFormProps) {
+export function BrandWebsiteSocialForm({
+  brandId,
+  initialSocialConfig,
+}: BrandWebsiteSocialFormProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
 
@@ -49,15 +79,26 @@ export function BrandWebsiteSocialForm({ brandId, initialSocialConfig }: BrandWe
   const onSubmit = (data: SocialFormValues) => {
     // Filter out empty strings and send them as undefined
     const payload = Object.fromEntries(
-        Object.entries(data).map(([key, value]) => [key, value === '' ? undefined : value])
+      Object.entries(data).map(([key, value]) => [
+        key,
+        value === '' ? undefined : value,
+      ]),
     );
-    
+
     startTransition(async () => {
       try {
         await saveBrandWebsiteSocial(brandId, payload);
-        toast({ title: 'Success', description: 'Social media settings saved successfully.' });
+        toast({
+          title: 'Success',
+          description: 'Social media settings saved successfully.',
+        });
       } catch (error: any) {
-        toast({ variant: 'destructive', title: 'Error', description: error.message || 'Failed to save social settings.' });
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description:
+            error?.message || 'Failed to save social settings.',
+        });
       }
     });
   };
@@ -68,19 +109,97 @@ export function BrandWebsiteSocialForm({ brandId, initialSocialConfig }: BrandWe
         <Card>
           <CardHeader>
             <CardTitle>Social Media</CardTitle>
-            <CardDescription>Manage social media links and default sharing image.</CardDescription>
+            <CardDescription>
+              Manage social media links and default sharing image.
+            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <FormField control={form.control} name="shareImageUrl" render={({ field }) => (<FormItem><FormLabel>Default Social Share Image (og:image)</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
-            <FormField control={form.control} name="facebook" render={({ field }) => (<FormItem><FormLabel>Facebook URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
-            <FormField control={form.control} name="instagram" render={({ field }) => (<FormItem><FormLabel>Instagram URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
-            <FormField control={form.control} name="tiktok" render={({ field }) => (<FormItem><FormLabel>TikTok URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
-            <FormField control={form.control} name="linkedin" render={({ field }) => (<FormItem><FormLabel>LinkedIn URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
-            <FormField control={form.control} name="x" render={({ field }) => (<FormItem><FormLabel>X (Twitter) URL</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)}/>
+            <FormField
+              control={form.control}
+              name="shareImageUrl"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>
+                    Default Social Share Image (og:image)
+                  </FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="facebook"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Facebook URL</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="instagram"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Instagram URL</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="tiktok"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>TikTok URL</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="linkedin"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>LinkedIn URL</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+            <FormField
+              control={form.control}
+              name="x"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>X (Twitter) URL</FormLabel>
+                  <FormControl>
+                    <Input {...field} />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
           </CardContent>
           <CardFooter className="border-t px-6 py-4">
             <Button type="submit" disabled={isPending}>
-              {isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {isPending && (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              )}
               Save Social Settings
             </Button>
           </CardFooter>
