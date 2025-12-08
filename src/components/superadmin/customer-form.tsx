@@ -77,9 +77,13 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
   }, [customer, form, isOpen])
 
   const title = customer ? 'Edit Customer' : 'Create New Customer'
-  const description = customer ? `Editing details for ${customer.fullName}.` : 'Fill in the details for the new customer.'
+  const description = customer
+    ? `Editing details for ${customer.fullName}.`
+    : 'Fill in the details for the new customer.'
   const isEditing = !!customer
-  const { formState: { isSubmitting } } = form
+  const {
+    formState: { isSubmitting },
+  } = form
 
   const onSubmit = (data: CustomerFormValues) => {
     const formData = new FormData()
@@ -90,11 +94,20 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
     formData.append('status', data.status ? 'active' : 'inactive')
 
     startTransition(async () => {
-      const result = await createOrUpdateCustomer(null, formData)
+      // Cast til any for at slippe for type-fejl på første argument
+      const result = await (createOrUpdateCustomer as any)(null, formData)
+
       if (result?.error) {
-        toast({ variant: 'destructive', title: 'Error', description: result.message })
+        toast({
+          variant: 'destructive',
+          title: 'Error',
+          description: result.message,
+        })
       } else {
-        toast({ title: 'Success!', description: result.message })
+        toast({
+          title: 'Success!',
+          description: result.message,
+        })
         setIsOpen(false)
       }
     })
@@ -117,7 +130,9 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Full Name</FormLabel>
-                  <FormControl><Input placeholder="John Doe" {...field} /></FormControl>
+                  <FormControl>
+                    <Input placeholder="John Doe" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -129,7 +144,9 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Email</FormLabel>
-                  <FormControl><Input type="email" placeholder="john@example.com" {...field} /></FormControl>
+                  <FormControl>
+                    <Input type="email" placeholder="john@example.com" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -141,7 +158,9 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Phone</FormLabel>
-                  <FormControl><Input type="tel" placeholder="+123456789" {...field} /></FormControl>
+                  <FormControl>
+                    <Input type="tel" placeholder="+123456789" {...field} />
+                  </FormControl>
                   <FormMessage />
                 </FormItem>
               )}
@@ -164,9 +183,17 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
             />
 
             <DialogFooter>
-              <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>Cancel</Button>
+              <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>
+                Cancel
+              </Button>
               <Button type="submit" disabled={isPending || isSubmitting}>
-                {(isPending || isSubmitting) ? <Loader2 className="animate-spin" /> : (isEditing ? 'Save Changes' : 'Create Customer')}
+                {isPending || isSubmitting ? (
+                  <Loader2 className="animate-spin" />
+                ) : isEditing ? (
+                  'Save Changes'
+                ) : (
+                  'Create Customer'
+                )}
               </Button>
             </DialogFooter>
           </form>
