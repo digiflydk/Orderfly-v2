@@ -131,6 +131,7 @@ export async function createOrUpdateCombo(
     }
     
     const comboData = validatedFields.data;
+    const { id: comboDataId, startDate: comboStartDate, endDate: comboEndDate, ...comboDataWithoutId } = comboData;
 
     const allProductIds = comboData.productGroups.flatMap(g => g.productIds);
     if (allProductIds.length === 0) {
@@ -165,8 +166,18 @@ export async function createOrUpdateCombo(
     const priceDifferencePickup = typeof comboData.pickupPrice === 'number' ? calculatedNormalPricePickup - comboData.pickupPrice : undefined;
     const priceDifferenceDelivery = typeof comboData.deliveryPrice === 'number' ? calculatedNormalPriceDelivery - comboData.deliveryPrice : undefined;
 
-    const dataToSave: Omit<ComboMenu, 'createdAt' | 'updatedAt'> & { createdAt?: Timestamp, updatedAt: Timestamp, startDate?: Timestamp, endDate?: Timestamp } = {
-      ...comboData,
+    const comboIdToSave = id || doc(collection(db, 'comboMenus')).id;
+
+    type ComboMenuWrite = Omit<ComboMenu, 'createdAt' | 'updatedAt' | 'startDate' | 'endDate'> & {
+      createdAt?: Timestamp;
+      updatedAt: Timestamp;
+      startDate?: Timestamp;
+      endDate?: Timestamp;
+    };
+
+    const dataToSave: ComboMenuWrite = {
+      ...comboDataWithoutId,
+      id: comboIdToSave,
       calculatedNormalPricePickup,
       calculatedNormalPriceDelivery,
       priceDifferencePickup,
@@ -174,11 +185,8 @@ export async function createOrUpdateCombo(
       updatedAt: Timestamp.now(),
     };
     
-    if (comboData.startDate) dataToSave.startDate = Timestamp.fromDate(comboData.startDate);
-    if (comboData.endDate) dataToSave.endDate = Timestamp.fromDate(comboData.endDate);
-
-    const comboIdToSave = id || doc(collection(db, 'comboMenus')).id;
-    dataToSave.id = comboIdToSave;
+    if (comboStartDate) dataToSave.startDate = Timestamp.fromDate(comboStartDate);
+    if (comboEndDate) dataToSave.endDate = Timestamp.fromDate(comboEndDate);
 
     if (!id) {
       dataToSave.createdAt = Timestamp.now();

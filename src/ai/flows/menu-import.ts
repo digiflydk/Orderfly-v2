@@ -12,6 +12,8 @@
 import {ai} from '@/ai/genkit';
 import { MenuImportInputSchema, MenuImportOutputSchema, type MenuImportInput, type MenuImportOutput } from '@/types';
 
+export type { MenuImportInput, MenuImportOutput } from '@/types';
+
 
 export async function menuImportFromImage(input: MenuImportInput): Promise<MenuImportOutput> {
   return menuImportFlow(input);

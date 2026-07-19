@@ -27,8 +27,8 @@ const toppingSchema = z.object({
   groupId: z.string().min(1, { message: 'A topping group must be selected.' }),
   toppingName: z.string().min(2, { message: 'Topping name must be at least 2 characters.' }),
   price: z.coerce.number().min(0, { message: 'Price must be a non-negative number.' }),
-  isActive: z.boolean().default(true),
-  isDefault: z.boolean().default(false),
+  isActive: z.boolean(),
+  isDefault: z.boolean(),
   sortOrder: z.coerce.number().optional(),
 });
 

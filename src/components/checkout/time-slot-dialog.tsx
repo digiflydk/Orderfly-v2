@@ -45,7 +45,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
     setIsLoading(true);
     setSelectedDate(date);
     // Use the client-safe action here
-    const slots = calculateTimeSlots(location, date.toISOString());
+    const slots = calculateTimeSlots(location);
     setTimeSlots(slots);
     setIsLoading(false);
     setInternalTime('asap');

@@ -20,7 +20,7 @@ export type FormState = {
 };
 
 export async function createOrUpdateUser(
-  prevState: FormState,
+  prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
   const rawData: Record<string, any> = Object.fromEntries(formData.entries());

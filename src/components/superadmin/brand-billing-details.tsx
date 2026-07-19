@@ -12,7 +12,6 @@ import {
     getBrandBillingDetails,
     updateBrandStatus,
     createStripePortalLink,
-    type getBrandBillingDetails
 } from '@/app/superadmin/billing/actions';
 import { Button } from '../ui/button';
 import { Skeleton } from '../ui/skeleton';

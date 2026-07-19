@@ -26,7 +26,7 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import type { PaymentDetails, TimeSlotResponse, MinimalCartItem, Location, Upsell, Product, ProductForMenu, Discount } from '@/types';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../ui/select";
 import { TimeSlotDialog } from "./timeslot-dialog";
-import { Alert, AlertTitle } from "../ui/alert";
+import { Alert, AlertTitle, AlertDescription } from "../ui/alert";
 import Cookies from "js-cookie";
 import { useAnalytics } from '@/context/analytics-context';
 import { loadStripe } from '@stripe/stripe-js';
@@ -45,7 +45,7 @@ const checkoutSchema = z.object({
     street: z.string().optional(),
     zipCode: z.string().optional(),
     city: z.string().optional(),
-    subscribeToNewsletter: z.boolean().default(false),
+    subscribeToNewsletter: z.boolean(),
     acceptTerms: z.boolean().refine(val => val === true, {
         message: "You must accept the terms and conditions."
     }),

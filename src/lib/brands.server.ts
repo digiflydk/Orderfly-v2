@@ -1,6 +1,6 @@
 
 
-import { dbAdmin } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase-admin';
 import type { Brand } from '@/types';
 
 export type BrandDoc = Brand | null;
@@ -8,7 +8,7 @@ export type BrandDoc = Brand | null;
 export async function getBrandBySlugServer(slug: string): Promise<BrandDoc> {
   if (!slug) return null;
   try {
-    const snap = await dbAdmin.collection('brands').where('slug', '==', slug).limit(1).get();
+    const snap = await getAdminDb().collection('brands').where('slug', '==', slug).limit(1).get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
     const data = doc.data();

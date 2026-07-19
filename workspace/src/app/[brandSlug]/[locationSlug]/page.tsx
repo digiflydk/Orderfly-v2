@@ -80,8 +80,20 @@ export default async function Page({
     }
 
     const counts = await getCatalogCounts({ brandId: probe.brand!.id });
-    const menu: MenuData = await getMenuForRender({ brandId: probe.brand!.id });
-    const typedMenu = menu as unknown as MenuData;
+    const menu = await getMenuForRender({ brandId: probe.brand!.id, locationId: probe.location!.id });
+    const typedMenu: MenuData = {
+      ...menu,
+      categories: menu.categories.map((category) => ({
+        id: category.id,
+        brandId: probe.brand!.id,
+        locationIds: [probe.location!.id],
+        categoryName: category.name ?? category.categoryName,
+        isActive: true,
+        sortOrder: category.sortOrder,
+        description: category.description,
+        icon: category.icon,
+      } as Category)),
+    };
 
     if(safe){
       return (
@@ -90,11 +102,11 @@ export default async function Page({
           <pre className="text-xs bg-black/5 p-3 rounded mb-4">{JSON.stringify({ counts, fallbackUsed: menu.fallbackUsed }, null, 2)}</pre>
           {(typedMenu.categories as Category[]).map((cat: Category) => (
             <section key={cat.id} className="mb-6">
-              <h2 className="font-semibold">{cat.name}</h2>
+              <h2 className="font-semibold">{cat.categoryName}</h2>
               <ul className="list-disc ml-5 mt-2">
                 {productsForCategory(typedMenu.productsByCategory, cat.id).map((p: Product) => (
                   <li key={p.id}>
-                    {p.productName || p.name || p.title || "Uden navn"}
+                    {p.productName || "Uden navn"}
                   </li>
                 ))}
               </ul>
@@ -121,7 +133,7 @@ export default async function Page({
           <h1 className="text-2xl sm:text-3xl font-bold">{probe.brand?.name ?? brandSlug}</h1>
           <p className="opacity-70">{probe.location?.name ?? locationSlug}</p>
         </header>
-        <ProductGrid menu={menu as MenuData}/>
+        <ProductGrid menu={menu}/>
       </div>
     );
   }catch(e:any){

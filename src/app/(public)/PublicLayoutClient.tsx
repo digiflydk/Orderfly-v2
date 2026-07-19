@@ -4,7 +4,8 @@
 import { useState } from 'react';
 import { Footer } from "@/components/layout/footer";
 import { CookieConsent } from '@/components/cookie-consent';
-import type { Brand, GeneralSettings } from '@/types';
+import type { Brand } from '@/types';
+import type { GeneralSettings } from '@/types/settings';
 import type { WebsiteHeaderConfig } from '@/types/website';
 
 export function PublicLayoutClient({

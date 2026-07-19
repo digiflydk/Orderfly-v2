@@ -1,5 +1,16 @@
-
 'use server';
 
-// This file is now obsolete and can be removed.
-// The logic has been consolidated into getSalesSummary.ts to avoid data discrepancies.
+import { subDays } from 'date-fns';
+import { getSalesDashboardData } from '@/lib/superadmin/getSalesSummary';
+
+export async function getKpis() {
+  const endDate = new Date();
+  const startDate = subDays(endDate, 30);
+
+  const data = await getSalesDashboardData({
+    dateFrom: startDate.toISOString(),
+    dateTo: endDate.toISOString(),
+  });
+
+  return data;
+}

@@ -4,7 +4,7 @@
 // src/lib/superadmin/getSalesSummary.ts
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import type { OrderSummary, Customer, Feedback } from '@/types';
+import type { OrderDetail, Customer, Feedback } from '@/types';
 import type { SACommonFilters } from '@/types/superadmin';
 import { startOfDay, endOfDay, subDays } from 'date-fns';
 
@@ -34,7 +34,7 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
         getDocs(collection(db, 'anonymous_cookie_consents')),
     ]);
     
-    let orders: OrderSummary[] = ordersSnapshot.docs.map(doc => doc.data() as OrderSummary);
+    let orders: OrderDetail[] = ordersSnapshot.docs.map(doc => doc.data() as OrderDetail);
     
     if (filters.locationIds && filters.locationIds.length > 30) {
         const locationSet = new Set(filters.locationIds);

@@ -33,21 +33,19 @@ const Schema = z.object({
   title: z.string().min(2, "Titel er påkrævet"),
   helpText: z.string().optional(),
   type: z.enum(QUESTION_TYPES.map(t => t.value) as [string, ...string[]]),
-  required: z.boolean().default(false),
+  required: z.boolean(),
   category: z.string().optional(), // valgfrit felt hvis I kategoriserer spørgsmål
   language: z.string().min(2, "Vælg et sprog"),
-  isActive: z.boolean().default(true),
+  isActive: z.boolean(),
 
   // Svarmuligheder (bruges kun for choice-typer)
-  options: z
-    .array(
-      z.object({
-        id: z.string().min(1),
-        label: z.string().min(1, "Option label er påkrævet"),
-        value: z.string().min(1, "Option value er påkrævet"),
-      })
-    )
-    .default([]),
+  options: z.array(
+    z.object({
+      id: z.string().min(1),
+      label: z.string().min(1, "Option label er påkrævet"),
+      value: z.string().min(1, "Option value er påkrævet"),
+    })
+  ),
 });
 
 type FormValues = z.infer<typeof Schema>;

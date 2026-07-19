@@ -37,7 +37,7 @@ const categorySchema = z.object({
   locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
   categoryName: z.string().min(2, { message: 'Category name must be at least 2 characters.' }),
   description: z.string().optional(),
-  isActive: z.boolean().default(true),
+  isActive: z.boolean(),
   sortOrder: z.coerce.number().optional(),
   icon: z.string().optional(),
 });

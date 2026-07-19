@@ -2,7 +2,8 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import type { Brand, Location, GeneralSettings } from '@/types';
+import type { Brand, Location } from '@/types';
+import type { GeneralSettings } from '@/types/settings';
 import { CookieConsent } from '@/components/cookie-consent';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';

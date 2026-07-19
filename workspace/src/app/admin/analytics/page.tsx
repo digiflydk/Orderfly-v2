@@ -3,7 +3,7 @@
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { Suspense } from 'react';
-import { getFunnelDataForBrand } from "@/lib/analytics/actions";
+import { getFunnelDataForSuperAdmin } from "@/app/superadmin/analytics/cust-funnel/actions";
 import { AnalyticsDashboardClient } from '@/components/superadmin/analytics-dashboard-client';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationsForBrand } from '@/app/superadmin/locations/actions';
@@ -29,7 +29,7 @@ async function AnalyticsData({ searchParams }: { searchParams: FunnelFilters }) 
     dateTo,
   };
   
-  const initialData = await getFunnelDataForBrand(MOCK_BRAND_ID, filters);
+  const initialData = await getFunnelDataForSuperAdmin(filters as FunnelFilters);
 
   return (
       <AnalyticsDashboardClient

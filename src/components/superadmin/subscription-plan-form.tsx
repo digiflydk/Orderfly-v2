@@ -36,8 +36,8 @@ const planSchema = z.object({
   priceMonthly: z.coerce.number().min(0, { message: 'Price must be a positive number.' }),
   priceYearly: z.coerce.number().min(0, { message: 'Price must be a positive number.' }),
   serviceFee: z.coerce.number().min(0).max(100, { message: 'Service fee must be between 0 and 100.' }),
-  isActive: z.boolean().default(false),
-  isMostPopular: z.boolean().default(false),
+  isActive: z.boolean(),
+  isMostPopular: z.boolean(),
 });
 
 type PlanFormValues = z.infer<typeof planSchema>;
@@ -120,7 +120,7 @@ export function SubscriptionPlanForm({ isOpen, setIsOpen, plan }: SubscriptionPl
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form action={handleFormSubmit} className="space-y-4 py-4">
+          <form onSubmit={handleFormSubmit} className="space-y-4 py-4">
             {plan && <input type="hidden" name="id" value={plan.id} />}
             <FormField
               control={form.control}

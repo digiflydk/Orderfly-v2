@@ -6,7 +6,8 @@ import { db } from '@/lib/firebase';
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, orderBy, query, runTransaction
 } from 'firebase/firestore';
-import { type QaStepTemplate } from '@/app/superadmin/qa/qa-utils';
+export type { QaStepTemplate } from '@/app/superadmin/qa/qa-utils';
+import type { QaStepTemplate } from '@/app/superadmin/qa/qa-utils';
 
 export type QaStatus = 'Draft' | 'Ready' | 'Deprecated';
 export type QaContext = 'public' | 'superadmin';

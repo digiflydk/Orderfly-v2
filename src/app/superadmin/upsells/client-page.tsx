@@ -89,7 +89,7 @@ export function UpsellsClientPage({ initialUpsells, brands }: UpsellsClientPageP
     if (!dateString) return 'N/A';
     try {
         const utcDate = toZonedTime(dateString, 'UTC');
-        return format(utcDate, 'dd MMM yyyy, HH:mm', { timeZone: 'UTC' });
+        return format(utcDate, 'dd MMM yyyy, HH:mm');
     } catch (e) {
         return 'Invalid Date';
     }

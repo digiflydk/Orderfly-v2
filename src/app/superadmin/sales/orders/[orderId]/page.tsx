@@ -14,6 +14,8 @@ import { sendFeedbackRequestEmail } from '@/app/superadmin/feedback/actions';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getOrderById } from '@/app/checkout/order-actions';
 import { getAdminDb } from '@/lib/firebase-admin';
+import type { AsyncPageProps } from '@/types/next-async-props';
+import { resolveParams } from '@/lib/next/resolve-props';
 
 export const revalidate = 0; // Force dynamic rendering
 
@@ -55,14 +57,13 @@ function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType, la
     )
 }
 
-export default async function OrderDetailPage({ params }: { params: { orderId: string } }) {
-    const order = await getOrderDetails(params.orderId);
+export default async function OrderDetailPage({ params }: AsyncPageProps<{ orderId: string }>) {
+    const { orderId } = await resolveParams(params);
+    const order = await getOrderDetails(orderId);
 
     if (!order) {
         notFound();
     }
-
-    const sendFeedbackEmailWithId = sendFeedbackRequestEmail.bind(null, order.id);
 
     return (
         <div className="space-y-6">
@@ -82,7 +83,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
                     </p>
                 </div>
                 <div className="flex items-center gap-2">
-                     <form action={sendFeedbackEmailWithId}>
+                     <form action={async () => { await sendFeedbackRequestEmail(order.id); }}>
                         <Button variant="outline" type="submit"><MessageSquare className="mr-2"/>Send Feedback Request</Button>
                      </form>
                      <Button variant="outline"><Download className="mr-2"/>Export</Button>
@@ -112,7 +113,7 @@ export default async function OrderDetailPage({ params }: { params: { orderId: s
                                                 {item.toppings && item.toppings.length > 0 && <p className="text-xs text-muted-foreground">{item.toppings.join(', ')}</p>}
                                             </TableCell>
                                             <TableCell>{item.quantity}</TableCell>
-                                            <TableCell>kr. {item.unitPrice.toFixed(2)}</TableCell>
+                                            <TableCell>kr. {(item.unitPrice ?? 0).toFixed(2)}</TableCell>
                                             <TableCell className="text-right">kr. {item.totalPrice.toFixed(2)}</TableCell>
                                         </TableRow>
                                     ))}

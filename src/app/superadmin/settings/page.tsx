@@ -1,9 +1,15 @@
 
 import { SettingsForm } from "@/components/superadmin/settings/settings-form";
 import { getPlatformSettings } from "./actions";
+import type { PlatformBrandingSettings } from "@/types";
 
 export default async function SettingsPage() {
     const { analyticsSettings, paymentGatewaySettings, languageSettings, brandingSettings } = await getPlatformSettings();
+    const safeBrandingSettings: PlatformBrandingSettings = brandingSettings ?? {
+        platformLogoUrl: null,
+        platformFaviconUrl: null,
+        platformHeading: 'OrderFly',
+    };
 
     return (
         <div className="space-y-6">
@@ -18,7 +24,7 @@ export default async function SettingsPage() {
                 initialAnalyticsSettings={analyticsSettings}
                 initialPaymentGatewaySettings={paymentGatewaySettings}
                 initialLanguageSettings={languageSettings}
-                initialBrandingSettings={brandingSettings}
+                initialBrandingSettings={safeBrandingSettings}
             />
         </div>
     );

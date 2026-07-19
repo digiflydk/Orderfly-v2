@@ -70,7 +70,7 @@ export default async function SalesDashboardPage({ params, searchParams }: Async
                 </p>
             </div>
             
-            <FiltersBar value={filters} brands={brands} locations={locations} onFilterChange={handleFilterChange as any}/>
+            <FiltersBar filters={filters} brands={brands} locations={locations} onChange={handleFilterChange}/>
 
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
                 {kpis.map((kpi) => (

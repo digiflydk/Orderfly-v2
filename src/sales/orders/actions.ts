@@ -4,26 +4,28 @@
 
 import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { doc, updateDoc } from 'firebase/firestore';
 import type { OrderStatus } from '@/types';
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
     try {
         const db = getAdminDb();
-        const orderRef = doc(db, 'orders', orderId);
+        const orderRef = db.collection('orders').doc(orderId);
         
         if (status === 'Delivered') {
-            const orderSnap = await getDoc(orderRef);
-            if (!orderSnap.exists()) {
+            const orderSnap = await orderRef.get();
+            if (!orderSnap.exists) {
                 return { success: false, message: 'Order not found.' };
             }
             const orderData = orderSnap.data();
+            if (!orderData) {
+                return { success: false, message: 'Order not found.' };
+            }
             if (orderData.paymentStatus !== 'Paid') {
                 return { success: false, message: 'Cannot mark order as Delivered until payment is confirmed.' };
             }
         }
         
-        await updateDoc(orderRef, { status: status });
+        await orderRef.update({ status: status });
         
         revalidatePath('/superadmin/sales/orders');
         revalidatePath(`/superadmin/sales/orders/${orderId}`);

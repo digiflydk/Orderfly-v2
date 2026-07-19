@@ -17,7 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import type { StandardDiscount, Brand, Product, Location, Category, ProductForMenu } from '@/types';
-import { createOrUpdateStandardDiscount, type FormState } from '@/app/superadmin/standard-discounts/actions';
+import { createOrUpdateStandardDiscount, type FormState, type SerializedStandardDiscount } from '@/app/superadmin/standard-discounts/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -41,23 +41,23 @@ const standardDiscountSchema = z.object({
   locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
   discountName: z.string().min(2, 'Discount name is required.'),
   discountType: z.enum(['product', 'category', 'cart', 'free_delivery']),
-  referenceIds: z.array(z.string()).optional().default([]),
+  referenceIds: z.array(z.string()),
   discountMethod: z.enum(['percentage', 'fixed_amount']),
   discountValue: z.coerce.number().positive('Discount value must be positive.').optional(),
   minOrderValue: z.coerce.number().min(0).optional(),
-  isActive: z.boolean().default(true),
+  isActive: z.boolean(),
   orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type is required.'),
-  activeDays: z.array(z.string()).optional().default([]),
-  activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
+  activeDays: z.array(z.string()),
+  activeTimeSlots: z.array(activeTimeSlotSchema),
   timeSlotValidationType: z.enum(['orderTime', 'pickupTime']),
   startDate: z.string().or(z.date()).optional(),
   endDate: z.string().or(z.date()).optional(),
-  allowStacking: z.boolean().default(false),
+  allowStacking: z.boolean(),
   // New marketing fields
   discountHeading: z.string().optional(),
   discountDescription: z.string().optional(),
   discountImageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
-  assignToOfferCategory: z.boolean().default(false),
+  assignToOfferCategory: z.boolean(),
 }).superRefine((data, ctx) => {
     if (data.discountType === 'product' && (!data.referenceIds || data.referenceIds.length === 0)) {
         ctx.addIssue({
@@ -139,7 +139,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
     const selectedBrandId = watch('brandId');
     const discountType = watch('discountType');
     const discountMethod = watch('discountMethod');
-    const imageUrl = watch('imageUrl');
+    const imageUrl = watch('discountImageUrl');
 
     const availableLocations = useMemo(() => {
         if (!selectedBrandId) return [];
@@ -194,7 +194,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
         Object.entries(data).forEach(([key, value]) => {
             if (value === undefined || value === null) return;
             
-            if (key === 'activeTimeSlots' || key === 'imageUrl') return;
+            if (key === 'activeTimeSlots' || key === 'discountImageUrl') return;
 
             if (key === 'startDate' || key === 'endDate') {
                 if (value) {
@@ -478,10 +478,10 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
                         <Separator/>
                          
                         <FormField control={control} name="startDate" render={({ field }) => (
-                             <FormItem className="flex flex-col"><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
+                             <FormItem className="flex flex-col"><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ? new Date(field.value) : undefined} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
                         )}/>
                         <FormField control={control} name="endDate" render={({ field }) => (
-                            <FormItem className="flex flex-col"><FormLabel>End Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
+                            <FormItem className="flex flex-col"><FormLabel>End Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(new Date(field.value), "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value ? new Date(field.value) : undefined} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
                         )}/>
                     </CardContent>
                 </Card>
@@ -491,4 +491,3 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
     </Form>
   );
 }
-

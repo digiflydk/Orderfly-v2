@@ -11,9 +11,9 @@ import { getDiscountByCode } from '@/app/superadmin/discounts/actions';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
-import { getToppings } from '../superadmin/toppings/actions';
-import { getLoyaltySettings } from '../superadmin/loyalty/actions';
-import { getActiveStripeSecretKey } from '../superadmin/settings/actions';
+import { getToppings } from '@/app/superadmin/toppings/actions';
+import { getLoyaltySettings } from '@/app/superadmin/loyalty/actions';
+import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
 import { getOrigin } from '@/lib/url';
 import { generateOrderId } from '@/lib/order-id';
 import { getOrderById, getOrderByCheckoutSessionId as getOrderBySessionId } from './order-actions';
@@ -91,7 +91,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 country: 'DK',
                 marketingConsent: customerInfo.subscribeToNewsletter,
                 status: 'active',
-                createdAt: Timestamp.now(),
+                createdAt: new Date(),
                 totalOrders: 0, // Initial creation, will be updated by webhook
                 totalSpend: 0,  // Initial creation
                 locationIds: [locationId],
@@ -148,7 +148,7 @@ export async function createStripeCheckoutSessionAction(
     if (!stripeSecretKey) {
         throw new Error('Stripe API key is not configured.');
     }
-    const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
+    const stripe = new Stripe(stripeSecretKey);
 
     const origin = await getOrigin();
     
@@ -194,7 +194,7 @@ export async function createStripeCheckoutSessionAction(
         price_data: {
             currency: 'dkk',
             product_data: { name: item.name, description: item.toppings?.join(', ') || undefined },
-            unit_amount: Math.round(item.unitPrice * 100),
+            unit_amount: Math.round((item.unitPrice ?? (item.totalPrice / Math.max(item.quantity, 1))) * 100),
         },
         quantity: item.quantity,
     }));
@@ -218,7 +218,7 @@ export async function createStripeCheckoutSessionAction(
         });
     }
 
-    const coupons: Stripe.Checkout.SessionCreateParams.Coupon[] = [];
+    const discounts: Stripe.Checkout.SessionCreateParams.Discount[] = [];
     if (paymentDetails.cartDiscountTotal && paymentDetails.cartDiscountTotal > 0) {
         const coupon = await stripe.coupons.create({
             amount_off: Math.round(paymentDetails.cartDiscountTotal * 100),
@@ -226,7 +226,7 @@ export async function createStripeCheckoutSessionAction(
             duration: 'once',
             name: paymentDetails.cartDiscountName,
         });
-        coupons.push(coupon.id);
+        discounts.push({ coupon: coupon.id });
     }
     
     // Step 2: Create Stripe session with orderId in metadata
@@ -250,7 +250,7 @@ export async function createStripeCheckoutSessionAction(
             appliedDiscountId: appliedDiscountId || '',
             anonymousConsentId: anonymousConsentId || '',
         },
-        discounts: coupons,
+        discounts,
         payment_intent_data: {
             statement_descriptor: statement_descriptor,
             statement_descriptor_suffix: statement_descriptor_suffix,

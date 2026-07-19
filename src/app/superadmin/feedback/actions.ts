@@ -25,6 +25,14 @@ type Question = {
   maxSelection?: number;
 };
 
+const normalizeDate = (value: unknown): Date => {
+  if (value instanceof Date) return value;
+  if (value && typeof value === 'object' && 'toDate' in value && typeof (value as { toDate: () => Date }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  return new Date(value as string | number);
+};
+
 type VersionPayload = {
   id?: string;
   versionLabel: string;
@@ -118,7 +126,7 @@ export async function getFeedbackEntries(): Promise<Feedback[]> {
         return {
             ...data,
             id: doc.id,
-            receivedAt: (data.receivedAt as admin.firestore.Timestamp).toDate(),
+            receivedAt: normalizeDate(data.receivedAt),
         } as Feedback;
     });
     return feedbackEntries;
@@ -133,7 +141,7 @@ export async function getFeedbackById(id: string): Promise<Feedback | null> {
         return { 
             id: docSnap.id, 
             ...data,
-            receivedAt: (data.receivedAt as admin.firestore.Timestamp).toDate(),
+            receivedAt: normalizeDate(data.receivedAt),
         } as Feedback;
     }
     return null;
@@ -226,4 +234,26 @@ export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionsVe
     const q = db.collection('feedbackQuestionsVersion').orderBy('versionLabel', 'desc');
     const snapshot = await q.get();
     return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as FeedbackQuestionsVersion));
+}
+
+export async function createFeedbackQuestion(payload: {
+  title: string;
+  helpText?: string;
+  type: string;
+  required: boolean;
+  category?: string;
+  language: string;
+  isActive: boolean;
+  options: { id: string; label: string; value: string }[];
+}) {
+  const db = getAdminDb();
+  const ref = db.collection('feedbackQuestions').doc();
+  await ref.set({
+    ...payload,
+    id: ref.id,
+    createdAt: new Date(),
+    updatedAt: new Date(),
+  });
+  revalidatePath('/superadmin/feedback/questions');
+  return { ok: true, id: ref.id };
 }

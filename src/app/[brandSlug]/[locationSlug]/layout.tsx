@@ -12,9 +12,9 @@ export default async function LocationLayout({
   params,
 }: {
   children: React.ReactNode;
-  params: { brandSlug: string; locationSlug: string };
+  params: Promise<{ brandSlug: string; locationSlug: string }>;
 }) {
-  const { brandSlug, locationSlug } = params;
+  const { brandSlug, locationSlug } = await params;
   const adminReady = isAdminReady();
 
   const brand = adminReady ? await getBrandBySlug(brandSlug) : null;

@@ -81,7 +81,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
     if (newFilters.locationId && newFilters.locationId !== 'all') {
         params.set('locationId', newFilters.locationId);
     }
-    if (newFilters.device && newFilters.device !== 'all') {
+    if (newFilters.device) {
       params.set('device', newFilters.device);
     }
     if (newFilters.counting && newFilters.counting !== 'events') {
@@ -111,8 +111,8 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
       <Card>
         <CardContent className="p-4 flex flex-col gap-4">
              <FiltersBar 
-                value={currentFilters}
-                onFilterChange={handleFilterChange}
+                filters={currentFilters}
+                onChange={handleFilterChange}
                 brands={brands || []}
                 locations={locations}
             />

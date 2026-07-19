@@ -63,7 +63,7 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
   const [statusFilter, setStatusFilter] = useState('all');
 
   const [isFormOpen, setIsFormOpen] = useState(false);
-  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
+  const [selectedCustomer, setSelectedCustomer] = useState<Pick<Customer, 'id' | 'fullName' | 'email' | 'phone' | 'status'> | null>(null);
   
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
@@ -88,13 +88,19 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
     router.push(`/superadmin/customers/${encodeURIComponent(customerId)}`);
   }
 
-  const handleEdit = (e: React.MouseEvent, customer: CustomerWithDetails) => {
+  const handleEdit = (e: Event, customer: CustomerWithDetails) => {
     e.stopPropagation(); // Prevent row click navigation
-    setSelectedCustomer(customer as Customer);
+    setSelectedCustomer({
+      id: customer.id,
+      fullName: customer.fullName,
+      email: customer.email,
+      phone: customer.phone,
+      status: customer.status,
+    });
     setIsFormOpen(true);
   };
   
-  const confirmDelete = (e: React.MouseEvent, customerId: string) => {
+  const confirmDelete = (e: Event, customerId: string) => {
     e.stopPropagation();
     setCustomerToDelete(customerId);
     setIsAlertOpen(true);

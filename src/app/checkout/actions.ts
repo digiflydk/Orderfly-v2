@@ -11,9 +11,9 @@ import { getDiscountByCode } from '@/app/superadmin/discounts/actions';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
-import { getToppings } from '../superadmin/toppings/actions';
-import { getLoyaltySettings } from '../superadmin/loyalty/actions';
-import { getActiveStripeSecretKey } from '../superadmin/settings/actions';
+import { getToppings } from '@/app/superadmin/toppings/actions';
+import { getLoyaltySettings } from '@/app/superadmin/loyalty/actions';
+import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
 import { getOrigin } from '@/lib/url';
 import { generateOrderId } from '@/lib/order-id';
 import { getOrderById, getOrderByCheckoutSessionId as getOrderBySessionId } from './order-actions';
@@ -91,7 +91,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 country: 'DK',
                 marketingConsent: customerInfo.subscribeToNewsletter,
                 status: 'active',
-                createdAt: Timestamp.now(),
+                createdAt: new Date(),
                 totalOrders: 0, // Initial creation, will be updated by webhook
                 totalSpend: 0,  // Initial creation
                 locationIds: [locationId],
@@ -148,7 +148,7 @@ export async function createStripeCheckoutSessionAction(
     if (!stripeSecretKey) {
         throw new Error('Stripe API key is not configured.');
     }
-    const stripe = new Stripe(stripeSecretKey, { apiVersion: "2024-06-20" });
+    const stripe = new Stripe(stripeSecretKey);
 
     const origin = await getOrigin();
     
@@ -190,14 +190,17 @@ export async function createStripeCheckoutSessionAction(
     });
 
 
-    const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => ({
-        price_data: {
-            currency: 'dkk',
-            product_data: { name: item.name, description: item.toppings?.join(', ') || undefined },
-            unit_amount: Math.round(item.unitPrice * 100),
-        },
-        quantity: item.quantity,
-    }));
+    const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => {
+        const unitPrice = item.unitPrice ?? (item.quantity > 0 ? item.totalPrice / item.quantity : 0);
+        return {
+            price_data: {
+                currency: 'dkk',
+                product_data: { name: item.name, description: item.toppings?.join(', ') || undefined },
+                unit_amount: Math.round(unitPrice * 100),
+            },
+            quantity: item.quantity,
+        };
+    });
 
     if (deliveryType === 'delivery' && paymentDetails.deliveryFee > 0) {
         line_items.push({

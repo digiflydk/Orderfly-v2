@@ -49,8 +49,8 @@ const upsellSchema = z.object({
     imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')).nullable(),
     
     offerType: z.enum(['product', 'category']),
-    offerProductIds: z.array(z.string()).optional().default([]),
-    offerCategoryIds: z.array(z.string()).optional().default([]),
+    offerProductIds: z.array(z.string()),
+    offerCategoryIds: z.array(z.string()),
 
     discountType: z.enum(['none', 'percentage', 'fixed_amount']),
     discountValue: z.coerce.number().positive('Discount value must be positive.').optional(),
@@ -58,12 +58,12 @@ const upsellSchema = z.object({
     triggerConditions: z.array(triggerConditionSchema).min(1, 'At least one trigger condition is required.'),
 
     orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
-    activeDays: z.array(z.string()).optional().default([]),
-    activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
+    activeDays: z.array(z.string()),
+    activeTimeSlots: z.array(activeTimeSlotSchema),
     startDate: z.date().optional(),
     endDate: z.date().optional(),
-    isActive: z.boolean().default(true),
-    tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])).optional().default([]),
+    isActive: z.boolean(),
+    tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])),
 }).refine(data => {
     return !(data.offerType === 'product' && (!data.offerProductIds || data.offerProductIds.length === 0));
 }, {
@@ -88,6 +88,8 @@ interface UpsellFormPageProps {
   upsell?: Upsell;
   brands: Brand[];
   locations: Location[];
+  products?: Product[];
+  categories?: Category[];
 }
 
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -152,7 +154,15 @@ function ProductGroupCard({ index, control, remove, brandProducts, brandCategori
                                 <FormField key={p.id} control={control} name={`productGroups.${index}.productIds`} render={({field}) => (
                                     <FormItem className="flex items-center space-x-2">
                                         <FormControl>
-                                            <Checkbox name={field.name} checked={field.value?.includes(p.id)} onCheckedChange={(checked) => checked ? field.onChange([...field.value, p.id]) : field.onChange(field.value?.filter(id => id !== p.id))}/>
+                                            <Checkbox
+                                                name={field.name}
+                                                checked={field.value?.includes(p.id)}
+                                                onCheckedChange={(checked) =>
+                                                    checked
+                                                        ? field.onChange([...(field.value ?? []), p.id])
+                                                        : field.onChange((field.value ?? []).filter((id: string) => id !== p.id))
+                                                }
+                                            />
                                         </FormControl>
                                         <FormLabel className="font-normal text-sm">{p.productName}</FormLabel>
                                     </FormItem>
@@ -388,14 +398,14 @@ export function UpsellFormPage({ upsell, brands, locations }: UpsellFormPageProp
                                         {brandCategories.map(cat => (<SelectItem key={cat.id} value={cat.id}>{cat.categoryName}</SelectItem>))}
                                     </SelectContent>
                                 </Select>
-                                <ScrollArea className="h-40 rounded-md border"><div className="p-4">{filteredBrandProducts.map((p) => (<FormField key={p.id} control={control} name="offerProductIds" render={({ field }) => (<FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value?.includes(p.id)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), p.id]) : field.onChange((field.value || [])?.filter(id => id !== p.id))}/></FormControl><FormLabel className="font-normal text-sm">{p.productName}</FormLabel></FormItem>)}/>))}</div></ScrollArea><FormMessage/></FormItem>
+                                <ScrollArea className="h-40 rounded-md border"><div className="p-4">{filteredBrandProducts.map((p) => (<FormField key={p.id} control={control} name="offerProductIds" render={({ field }) => (<FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value?.includes(p.id)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), p.id]) : field.onChange((field.value || []).filter((id: string) => id !== p.id))}/></FormControl><FormLabel className="font-normal text-sm">{p.productName}</FormLabel></FormItem>)}/>))}</div></ScrollArea><FormMessage/></FormItem>
                             )}/>
                         )}
 
                         {offerType === 'category' && (
                             <FormField control={control} name="offerCategoryIds" render={() => (
                                 <FormItem><FormLabel>Offered Categories</FormLabel>
-                                <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandCategories.map((c) => (<FormField key={c.id} control={control} name="offerCategoryIds" render={({ field }) => (<FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value?.includes(c.id)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), c.id]) : field.onChange((field.value || [])?.filter(id => id !== c.id))}/></FormControl><FormLabel className="font-normal text-sm">{c.categoryName}</FormLabel></FormItem>)}/>))}</div></ScrollArea><FormMessage/></FormItem>
+                                <ScrollArea className="h-40 rounded-md border"><div className="p-4">{brandCategories.map((c) => (<FormField key={c.id} control={control} name="offerCategoryIds" render={({ field }) => (<FormItem className="flex items-center space-x-2"><FormControl><Checkbox checked={field.value?.includes(c.id)} onCheckedChange={(checked) => checked ? field.onChange([...(field.value || []), c.id]) : field.onChange((field.value || []).filter((id: string) => id !== c.id))}/></FormControl><FormLabel className="font-normal text-sm">{c.categoryName}</FormLabel></FormItem>)}/>))}</div></ScrollArea><FormMessage/></FormItem>
                             )}/>
                         )}
                         

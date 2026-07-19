@@ -2,15 +2,13 @@ import { notFound } from "next/navigation";
 import { isM3Enabled } from "@/lib/feature-flags";
 import { mockMenu } from "@/app/m3pizza/_data/mock";
 import MenuList from "@/app/m3pizza/_components/MenuList";
-
-type Props = {
-  params: { brandSlug: string; locationSlug: string };
-};
+import type { AsyncPageProps } from "@/types/next-async-props";
+import { resolveParams } from "@/lib/next/resolve-props";
 
 export const runtime = "nodejs";
 
-export default function M3LocationPage({ params }: Props) {
-  const { brandSlug, locationSlug } = params;
+export default async function M3LocationPage({ params }: AsyncPageProps<{ brandSlug: string; locationSlug: string }>) {
+  const { brandSlug, locationSlug } = await resolveParams(params);
 
   if (!isM3Enabled()) {
     notFound();

@@ -43,8 +43,6 @@ export default function QaNewPage() {
       context,
       startPath,
       proofUrl: proofUrl || undefined,
-      createdAt: Date.now(),
-      updatedAt: Date.now(),
     });
     router.push(`/superadmin/qa/${code}`);
   }

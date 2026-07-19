@@ -10,7 +10,7 @@ import { cn } from '@/lib/utils';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import Link from 'next/link';
 import type { GeneralSettings } from '@/types/settings';
-import type { AIProjectQualificationOutput, AIProjectQualificationInput } from '@/ai/flows/ai-project-qualification';
+import type { AIProjectQualificationOutput, AIProjectQualificationInput } from '@/types';
 
 type Message = {
   role: 'user' | 'assistant';

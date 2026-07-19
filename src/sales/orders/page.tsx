@@ -36,9 +36,8 @@ export default async function OrdersPage({ params, searchParams }: AsyncPageProp
     
     const serializedOrders: ClientOrderSummary[] = orders.map(order => ({
         ...order,
+        total: order.totalAmount,
         createdAt: order.createdAt.toISOString(),
-        paidAt: order.paidAt?.toISOString(),
-        updatedAt: order.updatedAt?.toISOString(),
     }));
 
     return (

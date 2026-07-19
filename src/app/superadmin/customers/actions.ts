@@ -25,7 +25,7 @@ export type FormState = {
 
 
 export async function createOrUpdateCustomer(
-  prevState: FormState,
+  prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
     const rawData = {
@@ -72,7 +72,7 @@ export async function createOrUpdateCustomer(
                 ...customerData,
                 id: docId,
                 brandId: 'brand-gourmet', // Placeholder
-                createdAt: Timestamp.now(),
+                createdAt: new Date(),
                 totalOrders: 0,
                 totalSpend: 0,
                 locationIds: [],

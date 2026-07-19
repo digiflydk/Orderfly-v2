@@ -14,7 +14,7 @@ export async function POST(req: NextRequest) {
     if (!stripeKey) {
         throw new Error("Stripe is not configured.");
     }
-    const stripe = new Stripe(stripeKey, { apiVersion: '2024-06-20' });
+    const stripe = new Stripe(stripeKey);
 
     const ref = doc(db, 'orders', orderId);
     const snap = await getDoc(ref);

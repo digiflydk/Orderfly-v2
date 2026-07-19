@@ -26,7 +26,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import type { Brand, CookieTexts } from '@/types';
-import { createOrUpdateCookieTexts } from './actions';
+import { createOrUpdateCookieTexts } from '@/app/superadmin/settings/cookie-texts/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';

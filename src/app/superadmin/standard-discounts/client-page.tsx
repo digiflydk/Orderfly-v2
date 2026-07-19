@@ -85,7 +85,7 @@ export function StandardDiscountsClientPage({ initialDiscounts, brands, location
         setLocalDiscounts(prev => prev.map(d => d.id === id ? { ...d, isActive: !currentValue } : d));
         const result = await updateStandardDiscountStatus(id, !currentValue);
         if (result.error) {
-            toast({ variant: 'destructive', title: 'Error', description: result.message });
+            toast({ variant: 'destructive', title: 'Error', description: result.error });
             setLocalDiscounts(prev => prev.map(d => d.id === id ? { ...d, isActive: currentValue } : d)); // Revert on error
         }
     }
@@ -102,7 +102,7 @@ export function StandardDiscountsClientPage({ initialDiscounts, brands, location
     if (!dateString) return 'N/A';
     try {
         const utcDate = toZonedTime(dateString, 'UTC');
-        return format(utcDate, 'dd MMM yyyy, HH:mm', { timeZone: 'UTC' });
+        return format(utcDate, 'dd MMM yyyy, HH:mm');
     } catch (e) {
         return 'Invalid Date';
     }

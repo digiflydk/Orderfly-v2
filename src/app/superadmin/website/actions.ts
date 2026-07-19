@@ -1,12 +1,12 @@
 
 'use server';
 import { z } from 'zod';
-import { aiProjectQualification, type AIProjectQualificationInput, type AIProjectQualificationOutput } from '@/ai/flows/ai-project-qualification';
+import { aiProjectQualification } from '@/ai/flows/ai-project-qualification';
+import type { AIProjectQualificationInput, AIProjectQualificationOutput } from '@/types';
 import { getGeneralSettings, saveGeneralSettings } from '@/services/settings';
 import type { GeneralSettings, Customer } from '@/types/settings';
 import { revalidatePath } from 'next/cache';
 import { getAllLeads, Lead } from '@/services/leads';
-import { v4 as uuidv4 } from 'uuid';
 
 
 export async function qualifyProjectAction(input: AIProjectQualificationInput): Promise<AIProjectQualificationOutput> {
@@ -89,7 +89,7 @@ export async function saveCustomerAction(customerData: Omit<Customer, 'id'>): Pr
     try {
         const settings = await getGeneralSettings();
         const customers = settings?.customers || [];
-        const newCustomer: Customer = { ...customerData, id: uuidv4() };
+        const newCustomer: Customer = { ...customerData, id: crypto.randomUUID() };
         const updatedCustomers = [...customers, newCustomer];
         await saveGeneralSettings({ customers: updatedCustomers });
         revalidatePath('/cms/customers');

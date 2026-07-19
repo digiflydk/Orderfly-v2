@@ -22,7 +22,7 @@ export type FormState = {
 };
 
 export async function createOrUpdatePlan(
-  prevState: FormState,
+  prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
   const rawData = Object.fromEntries(formData.entries());

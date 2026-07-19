@@ -37,7 +37,7 @@ const questionSchema = z.object({
 const feedbackQuestionVersionSchema = z.object({
   id: z.string().optional(),
   versionLabel: z.string().min(1, "Version label is required."),
-  isActive: z.boolean().default(false),
+  isActive: z.boolean(),
   language: z.string().min(2, "Language code is required."),
   orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
   questions: z.array(questionSchema).min(1, "At least one question is required."),

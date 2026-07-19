@@ -538,6 +538,7 @@ export type MinimalCartItem = {
     unitPrice?: number;
     totalPrice: number;
     toppings?: string[];
+    itemType?: 'product' | 'combo';
 }
 
 
@@ -902,7 +903,7 @@ export type AnalyticsDaily = {
 
   // Meta
   agg_version: number;
-  updated_at: Timestamp;
+  updated_at: FirebaseFirestore.Timestamp;
 };
 
 export type FunnelOutput = {

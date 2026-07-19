@@ -15,6 +15,7 @@ import M3Footer from "@/components/layout/M3Footer";
 import { OrderModal } from './_components/OrderModal';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Button } from "@/components/ui/button";
 
 export default function M3IndexPage() {
   const [orderModalOpen, setOrderModalOpen] = useState(false);

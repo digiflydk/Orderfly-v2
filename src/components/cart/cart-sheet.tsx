@@ -33,7 +33,7 @@ export function CartSheet() {
   const { cartItems, removeFromCart, updateQuantity, itemCount, brand, location, subtotal, itemDiscount, cartDiscount, cartTotal, deliveryFee, freeDeliveryDiscountApplied, deliveryType } = useCart();
   const [isPending, startTransition] = useTransition();
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
-  const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: Product[]} | null>(null);
+  const [activeUpsell, setActiveUpsell] = useState<{ upsell: Upsell; products: ProductForMenu[] } | null>(null);
   const router = useRouter();
   const { toast } = useToast();
   const { trackEvent } = useAnalytics();

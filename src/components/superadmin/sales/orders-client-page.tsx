@@ -10,7 +10,16 @@ export type ClientOrderSummary = {
   // extend as needed
 };
 
-export function OrdersClientPage(props: { data?: ClientOrderSummary[] }) {
+type Brand = { id: string; name: string };
+type Location = { id: string; name: string; brandId: string };
+
+export function OrdersClientPage(props: {
+  initialOrders?: ClientOrderSummary[];
+  brands?: Brand[];
+  locations?: Location[];
+  initialFilters?: unknown;
+  data?: ClientOrderSummary[];
+}) {
   // keep existing UI if present; placeholder to unblock build
   return null;
 }
