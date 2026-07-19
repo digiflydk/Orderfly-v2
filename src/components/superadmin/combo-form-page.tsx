@@ -54,13 +54,13 @@ const comboMenuSchema = z.object({
     imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
     pickupPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
     deliveryPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
-    isActive: z.boolean().default(true),
+    isActive: z.boolean(),
     startDate: z.date().optional(),
     endDate: z.date().optional(),
-    activeDays: z.array(z.string()).optional().default([]),
-    activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
+    activeDays: z.array(z.string()),
+    activeTimeSlots: z.array(activeTimeSlotSchema),
     orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
-    tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])).optional().default([]),
+    tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])),
     productGroups: z.array(productGroupSchema).min(1, 'At least one product group must be configured.'),
 }).refine(data => data.pickupPrice !== undefined || data.deliveryPrice !== undefined, {
     message: "At least one price (Pickup or Delivery) must be provided.",
@@ -142,7 +142,7 @@ function ProductGroupCard({ index, control, remove, brandProducts, brandCategori
                                 <FormField key={p.id} control={control} name={`productGroups.${index}.productIds`} render={({field}) => (
                                     <FormItem className="flex items-center space-x-2">
                                         <FormControl>
-                                            <Checkbox name={field.name} checked={field.value?.includes(p.id)} onCheckedChange={(checked) => checked ? field.onChange([...field.value, p.id]) : field.onChange(field.value?.filter(id => id !== p.id))}/>
+                                            <Checkbox name={field.name} checked={field.value?.includes(p.id)} onCheckedChange={(checked) => checked ? field.onChange([...field.value, p.id]) : field.onChange(field.value?.filter((id: string) => id !== p.id))}/>
                                         </FormControl>
                                         <FormLabel className="font-normal text-sm">{p.productName}</FormLabel>
                                     </FormItem>

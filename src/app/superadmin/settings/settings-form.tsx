@@ -25,9 +25,10 @@ interface SettingsFormProps {
   initialBrandingSettings: PlatformBrandingSettings;
 }
 
-function SubmitButton({ children }: { children: React.ReactNode }) {
-    const { pending } = useFormStatus();
-    return <Button type="submit" disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : children}</Button>;
+function SubmitButton({ children, pending }: { children: React.ReactNode; pending?: boolean }) {
+    const { pending: formPending } = useFormStatus();
+    const isPending = pending ?? formPending;
+    return <Button type="submit" disabled={isPending}>{isPending ? <Loader2 className="animate-spin" /> : children}</Button>;
 }
 
 

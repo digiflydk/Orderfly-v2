@@ -126,19 +126,23 @@ export async function createOrUpdateUpsell(
     }
     
     const upsellData = validatedFields.data;
-
-    const dataToSave: Omit<Upsell, 'createdAt' | 'updatedAt' | 'views' | 'conversions'> & { createdAt?: Timestamp, updatedAt: Timestamp, startDate?: Timestamp, endDate?: Timestamp, views: number, conversions: number } = {
+    const normalizedUpsellData = {
       ...upsellData,
+      description: upsellData.description ?? undefined,
+      imageUrl: upsellData.imageUrl ?? null,
+    };
+    const upsellIdToSave = id || doc(collection(db, 'upsells')).id;
+    const { id: _ignoredId, ...upsellPayload } = normalizedUpsellData;
+
+    const dataToSave: Omit<Upsell, 'createdAt' | 'updatedAt' | 'views' | 'conversions' | 'startDate' | 'endDate'> & { createdAt?: Timestamp, updatedAt: Timestamp, startDate?: Timestamp, endDate?: Timestamp, views: number, conversions: number } = {
+      ...upsellPayload,
+      id: upsellIdToSave,
+      startDate: upsellData.startDate ? Timestamp.fromDate(upsellData.startDate) : undefined,
+      endDate: upsellData.endDate ? Timestamp.fromDate(upsellData.endDate) : undefined,
       updatedAt: Timestamp.now(),
       views: id ? (await getUpsellById(id))?.views ?? 0 : 0,
       conversions: id ? (await getUpsellById(id))?.conversions ?? 0 : 0,
     };
-    
-    if (upsellData.startDate) dataToSave.startDate = Timestamp.fromDate(upsellData.startDate);
-    if (upsellData.endDate) dataToSave.endDate = Timestamp.fromDate(upsellData.endDate);
-
-    const upsellIdToSave = id || doc(collection(db, 'upsells')).id;
-    dataToSave.id = upsellIdToSave;
 
     if (!id) {
       dataToSave.createdAt = Timestamp.now();

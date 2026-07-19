@@ -321,7 +321,7 @@ export function CategoriesClientPage({ initialCategories, locations, brands }: C
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                     <AlertDialogCancel>Cancel</AlertDialogCancel>
-                    <AlertDialogAction onClick={() => handleDelete(category.id)}>Continue</AlertDialogAction>
+                    <AlertDialogAction onClick={() => handleDelete()}>Continue</AlertDialogAction>
                     </AlertDialogFooter>
                 </AlertDialogContent>
             </AlertDialog>

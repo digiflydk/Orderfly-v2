@@ -36,7 +36,7 @@ async function CategoriesPageContent() {
             ...category,
             sortOrder: category.sortOrder ?? index, // Fallback sortOrder
             locationNames: category.locationIds?.map(id => locationMap.get(id)?.name || 'Unknown Location').join(', ') || '',
-            brandId: brandId,
+            brandId: brandId ?? '',
             brandName: brandName || 'Unknown Brand'
         };
     }).sort((a, b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999));

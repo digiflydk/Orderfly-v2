@@ -3,7 +3,6 @@
 
 import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, getDoc } from 'firebase/firestore';
 import type { Role } from '@/types';
 import { z } from 'zod';
 import { ALL_PERMISSIONS } from '@/lib/permissions';
@@ -48,8 +47,8 @@ export async function createOrUpdateRole(
   const { id, ...roleData } = validatedFields.data;
 
   try {
-    const roleRef = id ? doc(db, 'roles', id) : doc(collection(db, 'roles'));
-    await setDoc(roleRef, { ...roleData, id: roleRef.id }, { merge: true });
+    const roleRef = id ? db.collection('roles').doc(id) : db.collection('roles').doc();
+    await roleRef.set({ ...roleData, id: roleRef.id }, { merge: true });
 
   } catch (e) {
     console.error(e);
@@ -65,7 +64,7 @@ export async function deleteRole(roleId: string) {
     // Note: In a real app, you'd check if this role is assigned to any users before deleting.
     try {
         const db = getAdminDb();
-        await deleteDoc(doc(db, "roles", roleId));
+        await db.collection("roles").doc(roleId).delete();
         revalidatePath("/superadmin/roles");
         return { message: "Role deleted successfully.", error: false };
     } catch (e) {
@@ -77,16 +76,16 @@ export async function deleteRole(roleId: string) {
 
 export async function getRoles(): Promise<Role[]> {
     const db = getAdminDb();
-    const q = query(collection(db, 'roles'), orderBy('name'));
-    const querySnapshot = await getDocs(q);
+    const q = db.collection('roles').orderBy('name');
+    const querySnapshot = await q.get();
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Role[];
 }
 
 export async function getRoleById(roleId: string): Promise<Role | null> {
     const db = getAdminDb();
-    const docRef = doc(db, 'roles', roleId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
+    const docRef = db.collection('roles').doc(roleId);
+    const docSnap = await docRef.get();
+    if (docSnap.exists) {
         return { id: docSnap.id, ...docSnap.data() } as Role;
     }
     return null;

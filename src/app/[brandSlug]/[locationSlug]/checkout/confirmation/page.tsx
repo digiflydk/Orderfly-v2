@@ -11,7 +11,6 @@ function serializeOrder(order: OrderDetail | null): any {
         ...order,
         createdAt: order.createdAt instanceof Date ? order.createdAt.toISOString() : new Date().toISOString(),
         paidAt: order.paidAt instanceof Date ? order.paidAt.toISOString() : undefined,
-        updatedAt: order.updatedAt instanceof Date ? order.updatedAt.toISOString() : undefined,
     }
 }
 

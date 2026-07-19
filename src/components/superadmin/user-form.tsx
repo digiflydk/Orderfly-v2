@@ -35,7 +35,7 @@ import { ScrollArea } from '../ui/scroll-area';
 const userSchema = z.object({
   name: z.string().min(2, { message: 'Name must be at least 2 characters.' }),
   email: z.string().email({ message: 'Please enter a valid email address.'}),
-  roleIds: z.array(z.string()).optional().default([]),
+  roleIds: z.array(z.string()),
 });
 
 type UserFormValues = z.infer<typeof userSchema>;
@@ -81,7 +81,7 @@ export function UserForm({ isOpen, setIsOpen, user, allRoles }: UserFormProps) {
     if(user?.id) formData.append('id', user.id);
     formData.append('name', data.name);
     formData.append('email', data.email);
-    data.roleIds?.forEach(id => formData.append('roleIds', id));
+    data.roleIds.forEach((id) => formData.append('roleIds', id));
 
     startTransition(async () => {
         const result = await createOrUpdateUser(null, formData);
@@ -107,7 +107,7 @@ export function UserForm({ isOpen, setIsOpen, user, allRoles }: UserFormProps) {
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form action={handleFormSubmit} className="space-y-4 py-4">
+          <form onSubmit={handleFormSubmit} className="space-y-4 py-4">
             {user && <input type="hidden" name="id" value={user.id} />}
             <FormField
               control={form.control}

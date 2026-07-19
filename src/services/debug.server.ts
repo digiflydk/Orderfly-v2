@@ -74,7 +74,10 @@ export async function listCollection(req: DebugListRequest): Promise<DebugListRe
 
   const snap = await getDocs(qRef);
   const itemsRaw: any[] = [];
-  snap.forEach(d => itemsRaw.push({ id: d.id, ...d.data() }));
+  snap.forEach(d => {
+    const data = d.data() as Record<string, unknown>;
+    itemsRaw.push({ id: d.id, ...data });
+  });
   const items = itemsRaw.map(maskDoc);
   const nextCursor = itemsRaw.length ? itemsRaw[itemsRaw.length - 1].id : null;
 

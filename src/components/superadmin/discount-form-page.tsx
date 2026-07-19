@@ -42,17 +42,17 @@ const discountSchema = z.object({
   discountType: z.enum(['percentage', 'fixed_amount']),
   discountValue: z.coerce.number().positive('Discount value must be positive.'),
   minOrderValue: z.coerce.number().min(0).optional(),
-  isActive: z.boolean().default(true),
+  isActive: z.boolean(),
   orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
-  activeDays: z.array(z.string()).optional().default([]),
-  activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
+  activeDays: z.array(z.string()),
+  activeTimeSlots: z.array(activeTimeSlotSchema),
   startDate: z.string().optional(),
   endDate: z.string().optional(),
   usageLimit: z.coerce.number().min(0, 'Usage limit must be 0 or more.'),
   perCustomerLimit: z.coerce.number().min(0, 'Per customer limit must be 0 or more.'),
   assignedToCustomerId: z.string().optional(),
-  firstTimeCustomerOnly: z.boolean().default(false),
-  allowStacking: z.boolean().default(false),
+  firstTimeCustomerOnly: z.boolean(),
+  allowStacking: z.boolean(),
 });
 
 

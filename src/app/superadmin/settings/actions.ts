@@ -4,7 +4,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import type { PaymentGatewaySettings, LanguageSettings, Brand, PlatformBrandingSettings } from '@/types';
+import type { PaymentGatewaySettings, LanguageSettings, Brand, PlatformBrandingSettings, AnalyticsSettings } from '@/types';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getPlatformBrandingSettings } from './queries';
@@ -90,7 +90,7 @@ const defaultLanguageSettings: LanguageSettings = {
   supportedLanguages: [{ code: 'en', name: 'English' }, { code: 'da', name: 'Dansk' }],
 };
 
-const defaultAnalyticsSettings = { ga4TrackingId: '', gtmContainerId: '' };
+const defaultAnalyticsSettings: AnalyticsSettings = { ga4TrackingId: '', gtmContainerId: '' };
 
 async function saveBranding(data: PlatformBrandingSettings) {
     const settingsRef = doc(db, 'platform_settings', 'branding');
@@ -241,7 +241,7 @@ export async function getPlatformSettings() {
   const brandingSettings = await getPlatformBrandingSettings();
 
   return {
-    analyticsSettings: analyticsDoc.exists() ? analyticsDoc.data() : defaultAnalyticsSettings,
+    analyticsSettings: analyticsDoc.exists() ? (analyticsDoc.data() as AnalyticsSettings) : defaultAnalyticsSettings,
     paymentGatewaySettings: paymentDoc.exists() ? paymentDoc.data() as PaymentGatewaySettings : defaultPaymentGatewaySettings,
     languageSettings: languagesDoc.exists() ? languagesDoc.data() as LanguageSettings : defaultLanguageSettings,
     brandingSettings,
@@ -267,5 +267,4 @@ export async function getActiveStripeWebhookSecret(): Promise<string | null> {
     const mode = settings.paymentGatewaySettings.activeMode;
     return settings.paymentGatewaySettings[mode]?.webhookSecret || null;
 }
-
 

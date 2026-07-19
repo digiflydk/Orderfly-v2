@@ -1,23 +1,19 @@
 'use client';
 
-import dynamic from 'next/dynamic';
-import { createOrUpdateQuestionVersion } from '@/app/superadmin/feedback/actions';
+import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form';
+import type { FeedbackQuestionsVersion, LanguageSetting } from '@/types';
 
-const FeedbackQuestionVersionForm = dynamic(
-  () =>
-    import('@/components/superadmin/feedback-question-version-form').then(
-      (m: any) => m.default ?? m.FeedbackQuestionVersionForm
-    ),
-  { ssr: false }
-);
-
-export function EditFormClient({ versionId, initialData }: { versionId: string; initialData: any }) {
+export function EditFormClient({
+  version,
+  supportedLanguages,
+}: {
+  version: FeedbackQuestionsVersion;
+  supportedLanguages: LanguageSetting[];
+}) {
   return (
     <FeedbackQuestionVersionForm
-      mode="edit"
-      id={versionId}
-      initialData={initialData}
-      action={createOrUpdateQuestionVersion}
+      version={version}
+      supportedLanguages={supportedLanguages}
     />
   );
 }

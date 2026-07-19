@@ -88,14 +88,35 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
     router.push(`/superadmin/customers/${encodeURIComponent(customerId)}`);
   }
 
-  const handleEdit = (e: React.MouseEvent, customer: CustomerWithDetails) => {
-    e.stopPropagation(); // Prevent row click navigation
-    setSelectedCustomer(customer as Customer);
+  const toCustomerModel = (customer: CustomerWithDetails): Customer => {
+    const {
+      brandName,
+      locationNames,
+      createdAt,
+      lastOrderDate,
+      cookie_consent,
+      ...customerData
+    } = customer;
+
+    return {
+      ...customerData,
+      createdAt: new Date(createdAt),
+      lastOrderDate: lastOrderDate ? new Date(lastOrderDate) : undefined,
+      cookie_consent: cookie_consent
+        ? {
+            ...cookie_consent,
+            timestamp: new Date(cookie_consent.timestamp),
+          }
+        : undefined,
+    };
+  };
+
+  const handleEdit = (customer: CustomerWithDetails) => {
+    setSelectedCustomer(toCustomerModel(customer));
     setIsFormOpen(true);
   };
   
-  const confirmDelete = (e: React.MouseEvent, customerId: string) => {
-    e.stopPropagation();
+  const confirmDelete = (customerId: string) => {
     setCustomerToDelete(customerId);
     setIsAlertOpen(true);
   }
@@ -232,11 +253,11 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
                                     <Eye className="mr-2 h-4 w-4" />
                                     View Details
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={(e) => handleEdit(e, customer)}>
+                                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); handleEdit(customer); }}>
                                     <Edit className="mr-2 h-4 w-4" />
                                     Edit
                                 </DropdownMenuItem>
-                                <DropdownMenuItem onSelect={(e) => confirmDelete(e, customer.id)} className="text-destructive">
+                                <DropdownMenuItem onSelect={(e) => { e.preventDefault(); confirmDelete(customer.id); }} className="text-destructive">
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Delete
                                 </DropdownMenuItem>

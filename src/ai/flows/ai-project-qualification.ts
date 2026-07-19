@@ -56,7 +56,7 @@ export const aiProjectQualification = ai.defineFlow(
   },
   async (input) => {
     const response = await qualificationPrompt(input);
-    const output = response.output();
+    const output = response.output;
 
     if (!output) {
       throw new Error("The AI model did not return a valid response.");

@@ -2,7 +2,7 @@
 
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
-import ConfirmationClient from './confirmation-client';
+import { ConfirmationClient } from '@/app/[brandSlug]/[locationSlug]/checkout/confirmation/confirmation-client';
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 import { getLocationBySlug } from '@/lib/data/brand-location';
 import { getOrderById } from '@/app/checkout/order-actions';
@@ -17,7 +17,6 @@ function serializeOrder(order: OrderDetail | null): any {
         ...order,
         createdAt: order.createdAt instanceof Date ? order.createdAt.toISOString() : new Date().toISOString(),
         paidAt: order.paidAt instanceof Date ? order.paidAt.toISOString() : undefined,
-        updatedAt: order.updatedAt instanceof Date ? order.updatedAt.toISOString() : undefined,
     }
 }
 

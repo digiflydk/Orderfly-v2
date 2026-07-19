@@ -46,31 +46,31 @@ const asBool = (v: unknown) => {
 const baseFields = {
   id: z.string().optional().nullable(),
   brandId: z.string().min(1, 'A brand must be selected.'),
-  locationIds: z.array(z.string()).optional().default([]),
+  locationIds: z.array(z.string()),
   categoryId: z.string().min(1, 'A category must be selected.'),
   productName: z.string().min(2, 'Product name must be at least 2 characters.'),
   description: z.string().optional(),
   price: z.coerce.number().min(0, 'Price must be a non-negative number.'),
   priceDelivery: z.coerce.number().min(0, 'Delivery price must be a non-negative number.').optional(),
-  allergenIds: z.array(z.string()).optional().default([]),
-  toppingGroupIds: z.array(z.string()).optional().default([]),
+  allergenIds: z.array(z.string()),
+  toppingGroupIds: z.array(z.string()),
   imageUrl: z.any().optional(),
 };
 
 const createSchema = z.object({
   ...baseFields,
-  isActive: z.preprocess(asBool, z.boolean()).optional().default(false),
-  isFeatured: z.preprocess(asBool, z.boolean()).optional().default(false),
-  isNew: z.preprocess(asBool, z.boolean()).optional().default(false),
-  isPopular: z.preprocess(asBool, z.boolean()).optional().default(false),
+  isActive: z.boolean(),
+  isFeatured: z.boolean(),
+  isNew: z.boolean(),
+  isPopular: z.boolean(),
 });
 
 const updateSchema = z.object({
   ...baseFields,
-  isActive: z.preprocess(asBool, z.boolean()).optional(),
-  isFeatured: z.preprocess(asBool, z.boolean()).optional(),
-  isNew: z.preprocess(asBool, z.boolean()).optional(),
-  isPopular: z.preprocess(asBool, z.boolean()).optional(),
+  isActive: z.boolean(),
+  isFeatured: z.boolean(),
+  isNew: z.boolean(),
+  isPopular: z.boolean(),
 });
 
 type ProductFormValues = z.infer<typeof createSchema>;

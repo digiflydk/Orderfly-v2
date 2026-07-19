@@ -7,8 +7,8 @@ import { logDiag } from "@/lib/log";
 import ProductGrid from "@/components/catalog/product-grid";
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
-import type { MenuData, Category, Product } from "@/types/menu";
-import { productsForCategory } from "@/lib/menu-helpers";
+import type { MenuForRender, MenuCategory, MenuProduct } from "@/types/menu";
+import { productsForCategory } from "@/types/menu";
 
 function normalizeProbe(raw: any) {
   if (!raw || typeof raw !== "object") {
@@ -74,21 +74,21 @@ export default async function Page({
     }
 
     const counts = await getCatalogCounts({ brandId: probe.brand!.id });
-    const menu = await getMenuForRender({ brandId: probe.brand!.id });
-    const typedMenu = menu as unknown as MenuData;
+    const menu = await getMenuForRender({ brandId: probe.brand!.id, locationId: probe.location!.id });
+    const typedMenu = menu as MenuForRender;
 
     if(safe){
       return (
         <div className="mx-auto max-w-3xl p-4">
           <h1 className="text-2xl font-bold mb-4">Safe Mode – {probe.brand?.name ?? brandSlug} / {probe.location?.name ?? locationSlug}</h1>
           <pre className="text-xs bg-black/5 p-3 rounded mb-4">{JSON.stringify({ counts, fallbackUsed: menu.fallbackUsed }, null, 2)}</pre>
-          {(typedMenu.categories as Category[]).map((cat: Category) => (
+          {typedMenu.categories.map((cat: MenuCategory) => (
             <section key={cat.id} className="mb-6">
               <h2 className="font-semibold">{cat.name}</h2>
               <ul className="list-disc ml-5 mt-2">
-                {productsForCategory(typedMenu, cat.id).map((p: Product) => (
+                {productsForCategory(typedMenu.productsByCategory, cat.id).map((p: MenuProduct) => (
                   <li key={p.id}>
-                    {p.productName || p.name || p.title || "Uden navn"}
+                    {p.productName || "Uden navn"}
                   </li>
                 ))}
               </ul>
@@ -115,7 +115,7 @@ export default async function Page({
           <h1 className="text-2xl sm:text-3xl font-bold">{probe.brand?.name ?? brandSlug}</h1>
           <p className="opacity-70">{probe.location?.name ?? locationSlug}</p>
         </header>
-        <ProductGrid menu={menu as MenuData}/>
+        <ProductGrid menu={menu}/>
       </div>
     );
   }catch(e:any){

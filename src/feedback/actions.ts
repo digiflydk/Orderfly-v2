@@ -9,6 +9,7 @@ import type { Feedback, FeedbackQuestionsVersion, OrderDetail } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { getOrderById } from '@/app/checkout/order-actions';
+export { submitFeedbackAction } from '@/app/feedback/actions';
 
 
 export async function getFeedbackEntries(): Promise<Feedback[]> {

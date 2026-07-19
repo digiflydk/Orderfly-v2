@@ -13,7 +13,7 @@ import { trackServerEvent } from '@/lib/analytics';
 export const runtime = "nodejs";
 
 export async function POST(req: Request) {
-  const sig = headers().get('stripe-signature');
+  const sig = (await headers()).get('stripe-signature');
   const rawBody = await req.text();
   
   let event: Stripe.Event;
@@ -33,7 +33,7 @@ export async function POST(req: Request) {
         return new Response('No signature', { status: 400 });
     }
     
-    stripe = new Stripe(stripeKey, { apiVersion: "2024-06-20" });
+    stripe = new Stripe(stripeKey);
     event = await stripe.webhooks.constructEventAsync(rawBody, sig, webhookSecret);
 
   } catch (err) {

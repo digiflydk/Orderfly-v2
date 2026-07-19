@@ -3,7 +3,7 @@ import { notFound } from 'next/navigation';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
 import type { FeedbackQuestionsVersion } from '@/types';
-import { FeedbackQuestionVersionForm } from '@/components/superadmin/feedback-question-version-form';
+import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form';
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
 async function getQuestionVersionById(id: string): Promise<FeedbackQuestionsVersion | null> {

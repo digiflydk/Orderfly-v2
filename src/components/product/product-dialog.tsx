@@ -6,7 +6,7 @@ import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
 import { Minus, Plus, X } from 'lucide-react';
 import type { Topping, ToppingGroup, CartItemTopping, StandardDiscount, Allergen } from '@/types';
-import type { ProductForMenu } from '@/app/superadmin/products/actions';
+import type { ProductForMenu } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import {

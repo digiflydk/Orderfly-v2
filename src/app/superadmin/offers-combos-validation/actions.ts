@@ -43,6 +43,7 @@ function processMenuData(products: Product[], categories: Category[], activeComb
   if (promotionalDiscounts.length > 0) {
     const offerCategory: Category = {
         id: 'offers',
+        brandId: brand.id,
         categoryName: brand.offersHeading || 'Offers', // Use override or default
         locationIds: [location.id],
         isActive: true,

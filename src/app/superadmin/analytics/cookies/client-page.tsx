@@ -80,7 +80,7 @@ export function CookiesClientPage({ initialConsents, brands }: CookiesClientPage
     try {
       const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
       const zonedDate = toZonedTime(date, 'UTC');
-      return format(zonedDate, 'MMM d, yyyy HH:mm', { timeZone: 'UTC' });
+      return format(zonedDate, 'MMM d, yyyy HH:mm');
     } catch (e) {
       return 'Invalid Date';
     }

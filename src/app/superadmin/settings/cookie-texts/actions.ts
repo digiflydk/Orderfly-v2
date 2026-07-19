@@ -56,6 +56,7 @@ export async function createOrUpdateCookieTexts(formData: FormData) {
             necessary: { title: formData.get('cat_necessary_title'), description: formData.get('cat_necessary_desc') },
             functional: { title: formData.get('cat_functional_title'), description: formData.get('cat_functional_desc') },
             analytics: { title: formData.get('cat_analytics_title'), description: formData.get('cat_analytics_desc') },
+            statistics: { title: formData.get('cat_statistics_title'), description: formData.get('cat_statistics_desc') },
             performance: { title: formData.get('cat_performance_title'), description: formData.get('cat_performance_desc') },
             marketing: { title: formData.get('cat_marketing_title'), description: formData.get('cat_marketing_desc') },
         }
@@ -66,7 +67,7 @@ export async function createOrUpdateCookieTexts(formData: FormData) {
         return { error: 'Required fields are missing.' };
     }
     
-    const docId = rawData.id || doc(collection(db, 'cookie_texts')).id;
+    const docId = (rawData.id as string | undefined) || doc(collection(db, 'cookie_texts')).id;
     
     const dataToSave: Omit<CookieTexts, 'id' | 'last_updated'> & {last_updated: Timestamp} = {
         consent_version: rawData.consent_version as string,
@@ -85,9 +86,11 @@ export async function createOrUpdateCookieTexts(formData: FormData) {
             necessary: { title: rawData.categories.necessary.title as string, description: rawData.categories.necessary.description as string},
             functional: { title: rawData.categories.functional.title as string, description: rawData.categories.functional.description as string },
             analytics: { title: rawData.categories.analytics.title as string, description: rawData.categories.analytics.description as string},
+            statistics: { title: rawData.categories.statistics.title as string, description: rawData.categories.statistics.description as string},
             performance: { title: rawData.categories.performance.title as string, description: rawData.categories.performance.description as string},
             marketing: { title: rawData.categories.marketing.title as string, description: rawData.categories.marketing.description as string},
         },
+        last_updated: Timestamp.now(),
     };
     
     // Explicitly remove brand_id if it's undefined to avoid sending `undefined` to Firestore
@@ -95,7 +98,7 @@ export async function createOrUpdateCookieTexts(formData: FormData) {
         delete dataToSave.brand_id;
     }
 
-    await setDoc(doc(db, 'cookie_texts', docId), { ...dataToSave, last_updated: Timestamp.now() }, { merge: true });
+    await setDoc(doc(db, 'cookie_texts', docId), dataToSave, { merge: true });
 
     revalidatePath('/superadmin/settings/cookie-texts');
     redirect('/superadmin/settings/cookie-texts');

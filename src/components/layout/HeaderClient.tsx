@@ -2,7 +2,8 @@
 import { useEffect, useState, useMemo } from "react";
 import { Header } from "./header";
 import type { WebsiteHeaderConfig } from "@/types/website";
-import type { GeneralSettings, Brand, NavLink } from "@/types";
+import type { Brand } from "@/types";
+import type { GeneralSettings, NavLink } from "@/types/settings";
 import { usePathname } from "next/navigation";
 
 function toHsla({

@@ -167,6 +167,13 @@ export async function getActiveLocationBySlug(brandId: string, locationSlug: str
     return null;
 }
 
+export async function getLocationsForBrand(brandId: string): Promise<Location[]> {
+    const db = getAdminDb();
+    const q = db.collection('locations').where('brandId', '==', brandId);
+    const querySnapshot = await q.get();
+    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Location[];
+}
+
 export async function getAllLocations(brandId?: string): Promise<Location[]> {
     const db = getAdminDb();
     let q: admin.firestore.Query = db.collection('locations');
@@ -321,7 +328,7 @@ export async function getTimeSlots(locationId: string, forDateStr?: string): Pro
 /**
  * Fetch a single location by its brandId and slug.
  */
-export async function getLocationBySlug(brandId: string, slug: string) {
+export async function getLocationBySlug(brandId: string, slug: string): Promise<Location | null> {
   const db = getAdminDb();
 
   const snap = await db
@@ -333,5 +340,5 @@ export async function getLocationBySlug(brandId: string, slug: string) {
 
   if (snap.empty) return null;
   const doc = snap.docs[0];
-  return { id: doc.id, ...doc.data() };
+  return { id: doc.id, ...doc.data() } as Location;
 }

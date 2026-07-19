@@ -1,5 +1,5 @@
 
-import { FeedbackQuestionVersionForm } from '@/components/superadmin/feedback-question-version-form';
+import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form';
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
 
 export default async function NewFeedbackQuestionVersionPage() {

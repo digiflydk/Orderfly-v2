@@ -60,7 +60,7 @@ export async function submitFeedbackAction(prevState: any, formData: FormData) {
         // Process responses to extract core fields
         let rating = 0;
         let npsScore: number | undefined = undefined;
-        let comment: string | null = null;
+        let comment: string | undefined;
         let tags: string[] = [];
         
         Object.values(responses).forEach((response: any) => {

@@ -1,7 +1,7 @@
 
 'use server';
 
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs, type QueryDocumentSnapshot, type DocumentData } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Product, Category, ProductForMenu } from '@/types';
 
@@ -36,7 +36,7 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
     const categoryIds = new Set<string>();
 
     categorySnapshots.forEach(snapshot => {
-        snapshot.forEach(doc => {
+        snapshot.forEach((doc: QueryDocumentSnapshot<DocumentData>) => {
             if (!categoryIds.has(doc.id)) {
                 categories.push({ id: doc.id, ...doc.data() } as Category);
                 categoryIds.add(doc.id);

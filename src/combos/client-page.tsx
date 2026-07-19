@@ -91,7 +91,7 @@ export function CombosClientPage({ initialCombos, brands, locations }: CombosCli
     try {
         // Parse the date as UTC and format it in UTC to avoid timezone shifts
         const utcDate = toZonedTime(dateString, 'UTC');
-        return format(utcDate, 'dd MMM yyyy, HH:mm', { timeZone: 'UTC' });
+        return format(utcDate, 'dd MMM yyyy, HH:mm');
     } catch (e) {
         return 'Invalid Date';
     }

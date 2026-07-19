@@ -12,6 +12,10 @@ import { Skeleton } from "../ui/skeleton";
 import { TimeSlotDialog } from "./timeslot-dialog";
 import { calculateTimeSlots } from "@/app/superadmin/locations/client-actions";
 
+type TimeSelectorProps = {
+    timeSlots?: TimeSlotResponse | null;
+};
+
 
 function TimeSlotSkeleton() {
     return (
@@ -26,20 +30,26 @@ function TimeSlotSkeleton() {
 }
 
 
-export function TimeSelector() {
+export function TimeSelector({ timeSlots: providedTimeSlots }: TimeSelectorProps) {
     const { deliveryType, setDeliveryType, location, selectedTime } = useCart();
     const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
-    const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
+    const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(providedTimeSlots ?? null);
     const [isLoadingTimes, setIsLoadingTimes] = useState(true);
 
     useEffect(() => {
+        if (providedTimeSlots) {
+            setTimeSlots(providedTimeSlots);
+            setIsLoadingTimes(false);
+            return;
+        }
+
         if (location?.id) {
             setIsLoadingTimes(true);
             const slots = calculateTimeSlots(location);
             setTimeSlots(slots);
             setIsLoadingTimes(false);
         }
-    }, [location]);
+    }, [location, providedTimeSlots]);
     
     if (!location) return null;
     

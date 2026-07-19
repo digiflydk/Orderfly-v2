@@ -93,7 +93,7 @@ export async function getLoyaltySettings(): Promise<LoyaltySettings> {
 }
 
 export async function updateLoyaltySettings(
-  prevState: FormState,
+  prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
   

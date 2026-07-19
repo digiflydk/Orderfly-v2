@@ -3,8 +3,7 @@
 
 import type { Category } from '@/types';
 import { ProductCard } from "@/components/product/product-card";
-import type { ProductForMenu } from '@/app/superadmin/products/actions';
-import type { StandardDiscount } from '@/types';
+import type { ProductForMenu, StandardDiscount } from '@/types';
 
 interface CategorySectionProps {
   category: Category;

@@ -14,9 +14,12 @@ interface ClientPageProps {
     initialTestResults: TestResult[];
 }
 
-const StatusIcon = ({ status }: { status: 'Pass' | 'Fail' }) => {
+const StatusIcon = ({ status }: { status: TestResult['status'] }) => {
     if (status === 'Pass') {
         return <CheckCircle2 className="h-5 w-5 text-green-500" />;
+    }
+    if (status === 'Not Implemented') {
+        return <Loader2 className="h-5 w-5 text-muted-foreground" />;
     }
     return <XCircle className="h-5 w-5 text-destructive" />;
 };

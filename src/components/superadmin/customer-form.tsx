@@ -37,11 +37,12 @@ const customerSchema = z.object({
 })
 
 type CustomerFormValues = z.infer<typeof customerSchema>
+type CustomerFormCustomer = Pick<Customer, 'id' | 'fullName' | 'email' | 'phone' | 'status'>
 
 interface CustomerFormProps {
   isOpen: boolean
   setIsOpen: (isOpen: boolean) => void
-  customer: Customer | null
+  customer: CustomerFormCustomer | null
 }
 
 export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps) {

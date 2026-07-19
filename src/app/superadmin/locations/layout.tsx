@@ -13,7 +13,7 @@ export const runtime = "nodejs";
 export default async function LocationLayout({
   children,
   params,
-}: AsyncPageProps<{ brandSlug?: string; locationSlug?: string }>) {
+}: AsyncPageProps<{ brandSlug?: string; locationSlug?: string }> & { children: React.ReactNode }) {
   const { brandSlug, locationSlug } = await resolveParams(params);
   const adminReady = isAdminReady();
 

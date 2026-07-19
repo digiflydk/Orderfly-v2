@@ -213,6 +213,38 @@ export async function getProducts(): Promise<Product[]> {
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
 }
 
+export async function getProductsForLocation(locationId: string): Promise<ProductForMenu[]> {
+    if (!locationId) return [];
+
+    const db = getAdminDb();
+    const q = db.collection('products').where('isActive', '==', true);
+    const querySnapshot = await q.get();
+
+    const allProducts = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product));
+    const locationProducts = allProducts.filter((product) => {
+      return !product.locationIds || product.locationIds.length === 0 || product.locationIds.includes(locationId);
+    });
+
+    return locationProducts
+      .sort((a, b) => (a.sortOrder || 999) - (b.sortOrder || 999))
+      .map((product) => ({
+        id: product.id,
+        productName: product.productName,
+        description: product.description,
+        price: product.price,
+        priceDelivery: product.priceDelivery,
+        imageUrl: product.imageUrl,
+        isFeatured: product.isFeatured,
+        isNew: product.isNew,
+        isPopular: product.isPopular,
+        allergenIds: product.allergenIds,
+        toppingGroupIds: product.toppingGroupIds,
+        categoryId: product.categoryId,
+        brandId: product.brandId,
+        sortOrder: product.sortOrder,
+      }));
+}
+
 export async function getProductById(productId: string): Promise<Product | null> {
     const db = getAdminDb();
     const docRef = db.collection('products').doc(productId);

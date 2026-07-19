@@ -3,17 +3,16 @@
 
 import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import type { OrderDetail, OrderStatus } from '@/types';
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
     try {
         const db = getAdminDb();
-        const orderRef = doc(db, 'orders', orderId);
+        const orderRef = db.collection('orders').doc(orderId);
         
         if (status === 'Delivered') {
-            const orderSnap = await getDoc(orderRef);
-            if (!orderSnap.exists()) {
+            const orderSnap = await orderRef.get();
+            if (!orderSnap.exists) {
                 return { success: false, message: 'Order not found.' };
             }
             const orderData = orderSnap.data() as OrderDetail;
@@ -22,7 +21,7 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
             }
         }
         
-        await updateDoc(orderRef, { status: status });
+        await orderRef.update({ status: status });
         
         revalidatePath('/superadmin/sales/orders');
         revalidatePath(`/superadmin/sales/orders/${orderId}`);

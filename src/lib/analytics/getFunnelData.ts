@@ -3,7 +3,7 @@
 'use server';
 
 import { getAdminDb } from '@/lib/firebase-admin';
-import type { AnalyticsDaily, FunnelFilters, FunnelOutput } from '@/types';
+import type { AnalyticsDaily, AnalyticsEvent, FunnelFilters, FunnelOutput } from '@/types';
 import { getPurchasesInRange } from './sources/orders';
 import { startOfDay, endOfDay } from 'date-fns';
 import * as admin from 'firebase-admin';

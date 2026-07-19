@@ -48,7 +48,7 @@ const brandSchema = z.object({
   companyRegNo: z.string().regex(/^\d{8}$/, 'Company Registration No. must be an 8-digit number.'),
   
   subscriptionPlanId: z.string().optional(),
-  foodCategories: z.array(z.string()).optional().default([]),
+  foodCategories: z.array(z.string()),
   locationsCount: z.coerce.number().min(1, 'Number of locations is required.'),
 
   status: z.enum(['active', 'suspended', 'pending', 'trialing']),

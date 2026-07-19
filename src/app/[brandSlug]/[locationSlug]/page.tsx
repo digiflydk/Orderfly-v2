@@ -1,5 +1,6 @@
 
 import type { AsyncPageProps } from '@/types/next-async-props';
+import { resolveParams } from '@/lib/next/resolve-props';
 import { isAdminReady } from '@/lib/runtime';
 import { getProductsForLocation } from '@/app/superadmin/products/actions';
 import { getActiveCombosForLocation } from '@/app/superadmin/combos/actions';
@@ -8,12 +9,13 @@ import BrandPageClient from "./BrandPageClient";
 import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getMenuForRender } from '@/lib/server/catalog';
 import EmptyState from '@/components/ui/empty-state';
+import type { Category } from '@/types';
 
 export const runtime = 'nodejs';
 export const revalidate = 0; // Or a specific time in seconds
 
 export default async function LocationPage({ params }: AsyncPageProps<{brandSlug: string; locationSlug: string}>) {
-  const { brandSlug, locationSlug } = params;
+  const { brandSlug, locationSlug } = await resolveParams(params);
 
   if (!isAdminReady()) {
     // No admin → render safe fallback, no Admin calls
@@ -44,7 +46,16 @@ export default async function LocationPage({ params }: AsyncPageProps<{brandSlug
       brand={brand}
       location={location}
       menu={{
-        categories: menu.categories,
+        categories: menu.categories.map((category) => ({
+          id: category.id,
+          brandId: brand.id,
+          locationIds: [location.id],
+          categoryName: category.name ?? category.categoryName,
+          isActive: true,
+          sortOrder: category.sortOrder,
+          description: category.description,
+          icon: category.icon,
+        } satisfies Category)),
         productsByCategory: menu.productsByCategory,
         fallbackUsed: menu.fallbackUsed,
       }}

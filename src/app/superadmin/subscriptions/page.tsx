@@ -4,6 +4,8 @@ import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
 import { getSubscriptionPlans } from './actions';
 
+export { getSubscriptionPlans } from './actions';
+
 
 async function SubscriptionsPageContent() {
   const plans = await getSubscriptionPlans();

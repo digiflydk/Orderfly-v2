@@ -7,7 +7,6 @@ import {
   CarouselContent,
   CarouselItem,
 } from '@/components/ui/carousel';
-import Autoplay from 'embla-carousel-autoplay';
 import type { GeneralSettings } from '@/types/settings';
 import { cn } from '@/lib/utils';
 
@@ -21,10 +20,6 @@ export default function CustomersSection({ settings }: CustomersSectionProps) {
   const title = settings?.customersSectionTitle || "Betroet af branchens bedste";
   const description = settings?.customersSectionDescription || "";
   const alignment = settings?.customersSectionAlignment || 'center';
-
-  const plugin = React.useRef(
-    Autoplay({ delay: 2000, stopOnInteraction: true })
-  );
 
   if (!customers || customers.length === 0) {
     return null;
@@ -88,10 +83,7 @@ export default function CustomersSection({ settings }: CustomersSectionProps) {
             )}
         </div>
         <Carousel
-          plugins={[plugin.current]}
           className="w-full"
-          onMouseEnter={plugin.current.stop}
-          onMouseLeave={plugin.current.reset}
           opts={{
             align: "start",
             loop: true,

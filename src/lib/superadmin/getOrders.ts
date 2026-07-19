@@ -19,14 +19,14 @@ export async function getOrders(filters?: Partial<SACommonFilters>): Promise<Ord
 
   const querySnapshot = await q.get();
   const orders = querySnapshot.docs.map(doc => {
-      const data = doc.data();
+      const data = doc.data() as Record<string, any>;
       return { 
           id: doc.id,
           ...data,
           createdAt: (data.createdAt as admin.firestore.Timestamp).toDate(),
           paidAt: (data.paidAt as admin.firestore.Timestamp)?.toDate(),
           updatedAt: (data.updatedAt as admin.firestore.Timestamp)?.toDate(),
-        } as OrderSummary;
+        } as unknown as OrderSummary;
   });
   return orders;
 }

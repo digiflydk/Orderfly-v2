@@ -33,7 +33,7 @@ import { Switch } from '../ui/switch';
 
 
 const openingHoursSchema = z.object({
-  isOpen: z.boolean().default(false),
+  isOpen: z.boolean(),
   open: z.string(),
   close: z.string(),
 });
@@ -47,7 +47,7 @@ const locationSchema = z.object({
   zipCode: z.string().min(2, 'PO Box / ZIP Code is required.'),
   city: z.string().min(2, 'City is required.'),
   country: z.string().min(2, 'Country is required.'),
-  isActive: z.boolean().default(false),
+  isActive: z.boolean(),
   deliveryFee: z.coerce.number().min(0, { message: 'Delivery fee must be a positive number.' }),
   minOrder: z.coerce.number().min(0, { message: 'Minimum order must be a positive number.' }),
   imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().or(z.literal('')),
@@ -62,11 +62,11 @@ const locationSchema = z.object({
     saturday: openingHoursSchema,
     sunday: openingHoursSchema,
   }),
-  allowPreOrder: z.boolean().default(false),
+  allowPreOrder: z.boolean(),
   prep_time: z.coerce.number().min(0),
   delivery_time: z.coerce.number().min(0),
   travlhed_factor: z.enum(['normal', 'medium', 'høj']),
-  manual_override: z.coerce.number().min(0).optional().default(0),
+  manual_override: z.coerce.number().min(0),
   pickupSaveTag: z.string().optional(),
 });
 
@@ -78,7 +78,8 @@ interface LocationFormPageProps {
   brands: Brand[];
 }
 
-const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
+const daysOfWeek = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'] as const;
+type DayOfWeek = typeof daysOfWeek[number];
 
 export function LocationFormPage({ location, brands }: LocationFormPageProps) {
     const [isPending, startTransition] = useTransition();
@@ -114,8 +115,8 @@ export function LocationFormPage({ location, brands }: LocationFormPageProps) {
             country: '',
             isActive: true,
             allowPreOrder: false,
-            deliveryFee: undefined,
-            minOrder: undefined,
+            deliveryFee: 0,
+            minOrder: 0,
             deliveryTypes: ['delivery', 'pickup'],
             openingHours: getDefaultOpeningHours(),
             imageUrl: '',
@@ -143,9 +144,10 @@ export function LocationFormPage({ location, brands }: LocationFormPageProps) {
         const mondayHours = openingHours.monday;
         daysOfWeek.forEach(day => {
             if (day !== 'monday') {
-                setValue(`openingHours.${day}.isOpen`, mondayHours.isOpen);
-                setValue(`openingHours.${day}.open`, mondayHours.open);
-                setValue(`openingHours.${day}.close`, mondayHours.close);
+                const dayKey = day as keyof LocationFormValues['openingHours'];
+                setValue(`openingHours.${dayKey}.isOpen`, mondayHours.isOpen);
+                setValue(`openingHours.${dayKey}.open`, mondayHours.open);
+                setValue(`openingHours.${dayKey}.close`, mondayHours.close);
             }
         });
     };
@@ -320,11 +322,11 @@ export function LocationFormPage({ location, brands }: LocationFormPageProps) {
                         <CardTitle>Opening Hours</CardTitle>
                     </CardHeader>
                     <CardContent className="space-y-4">
-                         {daysOfWeek.map((day, index) => (
+                         {daysOfWeek.map((day: DayOfWeek, index) => (
                             <div key={day} className="grid grid-cols-[1fr_auto_auto_auto] items-center gap-4">
                                 <FormField
                                     control={control}
-                                    name={`openingHours.${day}.isOpen`}
+                                    name={`openingHours.${day}.isOpen` as const}
                                     render={({ field }) => (
                                         <FormItem className="flex flex-row items-center space-x-3 space-y-0">
                                             <FormControl>
@@ -339,7 +341,7 @@ export function LocationFormPage({ location, brands }: LocationFormPageProps) {
                                 />
                                 <FormField
                                     control={control}
-                                    name={`openingHours.${day}.open`}
+                                    name={`openingHours.${day}.open` as const}
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormControl>
@@ -351,7 +353,7 @@ export function LocationFormPage({ location, brands }: LocationFormPageProps) {
                                 <span>-</span>
                                 <FormField
                                     control={control}
-                                    name={`openingHours.${day}.close`}
+                                    name={`openingHours.${day}.close` as const}
                                     render={({ field }) => (
                                         <FormItem>
                                             <FormControl>
@@ -538,4 +540,3 @@ export function LocationFormPage({ location, brands }: LocationFormPageProps) {
     </Form>
   );
 }
-
