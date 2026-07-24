@@ -74,28 +74,34 @@ export default async function OrdersPage({
   searchParams,
 }: AsyncPageProps) {
   try {
-    const filters =
-      await resolveSearchParams<Partial<SACommonFilters>>(
-        searchParams,
-      );
+    const query = await resolveSearchParams<Record<string, string | string[] | undefined>>(
+      searchParams,
+    );
 
-    const orders: OrderSummary[] =
-      await getOrders(filters);
+    const dateFrom = typeof query.from === 'string' ? query.from : undefined;
+    const dateTo = typeof query.to === 'string' ? query.to : undefined;
 
-    const serializedOrders: ClientOrderSummary[] =
-      orders.map((order) => ({
-        id: String(order.id),
-        total:
-          typeof order.totalAmount === 'number'
-            ? order.totalAmount
-            : Number(order.totalAmount ?? 0),
-        createdAt: serializeDate(
-          order.createdAt as DateLike,
-        ),
-      }));
+    const filters: Partial<SACommonFilters> = {
+      ...(dateFrom && dateTo ? { dateFrom, dateTo } : {}),
+    };
+
+    const orders: OrderSummary[] = await getOrders(filters);
+
+    const serializedOrders: ClientOrderSummary[] = orders.map((order) => ({
+      id: String(order.id),
+      total:
+        typeof order.totalAmount === 'number'
+          ? order.totalAmount
+          : Number(order.totalAmount ?? 0),
+      createdAt: serializeDate(order.createdAt as DateLike),
+    }));
 
     return (
-      <OrdersClientPage data={serializedOrders} />
+      <OrdersClientPage
+        data={serializedOrders}
+        initialFrom={dateFrom}
+        initialTo={dateTo}
+      />
     );
   } catch (error) {
     console.error(
