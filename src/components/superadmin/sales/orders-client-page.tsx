@@ -2,6 +2,7 @@
 
 import * as React from 'react';
 import Link from 'next/link';
+import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   CalendarDays,
   CircleDollarSign,
@@ -22,6 +23,8 @@ export type ClientOrderSummary = {
 
 interface OrdersClientPageProps {
   data?: ClientOrderSummary[];
+  initialFrom?: string;
+  initialTo?: string;
 }
 
 function formatCurrency(value: number): string {
@@ -53,8 +56,21 @@ function formatDate(value?: string): string {
 
 export function OrdersClientPage({
   data = [],
+  initialFrom = '',
+  initialTo = '',
 }: OrdersClientPageProps) {
+  const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [search, setSearch] = React.useState('');
+  const [dateFrom, setDateFrom] = React.useState(initialFrom);
+  const [dateTo, setDateTo] = React.useState(initialTo);
+  const [dateError, setDateError] = React.useState<string | null>(null);
+
+  React.useEffect(() => {
+    setDateFrom(initialFrom);
+    setDateTo(initialTo);
+  }, [initialFrom, initialTo]);
 
   const filteredOrders = React.useMemo(() => {
     const normalizedSearch = search.trim().toLowerCase();
@@ -83,6 +99,48 @@ export function OrdersClientPage({
 
   const latestOrder = data[0];
 
+  function applyDateFilter(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+
+    if ((dateFrom && !dateTo) || (!dateFrom && dateTo)) {
+      setDateError('Select both a from date and a to date.');
+      return;
+    }
+
+    if (dateFrom && dateTo && dateFrom > dateTo) {
+      setDateError('The from date cannot be later than the to date.');
+      return;
+    }
+
+    setDateError(null);
+
+    const params = new URLSearchParams(searchParams.toString());
+
+    if (dateFrom && dateTo) {
+      params.set('from', dateFrom);
+      params.set('to', dateTo);
+    } else {
+      params.delete('from');
+      params.delete('to');
+    }
+
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
+  }
+
+  function clearDateFilter() {
+    setDateFrom('');
+    setDateTo('');
+    setDateError(null);
+
+    const params = new URLSearchParams(searchParams.toString());
+    params.delete('from');
+    params.delete('to');
+
+    const query = params.toString();
+    router.push(query ? `${pathname}?${query}` : pathname);
+  }
+
   return (
     <div className="space-y-6 p-6">
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
@@ -96,6 +154,45 @@ export function OrdersClientPage({
           </p>
         </div>
       </div>
+
+      <form onSubmit={applyDateFilter}>
+        <Card>
+          <CardContent className="pt-6">
+            <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
+              <div className="grid flex-1 gap-4 sm:grid-cols-2">
+                <label className="space-y-2 text-sm font-medium">
+                  <span>From date</span>
+                  <Input
+                    type="date"
+                    value={dateFrom}
+                    onChange={event => setDateFrom(event.target.value)}
+                  />
+                </label>
+
+                <label className="space-y-2 text-sm font-medium">
+                  <span>To date</span>
+                  <Input
+                    type="date"
+                    value={dateTo}
+                    onChange={event => setDateTo(event.target.value)}
+                  />
+                </label>
+              </div>
+
+              <div className="flex gap-2">
+                <Button type="submit">Apply</Button>
+                <Button type="button" variant="outline" onClick={clearDateFilter}>
+                  Clear
+                </Button>
+              </div>
+            </div>
+
+            {dateError ? (
+              <p className="mt-3 text-sm text-destructive">{dateError}</p>
+            ) : null}
+          </CardContent>
+        </Card>
+      </form>
 
       <div className="grid gap-4 md:grid-cols-3">
         <Card>
@@ -187,7 +284,9 @@ export function OrdersClientPage({
 
               <p className="mt-1 text-sm text-muted-foreground">
                 {data.length === 0
-                  ? 'There are currently no orders in the orders collection.'
+                  ? dateFrom && dateTo
+                    ? 'No orders were found in the selected date range.'
+                    : 'There are currently no orders in the orders collection.'
                   : 'No orders match your search.'}
               </p>
             </div>
