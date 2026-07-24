@@ -1,5 +1,4 @@
 
-'use server';
 import { ApiMapConfig } from '@/lib/docs/api-map-types';
 
 export const brandWebsiteApiMap: ApiMapConfig = {
