@@ -23,5 +23,13 @@
     "typeRoots": ["./node_modules/@types", "./src/types"]
   },
   "include": ["next-env.d.ts", "**/*.ts", "**/*.tsx", ".next/types/**/*.ts", "next.config.js"],
-  "exclude": ["node_modules", "design"]
+  "exclude": [
+	  "node_modules",
+	  "design",
+	  "usr",
+	  "workspace",
+	  "src/workspace",
+	  "src/legacy",
+	  "tests"
+	]
 }

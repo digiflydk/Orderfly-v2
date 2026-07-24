@@ -2,7 +2,7 @@
 'use server';
 
 import { getAdminDb } from '@/lib/firebase-admin';
-import type { BrandWebsitePage, BrandWebsitePageSummary } from '@/lib/types/brandWebsite';
+import type { BrandWebsitePage, BrandWebsitePageSummary } from '@/types';
 
 const pagesCollectionPath = (brandId: string) => `brands/${brandId}/websitePages`;
 

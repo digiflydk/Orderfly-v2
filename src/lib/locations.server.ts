@@ -1,5 +1,7 @@
 
-import { dbAdmin } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase-admin';
+
+const dbAdmin = getAdminDb();
 
 export async function getLocationsByBrandServer(brandId: string) {
   if (!brandId) return [];

@@ -32,7 +32,7 @@ const toppingSchema = z.object({
   sortOrder: z.coerce.number().optional(),
 });
 
-type ToppingFormValues = z.infer<typeof toppingSchema>;
+type ToppingFormValues = z.input<typeof toppingSchema>;
 
 interface ToppingFormPageProps {
   topping?: Topping | null;

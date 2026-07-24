@@ -96,6 +96,7 @@ export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWe
     const mergedConfig: Partial<BrandWebsiteConfig> = {
         ...currentConfig,
         ...validatedInput,
+        template: 'template-1',
         faviconUrl,
     };
 

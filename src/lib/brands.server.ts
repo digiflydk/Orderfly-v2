@@ -1,7 +1,9 @@
 
 
-import { dbAdmin } from '@/lib/firebase/admin';
+import { getAdminDb } from '@/lib/firebase-admin';
 import type { Brand } from '@/types';
+
+const dbAdmin = getAdminDb();
 
 export type BrandDoc = Brand | null;
 

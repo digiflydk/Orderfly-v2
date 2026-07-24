@@ -16,7 +16,7 @@ export interface ApiMapConfig {
   public: { areas: ApiMapArea[] };
   domainResolver?: Omit<ApiMapArea, 'id'>;
   logging?: {
-    audit?: Omit<ApiMapArea, 'id' | 'actions'> & { firestorePath: string; };
-    api?: Omit<ApiMapArea, 'id' | 'actions'> & { firestorePath: string; };
+    audit?: Omit<ApiMapArea, 'id' | 'actions' | 'firestorePaths'> & { firestorePath: string; };
+    api?: Omit<ApiMapArea, 'id' | 'actions' | 'firestorePaths'> & { firestorePath: string; };
   }
 }

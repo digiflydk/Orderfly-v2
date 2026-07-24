@@ -3,8 +3,7 @@
 'use server';
 
 import type { StandardDiscount, Product, CartItem, Category, Discount, Upsell } from "@/types";
-import { getActiveStandardDiscounts } from "../standard-discounts/actions";
-import { useMemo } from "react";
+import { getActiveStandardDiscounts } from "../app/superadmin/standard-discounts/actions";
 
 // This file contains the test logic for standard discounts.
 // It simulates cart behavior to validate that discount calculations are correct
@@ -94,11 +93,13 @@ function calculateDiscountForTest(
     );
     if (cartDiscounts.length > 0) {
         const autoCartDiscount = cartDiscounts[0]; // Assume first one wins
+        const discountValue = autoCartDiscount.discountValue ?? 0;
         let autoCartDiscountAmount = 0;
+
         if (autoCartDiscount.discountMethod === 'percentage') {
-            autoCartDiscountAmount = subtotalIncludingToppings * (autoCartDiscount.discountValue / 100);
+            autoCartDiscountAmount = subtotalIncludingToppings * (discountValue / 100);
         } else {
-            autoCartDiscountAmount = Math.min(subtotalIncludingToppings, autoCartDiscount.discountValue);
+            autoCartDiscountAmount = Math.min(subtotalIncludingToppings, discountValue);
         }
         if(autoCartDiscountAmount > bestCartLevelDiscountAmount) {
             bestCartLevelDiscountAmount = autoCartDiscountAmount;
@@ -148,16 +149,16 @@ export async function runDiscountValidationTests(): Promise<TestResult[]> {
     const results: TestResult[] = [];
     
     // --- Mocks for tests ---
-    const pizzaItem: CartItem = { cartItemId: 'cart-pizza-1', id: 'pizza-1', productName: 'Hawaii Pizza', price: 100, basePrice: 100, categoryId: 'cat-pizza', quantity: 1, itemTotal: 100, toppings: [] } as CartItem;
+    const pizzaItem: CartItem = { cartItemId: 'cart-pizza-1', id: 'pizza-1', itemType: 'product', brandId: MOCK_BRAND_ID, productName: 'Hawaii Pizza', price: 100, basePrice: 100, categoryId: 'cat-pizza', quantity: 1, itemTotal: 100, toppings: [] } as CartItem;
     const pizzaItemDelivery: CartItem = { ...pizzaItem, price: 110, basePrice: 110 };
-    const pastaItem: CartItem = { cartItemId: 'cart-pasta-1', id: 'pasta-1', productName: 'Carbonara', price: 120, basePrice: 120, categoryId: 'cat-pasta', quantity: 1, itemTotal: 120, toppings: [] } as CartItem;
-    const drinkItem: CartItem = { cartItemId: 'cart-drink-1', id: 'drink-1', productName: 'Cola', price: 25, basePrice: 25, categoryId: 'cat-drinks', quantity: 2, itemTotal: 25, toppings: [] } as CartItem;
-    const pizza2Item: CartItem = { cartItemId: 'cart-pizza-2', id: 'pizza-2', productName: 'Pepperoni Pizza', price: 105, basePrice: 105, categoryId: 'cat-pizza', quantity: 1, itemTotal: 105, toppings: [] } as CartItem;
-    const comboItem: CartItem = { cartItemId: 'cart-combo-1', id: 'combo-1', productName: 'Pizza Combo', price: 150, basePrice: 150, itemType: 'combo', quantity: 1, itemTotal: 150, toppings: [] } as CartItem;
-    const upsellItem: CartItem = { cartItemId: 'cart-upsell-1', id: 'drink-1', productName: 'Upsell Cola', price: 15, basePrice: 25, itemType: 'product', quantity: 1, itemTotal: 15, toppings: [] } as CartItem;
+    const pastaItem: CartItem = { cartItemId: 'cart-pasta-1', id: 'pasta-1', itemType: 'product', brandId: MOCK_BRAND_ID, productName: 'Carbonara', price: 120, basePrice: 120, categoryId: 'cat-pasta', quantity: 1, itemTotal: 120, toppings: [] } as CartItem;
+    const drinkItem: CartItem = { cartItemId: 'cart-drink-1', id: 'drink-1', itemType: 'product', brandId: MOCK_BRAND_ID, productName: 'Cola', price: 25, basePrice: 25, categoryId: 'cat-drinks', quantity: 2, itemTotal: 25, toppings: [] } as CartItem;
+    const pizza2Item: CartItem = { cartItemId: 'cart-pizza-2', id: 'pizza-2', itemType: 'product', brandId: MOCK_BRAND_ID, productName: 'Pepperoni Pizza', price: 105, basePrice: 105, categoryId: 'cat-pizza', quantity: 1, itemTotal: 105, toppings: [] } as CartItem;
+    const comboItem: CartItem = { cartItemId: 'cart-combo-1', id: 'combo-1', brandId: MOCK_BRAND_ID, productName: 'Pizza Combo', price: 150, basePrice: 150, itemType: 'combo', quantity: 1, itemTotal: 150, toppings: [] } as CartItem;
+    const upsellItem: CartItem = { cartItemId: 'cart-upsell-1', id: 'drink-1', brandId: MOCK_BRAND_ID, productName: 'Upsell Cola', price: 15, basePrice: 25, itemType: 'product', quantity: 1, itemTotal: 15, toppings: [] } as CartItem;
     const checkoutItemDiscount = { id: 'sd-42-item', discountType: 'product', referenceIds: ['pizza-1'], discountMethod: 'fixed_amount', discountValue: 20, orderTypes: ['pickup'] } as StandardDiscount;
     const cartDiscountHighThreshold = { id: 'sd-43-cart', discountName: 'High spender', discountType: 'cart', discountMethod: 'percentage', discountValue: 15, minOrderValue: 250, orderTypes: ['pickup'] } as StandardDiscount;
-    const lowBaseHighToppingItem = { cartItemId: 'cart-lowbase-1', id: 'base-1', productName: 'Low Base', price: 10, basePrice: 10, categoryId: 'cat-other', quantity: 1, itemTotal: 100, toppings: [{name: 'Gold Flakes', price: 90}] } as CartItem;
+    const lowBaseHighToppingItem = { cartItemId: 'cart-lowbase-1', id: 'base-1', itemType: 'product', brandId: MOCK_BRAND_ID, productName: 'Low Base', price: 10, basePrice: 10, categoryId: 'cat-other', quantity: 1, itemTotal: 100, toppings: [{name: 'Gold Flakes', price: 90}] } as CartItem;
 
     // --- TEST CASES START ---
 

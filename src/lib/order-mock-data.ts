@@ -18,6 +18,14 @@ export const MOCK_ORDER_SUMMARIES: OrderSummary[] = [
         totalAmount: 255.50,
         paymentStatus: 'Paid',
         paymentMethod: 'Stripe',
+        paymentDetails: {
+            subtotal: 0,
+            taxes: 0,
+            deliveryFee: 0,
+            discountTotal: 0,
+            tips: 0,
+            paymentRefId: '',
+        },
     },
     {
         id: 'ORD-894561',
@@ -33,6 +41,14 @@ export const MOCK_ORDER_SUMMARIES: OrderSummary[] = [
         totalAmount: 412.00,
         paymentStatus: 'Paid',
         paymentMethod: 'Stripe',
+        paymentDetails: {
+            subtotal: 0,
+            taxes: 0,
+            deliveryFee: 0,
+            discountTotal: 0,
+            tips: 0,
+            paymentRefId: '',
+        },
     },
     {
         id: 'ORD-123789',
@@ -48,6 +64,14 @@ export const MOCK_ORDER_SUMMARIES: OrderSummary[] = [
         totalAmount: 180.00,
         paymentStatus: 'Failed',
         paymentMethod: 'Stripe',
+        paymentDetails: {
+            subtotal: 0,
+            taxes: 0,
+            deliveryFee: 0,
+            discountTotal: 0,
+            tips: 0,
+            paymentRefId: '',
+        },
     },
 ];
 

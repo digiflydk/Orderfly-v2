@@ -7,7 +7,7 @@ import {
   CarouselContent,
   CarouselItem,
 } from '@/components/ui/carousel';
-import Autoplay from 'embla-carousel-autoplay';
+import Autoplay, { type AutoplayType } from 'embla-carousel-autoplay';
 import type { GeneralSettings } from '@/types/settings';
 import { cn } from '@/lib/utils';
 
@@ -22,7 +22,7 @@ export default function CustomersSection({ settings }: CustomersSectionProps) {
   const description = settings?.customersSectionDescription || "";
   const alignment = settings?.customersSectionAlignment || 'center';
 
-  const plugin = React.useRef(
+  const plugin = React.useRef<AutoplayType>(
     Autoplay({ delay: 2000, stopOnInteraction: true })
   );
 

@@ -1,6 +1,6 @@
 
 import type { GeneralSettings, NavLink } from '@/types/settings';
-import type { BrandWebsiteConfig } from "@/lib/types/brandWebsite";
+import type { BrandWebsiteConfig } from "@/types";
 
 export function resolveLinkClass(input?: string): string {
   const v = (input || '').toLowerCase().trim();

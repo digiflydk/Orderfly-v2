@@ -95,7 +95,11 @@ export async function createOrUpdateDiscount(
     if (!existingSnapshot.empty) {
         const existingDoc = existingSnapshot.docs[0];
         if (existingDoc.id !== validatedId) {
-            return { message: 'This discount code already exists for this brand.', error: true, errors: [{path: ['code'], message: 'This code is already in use.'}]};
+            return { message: 'This discount code already exists for this brand.', error: true, errors: [{
+                code: 'custom',
+                path: ['code'],
+                message: 'This code is already in use.',
+            }]};
         }
     }
     

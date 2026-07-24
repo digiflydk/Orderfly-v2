@@ -88,13 +88,21 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
     router.push(`/superadmin/customers/${encodeURIComponent(customerId)}`);
   }
 
-  const handleEdit = (e: React.MouseEvent, customer: CustomerWithDetails) => {
+  const handleEdit = (e: Event, customer: CustomerWithDetails) => {
     e.stopPropagation(); // Prevent row click navigation
-    setSelectedCustomer(customer as Customer);
+
+    setSelectedCustomer({
+      ...customer,
+      createdAt: new Date(customer.createdAt),
+      lastOrderDate: customer.lastOrderDate
+        ? new Date(customer.lastOrderDate)
+        : undefined,
+    });
+
     setIsFormOpen(true);
   };
   
-  const confirmDelete = (e: React.MouseEvent, customerId: string) => {
+  const confirmDelete = (e: Event, customerId: string) => {
     e.stopPropagation();
     setCustomerToDelete(customerId);
     setIsAlertOpen(true);

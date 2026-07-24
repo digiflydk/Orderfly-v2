@@ -8,4 +8,5 @@ export type WebsiteHeaderConfig = {
   topBg: WebsiteHeaderHsl;          // "Normal Tilstand (Top)"
   scrolledBg: WebsiteHeaderHsl;     // "Scrollet Tilstand"
   linkClass?: string;               // valgfri: link-styles
+  logoUrl?: string | null;
 };

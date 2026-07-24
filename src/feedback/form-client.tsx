@@ -10,7 +10,7 @@ import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Checkbox } from '@/components/ui/checkbox';
-import { submitFeedbackAction } from './actions';
+import { submitFeedbackAction } from '@/app/feedback/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';

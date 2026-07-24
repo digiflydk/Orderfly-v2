@@ -9,26 +9,24 @@ export function getHeaderConfig(
   brand: Brand | null
 ): WebsiteHeaderConfig {
   
-  const headerSettings = settings?.header;
-  
   return {
     isOverlay: true,
-    sticky: headerSettings?.isSticky ?? true,
-    heightPx: headerSettings?.height ?? 80,
-    logoWidthPx: headerSettings?.logoWidth ?? 120,
+    sticky: settings?.headerIsSticky ?? true,
+    heightPx: settings?.headerHeight ?? 80,
+    logoWidthPx: settings?.headerLogoWidth ?? 120,
     topBg: {
-      h: headerSettings?.initialBackgroundColor?.h ?? 0,
-      s: headerSettings?.initialBackgroundColor?.s ?? 0,
-      l: headerSettings?.initialBackgroundColor?.l ?? 100,
-      opacity: headerSettings?.initialBackgroundOpacity ?? 0,
+      h: settings?.headerInitialBackgroundColor?.h ?? 0,
+      s: settings?.headerInitialBackgroundColor?.s ?? 0,
+      l: settings?.headerInitialBackgroundColor?.l ?? 100,
+      opacity: settings?.headerInitialBackgroundOpacity ?? 0,
     },
     scrolledBg: {
-      h: headerSettings?.scrolledBackgroundColor?.h ?? 210,
-      s: headerSettings?.scrolledBackgroundColor?.s ?? 100,
-      l: headerSettings?.scrolledBackgroundColor?.l ?? 95,
-      opacity: headerSettings?.scrolledBackgroundOpacity ?? 98,
+      h: settings?.headerScrolledBackgroundColor?.h ?? 210,
+      s: settings?.headerScrolledBackgroundColor?.s ?? 100,
+      l: settings?.headerScrolledBackgroundColor?.l ?? 95,
+      opacity: settings?.headerScrolledBackgroundOpacity ?? 98,
     },
-    linkClass: resolveLinkClass(headerSettings?.linkColor),
+    linkClass: resolveLinkClass(settings?.headerLinkColor),
     logoUrl: settings?.logoUrl || brand?.logoUrl || null,
   };
 }

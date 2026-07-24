@@ -578,8 +578,8 @@ export type Upsell = {
   orderTypes: ('pickup' | 'delivery')[];
   activeDays: string[];
   activeTimeSlots: { start: string; end: string }[];
-  startDate?: FirebaseFirestore.Timestamp | null;
-  endDate?: FirebaseFirestore.Timestamp | null;
+  startDate?: Timestamp | null;
+  endDate?: Timestamp | null;
   isActive: boolean;
 
   // Tracking
@@ -587,8 +587,8 @@ export type Upsell = {
   conversions: number;
   
   // Timestamps
-  createdAt: FirebaseFirestore.Timestamp;
-  updatedAt: FirebaseFirestore.Timestamp;
+  createdAt: Timestamp;
+  updatedAt: Timestamp;
 };
 
 
@@ -829,7 +829,7 @@ export type AnalyticsEventName =
 
 export type AnalyticsEvent = {
   id: string;
-  ts: FirebaseFirestore.Timestamp;
+  ts: Timestamp;
   name: AnalyticsEventName;
   brandId: string;
   brandSlug: string;
@@ -905,7 +905,7 @@ export type AnalyticsDaily = {
 
   // Meta
   agg_version: number;
-  updated_at: FirebaseFirestore.Timestamp;
+  updated_at: Timestamp;
 };
 
 export type FunnelOutput = {
@@ -1001,6 +1001,8 @@ export type BrandWebsiteConfig = {
     domains: string[];
     defaultLocationId: string | null;
     faviconUrl: string | null;
+    logoUrl?: string;
+    headerNavLinks?: { label: string; href: string }[];
     designSystem: any;
     seo: any;
     social: any;
@@ -1017,7 +1019,7 @@ export type BrandWebsitePage = {
     body: string;
     imageUrl?: string;
     cta?: { label: string; href: string } | null;
-    seo: any;
+    seo?: any;
     sortOrder?: number;
     isPublished: boolean;
     createdAt: any;
@@ -1098,5 +1100,5 @@ export type BrandWebsiteHome = {
   campaignBanner: BrandWebsiteCampaignBanner | null;
   menuPreview: BrandWebsiteMenuPreviewItem[];
   footerCta: BrandWebsiteFooterCta | null;
-  updatedAt: string | null;
+  updatedAt: string | Date | null;
 };

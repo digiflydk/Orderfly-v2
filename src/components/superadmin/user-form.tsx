@@ -38,7 +38,7 @@ const userSchema = z.object({
   roleIds: z.array(z.string()).optional().default([]),
 });
 
-type UserFormValues = z.infer<typeof userSchema>;
+type UserFormValues = z.input<typeof userSchema>;
 
 interface UserFormProps {
   isOpen: boolean;
@@ -84,7 +84,7 @@ export function UserForm({ isOpen, setIsOpen, user, allRoles }: UserFormProps) {
     data.roleIds?.forEach(id => formData.append('roleIds', id));
 
     startTransition(async () => {
-        const result = await createOrUpdateUser(null, formData);
+        const result = await createOrUpdateUser({message: "", error: false}, formData);
         if (result?.error) {
             toast({ variant: 'destructive', title: 'Error', description: result.message });
         } else {
@@ -107,7 +107,7 @@ export function UserForm({ isOpen, setIsOpen, user, allRoles }: UserFormProps) {
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form action={handleFormSubmit} className="space-y-4 py-4">
+          <form onSubmit={handleFormSubmit} className="space-y-4 py-4">
             {user && <input type="hidden" name="id" value={user.id} />}
             <FormField
               control={form.control}

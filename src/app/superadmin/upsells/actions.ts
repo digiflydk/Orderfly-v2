@@ -149,7 +149,17 @@ export async function createOrUpdateUpsell(
     const db = getAdminDb();
     const existing = id ? await getUpsellById(id) : null;
     
-    const dataToSave: Omit<Upsell, 'id' | 'createdAt' | 'updatedAt' | 'views' | 'conversions'> & { createdAt?: admin.firestore.Timestamp; updatedAt: admin.firestore.Timestamp; startDate?: admin.firestore.Timestamp; endDate?: admin.firestore.Timestamp; views: number; conversions: number; } = {
+    const dataToSave: Omit<
+      Upsell,
+      'id' | 'createdAt' | 'updatedAt' | 'startDate' | 'endDate' | 'views' | 'conversions'
+    > & {
+      createdAt?: admin.firestore.Timestamp;
+      updatedAt: admin.firestore.Timestamp;
+      startDate?: admin.firestore.Timestamp;
+      endDate?: admin.firestore.Timestamp;
+      views: number;
+      conversions: number;
+    } = {
       ...normalised,
       updatedAt: admin.firestore.Timestamp.now(),
       views: existing?.views ?? 0,
@@ -251,8 +261,8 @@ export async function getActiveUpsellForCart({
   
   // 2. Filter by date, day, and time in code
   const activeNowUpsells = allUpsells.filter(upsell => {
-      const startDate = upsell.startDate ? (upsell.startDate as admin.firestore.Timestamp).toDate() : null;
-      const endDate = upsell.endDate ? (upsell.endDate as admin.firestore.Timestamp).toDate() : null;
+      const startDate = upsell.startDate ?? null;
+      const endDate = upsell.endDate ?? null;
       if (startDate && now < startDate) return false;
       if (endDate && now > endDate) return false;
 

@@ -3,7 +3,7 @@
 'use server';
 
 import type { StandardDiscount, Product, Category, ComboMenu, Brand, Location } from "@/types";
-import { getActiveStandardDiscounts } from "../standard-discounts/actions";
+import { getActiveStandardDiscounts } from "@/app/superadmin/standard-discounts/actions";
 
 // This file will contain the logic for the OCD (Offers/Combos Display) test cases.
 // For now, it's a placeholder structure. A full implementation would involve
@@ -43,6 +43,7 @@ function processMenuData(products: Product[], categories: Category[], activeComb
   if (promotionalDiscounts.length > 0) {
     const offerCategory: Category = {
         id: 'offers',
+        brandId: brand.id,
         categoryName: brand.offersHeading || 'Offers', // Use override or default
         locationIds: [location.id],
         isActive: true,

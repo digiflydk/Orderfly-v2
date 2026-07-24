@@ -7,7 +7,7 @@ import {
   VIRTUAL_CONFIG,
   serializeTimestamp,
 } from '@/lib/brand-website/utils/public-config-helpers';
-import type { BrandWebsiteConfig } from '@/lib/types/brandWebsite';
+import type { BrandWebsiteConfig } from '@/types';
 
 const configPath = (brandId: string) => `brands/${brandId}/website/config`;
 

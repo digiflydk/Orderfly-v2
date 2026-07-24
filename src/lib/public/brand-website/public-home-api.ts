@@ -2,7 +2,7 @@
 'use server';
 
 import { getAdminDb } from '@/lib/firebase-admin';
-import type { BrandWebsiteHome } from '@/lib/types/brandWebsite';
+import type { BrandWebsiteHome } from '@/types';
 import { brandWebsiteHomeSchema } from '@/lib/superadmin/brand-website/home-schemas';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
 

@@ -1,8 +1,8 @@
 import { SuperAdminSidebarClient } from "./sidebar-client";
-import { getPlatformBrandingSettings } from "@/app/superadmin/settings/actions";
+import { getPlatformBrandingSettings } from "@/app/superadmin/settings/queries";
 
 export async function SuperAdminSidebar() {
-  const brandingSettings = await getPlatformBrandingSettings();
+	const brandingSettings = await getPlatformBrandingSettings();
 
-  return <SuperAdminSidebarClient brandingSettings={brandingSettings} />;
+	return <SuperAdminSidebarClient brandingSettings={brandingSettings ?? undefined} />;
 }

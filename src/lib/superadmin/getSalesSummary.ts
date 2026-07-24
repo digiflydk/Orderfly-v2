@@ -4,9 +4,18 @@
 // src/lib/superadmin/getSalesSummary.ts
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
-import type { OrderSummary, Customer, Feedback } from '@/types';
+import type { OrderSummary, Customer } from '@/types';
 import type { SACommonFilters } from '@/types/superadmin';
 import { startOfDay, endOfDay, subDays } from 'date-fns';
+
+type SalesOrderItem = {
+    itemType?: 'product' | 'combo';
+    totalPrice: number;
+};
+
+type SalesOrder = OrderSummary & {
+    productItems?: SalesOrderItem[];
+};
 
 export const getSalesDashboardData = async (filters: SACommonFilters) => {
     let q = query(
@@ -34,7 +43,7 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
         getDocs(collection(db, 'anonymous_cookie_consents')),
     ]);
     
-    let orders: OrderSummary[] = ordersSnapshot.docs.map(doc => doc.data() as OrderSummary);
+    let orders: SalesOrder[] = ordersSnapshot.docs.map(doc => doc.data() as SalesOrder);
     
     if (filters.locationIds && filters.locationIds.length > 30) {
         const locationSet = new Set(filters.locationIds);
@@ -61,11 +70,15 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
 
     // New KPI Calculations
     const totalUpsellsAmount = paidOrders.reduce((sum, order) => sum + (order.paymentDetails?.upsellAmount ?? 0), 0);
-    const comboOrders = paidOrders.filter(o => o.productItems.some(item => item.itemType === 'combo'));
+    const comboOrders = paidOrders.filter(order =>
+        (order.productItems ?? []).some(item => item.itemType === 'combo')
+    );
+
     const totalComboDealsAmount = comboOrders.reduce((sum, order) => {
-        const comboItemsTotal = order.productItems
+        const comboItemsTotal = (order.productItems ?? [])
             .filter(item => item.itemType === 'combo')
             .reduce((itemSum, item) => itemSum + item.totalPrice, 0);
+
         return sum + comboItemsTotal;
     }, 0);
     const totalComboDealsOrders = comboOrders.length;

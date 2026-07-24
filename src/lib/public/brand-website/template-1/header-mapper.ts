@@ -1,6 +1,6 @@
 
 import type { WebsiteHeaderConfig } from "@/types/website";
-import type { BrandWebsiteConfig } from "@/lib/types/brandWebsite";
+import type { BrandWebsiteConfig } from "@/types";
 import { resolveLinkClass } from "@/lib/brand-website/utils/public-config-helpers";
 
 function toHsla(color: { h: number, s: number, l: number }, opacity: number) {
