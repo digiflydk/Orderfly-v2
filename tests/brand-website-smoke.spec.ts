@@ -2,13 +2,17 @@
 import { test, expect } from '@playwright/test';
 import type { WebsiteHeaderConfig } from '../src/types/website';
 
-test.describe('Brand Website Smoke Tests', () => {
-  const BASE_URL = 'http://localhost:3000';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000';
 
+test.describe('Brand Website Smoke Tests', () => {
   test('Test 1: Template 1 Header Loads on Desktop', async ({ page }) => {
-    await page.goto('/m3pizza');
-    await expect(page.locator('header[data-header]')).toBeVisible();
-    await expect(page.locator('header[data-header] button:has-text("Bestil nu")')).toBeVisible();
+    await page.goto(`${BASE_URL}/m3pizza`);
+
+    const header = page.getByTestId('template1-header');
+    const button = page.getByRole('button', { name: 'BESTIL NU' })
+
+    await expect(header).toBeVisible();
+    await expect(button).toBeVisible();
   });
 
   test('Test 2: Sticky CTA on Mobile', async ({ page }) => {
@@ -19,19 +23,23 @@ test.describe('Brand Website Smoke Tests', () => {
   });
 
   test('Test 3: CTA Label Matches CMS Config', async ({ page, request }) => {
-    const response = await request.get(`${BASE_URL}/api/public/brand-website/template-1/header-props?brandSlug=m3pizza`);
-    expect(response.ok()).toBeTruthy();
+    const response = await request.get(`${BASE_URL}/api/public/brand-website/template-1/header?brandSlug=m3pizza`);
+    expect(
+      response.ok(),
+      `API returned ${response.status()}: ${await response.text()}`
+    ).toBeTruthy();
+
     const config: { header: WebsiteHeaderConfig, ctaText: string, orderHref: string } = await response.json();
     const expectedCtaLabel = config.ctaText || 'Bestil nu';
 
     await page.goto('/m3pizza');
     await expect(page.locator('header[data-header] button')).toContainText(expectedCtaLabel);
   });
-  
+
   test('Test 4: Header is sticky on scroll', async ({ page }) => {
     await page.goto('/m3pizza');
     const header = page.locator('[data-testid="template1-header"]');
-    
+
     // Check initial position
     let initialBoundingBox = await header.boundingBox();
     expect(initialBoundingBox?.y).toBeGreaterThanOrEqual(0);
@@ -43,7 +51,7 @@ test.describe('Brand Website Smoke Tests', () => {
     // Check position after scroll
     let scrolledBoundingBox = await header.boundingBox();
     expect(scrolledBoundingBox?.y).toBe(0);
-    
+
     // Check for sticky class
     await expect(header).toHaveClass(/sticky/);
   });
