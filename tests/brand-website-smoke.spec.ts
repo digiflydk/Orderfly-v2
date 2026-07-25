@@ -8,7 +8,7 @@ test.describe('Brand Website Smoke Tests', () => {
   test('Test 1: Template 1 Header Loads on Desktop', async ({ page }) => {
     await page.goto(`${BASE_URL}/m3pizza`);
 
-    const header = page.getByTestId('template1-header');
+    const header = page.getByTestId('template1-page');
     const button = page.getByRole('button', { name: 'BESTIL NU' })
 
     await expect(header).toBeVisible();
@@ -34,7 +34,7 @@ test.describe('Brand Website Smoke Tests', () => {
 
     await page.goto('/m3pizza');
 
-    const button = page.getByTestId('template1-header').getByRole('button', { name: expectedCtaLabel });
+    const button = page.getByTestId('template1-page').getByRole('button', { name: expectedCtaLabel });
 
     await expect(button).toBeVisible();
     await expect(button).toHaveText(expectedCtaLabel);

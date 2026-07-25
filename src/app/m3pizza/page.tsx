@@ -55,7 +55,7 @@ export default function M3IndexPage() {
   return (
     <Template1Page>
       <header
-        data-testid="template1-header"
+        data-testid="template1-page"
         data-header
       >
         <main className="bg-m3-dark">
