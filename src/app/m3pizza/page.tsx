@@ -22,12 +22,12 @@ export default function M3IndexPage() {
 
   useEffect(() => {
     async function fetchConfig() {
-        try {
-            const result = await getPublicBrandWebsiteConfig('m3pizza');
-            setConfig(result);
-        } catch (error) {
-            console.error("Failed to fetch M3Pizza config:", error);
-        }
+      try {
+        const result = await getPublicBrandWebsiteConfig('m3pizza');
+        setConfig(result);
+      } catch (error) {
+        console.error("Failed to fetch M3Pizza config:", error);
+      }
     }
     fetchConfig();
   }, []);
@@ -49,20 +49,25 @@ export default function M3IndexPage() {
   };
 
   if (!config) {
-      return <div>Loading...</div>;
+    return <div>Loading...</div>;
   }
-  
+
   return (
     <Template1Page>
-      <main className="bg-m3-dark">
-        <Hero onOrderClick={() => setOrderModalOpen(true)} />
-        <CTADeck />
-        <MenuGrid />
-        <PromoBanner />
-        <FooterCTA />
-      </main>
+      <header
+        data-testid="template1-header"
+        data-header
+      >
+        <main className="bg-m3-dark">
+          <Hero onOrderClick={() => setOrderModalOpen(true)} />
+          <CTADeck />
+          <MenuGrid />
+          <PromoBanner />
+          <FooterCTA />
+        </main>
+      </header>
       <M3Footer />
-      
+
       <div className="md:hidden">
         <StickyOrderChoice onOrderClick={() => setOrderModalOpen(true)} />
       </div>
