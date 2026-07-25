@@ -2,7 +2,7 @@
 import { test, expect } from '@playwright/test';
 import type { WebsiteHeaderConfig } from '../src/types/website';
 
-const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://localhost:3000';
+const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000';
 
 test.describe('Brand Website Smoke Tests', () => {
   test('Test 1: Template 1 Header Loads on Desktop', async ({ page }) => {
