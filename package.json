@@ -79,6 +79,7 @@
   "devDependencies": {
     "@opentelemetry/exporter-jaeger": "^1.18.1",
     "@opentelemetry/sdk-node": "^0.53.0",
+    "@playwright/test": "^1.62.0",
     "@types/js-cookie": "^3.0.6",
     "@types/lodash": "^4.17.7",
     "@types/node": "^22.18.3",
