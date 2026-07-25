@@ -14,6 +14,7 @@ export default function StickyOrderChoice({ onOrderClick }: StickyOrderChoicePro
       <div className="h-14 md:hidden" aria-hidden="true" />
 
       <div
+        data-testid="template1-sticky-cta"
         className="
           fixed left-0 right-0 bottom-0 z-50 md:hidden
           bg-m3-cream

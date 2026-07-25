@@ -33,7 +33,11 @@ test.describe('Brand Website Smoke Tests', () => {
     const expectedCtaLabel = config.ctaText || 'Bestil nu';
 
     await page.goto('/m3pizza');
-    await expect(page.locator('header[data-header] button')).toContainText(expectedCtaLabel);
+
+    const button = page.getByTestId('template1-header').getByRole('button', { name: expectedCtaLabel });
+
+    await expect(button).toBeVisible();
+    await expect(button).toHaveText(expectedCtaLabel);
   });
 
   test('Test 4: Header is sticky on scroll', async ({ page }) => {
