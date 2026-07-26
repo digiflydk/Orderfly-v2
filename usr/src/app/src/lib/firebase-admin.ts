@@ -13,7 +13,7 @@ let adminApp: admin.app.App | null = null;
 let initError: Error | null = null;
 
 function loadServiceAccount(): SA | null {
-  const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
+  const raw = process.env.FB_SERVICE_ACCOUNT_JSON ?? process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
   if (!raw) {
     // We create a "soft" error here that will only be thrown if the Admin SDK is actually used.
     // This allows public pages to build and run without the admin credentials.
