@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "studio-2819118380-ae26c"
+    "default": "orderfly-v21-10334086-b3076",
+    "hosting": "orderfly-v21-10334086-b3076",
+    "database": "orderfly-39325"
   }
 }
