@@ -116,7 +116,7 @@ export async function adminHealthProbe() {
 
 		await app
 			.firestore()
-			.collection('__health_check__')
+			.collection('orderfly_health_check')
 			.limit(1)
 			.get();
 
