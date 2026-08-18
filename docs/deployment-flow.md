@@ -1,11 +1,31 @@
 # Orderfly deployment flow
 
-## Firebase project roles
+## Environment architecture
 
-- `orderfly-v21-10334086-b3076`: Firebase Studio and App Hosting project. This project hosts and deploys the application.
-- `orderfly-39325`: Production Firebase data project. Firestore, Authentication, Storage and server-side Firebase Admin access point here.
+Orderfly uses the same GitHub repository for staging and production, but hosting, runtime configuration, secrets and Firebase data access must be isolated between the two environments.
 
-The hosting project and data project are intentionally different. Do not change the `NEXT_PUBLIC_FIREBASE_*` values to the hosting project unless the data architecture is deliberately migrated.
+### Staging
+
+- GitHub repository: `digiflydk/Orderfly-v2`
+- Live branch: **`develop`**
+- App Hosting project: **`orderfly-v2-staging`**
+- App Hosting environment name: **`staging`**
+- Staging App Hosting URL: `https://orderfly-staging--orderfly-v2-staging.europe-west4.hosted.app`
+- Firebase data project: **`orderfly-39325`**
+- Firestore, Authentication, Storage and staging Firebase Admin credentials point to `orderfly-39325`.
+- `orderfly.dk` must never be attached to the staging backend.
+
+### Production
+
+- GitHub repository: `digiflydk/Orderfly-v2`
+- Live branch: **`main`**
+- App Hosting project: **`orderfly-v21-10334086-b3076`**
+- Canonical production URL: **`https://orderfly.dk`**
+- Production must use a **separate Firebase data project**. The production data project must not be `orderfly-39325`.
+- Production Firebase client configuration and Firebase Admin service account must only point to the dedicated production data project.
+- Production service accounts must not be granted Firestore/Auth/Storage access to `orderfly-39325`.
+
+The production data project ID is intentionally not documented until the dedicated project has been created and approved.
 
 ## Source of truth
 
@@ -21,16 +41,44 @@ GitHub is the source of truth for application code.
 
 1. Create one feature branch per task.
 2. Develop locally or in Firebase Studio.
-3. Commit and push the branch.
+3. Commit and push the feature branch.
 4. Open a pull request into `develop`.
 5. GitHub Actions must pass.
-6. Merge into `develop` and verify the staging version.
-7. Open a release pull request from `develop` into `main`.
-8. GitHub Actions must pass again.
-9. Merge into `main`.
-10. Deploy the approved `main` commit through the App Hosting backend in `orderfly-v21-10334086-b3076`.
+6. Merge into `develop`.
+7. App Hosting automatically rolls out the approved `develop` commit to the staging backend.
+8. Verify the staging URL and run smoke/integration tests against staging data only.
+9. Open a release pull request from `develop` into `main`.
+10. GitHub Actions must pass again.
+11. Merge into `main` only after staging acceptance.
+12. Production App Hosting rolls out the approved `main` commit.
 
-Production may only be deployed from `main`. Preview/staging validation must happen on `develop` (or App Hosting preview URLs), never on `orderfly.dk`.
+Production may only be deployed from `main`. Preview/staging validation must happen on `develop` or feature previews, never on `orderfly.dk`.
+
+## Branch-to-environment contract
+
+```text
+feature/*
+   ↓ PR
+ develop
+   ↓
+orderfly-v2-staging App Hosting
+   ↓
+orderfly-39325
+   ↓
+staging hosted.app URL
+
+ develop
+   ↓ release PR
+ main
+   ↓
+orderfly-v21-10334086-b3076 App Hosting
+   ↓
+DEDICATED PRODUCTION DATA PROJECT
+   ↓
+orderfly.dk
+```
+
+A commit on `develop` must not become visible on `orderfly.dk` unless that exact change is subsequently approved and merged into `main`.
 
 ## Production domain configuration (`orderfly.dk`)
 
@@ -44,81 +92,101 @@ The app enforces canonical host and HTTPS with edge middleware in `/middleware.t
 
 - `www.orderfly.dk` → `https://orderfly.dk` (HTTP 308, preserves path/query).
 - `http://orderfly.dk` → `https://orderfly.dk` (HTTP 308, preserves path/query).
-- Other hosts (preview/staging/dev) are not rewritten by this rule.
+- Other hosts such as staging/preview/dev must not be rewritten to production.
 
 ## DNS and certificate checklist
 
-DNS access is required in the domain registrar/DNS provider account for `orderfly.dk`. The release owner must coordinate with the person/team that has registrar access before go-live.
+DNS access is required in the domain registrar/DNS provider account for `orderfly.dk`. Configure the production custom domain only on the production App Hosting backend and apply the DNS records shown by Firebase.
 
-Configure the production domain in Firebase App Hosting and then apply the DNS records shown by Firebase (typically apex A/AAAA or ALIAS/ANAME and optional `www` CNAME). Validate:
+Validate:
 
-1. `orderfly.dk` resolves to the intended App Hosting backend.
+1. `orderfly.dk` resolves to the production App Hosting backend.
 2. `www.orderfly.dk` resolves and is configured for redirect.
-3. SSL/TLS certificate is issued and active for both `orderfly.dk` and `www.orderfly.dk`.
-4. Automatic certificate renewal remains enabled in Firebase-managed certificates.
+3. SSL/TLS certificate is issued and active for both hostnames.
+4. The staging backend has no production custom domain attached.
 
 ## Environment variables
 
 GitHub Actions variables and secrets are used only by GitHub Actions. They are not automatically copied to Firebase App Hosting.
 
-App Hosting must therefore have its own runtime configuration.
+App Hosting therefore has its own environment configuration.
 
-The public Firebase client configuration and the Firebase Admin service account must continue to target `orderfly-39325` because that is the data project.
+### Staging runtime values
 
-The deployment target is selected by `.firebaserc`:
+Staging App Hosting must use the Firebase Web App configuration belonging to `orderfly-39325`:
 
-```json
-{
-  "projects": {
-    "default": "orderfly-v21-10334086-b3076",
-    "hosting": "orderfly-v21-10334086-b3076",
-    "database": "orderfly-39325"
-  }
-}
-```
+- `NEXT_PUBLIC_FIREBASE_API_KEY`
+- `NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN`
+- `NEXT_PUBLIC_FIREBASE_PROJECT_ID=orderfly-39325`
+- `NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET`
+- `NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID`
+- `NEXT_PUBLIC_FIREBASE_APP_ID`
+- `SITE_URL` pointing to the staging URL
+- other non-sensitive staging-only values as required
 
-Use an explicit project when running Firebase CLI commands:
+Sensitive values must be stored in Secret Manager. The staging `FIREBASE_SERVICE_ACCOUNT_JSON` must contain credentials for `orderfly-39325` only.
 
-```bash
-firebase use hosting
-firebase deploy --project hosting
-```
+### Production runtime values
 
-Do not run `firebase deploy` from an unknown branch or with uncommitted changes.
-
-## Production-only runtime settings
-
-Production App Hosting runtime values must be set in the hosting environment (not in git):
+Production App Hosting must use values belonging to the dedicated production data project:
 
 - `SITE_URL=https://orderfly.dk`
-- `NEXT_PUBLIC_SITE_URL=https://orderfly.dk`
-- Production `NEXT_PUBLIC_FIREBASE_*` values pointing at `orderfly-39325`
-- `FIREBASE_SERVICE_ACCOUNT_JSON` for the production Firebase project
+- `NEXT_PUBLIC_SITE_URL=https://orderfly.dk` where used
+- production `NEXT_PUBLIC_FIREBASE_*` values pointing to the dedicated production data project
+- production `FIREBASE_SERVICE_ACCOUNT_JSON` for the dedicated production data project
 
-`FIREBASE_SERVICE_ACCOUNT_JSON` and all other sensitive values must only be stored as managed secrets (GitHub Secrets/Firebase Secret Manager), never committed to the repository or shared in issue comments/logs.
+Production must never reuse the staging service account JSON.
+
+## Secrets
+
+`FIREBASE_SERVICE_ACCOUNT_JSON`, `GEMINI_API_KEY` and other sensitive values must be stored in Google Cloud Secret Manager / Firebase App Hosting secrets and never committed to the repository, pasted into issue comments or printed in logs.
+
+The same secret name may exist in staging and production projects, but the underlying secret values must be environment-specific.
+
+## `.firebaserc` and Firebase CLI
+
+The repository currently contains Firebase aliases that predate the full staging/production separation. In particular, `orderfly-39325` is the staging data project and must not be treated as production simply because an alias references it.
+
+Always specify the intended Firebase project explicitly for administrative/deployment commands. Never run a data-changing Firebase CLI command against an assumed default project.
+
+Before any production Firebase CLI operation, verify the production data project ID explicitly. Until the dedicated production data project exists, no production data deployment should be performed.
 
 ## Auth, callback and CORS impact
 
-When switching production domain, verify and update any allowlists/callback URLs that depend on hostnames:
+Environment-specific hostnames must be allowlisted separately:
 
-- Firebase Authentication authorized domains must include `orderfly.dk`.
-- OAuth providers/callbacks must use `https://orderfly.dk` where applicable.
-- API CORS allowlists must include `https://orderfly.dk` and must not over-broaden origin access.
-- Payment or third-party return URLs that use `NEXT_PUBLIC_SITE_URL` must resolve to `https://orderfly.dk`.
+- Staging Firebase Authentication must authorize the staging `*.hosted.app` hostname as required.
+- Production Firebase Authentication must authorize `orderfly.dk`.
+- OAuth callbacks, CORS allowlists and payment/third-party return URLs must use the URL for the corresponding environment.
+- Staging callbacks must not be configured to send users into production unless deliberately testing a production integration.
 
-## Verification before production
+## Staging verification
+
+Before approving a release PR from `develop` to `main`, confirm:
+
+- The staging rollout deploys the expected `develop` commit.
+- The staging URL stays on the staging hostname and does not redirect to `orderfly.dk`.
+- Client Firebase configuration resolves to `orderfly-39325`.
+- `/api/diag/health` returns `ok: true` and `projectId: "orderfly-39325"` for the Firebase Admin connection.
+- Login/auth works against staging Auth.
+- Representative Firestore reads/writes happen only in staging.
+- No production credentials are present in the staging backend.
+
+## Production verification before rollout
 
 Before a production rollout, confirm:
 
-- The deployed commit is the current `main` commit.
+- The deployed commit is the approved current `main` commit.
 - GitHub Actions are green.
-- App Hosting variables and secrets are present.
-- The app still points to `orderfly-39325` for Firebase data.
-- The custom production domain points to the intended App Hosting backend.
+- Production App Hosting variables and secrets are present.
+- Production Firebase client config does **not** point to `orderfly-39325`.
+- Production Firebase Admin health check reports the dedicated production data project ID.
+- Production service accounts have no intended dependency on staging data.
+- The custom production domain points to the intended production App Hosting backend.
 - `http://orderfly.dk` redirects to `https://orderfly.dk`.
 - `https://www.orderfly.dk/<path>?<query>` redirects to `https://orderfly.dk/<path>?<query>`.
 
-## Post-deploy smoke test (minimum)
+## Post-deploy production smoke test
 
 After deploy on `main`, run smoke tests directly on `https://orderfly.dk`:
 
@@ -128,21 +196,26 @@ After deploy on `main`, run smoke tests directly on `https://orderfly.dk`:
 4. Navigation to core portal pages works.
 5. At least one representative API/database flow works.
 6. Relevant auth callbacks/redirects work on the production domain.
+7. Firebase diagnostics report the dedicated production project, never `orderfly-39325`.
 
 ## Rollback procedure (critical release incident)
 
-1. Identify the latest stable `main` commit that passed smoke test.
-2. In App Hosting, redeploy that exact stable release/artifact.
-3. Re-run the smoke test on `https://orderfly.dk`.
-4. Document incident start time, rollback executor, stable release ID/commit, and verification outcome in release notes/operations log.
+1. Identify the latest stable `main` commit that passed smoke tests.
+2. In production App Hosting, redeploy that exact stable release/artifact.
+3. Re-run the smoke tests on `https://orderfly.dk`.
+4. Confirm the rollback still uses the dedicated production Firebase data project.
+5. Document incident start time, rollback executor, stable release ID/commit and verification outcome in release notes/operations log.
 
 Expected ownership:
 
 - Release owner executes deployment/rollback.
 - PM/QA confirms smoke-test acceptance.
 
-## Impact on existing environments and users
+## Hard isolation rules
 
-- Preview/staging URLs stay separate from `orderfly.dk`.
-- Preview/staging must never be configured with production data by mistake.
-- Existing users on production keep using `https://orderfly.dk`; no staging URL is promoted as production.
+- `develop` → staging hosting → `orderfly-39325`.
+- `main` → production hosting → dedicated production Firebase data project.
+- Staging must never receive production secrets.
+- Production must never use the staging Firebase Admin service account.
+- Production must not intentionally be granted data access to `orderfly-39325`.
+- `orderfly.dk` must only be attached to the production App Hosting backend.
