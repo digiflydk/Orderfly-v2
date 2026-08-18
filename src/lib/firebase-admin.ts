@@ -7,7 +7,7 @@ type ServiceAccount = {
 	private_key: string;
 };
 
-const ADMIN_APP_NAME = 'orderfly-production-data';
+const ADMIN_APP_NAME = 'orderfly-admin';
 
 let adminApp: admin.app.App | null = null;
 let initError: Error | null = null;
