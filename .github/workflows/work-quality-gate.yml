@@ -1,0 +1,237 @@
+name: Work Quality Gate
+
+on:
+  workflow_run:
+    workflows: ["Playwright UI Tests"]
+    types: [completed]
+  workflow_dispatch:
+    inputs:
+      pr_number:
+        description: "Pull request number to review after CI"
+        required: true
+        type: number
+
+permissions:
+  actions: write
+  contents: read
+  issues: write
+  pull-requests: write
+
+env:
+  OPENAI_KEY: ${{ secrets.OPENAI_API_KEY }}
+
+jobs:
+  resolve:
+    runs-on: ubuntu-latest
+    outputs:
+      pr_number: ${{ steps.resolve.outputs.pr-number }}
+      issue_number: ${{ steps.resolve.outputs.issue-number }}
+      clean_title: ${{ steps.resolve.outputs.clean-title }}
+      managed: ${{ steps.resolve.outputs.managed }}
+    steps:
+      - name: Resolve Work-managed PR and issue
+        id: resolve
+        uses: actions/github-script@v7
+        env:
+          INPUT_PR: ${{ inputs.pr_number }}
+          RUN_HEAD_BRANCH: ${{ github.event.workflow_run.head_branch }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            let prNumber = Number(process.env.INPUT_PR || 0);
+            if (!prNumber && context.payload.workflow_run?.pull_requests?.length) {
+              prNumber = Number(context.payload.workflow_run.pull_requests[0].number);
+            }
+            if (!prNumber && process.env.RUN_HEAD_BRANCH) {
+              const prs = await github.rest.pulls.list({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                head: `${context.repo.owner}:${process.env.RUN_HEAD_BRANCH}`,
+                base: 'main',
+                state: 'open',
+                per_page: 10,
+              });
+              prNumber = Number(prs.data[0]?.number || 0);
+            }
+            if (!prNumber) {
+              core.setOutput('managed', 'false');
+              return;
+            }
+            const { data: pr } = await github.rest.pulls.get({owner: context.repo.owner, repo: context.repo.repo, pull_number: prNumber});
+            const match = (pr.body || '').match(/Work-Managed-Issue:\s*#(\d+)/);
+            if (!match) {
+              core.setOutput('managed', 'false');
+              return;
+            }
+            const issueNumber = Number(match[1]);
+            const { data: issue } = await github.rest.issues.get({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber});
+            core.setOutput('managed', 'true');
+            core.setOutput('pr-number', String(prNumber));
+            core.setOutput('issue-number', String(issueNumber));
+            core.setOutput('clean-title', issue.title.replace(/^\[[^\]]+\]\s*/, ''));
+
+  handle-ci-failure:
+    needs: resolve
+    if: needs.resolve.outputs.managed == 'true' && github.event_name == 'workflow_run' && github.event.workflow_run.conclusion != 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Capture failed CI logs
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: gh run view "$RUN_ID" --repo "$GITHUB_REPOSITORY" --log-failed > /tmp/work-ci-failure.log || true
+
+      - name: Return CI failure to Work or block after repeated failures
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve.outputs.issue_number }}
+          CLEAN_TITLE: ${{ needs.resolve.outputs.clean_title }}
+          RUN_URL: ${{ github.event.workflow_run.html_url }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const { data: comments } = await github.rest.issues.listComments({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, per_page: 100});
+            const retries = comments.filter(c => (c.body || '').includes('WORK_AUTO_RETRY:')).length;
+            const blocked = retries >= 3;
+            const raw = fs.existsSync('/tmp/work-ci-failure.log') ? fs.readFileSync('/tmp/work-ci-failure.log', 'utf8') : '';
+            const excerpt = raw.slice(-9000) || 'No failed-job log text was available. Inspect the linked workflow run.';
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `${blocked ? 'WORK_AUTOMATION_BLOCKED' : 'WORK_AUTO_RETRY:'} Playwright UI Tests failed. Run: ${process.env.RUN_URL}\n\n<details><summary>Failed CI excerpt</summary>\n\n\`\`\`text\n${excerpt}\n\`\`\`\n</details>`,
+            });
+            await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `${blocked ? '[BLOCKED]' : '[READY FOR DEV]'} ${process.env.CLEAN_TITLE}`});
+            if (!blocked) {
+              await github.rest.actions.createWorkflowDispatch({owner: context.repo.owner, repo: context.repo.repo, workflow_id: 'work-developer.yml', ref: 'main', inputs: { issue_number: String(issueNumber) }});
+            }
+
+  review-and-handoff:
+    needs: resolve
+    if: needs.resolve.outputs.managed == 'true' && (github.event_name == 'workflow_dispatch' || github.event.workflow_run.conclusion == 'success')
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Check out PR merge result
+        uses: actions/checkout@v6
+        with:
+          ref: refs/pull/${{ needs.resolve.outputs.pr_number }}/merge
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Build independent review context
+        uses: actions/github-script@v7
+        env:
+          PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
+          ISSUE_NUMBER: ${{ needs.resolve.outputs.issue_number }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const fs = require('fs');
+            const prNumber = Number(process.env.PR_NUMBER);
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const [{ data: pr }, { data: issue }, { data: comments }] = await Promise.all([
+              github.rest.pulls.get({owner: context.repo.owner, repo: context.repo.repo, pull_number: prNumber}),
+              github.rest.issues.get({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber}),
+              github.rest.issues.listComments({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, per_page: 100}),
+            ]);
+            const trusted = comments
+              .filter(c => ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(c.author_association) || c.user?.login === 'github-actions[bot]')
+              .slice(-20)
+              .map(c => c.body || '')
+              .join('\n\n---\n\n');
+            fs.writeFileSync('.review-context.md', [
+              '# Independent Work code-review context',
+              `Repository: ${context.repo.owner}/${context.repo.repo}`,
+              `PR: #${prNumber}`,
+              `Issue: #${issueNumber}`,
+              '',
+              '## Product specification and acceptance criteria',
+              issue.body || '',
+              '',
+              '## PR description',
+              pr.body || '',
+              '',
+              '## Trusted latest issue feedback',
+              trusted || 'No trusted comments.',
+            ].join('\n'));
+
+      - name: Block when OpenAI API secret is missing
+        if: env.OPENAI_KEY == ''
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve.outputs.issue_number }}
+          CLEAN_TITLE: ${{ needs.resolve.outputs.clean_title }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.ISSUE_NUMBER), title: `[BLOCKED] ${process.env.CLEAN_TITLE}`});
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.ISSUE_NUMBER), body: 'WORK_AUTOMATION_BLOCKED: CI passed, but independent Codex review cannot run because repository secret `OPENAI_API_KEY` is missing.'});
+            core.setFailed('OPENAI_API_KEY is not configured.');
+
+      - name: Independent Codex code review
+        if: env.OPENAI_KEY != ''
+        id: review
+        uses: openai/codex-action@v1
+        with:
+          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
+          permission-profile: ":read-only"
+          allow-bots: true
+          output-schema: |
+            {
+              "type": "object",
+              "properties": {
+                "verdict": {"type": "string", "enum": ["approve", "changes_requested"]},
+                "summary": {"type": "string"},
+                "findings": {"type": "array", "items": {"type": "string"}}
+              },
+              "required": ["verdict", "summary", "findings"],
+              "additionalProperties": false
+            }
+          prompt: |
+            Act as an independent senior code reviewer for Orderfly. Read `.review-context.md`, `AGENTS.md`, and repository documentation. Review the PR merge result against `origin/main` and every acceptance criterion in the linked issue.
+            Playwright CI has already passed. Do not assume that means the implementation is correct.
+            Check for incomplete acceptance criteria, Firebase project mix-ups, authentication/tenant/brand isolation regressions, unsafe credential handling, data-flow errors, missing edge cases, weak tests, documentation drift and deployment risks.
+            Return `approve` only when there are no material findings that should block PO acceptance. Otherwise return `changes_requested` with concrete findings. Do not modify files.
+
+      - name: Apply review verdict and hand off to PO
+        if: env.OPENAI_KEY != ''
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ needs.resolve.outputs.issue_number }}
+          CLEAN_TITLE: ${{ needs.resolve.outputs.clean_title }}
+          PR_NUMBER: ${{ needs.resolve.outputs.pr_number }}
+          REVIEW_JSON: ${{ steps.review.outputs.final-message }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const prNumber = Number(process.env.PR_NUMBER);
+            const review = JSON.parse(process.env.REVIEW_JSON);
+            const body = [
+              `## Independent Work code review: ${review.verdict === 'approve' ? 'APPROVED' : 'CHANGES REQUESTED'}`,
+              '',
+              review.summary,
+              '',
+              ...(review.findings?.length ? ['### Findings', ...review.findings.map(x => `- ${x}`)] : ['No blocking findings.']),
+            ].join('\n');
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: prNumber, body});
+            if (review.verdict === 'approve') {
+              await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[READY FOR PO] ${process.env.CLEAN_TITLE}`});
+              await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_READY_FOR_PO: Playwright CI and independent code review are green for PR #${prNumber}. Awaiting PO acceptance.`});
+              return;
+            }
+            const { data: comments } = await github.rest.issues.listComments({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, per_page: 100});
+            const retries = comments.filter(c => (c.body || '').includes('WORK_AUTO_RETRY:')).length;
+            const blocked = retries >= 3;
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `${blocked ? 'WORK_AUTOMATION_BLOCKED' : 'WORK_AUTO_RETRY:'} Independent code review requested changes on PR #${prNumber}.\n\n${body}`});
+            await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `${blocked ? '[BLOCKED]' : '[READY FOR DEV]'} ${process.env.CLEAN_TITLE}`});
+            if (!blocked) {
+              await github.rest.actions.createWorkflowDispatch({owner: context.repo.owner, repo: context.repo.repo, workflow_id: 'work-developer.yml', ref: 'main', inputs: { issue_number: String(issueNumber) }});
+            }
+
+      - name: Remove transient review context
+        if: always()
+        run: rm -f .review-context.md
