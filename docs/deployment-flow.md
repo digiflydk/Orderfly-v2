@@ -1,5 +1,7 @@
 # Orderfly deployment flow
 
+Last reviewed: 2026-08-23
+
 ## Firebase project roles
 
 - `orderfly-v21-10334086-b3076`: Firebase Studio and App Hosting project. This project hosts and deploys the application.
@@ -9,28 +11,32 @@ The hosting project and data project are intentionally different. Do not change 
 
 ## Source of truth
 
-GitHub is the source of truth for application code.
+GitHub is the source of truth for application code, product issues, pull requests, CI evidence and documentation.
 
-- Feature branches contain work in progress.
-- `develop` is the staging integration branch.
-- `main` is the production release branch.
-- Firebase Studio may edit, preview, commit and push code.
-- Production must not be published from uncommitted local Studio state.
+Orderfly follows the same PM / PO / Work lifecycle as Esmeralda:
 
-## Required flow
+`[READY FOR DEV] -> [IN DEVELOPMENT] -> [IN REVIEW] -> [READY FOR PO] -> [AWAITING LIVE VERIFY] -> [DONE]`
 
-1. Create one feature branch per task.
-2. Develop locally or in Firebase Studio.
-3. Commit and push the branch.
-4. Open a pull request into `develop`.
-5. GitHub Actions must pass.
-6. Merge into `develop` and verify the staging version.
-7. Open a release pull request from `develop` into `main`.
-8. GitHub Actions must pass again.
-9. Merge into `main`.
-10. Deploy the approved `main` commit through the App Hosting backend in `orderfly-v21-10334086-b3076`.
+Work branches from `main` and opens pull requests into `main`. Work never merges or deploys its own change. PO acceptance is required before merge, and deployment plus live verification are required before an issue is Done.
 
-Production may only be deployed from `main`. Preview/staging validation must happen on `develop` (or App Hosting preview URLs), never on `orderfly.dk`.
+See [Development workflow](development-workflow.md).
+
+## Required development and release flow
+
+1. PM defines the product need, defect or priority.
+2. PO creates a complete GitHub issue and marks it `[READY FOR DEV]`.
+3. Work creates or resumes `work-issue-<number>` from current `main`, implements the issue, adds tests and updates documentation.
+4. Work opens or updates a PR into `main`.
+5. The existing Orderfly Playwright workflow must pass on the Work branch, including the build exercised by Playwright. Work also runs TypeScript typecheck before creating the PR.
+6. Independent code review must pass.
+7. The issue moves to `[READY FOR PO]`.
+8. PO reviews acceptance criteria, PR/diff, CI, Playwright evidence, code review, documentation and unresolved risks.
+9. If accepted, the exact reviewed PR is merged to `main`, and the issue becomes `[AWAITING LIVE VERIFY]`.
+10. Firebase App Hosting deploys, or the release operator deploys, the approved `main` commit.
+11. Read-only live Playwright and any issue-specific controlled live verification are performed.
+12. Only PO may close the issue as `[DONE]` after confirming the approved change is live and all acceptance evidence is complete. PM is then notified.
+
+A green pre-merge test run proves the candidate code passed its checks. It does not by itself prove that the same commit is live. Merge also does not mean Done.
 
 ## Production domain configuration (`orderfly.dk`)
 
@@ -42,28 +48,24 @@ Production may only be deployed from `main`. Preview/staging validation must hap
 
 The app enforces canonical host and HTTPS with edge middleware in `/middleware.ts`:
 
-- `www.orderfly.dk` → `https://orderfly.dk` (HTTP 308, preserves path/query).
-- `http://orderfly.dk` → `https://orderfly.dk` (HTTP 308, preserves path/query).
-- Other hosts (preview/staging/dev) are not rewritten by this rule.
+- `www.orderfly.dk` -> `https://orderfly.dk` (HTTP 308, preserves path/query).
+- `http://orderfly.dk` -> `https://orderfly.dk` (HTTP 308, preserves path/query).
+- Other preview/dev hosts are not rewritten by this rule.
 
 ## DNS and certificate checklist
 
-DNS access is required in the domain registrar/DNS provider account for `orderfly.dk`. The release owner must coordinate with the person/team that has registrar access before go-live.
-
-Configure the production domain in Firebase App Hosting and then apply the DNS records shown by Firebase (typically apex A/AAAA or ALIAS/ANAME and optional `www` CNAME). Validate:
+DNS access is required in the domain registrar/DNS provider account for `orderfly.dk`. Before go-live, validate:
 
 1. `orderfly.dk` resolves to the intended App Hosting backend.
-2. `www.orderfly.dk` resolves and is configured for redirect.
-3. SSL/TLS certificate is issued and active for both `orderfly.dk` and `www.orderfly.dk`.
-4. Automatic certificate renewal remains enabled in Firebase-managed certificates.
+2. `www.orderfly.dk` resolves and redirects correctly.
+3. SSL/TLS certificates are active for both hosts.
+4. Automatic certificate renewal remains enabled.
 
 ## Environment variables
 
 GitHub Actions variables and secrets are used only by GitHub Actions. They are not automatically copied to Firebase App Hosting.
 
-App Hosting must therefore have its own runtime configuration.
-
-The public Firebase client configuration and the Firebase Admin service account must continue to target `orderfly-39325` because that is the data project.
+App Hosting must therefore have its own runtime configuration. The public Firebase client configuration and the Firebase Admin service account must continue to target `orderfly-39325` because that is the production data project.
 
 The deployment target is selected by `.firebaserc`:
 
@@ -77,72 +79,60 @@ The deployment target is selected by `.firebaserc`:
 }
 ```
 
-Use an explicit project when running Firebase CLI commands:
+Use an explicit project when running Firebase CLI operations. Never deploy from an unknown branch or an uncommitted working tree.
 
-```bash
-firebase use hosting
-firebase deploy --project hosting
-```
+## Production runtime settings
 
-Do not run `firebase deploy` from an unknown branch or with uncommitted changes.
-
-## Production-only runtime settings
-
-Production App Hosting runtime values must be set in the hosting environment (not in git):
+Production App Hosting runtime values must be set in the hosting environment, not in git:
 
 - `SITE_URL=https://orderfly.dk`
 - `NEXT_PUBLIC_SITE_URL=https://orderfly.dk`
-- Production `NEXT_PUBLIC_FIREBASE_*` values pointing at `orderfly-39325`
-- `FIREBASE_SERVICE_ACCOUNT_JSON` for the production Firebase project
+- production `NEXT_PUBLIC_FIREBASE_*` values pointing at `orderfly-39325`
+- `FIREBASE_SERVICE_ACCOUNT_JSON` for the production Firebase data project
 
-`FIREBASE_SERVICE_ACCOUNT_JSON` and all other sensitive values must only be stored as managed secrets (GitHub Secrets/Firebase Secret Manager), never committed to the repository or shared in issue comments/logs.
+`FIREBASE_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY` and all other sensitive values must only be stored as managed secrets, never committed or copied into issue/PR comments or logs.
 
 ## Auth, callback and CORS impact
 
-When switching production domain, verify and update any allowlists/callback URLs that depend on hostnames:
+When changing host-dependent behavior, verify:
 
-- Firebase Authentication authorized domains must include `orderfly.dk`.
-- OAuth providers/callbacks must use `https://orderfly.dk` where applicable.
-- API CORS allowlists must include `https://orderfly.dk` and must not over-broaden origin access.
-- Payment or third-party return URLs that use `NEXT_PUBLIC_SITE_URL` must resolve to `https://orderfly.dk`.
+- Firebase Authentication authorized domains include `orderfly.dk`.
+- OAuth providers/callbacks use `https://orderfly.dk` where applicable.
+- API CORS allowlists contain the intended origin without broad wildcard access.
+- Payment and third-party return URLs using `NEXT_PUBLIC_SITE_URL` resolve to the production domain.
 
-## Verification before production
+## Post-merge live verification
 
-Before a production rollout, confirm:
+`.github/workflows/work-live-verification.yml` runs for merged Work-managed PRs into `main`.
 
-- The deployed commit is the current `main` commit.
-- GitHub Actions are green.
-- App Hosting variables and secrets are present.
-- The app still points to `orderfly-39325` for Firebase data.
-- The custom production domain points to the intended App Hosting backend.
-- `http://orderfly.dk` redirects to `https://orderfly.dk`.
-- `https://www.orderfly.dk/<path>?<query>` redirects to `https://orderfly.dk/<path>?<query>`.
+The baseline verification is read-only and checks live endpoint/browser health, the public brand surface and a mobile overflow regression. It records evidence on the linked issue and leaves the issue in `[AWAITING LIVE VERIFY]`.
 
-## Post-deploy smoke test (minimum)
+A green generic smoke test is not allowed to close the issue automatically. PO must also verify deployment evidence and every issue-specific acceptance criterion.
 
-After deploy on `main`, run smoke tests directly on `https://orderfly.dk`:
+Authentication, payments, orders, customer mutations or other state-changing scenarios may only be tested live when the issue defines a controlled, reversible and auditable procedure. Unattended automation must not mutate production data.
 
-1. Landing page loads without critical browser/server errors.
-2. Login and logout both work.
-3. Session survives a browser refresh.
-4. Navigation to core portal pages works.
-5. At least one representative API/database flow works.
-6. Relevant auth callbacks/redirects work on the production domain.
+## Definition of release completion
 
-## Rollback procedure (critical release incident)
+A Work-managed development issue is not Done until all applicable items are true:
 
-1. Identify the latest stable `main` commit that passed smoke test.
+- implementation completed
+- relevant automated tests added or updated
+- TypeScript/type validation green
+- Playwright green
+- independent code review green
+- documentation updated
+- PO acceptance recorded
+- PR merged to `main`
+- approved change deployed
+- read-only live verification green
+- any required controlled live scenarios verified and restored safely
+
+## Rollback procedure
+
+1. Identify the latest stable `main` commit that passed live verification.
 2. In App Hosting, redeploy that exact stable release/artifact.
-3. Re-run the smoke test on `https://orderfly.dk`.
-4. Document incident start time, rollback executor, stable release ID/commit, and verification outcome in release notes/operations log.
+3. Re-run live smoke tests on `https://orderfly.dk`.
+4. Document incident start time, rollback executor, stable release ID/commit and verification outcome in release notes/operations log.
+5. Keep the affected issue `[BLOCKED]` until the defect has been triaged and a safe fix is ready.
 
-Expected ownership:
-
-- Release owner executes deployment/rollback.
-- PM/QA confirms smoke-test acceptance.
-
-## Impact on existing environments and users
-
-- Preview/staging URLs stay separate from `orderfly.dk`.
-- Preview/staging must never be configured with production data by mistake.
-- Existing users on production keep using `https://orderfly.dk`; no staging URL is promoted as production.
+Never edit production data merely to hide a failed release.
