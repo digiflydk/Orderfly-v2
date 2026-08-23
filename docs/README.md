@@ -1,7 +1,7 @@
 # Orderfly — Documentation Index
 
-- **development-workflow.md** — PM → PO → Work automated development, CI, review and staging gates
-- **deployment-flow.md** — `develop` staging and `main` production release procedure
+- **development-workflow.md** — PM → PO → Work automated development, CI, code review, PO acceptance and live-verification gates
+- **deployment-flow.md** — Production merge/deployment, Firebase boundaries, live acceptance and rollback procedure
 - **FILE-MAP.md** — Source file locations and feature map  
 - **OPERATIONS-LOG.md** — Release history (version • ticket)  
 - **PM-ONEPAGER.md** — High-level overview for PM/QA  
