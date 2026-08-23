@@ -4,9 +4,11 @@ on:
   workflow_dispatch:
   push:
     branches:
+      - develop
       - main
   pull_request:
     branches:
+      - develop
       - main
     types:
       - opened
@@ -64,7 +66,7 @@ jobs:
       - name: Install Playwright browsers
         run: npx playwright install --with-deps
 
-      - name: Run Playwright UI tests against PR build
+      - name: Run Playwright UI tests against checked-out change
         run: npx playwright test
 
       - name: Upload Playwright test report
