@@ -11,6 +11,7 @@ on:
         type: number
 
 permissions:
+  actions: write
   contents: write
   issues: write
   pull-requests: write
@@ -28,10 +29,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Check out main
+      - name: Check out current develop
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: develop
           fetch-depth: 0
 
       - name: Load trusted issue context
@@ -44,29 +45,20 @@ jobs:
           script: |
             const fs = require('fs');
             const issueNumber = Number(process.env.ISSUE_NUMBER);
-            const { data: issue } = await github.rest.issues.get({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-            });
+            const { data: issue } = await github.rest.issues.get({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber});
             const trusted = ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(issue.author_association);
             const ready = issue.title.startsWith('[READY FOR DEV]');
             core.setOutput('eligible', trusted && ready ? 'true' : 'false');
             core.setOutput('clean-title', issue.title.replace(/^\[[^\]]+\]\s*/, ''));
             if (!trusted || !ready) return;
-            const { data: comments } = await github.rest.issues.listComments({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              per_page: 100,
-            });
+            const { data: comments } = await github.rest.issues.listComments({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, per_page: 100});
             const relevant = comments
               .filter(c => ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(c.author_association) || c.user?.login === 'github-actions[bot]')
               .slice(-20)
               .map(c => `### Comment by ${c.user?.login || 'unknown'}\n${c.body || ''}`)
               .join('\n\n');
             fs.writeFileSync('.work-context.md', [
-              '# Work implementation context',
+              '# Orderfly Work implementation context',
               `Repository: ${context.repo.owner}/${context.repo.repo}`,
               `Issue: #${issueNumber}`,
               `Title: ${issue.title}`,
@@ -94,12 +86,7 @@ jobs:
             const { data: issue } = await github.rest.issues.get({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber});
             const clean = issue.title.replace(/^\[[^\]]+\]\s*/, '');
             await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[BLOCKED] ${clean}`});
-            await github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: issueNumber,
-              body: 'WORK_AUTOMATION_BLOCKED: Repository secret `OPENAI_API_KEY` is missing. Add the secret, then change the issue title back to `[READY FOR DEV]` to retry.',
-            });
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: 'WORK_AUTOMATION_BLOCKED: Repository secret `OPENAI_API_KEY` is missing. Add the secret, then change the issue title back to `[READY FOR DEV]` to retry.'});
             core.setFailed('OPENAI_API_KEY is not configured.');
 
       - name: Mark issue in development
@@ -111,12 +98,7 @@ jobs:
         with:
           github-token: ${{ github.token }}
           script: |
-            await github.rest.issues.update({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              issue_number: Number(process.env.ISSUE_NUMBER),
-              title: `[IN DEVELOPMENT] ${process.env.CLEAN_TITLE}`,
-            });
+            await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.ISSUE_NUMBER), title: `[IN DEVELOPMENT] ${process.env.CLEAN_TITLE}`});
 
       - name: Prepare work branch
         if: steps.issue.outputs.eligible == 'true' && env.OPENAI_KEY != ''
@@ -128,7 +110,6 @@ jobs:
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
             git fetch origin "$BRANCH"
             git checkout -B "$BRANCH" "origin/$BRANCH"
-            git rebase origin/main
           else
             git checkout -b "$BRANCH"
           fi
@@ -154,11 +135,12 @@ jobs:
           allow-bots: true
           prompt: |
             You are the Work developer/implementer for Orderfly.
-            Read `.work-context.md`, `AGENTS.md`, and the relevant canonical documentation before changing code.
+            Read `.work-context.md`, the relevant files under `docs/`, and `AGENTS.md` if it exists in this checkout before changing code.
 
             Implement exactly the linked GitHub issue and every acceptance criterion. Treat trusted issue comments as CI/code-review feedback when applicable.
 
             Required engineering discipline:
+            - Feature work targets `develop`; `main` remains the production release branch.
             - Preserve Firebase hosting/data project separation, authentication and brand/tenant boundaries.
             - Do not weaken tests, security, validation or business rules to make CI green.
             - Add or update meaningful automated tests for the changed behavior.
@@ -190,9 +172,9 @@ jobs:
         run: |
           git add -A
           git commit -m "work: implement issue #${ISSUE_NUMBER}"
-          git push --force-with-lease -u origin "HEAD:$BRANCH"
+          git push -u origin "HEAD:$BRANCH"
 
-      - name: Create or update pull request into main
+      - name: Create or update pull request into develop
         if: steps.issue.outputs.eligible == 'true' && env.OPENAI_KEY != ''
         id: pr
         uses: actions/github-script@v7
@@ -206,7 +188,7 @@ jobs:
           script: |
             const issueNumber = Number(process.env.ISSUE_NUMBER);
             const head = `${context.repo.owner}:${process.env.BRANCH}`;
-            const existing = await github.rest.pulls.list({owner: context.repo.owner, repo: context.repo.repo, head, base: 'main', state: 'open'});
+            const existing = await github.rest.pulls.list({owner: context.repo.owner, repo: context.repo.repo, head, base: 'develop', state: 'open'});
             const body = [
               `Work-Managed-Issue: #${issueNumber}`,
               '',
@@ -215,19 +197,19 @@ jobs:
               '## Work developer summary',
               process.env.CODEX_SUMMARY || 'Implementation completed by automated Work developer run.',
               '',
-              '## Required gates',
-              '- [ ] Orderfly CI',
-              '- [ ] Playwright',
+              '## Required development gates',
+              '- [ ] Orderfly CI / local Playwright',
               '- [ ] Independent code review',
               '- [ ] Documentation updated',
               '- [ ] PO acceptance',
-              '- [ ] Live verification after merge/deploy',
+              '- [ ] Merge to develop',
+              '- [ ] Live staging Playwright before Done',
             ].join('\n');
             let pr;
             if (existing.data.length) {
               pr = (await github.rest.pulls.update({owner: context.repo.owner, repo: context.repo.repo, pull_number: existing.data[0].number, title: `Work #${issueNumber}: ${process.env.CLEAN_TITLE}`, body})).data;
             } else {
-              pr = (await github.rest.pulls.create({owner: context.repo.owner, repo: context.repo.repo, head: process.env.BRANCH, base: 'main', title: `Work #${issueNumber}: ${process.env.CLEAN_TITLE}`, body})).data;
+              pr = (await github.rest.pulls.create({owner: context.repo.owner, repo: context.repo.repo, head: process.env.BRANCH, base: 'develop', title: `Work #${issueNumber}: ${process.env.CLEAN_TITLE}`, body})).data;
             }
             core.setOutput('number', String(pr.number));
             core.setOutput('url', pr.html_url);
@@ -244,7 +226,17 @@ jobs:
           script: |
             const issueNumber = Number(process.env.ISSUE_NUMBER);
             await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[IN REVIEW] ${process.env.CLEAN_TITLE}`});
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_IMPLEMENTATION_COMPLETE: PR created/updated: ${process.env.PR_URL}. Orderfly CI, Playwright and independent code review are now the release gates.`});
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_IMPLEMENTATION_COMPLETE: PR created/updated: ${process.env.PR_URL}. Orderfly CI, Playwright and independent code review are now the development gates.`});
+
+      - name: Explicitly dispatch Orderfly CI on the Work branch
+        if: steps.issue.outputs.eligible == 'true' && env.OPENAI_KEY != ''
+        uses: actions/github-script@v7
+        env:
+          BRANCH: work-issue-${{ env.ISSUE_NUMBER }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            await github.rest.actions.createWorkflowDispatch({owner: context.repo.owner, repo: context.repo.repo, workflow_id: 'ui-tests.yml', ref: process.env.BRANCH});
 
       - name: Mark failed implementation as blocked
         if: failure() && steps.issue.outputs.eligible == 'true' && env.OPENAI_KEY != ''
