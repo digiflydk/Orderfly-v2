@@ -28,10 +28,10 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
-      - name: Check out current develop
+      - name: Check out main
         uses: actions/checkout@v6
         with:
-          ref: develop
+          ref: main
           fetch-depth: 0
 
       - name: Load trusted issue context
@@ -66,7 +66,7 @@ jobs:
               .map(c => `### Comment by ${c.user?.login || 'unknown'}\n${c.body || ''}`)
               .join('\n\n');
             fs.writeFileSync('.work-context.md', [
-              '# Orderfly Work implementation context',
+              '# Work implementation context',
               `Repository: ${context.repo.owner}/${context.repo.repo}`,
               `Issue: #${issueNumber}`,
               `Title: ${issue.title}`,
@@ -128,6 +128,7 @@ jobs:
           if git ls-remote --exit-code --heads origin "$BRANCH" >/dev/null 2>&1; then
             git fetch origin "$BRANCH"
             git checkout -B "$BRANCH" "origin/$BRANCH"
+            git rebase origin/main
           else
             git checkout -b "$BRANCH"
           fi
@@ -153,22 +154,20 @@ jobs:
           allow-bots: true
           prompt: |
             You are the Work developer/implementer for Orderfly.
-            Read `.work-context.md`, the relevant files under `docs/`, and `AGENTS.md` if it exists in this checkout before changing code.
+            Read `.work-context.md`, `AGENTS.md`, and the relevant canonical documentation before changing code.
 
-            Implement exactly the linked GitHub issue and every acceptance criterion. Treat the trusted latest issue comments as CI/code-review feedback that must be resolved when applicable.
+            Implement exactly the linked GitHub issue and every acceptance criterion. Treat trusted issue comments as CI/code-review feedback when applicable.
 
-            Orderfly engineering boundaries:
-            - Feature work targets `develop`; `main` is the production release branch.
-            - Preserve the separation between Firebase App Hosting project `orderfly-v21-10334086-b3076` and production data project `orderfly-39325`.
-            - Preserve authentication, brand/tenant boundaries and server-side authorization.
-            - Do not weaken tests, validation or security just to make CI green.
-            - Add/update meaningful tests for changed behavior.
-            - Update relevant canonical documentation in the same change whenever behavior, APIs, data flow, architecture, operations, testing or deployment changes.
-            - Do not deploy, publish, merge, alter GitHub secrets or mutate production data. GitHub automation and PO/release gates handle those steps.
-            - Run `npm run typecheck` and any relevant local tests that are possible in this sandbox, then fix failures caused by your change.
+            Required engineering discipline:
+            - Preserve Firebase hosting/data project separation, authentication and brand/tenant boundaries.
+            - Do not weaken tests, security, validation or business rules to make CI green.
+            - Add or update meaningful automated tests for the changed behavior.
+            - Update canonical documentation in the same change whenever behavior, APIs, data flow, architecture, security, tests or deployment behavior changes.
+            - Do not deploy, publish, merge, alter GitHub secrets or mutate production data.
+            - Run relevant local verification including `npm run typecheck` and fix failures caused by your change.
             - Do not commit or push. Leave the working tree with the completed implementation.
 
-            Finish with a concise implementation/test summary.
+            Finish with a concise implementation and test summary.
 
       - name: Remove transient context
         if: always()
@@ -191,9 +190,9 @@ jobs:
         run: |
           git add -A
           git commit -m "work: implement issue #${ISSUE_NUMBER}"
-          git push -u origin "HEAD:$BRANCH"
+          git push --force-with-lease -u origin "HEAD:$BRANCH"
 
-      - name: Create or update pull request into develop
+      - name: Create or update pull request into main
         if: steps.issue.outputs.eligible == 'true' && env.OPENAI_KEY != ''
         id: pr
         uses: actions/github-script@v7
@@ -207,7 +206,7 @@ jobs:
           script: |
             const issueNumber = Number(process.env.ISSUE_NUMBER);
             const head = `${context.repo.owner}:${process.env.BRANCH}`;
-            const existing = await github.rest.pulls.list({owner: context.repo.owner, repo: context.repo.repo, head, base: 'develop', state: 'open'});
+            const existing = await github.rest.pulls.list({owner: context.repo.owner, repo: context.repo.repo, head, base: 'main', state: 'open'});
             const body = [
               `Work-Managed-Issue: #${issueNumber}`,
               '',
@@ -216,19 +215,19 @@ jobs:
               '## Work developer summary',
               process.env.CODEX_SUMMARY || 'Implementation completed by automated Work developer run.',
               '',
-              '## Required development gates',
-              '- [ ] Typecheck/build/local Playwright CI',
+              '## Required gates',
+              '- [ ] Orderfly CI',
+              '- [ ] Playwright',
               '- [ ] Independent code review',
-              '- [ ] PO acceptance',
-              '- [ ] Merge to develop',
-              '- [ ] Staging/live Playwright verification before Done',
               '- [ ] Documentation updated',
+              '- [ ] PO acceptance',
+              '- [ ] Live verification after merge/deploy',
             ].join('\n');
             let pr;
             if (existing.data.length) {
               pr = (await github.rest.pulls.update({owner: context.repo.owner, repo: context.repo.repo, pull_number: existing.data[0].number, title: `Work #${issueNumber}: ${process.env.CLEAN_TITLE}`, body})).data;
             } else {
-              pr = (await github.rest.pulls.create({owner: context.repo.owner, repo: context.repo.repo, head: process.env.BRANCH, base: 'develop', title: `Work #${issueNumber}: ${process.env.CLEAN_TITLE}`, body})).data;
+              pr = (await github.rest.pulls.create({owner: context.repo.owner, repo: context.repo.repo, head: process.env.BRANCH, base: 'main', title: `Work #${issueNumber}: ${process.env.CLEAN_TITLE}`, body})).data;
             }
             core.setOutput('number', String(pr.number));
             core.setOutput('url', pr.html_url);
@@ -245,7 +244,7 @@ jobs:
           script: |
             const issueNumber = Number(process.env.ISSUE_NUMBER);
             await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[IN REVIEW] ${process.env.CLEAN_TITLE}`});
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_IMPLEMENTATION_COMPLETE: PR created/updated: ${process.env.PR_URL}. Orderfly CI and independent code review are now the development gates.`});
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_IMPLEMENTATION_COMPLETE: PR created/updated: ${process.env.PR_URL}. Orderfly CI, Playwright and independent code review are now the release gates.`});
 
       - name: Mark failed implementation as blocked
         if: failure() && steps.issue.outputs.eligible == 'true' && env.OPENAI_KEY != ''
