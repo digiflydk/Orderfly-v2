@@ -60,6 +60,11 @@ jobs:
               issue_number: issueNumber,
               per_page: 100,
             });
+            const relevant = comments
+              .filter(c => ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(c.author_association) || c.user?.login === 'github-actions[bot]')
+              .slice(-20)
+              .map(c => `### Comment by ${c.user?.login || 'unknown'}\n${c.body || ''}`)
+              .join('\n\n');
             fs.writeFileSync('.work-context.md', [
               '# Orderfly Work implementation context',
               `Repository: ${context.repo.owner}/${context.repo.repo}`,
@@ -69,8 +74,8 @@ jobs:
               '## Product specification / acceptance criteria',
               issue.body || '',
               '',
-              '## Latest issue comments / CI or review feedback',
-              comments.slice(-20).map(c => `### Comment by ${c.user?.login || 'unknown'}\n${c.body || ''}`).join('\n\n') || 'No comments yet.',
+              '## Trusted latest issue / CI / review feedback',
+              relevant || 'No trusted comments yet.',
             ].join('\n'));
 
       - name: Stop when issue is not eligible
@@ -145,11 +150,12 @@ jobs:
         with:
           openai-api-key: ${{ secrets.OPENAI_API_KEY }}
           permission-profile: ":workspace"
+          allow-bots: true
           prompt: |
             You are the Work developer/implementer for Orderfly.
             Read `.work-context.md`, the relevant files under `docs/`, and `AGENTS.md` if it exists in this checkout before changing code.
 
-            Implement exactly the linked GitHub issue and every acceptance criterion. Treat the latest issue comments as CI/code-review feedback that must be resolved when applicable.
+            Implement exactly the linked GitHub issue and every acceptance criterion. Treat the trusted latest issue comments as CI/code-review feedback that must be resolved when applicable.
 
             Orderfly engineering boundaries:
             - Feature work targets `develop`; `main` is the production release branch.
