@@ -71,7 +71,7 @@ jobs:
               owner: context.repo.owner,
               repo: context.repo.repo,
               issue_number: issueNumber,
-              body: `${blocked ? 'WORK_AUTOMATION_BLOCKED' : 'WORK_AUTO_RETRY:'} Orderfly CI failed. Run: ${process.env.RUN_URL}\n\n<details><summary>Failed CI excerpt</summary>\n\n\`\`\`text\n${excerpt}\n\`\`\`\n</details>`,
+              body: `${blocked ? 'WORK_AUTOMATION_BLOCKED' : 'WORK_AUTO_RETRY:'} Orderfly CI/Playwright failed. Run: ${process.env.RUN_URL}\n\n<details><summary>Failed CI excerpt</summary>\n\n\`\`\`text\n${excerpt}\n\`\`\`\n</details>`,
             });
             await github.rest.issues.update({
               owner: context.repo.owner,
@@ -126,7 +126,7 @@ jobs:
               .map(c => c.body || '')
               .join('\n\n---\n\n');
             fs.writeFileSync('.review-context.md', [
-              '# Independent Orderfly code-review context',
+              '# Independent Work code-review context',
               `Repository: ${context.repo.owner}/${context.repo.repo}`,
               `PR: #${prNumber}`,
               `Issue: #${issueNumber}`,
@@ -178,11 +178,11 @@ jobs:
               "additionalProperties": false
             }
           prompt: |
-            Act as an independent senior Orderfly code reviewer. Read `.review-context.md`, repository documentation and `AGENTS.md` if present. Review the PR merge result against `origin/develop` and every acceptance criterion in the linked issue.
+            Act as an independent senior code reviewer for Orderfly. Read `.review-context.md`, `AGENTS.md`, and the repository documentation. Review the PR merge result against `origin/main` and every acceptance criterion in the linked issue.
 
-            Orderfly CI has already typechecked, built and run local Playwright tests before this review. Do not assume that means the implementation is correct.
+            Orderfly CI and Playwright have already passed before this review. Do not assume that means the implementation is correct.
 
-            Check especially for incomplete acceptance criteria, Firebase project mix-ups, authentication/tenant/brand isolation regressions, unsafe server/client credential handling, data-flow errors, missing edge cases, weak tests, documentation drift and production/deployment risks.
+            Check especially for incomplete acceptance criteria, Firebase project mix-ups, authentication/tenant/brand isolation regressions, unsafe credential handling, data-flow errors, missing edge cases, weak tests, documentation drift and production/deployment risks.
 
             Return `approve` only when there are no material findings that should block PO acceptance. Otherwise return `changes_requested` with concrete findings. Do not modify files.
 
@@ -216,7 +216,7 @@ jobs:
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: issueNumber,
-                body: `WORK_READY_FOR_PO: Orderfly CI and independent code review are green for PR #${prNumber}. Awaiting PO acceptance and merge to develop. Staging/live Playwright is required before the issue can become Done.`,
+                body: `WORK_READY_FOR_PO: Orderfly CI, Playwright and independent code review are green for PR #${prNumber}. Documentation is included in the implementation. Awaiting PO acceptance.`,
               });
               return;
             }
