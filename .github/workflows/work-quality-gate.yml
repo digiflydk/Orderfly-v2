@@ -12,7 +12,7 @@ on:
         type: number
 
 permissions:
-  actions: read
+  actions: write
   contents: read
   issues: write
   pull-requests: write
@@ -79,6 +79,15 @@ jobs:
               issue_number: issueNumber,
               title: `${blocked ? '[BLOCKED]' : '[READY FOR DEV]'} ${process.env.CLEAN_TITLE}`,
             });
+            if (!blocked) {
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'work-developer.yml',
+                ref: 'main',
+                inputs: { issue_number: String(issueNumber) },
+              });
+            }
 
   review-and-handoff:
     if: (github.event_name == 'workflow_dispatch') || (github.event.workflow_run.conclusion == 'success' && github.event.workflow_run.pull_requests[0].number != null)
@@ -111,6 +120,11 @@ jobs:
             const issueNumber = Number(match[1]);
             const { data: issue } = await github.rest.issues.get({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber});
             const { data: comments } = await github.rest.issues.listComments({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, per_page: 100});
+            const trustedComments = comments
+              .filter(c => ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(c.author_association) || c.user?.login === 'github-actions[bot]')
+              .slice(-20)
+              .map(c => c.body || '')
+              .join('\n\n---\n\n');
             fs.writeFileSync('.review-context.md', [
               '# Independent Orderfly code-review context',
               `Repository: ${context.repo.owner}/${context.repo.repo}`,
@@ -123,8 +137,8 @@ jobs:
               '## PR description',
               pr.body || '',
               '',
-              '## Latest issue feedback',
-              comments.slice(-20).map(c => c.body || '').join('\n\n---\n\n') || 'No comments.',
+              '## Trusted latest issue feedback',
+              trustedComments || 'No trusted comments.',
             ].join('\n'));
             core.setOutput('managed', 'true');
             core.setOutput('issue-number', String(issueNumber));
@@ -221,6 +235,15 @@ jobs:
               issue_number: issueNumber,
               title: `${blocked ? '[BLOCKED]' : '[READY FOR DEV]'} ${process.env.CLEAN_TITLE}`,
             });
+            if (!blocked) {
+              await github.rest.actions.createWorkflowDispatch({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                workflow_id: 'work-developer.yml',
+                ref: 'main',
+                inputs: { issue_number: String(issueNumber) },
+              });
+            }
 
       - name: Remove transient review context
         if: always()
