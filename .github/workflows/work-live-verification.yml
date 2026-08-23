@@ -1,8 +1,8 @@
-name: Work Live Verification
+name: Work Staging Live Gate
 
 on:
   pull_request_target:
-    branches: [main]
+    branches: [develop]
     types: [closed]
 
 permissions:
@@ -11,7 +11,7 @@ permissions:
   pull-requests: read
 
 env:
-  LIVE_URL: ${{ vars.ORDERFLY_LIVE_URL || 'https://orderfly.dk' }}
+  STAGING_URL: ${{ vars.ORDERFLY_STAGING_URL }}
 
 jobs:
   live-verify:
@@ -37,32 +37,46 @@ jobs:
             core.setOutput('managed', 'true');
             core.setOutput('issue-number', String(issueNumber));
             core.setOutput('clean-title', clean);
-            await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[AWAITING LIVE VERIFY] ${clean}`});
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_LIVE_VERIFY: PO-approved PR #${pr.number} was merged to main. Waiting for the live deployment and running read-only Playwright verification before Done.`});
+            await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[STAGING VERIFY] ${clean}`});
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_STAGING_VERIFY: PO-approved PR #${pr.number} was merged to develop. Waiting for the configured develop staging endpoint and running read-only Playwright verification before Done.`});
 
-      - name: Check out merged main
-        if: steps.context.outputs.managed == 'true'
+      - name: Require staging URL
+        if: steps.context.outputs.managed == 'true' && env.STAGING_URL == ''
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ steps.context.outputs.issue-number }}
+          CLEAN_TITLE: ${{ steps.context.outputs.clean-title }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[BLOCKED] ${process.env.CLEAN_TITLE}`});
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: 'WORK_AUTOMATION_BLOCKED: Repository variable `ORDERFLY_STAGING_URL` is missing. Configure it with the live develop/App Hosting staging URL, then re-run this staging gate.'});
+            core.setFailed('ORDERFLY_STAGING_URL is not configured.');
+
+      - name: Check out merged develop
+        if: steps.context.outputs.managed == 'true' && env.STAGING_URL != ''
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: develop
 
       - name: Setup Node.js
-        if: steps.context.outputs.managed == 'true'
+        if: steps.context.outputs.managed == 'true' && env.STAGING_URL != ''
         uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
 
       - name: Install dependencies and Chromium
-        if: steps.context.outputs.managed == 'true'
+        if: steps.context.outputs.managed == 'true' && env.STAGING_URL != ''
         run: |
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Wait for live endpoint
-        if: steps.context.outputs.managed == 'true'
+      - name: Wait for staging endpoint
+        if: steps.context.outputs.managed == 'true' && env.STAGING_URL != ''
         env:
-          URL: ${{ env.LIVE_URL }}
+          URL: ${{ env.STAGING_URL }}
         run: |
           ok=0
           for attempt in $(seq 1 24); do
@@ -75,82 +89,82 @@ jobs:
           done
           test "$ok" = "1"
 
-      - name: Create read-only live Playwright checks
-        if: steps.context.outputs.managed == 'true'
+      - name: Create read-only staging Playwright checks
+        if: steps.context.outputs.managed == 'true' && env.STAGING_URL != ''
         run: |
-          cat > tests/__work_live_smoke.spec.ts <<'EOF'
+          cat > tests/__work_staging_smoke.spec.ts <<'EOF'
           import { test, expect } from '@playwright/test';
 
-          const base = process.env.ORDERFLY_LIVE_URL!;
+          const base = process.env.ORDERFLY_STAGING_URL!;
 
-          test('live landing page is healthy', async ({ page }) => {
+          test('staging landing page is healthy', async ({ page }) => {
             const pageErrors: string[] = [];
             page.on('pageerror', error => pageErrors.push(error.message));
             const response = await page.goto(base, { waitUntil: 'domcontentloaded' });
-            expect(response, 'live navigation returned no response').not.toBeNull();
+            expect(response, 'staging navigation returned no response').not.toBeNull();
             expect(response!.status()).toBeLessThan(500);
             await expect(page.locator('body')).toBeVisible();
             expect(pageErrors, `browser page errors: ${pageErrors.join(' | ')}`).toEqual([]);
           });
 
-          test('live public brand surface works on desktop', async ({ page }) => {
+          test('staging public brand surface works on desktop', async ({ page }) => {
             const response = await page.goto(new URL('/m3pizza', base).toString(), { waitUntil: 'domcontentloaded' });
             expect(response).not.toBeNull();
             expect(response!.status()).toBeLessThan(500);
             await expect(page.locator('body')).toBeVisible();
           });
 
-          test('live public brand surface has no horizontal overflow on mobile', async ({ page }) => {
+          test('staging public brand surface has no horizontal overflow on mobile', async ({ page }) => {
             await page.setViewportSize({ width: 375, height: 667 });
             await page.goto(new URL('/m3pizza', base).toString(), { waitUntil: 'domcontentloaded' });
             const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
             expect(overflow).toBeFalsy();
           });
           EOF
-          cat > /tmp/playwright.work-live.config.ts <<'EOF'
+          cat > /tmp/playwright.work-staging.config.ts <<'EOF'
           import { defineConfig, devices } from '@playwright/test';
           export default defineConfig({
             testDir: process.cwd() + '/tests',
-            testMatch: '__work_live_smoke.spec.ts',
+            testMatch: '__work_staging_smoke.spec.ts',
             retries: 2,
             use: { trace: 'on-first-retry' },
-            projects: [{ name: 'live-chromium', use: { ...devices['Desktop Chrome'] } }],
+            projects: [{ name: 'staging-chromium', use: { ...devices['Desktop Chrome'] } }],
           });
           EOF
 
-      - name: Run Playwright against live Orderfly
-        if: steps.context.outputs.managed == 'true'
+      - name: Run Playwright against Orderfly staging
+        if: steps.context.outputs.managed == 'true' && env.STAGING_URL != ''
         env:
-          ORDERFLY_LIVE_URL: ${{ env.LIVE_URL }}
-        run: npx playwright test --config=/tmp/playwright.work-live.config.ts
+          ORDERFLY_STAGING_URL: ${{ env.STAGING_URL }}
+        run: npx playwright test --config=/tmp/playwright.work-staging.config.ts
 
-      - name: Upload live Playwright diagnostics
+      - name: Upload staging Playwright diagnostics
         if: always() && steps.context.outputs.managed == 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: orderfly-live-playwright-${{ github.run_attempt }}
+          name: orderfly-staging-playwright-${{ github.run_attempt }}
           path: |
             playwright-report/
             test-results/
           if-no-files-found: ignore
           retention-days: 14
 
-      - name: Mark issue Done after live verification passes
+      - name: Mark issue Done after staging verification passes
         if: success() && steps.context.outputs.managed == 'true'
         uses: actions/github-script@v7
         env:
           ISSUE_NUMBER: ${{ steps.context.outputs.issue-number }}
           CLEAN_TITLE: ${{ steps.context.outputs.clean-title }}
-          LIVE_URL: ${{ env.LIVE_URL }}
+          STAGING_URL: ${{ env.STAGING_URL }}
         with:
           github-token: ${{ github.token }}
           script: |
             const issueNumber = Number(process.env.ISSUE_NUMBER);
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_DONE: PO acceptance, merge to main and read-only Playwright live verification passed on ${process.env.LIVE_URL}. Development task is Done.`});
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_DONE: PO acceptance, merge to develop and read-only Playwright staging verification passed on ${process.env.STAGING_URL}. Development task is Done. Promotion from develop to main remains a separate production release decision.`});
             await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[DONE] ${process.env.CLEAN_TITLE}`, state: 'closed', state_reason: 'completed'});
 
-      - name: Mark live verification failure as blocked
-        if: failure() && steps.context.outputs.managed == 'true'
+      - name: Mark staging verification failure as blocked
+        if: failure() && steps.context.outputs.managed == 'true' && env.STAGING_URL != ''
         uses: actions/github-script@v7
         env:
           ISSUE_NUMBER: ${{ steps.context.outputs.issue-number }}
@@ -161,4 +175,4 @@ jobs:
           script: |
             const issueNumber = Number(process.env.ISSUE_NUMBER);
             await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[BLOCKED] ${process.env.CLEAN_TITLE}`});
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_LIVE_BLOCKED: Post-merge Playwright live verification failed. Run: ${process.env.RUN_URL}. The issue is not Done until live verification is green.`});
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_STAGING_BLOCKED: Post-merge Playwright verification on develop staging failed. Run: ${process.env.RUN_URL}. Do not promote this change to main until the staging issue is resolved.`});
