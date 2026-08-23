@@ -3,9 +3,10 @@
 ## Repository and release boundaries
 
 - GitHub is the source of truth.
-- Work feature branches start from `main` and open pull requests into `main`, matching the Esmeralda development process.
+- Product feature branches start from the current `develop` branch and open pull requests into `develop`.
+- `develop` is the staging integration branch. `main` is the production release branch.
 - Work must never merge its own pull request or bypass PO acceptance.
-- Production deployment is a separate post-merge step and must be followed by live verification before an issue is Done.
+- Promotion from `develop` to `main` is a separate production release decision after staging verification.
 
 ## Firebase project separation
 
@@ -27,14 +28,15 @@
 - Run the relevant Playwright tests for changed user flows.
 - Keep browser tests meaningful. Do not skip, loosen or delete assertions merely to make CI green.
 - A changed critical business flow needs both successful behavior and important rejection/edge-case coverage.
-- Post-merge live verification is read-only unless an issue defines an explicitly controlled and reversible write test.
+- Post-merge staging verification is read-only unless an issue defines an explicitly controlled and reversible write test in a non-production environment.
 - Unattended tests must not mutate production data.
 
 ## Documentation
 
 - Update the relevant files under `docs/` in the same pull request whenever behavior, architecture, APIs, data flow, deployment, operations or testing changes.
-- Keep the PM -> PO -> Work -> CI/Playwright -> code review -> PO acceptance -> merge -> live verification -> Done workflow accurate.
+- Keep the PM -> PO -> Work -> CI/Playwright -> code review -> PO acceptance -> merge to develop -> staging verification -> Done workflow accurate.
+- Keep the separate `develop` -> `main` production release process accurate.
 
 ## Work agent boundary
 
-The Work implementation agent may edit the checked-out repository, add tests and update documentation. It must not merge its own pull request, deploy production, change GitHub secrets or mutate production data. Independent CI/code review, PO acceptance and live verification are separate gates.
+The Work implementation agent may edit the checked-out repository, add tests and update documentation. It must not merge its own pull request, deploy production, change GitHub secrets or mutate production data. Independent CI/code review, PO acceptance and staging verification are separate gates.
