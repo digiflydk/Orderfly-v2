@@ -56,9 +56,14 @@ test('checked-in workflows implement MANUAL_NO_API_MODE and deployment-aware fin
   assert.match(quality, /MANUAL_CODE_REVIEW/);
   assert.match(quality, /pulls\.merge/);
   assert.match(quality, /Persistent release lock/);
-  assert.match(quality, /mergedButUnverified/);
-  assert.match(quality, /RELEASE_MERGED/);
+  assert.match(quality, /closedPulls/);
+  assert.match(quality, /actualMergedPr/);
+  assert.match(quality, /full\.merged/);
+  assert.match(quality, /merge_commit_sha/);
+  assert.match(quality, /hasVerifiedLive/);
   assert.match(quality, /LIVE_VERIFICATION_PASSED/);
+  assert.match(quality, /body\.includes\(`Merge-SHA: \$\{mergeSha\}`\)/);
+  assert.match(quality, /core\.setOutput\('merge-sha', mergeSha\)/);
   assert.match(quality, /Firebase App Hosting automatic rollout/);
   assert.doesNotMatch(quality, /\[DONE\]/);
 
