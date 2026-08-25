@@ -22,6 +22,10 @@ Canonical lifecycle:
 
 No OpenAI API credits or API-based implementation/review runner is required for this process.
 
+## One-time #20 bootstrap
+
+The release gate introduced by issue #20 cannot execute from `main` before the PR that installs it has been merged. Therefore PR #21 is a one-time bootstrap exception: after its exact current head has green Orderfly CI and clean current-head code review, it may be merged directly through the trusted GitHub merge operation without PO approval. The exact returned merge SHA must then continue through the same App Hosting deployment-evidence and post-deploy live-verification gates described below. This exception applies only to installing #20; subsequent manual Work releases use the checked-in default-branch release gate.
+
 ## Sequence
 
 1. PO creates a trusted issue with complete scope, acceptance criteria, tests and documentation impact, marked `[READY FOR MANUAL WORK]`.
@@ -37,7 +41,7 @@ No OpenAI API credits or API-based implementation/review runner is required for 
 6. Any blocking finding requires a new commit, new CI and new clean review evidence for the new head.
 7. When engineering evidence is green, Work sets `[READY FOR RELEASE]`. This is an engineering handoff, not PO approval.
 8. `.github/workflows/work-quality-gate.yml` revalidates current `main`, the exact PR head, successful CI and the latest exact-head review marker immediately before squash merge.
-9. The gate refuses another merge while any other issue is `[DEPLOYING]` or `[LIVE VERIFY]`, preserving a persistent release lock across the App Hosting handoff.
+9. The gate refuses another merge while any other trusted issue is `[DEPLOYING]` or `[LIVE VERIFY]`, preserving a persistent release lock across the App Hosting handoff.
 10. A successful merge records the exact merge SHA and sets `[DEPLOYING]`.
 11. Firebase App Hosting automatically rolls out the commit from the configured live `main` branch. Merge alone is never deployment proof.
 12. A trusted `APP_HOSTING_ROLLOUT_CONFIRMED` issue comment must identify the exact merged commit, rollout ID, timestamp, hosting project, data project and live URL.
