@@ -9,7 +9,7 @@
 - After implementation, CI and independent/manual review are green, set the issue to `[READY FOR RELEASE]`. There is no routine PO acceptance stop.
 - The trusted default-branch release gate revalidates the current PR head, CI and exact-head review evidence immediately before merge.
 - Production deployment is separate from merge. Firebase App Hosting must complete the rollout for the exact merge SHA before live verification starts.
-- Keep only one merged but not successfully live-verified release active at a time. `[DEPLOYING]`, `[LIVE VERIFY]`, and a post-merge `[BLOCKED]` release without `LIVE_VERIFICATION_PASSED` all retain the persistent release lock so `main` cannot advance past unverified deployment evidence.
+- Keep only one merged but not successfully live-verified release active at a time. `[DEPLOYING]` and `[LIVE VERIFY]` hold the lock directly. For a trusted `[BLOCKED]` or post-merge `[READY FOR RELEASE]` issue, the gate derives lock state from the actual linked GitHub PR: if that PR is really merged and no trusted `LIVE_VERIFICATION_PASSED` matches its merge SHA, the release lock remains even if post-merge bookkeeping failed. A genuinely pre-merge blocked issue has no merged linked PR and does not hold the lock.
 - `[DONE]` is allowed only after deployment-aware live verification and any required controlled live verification pass.
 
 Canonical lifecycle:
