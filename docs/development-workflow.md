@@ -41,13 +41,13 @@ The release gate introduced by issue #20 cannot execute from `main` before the P
 6. Any blocking finding requires a new commit, new CI and new clean review evidence for the new head.
 7. When engineering evidence is green, Work sets `[READY FOR RELEASE]`. This is an engineering handoff, not PO approval.
 8. `.github/workflows/work-quality-gate.yml` revalidates current `main`, the exact PR head, successful CI and the latest exact-head review marker immediately before squash merge.
-9. The gate refuses another merge while any other trusted issue is `[DEPLOYING]` or `[LIVE VERIFY]`, preserving a persistent release lock across the App Hosting handoff.
+9. The gate refuses another merge while any other trusted issue is `[DEPLOYING]` or `[LIVE VERIFY]`. A post-merge `[BLOCKED]` issue also retains the release lock when trusted `RELEASE_MERGED` evidence exists without a later trusted `LIVE_VERIFICATION_PASSED`. Pre-merge blocked work does not hold this lock.
 10. A successful merge records the exact merge SHA and sets `[DEPLOYING]`.
 11. Firebase App Hosting automatically rolls out the commit from the configured live `main` branch. Merge alone is never deployment proof.
 12. A trusted `APP_HOSTING_ROLLOUT_CONFIRMED` issue comment must identify the exact merged commit, rollout ID, timestamp, hosting project, data project and live URL.
 13. `.github/workflows/work-deployment-evidence.yml` validates that evidence and only then sets `[LIVE VERIFY]` and dispatches live Playwright.
-14. `.github/workflows/work-live-verification.yml` verifies the same merge SHA and deployment evidence, checks out that exact SHA and runs the checked-in production Playwright configuration.
-15. Green generic live verification closes issues declaring `Controlled-Live-Verification: none` as `[DONE]`. Issues declaring `required` remain `[LIVE VERIFY]` until their explicit controlled procedure is complete.
+14. `.github/workflows/work-live-verification.yml` verifies the same merge SHA and deployment evidence, re-reads `Controlled-Live-Verification` from trusted `RELEASE_MERGED` evidence, requires the dispatch value to match it exactly, checks out the exact deployed SHA and runs the checked-in production Playwright configuration.
+15. Green generic live verification closes issues whose persisted controlled-live mode is `none` as `[DONE]`. Issues whose persisted mode is `required` remain `[LIVE VERIFY]` until their explicit controlled procedure is complete.
 
 ## Firebase safety boundary
 
@@ -58,11 +58,11 @@ The release gate introduced by issue #20 cannot execute from `main` before the P
 
 ## Failure handling
 
-- CI/review/current-head mismatch: `[BLOCKED]` with exact evidence, then fix and reverify.
+- CI/review/current-head mismatch before merge: `[BLOCKED]` with exact evidence, then fix and reverify. It does not retain the post-merge release lock.
 - Stale or non-mergeable PR: `[BLOCKED]`; rebase and rerun CI/review.
-- App Hosting rollout failure: stay `[DEPLOYING]` or use `[BLOCKED]` with actual rollout evidence. Do not pretend merge equals deployment.
+- App Hosting rollout failure after merge: `[BLOCKED]` with actual rollout evidence or remain `[DEPLOYING]`; either way the merged release retains the persistent lock until recovery/live success.
 - Invalid deployment evidence: it is rejected and live verification does not start.
-- Production Playwright failure: `[BLOCKED]`; the issue is not Done.
+- Production Playwright failure after merge: `[BLOCKED]`; the issue is not Done and retains the release lock until a successful recovery/live verification records `LIVE_VERIFICATION_PASSED`.
 - Product ambiguity or conflicting acceptance evidence returns to PO for a product decision, not a routine release approval.
 
 ## Required checks
