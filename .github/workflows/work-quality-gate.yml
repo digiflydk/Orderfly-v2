@@ -47,8 +47,8 @@ jobs:
               if (!issue.title.startsWith('[READY FOR RELEASE]')) throw new Error(`Issue #${issueNumber} is not [READY FOR RELEASE].`);
               if (!contract.isTrustedAssociation(issue.author_association)) throw new Error(`Issue #${issueNumber} is not trusted.`);
 
-              const openIssues = await github.paginate(github.rest.issues.listForRepo, { owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100 });
-              const trustedReleaseIssues = openIssues.filter((candidate) =>
+              const allIssues = await github.paginate(github.rest.issues.listForRepo, { owner: context.repo.owner, repo: context.repo.repo, state: 'all', per_page: 100 });
+              const trustedReleaseIssues = allIssues.filter((candidate) =>
                 !candidate.pull_request &&
                 contract.isTrustedAssociation(candidate.author_association));
               let activeRelease = trustedReleaseIssues.find((candidate) =>
@@ -160,7 +160,7 @@ jobs:
               if (newMain !== mergeSha) throw new Error(`main does not point to returned merge SHA ${mergeSha}.`);
 
               const cleanTitle = contract.cleanIssueTitle(issue.title);
-              await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[DEPLOYING] ${cleanTitle}` });
+              await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[DEPLOYING] ${cleanTitle}`, state: 'open' });
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
@@ -200,7 +200,7 @@ jobs:
             if (!Number.isInteger(issueNumber) || issueNumber < 1) return;
             const issue = (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber })).data;
             const clean = String(issue.title || '').replace(/^\[[^\]]+\]\s*/, '');
-            await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[BLOCKED] ${clean}` });
+            await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[BLOCKED] ${clean}`, state: 'open' });
             const mergeLine = /^[0-9a-f]{40}$/i.test(process.env.MERGE_SHA || '') ? `\nMerge-SHA: ${process.env.MERGE_SHA}` : '';
             await github.rest.issues.createComment({
               owner: context.repo.owner,
