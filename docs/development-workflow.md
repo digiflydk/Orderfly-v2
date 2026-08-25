@@ -1,80 +1,80 @@
 # PM / PO / Work development workflow
 
-Last reviewed: 2026-08-23
+Last reviewed: 2026-08-25
 
 ## Principle
 
-Orderfly uses the same product-development lifecycle as Esmeralda. The repositories may run different technical test commands because their stacks differ, but the issue states, ownership, Work responsibilities, PO gate and definition of Done are the same.
+Orderfly uses the same engineering/release lifecycle as Esmeralda. Product requirements are defined before implementation; green engineering work does not stop for routine PO acceptance.
+
+Canonical lifecycle:
+
+`[READY FOR MANUAL WORK] -> [IN DEVELOPMENT] -> [IN REVIEW] -> [READY FOR RELEASE] -> [DEPLOYING] -> [LIVE VERIFY] -> [DONE]`
+
+`[BLOCKED]` is reserved for genuine CI, review, merge, deployment or live-verification failures.
 
 ## Roles
 
-- **PM:** defines business goal, priority and product decisions.
-- **PO:** converts requests and bugs into GitHub issues with scope, priority, acceptance criteria, dependencies, test requirements and documentation impact. PO accepts or rejects completed implementation.
-- **Work:** automated implementation agent. It writes code, tests and documentation on a feature branch but cannot merge or declare the issue Done.
+- **PM:** defines the business goal and priority.
+- **PO:** turns the goal into complete acceptance criteria and resolves product ambiguity or conflicting evidence.
+- **Manual Work:** implements code, tests and documentation on a branch from current `main`.
+- **CI / independent review:** prove the current PR head is technically ready.
+- **Trusted release workflows:** revalidate evidence, merge, validate App Hosting deployment evidence, run live verification and finalize.
 
-GitHub issues, pull requests, CI evidence and repository documentation are the operational source of truth.
+No OpenAI API credits or API-based implementation/review runner is required for this process.
 
-## Shared state machine
+## Sequence
 
-`[READY FOR DEV] -> [IN DEVELOPMENT] -> [IN REVIEW] -> [READY FOR PO] -> [AWAITING LIVE VERIFY] -> [DONE]`
+1. PO creates a trusted issue with complete scope, acceptance criteria, tests and documentation impact, marked `[READY FOR MANUAL WORK]`.
+2. Manual Work branches from current `main`, sets `[IN DEVELOPMENT]`, implements the issue and updates relevant documentation.
+3. The PR targets `main` and contains exactly one `Manual-Work-Issue: #N` marker plus `Controlled-Live-Verification: none|required`.
+4. `Orderfly CI` runs the release contract, TypeScript typecheck, production build through Playwright web-server startup and browser tests against the current PR head.
+5. Independent/manual review records on the PR:
 
-`[BLOCKED]` is used when credentials, repeated CI/review failures, deployment problems or another external dependency requires intervention.
+   `MANUAL_CODE_REVIEW: CLEAN`
 
-## Automated sequence
+   `Reviewed-Head: <40-character SHA>`
 
-1. PO creates a trusted, complete issue and prefixes it `[READY FOR DEV]`.
-2. `.github/workflows/work-developer.yml` checks out `main`, creates or resumes `work-issue-<number>` and runs the Work coding agent.
-3. Work implements only the issue scope and acceptance criteria, adds or updates tests, runs local verification and updates relevant documentation. Work may not deploy, merge, change secrets or mutate production data.
-4. Work pushes its branch and creates or updates one PR into `main` with `Work-Managed-Issue: #<number>` in the PR body.
-5. Work explicitly dispatches the existing `.github/workflows/ui-tests.yml` Playwright workflow on the Work branch. Explicit dispatch is used because bot-authored GitHub events do not recursively start ordinary workflows with the same `GITHUB_TOKEN`.
-6. Playwright CI failure records evidence, returns the issue to `[READY FOR DEV]` and explicitly dispatches Work again. Automatic retries are capped; repeated failures become `[BLOCKED]`.
-7. Green Playwright CI triggers `.github/workflows/work-quality-gate.yml`, which resolves the linked Work PR and runs a separate read-only Codex code review against the issue acceptance criteria and the diff to `main`.
-8. Blocking review findings are written back to the issue and Work is explicitly dispatched for a repair iteration. A clean review changes the issue to `[READY FOR PO]`.
-9. PO inspects the issue, PR, diff, Playwright evidence, review findings, documentation and unresolved risks. If acceptance criteria are not proven, PO sends the task back to `[READY FOR DEV]` with concrete findings.
-10. When PO accepts the implementation, the PR is merged to `main` and the issue becomes `[AWAITING LIVE VERIFY]`.
-11. `.github/workflows/work-live-verification.yml` runs read-only Playwright against the live Orderfly environment and records evidence on the issue.
-12. PO marks `[DONE]` only when the approved change is live and all issue-specific live acceptance criteria are satisfied. A green generic smoke test is evidence, not automatic permission for Work to close the issue.
+6. Any blocking finding requires a new commit, new CI and new clean review evidence for the new head.
+7. When engineering evidence is green, Work sets `[READY FOR RELEASE]`. This is an engineering handoff, not PO approval.
+8. `.github/workflows/work-quality-gate.yml` revalidates current `main`, the exact PR head, successful CI and the latest exact-head review marker immediately before squash merge.
+9. The gate refuses another merge while any other issue is `[DEPLOYING]` or `[LIVE VERIFY]`, preserving a persistent release lock across the App Hosting handoff.
+10. A successful merge records the exact merge SHA and sets `[DEPLOYING]`.
+11. Firebase App Hosting automatically rolls out the commit from the configured live `main` branch. Merge alone is never deployment proof.
+12. A trusted `APP_HOSTING_ROLLOUT_CONFIRMED` issue comment must identify the exact merged commit, rollout ID, timestamp, hosting project, data project and live URL.
+13. `.github/workflows/work-deployment-evidence.yml` validates that evidence and only then sets `[LIVE VERIFY]` and dispatches live Playwright.
+14. `.github/workflows/work-live-verification.yml` verifies the same merge SHA and deployment evidence, checks out that exact SHA and runs the checked-in production Playwright configuration.
+15. Green generic live verification closes issues declaring `Controlled-Live-Verification: none` as `[DONE]`. Issues declaring `required` remain `[LIVE VERIFY]` until their explicit controlled procedure is complete.
 
-Only issue comments from repository owners/members/collaborators and `github-actions[bot]` are included in coding/review context. This prevents arbitrary comments from becoming agent instructions while preserving CI and review feedback.
+## Firebase safety boundary
 
-## Required repository configuration
-
-### Secret
-
-`OPENAI_API_KEY`
-
-Used by the official OpenAI Codex GitHub Action for Work implementation and independent review. Never place the value in files, issues, pull requests or logs.
-
-### Optional live URL variable
-
-`ORDERFLY_LIVE_URL`
-
-If present, post-merge live verification uses this URL. Otherwise the workflow defaults to `https://orderfly.dk`.
-
-## Test gates
-
-Before `[READY FOR PO]`:
-
-- TypeScript typecheck in the Work implementation run
-- Existing Orderfly Playwright workflow on the Work branch
-- Independent code review against `main`
-- Required documentation changes
-
-Before `[DONE]`:
-
-- PO acceptance
-- Merge to `main`
-- Deployment evidence for the approved change
-- Read-only Playwright live verification
-- Any additional controlled live scenario explicitly required by the issue
+- App Hosting project: `orderfly-v21-10334086-b3076`.
+- Production data project: `orderfly-39325`.
+- The hosting and data projects are deliberately different. Release evidence must preserve both identities.
+- Never alter the data-project client/admin configuration merely to make an App Hosting rollout pass.
 
 ## Failure handling
 
-- **Implementation failure:** `[BLOCKED]` with Actions run link.
-- **Playwright failure:** return to `[READY FOR DEV]` with failed evidence and automatic repair dispatch, capped after repeated failures.
-- **Code-review failure:** return to `[READY FOR DEV]` with findings and automatic repair dispatch, capped after repeated failures.
-- **Missing OpenAI secret:** `[BLOCKED]`.
-- **PO rejection:** `[READY FOR DEV]` with PO findings.
-- **Live verification failure after merge:** `[BLOCKED]`; the issue is not Done until live verification is green.
+- CI/review/current-head mismatch: `[BLOCKED]` with exact evidence, then fix and reverify.
+- Stale or non-mergeable PR: `[BLOCKED]`; rebase and rerun CI/review.
+- App Hosting rollout failure: stay `[DEPLOYING]` or use `[BLOCKED]` with actual rollout evidence. Do not pretend merge equals deployment.
+- Invalid deployment evidence: it is rejected and live verification does not start.
+- Production Playwright failure: `[BLOCKED]`; the issue is not Done.
+- Product ambiguity or conflicting acceptance evidence returns to PO for a product decision, not a routine release approval.
 
-Work never weakens tests or acceptance criteria to escape a failure.
+## Required checks
+
+Before `[READY FOR RELEASE]`:
+
+- release-process regression contract
+- TypeScript typecheck
+- build exercised by Playwright CI
+- relevant Playwright scenarios
+- independent/manual exact-head code review
+- documentation updates
+
+Before `[DONE]`:
+
+- exact PR merge SHA recorded
+- matching successful App Hosting rollout evidence
+- post-deployment live Playwright green
+- any explicitly required controlled live verification green and safely restored
