@@ -34,6 +34,7 @@ jobs:
           PR_NUMBER: ${{ env.PR_NUMBER }}
           MERGE_SHA: ${{ env.MERGE_SHA }}
           DEPLOYMENT_RUN_ID: ${{ env.DEPLOYMENT_RUN_ID }}
+          CONTROLLED_LIVE_VERIFICATION: ${{ env.CONTROLLED_LIVE_VERIFICATION }}
         with:
           github-token: ${{ github.token }}
           script: |
@@ -41,7 +42,9 @@ jobs:
             const prNumber = Number(process.env.PR_NUMBER);
             const mergeSha = String(process.env.MERGE_SHA || '').toLowerCase();
             const deploymentRun = String(process.env.DEPLOYMENT_RUN_ID || '');
+            const dispatchedMode = String(process.env.CONTROLLED_LIVE_VERIFICATION || '').toLowerCase();
             if (!Number.isInteger(issueNumber) || !Number.isInteger(prNumber) || !/^[0-9a-f]{40}$/.test(mergeSha) || !/^\d+$/.test(deploymentRun)) throw new Error('Invalid deployment-aware live payload.');
+            if (!['none', 'required'].includes(dispatchedMode)) throw new Error('Controlled live mode is missing or invalid.');
             const mainSha = String((await github.rest.git.getRef({ owner: context.repo.owner, repo: context.repo.repo, ref: 'heads/main' })).data.object.sha).toLowerCase();
             if (mainSha !== mergeSha) throw new Error(`Live verification refused: main ${mainSha} does not equal deployed merge ${mergeSha}.`);
             const pr = (await github.rest.pulls.get({ owner: context.repo.owner, repo: context.repo.repo, pull_number: prNumber })).data;
@@ -49,12 +52,20 @@ jobs:
             const issue = (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber })).data;
             if (!issue.title.startsWith('[LIVE VERIFY]')) throw new Error(`Issue #${issueNumber} is not [LIVE VERIFY].`);
             const comments = await github.paginate(github.rest.issues.listComments, { owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, per_page: 100 });
-            const evidence = comments.find((comment) => {
-              const trusted = ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(String(comment.author_association || '').toUpperCase()) || comment.user?.login === 'github-actions[bot]';
+            const trusted = (comment) => ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(String(comment.author_association || '').toUpperCase()) || comment.user?.login === 'github-actions[bot]';
+            const releaseEvidence = comments.find((comment) => {
               const body = String(comment.body || '');
-              return trusted && body.includes('DEPLOYMENT_SUCCEEDED') && body.includes(`Merge-SHA: ${mergeSha}`) && body.includes(`Deployment-Run: ${deploymentRun}`) && body.includes('App-Hosting-Project: orderfly-v21-10334086-b3076') && body.includes('Data-Project: orderfly-39325');
+              return trusted(comment) && /(?:^|\n)RELEASE_MERGED\s*(?=\n|$)/.test(body) && body.includes(`PR: #${prNumber}`) && body.includes(`Merge-SHA: ${mergeSha}`);
             });
-            if (!evidence) throw new Error('Matching trusted App Hosting deployment evidence was not found.');
+            if (!releaseEvidence) throw new Error('Matching trusted RELEASE_MERGED evidence was not found.');
+            const persistedMode = String(releaseEvidence.body || '').match(/(?:^|\n)Controlled-Live-Verification:\s*(none|required)\s*(?=\n|$)/i)?.[1]?.toLowerCase();
+            if (!persistedMode || persistedMode !== dispatchedMode) throw new Error(`Controlled live mode mismatch: persisted=${persistedMode || 'missing'}, dispatched=${dispatchedMode}.`);
+            const deploymentEvidence = comments.find((comment) => {
+              const body = String(comment.body || '');
+              return trusted(comment) && body.includes('DEPLOYMENT_SUCCEEDED') && body.includes(`Merge-SHA: ${mergeSha}`) && body.includes(`Deployment-Run: ${deploymentRun}`) && body.includes('App-Hosting-Project: orderfly-v21-10334086-b3076') && body.includes('Data-Project: orderfly-39325');
+            });
+            if (!deploymentEvidence) throw new Error('Matching trusted App Hosting deployment evidence was not found.');
+            core.setOutput('controlled-live', persistedMode);
             core.setOutput('clean-title', String(issue.title || '').replace(/^\[[^\]]+\]\s*/, ''));
 
       - name: Check out exact deployed SHA
@@ -110,7 +121,7 @@ jobs:
           ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
           MERGE_SHA: ${{ env.MERGE_SHA }}
           DEPLOYMENT_RUN_ID: ${{ env.DEPLOYMENT_RUN_ID }}
-          CONTROLLED_LIVE_VERIFICATION: ${{ env.CONTROLLED_LIVE_VERIFICATION }}
+          CONTROLLED_LIVE_VERIFICATION: ${{ steps.context.outputs.controlled-live }}
           CLEAN_TITLE: ${{ steps.context.outputs.clean-title }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
@@ -126,6 +137,7 @@ jobs:
               });
               return;
             }
+            if (process.env.CONTROLLED_LIVE_VERIFICATION !== 'none') throw new Error('Persisted controlled live mode must be none or required.');
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -149,4 +161,4 @@ jobs:
             const issue = (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber })).data;
             const clean = String(issue.title || '').replace(/^\[[^\]]+\]\s*/, '');
             await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[BLOCKED] ${clean}` });
-            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `LIVE_VERIFICATION_BLOCKED\nMerge-SHA: ${process.env.MERGE_SHA}\nPost-deployment production smoke failed.\nRun: ${process.env.RUN_URL}` });
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `LIVE_VERIFICATION_BLOCKED\nMerge-SHA: ${process.env.MERGE_SHA}\nPost-deployment production smoke failed. The merged release remains under the persistent release lock until recovery or successful live verification.\nRun: ${process.env.RUN_URL}` });
