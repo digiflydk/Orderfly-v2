@@ -9,7 +9,7 @@
 - After implementation, CI and independent/manual review are green, set the issue to `[READY FOR RELEASE]`. There is no routine PO acceptance stop.
 - The trusted default-branch release gate revalidates the current PR head, CI and exact-head review evidence immediately before merge.
 - Production deployment is separate from merge. Firebase App Hosting must complete the rollout for the exact merge SHA before live verification starts.
-- Keep only one issue in `[DEPLOYING]` or `[LIVE VERIFY]` at a time so `main` cannot advance past unverified deployment evidence.
+- Keep only one merged but not successfully live-verified release active at a time. `[DEPLOYING]`, `[LIVE VERIFY]`, and a post-merge `[BLOCKED]` release without `LIVE_VERIFICATION_PASSED` all retain the persistent release lock so `main` cannot advance past unverified deployment evidence.
 - `[DONE]` is allowed only after deployment-aware live verification and any required controlled live verification pass.
 
 Canonical lifecycle:
@@ -42,6 +42,7 @@ Use `[BLOCKED]` for genuine engineering, merge, deployment or live-verification 
 - A later review marker or changed head invalidates older clean evidence.
 - Keep browser tests meaningful. Do not skip, loosen or delete assertions merely to make CI green.
 - Post-deploy live verification is read-only unless an issue defines an explicitly controlled and reversible write test.
+- The controlled-live mode used for finalization must be re-read from trusted persisted `RELEASE_MERGED` evidence and match the deployment dispatch exactly. Missing or changed payload values fail closed.
 - Unattended tests must not mutate production data.
 
 ## Documentation
