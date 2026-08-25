@@ -33,7 +33,7 @@ Before `[READY FOR RELEASE]` the current PR head must have:
 - independent/manual review recorded as `MANUAL_CODE_REVIEW: CLEAN` and `Reviewed-Head: <SHA>`;
 - required documentation updates.
 
-`.github/workflows/work-quality-gate.yml` rechecks all evidence immediately before merge. It also refuses to merge while another issue is `[DEPLOYING]` or `[LIVE VERIFY]`, which acts as a persistent repository-wide release lock across the external App Hosting rollout.
+`.github/workflows/work-quality-gate.yml` rechecks all evidence immediately before merge. It refuses to merge while another trusted release is `[DEPLOYING]` or `[LIVE VERIFY]`. A trusted post-merge `[BLOCKED]` issue also retains the repository-wide release lock when it contains `RELEASE_MERGED` evidence but no later `LIVE_VERIFICATION_PASSED`; a pre-merge blocked issue does not hold this lock.
 
 A successful gate squash-merges the verified head, records the returned merge SHA and sets the issue to `[DEPLOYING]`. Merge is not deployment proof.
 
@@ -58,13 +58,13 @@ Live-URL: https://orderfly.dk
 Operation-Result: success
 ```
 
-`.github/workflows/work-deployment-evidence.yml` accepts only a trusted repository participant, a real timestamp after merge, the exact merged PR/SHA, the correct hosting/data project split and a rollout commit equal to the merge SHA. `main` must still equal that SHA because the persistent release lock prevents overlapping releases.
+`.github/workflows/work-deployment-evidence.yml` accepts only a trusted repository participant, a real timestamp after merge, the exact merged PR/SHA, the correct hosting/data project split and a rollout commit equal to the merge SHA. `main` must still equal that SHA because the persistent release lock prevents overlapping unverified releases.
 
 Successful validation records `DEPLOYMENT_SUCCEEDED`, moves the issue to `[LIVE VERIFY]` and dispatches post-deploy live verification. Invalid evidence cannot start live Playwright and does not create an API-key blocker.
 
 ## Post-deployment live Playwright
 
-`.github/workflows/work-live-verification.yml` is triggered only by the validated deployment evidence dispatch. It refuses to run unless the issue, merged PR, current `main`, deployment record and dispatch all identify the same merge SHA.
+`.github/workflows/work-live-verification.yml` is triggered only by the validated deployment evidence dispatch. It refuses to run unless the issue, merged PR, current `main`, deployment record and dispatch all identify the same merge SHA. It re-reads `Controlled-Live-Verification` from trusted persisted `RELEASE_MERGED` evidence and requires the dispatch value to match it exactly; missing, altered or invalid values fail closed.
 
 The workflow checks out the exact deployed SHA and uses checked-in `playwright.live.config.ts` plus `tests/work-post-deploy-live.spec.ts`. It does not create a config under `/tmp`, use a global Playwright install or treat merge as deployment evidence.
 
@@ -75,7 +75,9 @@ The generic production smoke is read-only and verifies at minimum:
 - `/m3pizza` has no page-level horizontal overflow at a 375 px viewport;
 - uncaught browser page errors fail the landing-page test.
 
-If `Controlled-Live-Verification: none`, a green post-deploy run records `LIVE_VERIFICATION_PASSED`, sets `[DONE]` and closes the issue. If the PR declared `required`, generic smoke leaves the issue `[LIVE VERIFY]` until the issue-specific reversible procedure is complete.
+If the persisted controlled-live mode is `none`, a green post-deploy run records `LIVE_VERIFICATION_PASSED`, sets `[DONE]` and closes the issue. If the persisted mode is `required`, generic smoke leaves the issue `[LIVE VERIFY]` until the issue-specific reversible procedure is complete.
+
+A post-merge deployment or live failure may set the issue `[BLOCKED]`, but that does not release the repository-wide release lock. The lock remains until a successful recovery/live path records `LIVE_VERIFICATION_PASSED` or a separately reviewed recovery explicitly resolves the release.
 
 ## Production domain
 
