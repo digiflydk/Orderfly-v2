@@ -33,9 +33,9 @@ Before `[READY FOR RELEASE]` the current PR head must have:
 - independent/manual review recorded as `MANUAL_CODE_REVIEW: CLEAN` and `Reviewed-Head: <SHA>`;
 - required documentation updates.
 
-`.github/workflows/work-quality-gate.yml` rechecks all evidence immediately before merge. It refuses to merge while another trusted release is `[DEPLOYING]` or `[LIVE VERIFY]`. A trusted post-merge `[BLOCKED]` issue also retains the repository-wide release lock when it contains `RELEASE_MERGED` evidence but no later `LIVE_VERIFICATION_PASSED`; a pre-merge blocked issue does not hold this lock.
+`.github/workflows/work-quality-gate.yml` rechecks all evidence immediately before merge. It refuses to merge while another trusted release is `[DEPLOYING]` or `[LIVE VERIFY]`. For a trusted `[BLOCKED]` or post-merge `[READY FOR RELEASE]` issue, it resolves the linked PR through the `Manual-Work-Issue` marker and asks GitHub whether that PR actually merged. If it did and no trusted `LIVE_VERIFICATION_PASSED` matches the real merge SHA, the repository-wide lock remains. This does not depend on `RELEASE_MERGED` bookkeeping successfully completing after the merge.
 
-A successful gate squash-merges the verified head, records the returned merge SHA and sets the issue to `[DEPLOYING]`. Merge is not deployment proof.
+A successful gate squash-merges the verified head, records the returned merge SHA and sets the issue to `[DEPLOYING]`. Merge is not deployment proof. The workflow exposes the returned merge SHA immediately so a later bookkeeping failure can be recorded accurately.
 
 ## Production deployment through Firebase App Hosting
 
@@ -77,7 +77,7 @@ The generic production smoke is read-only and verifies at minimum:
 
 If the persisted controlled-live mode is `none`, a green post-deploy run records `LIVE_VERIFICATION_PASSED`, sets `[DONE]` and closes the issue. If the persisted mode is `required`, generic smoke leaves the issue `[LIVE VERIFY]` until the issue-specific reversible procedure is complete.
 
-A post-merge deployment or live failure may set the issue `[BLOCKED]`, but that does not release the repository-wide release lock. The lock remains until a successful recovery/live path records `LIVE_VERIFICATION_PASSED` or a separately reviewed recovery explicitly resolves the release.
+A post-merge deployment or live failure may set the issue `[BLOCKED]`, but that does not release the repository-wide release lock. The next release gate resolves the actual linked merged PR and requires matching trusted live-success evidence for its merge SHA before allowing `main` to advance.
 
 ## Production domain
 
