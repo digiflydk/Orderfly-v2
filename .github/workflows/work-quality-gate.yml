@@ -51,8 +51,9 @@ jobs:
               const activeRelease = openIssues.find((candidate) =>
                 !candidate.pull_request &&
                 Number(candidate.number) !== issueNumber &&
+                contract.isTrustedAssociation(candidate.author_association) &&
                 /^\[(?:DEPLOYING|LIVE VERIFY)\]/.test(String(candidate.title || '')));
-              if (activeRelease) throw new Error(`Persistent release lock: issue #${activeRelease.number} is ${activeRelease.title.match(/^\[[^\]]+\]/)?.[0] || 'active'}.`);
+              if (activeRelease) throw new Error(`Persistent release lock: trusted issue #${activeRelease.number} is ${activeRelease.title.match(/^\[[^\]]+\]/)?.[0] || 'active'}.`);
 
               const pulls = await github.paginate(github.rest.pulls.list, { owner: context.repo.owner, repo: context.repo.repo, state: 'open', base: 'main', per_page: 100 });
               const candidates = pulls.filter((pr) => contract.manualIssueNumber(pr.body) === issueNumber);
@@ -60,6 +61,7 @@ jobs:
               const pr = candidates[0];
               if (pr.draft || pr.base.ref !== 'main') throw new Error(`PR #${pr.number} must be a non-draft PR to main.`);
               if (pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) throw new Error('Release PR head must belong to this repository.');
+              if (!contract.isTrustedAssociation(pr.author_association)) throw new Error(`PR #${pr.number} is not authored by a trusted repository participant.`);
               const controlledMode = contract.controlledLiveMode(pr.body);
               if (!controlledMode) throw new Error(`PR #${pr.number} must declare Controlled-Live-Verification: none|required.`);
 
