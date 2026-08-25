@@ -86,8 +86,8 @@ jobs:
               return trusted && body.includes('RELEASE_MERGED') && body.includes(`PR: #${prNumber}`) && body.includes(`Merge-SHA: ${mergeSha}`);
             });
             if (!releaseComment) throw new Error('Matching trusted RELEASE_MERGED evidence is required.');
-            const controlledMode = String(releaseComment.body || '').match(/(?:^|\n)Controlled-Live-Verification:\s*(none|required)\s*(?=\n|$)/i)?.[1]?.toLowerCase();
-            if (!controlledMode) throw new Error('Release evidence is missing Controlled-Live-Verification.');
+            const controlledMode = contract.controlledLiveMode(releaseComment.body);
+            if (!controlledMode) throw new Error('Release evidence must contain exactly one Controlled-Live-Verification marker.');
 
             core.setOutput('issue-number', String(issueNumber));
             core.setOutput('pr-number', String(prNumber));
@@ -100,6 +100,8 @@ jobs:
             core.setOutput('operator-url', context.payload.comment.html_url || '');
 
       - name: Record rollout and dispatch post-deploy live verification
+        id: handoff
+        if: steps.evidence.outcome == 'success'
         uses: actions/github-script@v7
         env:
           ISSUE_NUMBER: ${{ steps.evidence.outputs.issue-number }}
@@ -147,16 +149,32 @@ jobs:
               },
             });
 
-      - name: Reject invalid evidence without requesting API credentials
+      - name: Recover a failed handoff or reject invalid evidence
         if: failure()
         uses: actions/github-script@v7
         env:
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
+          MERGE_SHA: ${{ steps.evidence.outputs.merge-sha }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           github-token: ${{ github.token }}
           script: |
             const issueNumber = Number(context.payload.issue.number);
             if (!Number.isInteger(issueNumber) || issueNumber < 1) return;
+            const issue = (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber })).data;
+            if (process.env.EVIDENCE_OUTCOME === 'success') {
+              const clean = String(issue.title || '').replace(/^\[[^\]]+\]\s*/, '');
+              if (!issue.title.startsWith('[DEPLOYING]')) {
+                await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[DEPLOYING] ${clean}` });
+              }
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `DEPLOYMENT_HANDOFF_FAILED\nMerge-SHA: ${process.env.MERGE_SHA || 'unknown'}\nThe App Hosting rollout evidence was valid, but the GitHub handoff to live verification did not complete. The issue has been restored to [DEPLOYING], so the same verified rollout can be submitted again without changing production. No OpenAI API credential is required.\nRun: ${process.env.RUN_URL}`,
+              });
+              return;
+            }
             await github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
