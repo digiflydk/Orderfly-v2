@@ -38,10 +38,11 @@ test('deployment timestamp and evidence are exact-SHA gated', () => {
 });
 
 test('checked-in workflows implement MANUAL_NO_API_MODE and deployment-aware finalization', async () => {
-  const [quality, deploy, live, ci, liveConfig, normalConfig, agents, development, deployment] = await Promise.all([
+  const [quality, deploy, live, liveSpec, ci, liveConfig, normalConfig, agents, development, deployment] = await Promise.all([
     source('.github/workflows/work-quality-gate.yml'),
     source('.github/workflows/work-deployment-evidence.yml'),
     source('.github/workflows/work-live-verification.yml'),
+    source('tests/work-post-deploy-live.spec.ts'),
     source('.github/workflows/ui-tests.yml'),
     source('playwright.live.config.ts'),
     source('playwright.config.ts'),
@@ -58,6 +59,9 @@ test('checked-in workflows implement MANUAL_NO_API_MODE and deployment-aware fin
   assert.match(quality, /MANUAL_CODE_REVIEW/);
   assert.match(quality, /pulls\.merge/);
   assert.match(quality, /Persistent release lock/);
+  assert.match(quality, /trustedReleaseIssues = openIssues\.filter/);
+  assert.doesNotMatch(quality, /trustedReleaseIssues = openIssues\.filter\([\s\S]{0,180}Number\(candidate\.number\) !== issueNumber/);
+  assert.match(quality, /possiblePostMergeFailures = trustedReleaseIssues/);
   assert.match(quality, /closedPulls/);
   assert.match(quality, /actualMergedPr/);
   assert.match(quality, /full\.merged/);
@@ -95,6 +99,11 @@ test('checked-in workflows implement MANUAL_NO_API_MODE and deployment-aware fin
   assert.match(live, /LIVE_VERIFICATION_PASSED/);
   assert.ok(live.indexOf('DEPLOYMENT_SUCCEEDED') < live.indexOf('[DONE]'));
   assert.doesNotMatch(live, /\/tmp\/playwright|NODE_PATH|npm install -g/);
+
+  assert.equal((liveSpec.match(/\.ok\(\)/g) || []).length, 3);
+  assert.doesNotMatch(liveSpec, /status\(\)\)\.toBeLessThan\(500\)/);
+  assert.match(liveSpec, /production landing page returned HTTP/);
+  assert.match(liveSpec, /production \/m3pizza returned HTTP/);
 
   assert.match(ci, /test:release-contract/);
   assert.match(liveConfig, /work-post-deploy-live\.spec\.ts/);
