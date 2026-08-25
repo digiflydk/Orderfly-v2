@@ -17,6 +17,8 @@ test('manual release markers and review evidence bind to the exact head', () => 
   assert.equal(manualIssueNumber('Manual-Work-Issue: #20\nControlled-Live-Verification: none'), 20);
   assert.equal(manualIssueNumber('Manual-Work-Issue: #20\nManual-Work-Issue: #21'), null);
   assert.equal(controlledLiveMode('Controlled-Live-Verification: required'), 'required');
+  assert.equal(controlledLiveMode('Controlled-Live-Verification: none\nControlled-Live-Verification: required'), null);
+  assert.equal(controlledLiveMode('Controlled-Live-Verification: required\nControlled-Live-Verification: required'), null);
   assert.deepEqual(missingCiJobs(REQUIRED_CI_JOBS.map((name) => ({ name, status: 'completed', conclusion: 'success' }))), []);
   const head = 'a'.repeat(40);
   const clean = selectCleanReview([{ author_association: 'OWNER', created_at: '2026-08-25T05:00:00Z', body: `MANUAL_CODE_REVIEW: CLEAN\nReviewed-Head: ${head}` }], head);
@@ -72,8 +74,14 @@ test('checked-in workflows implement MANUAL_NO_API_MODE and deployment-aware fin
   assert.match(deploy, /orderfly-39325/);
   assert.match(deploy, /Rollout-Commit/);
   assert.match(deploy, /validateDeploymentTimestamp/);
+  assert.match(deploy, /contract\.controlledLiveMode\(releaseComment\.body\)/);
+  assert.match(deploy, /exactly one Controlled-Live-Verification marker/);
   assert.match(deploy, /DEPLOYMENT_SUCCEEDED/);
   assert.match(deploy, /work-live-verify/);
+  assert.match(deploy, /EVIDENCE_OUTCOME/);
+  assert.match(deploy, /DEPLOYMENT_HANDOFF_FAILED/);
+  assert.match(deploy, /\[DEPLOYING\]/);
+  assert.match(deploy, /same verified rollout can be submitted again/);
 
   assert.match(live, /repository_dispatch/);
   assert.match(live, /work-live-verify/);
