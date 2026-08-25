@@ -50,9 +50,10 @@ jobs:
               const openIssues = await github.paginate(github.rest.issues.listForRepo, { owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100 });
               const trustedReleaseIssues = openIssues.filter((candidate) =>
                 !candidate.pull_request &&
-                Number(candidate.number) !== issueNumber &&
                 contract.isTrustedAssociation(candidate.author_association));
-              let activeRelease = trustedReleaseIssues.find((candidate) => /^\[(?:DEPLOYING|LIVE VERIFY)\]/.test(String(candidate.title || '')));
+              let activeRelease = trustedReleaseIssues.find((candidate) =>
+                Number(candidate.number) !== issueNumber &&
+                /^\[(?:DEPLOYING|LIVE VERIFY)\]/.test(String(candidate.title || '')));
 
               if (!activeRelease) {
                 const closedPulls = await github.paginate(github.rest.pulls.list, {
@@ -106,7 +107,7 @@ jobs:
               if (pr.head.repo?.full_name !== `${context.repo.owner}/${context.repo.repo}`) throw new Error('Release PR head must belong to this repository.');
               if (!contract.isTrustedAssociation(pr.author_association)) throw new Error(`PR #${pr.number} is not authored by a trusted repository participant.`);
               const controlledMode = contract.controlledLiveMode(pr.body);
-              if (!controlledMode) throw new Error(`PR #${pr.number} must declare Controlled-Live-Verification: none|required.`);
+              if (!controlledMode) throw new Error(`PR #${pr.number} must declare exactly one Controlled-Live-Verification: none|required marker.`);
 
               const baseSha = String((await github.rest.git.getRef({ owner: context.repo.owner, repo: context.repo.repo, ref: 'heads/main' })).data.object.sha);
               const comparison = await github.request('GET /repos/{owner}/{repo}/compare/{basehead}', {
