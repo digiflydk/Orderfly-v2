@@ -48,12 +48,31 @@ jobs:
               if (!contract.isTrustedAssociation(issue.author_association)) throw new Error(`Issue #${issueNumber} is not trusted.`);
 
               const openIssues = await github.paginate(github.rest.issues.listForRepo, { owner: context.repo.owner, repo: context.repo.repo, state: 'open', per_page: 100 });
-              const activeRelease = openIssues.find((candidate) =>
+              const trustedReleaseIssues = openIssues.filter((candidate) =>
                 !candidate.pull_request &&
                 Number(candidate.number) !== issueNumber &&
-                contract.isTrustedAssociation(candidate.author_association) &&
-                /^\[(?:DEPLOYING|LIVE VERIFY)\]/.test(String(candidate.title || '')));
-              if (activeRelease) throw new Error(`Persistent release lock: trusted issue #${activeRelease.number} is ${activeRelease.title.match(/^\[[^\]]+\]/)?.[0] || 'active'}.`);
+                contract.isTrustedAssociation(candidate.author_association));
+              let activeRelease = trustedReleaseIssues.find((candidate) => /^\[(?:DEPLOYING|LIVE VERIFY)\]/.test(String(candidate.title || '')));
+              if (!activeRelease) {
+                for (const candidate of trustedReleaseIssues.filter((item) => /^\[BLOCKED\]/.test(String(item.title || '')))) {
+                  const candidateComments = await github.paginate(github.rest.issues.listComments, {
+                    owner: context.repo.owner,
+                    repo: context.repo.repo,
+                    issue_number: candidate.number,
+                    per_page: 100,
+                  });
+                  const trustedBodies = candidateComments
+                    .filter((comment) => contract.isTrustedAssociation(comment.author_association) || comment.user?.login === 'github-actions[bot]')
+                    .map((comment) => String(comment.body || ''));
+                  const mergedButUnverified = trustedBodies.some((body) => /(?:^|\n)RELEASE_MERGED\s*(?=\n|$)/.test(body) && /(?:^|\n)Merge-SHA:\s*[0-9a-f]{40}\s*(?=\n|$)/i.test(body)) &&
+                    !trustedBodies.some((body) => /(?:^|\n)LIVE_VERIFICATION_PASSED\s*(?=\n|$)/.test(body));
+                  if (mergedButUnverified) {
+                    activeRelease = candidate;
+                    break;
+                  }
+                }
+              }
+              if (activeRelease) throw new Error(`Persistent release lock: trusted issue #${activeRelease.number} is ${activeRelease.title.match(/^\[[^\]]+\]/)?.[0] || 'active'} and its merged release is not verified Done.`);
 
               const pulls = await github.paginate(github.rest.pulls.list, { owner: context.repo.owner, repo: context.repo.repo, state: 'open', base: 'main', per_page: 100 });
               const candidates = pulls.filter((pr) => contract.manualIssueNumber(pr.body) === issueNumber);
