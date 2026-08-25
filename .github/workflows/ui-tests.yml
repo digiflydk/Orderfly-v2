@@ -57,6 +57,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Verify release-process contracts
+        run: npm run test:release-contract
+
       - name: Typecheck
         run: npm run typecheck
 
