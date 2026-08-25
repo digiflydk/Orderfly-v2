@@ -56,8 +56,11 @@ test('checked-in workflows implement MANUAL_NO_API_MODE and deployment-aware fin
   assert.match(quality, /MANUAL_CODE_REVIEW/);
   assert.match(quality, /pulls\.merge/);
   assert.match(quality, /Persistent release lock/);
+  assert.match(quality, /mergedButUnverified/);
+  assert.match(quality, /RELEASE_MERGED/);
+  assert.match(quality, /LIVE_VERIFICATION_PASSED/);
   assert.match(quality, /Firebase App Hosting automatic rollout/);
-  assert.doesNotMatch(quality, /LIVE_VERIFICATION_PASSED|\[DONE\]/);
+  assert.doesNotMatch(quality, /\[DONE\]/);
 
   assert.match(deploy, /APP_HOSTING_ROLLOUT_CONFIRMED/);
   assert.match(deploy, /orderfly-v21-10334086-b3076/);
@@ -70,6 +73,11 @@ test('checked-in workflows implement MANUAL_NO_API_MODE and deployment-aware fin
   assert.match(live, /repository_dispatch/);
   assert.match(live, /work-live-verify/);
   assert.doesNotMatch(live, /pull_request_target|types:\s*\[closed\]/);
+  assert.match(live, /RELEASE_MERGED/);
+  assert.match(live, /persistedMode/);
+  assert.match(live, /dispatchedMode/);
+  assert.match(live, /persistedMode !== dispatchedMode/);
+  assert.match(live, /steps\.context\.outputs\.controlled-live/);
   assert.match(live, /DEPLOYMENT_SUCCEEDED/);
   assert.match(live, /LIVE_VERIFICATION_PASSED/);
   assert.ok(live.indexOf('DEPLOYMENT_SUCCEEDED') < live.indexOf('[DONE]'));
