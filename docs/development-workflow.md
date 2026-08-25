@@ -41,7 +41,7 @@ The release gate introduced by issue #20 cannot execute from `main` before the P
 6. Any blocking finding requires a new commit, new CI and new clean review evidence for the new head.
 7. When engineering evidence is green, Work sets `[READY FOR RELEASE]`. This is an engineering handoff, not PO approval.
 8. `.github/workflows/work-quality-gate.yml` revalidates current `main`, the exact PR head, successful CI and the latest exact-head review marker immediately before squash merge.
-9. The gate refuses another merge while any other trusted issue is `[DEPLOYING]` or `[LIVE VERIFY]`. A post-merge `[BLOCKED]` issue also retains the release lock when trusted `RELEASE_MERGED` evidence exists without a later trusted `LIVE_VERIFICATION_PASSED`. Pre-merge blocked work does not hold this lock.
+9. The gate refuses another merge while any other trusted issue is `[DEPLOYING]` or `[LIVE VERIFY]`. For trusted `[BLOCKED]` or post-merge `[READY FOR RELEASE]` issues, it resolves the linked `Manual-Work-Issue` PR through GitHub, verifies whether that PR is actually merged and holds the lock until a trusted `LIVE_VERIFICATION_PASSED` matches that real merge SHA. This remains safe even if merge succeeded but later issue/comment bookkeeping failed. A genuinely pre-merge blocked issue has no actual merged linked PR and does not hold the lock.
 10. A successful merge records the exact merge SHA and sets `[DEPLOYING]`.
 11. Firebase App Hosting automatically rolls out the commit from the configured live `main` branch. Merge alone is never deployment proof.
 12. A trusted `APP_HOSTING_ROLLOUT_CONFIRMED` issue comment must identify the exact merged commit, rollout ID, timestamp, hosting project, data project and live URL.
@@ -58,11 +58,12 @@ The release gate introduced by issue #20 cannot execute from `main` before the P
 
 ## Failure handling
 
-- CI/review/current-head mismatch before merge: `[BLOCKED]` with exact evidence, then fix and reverify. It does not retain the post-merge release lock.
+- CI/review/current-head mismatch before merge: `[BLOCKED]` with exact evidence, then fix and reverify. It does not retain the post-merge release lock because no linked PR has actually merged.
 - Stale or non-mergeable PR: `[BLOCKED]`; rebase and rerun CI/review.
+- A failure after GitHub confirms merge but before `RELEASE_MERGED` bookkeeping is complete still retains the lock, because subsequent gates derive merge state from the actual linked PR rather than trusting the presence of a comment.
 - App Hosting rollout failure after merge: `[BLOCKED]` with actual rollout evidence or remain `[DEPLOYING]`; either way the merged release retains the persistent lock until recovery/live success.
 - Invalid deployment evidence: it is rejected and live verification does not start.
-- Production Playwright failure after merge: `[BLOCKED]`; the issue is not Done and retains the release lock until a successful recovery/live verification records `LIVE_VERIFICATION_PASSED`.
+- Production Playwright failure after merge: `[BLOCKED]`; the issue is not Done and retains the release lock until a successful recovery/live verification records `LIVE_VERIFICATION_PASSED` for the same real merge SHA.
 - Product ambiguity or conflicting acceptance evidence returns to PO for a product decision, not a routine release approval.
 
 ## Required checks
