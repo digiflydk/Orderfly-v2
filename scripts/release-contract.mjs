@@ -15,8 +15,8 @@ export function manualIssueNumber(body) {
 }
 
 export function controlledLiveMode(body) {
-  const match = String(body || "").match(/(?:^|\n)Controlled-Live-Verification:\s*(none|required)\s*(?=\n|$)/i);
-  return match ? match[1].toLowerCase() : null;
+  const matches = [...String(body || "").matchAll(/(?:^|\n)Controlled-Live-Verification:\s*(none|required)\s*(?=\n|$)/gi)];
+  return matches.length === 1 ? matches[0][1].toLowerCase() : null;
 }
 
 export function selectCiRun(runs, pr) {
