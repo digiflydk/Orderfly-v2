@@ -14,7 +14,7 @@ The request must include:
 
 `x-esmeralda-integration-secret: <shared secret>`
 
-Orderfly reads the expected value from `ORDERFLY_ESMERALDA_INTEGRATION_SECRET`. Missing or incorrect values return `401`. The route compares equal-length secrets with a timing-safe comparison. No integration secret is committed to the repository.
+Orderfly reads the expected value from `ORDERFLY_ESMERALDA_INTEGRATION_SECRET`. Missing, incorrect or shorter-than-32-byte values return `401`. Equal-length secrets are compared with a timing-safe comparison. No integration secret is committed to the repository.
 
 ### Request contract
 
@@ -58,7 +58,15 @@ Resolution rules:
 6. No safe match: create a new customer.
 7. Never match by name alone.
 
-The implementation compares normalized values in memory after a brand-scoped customer query. This preserves compatibility with older customer documents whose stored email case or formatting predates normalized helper fields.
+The implementation compares normalized values after a brand-scoped customer query. This preserves compatibility with older customer documents whose stored email case or formatting predates normalized helper fields.
+
+### Concurrent duplicate prevention
+
+The normalized `(brand, email)` identity is hashed with SHA-256 and reserved in the server-side `integrationConsumerCustomerIdentities` collection. Customer creation/resolution and the identity reservation are committed in one Firestore transaction.
+
+Two concurrent Esmeralda requests for the same previously unseen brand/email therefore contend on the same reservation document instead of independently creating two customers. If the reservation points to a missing, wrong-brand or conflicting customer, Orderfly returns `409 identity_index_conflict` rather than silently remapping the identity.
+
+The reservation stores the hash, brand id and native customer id. It does not put the plain email address in the Firestore document id.
 
 ## Existing-customer update safety
 
@@ -68,6 +76,8 @@ When an existing customer resolves, the integration may update profile identity 
 - `totalSpend`
 - `lastOrderDate`
 - calculated loyalty history
+
+An absent incoming phone does not clear an existing customer's phone or `normalizedPhone`. Likewise, the booking placeholder name `Ikke oplyst`/`Not provided` does not replace an already populated customer name.
 
 A newly created consumer customer receives the existing new-customer defaults only because no prior commerce history exists.
 
@@ -91,7 +101,7 @@ Expected error classes:
 - `400 invalid_json` / `invalid_payload`
 - `401 unauthorized`
 - `404 organization_not_found` / `location_not_found` / `location_organization_mismatch`
-- `409 ambiguous_email_identity` / `ambiguous_phone_identity` / `phone_identity_conflict`
+- `409 ambiguous_email_identity` / `ambiguous_phone_identity` / `phone_identity_conflict` / `identity_index_conflict`
 - `500 integration_failure`
 
 ## Idempotency model
