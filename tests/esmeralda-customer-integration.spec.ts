@@ -1,3 +1,5 @@
+import { readFile } from 'node:fs/promises';
+
 import { expect, test } from '@playwright/test';
 
 import {
@@ -21,25 +23,34 @@ test.describe('Esmeralda customer integration contract', () => {
     expect(normalizePhone('   ')).toBeNull();
   });
 
-  test('rejects missing, wrong and length-mismatched machine secrets', () => {
-    expect(isValidMachineSecret(undefined, 'secret')).toBe(false);
-    expect(isValidMachineSecret('secret', undefined)).toBe(false);
-    expect(isValidMachineSecret('secret', 'wrong')).toBe(false);
-    expect(isValidMachineSecret('secret', 'secrex')).toBe(false);
-    expect(isValidMachineSecret('secret', 'secret')).toBe(true);
+  test('requires a matching high-entropy machine secret', () => {
+    const secret = '0123456789abcdef0123456789abcdef';
+    const wrong = '0123456789abcdef0123456789abcdee';
+
+    expect(isValidMachineSecret(undefined, secret)).toBe(false);
+    expect(isValidMachineSecret(secret, undefined)).toBe(false);
+    expect(isValidMachineSecret('short-secret', 'short-secret')).toBe(false);
+    expect(isValidMachineSecret(secret, 'wrong')).toBe(false);
+    expect(isValidMachineSecret(secret, wrong)).toBe(false);
+    expect(isValidMachineSecret(secret, secret)).toBe(true);
   });
 
   test('requires canonical organization, location, booking and customer identity fields', () => {
     const valid = esmeraldaConsumerCustomerSchema.safeParse({
-      organization_id: 'brand-esmeralda',
-      location_id: 'location-amager',
-      booking_id: 'booking-123',
+      organization_id: ' brand-esmeralda ',
+      location_id: ' location-amager ',
+      booking_id: ' booking-123 ',
       full_name: 'Guest Name',
       email: 'guest@example.com',
       phone: '+45 12345678',
     });
 
     expect(valid.success).toBe(true);
+    if (valid.success) {
+      expect(valid.data.organization_id).toBe('brand-esmeralda');
+      expect(valid.data.location_id).toBe('location-amager');
+      expect(valid.data.booking_id).toBe('booking-123');
+    }
 
     const invalid = esmeraldaConsumerCustomerSchema.safeParse({
       organization_id: 'brand-esmeralda',
@@ -50,5 +61,22 @@ test.describe('Esmeralda customer integration contract', () => {
     });
 
     expect(invalid.success).toBe(false);
+  });
+
+  test('customer resolver reserves normalized identity transactionally and does not blindly clear phone data', async () => {
+    const resolver = await readFile(
+      new URL(
+        '../src/lib/integrations/esmeralda-consumer-customer.ts',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+
+    expect(resolver).toContain('integrationConsumerCustomerIdentities');
+    expect(resolver).toContain('db.runTransaction');
+    expect(resolver).toContain("createHash('sha256')");
+    expect(resolver).toContain("'identity_index_conflict'");
+    expect(resolver).toContain('if (incomingPhone && normalizedPhone)');
+    expect(resolver).not.toContain('normalizedPhone,\n    locationIds');
   });
 });
