@@ -24,9 +24,9 @@ Esmeralda cannot construct a trusted public feedback context in the browser. It 
 
 Authentication uses `x-esmeralda-integration-secret`. The payload uses canonical snake_case and includes mapped native Orderfly brand/location/customer IDs plus the Esmeralda booking ID and booking-time guest snapshot.
 
-Orderfly validates brand, location and customer scope. One deterministic Firestore invitation identity exists per `(brand, booking)`. The public link contains an opaque HMAC-SHA256 signed token with a 30-day expiry. The token is verified server-side before the public feedback form can resolve a booking.
+Orderfly validates brand, location and customer scope. One deterministic Firestore invitation identity exists per `(brand, booking)`. The public link contains a tamper-evident HMAC-SHA256 signed token with a 30-day expiry. The claims are signed rather than encrypted, so authorization never relies on token confidentiality. The token is verified server-side and matched to the private invitation document before the public feedback form can resolve a booking.
 
-Submission revalidates the invitation, customer, source and active question version. A booking invitation is consumed transactionally with feedback creation, preventing duplicate feedback documents for repeated form submissions.
+Submission revalidates the invitation, customer, source and active question version. The server also validates the submitted response set against that exact active version: required questions must be present, star values are restricted to 1-5, NPS to 0-10, option values must exist in the configured question, min/max selections are enforced, unknown question IDs are rejected and stored question labels/types come from the authoritative version rather than browser input. A booking invitation is consumed transactionally with feedback creation, preventing duplicate feedback documents for repeated form submissions.
 
 The private Firestore collection is `integrationFeedbackInvitations`; all access in checked-in code uses Firebase Admin. The repository does not contain Firestore client rules, so deployment rules remain an external Firebase configuration concern and must not grant browser access to this collection.
 
