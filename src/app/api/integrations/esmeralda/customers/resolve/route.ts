@@ -2,9 +2,11 @@ import { NextResponse } from 'next/server';
 
 import {
   esmeraldaConsumerCustomerSchema,
+  isValidMachineSecret,
+} from '@/lib/integrations/esmeralda-customer-contract';
+import {
   IntegrationBoundaryError,
   IntegrationConflictError,
-  isValidMachineSecret,
   resolveOrUpsertEsmeraldaConsumerCustomer,
 } from '@/lib/integrations/esmeralda-consumer-customer';
 
