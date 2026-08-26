@@ -7,6 +7,7 @@ import {
   esmeraldaBookingFeedbackInvitationSchema,
   esmeraldaCustomerHistorySchema,
 } from '../src/lib/integrations/esmeralda-feedback-contract';
+import { validateFeedbackResponses } from '../src/lib/feedback/response-validation';
 import { FeedbackQuestionsVersionSchema } from '../src/lib/schemas/feedback';
 
 test.describe('Esmeralda booking feedback and history contracts', () => {
@@ -56,6 +57,50 @@ test.describe('Esmeralda booking feedback and history contracts', () => {
     expect(result.success).toBe(true);
   });
 
+  test('server response validation enforces required questions, numeric bounds and known options', () => {
+    const questions = [
+      { questionId: 'rating', label: 'Bedømmelse', type: 'stars', isRequired: true },
+      { questionId: 'nps', label: 'Anbefaling', type: 'nps', isRequired: false },
+      {
+        questionId: 'tags',
+        label: 'Hvad kunne du lide?',
+        type: 'multiple_options',
+        isRequired: true,
+        minSelection: 1,
+        maxSelection: 2,
+        options: [{ id: 'food', label: 'Maden' }, { id: 'service', label: 'Servicen' }],
+      },
+    ];
+
+    const valid = validateFeedbackResponses(questions, {
+      rating: { type: 'stars', answer: 5, questionLabel: 'forged label' },
+      nps: { type: 'nps', answer: 9 },
+      tags: { type: 'multiple_options', answer: ['Maden'] },
+    });
+    expect(valid.ok).toBe(true);
+    if (valid.ok) {
+      expect(valid.responses.rating.questionLabel).toBe('Bedømmelse');
+      expect(valid.responses.rating.answer).toBe(5);
+    }
+
+    expect(validateFeedbackResponses(questions, {
+      tags: { type: 'multiple_options', answer: ['Maden'] },
+    }).ok).toBe(false);
+    expect(validateFeedbackResponses(questions, {
+      rating: { type: 'stars', answer: 6 },
+      tags: { type: 'multiple_options', answer: ['Maden'] },
+    }).ok).toBe(false);
+    expect(validateFeedbackResponses(questions, {
+      rating: { type: 'stars', answer: 5 },
+      tags: { type: 'multiple_options', answer: ['Ikke en mulighed'] },
+    }).ok).toBe(false);
+    expect(validateFeedbackResponses(questions, {
+      rating: { type: 'stars', answer: 5 },
+      tags: { type: 'multiple_options', answer: ['Maden'] },
+      injected: { type: 'text', answer: 'not in active version' },
+    }).ok).toBe(false);
+  });
+
   test('App Hosting injects the integration secret and invitations are signed, bounded and idempotent', async () => {
     const [appHosting, integration] = await Promise.all([
       readFile(resolve(process.cwd(), 'apphosting.yaml'), 'utf8'),
@@ -68,11 +113,12 @@ test.describe('Esmeralda booking feedback and history contracts', () => {
     expect(integration).toContain("sourceType: 'booking'");
   });
 
-  test('public feedback submission derives source scope server-side and consumes booking invitations transactionally', async () => {
+  test('public feedback submission derives source scope server-side, validates the active form and consumes booking invitations transactionally', async () => {
     const actions = await readFile(resolve(process.cwd(), 'src/app/feedback/actions.ts'), 'utf8');
     expect(actions).toContain("sourceType: z.enum(['commerce_order', 'booking'])");
     expect(actions).toContain('resolveAuthoritativeSource');
     expect(actions).toContain('resolveBookingFeedbackInvitationToken');
+    expect(actions).toContain('validateFeedbackResponses');
     expect(actions).toContain("transaction.update(invitationRef");
     expect(actions).toContain("feedbackData.orderId = source.sourceId");
   });
