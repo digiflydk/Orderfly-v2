@@ -2,9 +2,9 @@ import { timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 
 export const esmeraldaConsumerCustomerSchema = z.object({
-  organization_id: z.string().min(1).max(200),
-  location_id: z.string().min(1).max(200),
-  booking_id: z.string().min(1).max(200),
+  organization_id: z.string().trim().min(1).max(200),
+  location_id: z.string().trim().min(1).max(200),
+  booking_id: z.string().trim().min(1).max(200),
   full_name: z.string().trim().min(1).max(200),
   email: z.string().trim().email().max(320),
   phone: z.string().trim().max(80).optional().nullable(),
@@ -45,6 +45,7 @@ export function isValidMachineSecret(
   const expected = Buffer.from(expectedSecret);
   const supplied = Buffer.from(suppliedSecret);
 
+  if (expected.length < 32 || supplied.length < 32) return false;
   if (expected.length !== supplied.length) return false;
   return timingSafeEqual(expected, supplied);
 }
