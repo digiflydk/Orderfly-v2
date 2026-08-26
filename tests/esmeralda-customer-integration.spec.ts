@@ -1,4 +1,5 @@
 import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 
 import { expect, test } from '@playwright/test';
 
@@ -65,9 +66,9 @@ test.describe('Esmeralda customer integration contract', () => {
 
   test('customer resolver reserves normalized identity transactionally and does not blindly clear phone data', async () => {
     const resolver = await readFile(
-      new URL(
-        '../src/lib/integrations/esmeralda-consumer-customer.ts',
-        import.meta.url,
+      resolve(
+        process.cwd(),
+        'src/lib/integrations/esmeralda-consumer-customer.ts',
       ),
       'utf8',
     );
