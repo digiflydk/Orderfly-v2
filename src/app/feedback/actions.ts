@@ -11,6 +11,7 @@ import type {
   FeedbackExperienceType,
   FeedbackSourceType,
 } from '@/lib/feedback/source-types';
+import { validateFeedbackResponses } from '@/lib/feedback/response-validation';
 import { resolveBookingFeedbackInvitationToken } from '@/lib/integrations/esmeralda-feedback-integration';
 
 export async function getActiveFeedbackQuestionsForExperience(
@@ -41,7 +42,7 @@ const feedbackSubmissionSchema = z.object({
   questionVersionId: z.string().trim().min(1).max(200),
   language: z.string().trim().min(2).max(16),
   invitationToken: z.string().trim().max(4096).optional().nullable(),
-  responses: z.record(z.string(), z.any()),
+  responses: z.record(z.string(), z.unknown()),
 });
 
 type AuthoritativeSource = {
@@ -91,18 +92,18 @@ async function resolveAuthoritativeSource(
   };
 }
 
-function extractCoreResponses(responses: Record<string, any>) {
+function extractCoreResponses(responses: Record<string, { type: string; answer: unknown }>) {
   let rating = 0;
   let npsScore: number | undefined;
   let comment: string | undefined;
   const tags: string[] = [];
 
-  Object.values(responses).forEach((response: any) => {
-    if (response?.type === 'stars' && Number.isFinite(Number(response.answer))) rating = Number(response.answer);
-    if (response?.type === 'nps' && Number.isFinite(Number(response.answer))) npsScore = Number(response.answer);
-    if (response?.type === 'text' && typeof response.answer === 'string') comment = response.answer.trim() || undefined;
-    if ((response?.type === 'multiple_options' || response?.type === 'tags') && Array.isArray(response.answer)) {
-      for (const tag of response.answer) if (typeof tag === 'string' && tag.trim()) tags.push(tag.trim());
+  Object.values(responses).forEach((response) => {
+    if (response.type === 'stars' && typeof response.answer === 'number') rating = response.answer;
+    if (response.type === 'nps' && typeof response.answer === 'number') npsScore = response.answer;
+    if (response.type === 'text' && typeof response.answer === 'string') comment = response.answer;
+    if ((response.type === 'multiple_options' || response.type === 'tags') && Array.isArray(response.answer)) {
+      for (const tag of response.answer) if (typeof tag === 'string') tags.push(tag);
     }
   });
 
@@ -111,9 +112,13 @@ function extractCoreResponses(responses: Record<string, any>) {
 
 export async function submitFeedbackAction(_prevState: any, formData: FormData) {
   try {
-    let responses: Record<string, any> = {};
+    let responses: Record<string, unknown> = {};
     try {
-      responses = JSON.parse(String(formData.get('responses') || '{}'));
+      const decoded = JSON.parse(String(formData.get('responses') || '{}'));
+      if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) {
+        return { message: 'Invalid feedback payload.', error: true };
+      }
+      responses = decoded as Record<string, unknown>;
     } catch {
       return { message: 'Invalid feedback payload.', error: true };
     }
@@ -145,7 +150,13 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
       return { message: 'Feedback form is not valid for this visit.', error: true };
     }
 
-    const { rating, npsScore, comment, tags } = extractCoreResponses(parsed.data.responses);
+    const responseValidation = validateFeedbackResponses(questionsData.questions, parsed.data.responses);
+    if (!responseValidation.ok) {
+      return { message: responseValidation.error, error: true };
+    }
+    const validatedResponses = responseValidation.responses;
+    const { rating, npsScore, comment, tags } = extractCoreResponses(validatedResponses);
+
     const feedbackRef = db.collection('feedback').doc();
     const feedbackData: Record<string, unknown> = {
       id: feedbackRef.id,
@@ -156,7 +167,7 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
       brandId: source.brandId,
       questionVersionId: parsed.data.questionVersionId,
       language: parsed.data.language,
-      responses: parsed.data.responses,
+      responses: validatedResponses,
       receivedAt: admin.firestore.FieldValue.serverTimestamp(),
       rating,
       tags,
