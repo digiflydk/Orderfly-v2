@@ -129,4 +129,15 @@ test.describe('Esmeralda booking feedback and history contracts', () => {
     expect(integration).toContain(".where('customerDetails.id', '==', parsed.customer_id)");
     expect(integration).toContain(".where('customerId', '==', parsed.customer_id)");
   });
+
+  test('checkout customer identity is brand scoped while same-brand legacy ids remain reusable', async () => {
+    const checkout = await readFile(resolve(process.cwd(), 'src/app/checkout/actions.ts'), 'utf8');
+    expect(checkout).toContain("createHash('sha256')");
+    expect(checkout).toContain('`${brandId}\\n${normalizedEmail}`');
+    expect(checkout).toContain('cust-v2-');
+    expect(checkout).toContain('legacyData.brandId === brandId');
+    expect(checkout).toContain("customerData.brandId !== brandId");
+    expect(checkout).toContain('location.brandId !== brand.id');
+    expect(checkout).toContain('normalizedEmail');
+  });
 });
