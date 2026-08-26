@@ -2,6 +2,7 @@
 
 'use server';
 
+import { createHash } from 'node:crypto';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { db } from '@/lib/firebase';
@@ -27,13 +28,50 @@ function sanitizeDescriptor(s: string, max: number) {
 function makeDescriptorPrefix(brand: string) { return sanitizeDescriptor(`OFLY*${brand}`, 22); }
 function makeDescriptorSuffix(city: string) { return sanitizeDescriptor(city, 10); }
 
+function normalizeCustomerEmail(value: string): string {
+    return value.trim().toLowerCase();
+}
+
+function scopedCustomerId(brandId: string, normalizedEmail: string): string {
+    const digest = createHash('sha256')
+        .update(`${brandId}\n${normalizedEmail}`, 'utf8')
+        .digest('hex')
+        .slice(0, 32);
+    return `cust-v2-${digest}`;
+}
+
+async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: string) {
+    const normalizedEmail = normalizeCustomerEmail(customerInfo.email);
+    if (!normalizedEmail) throw new Error('Customer email is required.');
+
+    const scopedRef = doc(db, 'customers', scopedCustomerId(brandId, normalizedEmail));
+    const scopedDoc = await getDoc(scopedRef);
+    if (scopedDoc.exists()) {
+        const scopedData = scopedDoc.data() as Customer;
+        if (scopedData.brandId !== brandId) {
+            throw new Error('Customer identity scope conflict.');
+        }
+        return { customerRef: scopedRef, customerDoc: scopedDoc, normalizedEmail };
+    }
+
+    // Backward compatibility: older checkout customers used an email-only hash.
+    // Reuse that native id only when the existing document belongs to this exact brand.
+    const legacyRef = doc(db, 'customers', `cust-${simpleHash(customerInfo.email)}`);
+    const legacyDoc = await getDoc(legacyRef);
+    if (legacyDoc.exists()) {
+        const legacyData = legacyDoc.data() as Customer;
+        if (legacyData.brandId === brandId) {
+            return { customerRef: legacyRef, customerDoc: legacyDoc, normalizedEmail };
+        }
+    }
+
+    return { customerRef: scopedRef, customerDoc: scopedDoc, normalizedEmail };
+}
 
 async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: string, locationId: string, newOrderTotal: number, anonymousConsentId?: string): Promise<string> {
-    const customerId = `cust-${simpleHash(customerInfo.email)}`;
-    const customerRef = doc(db, 'customers', customerId);
-
     try {
-        const customerDoc = await getDoc(customerRef);
+        const { customerRef, customerDoc, normalizedEmail } = await resolveCheckoutCustomerRef(customerInfo, brandId);
+        const customerId = customerRef.id;
         let cookieConsentData: Customer['cookie_consent'] | undefined = undefined;
 
         if (anonymousConsentId) {
@@ -57,8 +95,13 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
 
         if (customerDoc.exists()) {
             const customerData = customerDoc.data() as Customer;
-            const updatedData: Partial<Customer> = {
+            if (customerData.brandId !== brandId) {
+                throw new Error('Customer identity scope conflict.');
+            }
+            const updatedData: Partial<Customer> & { normalizedEmail?: string } = {
                 fullName: customerInfo.name,
+                email: normalizedEmail,
+                normalizedEmail,
                 phone: customerInfo.phone,
                 street: customerInfo.street,
                 zipCode: customerInfo.zipCode,
@@ -76,14 +119,14 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 updatedData.cookie_consent = cookieConsentData;
             }
 
-
             await updateDoc(customerRef, updatedData);
         } else {
-            const newCustomer: Customer = {
+            const newCustomer: Customer & { normalizedEmail: string } = {
                 id: customerId,
                 brandId: brandId,
                 fullName: customerInfo.name,
-                email: customerInfo.email,
+                email: normalizedEmail,
+                normalizedEmail,
                 phone: customerInfo.phone,
                 street: customerInfo.street,
                 zipCode: customerInfo.zipCode,
@@ -109,7 +152,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
     }
 }
 
-// Simple hash function to create a numeric ID from an email string
+// Legacy hash retained only for safe lookup of pre-v2 customer ids.
 function simpleHash(str: string): number {
     let hash = 0;
     for (let i = 0; i < str.length; i++) {
@@ -165,7 +208,7 @@ export async function createStripeCheckoutSessionAction(
         getBrandById(brandId),
         getLocationById(locationId),
     ]);
-    if (!brand || !location) throw new Error("Brand or location not found");
+    if (!brand || !location || location.brandId !== brand.id) throw new Error("Brand or location not found in the requested tenant scope");
     
     const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, 0, anonymousConsentId);
 
