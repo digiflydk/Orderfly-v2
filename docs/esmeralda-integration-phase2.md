@@ -30,6 +30,12 @@ Submission revalidates the invitation, customer, source and active question vers
 
 The private Firestore collection is `integrationFeedbackInvitations`; all access in checked-in code uses Firebase Admin. The repository does not contain Firestore client rules, so deployment rules remain an external Firebase configuration concern and must not grant browser access to this collection.
 
+## Consumer identity tenant hardening
+
+The existing checkout customer path previously derived its deterministic customer document id from email alone. That could make the same email address collide across two brands. Checkout now normalizes the email and derives new customer ids from a SHA-256 digest of `(brandId, normalizedEmail)`, so consumer identity is tenant-scoped at creation time.
+
+Backward compatibility is preserved for existing email-hash customer documents: a legacy customer id is reused only when the loaded document already belongs to the requested brand. A legacy document owned by another brand is never updated; checkout creates/uses the new brand-scoped id instead. Existing customer updates also verify `brandId`, and checkout rejects a location whose `brandId` does not match the selected brand before creating the customer or order. New/updated records store `normalizedEmail` for consistent identity resolution while preserving the native Firestore customer id chosen for that customer.
+
 ## Customer history
 
 Esmeralda calls:
@@ -64,3 +70,4 @@ Firebase App Hosting injects `ORDERFLY_ESMERALDA_INTEGRATION_SECRET` from Secret
 - Existing pickup/delivery question versions remain valid.
 - Existing feedback rows without `sourceType` are interpreted as `commerce_order`, with `orderId` used as the canonical source id.
 - Existing customer order/spend/loyalty aggregates are not changed by booking integration.
+- Existing same-brand legacy checkout customer ids are retained when safely resolvable; only new/cross-brand-conflicting identities move to the brand-scoped v2 id format.
