@@ -20,7 +20,7 @@ export const FeedbackQuestionsVersionSchema = z.object({
   versionLabel: z.string(),
   isActive: z.boolean(),
   language: z.string().default("da"),
-  orderTypes: z.array(z.enum(["pickup", "delivery"])),
+  orderTypes: z.array(z.enum(["pickup", "delivery", "booking"])),
   questions: z.array(QuestionSchema),
   createdAt: z.any().optional(),
   updatedAt: z.any().optional(),

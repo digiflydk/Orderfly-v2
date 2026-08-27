@@ -1,99 +1,211 @@
-
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, getDocs, query, where, Timestamp, getDoc } from 'firebase/firestore';
-import { z } from 'zod';
-import type { Feedback, FeedbackQuestionsVersion, OrderDetail } from '@/types';
 import { redirect } from 'next/navigation';
+import { z } from 'zod';
+
+import { admin, getAdminDb } from '@/lib/firebase-admin';
+import { getOrderById } from '@/app/checkout/order-actions';
+import type {
+  ExperienceFeedbackQuestionsVersion,
+  FeedbackExperienceType,
+  FeedbackSourceType,
+} from '@/lib/feedback/source-types';
+import { validateFeedbackResponses } from '@/lib/feedback/response-validation';
+import { resolveBookingFeedbackInvitationToken } from '@/lib/integrations/esmeralda-feedback-integration';
+
+export async function getActiveFeedbackQuestionsForExperience(
+  experienceType: FeedbackExperienceType,
+): Promise<ExperienceFeedbackQuestionsVersion | null> {
+  const db = getAdminDb();
+  const snapshot = await db.collection('feedbackQuestionsVersion')
+    .where('isActive', '==', true)
+    .where('orderTypes', 'array-contains', experienceType)
+    .get();
+  if (snapshot.empty) return null;
+  const doc = snapshot.docs[0];
+  return { id: doc.id, ...doc.data() } as ExperienceFeedbackQuestionsVersion;
+}
 
 export async function getActiveFeedbackQuestionsForOrder(
-  deliveryType: 'Delivery' | 'Pickup'
-): Promise<FeedbackQuestionsVersion | null> {
-  const q = query(
-    collection(db, 'feedbackQuestionsVersion'), 
-    where('isActive', '==', true),
-    where('orderTypes', 'array-contains', deliveryType.toLowerCase())
+  deliveryType: 'Delivery' | 'Pickup',
+): Promise<ExperienceFeedbackQuestionsVersion | null> {
+  return getActiveFeedbackQuestionsForExperience(
+    deliveryType.toLowerCase() as 'delivery' | 'pickup',
   );
-  
-  const snapshot = await getDocs(q);
-  if (snapshot.empty) return null;
-
-  // Assuming only one version is active per language/type combo
-  const doc = snapshot.docs[0];
-  return { id: doc.id, ...doc.data() } as FeedbackQuestionsVersion;
 }
 
 const feedbackSubmissionSchema = z.object({
-  orderId: z.string(),
-  customerId: z.string(),
-  locationId: z.string(),
-  brandId: z.string(),
-  questionVersionId: z.string(),
-  language: z.string(),
-  responses: z.any(), // Will be parsed from JSON
+  sourceType: z.enum(['commerce_order', 'booking']),
+  sourceId: z.string().trim().min(1).max(200),
+  customerId: z.string().trim().min(1).max(200),
+  questionVersionId: z.string().trim().min(1).max(200),
+  language: z.string().trim().min(2).max(16),
+  invitationToken: z.string().trim().max(4096).optional().nullable(),
+  responses: z.record(z.string(), z.unknown()),
 });
 
-export async function submitFeedbackAction(prevState: any, formData: FormData) {
-    try {
-        const rawData = {
-            orderId: formData.get('orderId'),
-            customerId: formData.get('customerId'),
-            locationId: formData.get('locationId'),
-            brandId: formData.get('brandId'),
-            questionVersionId: formData.get('questionVersionId'),
-            language: formData.get('language'),
-            responses: JSON.parse(formData.get('responses') as string || '{}'),
-        };
-        
-        const validatedFields = feedbackSubmissionSchema.safeParse(rawData);
+type AuthoritativeSource = {
+  sourceType: FeedbackSourceType;
+  sourceId: string;
+  customerId: string;
+  locationId: string;
+  brandId: string;
+  experienceType: FeedbackExperienceType;
+  invitationId?: string;
+};
 
-        if (!validatedFields.success) {
-            console.error(validatedFields.error.flatten());
-            return { message: 'Validation failed.', error: true };
-        }
-        
-        const { responses, ...feedbackBase } = validatedFields.data;
+async function resolveAuthoritativeSource(
+  parsed: z.infer<typeof feedbackSubmissionSchema>,
+): Promise<AuthoritativeSource | null> {
+  if (parsed.sourceType === 'commerce_order') {
+    const order = await getOrderById(parsed.sourceId);
+    if (!order || order.customerDetails.id !== parsed.customerId) return null;
+    return {
+      sourceType: 'commerce_order',
+      sourceId: order.id,
+      customerId: order.customerDetails.id,
+      locationId: order.locationId,
+      brandId: order.brandId,
+      experienceType: order.deliveryType.toLowerCase() as 'pickup' | 'delivery',
+    };
+  }
 
-        // Process responses to extract core fields
-        let rating = 0;
-        let npsScore: number | undefined = undefined;
-        let comment: string | null = null;
-        let tags: string[] = [];
-        
-        Object.values(responses).forEach((response: any) => {
-            if (response.type === 'stars') rating = response.answer;
-            if (response.type === 'nps') npsScore = response.answer;
-            if (response.type === 'text') comment = response.answer;
-            if (response.type === 'multiple_options' && Array.isArray(response.answer)) {
-                tags.push(...response.answer);
-            }
-        });
-        
-        const newFeedback: Omit<Feedback, 'id'> = {
-            ...feedbackBase,
-            receivedAt: new Date(),
-            rating,
-            npsScore,
-            comment: comment ?? undefined,
-            tags,
-            responses, // Now storing the full responses object
-            showPublicly: false, // Default to private
-            maskCustomerName: false,
-            autoResponseSent: false, 
-        };
-        
-        const feedbackRef = doc(collection(db, 'feedback'));
-        await setDoc(feedbackRef, { ...newFeedback, id: feedbackRef.id });
+  if (!parsed.invitationToken) return null;
+  const invitation = await resolveBookingFeedbackInvitationToken(parsed.invitationToken);
+  if (
+    !invitation ||
+    invitation.booking_id !== parsed.sourceId ||
+    invitation.customer_id !== parsed.customerId
+  ) {
+    return null;
+  }
 
-        revalidatePath('/superadmin/feedback');
-    } catch (e) {
-        const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-        console.error('Error submitting feedback:', e);
-        return { message: `Failed to submit feedback: ${errorMessage}`, error: true };
+  return {
+    sourceType: 'booking',
+    sourceId: invitation.booking_id,
+    customerId: invitation.customer_id,
+    locationId: invitation.location_id,
+    brandId: invitation.organization_id,
+    experienceType: 'booking',
+    invitationId: invitation.invitation_id,
+  };
+}
+
+function extractCoreResponses(responses: Record<string, { type: string; answer: unknown }>) {
+  let rating = 0;
+  let npsScore: number | undefined;
+  let comment: string | undefined;
+  const tags: string[] = [];
+
+  Object.values(responses).forEach((response) => {
+    if (response.type === 'stars' && typeof response.answer === 'number') rating = response.answer;
+    if (response.type === 'nps' && typeof response.answer === 'number') npsScore = response.answer;
+    if (response.type === 'text' && typeof response.answer === 'string') comment = response.answer;
+    if ((response.type === 'multiple_options' || response.type === 'tags') && Array.isArray(response.answer)) {
+      for (const tag of response.answer) if (typeof tag === 'string') tags.push(tag);
     }
-    
-    redirect('/feedback/thank-you');
+  });
+
+  return { rating, npsScore, comment, tags };
+}
+
+export async function submitFeedbackAction(_prevState: any, formData: FormData) {
+  try {
+    let responses: Record<string, unknown> = {};
+    try {
+      const decoded = JSON.parse(String(formData.get('responses') || '{}'));
+      if (!decoded || typeof decoded !== 'object' || Array.isArray(decoded)) {
+        return { message: 'Invalid feedback payload.', error: true };
+      }
+      responses = decoded as Record<string, unknown>;
+    } catch {
+      return { message: 'Invalid feedback payload.', error: true };
+    }
+
+    const parsed = feedbackSubmissionSchema.safeParse({
+      sourceType: formData.get('sourceType'),
+      sourceId: formData.get('sourceId'),
+      customerId: formData.get('customerId'),
+      questionVersionId: formData.get('questionVersionId'),
+      language: formData.get('language'),
+      invitationToken: formData.get('invitationToken') || undefined,
+      responses,
+    });
+    if (!parsed.success) return { message: 'Validation failed.', error: true };
+
+    const source = await resolveAuthoritativeSource(parsed.data);
+    if (!source) return { message: 'Feedback source could not be verified.', error: true };
+
+    const db = getAdminDb();
+    const questionsSnapshot = await db.collection('feedbackQuestionsVersion').doc(parsed.data.questionVersionId).get();
+    if (!questionsSnapshot.exists) return { message: 'Feedback form is no longer available.', error: true };
+    const questionsData = questionsSnapshot.data() ?? {};
+    const allowedTypes = Array.isArray(questionsData.orderTypes) ? questionsData.orderTypes : [];
+    if (
+      questionsData.isActive !== true ||
+      questionsData.language !== parsed.data.language ||
+      !allowedTypes.includes(source.experienceType)
+    ) {
+      return { message: 'Feedback form is not valid for this visit.', error: true };
+    }
+
+    const responseValidation = validateFeedbackResponses(questionsData.questions, parsed.data.responses);
+    if (!responseValidation.ok) {
+      return { message: responseValidation.error, error: true };
+    }
+    const validatedResponses = responseValidation.responses;
+    const { rating, npsScore, comment, tags } = extractCoreResponses(validatedResponses);
+
+    const feedbackRef = db.collection('feedback').doc();
+    const feedbackData: Record<string, unknown> = {
+      id: feedbackRef.id,
+      sourceType: source.sourceType,
+      sourceId: source.sourceId,
+      customerId: source.customerId,
+      locationId: source.locationId,
+      brandId: source.brandId,
+      questionVersionId: parsed.data.questionVersionId,
+      language: parsed.data.language,
+      responses: validatedResponses,
+      receivedAt: admin.firestore.FieldValue.serverTimestamp(),
+      rating,
+      tags,
+      showPublicly: false,
+      maskCustomerName: false,
+      autoResponseSent: false,
+      answeredVia: 'webshop',
+    };
+    if (source.sourceType === 'commerce_order') feedbackData.orderId = source.sourceId;
+    if (typeof npsScore === 'number') feedbackData.npsScore = npsScore;
+    if (comment) feedbackData.comment = comment;
+
+    if (source.sourceType === 'booking' && source.invitationId) {
+      const invitationRef = db.collection('integrationFeedbackInvitations').doc(source.invitationId);
+      await db.runTransaction(async (transaction) => {
+        const invitationSnapshot = await transaction.get(invitationRef);
+        if (!invitationSnapshot.exists) throw new Error('Feedback invitation no longer exists.');
+        const invitation = invitationSnapshot.data() ?? {};
+        if (invitation.status === 'submitted' && typeof invitation.feedbackId === 'string') return;
+        if (invitation.status !== 'active') throw new Error('Feedback invitation is not active.');
+        transaction.create(feedbackRef, feedbackData);
+        transaction.update(invitationRef, {
+          status: 'submitted',
+          feedbackId: feedbackRef.id,
+          submittedAt: admin.firestore.FieldValue.serverTimestamp(),
+          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+    } else {
+      await feedbackRef.create(feedbackData);
+    }
+
+    revalidatePath('/superadmin/feedback');
+  } catch (e) {
+    const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
+    console.error('Error submitting feedback:', e);
+    return { message: `Failed to submit feedback: ${errorMessage}`, error: true };
+  }
+
+  redirect('/feedback/thank-you');
 }
