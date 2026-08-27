@@ -10,8 +10,8 @@ export const revalidate = 0;
 
 import { SuperAdminLayoutClient } from '@/components/superadmin/superadmin-layout-client';
 import { getPlatformBrandingSettings } from './settings/queries';
-import { hasPermission } from '@/lib/permissions';
 import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
+import { currentSuperadminSession } from '@/lib/auth/mpanel-superadmin-sso';
 
 export default async function SuperadminLayout({
   children,
@@ -26,8 +26,7 @@ export default async function SuperadminLayout({
     brandingSettings = null;
   }
 
-  // Simpelt permission-tjek (kan udbygges senere)
-  const canAccess = hasPermission('users:view');
+  const canAccess = Boolean(await currentSuperadminSession());
 
   if (!canAccess) {
     return (

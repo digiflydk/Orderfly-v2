@@ -2,6 +2,29 @@
 
 This document outlines the security model, roles, and permissions strategy for the Orderfly platform.
 
+## mPanel SSO Superadmin boundary
+
+Orderfly Superadmin is protected by an opaque, server-side session established
+only through the Esmeralda mPanel SSO exchange. This is not a general user sync.
+One runtime-configured immutable mPanel employee UUID may mint a signed,
+audience- and purpose-bound launch code. The code expires within 60 seconds and
+its `jti` is atomically consumed once. Orderfly then creates a random opaque
+session and returns only a Secure, HttpOnly, SameSite=Lax cookie lasting at most
+15 minutes.
+
+Node middleware validates the server-side session for every
+`/superadmin/**` page and Server Action request plus every
+`/api/superadmin/**` route. Display names, e-mail addresses, ordinary admin
+roles and browser state never grant access. Logout revokes only the Orderfly
+session and leaves mPanel signed in.
+
+Runtime configuration names, without values:
+
+- `ORDERFLY_MPANEL_SSO_SECRET`
+- `ORDERFLY_MPANEL_SUPERADMIN_EMPLOYEE_ID`
+- `ORDERFLY_MPANEL_SSO_ISSUER`
+- `ORDERFLY_MPANEL_SSO_AUDIENCE`
+
 ---
 
 ## 1. Core Principles
