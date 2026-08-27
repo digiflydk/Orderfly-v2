@@ -1,5 +1,5 @@
 import { expect, test } from '@playwright/test';
-import { resolveProductionRedirect } from '../middleware';
+import { resolveProductionRedirect } from '../src/lib/production-redirect';
 
 test.describe('Production domain redirects', () => {
   test('redirects www host to canonical apex host and preserves path/query', async () => {

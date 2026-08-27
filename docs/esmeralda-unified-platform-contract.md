@@ -237,6 +237,19 @@ If a manufactured frozen pizza is also sold through Orderfly, use an explicit `p
 
 ### User, membership and permissions
 
+#### Omair-only Superadmin SSO
+
+The initial SSO release uses the existing mPanel employee-session identity. It
+does not create a Firebase user and never matches by name or e-mail. Esmeralda
+validates the hashed active `employee_sessions` row and the same-organization
+active employee, then requires one runtime-configured `employees.id` UUID. A
+60-second signed one-time code is posted to Orderfly. Orderfly atomically
+consumes it and creates a separate 15-minute opaque HttpOnly session. No raw
+mPanel session token crosses the platform boundary.
+
+This SSO is separate from organization/brand mappings and consumer customer,
+booking and feedback synchronization.
+
 Canonical concepts:
 
 - `platform_user`: login identity

@@ -2,6 +2,8 @@
 
 | Path | Method | Caller | Handler | DB | Response |
 |---|---|---|---|---|---|
+| /api/integrations/esmeralda/superadmin-sso/exchange | POST form | mPanel launch | redeemLaunchCode | integrationSsoRedemptions, superadminSessions | 303 dashboard |
+| /api/superadmin/session/logout | POST | Superadmin session | revokeRawSuperadminSession | superadminSessions | JSON |
 | /superadmin/products/new | POST (Action) | ProductFormPage | createOrUpdateProduct | products | Redirect |
 | /superadmin/products/edit/:id | POST (Action) | ProductFormPage | createOrUpdateProduct | products | Redirect |
 | /superadmin/feedback/questions/new | POST (Action) | FeedbackQuestionVersionForm | createOrUpdateQuestionVersion | feedbackQuestionsVersion | Redirect |

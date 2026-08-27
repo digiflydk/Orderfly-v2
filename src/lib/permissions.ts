@@ -7,6 +7,7 @@ export type Permission = {
 }
 
 export const ALL_PERMISSIONS: Permission[] = [
+    { id: 'orderfly.superadmin', name: 'Orderfly Superadmin', description: 'Full platform access after the server-authenticated mPanel SSO boundary.', group: 'Platform' },
     // Brand Management
     { id: 'brands:view', name: 'View Brands', description: 'Can view the list of brands.', group: 'Brands' },
     { id: 'brands:create', name: 'Create Brands', description: 'Can create new brands.', group: 'Brands' },
@@ -48,20 +49,8 @@ export const ALL_PERMISSIONS: Permission[] = [
 ];
 
 
-// This is a placeholder for a real permission check function that would
-// get the current user's permissions from their roles.
-// For now, it simulates a "SuperAdmin" user who always has all permissions.
+// This validates the capability catalogue only. Authentication is enforced by
+// the Node middleware and opaque server-side Superadmin session.
 export function hasPermission(permissionId: string): boolean {
-    // In a real app, you would:
-    // 1. Get the current logged-in user from Firebase Auth.
-    // 2. Look up their user document in Firestore to get their `roleIds`.
-    // 3. Look up those roles in the `roles` collection.
-    // 4. Aggregate all permissions from those roles into a Set.
-    // 5. Return `userPermissions.has(permissionId)`.
-
-    // For now, we assume the user is a SuperAdmin and has all permissions.
-    // This prevents being locked out during development.
-    // To test the logic, you can temporarily return `false` or check a specific permission.
-    console.log(`Checking for permission: ${permissionId}. Granting access as SuperAdmin.`);
-    return true;
+    return ALL_PERMISSIONS.some(permission => permission.id === permissionId);
 }

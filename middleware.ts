@@ -1,47 +1,41 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-const CANONICAL_HOST = 'orderfly.dk';
-const WWW_HOST = `www.${CANONICAL_HOST}`;
+import {
+  SUPERADMIN_COOKIE,
+  validateRawSuperadminSession,
+} from '@/lib/auth/mpanel-superadmin-sso';
+import { resolveProductionRedirect } from '@/lib/production-redirect';
 
-function normalizeHost(host: string | null): string {
-  return (host ?? '').split(':')[0].trim().toLowerCase();
-}
-
-function normalizeProto(proto: string | null): string {
-  return (proto ?? '').split(',')[0].trim().toLowerCase();
-}
-
-export function resolveProductionRedirect(url: URL, hostHeader: string | null, forwardedProto: string | null): string | null {
-  const host = normalizeHost(hostHeader);
-  const proto = normalizeProto(forwardedProto) || url.protocol.replace(':', '');
-
-  const shouldRedirectToCanonicalHost = host === WWW_HOST;
-  const shouldRedirectToHttps = host === CANONICAL_HOST && proto === 'http';
-
-  if (!shouldRedirectToCanonicalHost && !shouldRedirectToHttps) {
-    return null;
-  }
-
-  const redirectUrl = new URL(url.toString());
-  redirectUrl.protocol = 'https:';
-  redirectUrl.host = CANONICAL_HOST;
-  return redirectUrl.toString();
-}
-
-export function middleware(request: NextRequest) {
-  const redirectTarget = resolveProductionRedirect(
-    new URL(request.url),
-    request.headers.get('x-forwarded-host') ?? request.headers.get('host'),
-    request.headers.get('x-forwarded-proto')
-  );
-
-  if (!redirectTarget) {
-    return NextResponse.next();
-  }
-  
-  return NextResponse.redirect(redirectTarget, 308);
-}
+export { resolveProductionRedirect } from '@/lib/production-redirect';
 
 export const config = {
   matcher: ['/((?!_next/static|_next/image|favicon.ico).*)'],
+  runtime: 'nodejs',
 };
+
+export async function middleware(request: NextRequest) {
+  const canonicalRedirect = resolveProductionRedirect(
+    new URL(request.url),
+    request.headers.get('x-forwarded-host') ?? request.headers.get('host'),
+    request.headers.get('x-forwarded-proto'),
+  );
+  if (canonicalRedirect) return NextResponse.redirect(canonicalRedirect, 308);
+
+  const isProtected = request.nextUrl.pathname.startsWith('/superadmin/') ||
+    request.nextUrl.pathname === '/superadmin' ||
+    request.nextUrl.pathname.startsWith('/api/superadmin/');
+  if (!isProtected) return NextResponse.next();
+
+  const isLogout = request.nextUrl.pathname === '/api/superadmin/session/logout';
+  if (isLogout) return NextResponse.next();
+
+  const session = await validateRawSuperadminSession(
+    request.cookies.get(SUPERADMIN_COOKIE)?.value ?? '',
+  );
+  if (session) return NextResponse.next();
+
+  if (request.nextUrl.pathname.startsWith('/api/')) {
+    return NextResponse.json({ error: 'unauthorized' }, { status: 401 });
+  }
+  return NextResponse.redirect(new URL('/?orderfly_login=required', request.url));
+}
