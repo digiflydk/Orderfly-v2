@@ -1,9 +1,8 @@
 name: Work Live Verification
 
 on:
-  pull_request_target:
-    branches: [main]
-    types: [closed]
+  repository_dispatch:
+    types: [work-live-verify]
 
 permissions:
   contents: read
@@ -11,63 +10,89 @@ permissions:
   pull-requests: read
 
 env:
-  LIVE_URL: ${{ vars.ORDERFLY_LIVE_URL || 'https://orderfly.dk' }}
+  LIVE_URL: https://orderfly.dk
+  ISSUE_NUMBER: ${{ github.event.client_payload.issue_number }}
+  PR_NUMBER: ${{ github.event.client_payload.pr_number }}
+  MERGE_SHA: ${{ github.event.client_payload.merge_sha }}
+  DEPLOYMENT_RUN_ID: ${{ github.event.client_payload.deployment_run_id }}
+  CONTROLLED_LIVE_VERIFICATION: ${{ github.event.client_payload.controlled_live_verification }}
+
+concurrency:
+  group: orderfly-production-release
+  cancel-in-progress: false
 
 jobs:
   live-verify:
-    if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
-      - name: Resolve Work-managed issue
+      - name: Validate deployment evidence for exact merge SHA
         id: context
         uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
+          PR_NUMBER: ${{ env.PR_NUMBER }}
+          MERGE_SHA: ${{ env.MERGE_SHA }}
+          DEPLOYMENT_RUN_ID: ${{ env.DEPLOYMENT_RUN_ID }}
+          CONTROLLED_LIVE_VERIFICATION: ${{ env.CONTROLLED_LIVE_VERIFICATION }}
         with:
           github-token: ${{ github.token }}
           script: |
-            const pr = context.payload.pull_request;
-            const match = (pr.body || '').match(/Work-Managed-Issue:\s*#(\d+)/);
-            if (!match) {
-              core.setOutput('managed', 'false');
-              return;
-            }
-            const issueNumber = Number(match[1]);
-            const { data: issue } = await github.rest.issues.get({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber});
-            const clean = issue.title.replace(/^\[[^\]]+\]\s*/, '');
-            core.setOutput('managed', 'true');
-            core.setOutput('issue-number', String(issueNumber));
-            core.setOutput('clean-title', clean);
-            await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[AWAITING LIVE VERIFY] ${clean}`});
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_LIVE_VERIFY: PO-approved PR #${pr.number} was merged to main. Running read-only live Playwright health checks. A green smoke run is evidence for PO, not permission for Work to mark Done.`});
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            const prNumber = Number(process.env.PR_NUMBER);
+            const mergeSha = String(process.env.MERGE_SHA || '').toLowerCase();
+            const deploymentRun = String(process.env.DEPLOYMENT_RUN_ID || '');
+            const dispatchedMode = String(process.env.CONTROLLED_LIVE_VERIFICATION || '').toLowerCase();
+            if (!Number.isInteger(issueNumber) || !Number.isInteger(prNumber) || !/^[0-9a-f]{40}$/.test(mergeSha) || !/^\d+$/.test(deploymentRun)) throw new Error('Invalid deployment-aware live payload.');
+            if (!['none', 'required'].includes(dispatchedMode)) throw new Error('Controlled live mode is missing or invalid.');
+            if (process.env.LIVE_URL !== 'https://orderfly.dk') throw new Error('Live verification must target the canonical production URL.');
+            const mainSha = String((await github.rest.git.getRef({ owner: context.repo.owner, repo: context.repo.repo, ref: 'heads/main' })).data.object.sha).toLowerCase();
+            if (mainSha !== mergeSha) throw new Error(`Live verification refused: main ${mainSha} does not equal deployed merge ${mergeSha}.`);
+            const pr = (await github.rest.pulls.get({ owner: context.repo.owner, repo: context.repo.repo, pull_number: prNumber })).data;
+            if (!pr.merged || String(pr.merge_commit_sha || '').toLowerCase() !== mergeSha) throw new Error(`PR #${prNumber} does not match deployed merge ${mergeSha}.`);
+            const issue = (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber })).data;
+            if (!issue.title.startsWith('[LIVE VERIFY]')) throw new Error(`Issue #${issueNumber} is not [LIVE VERIFY].`);
+            const comments = await github.paginate(github.rest.issues.listComments, { owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, per_page: 100 });
+            const trusted = (comment) => ['OWNER', 'MEMBER', 'COLLABORATOR'].includes(String(comment.author_association || '').toUpperCase()) || comment.user?.login === 'github-actions[bot]';
+            const releaseEvidence = comments.find((comment) => {
+              const body = String(comment.body || '');
+              return trusted(comment) && /(?:^|\n)RELEASE_MERGED\s*(?=\n|$)/.test(body) && body.includes(`PR: #${prNumber}`) && body.includes(`Merge-SHA: ${mergeSha}`);
+            });
+            if (!releaseEvidence) throw new Error('Matching trusted RELEASE_MERGED evidence was not found.');
+            const releaseModeMatches = [...String(releaseEvidence.body || '').matchAll(/(?:^|\n)Controlled-Live-Verification:\s*(none|required)\s*(?=\n|$)/gi)];
+            const persistedMode = releaseModeMatches.length === 1 ? releaseModeMatches[0][1].toLowerCase() : null;
+            if (!persistedMode || persistedMode !== dispatchedMode) throw new Error(`Controlled live mode mismatch: persisted=${persistedMode || 'missing-or-duplicate'}, dispatched=${dispatchedMode}.`);
+            const deploymentEvidence = comments.find((comment) => {
+              const body = String(comment.body || '');
+              return trusted(comment) && body.includes('DEPLOYMENT_SUCCEEDED') && body.includes(`Merge-SHA: ${mergeSha}`) && body.includes(`Deployment-Run: ${deploymentRun}`) && body.includes('App-Hosting-Project: orderfly-v21-10334086-b3076') && body.includes('Data-Project: orderfly-39325');
+            });
+            if (!deploymentEvidence) throw new Error('Matching trusted App Hosting deployment evidence was not found.');
+            core.setOutput('controlled-live', persistedMode);
+            core.setOutput('clean-title', String(issue.title || '').replace(/^\[[^\]]+\]\s*/, ''));
 
-      - name: Check out merged main
-        if: steps.context.outputs.managed == 'true'
+      - name: Check out exact deployed SHA
         uses: actions/checkout@v6
         with:
-          ref: main
+          ref: ${{ env.MERGE_SHA }}
+          persist-credentials: false
 
       - name: Setup Node.js
-        if: steps.context.outputs.managed == 'true'
         uses: actions/setup-node@v6
         with:
           node-version: 24
           cache: npm
 
       - name: Install dependencies and Chromium
-        if: steps.context.outputs.managed == 'true'
         run: |
           npm ci
           npx playwright install --with-deps chromium
 
-      - name: Wait for live endpoint
-        if: steps.context.outputs.managed == 'true'
-        env:
-          URL: ${{ env.LIVE_URL }}
+      - name: Wait for production endpoint
         run: |
           ok=0
           for attempt in $(seq 1 24); do
-            code=$(curl -L -sS -o /dev/null -w '%{http_code}' --max-time 20 "$URL" || true)
-            if [ "$code" -ge 200 ] && [ "$code" -lt 500 ]; then
+            code=$(curl -L -sS -o /dev/null -w '%{http_code}' --max-time 20 "$LIVE_URL" || true)
+            if [ "$code" -ge 200 ] && [ "$code" -lt 300 ]; then
               ok=1
               break
             fi
@@ -75,86 +100,67 @@ jobs:
           done
           test "$ok" = "1"
 
-      - name: Create read-only live Playwright checks
-        if: steps.context.outputs.managed == 'true'
-        run: |
-          cat > tests/__work_live_smoke.spec.ts <<'EOF'
-          import { test, expect } from '@playwright/test';
-          const base = process.env.ORDERFLY_LIVE_URL!;
-
-          test('live landing page is healthy', async ({ page }) => {
-            const errors: string[] = [];
-            page.on('pageerror', error => errors.push(error.message));
-            const response = await page.goto(base, { waitUntil: 'domcontentloaded' });
-            expect(response).not.toBeNull();
-            expect(response!.status()).toBeLessThan(500);
-            await expect(page.locator('body')).toBeVisible();
-            expect(errors).toEqual([]);
-          });
-
-          test('live public brand surface works on desktop', async ({ page }) => {
-            const response = await page.goto(new URL('/m3pizza', base).toString(), { waitUntil: 'domcontentloaded' });
-            expect(response).not.toBeNull();
-            expect(response!.status()).toBeLessThan(500);
-            await expect(page.locator('body')).toBeVisible();
-          });
-
-          test('live public brand surface has no horizontal overflow on mobile', async ({ page }) => {
-            await page.setViewportSize({ width: 375, height: 667 });
-            await page.goto(new URL('/m3pizza', base).toString(), { waitUntil: 'domcontentloaded' });
-            const overflow = await page.evaluate(() => document.documentElement.scrollWidth > document.documentElement.clientWidth + 1);
-            expect(overflow).toBeFalsy();
-          });
-          EOF
-          cat > /tmp/playwright.work-live.config.ts <<'EOF'
-          import { defineConfig, devices } from '@playwright/test';
-          export default defineConfig({
-            testDir: process.cwd() + '/tests',
-            testMatch: '__work_live_smoke.spec.ts',
-            retries: 2,
-            use: { trace: 'on-first-retry' },
-            projects: [{ name: 'live-chromium', use: { ...devices['Desktop Chrome'] } }],
-          });
-          EOF
-
-      - name: Run Playwright against live Orderfly
-        if: steps.context.outputs.managed == 'true'
+      - name: Run checked-in post-deploy Playwright
         env:
           ORDERFLY_LIVE_URL: ${{ env.LIVE_URL }}
-        run: npx playwright test --config=/tmp/playwright.work-live.config.ts
+        run: npx playwright test --config=playwright.live.config.ts
 
-      - name: Upload live Playwright diagnostics
-        if: always() && steps.context.outputs.managed == 'true'
+      - name: Upload live diagnostics
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: orderfly-post-merge-live-${{ github.run_attempt }}
+          name: orderfly-post-deploy-${{ env.MERGE_SHA }}-${{ github.run_attempt }}
           path: |
             playwright-report/
             test-results/
           if-no-files-found: ignore
-          retention-days: 14
+          retention-days: 90
 
-      - name: Record green live evidence
-        if: success() && steps.context.outputs.managed == 'true'
+      - name: Finalize green release or retain controlled gate
+        if: success()
         uses: actions/github-script@v7
         env:
-          ISSUE_NUMBER: ${{ steps.context.outputs.issue-number }}
-          LIVE_URL: ${{ env.LIVE_URL }}
-          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        with:
-          github-token: ${{ github.token }}
-          script: |
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.ISSUE_NUMBER), body: `WORK_LIVE_VERIFY_PASSED: Read-only post-merge Playwright smoke passed on ${process.env.LIVE_URL}. Run: ${process.env.RUN_URL}. PO must still verify deployment evidence and any issue-specific live acceptance criteria before marking Done.`});
-
-      - name: Mark live verification failure as blocked
-        if: failure() && steps.context.outputs.managed == 'true'
-        uses: actions/github-script@v7
-        env:
-          ISSUE_NUMBER: ${{ steps.context.outputs.issue-number }}
+          ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
+          MERGE_SHA: ${{ env.MERGE_SHA }}
+          DEPLOYMENT_RUN_ID: ${{ env.DEPLOYMENT_RUN_ID }}
+          CONTROLLED_LIVE_VERIFICATION: ${{ steps.context.outputs.controlled-live }}
           CLEAN_TITLE: ${{ steps.context.outputs.clean-title }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           github-token: ${{ github.token }}
           script: |
-            await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.ISSUE_NUMBER), title: `[BLOCKED] ${process.env.CLEAN_TITLE}`});
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.ISSUE_NUMBER), body: `WORK_LIVE_BLOCKED: Post-merge Playwright live verification failed. Run: ${process.env.RUN_URL}. The issue is not Done.`});
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            if (process.env.CONTROLLED_LIVE_VERIFICATION === 'required') {
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `CONTROLLED_LIVE_VERIFICATION_REQUIRED\nMerge-SHA: ${process.env.MERGE_SHA}\nDeployment-Run: ${process.env.DEPLOYMENT_RUN_ID}\nGeneric post-deploy Playwright is green. The issue remains [LIVE VERIFY] until its explicit controlled verification is complete.\nRun: ${process.env.RUN_URL}`,
+              });
+              return;
+            }
+            if (process.env.CONTROLLED_LIVE_VERIFICATION !== 'none') throw new Error('Persisted controlled live mode must be none or required.');
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `LIVE_VERIFICATION_PASSED\nMerge-SHA: ${process.env.MERGE_SHA}\nDeployment-Run: ${process.env.DEPLOYMENT_RUN_ID}\nLive-URL: https://orderfly.dk\nLive-Run: ${process.env.RUN_URL}\nExact-SHA App Hosting deployment and read-only production Playwright are green.`,
+            });
+            await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[DONE] ${process.env.CLEAN_TITLE}`, state: 'closed', state_reason: 'completed' });
+
+      - name: Mark genuine live failure as blocked
+        if: failure()
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ env.ISSUE_NUMBER }}
+          MERGE_SHA: ${{ env.MERGE_SHA }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            if (!Number.isInteger(issueNumber) || issueNumber < 1) return;
+            const issue = (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber })).data;
+            const clean = String(issue.title || '').replace(/^\[[^\]]+\]\s*/, '');
+            await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[BLOCKED] ${clean}`, state: 'open' });
+            await github.rest.issues.createComment({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `LIVE_VERIFICATION_BLOCKED\nMerge-SHA: ${process.env.MERGE_SHA}\nLive-URL: https://orderfly.dk\nPost-deployment production smoke failed. The merged release remains under the persistent release lock until recovery or successful live verification.\nRun: ${process.env.RUN_URL}` });
