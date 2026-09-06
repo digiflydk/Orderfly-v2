@@ -37,7 +37,6 @@ export function DesktopCart() {
       freeDeliveryDiscountApplied,
       deliveryType,
       checkoutTotal, // Use checkoutTotal for final payment
-      cartTotal, // Use cartTotal for summary display
   } = useCart();
   const [isPending, startTransition] = useTransition();
   const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
@@ -68,17 +67,22 @@ export function DesktopCart() {
       if (brand && location) {
         const minimalCartItems = cartItems.map(item => ({
             id: item.id,
-            categoryId: item.categoryId
+            categoryId: item.categoryId,
+            itemType: item.itemType,
+            tags: item.tags,
         }));
         
         const upsellData = await getActiveUpsellForCart({
             brandId: brand.id,
             locationId: location.id,
+            deliveryType: deliveryType!,
             cartItems: minimalCartItems,
             cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0)),
+            excludedUpsellIds: [sessionStorage.getItem('orderfly_handled_upsell') || ''],
         });
 
         if (upsellData) {
+            sessionStorage.setItem('orderfly_handled_upsell', upsellData.upsell.id);
             setActiveUpsell(upsellData);
             setIsUpsellDialogOpen(true);
         } else {
@@ -199,7 +203,7 @@ export function DesktopCart() {
                     <Separator/>
                     <div className="w-full flex justify-between font-bold">
                         <span>Total</span>
-                        <span>kr.{cartTotal.toFixed(2)}</span>
+                        <span>kr.{checkoutTotal.toFixed(2)}</span>
                     </div>
                     <Button onClick={handleCheckoutClick} className="w-full font-bold" disabled={isPending}>
                         <div className="flex w-full justify-between items-center">
