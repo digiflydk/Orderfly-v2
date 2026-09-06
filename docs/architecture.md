@@ -39,9 +39,36 @@ flowchart LR
 * **Feedback Flow:** UI → `createOrUpdateQuestionVersion` → Firestore → Redirect
 * **Debug & Docs:** `/api/debug/all`, `/api/docs`, `/api/redoc`
 * **M3Pizza Order Entry:** `/m3pizza` is internally rewritten to the M3Pizza marketing page, while the public URL stays unchanged. The delivery-method modal continues to the shared commerce route `/cphpizza/m3-pizza-hellerup?deliveryMethod={delivery|pickup}`, using the production CPH PIZZA brand and M3 Pizza Hellerup location. The route is handled by `/{brandSlug}/{locationSlug}` and renders the existing Firestore-backed menu, product, cart and checkout flow. `/m3pizza/order` remains a middleware compatibility redirect and normalizes legacy `takeaway` to `pickup`. Confirmation pages resolve asynchronous route/query props, use the order ID with checkout-session fallback, verify that the order belongs to the requested brand/location, serialize Firestore timestamps before client rendering, and omit payment-provider identifiers from the browser payload. The retired `/m3pizza/m3pizza/m3-pizza-hellerup` preview route is not part of the public flow.
+* **Promotion and Checkout Flow:** Standard discounts, entered codes, and newsletter-signup discounts are read from Firestore but revalidated by the checkout server action before an order or Stripe session is created. The server chooses the best cart-level discount, recalculates delivery, bag and administration fees, and sends the same total to the order and Stripe. Newsletter incentives are configured in the existing Discounts module with `applicationType = newsletter_signup`; consent and per-customer usage are checked server-side and usage is recorded by the idempotent Stripe webhook. Upsells are filtered by brand, location, delivery method, schedule and cart trigger, suppress products already in the cart, and are shown at most once per browser checkout session.
 
 ## Architecture Principles
 
 * Next.js App Router (v15) with Server Actions
 * Firestore as single source of truth
 * Swagger & Debug routes for testing and operational visibility
+
+### Promotion review corrections (#40)
+
+Cart-level eligibility resolves product and combo records in the requested brand/location. Combos, active item offers and items sold below catalog price are excluded. Legacy offer suffixes resolve back to the native product ID. Checkout payloads must carry the item ID; old open checkout tabs must refresh.
+
+Customer assignments use brand-filtered `customers` IDs; legacy assignments to administrative users must be reselected. Discount and upsell schedules use `Europe/Copenhagen`, including DST. A newly consenting customer retains a pending newsletter discount ID until successful use, allowing canceled-payment retries; paid usage still blocks reuse. Payment status, customer aggregates and discount counters commit in one Firestore transaction, so failures roll back all required fulfillment work.
+
+Focused regression command: `node --test tests/unit/promotion-review.cjs` (no browser or production writes).
+
+### Concurrent redemption and deleted records
+
+Before issuing a discounted Stripe session, checkout reserves global, per-customer and first-order capacity in a Firestore transaction. Fixed-size customer, discount and customer/discount capacity documents retain held and paid counters independently of deletable admin records. Fulfillment consumes the hold and updates paid counters together with the order. Missing customer/discount records are skipped, recorded in `fulfillmentWarnings`, and never recreated; existing records from another brand still reject processing.
+
+Stripe sessions expire after 31 minutes. The webhook must receive **checkout.session.expired** as well as **checkout.session.completed**. Only verified Stripe expiration releases a payable-session hold; visiting the cancel URL does not. Failures before the session request release the hold immediately. Ambiguous Stripe request failures retain capacity: operators must reconcile the order-ID idempotency key with Stripe before releasing it, never release merely on elapsed wall time. Active holds count until expiration delivery even when the webhook is delayed.
+
+The regression suite covers two competing reservations, global/per-customer/first-order limits, release, duplicate fulfillment, rollback/retry and customer/discount deletion during checkout.
+
+### Explicit cancellation
+
+New Stripe cancel URLs carry an unguessable, order-specific capability. Only its SHA-256 hash is stored on the order. Returning through Stripe cancellation calls a server action that validates the capability and Stripe metadata, expires the open session, and releases capacity only after confirmed `expired` status. Completed payments never release capacity. Transient failures show a retry state rather than claiming cancellation succeeded. Pre-existing sessions without this capability keep the expiry-only behavior. Cancellation tests include invalid capability, provider failure, payment races and retries; no live Stripe writes are part of the unit suite.
+
+### Final concurrency and identity corrections
+
+Every checkout reserves customer capacity, including undiscounted orders. First-order promotions exclude all concurrent sessions in either creation order. Cancellation and expiry release that capacity too. The former brand-wide ledger is replaced before release by hashed, tenant-scoped documents in `checkout_customer_capacity`, `checkout_discount_capacity` and `checkout_customer_discount_capacity`. Each stores only numeric held/paid counters plus a customer first-order flag; order documents retain reservation state. No brand-wide customer history map is rewritten at payment. This replaces an unreleased PR schema; any environment running a prior PR snapshot must reconcile outstanding old holds before upgrading.
+
+Checkout first resolves a brand-scoped normalized email to the native customer document, including integration-created IDs. Ambiguous duplicates fail explicitly. Upsell history retains a set of every handled offer ID and reads the legacy single-ID value. Regression suite: nine tests, including mixed first-order/ordinary session rejection in both directions and native integrated-customer resolution.

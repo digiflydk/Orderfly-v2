@@ -1,12 +1,23 @@
 
 'use server';
 
+import { restaurantClock } from '@/lib/promotion-rules';
 import { revalidatePath } from 'next/cache';
 import { getAdminDb, admin } from '@/lib/firebase-admin';
 import type { Upsell, Product, Category, CartItem, ProductForMenu, Brand, Location } from '@/types';
 import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
 import { getProductsByIds } from '../products/actions';
+
+function toDate(value: unknown): Date | undefined {
+  if (!value) return undefined;
+  if (value instanceof Date) return value;
+  if (typeof value === 'object' && value !== null && 'toDate' in value && typeof (value as { toDate?: unknown }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate();
+  }
+  const parsed = new Date(value as string | number);
+  return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
 
 const activeTimeSlotSchema = z.object({
   start: z.string(),
@@ -227,20 +238,24 @@ export async function getUpsellById(upsellId: string): Promise<Upsell | null> {
 type GetActiveUpsellParams = {
   brandId: string;
   locationId: string;
-  cartItems: { id: string; categoryId?: string }[];
+  deliveryType: 'pickup' | 'delivery';
+  cartItems: { id: string; categoryId?: string; itemType?: 'product' | 'combo'; tags?: string[] }[];
   cartTotal: number;
+  excludedUpsellIds?: string[];
 };
 export async function getActiveUpsellForCart({
   brandId,
   locationId,
+  deliveryType,
   cartItems,
   cartTotal,
+  excludedUpsellIds = [],
 }: GetActiveUpsellParams): Promise<{
   upsell: Upsell;
   products: ProductForMenu[];
 } | null> {
   const now = new Date();
-  const currentDay = now.toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
+  const currentDay = restaurantClock(now).day;
   const db = getAdminDb();
 
   // 1. Fetch all potentially active upsells for the brand and location
@@ -261,15 +276,17 @@ export async function getActiveUpsellForCart({
   
   // 2. Filter by date, day, and time in code
   const activeNowUpsells = allUpsells.filter(upsell => {
-      const startDate = upsell.startDate ?? null;
-      const endDate = upsell.endDate ?? null;
+      if (excludedUpsellIds.includes(upsell.id)) return false;
+      if (!(upsell.orderTypes || []).includes(deliveryType)) return false;
+      const startDate = toDate(upsell.startDate) ?? null;
+      const endDate = toDate(upsell.endDate) ?? null;
       if (startDate && now < startDate) return false;
       if (endDate && now > endDate) return false;
 
-      if (upsell.activeDays.length > 0 && !upsell.activeDays.includes(currentDay)) return false;
+      if ((upsell.activeDays || []).length > 0 && !upsell.activeDays.includes(currentDay)) return false;
 
-      if (upsell.activeTimeSlots.length > 0) {
-          const currentTime = now.toTimeString().slice(0,5);
+      if ((upsell.activeTimeSlots || []).length > 0) {
+          const currentTime = restaurantClock(now).time;
           const inActiveTime = upsell.activeTimeSlots.some(slot => currentTime >= slot.start && currentTime <= slot.end);
           if(!inActiveTime) return false;
       }
@@ -291,6 +308,10 @@ export async function getActiveUpsellForCart({
               if (cartProductIds.includes(condition.referenceId)) isTriggered = true;
           } else if (condition.type === 'category_in_cart') {
                if (cartCategoryIds.has(condition.referenceId)) isTriggered = true;
+          } else if (condition.type === 'combo_in_cart') {
+              if (cartItems.some(item => item.itemType === 'combo' && item.id === condition.referenceId)) isTriggered = true;
+          } else if (condition.type === 'product_tag_in_cart') {
+              if (cartItems.some(item => (item.tags || []).includes(condition.referenceId))) isTriggered = true;
           }
           if (isTriggered) break; // If any condition is met, we don't need to check others for this upsell
       }
@@ -328,7 +349,14 @@ export async function getActiveUpsellForCart({
                       console.error("Failed to increment upsell views:", e);
                   }
                   
-                  return { upsell: upsell as Upsell, products: products as ProductForMenu[] }; // Return the first valid upsell found
+                  const serializableUpsell = {
+                    ...upsell,
+                    startDate: toDate(upsell.startDate)?.toISOString(),
+                    endDate: toDate(upsell.endDate)?.toISOString(),
+                    createdAt: toDate(upsell.createdAt)?.toISOString(),
+                    updatedAt: toDate(upsell.updatedAt)?.toISOString(),
+                  };
+                  return { upsell: serializableUpsell as unknown as Upsell, products: products as ProductForMenu[] }; // Return the first valid upsell found
               }
           }
       }

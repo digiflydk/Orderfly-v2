@@ -294,6 +294,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
           toppings: sortedToppings,
           itemTotal,
           categoryId: product.categoryId,
+          tags: [
+            ...(product.isPopular ? ['Popular'] : []),
+            ...(product.isFeatured ? ['Recommended'] : []),
+            ...(product.isNew ? ['Campaign'] : []),
+          ],
           brandId: product.brandId,
         };
         return [...prevItems, newCartItem];

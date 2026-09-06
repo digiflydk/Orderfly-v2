@@ -18,7 +18,8 @@ const discountSchema = z.object({
   id: z.string().optional(),
   brandId: z.string().min(1, 'A brand must be selected.'),
   locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
-  code: z.string().min(3, 'Code must be at least 3 characters.').transform(v => v.toUpperCase()),
+  applicationType: z.enum(['code', 'newsletter_signup']).default('code'),
+  code: z.string().transform(v => v.trim().toUpperCase()),
   description: z.string().optional(),
   discountType: z.enum(['percentage', 'fixed_amount']),
   discountValue: z.coerce.number().positive('Discount value must be positive.'),
@@ -34,6 +35,14 @@ const discountSchema = z.object({
   assignedToCustomerId: z.string().optional(),
   firstTimeCustomerOnly: z.boolean().default(false),
   allowStacking: z.boolean().default(false),
+}).superRefine((data, ctx) => {
+  if (data.applicationType === 'code' && data.code.length < 3) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['code'],
+      message: 'Code must be at least 3 characters.',
+    });
+  }
 });
 
 export type FormState = {
@@ -52,12 +61,15 @@ export async function createOrUpdateDiscount(
     const rawData = {
         brandId: formData.get('brandId'),
         locationIds: formData.getAll('locationIds'),
-        code: formData.get('code'),
+        applicationType: formData.get('applicationType') || 'code',
+        code: formData.get('applicationType') === 'newsletter_signup'
+          ? 'NEWSLETTER_SIGNUP'
+          : formData.get('code'),
         description: formData.get('description'),
         discountType: formData.get('discountType'),
         discountValue: formData.get('discountValue'),
         minOrderValue: formData.get('minOrderValue') || undefined,
-        isActive: formData.has('isActive'),
+        isActive: formData.get('isActive') === 'true' || formData.get('isActive') === 'on',
         orderTypes: formData.getAll('orderTypes'),
         activeDays: formData.getAll('activeDays'),
         startDate: formData.get('startDate') || undefined,
@@ -65,8 +77,8 @@ export async function createOrUpdateDiscount(
         usageLimit: formData.get('usageLimit'),
         perCustomerLimit: formData.get('perCustomerLimit'),
         assignedToCustomerId: formData.get('assignedToCustomerId') || undefined,
-        firstTimeCustomerOnly: formData.has('firstTimeCustomerOnly'),
-        allowStacking: formData.has('allowStacking'),
+        firstTimeCustomerOnly: formData.get('firstTimeCustomerOnly') === 'true' || formData.get('firstTimeCustomerOnly') === 'on',
+        allowStacking: formData.get('allowStacking') === 'true' || formData.get('allowStacking') === 'on',
         activeTimeSlots: JSON.parse((formData.get('activeTimeSlots') as string | null) || '[]'),
     };
     
@@ -84,6 +96,13 @@ export async function createOrUpdateDiscount(
     }
     
     const { id: validatedId, ...discountData } = validatedFields.data;
+
+    if (discountData.assignedToCustomerId) {
+      const customer = await getDoc(doc(db, 'customers', discountData.assignedToCustomerId));
+      if (!customer.exists() || customer.data().brandId !== discountData.brandId) {
+        return { error: true, message: 'Select a customer belonging to this brand.' };
+      }
+    }
 
     // Check for uniqueness
     const uniquenessQuery = query(
@@ -211,6 +230,9 @@ export async function getDiscountByCode(code: string, brandId: string): Promise<
   }
   
   const data = querySnapshot.docs[0].data();
+  if (data.applicationType === 'newsletter_signup') {
+    return null;
+  }
   // Return raw Date objects, they will be handled by the client
   return {
     ...data,
@@ -220,4 +242,10 @@ export async function getDiscountByCode(code: string, brandId: string): Promise<
     createdAt: data.createdAt.toDate(),
     updatedAt: data.updatedAt.toDate(),
   } as Discount;
+}
+
+export async function getDiscountCustomers(brandId: string): Promise<{id: string; name: string; email: string}[]> {
+  if (!brandId) return [];
+  const snapshot = await getDocs(query(collection(db, 'customers'), where('brandId', '==', brandId)));
+  return snapshot.docs.map(d => ({ id: d.id, name: d.data().fullName || '', email: d.data().email || '' }));
 }

@@ -1,3 +1,4 @@
+import { releaseDiscount, prepareCapacitySettlement } from '@/lib/discount-reservations';
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -44,6 +45,14 @@ export async function POST(req: Request) {
 
   // Handle the event
   switch (event.type) {
+    case 'checkout.session.expired': {
+      const expired = event.data.object as Stripe.Checkout.Session;
+      if (expired.metadata?.orderId && expired.metadata?.brandId) {
+        try { await releaseDiscount(expired.metadata.orderId, expired.metadata.brandId, expired.id); }
+        catch { return new Response('Reservation release failed', { status: 500 }); }
+      }
+      break;
+    }
     case 'checkout.session.completed':
       const session = event.data.object as Stripe.Checkout.Session;
       
@@ -55,64 +64,53 @@ export async function POST(req: Request) {
         }
 
         const orderRef = doc(db, 'orders', metadata.orderId);
-        const orderSnap = await getDoc(orderRef);
-
-        if (!orderSnap.exists()) {
-          console.error(`Webhook critical error: Order document with ID ${metadata.orderId} not found. The pre-creation step might have failed. Session ID: ${session.id}`);
-          return new Response('Order not found, webhook will not create a duplicate.', { status: 200 });
-        }
-        
-        // Idempotency check: If order is already marked as 'Paid', do nothing more.
-        if (orderSnap.data().paymentStatus === 'Paid') {
-            console.log(`✅ Webhook received for already processed order ${metadata.orderId}. No action taken.`);
-            return new Response("ok", { status: 200 });
-        }
-
+        if (session.payment_status !== 'paid') return new Response('Payment pending', { status: 200 });
         const piId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
-        
-        await updateDoc(orderRef, {
-            paymentStatus: 'Paid',
-            paidAt: serverTimestamp(),
-            'psp.paymentIntentId': piId,
-            updatedAt: serverTimestamp()
+        const fulfilled = await runTransaction(db, async transaction => {
+          const orderSnap = await transaction.get(orderRef);
+          if (!orderSnap.exists()) throw new Error('Order not found');
+          const order = orderSnap.data();
+          if (order.paymentStatus === 'Paid') return false;
+          if (order.brandId !== metadata.brandId || order.locationId !== metadata.locationId || (order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== session.id)) throw new Error('Payment scope mismatch');
+          const customerRef = doc(db, 'customers', order.customerDetails.id);
+          const customerSnap = await transaction.get(customerRef);
+          if (customerSnap.exists() && customerSnap.data().brandId !== order.brandId) throw new Error('Customer scope mismatch');
+          const discountId = order.appliedDiscountId;
+          const discountRef = discountId ? doc(db, 'discounts', discountId) : null;
+          const discountSnap = discountRef ? await transaction.get(discountRef) : null;
+          if (discountSnap?.exists() && discountSnap.data().brandId !== order.brandId) throw new Error('Discount scope mismatch');
+          const settleCapacity = await prepareCapacitySettlement(transaction, order, true);
+          settleCapacity();
+          const customer = customerSnap.data() || {};
+          const usage = { ...(customer.discountUsage || {}) };
+          if (discountRef && discountSnap?.exists()) {
+            usage[discountId] = (usage[discountId] || 0) + 1;
+            transaction.update(discountRef, { usedCount: (discountSnap.data().usedCount || 0) + 1 });
+          }
+          if (customerSnap.exists()) transaction.update(customerRef, {
+            totalOrders: (customer.totalOrders || 0) + 1,
+            totalSpend: (customer.totalSpend || 0) + order.totalAmount,
+            lastOrderDate: serverTimestamp(),
+            discountUsage: usage,
+          });
+          transaction.update(orderRef, {
+            discountReservation: discountId ? 'consumed' : 'none',
+            fulfillmentWarnings: [!customerSnap.exists() ? 'customer_deleted' : '', discountId && !discountSnap?.exists() ? 'discount_deleted' : ''].filter(Boolean),
+            'psp.checkoutSessionId': session.id,
+            paymentStatus: 'Paid', paidAt: serverTimestamp(),
+            'psp.paymentIntentId': piId || null, updatedAt: serverTimestamp(),
+          });
+          return true;
         });
-        
-        // Track payment_succeeded event
-        await trackServerEvent('payment_succeeded', {
-            brandId: metadata.brandId,
-            locationId: metadata.locationId,
+        if (fulfilled) {
+          await trackServerEvent('payment_succeeded', {
+            brandId: metadata.brandId, locationId: metadata.locationId,
             sessionId: metadata.anonymousConsentId || 'unknown-session',
-            orderId: metadata.orderId,
-            cartValue: session.amount_total ? session.amount_total / 100 : 0,
-            paymentIntentId: piId, // Add for idempotency on analytics side if needed
-        });
-        
-        // Update customer aggregates.
-        if (session.customer_details?.email) {
-            const customerRef = doc(db, "customers", orderSnap.data().customerDetails.id);
-            const customerDoc = await getDoc(customerRef);
-            if (customerDoc.exists()) {
-                const customerData = customerDoc.data();
-                const newTotalOrders = (customerData.totalOrders || 0) + 1;
-                const newTotalSpend = (customerData.totalSpend || 0) + orderSnap.data().totalAmount;
-                await updateDoc(customerRef, {
-                    totalOrders: newTotalOrders,
-                    totalSpend: newTotalSpend,
-                    lastOrderDate: serverTimestamp()
-                });
-            }
+            orderId: metadata.orderId, cartValue: (session.amount_total || 0) / 100,
+            paymentIntentId: piId,
+          });
         }
-        
-        if (metadata.appliedDiscountId) {
-            const discountRef = doc(db, 'discounts', metadata.appliedDiscountId);
-             await runTransaction(db, async (transaction) => {
-                const freshSnap = await transaction.get(discountRef);
-                if (!freshSnap.exists()) { throw "Discount does not exist!"; }
-                const currentUsedCount = (freshSnap.data()?.usedCount || 0) + 1;
-                transaction.update(discountRef, { usedCount: currentUsedCount });
-            });
-        }
-        
+
         console.log(`✅ Webhook idempotently confirmed order ${metadata.orderId} for session ${session.id}`);
 
       } catch (err) {

@@ -1,9 +1,10 @@
 'use client';
+import { getDiscountCustomers } from '@/app/superadmin/discounts/actions';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { useEffect, useMemo, useTransition } from 'react';
+import { useState, useEffect, useMemo, useTransition } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2, PlusCircle, Trash2, Clock } from 'lucide-react';
@@ -20,7 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import type { Discount, Brand, Location, User } from '@/types';
+import type { Discount, Brand, Location } from '@/types';
 import { createOrUpdateDiscount } from '@/app/superadmin/discounts/actions';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -48,10 +49,8 @@ const discountSchema = z.object({
   id: z.string().optional(),
   brandId: z.string().min(1, 'A brand must be selected.'),
   locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
-  code: z
-    .string()
-    .min(3, 'Code must be at least 3 characters.')
-    .transform(v => v.toUpperCase()),
+  applicationType: z.enum(['code', 'newsletter_signup']).default('code'),
+  code: z.string().transform(v => v.trim().toUpperCase()),
   description: z.string().optional(),
   discountType: z.enum(['percentage', 'fixed_amount']),
   discountValue: z.coerce.number().positive('Discount value must be positive.'),
@@ -69,6 +68,14 @@ const discountSchema = z.object({
   assignedToCustomerId: z.string().optional(),
   firstTimeCustomerOnly: z.boolean().default(false),
   allowStacking: z.boolean().default(false),
+}).superRefine((data, ctx) => {
+  if (data.applicationType === 'code' && data.code.length < 3) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ['code'],
+      message: 'Code must be at least 3 characters.',
+    });
+  }
 });
 
 type DiscountFormValues = z.infer<typeof discountSchema>;
@@ -77,7 +84,7 @@ interface DiscountFormPageProps {
   discount?: Discount;
   brands: Brand[];
   locations: Location[];
-  users: User[];
+
 }
 
 const WEEKDAYS = [
@@ -94,7 +101,7 @@ export function DiscountFormPage({
   discount,
   brands,
   locations,
-  users,
+
 }: DiscountFormPageProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -104,6 +111,7 @@ export function DiscountFormPage({
     defaultValues: (discount
       ? {
           ...discount,
+          applicationType: discount.applicationType ?? 'code',
           startDate: discount.startDate
             ? format(discount.startDate, 'yyyy-MM-dd')
             : undefined,
@@ -116,6 +124,7 @@ export function DiscountFormPage({
       : {
           brandId: '',
           locationIds: [],
+          applicationType: 'code',
           code: '',
           description: '',
           discountType: 'percentage',
@@ -147,6 +156,7 @@ export function DiscountFormPage({
     if (discount) {
       reset({
         ...discount,
+        applicationType: discount.applicationType ?? 'code',
         startDate: discount.startDate
           ? format(discount.startDate, 'yyyy-MM-dd')
           : undefined,
@@ -160,15 +170,30 @@ export function DiscountFormPage({
   }, [discount, reset]);
 
   const selectedBrandId = watch('brandId');
+  const [customers, setCustomers] = useState<{id: string; name: string; email: string}[]>([]);
+  useEffect(() => {
+    let current = true;
+    setCustomers([]);
+    void getDiscountCustomers(selectedBrandId).then(rows => { if (current) setCustomers(rows); });
+    return () => { current = false; };
+  }, [selectedBrandId]);
   const assignedToCustomerId = watch('assignedToCustomerId');
   const firstTimeCustomerOnly = watch('firstTimeCustomerOnly');
+  const applicationType = watch('applicationType');
+
+  useEffect(() => {
+    if (applicationType === 'newsletter_signup') {
+      setValue('code', 'NEWSLETTER_SIGNUP', { shouldValidate: true });
+      setValue('perCustomerLimit', 1, { shouldValidate: true });
+    }
+  }, [applicationType, setValue]);
 
   const availableLocations = useMemo(() => {
     if (!selectedBrandId) return [];
     return locations.filter(l => l.brandId === selectedBrandId);
   }, [selectedBrandId, locations]);
 
-  const title = discount ? 'Edit Discount Code' : 'Create New Discount';
+  const title = discount ? 'Edit Discount' : 'Create New Discount';
   const description = discount
     ? `Editing details for ${discount.code}.`
     : 'Fill in the details for the new discount.';
@@ -247,6 +272,31 @@ export function DiscountFormPage({
                 <CardTitle>Core Details</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                <FormField
+                  control={control as any}
+                  name="applicationType"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>How the discount is applied</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="code">Customer enters a discount code</SelectItem>
+                          <SelectItem value="newsletter_signup">Automatic on newsletter signup</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Newsletter discounts use these same value, location and availability rules.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
                 <FormField
                   control={control as any}
                   name="brandId"
@@ -330,19 +380,21 @@ export function DiscountFormPage({
 
                 <Separator />
 
-                <FormField
-                  control={control as any}
-                  name="code"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Discount Code</FormLabel>
-                      <FormControl>
-                        <Input placeholder="e.g., SUMMER10" {...field} />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+                {applicationType === 'code' && (
+                  <FormField
+                    control={control as any}
+                    name="code"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Discount Code</FormLabel>
+                        <FormControl>
+                          <Input placeholder="e.g., SUMMER10" {...field} />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                )}
 
                 <FormField
                   control={control as any}
@@ -459,7 +511,7 @@ export function DiscountFormPage({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {users.map(u => (
+                          {customers.map(u => (
                             <SelectItem key={u.id} value={u.id}>
                               {u.name} ({u.email})
                             </SelectItem>

@@ -2,13 +2,16 @@
 
 'use server';
 
-import { createHash } from 'node:crypto';
+import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
+import { newsletterEligible, cartLineEligible, assignedCustomerMatches, restaurantClock } from '@/lib/promotion-rules';
+import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
+import { createHash, randomBytes } from 'node:crypto';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from 'firebase/firestore';
 import type { CartItem, Discount, OrderDetail, Brand, Location, CustomerInfo, Customer, StandardDiscount, PaymentDetails, MinimalCartItem, Product, ComboMenu, Topping, ComboSelection, LoyaltySettings, AnonymousCookieConsent } from '@/types';
-import { getDiscountByCode } from '@/app/superadmin/discounts/actions';
+import { getDiscountByCode, getDiscountById } from '@/app/superadmin/discounts/actions';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
@@ -44,6 +47,9 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     const normalizedEmail = normalizeCustomerEmail(customerInfo.email);
     if (!normalizedEmail) throw new Error('Customer email is required.');
 
+    const integrated = await findCheckoutCustomer(brandId, normalizedEmail);
+    if (integrated) return { customerRef: integrated.ref, customerDoc: integrated, normalizedEmail };
+
     const scopedRef = doc(db, 'customers', scopedCustomerId(brandId, normalizedEmail));
     const scopedDoc = await getDoc(scopedRef);
     if (scopedDoc.exists()) {
@@ -68,7 +74,7 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     return { customerRef: scopedRef, customerDoc: scopedDoc, normalizedEmail };
 }
 
-async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: string, locationId: string, newOrderTotal: number, anonymousConsentId?: string): Promise<string> {
+async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: string, locationId: string, newOrderTotal: number, anonymousConsentId?: string, newsletterDiscountId?: string): Promise<string> {
     try {
         const { customerRef, customerDoc, normalizedEmail } = await resolveCheckoutCustomerRef(customerInfo, brandId);
         const customerId = customerRef.id;
@@ -119,6 +125,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 updatedData.cookie_consent = cookieConsentData;
             }
 
+            if (newsletterDiscountId && !customerData.marketingConsent) updatedData.pendingNewsletterDiscountId = newsletterDiscountId;
             await updateDoc(customerRef, updatedData);
         } else {
             const newCustomer: Customer & { normalizedEmail: string } = {
@@ -142,6 +149,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 loyaltyClassification: 'New',
                 cookie_consent: cookieConsentData,
             };
+            if (newsletterDiscountId) newCustomer.pendingNewsletterDiscountId = newsletterDiscountId;
             await setDoc(customerRef, newCustomer);
         }
         
@@ -172,6 +180,112 @@ const toNumber = (value: number | string | null | undefined): number => {
     return 0;
 };
 
+function asDate(value: unknown): Date | undefined {
+    if (!value) return undefined;
+    if (value instanceof Date) return value;
+    if (typeof value === 'object' && value !== null && 'toDate' in value && typeof (value as { toDate?: unknown }).toDate === 'function') {
+        return (value as { toDate: () => Date }).toDate();
+    }
+    const parsed = new Date(value as string | number);
+    return Number.isNaN(parsed.getTime()) ? undefined : parsed;
+}
+
+function calculateDiscountAmount(discount: Discount, subtotal: number): number {
+    if (subtotal <= 0) return 0;
+    if (discount.discountType === 'percentage') {
+        return Math.min(subtotal, subtotal * (discount.discountValue / 100));
+    }
+    return Math.min(subtotal, discount.discountValue);
+}
+
+type DiscountEligibilityContext = {
+    brandId: string;
+    locationId: string;
+    deliveryType: 'delivery' | 'pickup';
+    subtotal: number;
+    customerId?: string;
+    customer?: Customer | null;
+    newsletterConsent?: boolean;
+};
+
+function validateDiscountEligibility(discount: Discount, context: DiscountEligibilityContext): string | null {
+    const now = new Date();
+    const applicationType = discount.applicationType ?? 'code';
+
+    if (discount.brandId !== context.brandId) return 'This discount belongs to another brand.';
+    if (!discount.isActive) return 'This discount is no longer active.';
+    if (!discount.locationIds.includes(context.locationId)) return 'This discount is not valid for this location.';
+    if (!discount.orderTypes.includes(context.deliveryType)) return 'This discount is not valid for this order type.';
+    if (discount.usageLimit > 0 && discount.usedCount >= discount.usageLimit) return 'This discount has reached its usage limit.';
+    if (discount.minOrderValue && context.subtotal < discount.minOrderValue) return `Minimum order value of kr. ${discount.minOrderValue.toFixed(2)} not met.`;
+
+    const startDate = asDate(discount.startDate);
+    const endDate = asDate(discount.endDate);
+    if (startDate && startDate > now) return 'This discount is not yet active.';
+    if (endDate && endDate < now) return 'This discount has expired.';
+
+    const currentDay = restaurantClock(now).day;
+    if ((discount.activeDays || []).length > 0 && !discount.activeDays.includes(currentDay)) return 'This discount is not active today.';
+    if ((discount.activeTimeSlots || []).length > 0) {
+        const currentTime = restaurantClock(now).time;
+        if (!discount.activeTimeSlots.some(slot => currentTime >= slot.start && currentTime <= slot.end)) return 'This discount is not active at this time.';
+    }
+
+    if (!assignedCustomerMatches(discount.assignedToCustomerId, context.customerId)) return 'This discount is assigned to another customer.';
+    if (discount.firstTimeCustomerOnly && (context.customer?.totalOrders || 0) > 0) return 'This discount is only available to first-time customers.';
+    if (discount.perCustomerLimit > 0 && ((context.customer?.discountUsage?.[discount.id] || 0) >= discount.perCustomerLimit)) return 'This discount has reached its per-customer limit.';
+
+    if (applicationType === 'newsletter_signup') {
+        if (!context.newsletterConsent) return 'Newsletter signup is required for this discount.';
+        if (!newsletterEligible(!!context.customer?.marketingConsent, context.customer?.pendingNewsletterDiscountId, discount.id, context.customer?.discountUsage?.[discount.id] || 0)) return 'This newsletter discount has already been used.';
+    }
+
+    return null;
+}
+
+export type NewsletterDiscountOffer = Pick<Discount, 'id' | 'description' | 'discountType' | 'discountValue' | 'minOrderValue'> & {
+    applicationType: 'newsletter_signup';
+};
+
+export async function getNewsletterSignupDiscountAction(
+    brandId: string,
+    locationId: string,
+    subtotal: number,
+    deliveryType: 'delivery' | 'pickup'
+): Promise<NewsletterDiscountOffer | null> {
+    const discountsQuery = query(collection(db, 'discounts'), where('brandId', '==', brandId));
+    const snapshot = await getDocs(discountsQuery);
+
+    for (const discountDoc of snapshot.docs) {
+        const data = discountDoc.data();
+        if (data.applicationType !== 'newsletter_signup') continue;
+        const discount = {
+            ...data,
+            id: discountDoc.id,
+            startDate: asDate(data.startDate),
+            endDate: asDate(data.endDate),
+        } as Discount;
+        const error = validateDiscountEligibility(discount, {
+            brandId,
+            locationId,
+            deliveryType,
+            subtotal,
+            newsletterConsent: true,
+        });
+        if (error && error !== 'This newsletter discount has already been used.') continue;
+
+        return {
+            id: discount.id,
+            description: discount.description,
+            discountType: discount.discountType,
+            discountValue: discount.discountValue,
+            minOrderValue: discount.minOrderValue,
+            applicationType: 'newsletter_signup',
+        };
+    }
+    return null;
+}
+
 
 // This function is now obsolete. The logic has been integrated into the Stripe checkout action.
 // We keep it here to avoid breaking any potential old references, but it should be considered deprecated.
@@ -195,6 +309,8 @@ export async function createStripeCheckoutSessionAction(
     deliveryTime?: string,
     anonymousConsentId?: string
 ): Promise<{ success: boolean; url?: string | null; error?: string }> {
+  let reservedOrderId: string | undefined;
+  let sessionRequestStarted = false;
   try {
     const stripeSecretKey = await getActiveStripeSecretKey();
     if (!stripeSecretKey) {
@@ -210,13 +326,114 @@ export async function createStripeCheckoutSessionAction(
     ]);
     if (!brand || !location || location.brandId !== brand.id) throw new Error("Brand or location not found in the requested tenant scope");
     
-    const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, 0, anonymousConsentId);
+    const resolvedCustomer = await resolveCheckoutCustomerRef(customerInfo, brand.id);
+    const existingCustomer = resolvedCustomer.customerDoc.exists()
+      ? resolvedCustomer.customerDoc.data() as Customer
+      : null;
+
+    const chargedItemsSubtotal = cartItems.reduce((sum, item) => {
+      const lineTotal = toNumber(item.totalPrice);
+      if (item.quantity <= 0 || lineTotal < 0) throw new Error('Invalid cart item quantity or total.');
+      return sum + lineTotal;
+    }, 0);
+    const itemDiscountTotal = Math.max(0, toNumber(paymentDetails.subtotal) - chargedItemsSubtotal);
+    const activeStandardDiscounts = await getActiveStandardDiscounts({
+      brandId,
+      locationId,
+      deliveryType,
+    });
+
+    // Resolve eligibility from native catalog records; the browser cannot mark a combo as a product.
+    const eligibleLines = await Promise.all(cartItems.map(async item => {
+      if (!item.id) throw new Error('Please refresh your basket before checking out.');
+      let [productSnap, comboSnap] = await Promise.all([
+        getDoc(doc(db, 'products', item.id)), getDoc(doc(db, 'comboMenus', item.id)),
+      ]);
+      if (!productSnap.exists() && !comboSnap.exists() && item.id.endsWith('-offer')) {
+        productSnap = await getDoc(doc(db, 'products', item.id.slice(0, -6)));
+      }
+      const catalog = productSnap.exists() ? productSnap.data() as Product : null;
+      const combo = comboSnap.exists() ? comboSnap.data() : null;
+      const record = catalog || combo;
+      if (!record || record.brandId !== brandId || (record.locationIds?.length && !record.locationIds.includes(locationId))) throw new Error('Basket item is unavailable at this restaurant.');
+      if (combo) return 0;
+      const catalogPrice = deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price;
+      const itemOffer = activeStandardDiscounts.some(d =>
+        (d.discountType === 'product' && d.referenceIds.includes(productSnap.id)) ||
+        (d.discountType === 'category' && d.referenceIds.includes(catalog!.categoryId))
+      );
+      return cartLineEligible(false, catalogPrice, item.unitPrice, itemOffer) ? item.totalPrice : 0;
+    }));
+    const eligibleSubtotal = eligibleLines.reduce((sum, amount) => sum + amount, 0);
+
+    const automaticCartDiscount = activeStandardDiscounts
+      .filter(discount => discount.discountType === 'cart' && eligibleSubtotal >= (discount.minOrderValue || 0))
+      .map(discount => ({
+        name: discount.discountName,
+        amount: discount.discountMethod === 'percentage'
+          ? eligibleSubtotal * ((discount.discountValue || 0) / 100)
+          : Math.min(eligibleSubtotal, discount.discountValue || 0),
+      }))
+      .reduce<{ name: string; amount: number } | null>((best, current) => !best || current.amount > best.amount ? current : best, null);
+
+    let selectedDiscount: Discount | null = null;
+    let selectedDiscountAmount = 0;
+    if (appliedDiscountId) {
+      selectedDiscount = await getDiscountById(appliedDiscountId);
+      if (!selectedDiscount) throw new Error('The selected discount no longer exists.');
+      const eligibilityError = validateDiscountEligibility(selectedDiscount, {
+        brandId,
+        locationId,
+        deliveryType,
+        subtotal: eligibleSubtotal,
+        customerId: resolvedCustomer.customerRef.id,
+        customer: existingCustomer,
+        newsletterConsent: customerInfo.subscribeToNewsletter,
+      });
+      if (eligibilityError) throw new Error(eligibilityError);
+      selectedDiscountAmount = calculateDiscountAmount(selectedDiscount, eligibleSubtotal);
+    }
+
+    const manualDiscountWins = selectedDiscountAmount > (automaticCartDiscount?.amount || 0);
+    const cartDiscountTotal = manualDiscountWins
+      ? selectedDiscountAmount
+      : (automaticCartDiscount?.amount || 0);
+    const cartDiscountName = manualDiscountWins
+      ? (selectedDiscount?.applicationType === 'newsletter_signup' ? 'Newsletter signup' : selectedDiscount?.code)
+      : automaticCartDiscount?.name;
+    const appliedDiscountIdForOrder = manualDiscountWins ? selectedDiscount?.id || null : null;
+
+    const hasFreeDelivery = deliveryType === 'delivery' && activeStandardDiscounts.some(discount =>
+      discount.discountType === 'free_delivery' && chargedItemsSubtotal >= (discount.minOrderValue || 0)
+    );
+    const effectiveDeliveryFee = deliveryType === 'delivery' && !hasFreeDelivery
+      ? Math.max(0, toNumber(location.deliveryFee))
+      : 0;
+    const effectiveBagFee = Math.min(Math.max(0, toNumber(paymentDetails.bagFee)), Math.max(0, toNumber(brand.bagFee)));
+    const subtotalAfterDiscount = Math.max(0, chargedItemsSubtotal - cartDiscountTotal);
+    const effectiveAdminFee = brand.adminFeeType === 'percentage'
+      ? subtotalAfterDiscount * (Math.max(0, toNumber(brand.adminFee)) / 100)
+      : Math.max(0, toNumber(brand.adminFee));
+    const totalAmount = subtotalAfterDiscount + effectiveDeliveryFee + effectiveBagFee + effectiveAdminFee;
+    const serverPaymentDetails: Omit<PaymentDetails, 'paymentRefId'> = {
+      ...paymentDetails,
+      subtotal: toNumber(paymentDetails.subtotal),
+      itemDiscountTotal,
+      cartDiscountTotal,
+      cartDiscountName,
+      discountTotal: itemDiscountTotal + cartDiscountTotal,
+      deliveryFee: effectiveDeliveryFee,
+      bagFee: effectiveBagFee,
+      adminFee: effectiveAdminFee,
+      vatAmount: totalAmount * ((brand.vatPercentage || 25) / (100 + (brand.vatPercentage || 25))),
+    };
+
+    const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, anonymousConsentId, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined);
 
     // Step 1: Pre-create order with 'Pending' status
     const orderId = generateOrderId();
+    const cancelToken = randomBytes(32).toString('hex');
     const orderRef = doc(db, 'orders', orderId);
-
-    const totalAmount = (paymentDetails.subtotal - (paymentDetails.discountTotal || 0)) + paymentDetails.deliveryFee + (paymentDetails.bagFee || 0) + (paymentDetails.adminFee || 0);
 
     await setDoc(orderRef, {
         id: orderId,
@@ -227,7 +444,9 @@ export async function createStripeCheckoutSessionAction(
         locationId,
         productItems: cartItems,
         totalAmount,
-        paymentDetails,
+        paymentDetails: serverPaymentDetails,
+        appliedDiscountId: appliedDiscountIdForOrder,
+        cancelTokenHash: createHash('sha256').update(cancelToken).digest('hex'),
         customerName: customerInfo.name,
         customerContact: customerInfo.email,
         deliveryType: deliveryType === 'delivery' ? 'Delivery' : 'Pickup',
@@ -242,6 +461,9 @@ export async function createStripeCheckoutSessionAction(
     });
 
 
+    await reserveDiscount(orderId, appliedDiscountIdForOrder, customerId, brandId);
+    reservedOrderId = orderId;
+
     const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => {
         if (item.unitPrice == null) {
             throw new Error(`Missing unitPrice for cart item: ${item.name ?? 'unknown'}`);
@@ -251,44 +473,44 @@ export async function createStripeCheckoutSessionAction(
             price_data: {
                 currency: 'dkk',
                 product_data: { name: item.name, description: item.toppings?.join(', ') || undefined },
-                unit_amount: Math.round(item.unitPrice! * 100),
+                unit_amount: Math.round((item.totalPrice / item.quantity) * 100),
             },
             quantity: item.quantity,
         };
     });
 
-    if (deliveryType === 'delivery' && paymentDetails.deliveryFee > 0) {
+    if (deliveryType === 'delivery' && serverPaymentDetails.deliveryFee > 0) {
         line_items.push({
-            price_data: { currency: 'dkk', product_data: { name: 'Delivery Fee' }, unit_amount: Math.round(paymentDetails.deliveryFee * 100) },
+            price_data: { currency: 'dkk', product_data: { name: 'Delivery Fee' }, unit_amount: Math.round(serverPaymentDetails.deliveryFee * 100) },
             quantity: 1,
         });
     }
-    if (paymentDetails.bagFee && paymentDetails.bagFee > 0) {
+    if (serverPaymentDetails.bagFee && serverPaymentDetails.bagFee > 0) {
         line_items.push({
-            price_data: { currency: 'dkk', product_data: { name: 'Bag Fee' }, unit_amount: Math.round(paymentDetails.bagFee * 100) },
+            price_data: { currency: 'dkk', product_data: { name: 'Bag Fee' }, unit_amount: Math.round(serverPaymentDetails.bagFee * 100) },
             quantity: 1,
         });
     }
-    if (paymentDetails.adminFee && paymentDetails.adminFee > 0) {
+    if (serverPaymentDetails.adminFee && serverPaymentDetails.adminFee > 0) {
         line_items.push({
-            price_data: { currency: 'dkk', product_data: { name: 'Admin Fee' }, unit_amount: Math.round(paymentDetails.adminFee * 100) },
+            price_data: { currency: 'dkk', product_data: { name: 'Admin Fee' }, unit_amount: Math.round(serverPaymentDetails.adminFee * 100) },
             quantity: 1,
         });
     }
 
-    const cartDiscountTotal = toNumber(paymentDetails.cartDiscountTotal);
     const sessionParams: Stripe.Checkout.SessionCreateParams = {
         payment_method_types: ['card'],
         line_items,
         mode: 'payment',
+        expires_at: Math.floor(Date.now() / 1000) + 31 * 60,
         customer_email: customerInfo.email,
         success_url: `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/${brandSlug}/${locationSlug}/checkout/cancel`,
+        cancel_url: `${origin}/${brandSlug}/${locationSlug}/checkout/cancel?order_id=${orderId}&token=${cancelToken}`,
         metadata: {
             orderId,
             brandId,
             locationId,
-            appliedDiscountId: appliedDiscountId || '',
+            appliedDiscountId: appliedDiscountIdForOrder || '',
             anonymousConsentId: anonymousConsentId || '',
         },
         payment_intent_data: {
@@ -303,13 +525,14 @@ export async function createStripeCheckoutSessionAction(
             amount_off: Math.round(cartDiscountTotal * 100),
             currency: 'dkk',
             duration: 'once',
-            name: paymentDetails.cartDiscountName || 'Discount',
+            name: serverPaymentDetails.cartDiscountName || 'Discount',
         });
         sessionParams.discounts = [{ coupon: coupon.id }];
     }
     
     // Step 2: Create Stripe session with orderId in metadata
-    const session = await stripe.checkout.sessions.create(sessionParams);
+    sessionRequestStarted = true;
+    const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: orderId });
     
     // Step 3: Patch order with session ID
     await updateDoc(orderRef, {
@@ -320,6 +543,9 @@ export async function createStripeCheckoutSessionAction(
     return { success: true, url: session.url };
 
   } catch (e: any) {
+    // Once a request may have reached Stripe, keep the hold until a signed expiration
+    // event. A timeout is not proof that a payable session was not created.
+    if (reservedOrderId && !sessionRequestStarted) await releaseDiscount(reservedOrderId, brandId);
     console.error("Failed to create Stripe checkout session:", e);
     const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
     return { success: false, error: errorMessage };
@@ -332,7 +558,8 @@ export async function validateDiscountAction(
     brandId: string, 
     locationId: string, 
     subtotal: number,
-    deliveryType: 'delivery' | 'pickup'
+    deliveryType: 'delivery' | 'pickup',
+    customerEmail?: string
 ): Promise<{ success: boolean; message: string; discount?: Discount; }> {
     const codeUpper = code.toUpperCase();
     const discount = await getDiscountByCode(codeUpper, brandId);
@@ -340,24 +567,32 @@ export async function validateDiscountAction(
     if (!discount) {
         return { success: false, message: 'Invalid discount code.' };
     }
-    if (!discount.isActive) {
-        return { success: false, message: 'This discount is no longer active.' };
+    let customer: Customer | null = null;
+    let customerId: string | undefined;
+    if (customerEmail?.trim()) {
+        const resolved = await resolveCheckoutCustomerRef({
+            name: '',
+            email: customerEmail,
+            phone: '',
+            subscribeToNewsletter: false,
+        }, brandId);
+        customerId = resolved.customerRef.id;
+        customer = resolved.customerDoc.exists() ? resolved.customerDoc.data() as Customer : null;
     }
-    if (discount.usageLimit > 0 && discount.usedCount >= discount.usageLimit) {
-        return { success: false, message: 'This discount has reached its usage limit.' };
+
+    if ((discount.firstTimeCustomerOnly || discount.assignedToCustomerId || discount.perCustomerLimit > 0) && !customerId) {
+        return { success: false, message: 'Enter your email before applying this discount.' };
     }
-    if (discount.startDate && new Date(discount.startDate) > new Date()) {
-        return { success: false, message: 'This discount is not yet active.' };
-    }
-    if (discount.endDate && new Date(discount.endDate) < new Date()) {
-        return { success: false, message: 'This discount has expired.' };
-    }
-    if (discount.minOrderValue && subtotal < discount.minOrderValue) {
-        return { success: false, message: `Minimum order value of kr. ${discount.minOrderValue.toFixed(2)} not met.` };
-    }
-    if (!discount.locationIds.includes(locationId)) {
-        return { success: false, message: 'This discount is not valid for this location.' };
-    }
+
+    const eligibilityError = validateDiscountEligibility(discount, {
+        brandId,
+        locationId,
+        deliveryType,
+        subtotal,
+        customerId,
+        customer,
+    });
+    if (eligibilityError) return { success: false, message: eligibilityError };
     
     return { success: true, message: 'Discount applied!', discount };
 }

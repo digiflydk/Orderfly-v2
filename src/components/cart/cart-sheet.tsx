@@ -2,6 +2,7 @@
 
 'use client';
 
+import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -60,17 +61,22 @@ export function CartSheet() {
       if (brand && location) {
         const minimalCartItems = cartItems.map(item => ({
             id: item.id,
-            categoryId: item.categoryId
+            categoryId: item.categoryId,
+            itemType: item.itemType,
+            tags: item.tags,
         }));
         
         const upsellData = await getActiveUpsellForCart({
             brandId: brand.id,
             locationId: location.id,
+            deliveryType: deliveryType!,
             cartItems: minimalCartItems,
             cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0)),
+            excludedUpsellIds: handledUpsells(),
         });
 
         if (upsellData) {
+            markUpsellHandled(upsellData.upsell.id);
             setActiveUpsell(upsellData);
             setIsUpsellDialogOpen(true);
         } else {
