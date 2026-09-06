@@ -38,7 +38,7 @@ flowchart LR
 * **Product Flow:** UI → `createOrUpdateProduct` → Firestore → Redirect
 * **Feedback Flow:** UI → `createOrUpdateQuestionVersion` → Firestore → Redirect
 * **Debug & Docs:** `/api/debug/all`, `/api/docs`, `/api/redoc`
-* **M3Pizza Order Entry:** `/m3pizza` is internally rewritten to the M3Pizza marketing page, while the public URL stays unchanged. The delivery-method modal continues to the shared commerce route `/m3pizza/m3-pizza-hellerup?deliveryMethod={delivery|pickup}`, which is handled by `/{brandSlug}/{locationSlug}` and renders the existing Firestore-backed menu, product, cart and checkout flow. `/m3pizza/order` remains a middleware compatibility redirect and normalizes legacy `takeaway` to `pickup`. The retired `/m3pizza/m3pizza/m3-pizza-hellerup` preview route is not part of the public flow.
+* **M3Pizza Order Entry:** `/m3pizza` is internally rewritten to the M3Pizza marketing page, while the public URL stays unchanged. The delivery-method modal continues to the shared commerce route `/cphpizza/m3-pizza-hellerup?deliveryMethod={delivery|pickup}`, using the production CPH PIZZA brand and M3 Pizza Hellerup location. The route is handled by `/{brandSlug}/{locationSlug}` and renders the existing Firestore-backed menu, product, cart and checkout flow. `/m3pizza/order` remains a middleware compatibility redirect and normalizes legacy `takeaway` to `pickup`. Confirmation pages resolve asynchronous route/query props, use the order ID with checkout-session fallback, and verify that the order belongs to the requested brand/location before rendering the receipt. The retired `/m3pizza/m3pizza/m3-pizza-hellerup` preview route is not part of the public flow.
 
 ## Architecture Principles
 
