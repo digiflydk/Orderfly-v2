@@ -101,6 +101,26 @@ test.describe('Brand Website Smoke Tests', () => {
     await expect.poll(() => page.evaluate(() => localStorage.getItem('deliveryMethod'))).toBe('pickup');
   });
 
+  test('M3Pizza choice still opens the menu when browser storage is unavailable', async ({ page }) => {
+    await page.addInitScript(() => {
+      const originalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key: string, value: string) {
+        if (key === 'deliveryMethod') {
+          throw new DOMException('Storage is unavailable', 'SecurityError');
+        }
+        return originalSetItem.call(this, key, value);
+      };
+    });
+    await page.setViewportSize({ width: 375, height: 667 });
+    await page.goto('/m3pizza');
+
+    await page.getByTestId('template1-sticky-cta').getByRole('button', { name: 'BESTIL HER' }).click();
+    await page.getByRole('button', { name: /Jeg tager med/ }).click();
+
+    await expect(page).toHaveURL(/\/m3pizza\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=pickup$/);
+    await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toBeVisible();
+  });
+
   for (const [requestedMethod, expectedMethod] of [
     ['delivery', 'delivery'],
     ['takeaway', 'pickup'],
@@ -116,4 +136,23 @@ test.describe('Brand Website Smoke Tests', () => {
       await expect.poll(() => page.evaluate(() => localStorage.getItem('deliveryMethod'))).toBe(expectedMethod);
     });
   }
+
+  test('legacy M3Pizza order link redirects when browser storage is unavailable', async ({ page }) => {
+    await page.addInitScript(() => {
+      const originalSetItem = Storage.prototype.setItem;
+      Storage.prototype.setItem = function (key: string, value: string) {
+        if (key === 'deliveryMethod') {
+          throw new DOMException('Storage is unavailable', 'SecurityError');
+        }
+        return originalSetItem.call(this, key, value);
+      };
+    });
+
+    await page.goto('/m3pizza/order?deliveryMethod=delivery');
+
+    await expect(page).toHaveURL(
+      /\/m3pizza\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=delivery$/,
+    );
+    await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toBeVisible();
+  });
 });

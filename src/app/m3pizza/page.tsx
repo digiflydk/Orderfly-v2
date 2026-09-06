@@ -17,6 +17,7 @@ import StickyOrderChoice from '@/app/m3/_components/StickyOrderChoice';
 import {
   getM3PizzaMenuHref,
   normalizeM3PizzaDeliveryMethod,
+  persistM3PizzaDeliveryMethod,
 } from '@/lib/m3pizza-order-flow';
 
 export default function M3IndexPage() {
@@ -50,7 +51,7 @@ export default function M3IndexPage() {
 
   const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
     const deliveryMethod = normalizeM3PizzaDeliveryMethod(method);
-    localStorage.setItem('deliveryMethod', deliveryMethod);
+    persistM3PizzaDeliveryMethod(deliveryMethod);
     router.push(getM3PizzaMenuHref(deliveryMethod));
   };
 

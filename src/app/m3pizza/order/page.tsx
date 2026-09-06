@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import {
   getM3PizzaMenuHref,
   normalizeM3PizzaDeliveryMethod,
+  persistM3PizzaDeliveryMethod,
 } from '@/lib/m3pizza-order-flow';
 
 export default function M3PizzaLegacyOrderRedirectPage() {
@@ -16,7 +17,7 @@ export default function M3PizzaLegacyOrderRedirectPage() {
     );
     const deliveryMethod = normalizeM3PizzaDeliveryMethod(requestedMethod);
 
-    localStorage.setItem('deliveryMethod', deliveryMethod);
+    persistM3PizzaDeliveryMethod(deliveryMethod);
     router.replace(getM3PizzaMenuHref(deliveryMethod));
   }, [router]);
 

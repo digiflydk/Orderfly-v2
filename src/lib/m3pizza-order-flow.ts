@@ -14,3 +14,14 @@ export function getM3PizzaMenuHref(
   const deliveryMethod = normalizeM3PizzaDeliveryMethod(value);
   return `${M3PIZZA_MENU_PATH}?deliveryMethod=${deliveryMethod}`;
 }
+
+export function persistM3PizzaDeliveryMethod(
+  deliveryMethod: M3PizzaDeliveryMethod,
+): void {
+  try {
+    window.localStorage.setItem('deliveryMethod', deliveryMethod);
+  } catch {
+    // Storage can be unavailable under restrictive browser privacy policies.
+    // The query parameter remains the source of truth for the destination page.
+  }
+}
