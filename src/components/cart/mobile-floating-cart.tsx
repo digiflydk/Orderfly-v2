@@ -35,7 +35,7 @@ import { isLockedItem } from '@/lib/cart-utils';
 import { safeImage } from '@/lib/images';
 
 function CartContents() {
-    const { cartItems, removeFromCart, updateQuantity, cartTotal, subtotal, itemDiscount, cartDiscount, voucherDiscount, deliveryFee, freeDeliveryDiscountApplied, bagFee, adminFee, vatAmount, brand } = useCart();
+    const { cartItems, removeFromCart, updateQuantity, checkoutTotal, subtotal, itemDiscount, cartDiscount, voucherDiscount, deliveryFee, freeDeliveryDiscountApplied, bagFee, adminFee, vatAmount, brand } = useCart();
 
     return (
         <>
@@ -161,7 +161,7 @@ function CartContents() {
                 <Separator/>
                 <div className="flex justify-between font-bold">
                     <span>Total</span>
-                    <span>kr.{cartTotal.toFixed(2)}</span>
+                    <span>kr.{checkoutTotal.toFixed(2)}</span>
                 </div>
               </div>
             </SheetFooter>
@@ -202,7 +202,9 @@ export function MobileFloatingCart() {
       if (brand && location) {
         const minimalCartItems = cartItems.map(item => ({
             id: item.id,
-            categoryId: item.categoryId
+            categoryId: item.categoryId,
+            itemType: item.itemType,
+            tags: item.tags,
         }));
         
         const currentDiscountableSubtotal = cartItems
@@ -215,11 +217,14 @@ export function MobileFloatingCart() {
         const upsellData = await getActiveUpsellForCart({
             brandId: brand.id,
             locationId: location.id,
+            deliveryType: deliveryType!,
             cartItems: minimalCartItems,
             cartTotal: currentDiscountableSubtotal,
+            excludedUpsellIds: [sessionStorage.getItem('orderfly_handled_upsell') || ''],
         });
 
         if (upsellData) {
+            sessionStorage.setItem('orderfly_handled_upsell', upsellData.upsell.id);
             setActiveUpsell(upsellData);
             setIsUpsellDialogOpen(true);
         } else {
@@ -250,7 +255,7 @@ export function MobileFloatingCart() {
                             </div>
                             <span className="font-bold">View cart</span>
                         </div>
-                        <span className="font-bold">kr. {cartTotal.toFixed(2)}</span>
+                        <span className="font-bold">kr. {checkoutTotal.toFixed(2)}</span>
                     </div>
                 </Button>
             </div>
