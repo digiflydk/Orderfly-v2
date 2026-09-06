@@ -105,11 +105,24 @@ export async function POST(req: Request) {
         
         if (metadata.appliedDiscountId) {
             const discountRef = doc(db, 'discounts', metadata.appliedDiscountId);
+            const customerRef = doc(db, 'customers', orderSnap.data().customerDetails.id);
              await runTransaction(db, async (transaction) => {
-                const freshSnap = await transaction.get(discountRef);
+                const [freshSnap, freshCustomerSnap] = await Promise.all([
+                  transaction.get(discountRef),
+                  transaction.get(customerRef),
+                ]);
                 if (!freshSnap.exists()) { throw "Discount does not exist!"; }
                 const currentUsedCount = (freshSnap.data()?.usedCount || 0) + 1;
                 transaction.update(discountRef, { usedCount: currentUsedCount });
+                if (freshCustomerSnap.exists()) {
+                  const currentUsage = freshCustomerSnap.data().discountUsage || {};
+                  transaction.update(customerRef, {
+                    discountUsage: {
+                      ...currentUsage,
+                      [metadata.appliedDiscountId]: (currentUsage[metadata.appliedDiscountId] || 0) + 1,
+                    },
+                  });
+                }
             });
         }
         
