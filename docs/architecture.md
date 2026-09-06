@@ -57,7 +57,7 @@ Focused regression command: `node --test tests/unit/promotion-review.cjs` (no br
 
 ### Concurrent redemption and deleted records
 
-Before issuing a discounted Stripe session, checkout reserves global, per-customer and first-order capacity in a Firestore transaction. A durable `discount_reservations/{brandId}` ledger retains active order holds and paid counters independently of deletable admin records. Fulfillment consumes the hold and updates paid counters together with the order. Missing customer/discount records are skipped, recorded in `fulfillmentWarnings`, and never recreated; existing records from another brand still reject processing.
+Before issuing a discounted Stripe session, checkout reserves global, per-customer and first-order capacity in a Firestore transaction. Fixed-size customer, discount and customer/discount capacity documents retain held and paid counters independently of deletable admin records. Fulfillment consumes the hold and updates paid counters together with the order. Missing customer/discount records are skipped, recorded in `fulfillmentWarnings`, and never recreated; existing records from another brand still reject processing.
 
 Stripe sessions expire after 31 minutes. The webhook must receive **checkout.session.expired** as well as **checkout.session.completed**. Only verified Stripe expiration releases a payable-session hold; visiting the cancel URL does not. Failures before the session request release the hold immediately. Ambiguous Stripe request failures retain capacity: operators must reconcile the order-ID idempotency key with Stripe before releasing it, never release merely on elapsed wall time. Active holds count until expiration delivery even when the webhook is delayed.
 
@@ -66,3 +66,9 @@ The regression suite covers two competing reservations, global/per-customer/firs
 ### Explicit cancellation
 
 New Stripe cancel URLs carry an unguessable, order-specific capability. Only its SHA-256 hash is stored on the order. Returning through Stripe cancellation calls a server action that validates the capability and Stripe metadata, expires the open session, and releases capacity only after confirmed `expired` status. Completed payments never release capacity. Transient failures show a retry state rather than claiming cancellation succeeded. Pre-existing sessions without this capability keep the expiry-only behavior. Cancellation tests include invalid capability, provider failure, payment races and retries; no live Stripe writes are part of the unit suite.
+
+### Final concurrency and identity corrections
+
+Every checkout reserves customer capacity, including undiscounted orders. First-order promotions exclude all concurrent sessions in either creation order. Cancellation and expiry release that capacity too. The former brand-wide ledger is replaced before release by hashed, tenant-scoped documents in `checkout_customer_capacity`, `checkout_discount_capacity` and `checkout_customer_discount_capacity`. Each stores only numeric held/paid counters plus a customer first-order flag; order documents retain reservation state. No brand-wide customer history map is rewritten at payment. This replaces an unreleased PR schema; any environment running a prior PR snapshot must reconcile outstanding old holds before upgrading.
+
+Checkout first resolves a brand-scoped normalized email to the native customer document, including integration-created IDs. Ambiguous duplicates fail explicitly. Upsell history retains a set of every handled offer ID and reads the legacy single-ID value. Regression suite: nine tests, including mixed first-order/ordinary session rejection in both directions and native integrated-customer resolution.

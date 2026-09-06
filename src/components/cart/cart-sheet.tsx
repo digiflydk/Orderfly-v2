@@ -2,6 +2,7 @@
 
 'use client';
 
+import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -71,11 +72,11 @@ export function CartSheet() {
             deliveryType: deliveryType!,
             cartItems: minimalCartItems,
             cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0)),
-            excludedUpsellIds: [sessionStorage.getItem('orderfly_handled_upsell') || ''],
+            excludedUpsellIds: handledUpsells(),
         });
 
         if (upsellData) {
-            sessionStorage.setItem('orderfly_handled_upsell', upsellData.upsell.id);
+            markUpsellHandled(upsellData.upsell.id);
             setActiveUpsell(upsellData);
             setIsUpsellDialogOpen(true);
         } else {

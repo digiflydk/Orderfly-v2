@@ -2,6 +2,7 @@
 
 'use server';
 
+import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
 import { newsletterEligible, cartLineEligible, assignedCustomerMatches, restaurantClock } from '@/lib/promotion-rules';
 import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
 import { createHash, randomBytes } from 'node:crypto';
@@ -45,6 +46,9 @@ function scopedCustomerId(brandId: string, normalizedEmail: string): string {
 async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: string) {
     const normalizedEmail = normalizeCustomerEmail(customerInfo.email);
     if (!normalizedEmail) throw new Error('Customer email is required.');
+
+    const integrated = await findCheckoutCustomer(brandId, normalizedEmail);
+    if (integrated) return { customerRef: integrated.ref, customerDoc: integrated, normalizedEmail };
 
     const scopedRef = doc(db, 'customers', scopedCustomerId(brandId, normalizedEmail));
     const scopedDoc = await getDoc(scopedRef);
@@ -457,10 +461,8 @@ export async function createStripeCheckoutSessionAction(
     });
 
 
-    if (appliedDiscountIdForOrder) {
-      await reserveDiscount(orderId, appliedDiscountIdForOrder, customerId, brandId);
-      reservedOrderId = orderId;
-    }
+    await reserveDiscount(orderId, appliedDiscountIdForOrder, customerId, brandId);
+    reservedOrderId = orderId;
 
     const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => {
         if (item.unitPrice == null) {

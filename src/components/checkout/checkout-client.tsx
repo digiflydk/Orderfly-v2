@@ -1,5 +1,6 @@
 'use client';
 
+import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
 import * as React from 'react';
 import { useCart } from "@/context/cart-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -625,13 +626,13 @@ function CheckoutForm({ location }: { location: Location }) {
       deliveryType: deliveryType!,
       cartItems: minimalCartItems,
       cartTotal: currentDiscountableSubtotal,
-      excludedUpsellIds: [sessionStorage.getItem('orderfly_handled_upsell') || ''],
+      excludedUpsellIds: handledUpsells(),
     });
 
     setIsProcessing(false);
 
     if (upsellData) {
-      sessionStorage.setItem('orderfly_handled_upsell', upsellData.upsell.id);
+      markUpsellHandled(upsellData.upsell.id);
       setActiveUpsell(upsellData);
       setCheckoutStep('upsell');
     } else {

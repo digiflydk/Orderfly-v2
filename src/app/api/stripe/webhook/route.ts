@@ -1,4 +1,4 @@
-import { releaseDiscount } from '@/lib/discount-reservations';
+import { releaseDiscount, prepareCapacitySettlement } from '@/lib/discount-reservations';
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -79,22 +79,8 @@ export async function POST(req: Request) {
           const discountRef = discountId ? doc(db, 'discounts', discountId) : null;
           const discountSnap = discountRef ? await transaction.get(discountRef) : null;
           if (discountSnap?.exists() && discountSnap.data().brandId !== order.brandId) throw new Error('Discount scope mismatch');
-          const ledgerRef = doc(db, 'discount_reservations', order.brandId);
-          const ledgerSnap = await transaction.get(ledgerRef);
-          const ledger = ledgerSnap.data() || {};
-          const holds = { ...(ledger.holds || {}) };
-          const paid = { ...(ledger.paid || {}) };
-          const customerPaid = { ...(ledger.customerPaid || {}) };
-          const customerOrders = { ...(ledger.customerOrders || {}) };
-          const customerId = order.customerDetails.id;
-          delete holds[metadata.orderId];
-          if (discountId) {
-            paid[discountId] = Math.max(paid[discountId] || 0, discountSnap?.data()?.usedCount || 0) + 1;
-            customerPaid[customerId] = { ...(customerPaid[customerId] || {}) };
-            customerPaid[customerId][discountId] = Math.max(customerPaid[customerId][discountId] || 0, customerSnap.data()?.discountUsage?.[discountId] || 0) + 1;
-          }
-          customerOrders[customerId] = (customerOrders[customerId] || 0) + 1;
-          transaction.set(ledgerRef, { holds, paid, customerPaid, customerOrders });
+          const settleCapacity = await prepareCapacitySettlement(transaction, order, true);
+          settleCapacity();
           const customer = customerSnap.data() || {};
           const usage = { ...(customer.discountUsage || {}) };
           if (discountRef && discountSnap?.exists()) {
