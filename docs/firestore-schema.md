@@ -109,6 +109,7 @@ Aggregates data for each unique customer.
 | `lastOrderDate`| timestamp | | |
 | `loyaltyScore`| number | | Calculated score (0-100) |
 | `loyaltyClassification`| string | | `New`, `Occasional`, `Loyal`, `At Risk` |
+| `pendingNewsletterDiscountId` | string | | Retains newly granted incentive eligibility across canceled checkout retries; paid usage remains authoritative |
 | `marketingConsent`| boolean | | Customer has opted in to marketing/newsletters |
 | `discountUsage`| map | | Discount document ID to successful-use count; updated after paid checkout |
 

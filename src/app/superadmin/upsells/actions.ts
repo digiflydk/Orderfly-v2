@@ -1,6 +1,7 @@
 
 'use server';
 
+import { restaurantClock } from '@/lib/promotion-rules';
 import { revalidatePath } from 'next/cache';
 import { getAdminDb, admin } from '@/lib/firebase-admin';
 import type { Upsell, Product, Category, CartItem, ProductForMenu, Brand, Location } from '@/types';
@@ -254,7 +255,7 @@ export async function getActiveUpsellForCart({
   products: ProductForMenu[];
 } | null> {
   const now = new Date();
-  const currentDay = now.toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
+  const currentDay = restaurantClock(now).day;
   const db = getAdminDb();
 
   // 1. Fetch all potentially active upsells for the brand and location
@@ -285,7 +286,7 @@ export async function getActiveUpsellForCart({
       if ((upsell.activeDays || []).length > 0 && !upsell.activeDays.includes(currentDay)) return false;
 
       if ((upsell.activeTimeSlots || []).length > 0) {
-          const currentTime = now.toTimeString().slice(0,5);
+          const currentTime = restaurantClock(now).time;
           const inActiveTime = upsell.activeTimeSlots.some(slot => currentTime >= slot.start && currentTime <= slot.end);
           if(!inActiveTime) return false;
       }

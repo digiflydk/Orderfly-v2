@@ -122,6 +122,7 @@ export type Customer = {
     country?: string;
     marketingConsent?: boolean;
     discountUsage?: Record<string, number>;
+    pendingNewsletterDiscountId?: string;
     tags?: string[];
     notes?: string;
     status: 'active' | 'inactive';
@@ -538,6 +539,7 @@ export interface CartItem {
  * @description A minimal representation of a cart item sent to the server.
  */
 export type MinimalCartItem = {
+    id?: string;
     name: string;
     quantity: number;
     unitPrice: number;

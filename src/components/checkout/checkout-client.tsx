@@ -542,6 +542,7 @@ function CheckoutForm({ location }: { location: Location }) {
       const anonymousId = Cookies.get('orderfly_anonymous_id');
 
       const minimalCartItems: MinimalCartItem[] = cartItems.map(item => ({
+        id: item.id,
         name: item.productName,
         quantity: item.quantity,
         unitPrice: item.price,

@@ -46,3 +46,11 @@ flowchart LR
 * Next.js App Router (v15) with Server Actions
 * Firestore as single source of truth
 * Swagger & Debug routes for testing and operational visibility
+
+### Promotion review corrections (#40)
+
+Cart-level eligibility resolves product and combo records in the requested brand/location. Combos, active item offers and items sold below catalog price are excluded. Legacy offer suffixes resolve back to the native product ID. Checkout payloads must carry the item ID; old open checkout tabs must refresh.
+
+Customer assignments use brand-filtered `customers` IDs; legacy assignments to administrative users must be reselected. Discount and upsell schedules use `Europe/Copenhagen`, including DST. A newly consenting customer retains a pending newsletter discount ID until successful use, allowing canceled-payment retries; paid usage still blocks reuse. Payment status, customer aggregates and discount counters commit in one Firestore transaction, so failures roll back all required fulfillment work.
+
+Focused regression command: `node --test tests/unit/promotion-review.cjs` (no browser or production writes).

@@ -2,6 +2,7 @@
 
 'use server';
 
+import { newsletterEligible, cartLineEligible, assignedCustomerMatches, restaurantClock } from '@/lib/promotion-rules';
 import { createHash } from 'node:crypto';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
@@ -68,7 +69,7 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     return { customerRef: scopedRef, customerDoc: scopedDoc, normalizedEmail };
 }
 
-async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: string, locationId: string, newOrderTotal: number, anonymousConsentId?: string): Promise<string> {
+async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: string, locationId: string, newOrderTotal: number, anonymousConsentId?: string, newsletterDiscountId?: string): Promise<string> {
     try {
         const { customerRef, customerDoc, normalizedEmail } = await resolveCheckoutCustomerRef(customerInfo, brandId);
         const customerId = customerRef.id;
@@ -119,6 +120,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 updatedData.cookie_consent = cookieConsentData;
             }
 
+            if (newsletterDiscountId && !customerData.marketingConsent) updatedData.pendingNewsletterDiscountId = newsletterDiscountId;
             await updateDoc(customerRef, updatedData);
         } else {
             const newCustomer: Customer & { normalizedEmail: string } = {
@@ -142,6 +144,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 loyaltyClassification: 'New',
                 cookie_consent: cookieConsentData,
             };
+            if (newsletterDiscountId) newCustomer.pendingNewsletterDiscountId = newsletterDiscountId;
             await setDoc(customerRef, newCustomer);
         }
         
@@ -216,20 +219,20 @@ function validateDiscountEligibility(discount: Discount, context: DiscountEligib
     if (startDate && startDate > now) return 'This discount is not yet active.';
     if (endDate && endDate < now) return 'This discount has expired.';
 
-    const currentDay = now.toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
+    const currentDay = restaurantClock(now).day;
     if ((discount.activeDays || []).length > 0 && !discount.activeDays.includes(currentDay)) return 'This discount is not active today.';
     if ((discount.activeTimeSlots || []).length > 0) {
-        const currentTime = now.toTimeString().slice(0, 5);
+        const currentTime = restaurantClock(now).time;
         if (!discount.activeTimeSlots.some(slot => currentTime >= slot.start && currentTime <= slot.end)) return 'This discount is not active at this time.';
     }
 
-    if (discount.assignedToCustomerId && discount.assignedToCustomerId !== context.customerId) return 'This discount is assigned to another customer.';
+    if (!assignedCustomerMatches(discount.assignedToCustomerId, context.customerId)) return 'This discount is assigned to another customer.';
     if (discount.firstTimeCustomerOnly && (context.customer?.totalOrders || 0) > 0) return 'This discount is only available to first-time customers.';
     if (discount.perCustomerLimit > 0 && ((context.customer?.discountUsage?.[discount.id] || 0) >= discount.perCustomerLimit)) return 'This discount has reached its per-customer limit.';
 
     if (applicationType === 'newsletter_signup') {
         if (!context.newsletterConsent) return 'Newsletter signup is required for this discount.';
-        if (context.customer?.marketingConsent) return 'This newsletter discount has already been used.';
+        if (!newsletterEligible(!!context.customer?.marketingConsent, context.customer?.pendingNewsletterDiscountId, discount.id, context.customer?.discountUsage?.[discount.id] || 0)) return 'This newsletter discount has already been used.';
     }
 
     return null;
@@ -333,13 +336,36 @@ export async function createStripeCheckoutSessionAction(
       deliveryType,
     });
 
+    // Resolve eligibility from native catalog records; the browser cannot mark a combo as a product.
+    const eligibleLines = await Promise.all(cartItems.map(async item => {
+      if (!item.id) throw new Error('Please refresh your basket before checking out.');
+      let [productSnap, comboSnap] = await Promise.all([
+        getDoc(doc(db, 'products', item.id)), getDoc(doc(db, 'comboMenus', item.id)),
+      ]);
+      if (!productSnap.exists() && !comboSnap.exists() && item.id.endsWith('-offer')) {
+        productSnap = await getDoc(doc(db, 'products', item.id.slice(0, -6)));
+      }
+      const catalog = productSnap.exists() ? productSnap.data() as Product : null;
+      const combo = comboSnap.exists() ? comboSnap.data() : null;
+      const record = catalog || combo;
+      if (!record || record.brandId !== brandId || (record.locationIds?.length && !record.locationIds.includes(locationId))) throw new Error('Basket item is unavailable at this restaurant.');
+      if (combo) return 0;
+      const catalogPrice = deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price;
+      const itemOffer = activeStandardDiscounts.some(d =>
+        (d.discountType === 'product' && d.referenceIds.includes(productSnap.id)) ||
+        (d.discountType === 'category' && d.referenceIds.includes(catalog!.categoryId))
+      );
+      return cartLineEligible(false, catalogPrice, item.unitPrice, itemOffer) ? item.totalPrice : 0;
+    }));
+    const eligibleSubtotal = eligibleLines.reduce((sum, amount) => sum + amount, 0);
+
     const automaticCartDiscount = activeStandardDiscounts
-      .filter(discount => discount.discountType === 'cart' && chargedItemsSubtotal >= (discount.minOrderValue || 0))
+      .filter(discount => discount.discountType === 'cart' && eligibleSubtotal >= (discount.minOrderValue || 0))
       .map(discount => ({
         name: discount.discountName,
         amount: discount.discountMethod === 'percentage'
-          ? chargedItemsSubtotal * ((discount.discountValue || 0) / 100)
-          : Math.min(chargedItemsSubtotal, discount.discountValue || 0),
+          ? eligibleSubtotal * ((discount.discountValue || 0) / 100)
+          : Math.min(eligibleSubtotal, discount.discountValue || 0),
       }))
       .reduce<{ name: string; amount: number } | null>((best, current) => !best || current.amount > best.amount ? current : best, null);
 
@@ -352,13 +378,13 @@ export async function createStripeCheckoutSessionAction(
         brandId,
         locationId,
         deliveryType,
-        subtotal: chargedItemsSubtotal,
+        subtotal: eligibleSubtotal,
         customerId: resolvedCustomer.customerRef.id,
         customer: existingCustomer,
         newsletterConsent: customerInfo.subscribeToNewsletter,
       });
       if (eligibilityError) throw new Error(eligibilityError);
-      selectedDiscountAmount = calculateDiscountAmount(selectedDiscount, chargedItemsSubtotal);
+      selectedDiscountAmount = calculateDiscountAmount(selectedDiscount, eligibleSubtotal);
     }
 
     const manualDiscountWins = selectedDiscountAmount > (automaticCartDiscount?.amount || 0);
@@ -395,7 +421,7 @@ export async function createStripeCheckoutSessionAction(
       vatAmount: totalAmount * ((brand.vatPercentage || 25) / (100 + (brand.vatPercentage || 25))),
     };
 
-    const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, anonymousConsentId);
+    const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, anonymousConsentId, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined);
 
     // Step 1: Pre-create order with 'Pending' status
     const orderId = generateOrderId();

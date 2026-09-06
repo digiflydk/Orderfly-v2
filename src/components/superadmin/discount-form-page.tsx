@@ -1,9 +1,10 @@
 'use client';
+import { getDiscountCustomers } from '@/app/superadmin/discounts/actions';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray } from 'react-hook-form';
-import { useEffect, useMemo, useTransition } from 'react';
+import { useState, useEffect, useMemo, useTransition } from 'react';
 import Link from 'next/link';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2, PlusCircle, Trash2, Clock } from 'lucide-react';
@@ -20,7 +21,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import type { Discount, Brand, Location, User } from '@/types';
+import type { Discount, Brand, Location } from '@/types';
 import { createOrUpdateDiscount } from '@/app/superadmin/discounts/actions';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -83,7 +84,7 @@ interface DiscountFormPageProps {
   discount?: Discount;
   brands: Brand[];
   locations: Location[];
-  users: User[];
+
 }
 
 const WEEKDAYS = [
@@ -100,7 +101,7 @@ export function DiscountFormPage({
   discount,
   brands,
   locations,
-  users,
+
 }: DiscountFormPageProps) {
   const { toast } = useToast();
   const [isPending, startTransition] = useTransition();
@@ -169,6 +170,13 @@ export function DiscountFormPage({
   }, [discount, reset]);
 
   const selectedBrandId = watch('brandId');
+  const [customers, setCustomers] = useState<{id: string; name: string; email: string}[]>([]);
+  useEffect(() => {
+    let current = true;
+    setCustomers([]);
+    void getDiscountCustomers(selectedBrandId).then(rows => { if (current) setCustomers(rows); });
+    return () => { current = false; };
+  }, [selectedBrandId]);
   const assignedToCustomerId = watch('assignedToCustomerId');
   const firstTimeCustomerOnly = watch('firstTimeCustomerOnly');
   const applicationType = watch('applicationType');
@@ -503,7 +511,7 @@ export function DiscountFormPage({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {users.map(u => (
+                          {customers.map(u => (
                             <SelectItem key={u.id} value={u.id}>
                               {u.name} ({u.email})
                             </SelectItem>

@@ -1,6 +1,7 @@
 
 'use server';
 
+import { restaurantClock } from '@/lib/promotion-rules';
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, where, documentId, updateDoc } from 'firebase/firestore';
@@ -218,7 +219,7 @@ export async function getActiveStandardDiscounts({ brandId, locationId, delivery
 	// We use `now` as a placeholder for these future values.
 	// The logic is structured to easily accommodate them when the checkout flow is updated.
 	const validationTime = pickupTime || now; // Use chosen pickup time if available, otherwise current time.
-	const validationTimeDay = validationTime.toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
+	const validationTimeDay = restaurantClock(validationTime).day;
 
 	let allDiscountsForBrand: StandardDiscount[];
 
@@ -257,14 +258,14 @@ export async function getActiveStandardDiscounts({ brandId, locationId, delivery
 		if (discount.endDate && now > discount.endDate) return false;
 
 		// Determine which day to check against based on validation type
-		const dayToCheck = discount.timeSlotValidationType === 'pickupTime' ? validationTimeDay : now.toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
+		const dayToCheck = discount.timeSlotValidationType === 'pickupTime' ? validationTimeDay : restaurantClock(now).day;
 		if ((discount.activeDays || []).length > 0 && !(discount.activeDays || []).includes(dayToCheck)) return false;
 
 		// Determine which time to check against
 		const timeToCheck = discount.timeSlotValidationType === 'pickupTime' ? validationTime : now;
 
 		if ((discount.activeTimeSlots || []).length > 0) {
-			const currentTimeString = timeToCheck.toTimeString().slice(0, 5);
+			const currentTimeString = restaurantClock(timeToCheck).time;
 			const inActiveTime = discount.activeTimeSlots.some(slot => currentTimeString >= slot.start && currentTimeString <= slot.end);
 			if (!inActiveTime) return false;
 		}

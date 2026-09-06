@@ -97,6 +97,13 @@ export async function createOrUpdateDiscount(
     
     const { id: validatedId, ...discountData } = validatedFields.data;
 
+    if (discountData.assignedToCustomerId) {
+      const customer = await getDoc(doc(db, 'customers', discountData.assignedToCustomerId));
+      if (!customer.exists() || customer.data().brandId !== discountData.brandId) {
+        return { error: true, message: 'Select a customer belonging to this brand.' };
+      }
+    }
+
     // Check for uniqueness
     const uniquenessQuery = query(
         collection(db, 'discounts'),
@@ -235,4 +242,10 @@ export async function getDiscountByCode(code: string, brandId: string): Promise<
     createdAt: data.createdAt.toDate(),
     updatedAt: data.updatedAt.toDate(),
   } as Discount;
+}
+
+export async function getDiscountCustomers(brandId: string): Promise<{id: string; name: string; email: string}[]> {
+  if (!brandId) return [];
+  const snapshot = await getDocs(query(collection(db, 'customers'), where('brandId', '==', brandId)));
+  return snapshot.docs.map(d => ({ id: d.id, name: d.data().fullName || '', email: d.data().email || '' }));
 }
