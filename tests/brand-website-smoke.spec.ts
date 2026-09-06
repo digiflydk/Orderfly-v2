@@ -83,7 +83,7 @@ test.describe('Brand Website Smoke Tests', () => {
     await page.getByTestId('template1-sticky-cta').getByRole('button', { name: 'BESTIL HER' }).click();
     await page.getByRole('button', { name: /Leverer til mig/ }).click();
 
-    await expect(page).toHaveURL(/\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=delivery$/);
+    await expect(page).toHaveURL(/\/cphpizza\/m3-pizza-hellerup\?deliveryMethod=delivery$/);
     await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
     await expect(page.getByText('Menu (mock)')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
@@ -98,7 +98,7 @@ test.describe('Brand Website Smoke Tests', () => {
     await page.getByTestId('template1-sticky-cta').getByRole('button', { name: 'BESTIL HER' }).click();
     await page.getByRole('button', { name: /Jeg tager med/ }).click();
 
-    await expect(page).toHaveURL(/\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=pickup$/);
+    await expect(page).toHaveURL(/\/cphpizza\/m3-pizza-hellerup\?deliveryMethod=pickup$/);
     await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('deliveryMethod'))).toBe('pickup');
@@ -120,7 +120,7 @@ test.describe('Brand Website Smoke Tests', () => {
     await page.getByTestId('template1-sticky-cta').getByRole('button', { name: 'BESTIL HER' }).click();
     await page.getByRole('button', { name: /Jeg tager med/ }).click();
 
-    await expect(page).toHaveURL(/\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=pickup$/);
+    await expect(page).toHaveURL(/\/cphpizza\/m3-pizza-hellerup\?deliveryMethod=pickup$/);
     await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
   });
@@ -135,7 +135,7 @@ test.describe('Brand Website Smoke Tests', () => {
       await page.goto(`/m3pizza/order?deliveryMethod=${requestedMethod}`);
 
       await expect(page).toHaveURL(
-        new RegExp(`/m3pizza/m3-pizza-hellerup\\?deliveryMethod=${expectedMethod}$`),
+        new RegExp(`/cphpizza/m3-pizza-hellerup\\?deliveryMethod=${expectedMethod}$`),
       );
       await expect.poll(() => page.evaluate(() => localStorage.getItem('deliveryMethod'))).toBe(expectedMethod);
     });
@@ -155,7 +155,7 @@ test.describe('Brand Website Smoke Tests', () => {
     await page.goto('/m3pizza/order?deliveryMethod=delivery');
 
     await expect(page).toHaveURL(
-      /\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=delivery$/,
+      /\/cphpizza\/m3-pizza-hellerup\?deliveryMethod=delivery$/,
     );
     await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
