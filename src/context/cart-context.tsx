@@ -74,9 +74,33 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
 
   useEffect(() => {
-    const savedDeliveryMethod = localStorage.getItem('deliveryMethod') as 'delivery' | 'pickup' | null;
-    if (savedDeliveryMethod) {
-      setDeliveryTypeState(savedDeliveryMethod);
+    const requestedDeliveryMethod = new URLSearchParams(window.location.search).get('deliveryMethod');
+    const deliveryMethodFromUrl =
+      requestedDeliveryMethod === 'delivery' || requestedDeliveryMethod === 'pickup'
+        ? requestedDeliveryMethod
+        : null;
+
+    let savedDeliveryMethod: 'delivery' | 'pickup' | null = null;
+    try {
+      const savedValue = localStorage.getItem('deliveryMethod');
+      if (savedValue === 'delivery' || savedValue === 'pickup') {
+        savedDeliveryMethod = savedValue;
+      }
+    } catch {
+      // Browser storage can be unavailable. The URL remains authoritative.
+    }
+
+    const initialDeliveryMethod = deliveryMethodFromUrl ?? savedDeliveryMethod;
+    if (initialDeliveryMethod) {
+      setDeliveryTypeState(initialDeliveryMethod);
+    }
+
+    if (deliveryMethodFromUrl) {
+      try {
+        localStorage.setItem('deliveryMethod', deliveryMethodFromUrl);
+      } catch {
+        // State still keeps the URL selection for this session.
+      }
     }
     setIsInitialized(true);
   }, []);
@@ -86,7 +110,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const setDeliveryType = (type: 'delivery' | 'pickup') => {
-    localStorage.setItem('deliveryMethod', type);
+    try {
+      localStorage.setItem('deliveryMethod', type);
+    } catch {
+      // Keep the in-memory selection when browser storage is unavailable.
+    }
     setDeliveryTypeState(type);
     setSelectedTime('asap');
   };

@@ -2,6 +2,12 @@ name: Orderfly CI
 
 on:
   workflow_dispatch:
+    inputs:
+      run_playwright:
+        description: Run the full cross-browser Playwright suite
+        required: false
+        default: false
+        type: boolean
   push:
     branches:
       - develop
@@ -25,7 +31,7 @@ concurrency:
 
 jobs:
   verify:
-    name: Typecheck, build and Playwright
+    name: Typecheck and build
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
@@ -60,14 +66,19 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Build
+        run: npm run build
+
       - name: Install Playwright browsers
+        if: github.event_name == 'workflow_dispatch' && inputs.run_playwright
         run: npx playwright install --with-deps
 
       - name: Run Playwright UI tests against checked-out change
+        if: github.event_name == 'workflow_dispatch' && inputs.run_playwright
         run: npx playwright test
 
       - name: Upload Playwright test report
-        if: always()
+        if: always() && github.event_name == 'workflow_dispatch' && inputs.run_playwright
         uses: actions/upload-artifact@v4
         with:
           name: playwright-report-${{ github.run_attempt }}

@@ -143,8 +143,16 @@ export function MenuClient({
   useEffect(() => {
     // OF-399: Show delivery modal only if a delivery method has not been previously selected in this session.
     if (typeof window !== 'undefined') {
-      const savedDeliveryMethod = localStorage.getItem('deliveryMethod');
-      if (!savedDeliveryMethod) {
+      const requestedDeliveryMethod = new URLSearchParams(window.location.search).get('deliveryMethod');
+      let savedDeliveryMethod: string | null = null;
+      try {
+        savedDeliveryMethod = localStorage.getItem('deliveryMethod');
+      } catch {
+        // The query parameter can still provide a valid selection.
+      }
+      const hasRequestedDeliveryMethod =
+        requestedDeliveryMethod === 'delivery' || requestedDeliveryMethod === 'pickup';
+      if (!hasRequestedDeliveryMethod && !savedDeliveryMethod) {
         openDeliveryModal({ brandSlug: brand.slug, locationSlug: location.slug });
       }
     }
