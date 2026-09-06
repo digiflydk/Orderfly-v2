@@ -1,3 +1,4 @@
+import { releaseDiscount } from '@/lib/discount-reservations';
 
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
@@ -44,6 +45,14 @@ export async function POST(req: Request) {
 
   // Handle the event
   switch (event.type) {
+    case 'checkout.session.expired': {
+      const expired = event.data.object as Stripe.Checkout.Session;
+      if (expired.metadata?.orderId && expired.metadata?.brandId) {
+        try { await releaseDiscount(expired.metadata.orderId, expired.metadata.brandId, expired.id); }
+        catch { return new Response('Reservation release failed', { status: 500 }); }
+      }
+      break;
+    }
     case 'checkout.session.completed':
       const session = event.data.object as Stripe.Checkout.Session;
       
@@ -62,27 +71,46 @@ export async function POST(req: Request) {
           if (!orderSnap.exists()) throw new Error('Order not found');
           const order = orderSnap.data();
           if (order.paymentStatus === 'Paid') return false;
-          if (order.brandId !== metadata.brandId || order.locationId !== metadata.locationId || order.psp?.checkoutSessionId !== session.id) throw new Error('Payment scope mismatch');
+          if (order.brandId !== metadata.brandId || order.locationId !== metadata.locationId || (order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== session.id)) throw new Error('Payment scope mismatch');
           const customerRef = doc(db, 'customers', order.customerDetails.id);
           const customerSnap = await transaction.get(customerRef);
-          if (!customerSnap.exists() || customerSnap.data().brandId !== order.brandId) throw new Error('Customer scope mismatch');
+          if (customerSnap.exists() && customerSnap.data().brandId !== order.brandId) throw new Error('Customer scope mismatch');
           const discountId = order.appliedDiscountId;
           const discountRef = discountId ? doc(db, 'discounts', discountId) : null;
           const discountSnap = discountRef ? await transaction.get(discountRef) : null;
-          if (discountSnap && (!discountSnap.exists() || discountSnap.data().brandId !== order.brandId)) throw new Error('Discount scope mismatch');
-          const customer = customerSnap.data();
+          if (discountSnap?.exists() && discountSnap.data().brandId !== order.brandId) throw new Error('Discount scope mismatch');
+          const ledgerRef = doc(db, 'discount_reservations', order.brandId);
+          const ledgerSnap = await transaction.get(ledgerRef);
+          const ledger = ledgerSnap.data() || {};
+          const holds = { ...(ledger.holds || {}) };
+          const paid = { ...(ledger.paid || {}) };
+          const customerPaid = { ...(ledger.customerPaid || {}) };
+          const customerOrders = { ...(ledger.customerOrders || {}) };
+          const customerId = order.customerDetails.id;
+          delete holds[metadata.orderId];
+          if (discountId) {
+            paid[discountId] = Math.max(paid[discountId] || 0, discountSnap?.data()?.usedCount || 0) + 1;
+            customerPaid[customerId] = { ...(customerPaid[customerId] || {}) };
+            customerPaid[customerId][discountId] = Math.max(customerPaid[customerId][discountId] || 0, customerSnap.data()?.discountUsage?.[discountId] || 0) + 1;
+          }
+          customerOrders[customerId] = (customerOrders[customerId] || 0) + 1;
+          transaction.set(ledgerRef, { holds, paid, customerPaid, customerOrders });
+          const customer = customerSnap.data() || {};
           const usage = { ...(customer.discountUsage || {}) };
           if (discountRef && discountSnap?.exists()) {
             usage[discountId] = (usage[discountId] || 0) + 1;
             transaction.update(discountRef, { usedCount: (discountSnap.data().usedCount || 0) + 1 });
           }
-          transaction.update(customerRef, {
+          if (customerSnap.exists()) transaction.update(customerRef, {
             totalOrders: (customer.totalOrders || 0) + 1,
             totalSpend: (customer.totalSpend || 0) + order.totalAmount,
             lastOrderDate: serverTimestamp(),
             discountUsage: usage,
           });
           transaction.update(orderRef, {
+            discountReservation: discountId ? 'consumed' : 'none',
+            fulfillmentWarnings: [!customerSnap.exists() ? 'customer_deleted' : '', discountId && !discountSnap?.exists() ? 'discount_deleted' : ''].filter(Boolean),
+            'psp.checkoutSessionId': session.id,
             paymentStatus: 'Paid', paidAt: serverTimestamp(),
             'psp.paymentIntentId': piId || null, updatedAt: serverTimestamp(),
           });

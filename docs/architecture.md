@@ -54,3 +54,11 @@ Cart-level eligibility resolves product and combo records in the requested brand
 Customer assignments use brand-filtered `customers` IDs; legacy assignments to administrative users must be reselected. Discount and upsell schedules use `Europe/Copenhagen`, including DST. A newly consenting customer retains a pending newsletter discount ID until successful use, allowing canceled-payment retries; paid usage still blocks reuse. Payment status, customer aggregates and discount counters commit in one Firestore transaction, so failures roll back all required fulfillment work.
 
 Focused regression command: `node --test tests/unit/promotion-review.cjs` (no browser or production writes).
+
+### Concurrent redemption and deleted records
+
+Before issuing a discounted Stripe session, checkout reserves global, per-customer and first-order capacity in a Firestore transaction. A durable `discount_reservations/{brandId}` ledger retains active order holds and paid counters independently of deletable admin records. Fulfillment consumes the hold and updates paid counters together with the order. Missing customer/discount records are skipped, recorded in `fulfillmentWarnings`, and never recreated; existing records from another brand still reject processing.
+
+Stripe sessions expire after 31 minutes. The webhook must receive **checkout.session.expired** as well as **checkout.session.completed**. Only verified Stripe expiration releases a payable-session hold; visiting the cancel URL does not. Failures before the session request release the hold immediately. Ambiguous Stripe request failures retain capacity: operators must reconcile the order-ID idempotency key with Stripe before releasing it, never release merely on elapsed wall time. Active holds count until expiration delivery even when the webhook is delayed.
+
+The regression suite covers two competing reservations, global/per-customer/first-order limits, release, duplicate fulfillment, rollback/retry and customer/discount deletion during checkout.

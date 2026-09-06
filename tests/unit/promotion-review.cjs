@@ -40,6 +40,7 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
  const session={id:'s',payment_status:'paid',payment_intent:'pi',amount_total:10000,metadata:{orderId:'o',brandId:'b',locationId:'l'}};
  class Stripe { webhooks = {constructEventAsync: async()=>({type:'checkout.session.completed',data:{object:session}})}; }
  const route=load('src/app/api/stripe/webhook/route.ts',{
+  '@/lib/discount-reservations':{releaseDiscount:async()=>{}},
   'next/server':{}, stripe:{default:Stripe},
   '@/app/superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'test',getActiveStripeWebhookSecret:async()=> 'test'},
   'next/headers':{headers:async()=>({get:()=> 'signature'})}, '@/lib/firebase':{db:{}},
@@ -48,7 +49,7 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
    doc:(_,collection,id)=>collection+'/'+id, serverTimestamp:()=> 'now',
    runTransaction:async(_,fn)=>{
     const draft=structuredClone(state); let writes=0;
-    const result=await fn({get:async ref=>({exists:()=>!!draft[ref], data:()=>draft[ref]}),update:(ref,data)=>{
+    const result=await fn({set:(ref,data)=>{draft[ref]=data;},get:async ref=>({exists:()=>!!draft[ref], data:()=>draft[ref]}),update:(ref,data)=>{
      draft[ref]={...draft[ref],...data};
      if(fail && ++writes===2) throw Error('simulated mid-fulfillment failure');
     }});
@@ -65,4 +66,52 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
  assert.equal(state['discounts/d'].usedCount,1);
  assert.equal(state['customers/c'].discountUsage.d,1);
  assert.equal(state['customers/c'].totalOrders,1);
+ for (const missing of ['customers/c', 'discounts/d']) {
+  state['orders/o'].paymentStatus='Pending';
+  delete state[missing];
+  assert.equal((await route.POST(new Request('https://test',{method:'POST',body:'event'}))).status,200);
+  assert.equal(state['orders/o'].paymentStatus,'Paid');
+  assert.ok(state['orders/o'].fulfillmentWarnings.length > 0);
+ }
+
+});
+
+test('reservation serializes concurrent sessions, releases safely, preserves paid holds', async () => {
+ let state = {
+  'discounts/d': {brandId:'b',isActive:true,usageLimit:1,perCustomerLimit:1,usedCount:0},
+  'customers/c': {brandId:'b'}, 'customers/c2':{brandId:'b'},
+  'orders/o1':{brandId:'b',customerDetails:{id:'c'},appliedDiscountId:'d'},
+  'orders/o2':{brandId:'b',customerDetails:{id:'c2'},appliedDiscountId:'d'},
+ };
+ let queue=Promise.resolve();
+ const api=load('src/lib/discount-reservations.ts',{
+  '@/lib/firebase':{db:{}},
+  'firebase/firestore':{
+   doc:(_,c,id)=>c+'/'+id,
+   runTransaction:(_,fn)=>{
+    const task=queue.then(async()=>{
+     const draft=structuredClone(state);
+     const result=await fn({get:async ref=>({exists:()=>!!draft[ref],data:()=>draft[ref]}),set:(ref,data)=>{draft[ref]=data;},update:(ref,data)=>{draft[ref]={...draft[ref],...data};}});
+     state=draft; return result;
+    });
+    queue=task.catch(()=>{}); return task;
+   },
+  },
+ });
+ const attempts=await Promise.allSettled([api.reserveDiscount('o1','d','c','b'),api.reserveDiscount('o2','d','c2','b')]);
+ assert.equal(attempts.filter(r=>r.status==='fulfilled').length,1);
+ await api.releaseDiscount('o1','b');
+ await api.reserveDiscount('o2','d','c2','b');
+ state['orders/o2'].paymentStatus='Paid';
+ await api.releaseDiscount('o2','b');
+ assert.equal(state['orders/o2'].discountReservation,'held');
+ // Unlimited global campaign still enforces per-customer limit across sessions.
+ state['discounts/d'].usageLimit=0;
+ state['orders/o1']={brandId:'b',customerDetails:{id:'c2'},appliedDiscountId:'d'};
+ await assert.rejects(api.reserveDiscount('o1','d','c2','b'),/already used or reserved/);
+ // First-time restriction spans distinct first-order campaigns.
+ state['discounts/e']={brandId:'b',isActive:true,firstTimeCustomerOnly:true};
+ state['discount_reservations/b'].holds.o2.firstTime=true;
+ state['orders/o1'].appliedDiscountId='e';
+ await assert.rejects(api.reserveDiscount('o1','e','c2','b'),/First-order/);
 });

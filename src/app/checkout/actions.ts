@@ -3,6 +3,7 @@
 'use server';
 
 import { newsletterEligible, cartLineEligible, assignedCustomerMatches, restaurantClock } from '@/lib/promotion-rules';
+import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
 import { createHash } from 'node:crypto';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
@@ -304,6 +305,8 @@ export async function createStripeCheckoutSessionAction(
     deliveryTime?: string,
     anonymousConsentId?: string
 ): Promise<{ success: boolean; url?: string | null; error?: string }> {
+  let reservedOrderId: string | undefined;
+  let sessionRequestStarted = false;
   try {
     const stripeSecretKey = await getActiveStripeSecretKey();
     if (!stripeSecretKey) {
@@ -452,6 +455,11 @@ export async function createStripeCheckoutSessionAction(
     });
 
 
+    if (appliedDiscountIdForOrder) {
+      await reserveDiscount(orderId, appliedDiscountIdForOrder, customerId, brandId);
+      reservedOrderId = orderId;
+    }
+
     const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => {
         if (item.unitPrice == null) {
             throw new Error(`Missing unitPrice for cart item: ${item.name ?? 'unknown'}`);
@@ -490,6 +498,7 @@ export async function createStripeCheckoutSessionAction(
         payment_method_types: ['card'],
         line_items,
         mode: 'payment',
+        expires_at: Math.floor(Date.now() / 1000) + 31 * 60,
         customer_email: customerInfo.email,
         success_url: `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${origin}/${brandSlug}/${locationSlug}/checkout/cancel`,
@@ -518,7 +527,8 @@ export async function createStripeCheckoutSessionAction(
     }
     
     // Step 2: Create Stripe session with orderId in metadata
-    const session = await stripe.checkout.sessions.create(sessionParams);
+    sessionRequestStarted = true;
+    const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: orderId });
     
     // Step 3: Patch order with session ID
     await updateDoc(orderRef, {
@@ -529,6 +539,9 @@ export async function createStripeCheckoutSessionAction(
     return { success: true, url: session.url };
 
   } catch (e: any) {
+    // Once a request may have reached Stripe, keep the hold until a signed expiration
+    // event. A timeout is not proof that a payable session was not created.
+    if (reservedOrderId && !sessionRequestStarted) await releaseDiscount(reservedOrderId, brandId);
     console.error("Failed to create Stripe checkout session:", e);
     const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
     return { success: false, error: errorMessage };
