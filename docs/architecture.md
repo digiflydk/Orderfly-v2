@@ -38,7 +38,7 @@ flowchart LR
 * **Product Flow:** UI → `createOrUpdateProduct` → Firestore → Redirect
 * **Feedback Flow:** UI → `createOrUpdateQuestionVersion` → Firestore → Redirect
 * **Debug & Docs:** `/api/debug/all`, `/api/docs`, `/api/redoc`
-* **M3Pizza Order Entry:** `/m3pizza` → delivery-method modal → `/m3pizza/m3pizza/m3-pizza-hellerup?deliveryMethod={delivery|pickup}`. The selected method is stored under the existing `deliveryMethod` browser key. `/m3pizza/order` remains a compatibility redirect and normalizes legacy `takeaway` to `pickup`.
+* **M3Pizza Order Entry:** `/m3pizza` is internally rewritten to the M3Pizza marketing page, while the public URL stays unchanged. The delivery-method modal continues to the shared commerce route `/m3pizza/m3-pizza-hellerup?deliveryMethod={delivery|pickup}`, which is handled by `/{brandSlug}/{locationSlug}` and renders the existing Firestore-backed menu, product, cart and checkout flow. `/m3pizza/order` remains a middleware compatibility redirect and normalizes legacy `takeaway` to `pickup`. The retired `/m3pizza/m3pizza/m3-pizza-hellerup` preview route is not part of the public flow.
 
 ## Architecture Principles
 

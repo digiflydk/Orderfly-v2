@@ -1,16 +1,15 @@
-
 'use client';
-import { useState, useEffect } from 'react';
+
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { isM3Enabled } from "@/lib/feature-flags";
-import { Hero } from "./_components/Hero";
-import { CTADeck } from "./_components/CTADeck";
-import { MenuGrid } from "./_components/MenuGrid";
-import { PromoBanner } from "./_components/PromoBanner";
-import { FooterCTA } from "./_components/FooterCTA";
-import M3Footer from "@/components/layout/M3Footer";
-import { OrderModal } from './_components/OrderModal';
-import { Button } from '@/components/ui/button';
+import { isM3Enabled } from '@/lib/feature-flags';
+import { Hero } from '@/app/m3pizza/_components/Hero';
+import { CTADeck } from '@/app/m3pizza/_components/CTADeck';
+import { MenuGrid } from '@/app/m3pizza/_components/MenuGrid';
+import { PromoBanner } from '@/app/m3pizza/_components/PromoBanner';
+import { FooterCTA } from '@/app/m3pizza/_components/FooterCTA';
+import M3Footer from '@/components/layout/M3Footer';
+import { OrderModal } from '@/app/m3pizza/_components/OrderModal';
 import { Template1Page } from '@/components/public/brand-website/template-1/Template1Page';
 import { getPublicBrandWebsiteConfig } from '@/lib/public/brand-website/public-config-api';
 import StickyOrderChoice from '@/app/m3/_components/StickyOrderChoice';
@@ -31,10 +30,10 @@ export default function M3IndexPage() {
         const result = await getPublicBrandWebsiteConfig('m3pizza');
         setConfig(result);
       } catch (error) {
-        console.error("Failed to fetch M3Pizza config:", error);
+        console.error('Failed to fetch M3Pizza config:', error);
       }
     }
-    fetchConfig();
+    void fetchConfig();
   }, []);
 
   if (!isM3Enabled()) {
@@ -60,30 +59,29 @@ export default function M3IndexPage() {
   }
 
   return (
-    <Template1Page>
-      <header
-        data-testid="template1-page"
-        data-header
-      >
-        <main className="bg-m3-dark">
-          <Hero onOrderClick={() => setOrderModalOpen(true)} />
-          <CTADeck />
-          <MenuGrid />
-          <PromoBanner />
-          <FooterCTA />
-        </main>
-      </header>
-      <M3Footer />
+    <div className="min-h-screen bg-m3-dark text-m3-white">
+      <Template1Page>
+        <header data-testid="template1-page" data-header>
+          <main className="bg-m3-dark">
+            <Hero onOrderClick={() => setOrderModalOpen(true)} />
+            <CTADeck />
+            <MenuGrid />
+            <PromoBanner />
+            <FooterCTA />
+          </main>
+        </header>
+        <M3Footer />
 
-      <div className="md:hidden">
-        <StickyOrderChoice onOrderClick={() => setOrderModalOpen(true)} />
-      </div>
+        <div className="md:hidden">
+          <StickyOrderChoice onOrderClick={() => setOrderModalOpen(true)} />
+        </div>
 
-      <OrderModal
-        open={orderModalOpen}
-        onOpenChange={setOrderModalOpen}
-        onDeliveryMethodSelected={handleDeliveryMethodSelected}
-      />
-    </Template1Page>
+        <OrderModal
+          open={orderModalOpen}
+          onOpenChange={setOrderModalOpen}
+          onDeliveryMethodSelected={handleDeliveryMethodSelected}
+        />
+      </Template1Page>
+    </div>
   );
 }

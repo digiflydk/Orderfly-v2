@@ -10,7 +10,9 @@ export default defineConfig({
 
   webServer: {
     command: process.env.CI ? 'npm run build && npm run start' : 'npm run dev',
-    url: 'http://127.0.0.1:3000',
+    // Probe a dependency-free endpoint. The storefront root can query Firestore
+    // while booting and must not be used as the process-readiness signal.
+    url: 'http://127.0.0.1:3000/api/ok',
     reuseExistingServer: !process.env.CI,
     timeout: 120_000,
   },

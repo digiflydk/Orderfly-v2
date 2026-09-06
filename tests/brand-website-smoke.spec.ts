@@ -76,15 +76,17 @@ test.describe('Brand Website Smoke Tests', () => {
     }
   });
 
-  test('M3Pizza delivery choice opens the existing menu without a 404', async ({ page }) => {
+  test('M3Pizza delivery choice opens the shared commerce menu', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 667 });
     await page.goto('/m3pizza');
 
     await page.getByTestId('template1-sticky-cta').getByRole('button', { name: 'BESTIL HER' }).click();
     await page.getByRole('button', { name: /Leverer til mig/ }).click();
 
-    await expect(page).toHaveURL(/\/m3pizza\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=delivery$/);
-    await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toBeVisible();
+    await expect(page).toHaveURL(/\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=delivery$/);
+    await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
+    await expect(page.getByText('Menu (mock)')).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
     await expect(page.getByText('404')).toHaveCount(0);
     await expect.poll(() => page.evaluate(() => localStorage.getItem('deliveryMethod'))).toBe('delivery');
   });
@@ -96,8 +98,9 @@ test.describe('Brand Website Smoke Tests', () => {
     await page.getByTestId('template1-sticky-cta').getByRole('button', { name: 'BESTIL HER' }).click();
     await page.getByRole('button', { name: /Jeg tager med/ }).click();
 
-    await expect(page).toHaveURL(/\/m3pizza\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=pickup$/);
-    await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toBeVisible();
+    await expect(page).toHaveURL(/\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=pickup$/);
+    await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('deliveryMethod'))).toBe('pickup');
   });
 
@@ -117,8 +120,9 @@ test.describe('Brand Website Smoke Tests', () => {
     await page.getByTestId('template1-sticky-cta').getByRole('button', { name: 'BESTIL HER' }).click();
     await page.getByRole('button', { name: /Jeg tager med/ }).click();
 
-    await expect(page).toHaveURL(/\/m3pizza\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=pickup$/);
-    await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toBeVisible();
+    await expect(page).toHaveURL(/\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=pickup$/);
+    await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
   });
 
   for (const [requestedMethod, expectedMethod] of [
@@ -131,7 +135,7 @@ test.describe('Brand Website Smoke Tests', () => {
       await page.goto(`/m3pizza/order?deliveryMethod=${requestedMethod}`);
 
       await expect(page).toHaveURL(
-        new RegExp(`/m3pizza/m3pizza/m3-pizza-hellerup\\?deliveryMethod=${expectedMethod}$`),
+        new RegExp(`/m3pizza/m3-pizza-hellerup\\?deliveryMethod=${expectedMethod}$`),
       );
       await expect.poll(() => page.evaluate(() => localStorage.getItem('deliveryMethod'))).toBe(expectedMethod);
     });
@@ -151,8 +155,16 @@ test.describe('Brand Website Smoke Tests', () => {
     await page.goto('/m3pizza/order?deliveryMethod=delivery');
 
     await expect(page).toHaveURL(
-      /\/m3pizza\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=delivery$/,
+      /\/m3pizza\/m3-pizza-hellerup\?deliveryMethod=delivery$/,
     );
-    await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
+  });
+
+  test('retired M3Pizza preview route is not used as a storefront', async ({ page }) => {
+    const response = await page.goto('/m3pizza/m3pizza/m3-pizza-hellerup');
+
+    expect(response?.status()).toBe(404);
+    await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
   });
 });
