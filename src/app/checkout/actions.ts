@@ -251,8 +251,12 @@ export async function getNewsletterSignupDiscountAction(
     brandId: string,
     locationId: string,
     subtotal: number,
-    deliveryType: 'delivery' | 'pickup'
+    deliveryType: 'delivery' | 'pickup',
+    email?: string
 ): Promise<NewsletterDiscountOffer | null> {
+    if (!email || !email.includes('@')) return null;
+    const resolved = await resolveCheckoutCustomerRef({ email } as CustomerInfo, brandId);
+    const customer = resolved.customerDoc.exists() ? resolved.customerDoc.data() as Customer : undefined;
     const discountsQuery = query(collection(db, 'discounts'), where('brandId', '==', brandId));
     const snapshot = await getDocs(discountsQuery);
 
@@ -271,8 +275,10 @@ export async function getNewsletterSignupDiscountAction(
             deliveryType,
             subtotal,
             newsletterConsent: true,
+            customerId: resolved.customerRef.id,
+            customer,
         });
-        if (error && error !== 'This newsletter discount has already been used.') continue;
+        if (error) continue;
 
         return {
             id: discount.id,
