@@ -115,3 +115,29 @@ test('reservation serializes concurrent sessions, releases safely, preserves pai
  state['orders/o1'].appliedDiscountId='e';
  await assert.rejects(api.reserveDiscount('o1','e','c2','b'),/First-order/);
 });
+
+test('cancel requires capability, confirms expiration before release and tolerates payment race', async () => {
+ const crypto = require('node:crypto');
+ const token='a'.repeat(64);
+ let status='open', fail=false, race=false, releases=0;
+ const session=()=>({status,payment_status:status==='complete'?'paid':'unpaid',metadata:{orderId:'ORD-1',brandId:'b',locationId:'l'}});
+ class Stripe { checkout={sessions:{retrieve:async()=>session(),expire:async()=>{if(race){status='complete';throw Error('paid');} if(fail)throw Error('network');status='expired';return session();}}}; }
+ const api=load('src/app/checkout/cancel-actions.ts',{
+  'node:crypto':crypto, stripe:{default:Stripe}, '@/lib/firebase':{db:{}},
+  'firebase/firestore':{doc:()=> 'order',getDoc:async()=>({exists:()=>true,data:()=>({brandId:'b',locationId:'l',psp:{checkoutSessionId:'s'},cancelTokenHash:crypto.createHash('sha256').update(token).digest('hex')})})},
+  '@/app/superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'test'},
+  '@/lib/discount-reservations':{releaseDiscount:async()=>{assert.equal(status,'expired');releases++;}},
+ });
+ assert.equal((await api.cancelCheckout('ORD-1','b'.repeat(64))).status,'error');
+ assert.equal(releases,0);
+ fail=true;
+ assert.equal((await api.cancelCheckout('ORD-1',token)).status,'error');
+ assert.equal(releases,0);
+ fail=false;race=true;
+ assert.equal((await api.cancelCheckout('ORD-1',token)).status,'paid');
+ assert.equal(releases,0);
+ race=false;status='open';
+ assert.equal((await api.cancelCheckout('ORD-1',token)).status,'canceled');
+ assert.equal(releases,1);
+ assert.equal((await api.cancelCheckout('ORD-1',token)).status,'canceled');
+});

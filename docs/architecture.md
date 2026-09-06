@@ -62,3 +62,7 @@ Before issuing a discounted Stripe session, checkout reserves global, per-custom
 Stripe sessions expire after 31 minutes. The webhook must receive **checkout.session.expired** as well as **checkout.session.completed**. Only verified Stripe expiration releases a payable-session hold; visiting the cancel URL does not. Failures before the session request release the hold immediately. Ambiguous Stripe request failures retain capacity: operators must reconcile the order-ID idempotency key with Stripe before releasing it, never release merely on elapsed wall time. Active holds count until expiration delivery even when the webhook is delayed.
 
 The regression suite covers two competing reservations, global/per-customer/first-order limits, release, duplicate fulfillment, rollback/retry and customer/discount deletion during checkout.
+
+### Explicit cancellation
+
+New Stripe cancel URLs carry an unguessable, order-specific capability. Only its SHA-256 hash is stored on the order. Returning through Stripe cancellation calls a server action that validates the capability and Stripe metadata, expires the open session, and releases capacity only after confirmed `expired` status. Completed payments never release capacity. Transient failures show a retry state rather than claiming cancellation succeeded. Pre-existing sessions without this capability keep the expiry-only behavior. Cancellation tests include invalid capability, provider failure, payment races and retries; no live Stripe writes are part of the unit suite.

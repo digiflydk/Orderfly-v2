@@ -4,7 +4,7 @@
 
 import { newsletterEligible, cartLineEligible, assignedCustomerMatches, restaurantClock } from '@/lib/promotion-rules';
 import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { db } from '@/lib/firebase';
@@ -428,6 +428,7 @@ export async function createStripeCheckoutSessionAction(
 
     // Step 1: Pre-create order with 'Pending' status
     const orderId = generateOrderId();
+    const cancelToken = randomBytes(32).toString('hex');
     const orderRef = doc(db, 'orders', orderId);
 
     await setDoc(orderRef, {
@@ -441,6 +442,7 @@ export async function createStripeCheckoutSessionAction(
         totalAmount,
         paymentDetails: serverPaymentDetails,
         appliedDiscountId: appliedDiscountIdForOrder,
+        cancelTokenHash: createHash('sha256').update(cancelToken).digest('hex'),
         customerName: customerInfo.name,
         customerContact: customerInfo.email,
         deliveryType: deliveryType === 'delivery' ? 'Delivery' : 'Pickup',
@@ -501,7 +503,7 @@ export async function createStripeCheckoutSessionAction(
         expires_at: Math.floor(Date.now() / 1000) + 31 * 60,
         customer_email: customerInfo.email,
         success_url: `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
-        cancel_url: `${origin}/${brandSlug}/${locationSlug}/checkout/cancel`,
+        cancel_url: `${origin}/${brandSlug}/${locationSlug}/checkout/cancel?order_id=${orderId}&token=${cancelToken}`,
         metadata: {
             orderId,
             brandId,
