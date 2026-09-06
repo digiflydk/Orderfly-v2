@@ -38,6 +38,7 @@ flowchart LR
 * **Product Flow:** UI → `createOrUpdateProduct` → Firestore → Redirect
 * **Feedback Flow:** UI → `createOrUpdateQuestionVersion` → Firestore → Redirect
 * **Debug & Docs:** `/api/debug/all`, `/api/docs`, `/api/redoc`
+* **M3Pizza Order Entry:** `/m3pizza` → delivery-method modal → `/m3pizza/m3pizza/m3-pizza-hellerup?deliveryMethod={delivery|pickup}`. The selected method is stored under the existing `deliveryMethod` browser key. `/m3pizza/order` remains a compatibility redirect and normalizes legacy `takeaway` to `pickup`.
 
 ## Architecture Principles
 
