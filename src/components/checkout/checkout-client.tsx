@@ -12,7 +12,8 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useEffect, useState, useMemo, useCallback, useTransition } from "react";
-import { createStripeCheckoutSessionAction, validateDiscountAction } from "@/app/checkout/actions";
+import { createStripeCheckoutSessionAction, getNewsletterSignupDiscountAction, validateDiscountAction } from "@/app/checkout/actions";
+import type { NewsletterDiscountOffer } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, X, Tag, Truck, Store, Clock, ShoppingCart, AlertTriangle } from "lucide-react";
 import { Badge } from "../ui/badge";
@@ -150,7 +151,7 @@ function OrderSummaryContent() {
   const {
     cartItems,
     subtotal,
-    cartTotal,
+    checkoutTotal,
     itemDiscount,
     cartDiscount,
     voucherDiscount,
@@ -285,7 +286,7 @@ function OrderSummaryContent() {
         <Separator />
         <div className="flex justify-between font-bold text-lg">
           <span>Total</span>
-          <span>kr.{cartTotal.toFixed(2)}</span>
+          <span>kr.{checkoutTotal.toFixed(2)}</span>
         </div>
 
         {vatAmount > 0 && (
@@ -334,6 +335,7 @@ function CheckoutForm({ location }: { location: Location }) {
   const [isLoadingTimes, setIsLoadingTimes] = useState(true);
   const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
   const [discountErrorMessage, setDiscountErrorMessage] = useState('');
+  const [newsletterOffer, setNewsletterOffer] = useState<NewsletterDiscountOffer | null>(null);
   const [isPending, startTransition] = useTransition();
 
   const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'processing'>('form');
@@ -379,6 +381,57 @@ function CheckoutForm({ location }: { location: Location }) {
     }
   });
 
+  const newsletterSelected = form.watch('subscribeToNewsletter');
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!brand || !location || !deliveryType) {
+      setNewsletterOffer(null);
+      return;
+    }
+
+    void getNewsletterSignupDiscountAction(
+      brand.id,
+      location.id,
+      subtotal,
+      deliveryType,
+    ).then(offer => {
+      if (!cancelled) setNewsletterOffer(offer);
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [brand, location, subtotal, deliveryType]);
+
+  useEffect(() => {
+    if (
+      newsletterSelected &&
+      newsletterOffer &&
+      (!appliedDiscount || appliedDiscount.applicationType === 'newsletter_signup')
+    ) {
+      applyDiscount({
+        ...newsletterOffer,
+        brandId: brand!.id,
+        locationIds: [location!.id],
+        code: 'Newsletter signup',
+        isActive: true,
+        orderTypes: [deliveryType!],
+        activeDays: [],
+        activeTimeSlots: [],
+        usageLimit: 0,
+        usedCount: 0,
+        perCustomerLimit: 1,
+        firstTimeCustomerOnly: false,
+        allowStacking: false,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      });
+    } else if (!newsletterSelected && appliedDiscount?.applicationType === 'newsletter_signup') {
+      removeDiscount();
+    }
+  }, [newsletterSelected, newsletterOffer, appliedDiscount?.applicationType, applyDiscount, removeDiscount, brand, location, deliveryType]);
+
   const handleApplyDiscount = useCallback(async () => {
     if (!discountCode || !brand || !location || !deliveryType) return;
 
@@ -395,7 +448,8 @@ function CheckoutForm({ location }: { location: Location }) {
       brand.id,
       location.id,
       currentDiscountableSubtotal,
-      deliveryType
+      deliveryType,
+      form.getValues('email')
     );
 
     if (result.success && result.discount) {
@@ -469,16 +523,17 @@ function CheckoutForm({ location }: { location: Location }) {
       const totalDiscount =
         (itemDiscount || 0) + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0);
 
+      const effectiveCartLevelDiscount = voucherDiscount ?? cartDiscount;
       const paymentDetails: Omit<PaymentDetails, 'paymentRefId'> = {
         subtotal,
-        deliveryFee,
+        deliveryFee: freeDeliveryDiscountApplied ? 0 : deliveryFee,
         bagFee,
         adminFee,
         vatAmount,
         discountTotal: totalDiscount,
         itemDiscountTotal: itemDiscount,
-        cartDiscountTotal: cartDiscount?.amount,
-        cartDiscountName: cartDiscount?.name,
+        cartDiscountTotal: effectiveCartLevelDiscount?.amount,
+        cartDiscountName: effectiveCartLevelDiscount?.name,
         tips: 0,
         taxes: 0
       };
@@ -552,7 +607,9 @@ function CheckoutForm({ location }: { location: Location }) {
     setIsProcessing(true);
     const minimalCartItems = cartItems.map(item => ({
       id: item.id,
-      categoryId: item.categoryId
+      categoryId: item.categoryId,
+      itemType: item.itemType,
+      tags: item.tags,
     }));
     const currentDiscountableSubtotal = cartItems
       .filter(item => !isLockedItem(item))
@@ -564,13 +621,16 @@ function CheckoutForm({ location }: { location: Location }) {
     const upsellData = await getActiveUpsellForCart({
       brandId: brand!.id,
       locationId: location!.id,
+      deliveryType: deliveryType!,
       cartItems: minimalCartItems,
-      cartTotal: currentDiscountableSubtotal
+      cartTotal: currentDiscountableSubtotal,
+      excludedUpsellIds: [sessionStorage.getItem('orderfly_handled_upsell') || ''],
     });
 
     setIsProcessing(false);
 
     if (upsellData) {
+      sessionStorage.setItem('orderfly_handled_upsell', upsellData.upsell.id);
       setActiveUpsell(upsellData);
       setCheckoutStep('upsell');
     } else {
@@ -817,7 +877,9 @@ function CheckoutForm({ location }: { location: Location }) {
                         <div className="space-y-1 leading-none">
                           <FormLabel>Subscribe to newsletter</FormLabel>
                           <FormDescription>
-                            Receive updates and special offers from us.
+                            {newsletterOffer
+                              ? `Receive updates and get ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`} off this order.`
+                              : 'Receive updates and special offers from us.'}
                           </FormDescription>
                         </div>
                       </FormItem>
@@ -828,7 +890,7 @@ function CheckoutForm({ location }: { location: Location }) {
 
               <section>
                 <h2 className="text-2xl font-bold mb-4">Discount Code</h2>
-                {appliedDiscount ? (
+                {appliedDiscount && appliedDiscount.applicationType !== 'newsletter_signup' ? (
                   <div className="flex justify-between items-center text-green-600">
                     <div className="flex items-center gap-2">
                       <Tag className="h-4 w-4" />
@@ -943,7 +1005,8 @@ function CheckoutForm({ location }: { location: Location }) {
           isOpen={checkoutStep === 'upsell'}
           setIsOpen={open => {
             if (!open) {
-              onUpsellDialogContinue();
+              setActiveUpsell(null);
+              setCheckoutStep('form');
             }
           }}
           upsellData={activeUpsell}
