@@ -109,6 +109,28 @@ Aggregates data for each unique customer.
 | `lastOrderDate`| timestamp | | |
 | `loyaltyScore`| number | | Calculated score (0-100) |
 | `loyaltyClassification`| string | | `New`, `Occasional`, `Loyal`, `At Risk` |
+| `marketingConsent`| boolean | | Customer has opted in to marketing/newsletters |
+| `discountUsage`| map | | Discount document ID to successful-use count; updated after paid checkout |
+
+---
+
+## Collection: `discounts`
+Defines customer-entered discount codes and automatic newsletter-signup incentives.
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| `brandId` | string | ✅ | Tenant scope |
+| `locationIds` | string[] | ✅ | Eligible restaurant locations |
+| `applicationType` | string | ✅ | `code` or `newsletter_signup` |
+| `code` | string | ✅ | Entered by the customer for `code`; internally `NEWSLETTER_SIGNUP` for newsletter incentives |
+| `discountType` | string | ✅ | `percentage` or `fixed_amount` |
+| `discountValue` | number | ✅ | Percentage or DKK amount |
+| `minOrderValue` | number | | Minimum eligible basket value |
+| `orderTypes` | string[] | ✅ | `pickup`, `delivery`, or both |
+| `usageLimit` | number | ✅ | Global successful-use limit; `0` means unlimited |
+| `perCustomerLimit` | number | ✅ | Successful-use limit per customer; newsletter incentives default to `1` |
+| `usedCount` | number | ✅ | Incremented by the paid-order webhook |
+| `isActive` | boolean | ✅ | Controls checkout eligibility |
 
 ---
 
