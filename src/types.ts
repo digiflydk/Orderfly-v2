@@ -121,6 +121,7 @@ export type Customer = {
     city?: string;
     country?: string;
     marketingConsent?: boolean;
+    discountUsage?: Record<string, number>;
     tags?: string[];
     notes?: string;
     status: 'active' | 'inactive';
@@ -406,6 +407,7 @@ export type Discount = {
   brandId: string;
   locationIds: string[];
   code: string;
+  applicationType?: 'code' | 'newsletter_signup';
   description?: string;
   discountType: 'percentage' | 'fixed_amount';
   discountValue: number;
@@ -527,6 +529,7 @@ export interface CartItem {
   toppings: CartItemTopping[]; // Only for itemType 'product'
   itemTotal: number; // The final price for one item (price + toppings)
   categoryId?: string; // Crucial for upsell logic
+  tags?: string[];
   brandId: string;
   comboSelections?: ComboSelection[]; // Only for itemType 'combo'
 }
