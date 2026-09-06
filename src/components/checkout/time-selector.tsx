@@ -36,13 +36,15 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
     // OF-522-126 - Use the prop directly, no internal fetching.
     const timeSlots = timeSlotsProp;
 
-    if (!location) return null;
-    
     const asapText = useMemo(() => {
         if (!timeSlots) return "Loading...";
         const text = deliveryType === 'delivery' ? timeSlots.asap_delivery : timeSlots.asap_pickup;
         return text || "Currently unavailable";
     }, [timeSlots, deliveryType]);
+
+    // Keep hooks unconditional. The cart context receives the location after
+    // the first render, so returning before useMemo changes the hook order.
+    if (!location) return null;
     
     const displayTime = selectedTime === 'asap' ? asapText : selectedTime;
 
