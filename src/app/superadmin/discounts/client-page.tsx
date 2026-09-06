@@ -89,9 +89,9 @@ export function DiscountsClientPage({ initialDiscounts, brands }: DiscountsClien
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Discount Codes</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Discounts</h1>
           <p className="text-muted-foreground">
-            Create, manage, and track all discount codes.
+            Create and track discount codes and automatic newsletter signup discounts.
           </p>
         </div>
         <Button asChild>
@@ -107,7 +107,7 @@ export function DiscountsClientPage({ initialDiscounts, brands }: DiscountsClien
                 <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                     <Input
-                        placeholder="Search by code..."
+                        placeholder="Search discounts..."
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
                         className="pl-10"
@@ -148,6 +148,7 @@ export function DiscountsClientPage({ initialDiscounts, brands }: DiscountsClien
             <TableHeader>
               <TableRow>
                 <TableHead>Code</TableHead>
+                <TableHead>Application</TableHead>
                 <TableHead>Brand</TableHead>
                 <TableHead>Discount</TableHead>
                 <TableHead>Usage</TableHead>
@@ -158,7 +159,8 @@ export function DiscountsClientPage({ initialDiscounts, brands }: DiscountsClien
             <TableBody>
               {filteredDiscounts.map((d) => (
                 <TableRow key={d.id}>
-                  <TableCell className="font-mono text-sm">{d.code}</TableCell>
+                  <TableCell className="font-mono text-sm">{d.applicationType === 'newsletter_signup' ? 'Automatic' : d.code}</TableCell>
+                  <TableCell>{d.applicationType === 'newsletter_signup' ? 'Newsletter signup' : 'Discount code'}</TableCell>
                   <TableCell>{d.brandName}</TableCell>
                   <TableCell>
                     {d.discountType === 'percentage' ? `${d.discountValue}%` : `kr. ${d.discountValue.toFixed(2)}`}
@@ -198,7 +200,7 @@ export function DiscountsClientPage({ initialDiscounts, brands }: DiscountsClien
               ))}
               {filteredDiscounts.length === 0 && (
                 <TableRow>
-                    <TableCell colSpan={6} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
                         No discounts found.
                     </TableCell>
                 </TableRow>
