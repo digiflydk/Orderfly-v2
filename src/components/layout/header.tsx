@@ -45,13 +45,16 @@ export function Header({ brand, settings, config, navLinks, linkClass, logoUrl, 
       <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-between px-4">
         <Link href="/" className="flex items-center gap-2">
           {finalLogoUrl ? (
-            <div className="relative h-9 flex items-center" style={{ width: config?.logoWidthPx ? `${config.logoWidthPx}px` : 'auto' }}>
+            <div
+              className="relative h-9 shrink-0"
+              style={{ width: `${Math.min(config?.logoWidthPx ?? 164, 164)}px` }}
+            >
                 <Image
                   src={finalLogoUrl}
                   alt={finalLogoAlt}
-                  width={164}
-                  height={36}
-                  style={{ width: '100%', height: 'auto' }}
+                  fill
+                  sizes="164px"
+                  className="object-contain object-left"
                   priority
                 />
             </div>
