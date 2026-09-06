@@ -60,17 +60,22 @@ export function CartSheet() {
       if (brand && location) {
         const minimalCartItems = cartItems.map(item => ({
             id: item.id,
-            categoryId: item.categoryId
+            categoryId: item.categoryId,
+            itemType: item.itemType,
+            tags: item.tags,
         }));
         
         const upsellData = await getActiveUpsellForCart({
             brandId: brand.id,
             locationId: location.id,
+            deliveryType: deliveryType!,
             cartItems: minimalCartItems,
             cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0)),
+            excludedUpsellIds: [sessionStorage.getItem('orderfly_handled_upsell') || ''],
         });
 
         if (upsellData) {
+            sessionStorage.setItem('orderfly_handled_upsell', upsellData.upsell.id);
             setActiveUpsell(upsellData);
             setIsUpsellDialogOpen(true);
         } else {
