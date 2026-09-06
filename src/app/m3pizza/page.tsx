@@ -14,6 +14,11 @@ import { Button } from '@/components/ui/button';
 import { Template1Page } from '@/components/public/brand-website/template-1/Template1Page';
 import { getPublicBrandWebsiteConfig } from '@/lib/public/brand-website/public-config-api';
 import StickyOrderChoice from '@/app/m3/_components/StickyOrderChoice';
+import {
+  getM3PizzaMenuHref,
+  normalizeM3PizzaDeliveryMethod,
+  persistM3PizzaDeliveryMethod,
+} from '@/lib/m3pizza-order-flow';
 
 export default function M3IndexPage() {
   const [orderModalOpen, setOrderModalOpen] = useState(false);
@@ -45,7 +50,9 @@ export default function M3IndexPage() {
   }
 
   const handleDeliveryMethodSelected = (method: 'takeaway' | 'delivery') => {
-    router.push(`/m3pizza/order?deliveryMethod=${method}`);
+    const deliveryMethod = normalizeM3PizzaDeliveryMethod(method);
+    persistM3PizzaDeliveryMethod(deliveryMethod);
+    router.push(getM3PizzaMenuHref(deliveryMethod));
   };
 
   if (!config) {
