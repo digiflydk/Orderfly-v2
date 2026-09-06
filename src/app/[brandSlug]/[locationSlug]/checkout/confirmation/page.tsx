@@ -8,13 +8,43 @@ import { OrderDetail } from '@/types';
 import type { AsyncPageProps } from '@/types/next-async-props';
 import { resolveParams, resolveSearchParams } from '@/lib/next/resolve-props';
 
+function serializeDate(value: unknown): string | undefined {
+  if (!value) return undefined;
+
+  if (value instanceof Date) {
+    return value.toISOString();
+  }
+
+  if (typeof value === 'string') {
+    const parsedDate = new Date(value);
+    return Number.isNaN(parsedDate.getTime()) ? undefined : parsedDate.toISOString();
+  }
+
+  if (
+    typeof value === 'object' &&
+    value !== null &&
+    'toDate' in value &&
+    typeof (value as { toDate?: unknown }).toDate === 'function'
+  ) {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+
+  return undefined;
+}
+
 function serializeOrder(order: OrderDetail | null): any {
-    if (!order) return null;
-    return {
-        ...order,
-        createdAt: order.createdAt instanceof Date ? order.createdAt.toISOString() : new Date().toISOString(),
-        paidAt: order.paidAt instanceof Date ? order.paidAt.toISOString() : undefined,
-    }
+  if (!order) return null;
+
+  const runtimeOrder = order as OrderDetail & { updatedAt?: unknown };
+  const { psp, ...safeOrder } = runtimeOrder;
+  void psp;
+
+  return {
+    ...safeOrder,
+    createdAt: serializeDate(order.createdAt) ?? new Date().toISOString(),
+    paidAt: serializeDate(order.paidAt),
+    updatedAt: serializeDate(runtimeOrder.updatedAt),
+  };
 }
 
 type ConfirmationParams = { brandSlug: string; locationSlug: string };
