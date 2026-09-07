@@ -24,4 +24,14 @@ Release merges and deploys the reviewed commit. QA records the active release SH
 4. Verify wrong location, delivery method, inactive and expired campaigns do not apply. Check discounted items/combos are excluded; code/newsletter and automatic cart offers compete without double discounts.
 5. In the approved Stripe test flow compare basket, Stripe total, receipt and admin order discount. Cancel one checkout and verify the existing reservation behavior. Record any discrepancy before calling the feature Done.
 
-Advanced tiered quantity pricing, fixed-price mix-and-match bundles and configurable stacking are not introduced by this change. Existing allowStacking metadata does not establish generalized stacking support.
+## Bundle prices and quantity tiers
+
+The PO extended #46/#47 to include `bundle_price` and `quantity_tiers`. Both reuse product/category scope and the same cart/server calculation, validation, eligibility and best-offer policy.
+
+`bundle_price`: buyQuantity specifies bundle size; bundlePrice is the total DKK price excluding toppings. Complete bundles repeat. Most expensive eligible units are bundled first; leftovers stay at normal price. Each bundle is capped at its normal total, so offers never surcharge cheap selections. Example: four pizzas priced 120, 100, 90 and 50 with 3-for-200 yield 110 DKK savings and a 250 DKK food total.
+
+`quantity_tiers`: editable rows specify minQuantity, percentage or fixed_amount reduction per item, and value. The highest reached threshold applies to all eligible units, not only units above the threshold. Input order does not matter. Thresholds must be unique positive integers (2–1000); at most 20 rows. Percentage cannot exceed 100; each unit's reduction is capped at its base price. Example: 10% from 3 units, 20% from 6 units. Toppings remain full price. A fixed-amount tier is a reduction per item, not a fixed unit price.
+
+QA additionally verifies: 3-for-200 at 2/3/4/6/7 units; mixed prices and cheaper-than-bundle selections; tier boundaries at 2/3/5/6; removing units crosses thresholds correctly; save/reopen preserves all tier rows and bundle price. Compare cart, Stripe, receipt and admin order. Both new methods must exclude wrong locations, expired/inactive offers, toppings and locked items. Invalid duplicate/fractional thresholds, empty tiers and invalid bundle prices must be visibly rejected. The targeted local suite now has 20 tests; live verification remains a separate QA gate.
+
+Configurable stacking is not introduced. Existing allowStacking metadata does not establish generalized stacking support.

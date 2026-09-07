@@ -12,7 +12,7 @@ import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from 'firebase/firestore';
 import type { CartItem, Discount, OrderDetail, Brand, Location, CustomerInfo, Customer, StandardDiscount, PaymentDetails, MinimalCartItem, Product, ComboMenu, Topping, ComboSelection, LoyaltySettings, AnonymousCookieConsent } from '@/types';
 import { getDiscountByCode, getDiscountById } from '@/app/superadmin/discounts/actions';
-import { bestAutomaticDiscount, type OfferLine } from '@/lib/automatic-discounts';
+import { bestAutomaticDiscount, isQuantityMethod, type OfferLine } from '@/lib/automatic-discounts';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
@@ -367,11 +367,11 @@ export async function createStripeCheckoutSessionAction(
       if (combo) return 0;
       const catalogPrice = deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price;
       const itemOffer = activeStandardDiscounts.some(d =>
-        d.discountMethod !== 'buy_x_pay_y' && ((d.discountType === 'product' && d.referenceIds.includes(productSnap.id)) ||
+        !isQuantityMethod(d.discountMethod) && ((d.discountType === 'product' && d.referenceIds.includes(productSnap.id)) ||
         (d.discountType === 'category' && d.referenceIds.includes(catalog!.categoryId)))
       );
       const eligible = cartLineEligible(false, catalogPrice, item.unitPrice, itemOffer);
-      if (eligible && activeStandardDiscounts.some(d => d.discountMethod === 'buy_x_pay_y') &&
+      if (eligible && activeStandardDiscounts.some(d => isQuantityMethod(d.discountMethod)) &&
           Math.round(item.totalPrice * 100) < Math.round(catalogPrice * 100) * item.quantity) {
         throw new Error('Basket prices have changed. Please refresh your basket.');
       }

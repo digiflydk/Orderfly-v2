@@ -437,9 +437,11 @@ export type StandardDiscount = {
   discountName: string;
   discountType: 'product' | 'category' | 'cart' | 'free_delivery';
   referenceIds: string[]; // Product or Category IDs
-discountMethod: 'percentage' | 'fixed_amount' | 'buy_x_pay_y';
+discountMethod: 'percentage' | 'fixed_amount' | 'buy_x_pay_y' | 'bundle_price' | 'quantity_tiers';
   buyQuantity?: number;
   payQuantity?: number;
+  bundlePrice?: number;
+  quantityTiers?: { minQuantity: number; method: 'percentage' | 'fixed_amount'; value: number }[];
   discountValue?: number;
   minOrderValue?: number;
   isActive: boolean;

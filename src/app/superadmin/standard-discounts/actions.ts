@@ -1,6 +1,7 @@
 
 'use server';
 
+import { isQuantityMethod } from '@/lib/automatic-discounts';
 import { restaurantClock } from '@/lib/promotion-rules';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { db } from '@/lib/firebase';
@@ -50,11 +51,15 @@ export async function createOrUpdateStandardDiscount(
 
 		// Handle optional numbers: convert empty strings to undefined so Zod doesn't try to coerce them
 		if (rawData.minOrderValue === '') rawData.minOrderValue = undefined;
-		if (rawData.discountValue === '' || rawData.discountMethod === 'buy_x_pay_y' || rawData.discountType === 'free_delivery') rawData.discountValue = undefined;
-        for (const key of ['buyQuantity', 'payQuantity']) if (rawData[key] === '' || rawData.discountMethod !== 'buy_x_pay_y') delete rawData[key];
+		if (rawData.discountValue === '' || isQuantityMethod(rawData.discountMethod) || rawData.discountType === 'free_delivery') rawData.discountValue = undefined;
+        for (const key of ['buyQuantity', 'payQuantity', 'bundlePrice']) if (rawData[key] === '') delete rawData[key];
+        if (!['buy_x_pay_y', 'bundle_price'].includes(rawData.discountMethod)) delete rawData.buyQuantity;
+        if (rawData.discountMethod !== 'buy_x_pay_y') delete rawData.payQuantity;
+        if (rawData.discountMethod !== 'bundle_price') delete rawData.bundlePrice;
+        rawData.quantityTiers = rawData.discountMethod === 'quantity_tiers' ? JSON.parse(String(formData.get('quantityTiers') || '[]')) : undefined;
 
         for (const key of ['startDate', 'endDate']) rawData[key] = rawData[key] ? new Date(rawData[key]) : undefined;
-        if (rawData.discountMethod === 'buy_x_pay_y') rawData.allowStacking = false;
+        if (isQuantityMethod(rawData.discountMethod)) rawData.allowStacking = false;
 		const validatedFields = standardDiscountSchema.safeParse(rawData);
 
 		if (!validatedFields.success) {

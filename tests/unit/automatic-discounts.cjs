@@ -13,6 +13,30 @@ const schema=load('src/lib/standard-discount-schema.ts');
 const rules=load('src/lib/promotion-rules.ts');
 const offer={brandId:'b',locationIds:['l'],discountName:'3 for 2',discountType:'category',referenceIds:['pizza'],discountMethod:'buy_x_pay_y',buyQuantity:3,payQuantity:2,isActive:true,orderTypes:['pickup','delivery'],activeDays:[],activeTimeSlots:[],timeSlotValidationType:'orderTime'};
 const line=(quantity,unitPrice=100,id='p',categoryId='pizza')=>({id,categoryId,quantity,unitPrice});
+test('fixed bundles repeat, leave remainders, prefer expensive units and never surcharge',()=>{
+ const bundle={...offer,discountMethod:'bundle_price',bundlePrice:200};
+ for(const [q,savings] of [[2,0],[3,100],[4,100],[6,200],[7,200]]) assert.equal(calc.quantityDiscount(bundle,[line(q)]),savings);
+ assert.equal(calc.quantityDiscount(bundle,[line(1,120),line(1,100),line(1,90),line(1,50)]),110);
+ assert.equal(calc.quantityDiscount(bundle,[line(3,50)]),0);
+ assert.equal(calc.quantityDiscount(bundle,[line(3,100),line(3,50)]),100);
+ assert.equal(calc.quantityDiscount(bundle,[line(2,120),line(3,100),line(1,80)]),220);
+ assert.equal(calc.quantityDiscount({...bundle,bundlePrice:199.95},[line(3,100)]),100.05);
+ assert.equal(calc.quantityDiscount(bundle,[line(2,100),line(20,50,'p2','drinks')]),0);
+});
+test('highest reached tier applies to all scoped units, excludes extras, caps each unit',()=>{
+ const tiered={...offer,discountMethod:'quantity_tiers',quantityTiers:[{minQuantity:6,method:'percentage',value:20},{minQuantity:3,method:'percentage',value:10}]};
+ for(const [q,savings] of [[2,0],[3,30],[5,50],[6,120]]) assert.equal(calc.quantityDiscount(tiered,[line(q)]),savings);
+ assert.equal(calc.quantityDiscount(tiered,[line(2,100),line(1,50)]),25);
+ assert.equal(calc.bestAutomaticDiscount([tiered],330,[line(3)]).amount,30);
+ assert.equal(calc.quantityDiscount({...tiered,quantityTiers:[{minQuantity:3,method:'fixed_amount',value:80}]},[line(2,100),line(1,50)]),210);
+});
+test('bundle and tier schemas reject missing, duplicate, fractional and invalid configuration',()=>{
+ const bundle={...offer,discountMethod:'bundle_price',bundlePrice:200};
+ assert.equal(schema.standardDiscountSchema.safeParse(bundle).success,true);
+ for(const patch of [{bundlePrice:0},{buyQuantity:undefined},{discountType:'cart',minOrderValue:10}]) assert.equal(schema.standardDiscountSchema.safeParse({...bundle,...patch}).success,false);
+ const tier={minQuantity:3,method:'percentage',value:10};
+ for(const quantityTiers of [[],[tier,tier],[{...tier,minQuantity:2.5}],[{...tier,value:101}]]) assert.equal(schema.standardDiscountSchema.safeParse({...offer,discountMethod:'quantity_tiers',quantityTiers}).success,false);
+});
 test('3 for 2: incomplete groups, repeated groups and split lines',()=>{
  for(const [quantity,expected] of [[1,0],[2,0],[3,100],[4,100],[6,200],[7,200]]) assert.equal(calc.quantityDiscount(offer,[line(quantity)]),expected);
  assert.equal(calc.quantityDiscount(offer,[line(1,120),line(1,90),line(1,80)]),80);
@@ -44,13 +68,18 @@ test('same form/server schema accepts supported scopes and rejects invalid deals
 test('real action persists quantity fields, retains location on edit, rejects cross-brand references',async()=>{
  let saved; const records={'brands/b':{},'locations/l':{brandId:'b'},'categories/pizza':{locationIds:['l']},'products/foreign':{brandId:'other'}};
  const api=load('src/app/superadmin/standard-discounts/actions.ts',{
-  '@/lib/standard-discount-schema':schema,'@/lib/promotion-rules':rules,'@/lib/firebase':{db:{}},'next/cache':{revalidatePath:()=>{},revalidateTag:()=>{}},'next/navigation':{redirect:()=>{throw Error('REDIRECT');}},
+  '@/lib/automatic-discounts':calc,'@/lib/standard-discount-schema':schema,'@/lib/promotion-rules':rules,'@/lib/firebase':{db:{}},'next/cache':{revalidatePath:()=>{},revalidateTag:()=>{}},'next/navigation':{redirect:()=>{throw Error('REDIRECT');}},
   'firebase/firestore':{collection:(_,p)=>p,doc:(db,p,id)=>typeof db==='string'?{id:'new',path:db+'/new'}:{id,path:p+'/'+id},getDoc:async ref=>({exists:()=>ref.path in records,data:()=>records[ref.path]}),Timestamp:{now:()=>0,fromDate:d=>d.toISOString()},setDoc:async(ref,data)=>{assert.ok(Object.values(data).every(v=>v!==undefined));saved=data;records[ref.path]=data;}}
  });
- const form=data=>{const f=new FormData();for(const[k,v]of Object.entries(data)){if(k==='activeTimeSlots')f.set(k,JSON.stringify(v));else if(Array.isArray(v))v.forEach(x=>f.append(k,x));else if(v!==undefined&&v!==false)f.set(k,String(v));}return f;};
+ const form=data=>{const f=new FormData();for(const[k,v]of Object.entries(data)){if(k==='activeTimeSlots'||k==='quantityTiers')f.set(k,JSON.stringify(v));else if(Array.isArray(v))v.forEach(x=>f.append(k,x));else if(v!==undefined&&v!==false)f.set(k,String(v));}return f;};
  await assert.rejects(api.createOrUpdateStandardDiscount(null,form(offer)),/REDIRECT/);
  assert.equal(saved.buyQuantity,3);assert.deepEqual(saved.locationIds,['l']);assert.equal('discountValue'in saved,false);
  await assert.rejects(api.createOrUpdateStandardDiscount(null,form({...offer,id:'new',buyQuantity:4})),/REDIRECT/);
  assert.equal(saved.buyQuantity,4);assert.deepEqual(saved.locationIds,['l']);
+ await assert.rejects(api.createOrUpdateStandardDiscount(null,form({...offer,id:'new',discountMethod:'bundle_price',bundlePrice:200,allowStacking:true})),/REDIRECT/);
+ assert.equal(saved.bundlePrice,200);assert.equal(saved.allowStacking,false);
+ const tiers=[{minQuantity:3,method:'percentage',value:10},{minQuantity:6,method:'fixed_amount',value:20}];
+ await assert.rejects(api.createOrUpdateStandardDiscount(null,form({...offer,id:'new',discountMethod:'quantity_tiers',quantityTiers:tiers})),/REDIRECT/);
+ assert.deepEqual(saved.quantityTiers,tiers);assert.deepEqual(saved.locationIds,['l']);
  const rejected=await api.createOrUpdateStandardDiscount(null,form({...offer,discountType:'product',referenceIds:['foreign']}));assert.equal(rejected.error,true);assert.match(rejected.message,/brand/);
 });
