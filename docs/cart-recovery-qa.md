@@ -27,6 +27,18 @@ The browser check uses only six local Chromium scenarios against the production 
 
 2026-09-07 local result on the branch based on `062d03bfaa9b52defe5a02c5738a8a60bf3d2c47`: typecheck passed; all 34 focused checks passed, including the six Chromium scenarios. The cancel/removal scenario initially detected an old total after an item was removed; synchronous derivation fixed it without changing its expected amount.
 
+### PR #59 review follow-up: fulfillment and bag changes
+
+[Review finding](https://github.com/digiflydk/Orderfly-v2/pull/59#discussion_r3949285740): switching pickup/delivery or changing the bag choice kept the previous checkout reference. Both handlers now clear that reference before persisting, so repricing cannot restore it and an old payment confirmation in another tab cannot erase the edited basket. Selecting the same value does not invalidate an unchanged basket.
+
+One focused regression, with four cases (pickup to delivery, delivery to pickup, remove bag, add bag), reproduced cart deletion on `e6782cd` and passes after the fix. It uses two tabs sharing browser storage, checks that the changed basket and choices survive the old confirmation and reload, and confirms that a new matching paid checkout still clears its own basket. Typecheck also passed. No other tests, Actions or production operations were run for this follow-up.
+
+```sh
+node --test --test-name-pattern='changed fulfillment or bag choice' tests/unit/cart-browser.cjs
+```
+
+Use `CART_CHROMIUM_PATH` if Chromium is installed separately. Add the same two-tab scenario to the targeted live QA after deployment.
+
 ## Work Release / Work QA handoff
 
 1. Review this PR and its exact commit, then obtain PO acceptance, merge and deploy through Work Release. Record the active production SHA. Issues remain open until live verification and cleanup are documented.

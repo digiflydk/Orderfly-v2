@@ -124,11 +124,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const toggleBagFee = (include: boolean) => {
+    if (current.current.includeBagFee === include) return;
+    checkoutOrderId.current = undefined;
+    persist(); // Invalidate the old payment in shared storage before the state update.
     setIncludeBagFee(include);
   };
 
   const setDeliveryType = (type: 'delivery' | 'pickup') => {
     if (current.current.deliveryType === type) return;
+    checkoutOrderId.current = undefined;
     persist();
     generation.current++;
     readyRef.current = false;

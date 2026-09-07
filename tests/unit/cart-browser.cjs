@@ -21,9 +21,12 @@ function Flow() {
     cart.setCartContext({id:route === '/other' ? 'other' : 'b', slug:'brand',bagFee:4,vatPercentage:25}, {id:route === '/other' ? 'other-location' : 'l',slug:'location',deliveryFee:20});
   }, [route, cart.setCartContext]);
   useEffect(() => {
-    if (route.includes('confirmation') && params.get('status') === 'Paid') cart.completeCheckout(params.get('order'),params.get('brand') || 'b','l');
+    if (route.includes('confirmation') && params.get('status') === 'Paid') {
+      cart.completeCheckout(params.get('order'),params.get('brand') || 'b','l');
+      window.receiptProcessed = true;
+    }
   }, [cart.completeCheckout]);
-  const output = {ready:cart.cartReady,items:cart.cartItems,total:cart.checkoutTotal,deliveryType:cart.deliveryType,brandId:cart.brand?.id};
+  const output = {ready:cart.cartReady,items:cart.cartItems,total:cart.checkoutTotal,deliveryType:cart.deliveryType,includeBagFee:cart.includeBagFee,brandId:cart.brand?.id};
   return React.createElement('div',null,
     React.createElement('pre',{id:'state'},JSON.stringify(output)),
     React.createElement('button',{id:'pizza',onClick:()=>cart.addToCart(product,1,[],75,75)},'Add pizza'),
@@ -31,6 +34,10 @@ function Flow() {
     React.createElement('button',{id:'combo',onClick:()=>cart.addComboToCart(combo,1,[{groupName:'Pizza',products:[{id:'pizza',name:'Italiana'}]}],100)},'Add combo'),
     React.createElement('button',{id:'quantity',onClick:()=>cart.updateQuantity(cart.cartItems[0].cartItemId,3)},'Set three'),
     React.createElement('button',{id:'remove',onClick:()=>cart.removeFromCart(cart.cartItems.at(-1).cartItemId)},'Remove last'),
+    React.createElement('button',{id:'pickup',onClick:()=>cart.setDeliveryType('pickup')},'Pickup'),
+    React.createElement('button',{id:'delivery',onClick:()=>cart.setDeliveryType('delivery')},'Delivery'),
+    React.createElement('button',{id:'with-bag',onClick:()=>cart.toggleBagFee(true)},'Include bag'),
+    React.createElement('button',{id:'without-bag',onClick:()=>cart.toggleBagFee(false)},'No bag'),
     React.createElement('button',{id:'pay',onClick:()=>{cart.saveCartForCheckout(params.get('order') || 'ORD-ONE');window.location.assign('/stripe');}},'Pay'),
     React.createElement('a',{href:'/checkout',id:'return'},'Return to Checkout')
   );
@@ -162,4 +169,44 @@ test('catalog failure preserves the saved cart until successful retry, and corru
   await page.unroute('**/restore'); await page.getByRole('button', { name: 'Prøv igen' }).click(); await ready(page); await count(page, 1);
   await page.evaluate(key => localStorage.setItem(key, '{broken'), f.CART_STORAGE_KEY);
   await page.reload(); await ready(page); await count(page, 0);
+});
+
+test('changed fulfillment or bag choice survives an old paid confirmation in another tab', async t => {
+  for (const scenario of [
+    { name: 'pickup to delivery', initialType: 'pickup', change: 'delivery', finalType: 'delivery', initialBag: true, finalBag: true },
+    { name: 'delivery to pickup', initialType: 'delivery', change: 'pickup', finalType: 'pickup', initialBag: true, finalBag: true },
+    { name: 'remove bag', initialType: 'pickup', change: 'without-bag', finalType: 'pickup', initialBag: true, finalBag: false },
+    { name: 'add bag', initialType: 'pickup', change: 'with-bag', finalType: 'pickup', initialBag: false, finalBag: true },
+  ]) await t.test(scenario.name, async subtest => {
+    const paymentTab = await setup(subtest, '/?deliveryMethod=' + scenario.initialType);
+    await paymentTab.click('#pizza'); await count(paymentTab, 1);
+    if (!scenario.initialBag) await paymentTab.click('#without-bag');
+    await paymentTab.click('#pay'); await paymentTab.waitForURL('**/stripe');
+    assert.equal((await saved(paymentTab)).checkoutOrderId, 'ORD-ONE');
+
+    const cartTab = await paymentTab.context().newPage();
+    await cartTab.goto(origin + '/checkout'); await ready(cartTab);
+    await cartTab.click('#' + scenario.change); await ready(cartTab);
+    assert.equal((await state(cartTab)).deliveryType, scenario.finalType);
+    assert.equal((await state(cartTab)).includeBagFee, scenario.finalBag);
+
+    // Same browser context shares storage, as two real customer tabs do.
+    await paymentTab.goto(origin + '/checkout/confirmation?order=ORD-ONE&status=Paid');
+    await paymentTab.waitForFunction(() => window.receiptProcessed === true);
+    const modified = await saved(paymentTab);
+    assert.ok(modified, 'The old payment must not delete the modified basket');
+    assert.equal(modified.checkoutOrderId, undefined);
+    assert.equal(modified.deliveryType, scenario.finalType);
+    assert.equal(modified.includeBagFee, scenario.finalBag);
+    await cartTab.reload(); await ready(cartTab); await count(cartTab, 1);
+    assert.equal((await state(cartTab)).deliveryType, scenario.finalType);
+    assert.equal((await state(cartTab)).includeBagFee, scenario.finalBag);
+
+    // A new checkout for this exact basket can still finish normally.
+    await cartTab.goto(origin + '/checkout?order=ORD-TWO'); await ready(cartTab);
+    await cartTab.click('#pay'); await cartTab.waitForURL('**/stripe');
+    await paymentTab.goto(origin + '/checkout/confirmation?order=ORD-TWO&status=Paid');
+    await paymentTab.waitForFunction(() => window.receiptProcessed === true);
+    assert.equal(await saved(paymentTab), null);
+  });
 });
