@@ -10,13 +10,16 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
     try {
         const orderRef = doc(db, 'orders', orderId);
         
-        if (status === 'Delivered') {
+        if (status === 'Delivered' || status === 'Canceled') {
             const orderSnap = await getDoc(orderRef);
             if (!orderSnap.exists()) {
                 return { success: false, message: 'Order not found.' };
             }
             const orderData = orderSnap.data() as OrderDetail;
-            if (orderData.paymentStatus !== 'Paid') {
+            if (status === 'Canceled' && orderData.paymentStatus === 'Paid' && (orderData.refundedAmountOre||0)<Math.round(orderData.totalAmount*100)) {
+                return {success:false,message:'Refundér betalingen i Stripe før den betalte ordre annulleres. Loyalty korrigeres ved refunderingen.'};
+            }
+            if (status === 'Delivered' && orderData.paymentStatus !== 'Paid') {
                 return { success: false, message: 'Cannot mark order as Delivered until payment is confirmed.' };
             }
         }

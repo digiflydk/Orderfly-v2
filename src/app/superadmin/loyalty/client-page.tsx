@@ -12,39 +12,14 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
 import { updateLoyaltySettings, type FormState } from './actions';
+import '@/lib/firebase';
+import { getAuth } from 'firebase/auth';
+import { scoreSettingsSchema } from '@/lib/loyalty/model';
 import { Loader2 } from 'lucide-react';
 import { Slider } from '@/components/ui/slider';
 
 
-const loyaltyThresholdSchema = z.array(z.object({
-  points: z.coerce.number(),
-  value: z.coerce.number(),
-}));
-
-const loyaltySettingsSchema = z.object({
-    weights: z.object({
-        totalOrders: z.coerce.number().min(0).max(100),
-        averageOrderValue: z.coerce.number().min(0).max(100),
-        recency: z.coerce.number().min(0).max(100),
-        frequency: z.coerce.number().min(0).max(100),
-        deliveryMethodBonus: z.coerce.number().min(0).max(100),
-    }).refine(data => Object.values(data).reduce((acc, v) => acc + v, 0) === 100, {
-        message: 'The sum of all weights must be exactly 100.',
-        path: ['totalOrders'],
-    }),
-    thresholds: z.object({
-        totalOrders: loyaltyThresholdSchema,
-        averageOrderValue: loyaltyThresholdSchema,
-        recency: loyaltyThresholdSchema,
-        frequency: loyaltyThresholdSchema,
-    }),
-    deliveryMethodBonus: z.coerce.number().min(0),
-    classifications: z.object({
-        loyal: z.object({ min: z.coerce.number(), max: z.coerce.number() }),
-        occasional: z.object({ min: z.coerce.number(), max: z.coerce.number() }),
-        atRisk: z.object({ min: z.coerce.number(), max: z.coerce.number() }),
-    }),
-});
+const loyaltySettingsSchema = scoreSettingsSchema;
 
 type LoyaltyFormValues = z.infer<typeof loyaltySettingsSchema>;
 
@@ -111,12 +86,16 @@ export function LoyaltySettingsClientPage({ initialSettings }: LoyaltySettingsCl
         });
 
         startTransition(async () => {
-            const result = await updateLoyaltySettings(initialFormState, formData);
+            try {
+            const user=getAuth().currentUser;
+            if(!user?.emailVerified)throw new Error('Log ind med bekræftet administrator-mail ovenfor.');
+            const result = await updateLoyaltySettings(initialFormState, formData,await user.getIdToken());
              if (result?.error) {
                 toast({ variant: 'destructive', title: 'Error', description: result.message });
             } else if (result?.message) {
                 toast({ title: 'Success!', description: result.message });
             }
+            } catch(e) {toast({variant:'destructive',title:'Kunne ikke gemme',description:e instanceof Error?e.message:'Prøv igen.'});}
         });
     });
 
@@ -214,9 +193,9 @@ export function LoyaltySettingsClientPage({ initialSettings }: LoyaltySettingsCl
                                  <div>
                                     <h4 className="font-semibold text-lg mb-2">Frequency (Avg. Days Between Orders)</h4>
                                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                                        <ThresholdInput control={form.control} name="thresholds.frequency.0.value" label="Very Frequent" description="Max days for 100 pts" />
-                                        <ThresholdInput control={form.control} name="thresholds.frequency.1.value" label="Frequent" description="Max days for 60 pts" />
-                                        <ThresholdInput control={form.control} name="thresholds.frequency.2.value" label="Infrequent" description="Max days for 10 pts" />
+                                        <ThresholdInput control={form.control} name="thresholds.frequency.0.value" label="Very Frequent" description="From average days for 100 pts" />
+                                        <ThresholdInput control={form.control} name="thresholds.frequency.1.value" label="Frequent" description="From average days for 60 pts" />
+                                        <ThresholdInput control={form.control} name="thresholds.frequency.2.value" label="Infrequent" description="From average days for 10 pts" />
                                     </div>
                                 </div>
                                 <Separator />

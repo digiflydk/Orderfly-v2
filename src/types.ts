@@ -368,6 +368,8 @@ export type PaymentDetails = {
  * @description A detailed view of a single order.
  */
 export type OrderDetail = OrderSummary & {
+    refundedAmountOre?: number;
+    loyalty?: { redeemedOre: number; earnedOre: number } | null;
   brandLogoUrl?: string | null;
   productItems: MinimalCartItem[];
   customerDetails: {

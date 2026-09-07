@@ -19,7 +19,9 @@ import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
 import { getToppings } from '../superadmin/toppings/actions';
-import { getLoyaltySettings } from '../superadmin/loyalty/actions';
+import { verifiedCustomer } from '@/lib/loyalty/identity';
+import { getProgram, walletView, reserveRewards, settleRewards } from '@/lib/loyalty/rewards';
+import { rewardQuote,ore } from '@/lib/loyalty/model';
 import { getActiveStripeSecretKey } from '../superadmin/settings/actions';
 import { getOrigin } from '@/lib/url';
 import { generateOrderId } from '@/lib/order-id';
@@ -316,9 +318,11 @@ export async function createStripeCheckoutSessionAction(
     brandSlug: string,
     locationSlug: string,
     deliveryTime?: string,
-    anonymousConsentId?: string
+    anonymousConsentId?: string,
+    loyaltyRequest?: { token: string; redeemOre: number }
 ): Promise<{ success: boolean; url?: string | null; error?: string }> {
   let reservedOrderId: string | undefined;
+  let rewardOrderId: string | undefined;
   let sessionRequestStarted = false;
   try {
     const stripeSecretKey = await getActiveStripeSecretKey();
@@ -343,7 +347,7 @@ export async function createStripeCheckoutSessionAction(
     const chargedItemsSubtotal = cartItems.reduce((sum, item) => {
       const lineTotal = toNumber(item.totalPrice);
       if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0 || lineTotal < 0) throw new Error('Invalid cart item quantity or total.');
-      return sum + lineTotal;
+      return sum + Math.round(lineTotal*100)/100;
     }, 0);
     const itemDiscountTotal = Math.max(0, toNumber(paymentDetails.subtotal) - chargedItemsSubtotal);
     const activeStandardDiscounts = await getActiveStandardDiscounts({
@@ -413,26 +417,36 @@ export async function createStripeCheckoutSessionAction(
     }
 
     const manualDiscountWins = selectedDiscountAmount > (automaticCartDiscount?.amount || 0);
-    const cartDiscountTotal = manualDiscountWins
+    let cartDiscountTotal = manualDiscountWins
       ? selectedDiscountAmount
       : (automaticCartDiscount?.amount || 0);
-    const cartDiscountName = manualDiscountWins
+    let cartDiscountName = manualDiscountWins
       ? (selectedDiscount?.applicationType === 'newsletter_signup' ? 'Newsletter signup' : selectedDiscount?.code)
       : automaticCartDiscount?.name;
     const appliedDiscountIdForOrder = manualDiscountWins ? selectedDiscount?.id || null : null;
+    cartDiscountTotal=Math.round(cartDiscountTotal*100)/100;
+
+    const rewardIdentity = loyaltyRequest ? await verifiedCustomer(loyaltyRequest.token,customerInfo.email) : null;
+    const rewardProgram = rewardIdentity ? await getProgram(brandId) : null;
+    const rewardWallet = rewardIdentity ? await walletView(brandId,rewardIdentity.uid) : null;
+    if (loyaltyRequest?.redeemOre && cartDiscountTotal>0) throw new Error('Loyalty kan ikke kombineres med en kurvrabat. Fjern rabatkoden eller brug din saldo næste gang.');
+    const rewardGoodsOre = ore(Math.max(0,chargedItemsSubtotal-cartDiscountTotal));
+    const reward = rewardProgram ? rewardQuote(rewardProgram,rewardWallet!.availableOre,rewardGoodsOre,loyaltyRequest!.redeemOre) : {redeemOre:0,earnOre:0};
+    if (reward.redeemOre) {cartDiscountTotal+=reward.redeemOre/100;cartDiscountName='Loyalty';}
 
     const hasFreeDelivery = deliveryType === 'delivery' && activeStandardDiscounts.some(discount =>
       discount.discountType === 'free_delivery' && chargedItemsSubtotal >= (discount.minOrderValue || 0)
     );
     const effectiveDeliveryFee = deliveryType === 'delivery' && !hasFreeDelivery
-      ? Math.max(0, toNumber(location.deliveryFee))
+      ? Math.round(Math.max(0, toNumber(location.deliveryFee))*100)/100
       : 0;
-    const effectiveBagFee = Math.min(Math.max(0, toNumber(paymentDetails.bagFee)), Math.max(0, toNumber(brand.bagFee)));
+    const effectiveBagFee = Math.round(Math.min(Math.max(0, toNumber(paymentDetails.bagFee)), Math.max(0, toNumber(brand.bagFee)))*100)/100;
     const subtotalAfterDiscount = Math.max(0, chargedItemsSubtotal - cartDiscountTotal);
-    const effectiveAdminFee = brand.adminFeeType === 'percentage'
+    const rawAdminFee = brand.adminFeeType === 'percentage'
       ? subtotalAfterDiscount * (Math.max(0, toNumber(brand.adminFee)) / 100)
       : Math.max(0, toNumber(brand.adminFee));
-    const totalAmount = subtotalAfterDiscount + effectiveDeliveryFee + effectiveBagFee + effectiveAdminFee;
+    const effectiveAdminFee=Math.round(rawAdminFee*100)/100;
+    const totalAmount = Math.round((subtotalAfterDiscount + effectiveDeliveryFee + effectiveBagFee + effectiveAdminFee)*100)/100;
     const serverPaymentDetails: Omit<PaymentDetails, 'paymentRefId'> = {
       ...paymentDetails,
       subtotal: toNumber(paymentDetails.subtotal),
@@ -453,6 +467,10 @@ export async function createStripeCheckoutSessionAction(
     const cancelToken = randomBytes(32).toString('hex');
     const orderRef = doc(db, 'orders', orderId);
 
+    if (rewardIdentity && rewardProgram?.enabled) {
+      await reserveRewards(orderId,brandId,rewardIdentity.uid,reward.redeemOre,rewardGoodsOre,ore(totalAmount)+reward.redeemOre,rewardProgram);
+      rewardOrderId=orderId;
+    }
     await setDoc(orderRef, omitUndefinedFields({
         id: orderId,
         createdAt: serverTimestamp(),
@@ -460,8 +478,9 @@ export async function createStripeCheckoutSessionAction(
         paymentStatus: 'Pending',
         brandId,
         locationId,
-        productItems: cartItems,
+        productItems: cartItems.map(item=>({...item,totalPrice:Math.round(item.totalPrice*100)/100})),
         totalAmount,
+        loyalty: rewardIdentity && rewardProgram?.enabled ? {redeemedOre:reward.redeemOre,earnedOre:reward.earnOre} : null,
         paymentDetails: serverPaymentDetails,
         appliedDiscountId: appliedDiscountIdForOrder,
         cancelTokenHash: createHash('sha256').update(cancelToken).digest('hex'),
@@ -490,10 +509,10 @@ export async function createStripeCheckoutSessionAction(
         return {
             price_data: {
                 currency: 'dkk',
-                product_data: { name: item.name, description: item.toppings?.join(', ') || undefined },
-                unit_amount: Math.round((item.totalPrice / item.quantity) * 100),
+                product_data: { name: `${item.quantity} × ${item.name}`, description: item.toppings?.join(', ') || undefined },
+                unit_amount: Math.round(item.totalPrice * 100),
             },
-            quantity: item.quantity,
+            quantity: 1,
         };
     });
 
@@ -563,7 +582,10 @@ export async function createStripeCheckoutSessionAction(
   } catch (e: any) {
     // Once a request may have reached Stripe, keep the hold until a signed expiration
     // event. A timeout is not proof that a payable session was not created.
-    if (reservedOrderId && !sessionRequestStarted) await releaseDiscount(reservedOrderId, brandId);
+    if (!sessionRequestStarted) {
+      if (reservedOrderId) await releaseDiscount(reservedOrderId, brandId);
+      if (rewardOrderId) await settleRewards(rewardOrderId,brandId,false);
+    }
     console.error("Failed to create Stripe checkout session:", e);
     const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
     return { success: false, error: errorMessage };

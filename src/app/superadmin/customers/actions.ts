@@ -7,6 +7,7 @@ import { collection, getDocs, query, orderBy, Timestamp, doc, writeBatch, setDoc
 import type { Customer, OrderDetail, LoyaltySettings, Feedback } from '@/types';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
+import { customerMetrics,asDate } from '@/lib/loyalty/model';
 import { getLoyaltySettings } from '../loyalty/actions';
 
 
@@ -102,68 +103,8 @@ export async function deleteCustomer(customerId: string) {
 }
 
 
-function calculateLoyaltyScore(customer: Customer, orders: OrderDetail[], settings: LoyaltySettings): number {
-    if (!customer || !settings) return 0;
-    if (customer.totalOrders === 0) return 0;
-
-    const { weights, thresholds, deliveryMethodBonus } = settings;
-
-    let totalOrdersScore = 0;
-    if (thresholds.totalOrders) {
-        for (const t of thresholds.totalOrders.slice().reverse()) {
-            if (customer.totalOrders >= t.value) {
-                totalOrdersScore = t.points;
-                break;
-            }
-        }
-    }
-    
-    const avgOrderValue = customer.totalOrders > 0 ? customer.totalSpend / customer.totalOrders : 0;
-    let avgOrderValueScore = 0;
-    if (thresholds.averageOrderValue) {
-        for (const t of thresholds.averageOrderValue.slice().reverse()) {
-            if (avgOrderValue >= t.value) {
-                avgOrderValueScore = t.points;
-                break;
-            }
-        }
-    }
-
-    let recencyScore = 0;
-    if (customer.lastOrderDate && thresholds.recency) {
-        const daysSinceLastOrder = (new Date().getTime() - new Date(customer.lastOrderDate).getTime()) / (1000 * 3600 * 24);
-        for (const t of thresholds.recency.slice().reverse()) {
-            if (daysSinceLastOrder <= t.value) {
-                recencyScore = t.points;
-                break;
-            }
-        }
-    }
-
-    let frequencyScore = 50; 
-
-    let deliveryMethodBonusScore = 0;
-    if(orders.length > 1) {
-        const firstDeliveryType = orders[0].deliveryType;
-        if(orders.every(o => o.deliveryType === firstDeliveryType)) {
-            deliveryMethodBonusScore = deliveryMethodBonus;
-        }
-    }
-    
-
-    const finalScore = 
-        (totalOrdersScore * (weights.totalOrders / 100)) +
-        (avgOrderValueScore * (weights.averageOrderValue / 100)) +
-        (recencyScore * (weights.recency / 100)) +
-        (frequencyScore * (weights.frequency / 100)) +
-        (deliveryMethodBonusScore * (weights.deliveryMethodBonus / 100));
-
-    return Math.round(finalScore);
-}
-
-
 export async function getCustomers(): Promise<Customer[]> {
-  const customerQuery = query(collection(db, 'customers'), orderBy('lastOrderDate', 'desc'));
+  const customerQuery = query(collection(db, 'customers'));
   const [customerSnapshot, ordersSnapshot, loyaltySettings] = await Promise.all([
     getDocs(customerQuery),
     getDocs(query(collection(db, 'orders'))),
@@ -172,7 +113,8 @@ export async function getCustomers(): Promise<Customer[]> {
 
   const allOrders = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OrderDetail));
   const ordersByCustomerId = allOrders.reduce((acc, order) => {
-      const customerId = order.customerDetails.id;
+      const customerId = order.customerDetails?.id;
+      if (!customerId) return acc;
       if (!acc[customerId]) {
           acc[customerId] = [];
       }
@@ -188,31 +130,18 @@ export async function getCustomers(): Promise<Customer[]> {
       const customerForCalc: Customer = {
           id: doc.id,
           ...data,
-          createdAt: data.createdAt.toDate(),
-          lastOrderDate: data.lastOrderDate?.toDate(),
+          createdAt: asDate(data.createdAt) || new Date(0),
+          lastOrderDate: asDate(data.lastOrderDate) || undefined,
           cookie_consent: data.cookie_consent ? {
             ...data.cookie_consent,
             timestamp: (data.cookie_consent.timestamp as Timestamp).toDate(),
           } : undefined,
       } as Customer;
       
-      const loyaltyScore = calculateLoyaltyScore(customerForCalc, customerOrders, loyaltySettings);
-      
-      let loyaltyClassification = 'New';
-      if (customerForCalc.totalOrders > 0 && loyaltySettings?.classifications) {
-          if (loyaltyScore >= loyaltySettings.classifications.loyal.min) {
-              loyaltyClassification = 'Loyal';
-          } else if (loyaltyScore >= loyaltySettings.classifications.occasional.min) {
-              loyaltyClassification = 'Occasional';
-          } else {
-              loyaltyClassification = 'At Risk';
-          }
-      }
-
+      const metrics = customerMetrics(customerOrders.filter(o=>o.brandId===customerForCalc.brandId), loyaltySettings);
       return { 
           ...customerForCalc,
-          loyaltyScore,
-          loyaltyClassification,
+          ...metrics,
       } as Customer;
   });
 
@@ -245,8 +174,8 @@ export async function getCustomerDetails(customerId: string): Promise<{
     const finalCustomerData: any = {
       ...customerData,
       id: customerSnap.id,
-      createdAt: (customerData.createdAt as Timestamp).toDate(),
-      lastOrderDate: (customerData.lastOrderDate as Timestamp)?.toDate(),
+      createdAt: asDate(customerData.createdAt) || new Date(0),
+      lastOrderDate: asDate(customerData.lastOrderDate) || undefined,
       cookie_consent: customerData.cookie_consent ? {
         ...customerData.cookie_consent,
         timestamp: (customerData.cookie_consent.timestamp as Timestamp).toDate(),
@@ -258,7 +187,8 @@ export async function getCustomerDetails(customerId: string): Promise<{
 
     const ordersQuery = query(
         collection(db, 'orders'),
-        where('customerDetails.id', '==', decodedCustomerId)
+        where('customerDetails.id', '==', decodedCustomerId),
+        where('brandId','==',customer.brandId)
     );
     
     const ordersSnapshot = await getDocs(ordersQuery);
@@ -267,7 +197,7 @@ export async function getCustomerDetails(customerId: string): Promise<{
         return {
             id: doc.id,
             ...data,
-            createdAt: (data.createdAt as Timestamp).toDate(),
+            createdAt: asDate(data.createdAt) || new Date(0),
         } as OrderDetail;
     }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort in-memory
         
@@ -275,22 +205,10 @@ export async function getCustomerDetails(customerId: string): Promise<{
     const pickupOrdersCount = allOrders.filter(o => o.deliveryType === 'Pickup').length;
     
     // Simplified retention rate
-    const retentionRate = customer.totalOrders > 1 ? 100 : 0;
     
     const loyaltySettings = await getLoyaltySettings();
-    const loyaltyScore = calculateLoyaltyScore(customer, allOrders, loyaltySettings);
-    
-    let loyaltyClassification = 'New';
-    if (customer.totalOrders > 0 && loyaltySettings?.classifications) {
-      if (loyaltyScore >= loyaltySettings.classifications.loyal.min) {
-        loyaltyClassification = 'Loyal';
-      } else if (loyaltyScore >= loyaltySettings.classifications.occasional.min) {
-        loyaltyClassification = 'Occasional';
-      } else {
-        loyaltyClassification = 'At Risk';
-      }
-    }
-    
+    const metrics = customerMetrics(allOrders.filter(o=>o.brandId===customer.brandId), loyaltySettings);
+    const retentionRate = metrics.totalOrders > 1 ? 100 : 0;
     // Fetch feedback data
     const feedbackQuery = query(collection(db, 'feedback'), where('customerId', '==', decodedCustomerId));
     const feedbackSnapshot = await getDocs(feedbackQuery);
@@ -308,13 +226,13 @@ export async function getCustomerDetails(customerId: string): Promise<{
     const orderIdsWithFeedback = feedbackEntries.map(f => f.orderId);
 
     return {
-        customer,
+        customer: {...customer,...metrics},
         allOrders,
         deliveryOrdersCount,
         pickupOrdersCount,
         retentionRate,
-        loyaltyScore,
-        loyaltyClassification,
+        loyaltyScore: metrics.loyaltyScore,
+        loyaltyClassification: metrics.loyaltyClassification,
         averageFeedbackRating,
         orderIdsWithFeedback,
         feedbackEntries,

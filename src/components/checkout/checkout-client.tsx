@@ -1,5 +1,7 @@
 'use client';
 
+import { LoyaltyAccount } from '@/components/loyalty/account';
+import type { User } from 'firebase/auth';
 import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
 import * as React from 'react';
 import { useCart } from "@/context/cart-context";
@@ -148,21 +150,25 @@ function BagFeeRow() {
   );
 }
 
-function OrderSummaryContent() {
+function OrderSummaryContent({loyaltyOre=0}:{loyaltyOre?:number}) {
   const {
     cartItems,
     subtotal,
-    checkoutTotal,
+    checkoutTotal: baseCheckoutTotal,
     itemDiscount,
     cartDiscount,
     voucherDiscount,
     freeDeliveryDiscountApplied,
     deliveryFee,
     brand,
-    adminFee,
-    vatAmount,
+    adminFee: baseAdminFee,
+    vatAmount: baseVatAmount,
     deliveryType
   } = useCart();
+  const adminFee = Math.max(0,baseAdminFee-(brand?.adminFeeType==='percentage'?loyaltyOre/100*(brand.adminFee||0)/100:0));
+  const checkoutTotal=baseCheckoutTotal-loyaltyOre/100-(baseAdminFee-adminFee);
+  const vatAmount=loyaltyOre?checkoutTotal*((brand?.vatPercentage||25)/(100+(brand?.vatPercentage||25))):baseVatAmount;
+
 
   return (
     <div className="space-y-4">
@@ -285,6 +291,7 @@ function OrderSummaryContent() {
         )}
 
         <Separator />
+        {loyaltyOre>0 && <p>Loyalty: - kr. {(loyaltyOre/100).toFixed(2)}</p>}
         <div className="flex justify-between font-bold text-lg">
           <span>Total</span>
           <span>kr.{checkoutTotal.toFixed(2)}</span>
@@ -306,7 +313,7 @@ function CheckoutForm({ location }: { location: Location }) {
   const {
     cartItems,
     subtotal,
-    checkoutTotal,
+    checkoutTotal: baseCheckoutTotal,
     brand,
     applyDiscount,
     removeDiscount,
@@ -326,6 +333,11 @@ function CheckoutForm({ location }: { location: Location }) {
     setSelectedTime
   } = useCart();
 
+  const [loyalty,setLoyalty]=useState<{user:User;redeemOre:number}|null>(null);
+  const loyaltyBlocked=Math.max(voucherDiscount?.amount||0,cartDiscount?.amount||0)>0;
+  const goodsOre=Math.round(Math.max(0,cartItems.reduce((sum,item)=>sum+(item.price+item.toppings.reduce((a,t)=>a+t.price,0))*item.quantity,0)-Math.max(voucherDiscount?.amount||0,cartDiscount?.amount||0))*100);
+  const loyaltyOre=loyaltyBlocked?0:loyalty?.redeemOre||0;
+  const checkoutTotal=baseCheckoutTotal-loyaltyOre/100*(1+(brand?.adminFeeType==='percentage'?(brand.adminFee||0)/100:0));
   const router = useRouter();
   const { toast } = useToast();
   const params = useParams();
@@ -577,7 +589,8 @@ function CheckoutForm({ location }: { location: Location }) {
         brand!.slug,
         location!.slug,
         finalDeliveryTime,
-        anonymousId
+        anonymousId,
+        loyalty ? {token:await loyalty.user.getIdToken(),redeemOre:loyaltyOre} : undefined
       );
 
       setIsProcessing(false);
@@ -746,6 +759,7 @@ function CheckoutForm({ location }: { location: Location }) {
           <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-32 lg:pb-0">
             {/* Left column */}
             <div className="space-y-10">
+              {brand && <LoyaltyAccount key={brand.id} brandId={brand.id} goodsOre={goodsOre} blocked={loyaltyBlocked} onChange={setLoyalty}/>}
               <section>
                 <h2 className="text-2xl font-bold mb-4">Delivery & Time</h2>
                 <div className="space-y-4">
@@ -960,7 +974,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <OrderSummaryContent />
+                      <OrderSummaryContent loyaltyOre={loyaltyOre} />
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
@@ -976,7 +990,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     <CardDescription>Review the items in your cart.</CardDescription>
                   </CardHeader>
                   <CardContent className="flex-1 overflow-y-auto pr-4">
-                    <OrderSummaryContent />
+                    <OrderSummaryContent loyaltyOre={loyaltyOre} />
                   </CardContent>
                 </Card>
                 <div className="p-4 bg-background border border-t-0 rounded-b-lg">

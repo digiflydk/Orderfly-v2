@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { settleRewards } from '@/lib/loyalty/rewards';
 import { db } from '@/lib/firebase';
 import { doc, runTransaction, type Transaction } from 'firebase/firestore';
 
@@ -60,14 +61,17 @@ export async function prepareCapacitySettlement(tx: Transaction, order: any, pai
 }
 
 export async function releaseDiscount(orderId: string, brandId: string, sessionId?: string) {
-  await runTransaction(db, async tx => {
+  const released = await runTransaction(db, async tx => {
     const orderRef = doc(db, 'orders', orderId), orderSnap = await tx.get(orderRef);
     if (!orderSnap.exists()) return;
     const order = orderSnap.data();
     if (order.brandId !== brandId || (sessionId && order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== sessionId)) throw new Error('Reservation scope mismatch');
-    if (order.paymentStatus === 'Paid' || order.discountReservation !== 'held') return;
+    if (order.paymentStatus === 'Paid') return false;
+    if (order.discountReservation !== 'held') return true;
     const settle = await prepareCapacitySettlement(tx, order, false);
     settle();
     tx.update(orderRef, { discountReservation: 'released' });
+    return true;
   });
+  if (released) await settleRewards(orderId,brandId,false);
 }

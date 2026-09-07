@@ -6,36 +6,10 @@ import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { LoyaltySettings } from '@/types';
 import { z } from 'zod';
+import { getAdminDb } from '@/lib/firebase-admin';
 
-const loyaltyThresholdSchema = z.array(z.object({
-  points: z.coerce.number(),
-  value: z.coerce.number(),
-}));
-
-const loyaltySettingsSchema = z.object({
-    weights: z.object({
-        totalOrders: z.coerce.number().min(0).max(100),
-        averageOrderValue: z.coerce.number().min(0).max(100),
-        recency: z.coerce.number().min(0).max(100),
-        frequency: z.coerce.number().min(0).max(100),
-        deliveryMethodBonus: z.coerce.number().min(0).max(100),
-    }).refine(data => Object.values(data).reduce((acc, v) => acc + v, 0) === 100, {
-        message: 'The sum of all weights must be exactly 100.',
-        path: ['totalOrders'], // Attach error to the first field for display
-    }),
-    thresholds: z.object({
-        totalOrders: loyaltyThresholdSchema,
-        averageOrderValue: loyaltyThresholdSchema,
-        recency: loyaltyThresholdSchema,
-        frequency: loyaltyThresholdSchema,
-    }),
-    deliveryMethodBonus: z.coerce.number().min(0),
-    classifications: z.object({
-        loyal: z.object({ min: z.coerce.number(), max: z.coerce.number() }),
-        occasional: z.object({ min: z.coerce.number(), max: z.coerce.number() }),
-        atRisk: z.object({ min: z.coerce.number(), max: z.coerce.number() }),
-    }),
-});
+import { scoreSettingsSchema as loyaltySettingsSchema } from '@/lib/loyalty/model';
+import { requireLoyaltyAdmin } from '@/lib/loyalty/identity';
 
 export type FormState = {
     message: string;
@@ -43,14 +17,20 @@ export type FormState = {
 };
 
 export async function getLoyaltySettings(): Promise<LoyaltySettings> {
+  return (await getLoyaltySettingsState()).settings;
+}
+
+export async function getLoyaltySettingsState(): Promise<{settings:LoyaltySettings;warning:string|null}> {
   const docRef = doc(db, 'platform_settings', 'loyalty');
   const docSnap = await getDoc(docRef);
 
   if (docSnap.exists()) {
-    return docSnap.data() as LoyaltySettings;
-  } else {
+    const parsed=loyaltySettingsSchema.safeParse(docSnap.data());
+    if(parsed.success)return {settings:parsed.data,warning:null};
+  }
+  {
     // Return default settings if none are found in the database
-    return {
+    const settings:LoyaltySettings = {
       weights: {
         totalOrders: 30,
         averageOrderValue: 20,
@@ -89,14 +69,17 @@ export async function getLoyaltySettings(): Promise<LoyaltySettings> {
         atRisk: { min: 0, max: 49 },
       },
     };
+    return {settings,warning:docSnap.exists()?'De gemte scoreindstillinger er ugyldige. Standardværdier vises, indtil du har rettet og gemt indstillingerne.':null};
   }
 }
 
 export async function updateLoyaltySettings(
   prevState: FormState,
-  formData: FormData
+  formData: FormData,
+  token: string = ''
 ): Promise<FormState> {
   
+  const actor = await requireLoyaltyAdmin(token);
   const rawData = {
     weights: {
         totalOrders: formData.get('weights.totalOrders'),
@@ -150,8 +133,10 @@ export async function updateLoyaltySettings(
   }
 
   try {
-    const settingsRef = doc(db, 'platform_settings', 'loyalty');
-    await setDoc(settingsRef, validatedFields.data);
+    const adminDb = getAdminDb(), batch = adminDb.batch();
+    batch.set(adminDb.collection('platform_settings').doc('loyalty'), validatedFields.data);
+    batch.set(adminDb.collection('loyalty_audit').doc(), {actor:actor.uid,kind:'score_settings',settings:validatedFields.data,at:new Date().toISOString()});
+    await batch.commit();
     revalidatePath('/superadmin/loyalty');
     return { message: 'Loyalty settings updated successfully.', error: false };
   } catch (e) {

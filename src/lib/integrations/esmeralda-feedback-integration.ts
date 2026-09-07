@@ -1,3 +1,5 @@
+import { customerMetrics } from '@/lib/loyalty/model';
+import { getLoyaltySettings } from '@/app/superadmin/loyalty/actions';
 import 'server-only';
 
 import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
@@ -313,6 +315,7 @@ export async function getEsmeraldaConsumerCustomerHistory(
   }).sort((a, b) => (b.received_at ?? '').localeCompare(a.received_at ?? '')).slice(0, parsed.limit);
 
   const customer = customerSnapshot.data() ?? {};
+  const metrics = customerMetrics(ordersSnapshot.docs.map(d=>d.data()), await getLoyaltySettings());
   return {
     customer: {
       customer_id: customerSnapshot.id,
@@ -321,11 +324,11 @@ export async function getEsmeraldaConsumerCustomerHistory(
       email: typeof customer.email === 'string' ? customer.email : '',
       phone: typeof customer.phone === 'string' ? customer.phone : '',
       status: typeof customer.status === 'string' ? customer.status : 'active',
-      total_orders: typeof customer.totalOrders === 'number' ? customer.totalOrders : 0,
-      total_spend: typeof customer.totalSpend === 'number' ? customer.totalSpend : 0,
-      last_order_at: toIso(customer.lastOrderDate),
-      loyalty_score: typeof customer.loyaltyScore === 'number' ? customer.loyaltyScore : 0,
-      loyalty_classification: typeof customer.loyaltyClassification === 'string' ? customer.loyaltyClassification : '',
+      total_orders: metrics.totalOrders,
+      total_spend: metrics.totalSpend,
+      last_order_at: toIso(metrics.lastOrderDate),
+      loyalty_score: metrics.loyaltyScore,
+      loyalty_classification: metrics.loyaltyClassification,
     },
     commerce_orders: orders,
     feedback,

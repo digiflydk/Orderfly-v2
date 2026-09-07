@@ -42,6 +42,7 @@ test('actual checkout action rejects tampering before side effects, allows valid
  const mocks=Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],{}]));
  let identityCalls=0;let writes=0;
  Object.assign(mocks,{
+  '@/lib/loyalty/model':load('src/lib/loyalty/model.ts'),
   '@/lib/checkout-price-validation':pricing,'@/lib/promotion-rules':rules,'@/lib/automatic-discounts':automatic,
   stripe:{default:class Stripe {}},'@/lib/firebase':{db:{}},
   '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>{if(++identityCalls===2)throw Error('AFTER_PRICE_VALIDATION');return {ref:{id:'c'},exists:()=>true,data:()=>({brandId:'b'})};}},
