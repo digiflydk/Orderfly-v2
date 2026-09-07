@@ -1,73 +1,98 @@
 # Orderfly deployment flow
 
-Last reviewed: 2026-08-23
+Last reviewed: 2026-08-25
 
 ## Firebase project roles
 
-- `orderfly-v21-10334086-b3076`: Firebase Studio and App Hosting project. This project hosts and deploys the application.
-- `orderfly-39325`: Production Firebase data project. Firestore, Authentication, Storage and server-side Firebase Admin access point here.
+- `orderfly-v21-10334086-b3076`: Firebase App Hosting project. It hosts and rolls out the application from the configured GitHub live branch.
+- `orderfly-39325`: production Firebase data project for Firestore, Authentication, Storage and server-side Firebase Admin access.
 
-The hosting project and data project are intentionally different. Do not change the `NEXT_PUBLIC_FIREBASE_*` values to the hosting project unless the data architecture is deliberately migrated.
+These projects are intentionally different. A hosting release must not repoint production data configuration to the App Hosting project.
 
-## Source of truth
+## Canonical release lifecycle
 
-GitHub is the source of truth for application code, product issues, pull requests, CI evidence and documentation.
+`[READY FOR MANUAL WORK] -> [IN DEVELOPMENT] -> [IN REVIEW] -> [READY FOR RELEASE] -> [DEPLOYING] -> [LIVE VERIFY] -> [DONE]`
 
-Orderfly follows the same PM / PO / Work lifecycle as Esmeralda:
+There is no routine PO stop after green engineering review. PO defines and clarifies product requirements before/during implementation and intervenes when evidence conflicts with the requested behavior.
 
-`[READY FOR DEV] -> [IN DEVELOPMENT] -> [IN REVIEW] -> [READY FOR PO] -> [AWAITING LIVE VERIFY] -> [DONE]`
+Orderfly uses `MANUAL_NO_API_MODE`. Release orchestration does not require OpenAI API credits or an API-based coding/review workflow.
 
-Work branches from `main` and opens pull requests into `main`. Work never merges or deploys its own change. PO acceptance is required before merge, and deployment plus live verification are required before an issue is Done.
+## Engineering gate and merge
 
-See [Development workflow](development-workflow.md).
+Manual Work opens one PR into `main` with:
 
-## Required development and release flow
+```text
+Manual-Work-Issue: #<issue>
+Controlled-Live-Verification: none|required
+```
 
-1. PM defines the product need, defect or priority.
-2. PO creates a complete GitHub issue and marks it `[READY FOR DEV]`.
-3. Work creates or resumes `work-issue-<number>` from current `main`, implements the issue, adds tests and updates documentation.
-4. Work opens or updates a PR into `main`.
-5. The existing Orderfly Playwright workflow must pass on the Work branch, including the build exercised by Playwright. Work also runs TypeScript typecheck before creating the PR.
-6. Independent code review must pass.
-7. The issue moves to `[READY FOR PO]`.
-8. PO reviews acceptance criteria, PR/diff, CI, Playwright evidence, code review, documentation and unresolved risks.
-9. If accepted, the exact reviewed PR is merged to `main`, and the issue becomes `[AWAITING LIVE VERIFY]`.
-10. Firebase App Hosting deploys, or the release operator deploys, the approved `main` commit.
-11. Read-only live Playwright and any issue-specific controlled live verification are performed.
-12. Only PO may close the issue as `[DONE]` after confirming the approved change is live and all acceptance evidence is complete. PM is then notified.
+Before `[READY FOR RELEASE]` the current PR head must have:
 
-A green pre-merge test run proves the candidate code passed its checks. It does not by itself prove that the same commit is live. Merge also does not mean Done.
+- successful `Orderfly CI` / `Typecheck, build and Playwright`;
+- successful release-process regression contract;
+- independent/manual review recorded as `MANUAL_CODE_REVIEW: CLEAN` and `Reviewed-Head: <SHA>`;
+- required documentation updates.
 
-## Production domain configuration (`orderfly.dk`)
+`.github/workflows/work-quality-gate.yml` rechecks all evidence immediately before merge. It refuses to merge while another trusted release is `[DEPLOYING]` or `[LIVE VERIFY]`. For a trusted `[BLOCKED]` or post-merge `[READY FOR RELEASE]` issue, it resolves the linked PR through the `Manual-Work-Issue` marker and asks GitHub whether that PR actually merged. If it did and no trusted `LIVE_VERIFICATION_PASSED` matches the real merge SHA, the repository-wide lock remains. This does not depend on `RELEASE_MERGED` bookkeeping successfully completing after the merge.
 
-- Hosting platform: **Firebase App Hosting** (`orderfly-v21-10334086-b3076`).
-- Production branch: **`main`**.
-- Canonical URL: **`https://orderfly.dk`**.
+A successful gate squash-merges the verified head, records the returned merge SHA and sets the issue to `[DEPLOYING]`. Merge is not deployment proof. The workflow exposes the returned merge SHA immediately so a later bookkeeping failure can be recorded accurately.
+
+## Production deployment through Firebase App Hosting
+
+Production branch: `main`.
+
+Firebase App Hosting automatic rollouts are the established deployment mechanism. When the connected live branch receives the accepted merge commit, App Hosting builds and rolls out that commit. No additional GitHub release credential is introduced by this workflow.
+
+The exact rollout must be visible in App Hosting/Cloud Build evidence before live verification can begin. Post a trusted issue comment in this exact shape:
+
+```text
+APP_HOSTING_ROLLOUT_CONFIRMED
+PR: #<pr>
+Merge-SHA: <40-character merge SHA>
+Deployment-Timestamp: <ISO-8601 UTC timestamp>
+App-Hosting-Project: orderfly-v21-10334086-b3076
+Data-Project: orderfly-39325
+Rollout-ID: <Firebase App Hosting rollout or Cloud Build identifier>
+Rollout-Commit: <same 40-character merge SHA>
+Live-URL: https://orderfly.dk
+Operation-Result: success
+```
+
+`.github/workflows/work-deployment-evidence.yml` accepts only a trusted repository participant, a real timestamp after merge, the exact merged PR/SHA, the correct hosting/data project split and a rollout commit equal to the merge SHA. `main` must still equal that SHA because the persistent release lock prevents overlapping unverified releases.
+
+Successful validation records `DEPLOYMENT_SUCCEEDED`, moves the issue to `[LIVE VERIFY]` and dispatches post-deploy live verification. Invalid evidence cannot start live Playwright and does not create an API-key blocker.
+
+## Post-deployment live Playwright
+
+`.github/workflows/work-live-verification.yml` is triggered only by the validated deployment evidence dispatch. It refuses to run unless the issue, merged PR, current `main`, deployment record and dispatch all identify the same merge SHA. It re-reads `Controlled-Live-Verification` from trusted persisted `RELEASE_MERGED` evidence and requires the dispatch value to match it exactly; missing, altered or invalid values fail closed.
+
+The workflow checks out the exact deployed SHA and uses checked-in `playwright.live.config.ts` plus `tests/work-post-deploy-live.spec.ts`. It does not create a config under `/tmp`, use a global Playwright install or treat merge as deployment evidence.
+
+The generic production smoke is read-only and verifies at minimum:
+
+- `https://orderfly.dk` responds and renders;
+- `/m3pizza` responds and renders;
+- `/m3pizza` has no page-level horizontal overflow at a 375 px viewport;
+- uncaught browser page errors fail the landing-page test.
+
+If the persisted controlled-live mode is `none`, a green post-deploy run records `LIVE_VERIFICATION_PASSED`, sets `[DONE]` and closes the issue. If the persisted mode is `required`, generic smoke leaves the issue `[LIVE VERIFY]` until the issue-specific reversible procedure is complete.
+
+A post-merge deployment or live failure may set the issue `[BLOCKED]`, but that does not release the repository-wide release lock. The next release gate resolves the actual linked merged PR and requires matching trusted live-success evidence for its merge SHA before allowing `main` to advance.
+
+## Production domain
+
+- Canonical URL: `https://orderfly.dk`.
 - `https://www.orderfly.dk` must permanently redirect to the canonical URL.
-- `http://orderfly.dk` must redirect to HTTPS.
+- HTTP must redirect to HTTPS.
+- Host-dependent auth callbacks, CORS, payment return URLs and `NEXT_PUBLIC_SITE_URL` must continue to use the production domain as documented.
 
-The app enforces canonical host and HTTPS with edge middleware in `/middleware.ts`:
+## Runtime configuration
 
-- `www.orderfly.dk` -> `https://orderfly.dk` (HTTP 308, preserves path/query).
-- `http://orderfly.dk` -> `https://orderfly.dk` (HTTP 308, preserves path/query).
-- Other preview/dev hosts are not rewritten by this rule.
+GitHub Actions variables/secrets are not App Hosting runtime configuration. App Hosting must retain its own managed runtime values.
 
-## DNS and certificate checklist
+Public/server Firebase data configuration must continue to target `orderfly-39325`, including the production public Firebase settings and server-side service account. Sensitive values remain managed secrets and must never be copied into source, issues, PRs or logs.
 
-DNS access is required in the domain registrar/DNS provider account for `orderfly.dk`. Before go-live, validate:
-
-1. `orderfly.dk` resolves to the intended App Hosting backend.
-2. `www.orderfly.dk` resolves and redirects correctly.
-3. SSL/TLS certificates are active for both hosts.
-4. Automatic certificate renewal remains enabled.
-
-## Environment variables
-
-GitHub Actions variables and secrets are used only by GitHub Actions. They are not automatically copied to Firebase App Hosting.
-
-App Hosting must therefore have its own runtime configuration. The public Firebase client configuration and the Firebase Admin service account must continue to target `orderfly-39325` because that is the production data project.
-
-The deployment target is selected by `.firebaserc`:
+The checked-in target map remains:
 
 ```json
 {
@@ -79,60 +104,12 @@ The deployment target is selected by `.firebaserc`:
 }
 ```
 
-Use an explicit project when running Firebase CLI operations. Never deploy from an unknown branch or an uncommitted working tree.
+## Rollback
 
-## Production runtime settings
-
-Production App Hosting runtime values must be set in the hosting environment, not in git:
-
-- `SITE_URL=https://orderfly.dk`
-- `NEXT_PUBLIC_SITE_URL=https://orderfly.dk`
-- production `NEXT_PUBLIC_FIREBASE_*` values pointing at `orderfly-39325`
-- `FIREBASE_SERVICE_ACCOUNT_JSON` for the production Firebase data project
-
-`FIREBASE_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY` and all other sensitive values must only be stored as managed secrets, never committed or copied into issue/PR comments or logs.
-
-## Auth, callback and CORS impact
-
-When changing host-dependent behavior, verify:
-
-- Firebase Authentication authorized domains include `orderfly.dk`.
-- OAuth providers/callbacks use `https://orderfly.dk` where applicable.
-- API CORS allowlists contain the intended origin without broad wildcard access.
-- Payment and third-party return URLs using `NEXT_PUBLIC_SITE_URL` resolve to the production domain.
-
-## Post-merge live verification
-
-`.github/workflows/work-live-verification.yml` runs for merged Work-managed PRs into `main`.
-
-The baseline verification is read-only and checks live endpoint/browser health, the public brand surface and a mobile overflow regression. It records evidence on the linked issue and leaves the issue in `[AWAITING LIVE VERIFY]`.
-
-A green generic smoke test is not allowed to close the issue automatically. PO must also verify deployment evidence and every issue-specific acceptance criterion.
-
-Authentication, payments, orders, customer mutations or other state-changing scenarios may only be tested live when the issue defines a controlled, reversible and auditable procedure. Unattended automation must not mutate production data.
-
-## Definition of release completion
-
-A Work-managed development issue is not Done until all applicable items are true:
-
-- implementation completed
-- relevant automated tests added or updated
-- TypeScript/type validation green
-- Playwright green
-- independent code review green
-- documentation updated
-- PO acceptance recorded
-- PR merged to `main`
-- approved change deployed
-- read-only live verification green
-- any required controlled live scenarios verified and restored safely
-
-## Rollback procedure
-
-1. Identify the latest stable `main` commit that passed live verification.
-2. In App Hosting, redeploy that exact stable release/artifact.
-3. Re-run live smoke tests on `https://orderfly.dk`.
-4. Document incident start time, rollback executor, stable release ID/commit and verification outcome in release notes/operations log.
-5. Keep the affected issue `[BLOCKED]` until the defect has been triaged and a safe fix is ready.
+1. Identify the latest stable App Hosting rollout with successful live verification.
+2. Roll back/rebuild the exact stable commit through App Hosting.
+3. Record the stable commit and rollout/build identifier.
+4. Re-run post-deploy live smoke on `https://orderfly.dk`.
+5. Keep the affected issue `[BLOCKED]` until the defect is understood and the production state is verified.
 
 Never edit production data merely to hide a failed release.

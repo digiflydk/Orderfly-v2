@@ -1,0 +1,183 @@
+name: Work App Hosting Deployment Evidence
+
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: read
+
+env:
+  HOSTING_PROJECT: orderfly-v21-10334086-b3076
+  DATA_PROJECT: orderfly-39325
+  LIVE_URL: https://orderfly.dk
+
+concurrency:
+  group: orderfly-production-release
+  cancel-in-progress: false
+
+jobs:
+  confirm:
+    if: startsWith(github.event.comment.body, 'APP_HOSTING_ROLLOUT_CONFIRMED')
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Check out release contract
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          persist-credentials: false
+
+      - name: Validate exact rollout evidence
+        id: evidence
+        uses: actions/github-script@v7
+        env:
+          HOSTING_PROJECT: ${{ env.HOSTING_PROJECT }}
+          DATA_PROJECT: ${{ env.DATA_PROJECT }}
+          LIVE_URL: ${{ env.LIVE_URL }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { pathToFileURL } = require('node:url');
+            const contract = await import(pathToFileURL(`${process.env.GITHUB_WORKSPACE}/scripts/release-contract.mjs`).href);
+            const association = String(context.payload.comment.author_association || '').toUpperCase();
+            if (!contract.isTrustedAssociation(association)) throw new Error('Deployment evidence must come from a trusted repository participant.');
+            if (context.payload.issue.pull_request) throw new Error('Deployment evidence must be posted on the feature issue.');
+
+            const lines = String(context.payload.comment.body || '').trim().split(/\r?\n/);
+            if (lines[0] !== 'APP_HOSTING_ROLLOUT_CONFIRMED') throw new Error('Invalid rollout evidence marker.');
+            const field = (name) => {
+              const prefix = `${name}:`;
+              const matches = lines.filter((line) => line.startsWith(prefix));
+              return matches.length === 1 ? matches[0].slice(prefix.length).trim() : null;
+            };
+            const prNumber = Number(String(field('PR') || '').match(/^#(\d+)$/)?.[1]);
+            const mergeSha = String(field('Merge-SHA') || '').toLowerCase();
+            const rolloutCommit = String(field('Rollout-Commit') || '').toLowerCase();
+            const deployedAt = String(field('Deployment-Timestamp') || '');
+            const hostingProject = field('App-Hosting-Project');
+            const dataProject = field('Data-Project');
+            const rolloutId = String(field('Rollout-ID') || '');
+            const liveUrl = field('Live-URL');
+            const result = String(field('Operation-Result') || '').toLowerCase();
+            if (!Number.isInteger(prNumber) || prNumber < 1) throw new Error('PR must be exactly PR: #<number>.');
+            if (!/^[0-9a-f]{40}$/.test(mergeSha) || rolloutCommit !== mergeSha) throw new Error('Merge-SHA and Rollout-Commit must be the same exact 40-character SHA.');
+            if (hostingProject !== process.env.HOSTING_PROJECT || dataProject !== process.env.DATA_PROJECT) throw new Error('Firebase hosting/data project separation is incorrect.');
+            if (liveUrl !== process.env.LIVE_URL) throw new Error(`Live-URL must be ${process.env.LIVE_URL}.`);
+            if (!/^[A-Za-z0-9._:/-]{3,300}$/.test(rolloutId)) throw new Error('A bounded App Hosting rollout/build identifier is required.');
+            if (result !== 'success') throw new Error('Only a successful completed rollout may enter live verification.');
+
+            const issueNumber = Number(context.payload.issue.number);
+            const issue = (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber })).data;
+            if (!issue.title.startsWith('[DEPLOYING]')) throw new Error(`Issue #${issueNumber} is not [DEPLOYING].`);
+            const pr = (await github.rest.pulls.get({ owner: context.repo.owner, repo: context.repo.repo, pull_number: prNumber })).data;
+            if (!pr.merged || String(pr.merge_commit_sha || '').toLowerCase() !== mergeSha) throw new Error(`PR #${prNumber} is not merged as ${mergeSha}.`);
+            const timestamp = contract.validateDeploymentTimestamp(deployedAt, { mergedAtMs: Date.parse(pr.merged_at || '') });
+            if (!timestamp.valid) throw new Error('Deployment-Timestamp must be a real UTC instant after merge and not in the future.');
+            const mainSha = String((await github.rest.git.getRef({ owner: context.repo.owner, repo: context.repo.repo, ref: 'heads/main' })).data.object.sha).toLowerCase();
+            if (mainSha !== mergeSha) throw new Error(`Persistent release lock violated: main ${mainSha} differs from deployed merge ${mergeSha}.`);
+
+            const comments = await github.paginate(github.rest.issues.listComments, { owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, per_page: 100 });
+            const releaseComment = comments.find((comment) => {
+              const trusted = contract.isTrustedAssociation(comment.author_association) || comment.user?.login === 'github-actions[bot]';
+              const body = String(comment.body || '');
+              return trusted && body.includes('RELEASE_MERGED') && body.includes(`PR: #${prNumber}`) && body.includes(`Merge-SHA: ${mergeSha}`);
+            });
+            if (!releaseComment) throw new Error('Matching trusted RELEASE_MERGED evidence is required.');
+            const controlledMode = contract.controlledLiveMode(releaseComment.body);
+            if (!controlledMode) throw new Error('Release evidence must contain exactly one Controlled-Live-Verification marker.');
+
+            core.setOutput('issue-number', String(issueNumber));
+            core.setOutput('pr-number', String(prNumber));
+            core.setOutput('merge-sha', mergeSha);
+            core.setOutput('deployment-run', String(context.payload.comment.id));
+            core.setOutput('deployed-at', deployedAt);
+            core.setOutput('rollout-id', rolloutId);
+            core.setOutput('controlled-live', controlledMode);
+            core.setOutput('clean-title', String(issue.title || '').replace(/^\[[^\]]+\]\s*/, ''));
+            core.setOutput('operator-url', context.payload.comment.html_url || '');
+
+      - name: Record rollout and dispatch post-deploy live verification
+        id: handoff
+        if: steps.evidence.outcome == 'success'
+        uses: actions/github-script@v7
+        env:
+          ISSUE_NUMBER: ${{ steps.evidence.outputs.issue-number }}
+          PR_NUMBER: ${{ steps.evidence.outputs.pr-number }}
+          MERGE_SHA: ${{ steps.evidence.outputs.merge-sha }}
+          DEPLOYMENT_RUN_ID: ${{ steps.evidence.outputs.deployment-run }}
+          DEPLOYED_AT: ${{ steps.evidence.outputs.deployed-at }}
+          ROLLOUT_ID: ${{ steps.evidence.outputs.rollout-id }}
+          CONTROLLED_LIVE_VERIFICATION: ${{ steps.evidence.outputs.controlled-live }}
+          CLEAN_TITLE: ${{ steps.evidence.outputs.clean-title }}
+          OPERATOR_URL: ${{ steps.evidence.outputs.operator-url }}
+          HOSTING_PROJECT: ${{ env.HOSTING_PROJECT }}
+          DATA_PROJECT: ${{ env.DATA_PROJECT }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const issueNumber = Number(process.env.ISSUE_NUMBER);
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: [
+                'DEPLOYMENT_SUCCEEDED',
+                `PR: #${process.env.PR_NUMBER}`,
+                `Merge-SHA: ${process.env.MERGE_SHA}`,
+                `Deployment-Run: ${process.env.DEPLOYMENT_RUN_ID}`,
+                `Deployment-Timestamp: ${process.env.DEPLOYED_AT}`,
+                `App-Hosting-Project: ${process.env.HOSTING_PROJECT}`,
+                `Data-Project: ${process.env.DATA_PROJECT}`,
+                `Rollout-ID: ${process.env.ROLLOUT_ID}`,
+                `Operator-Evidence: ${process.env.OPERATOR_URL}`,
+              ].join('\n'),
+            });
+            await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[LIVE VERIFY] ${process.env.CLEAN_TITLE}` });
+            await github.rest.repos.createDispatchEvent({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              event_type: 'work-live-verify',
+              client_payload: {
+                issue_number: issueNumber,
+                pr_number: Number(process.env.PR_NUMBER),
+                merge_sha: process.env.MERGE_SHA,
+                deployment_run_id: process.env.DEPLOYMENT_RUN_ID,
+                controlled_live_verification: process.env.CONTROLLED_LIVE_VERIFICATION,
+              },
+            });
+
+      - name: Recover a failed handoff or reject invalid evidence
+        if: failure()
+        uses: actions/github-script@v7
+        env:
+          EVIDENCE_OUTCOME: ${{ steps.evidence.outcome }}
+          MERGE_SHA: ${{ steps.evidence.outputs.merge-sha }}
+          RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const issueNumber = Number(context.payload.issue.number);
+            if (!Number.isInteger(issueNumber) || issueNumber < 1) return;
+            const issue = (await github.rest.issues.get({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber })).data;
+            if (process.env.EVIDENCE_OUTCOME === 'success') {
+              const clean = String(issue.title || '').replace(/^\[[^\]]+\]\s*/, '');
+              if (!issue.title.startsWith('[DEPLOYING]')) {
+                await github.rest.issues.update({ owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[DEPLOYING] ${clean}` });
+              }
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                body: `DEPLOYMENT_HANDOFF_FAILED\nMerge-SHA: ${process.env.MERGE_SHA || 'unknown'}\nThe App Hosting rollout evidence was valid, but the GitHub handoff to live verification did not complete. The issue has been restored to [DEPLOYING], so the same verified rollout can be submitted again without changing production. No OpenAI API credential is required.\nRun: ${process.env.RUN_URL}`,
+              });
+              return;
+            }
+            await github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: issueNumber,
+              body: `DEPLOYMENT_EVIDENCE_REJECTED: App Hosting evidence did not satisfy the exact-SHA contract. No OpenAI API credential is required.\nRun: ${process.env.RUN_URL}`,
+            });
