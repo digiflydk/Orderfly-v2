@@ -10,6 +10,8 @@ function load(path,mocks={}) {
 }
 const {upsellFormData}=load('src/lib/upsell-form-data.ts');
 const serialization=load('src/lib/upsell-serialization.ts');
+const {UpsellValidationFeedback}=load('src/components/superadmin/upsell-validation-feedback.tsx');
+const {renderToStaticMarkup}=require('react-dom/server');
 const values={brandId:'brand-cph',locationIds:['location-m3'],upsellName:'Andre købte også',description:'',imageUrl:'',offerType:'product',offerProductIds:['p1','p2'],offerCategoryIds:[],discountType:'none',isActive:true,orderTypes:['pickup','delivery'],activeDays:['monday'],tags:['Popular'],triggerConditions:[{id:'t1',type:'cart_value_over',referenceId:'100'}],activeTimeSlots:[{start:'11:00',end:'22:00'}],startDate:new Date('2026-09-07T09:00:00Z')};
 test('controlled create values satisfy the real server parser and persist native IDs',async()=>{
   let saved;
@@ -33,6 +35,21 @@ test('controlled create values satisfy the real server parser and persist native
   const invalid=await api.createOrUpdateUpsell(null,upsellFormData({...values,locationIds:[]}));
   assert.equal(invalid.error,true);assert.equal(saved,null);
   assert.ok(invalid.errors.some(e=>e.path[0]==='locationIds'));
+  const missingTrigger=await api.createOrUpdateUpsell(null,upsellFormData({...values,triggerConditions:[]}));
+  assert.equal(missingTrigger.error,true);assert.equal(saved,null);
+  const summary=renderToStaticMarkup(UpsellValidationFeedback({state:missingTrigger}));
+  const inline=renderToStaticMarkup(UpsellValidationFeedback({state:missingTrigger,field:'triggerConditions'}));
+  assert.match(summary,/role="alert"/);
+  assert.match(summary,/At least one trigger condition is required/);
+  assert.match(inline,/id="triggerConditions-error"/);
+  assert.match(inline,/At least one trigger condition is required/);
+  await assert.rejects(api.createOrUpdateUpsell(null,upsellFormData(values)),/REDIRECT/);
+  assert.deepEqual(saved.locationIds,['location-m3']);
+});
+test('persistent feedback renders non-validation failures and disappears on success',()=>{
+  assert.match(renderToStaticMarkup(UpsellValidationFeedback({state:{error:true,message:'Unable to save. Try again.'}})),/Unable to save/);
+  assert.equal(renderToStaticMarkup(UpsellValidationFeedback({state:null})), '');
+  assert.equal(renderToStaticMarkup(UpsellValidationFeedback({state:{error:false,message:'Saved'}})), '');
 });
 test('existing upsell and nested related data expose Dates rather than Firestore prototypes',async()=>{
   class Timestamp {toDate(){return new Date('2026-09-07T10:00:00Z');}}
@@ -68,6 +85,14 @@ test('actual form prevents native reset, keeps Hellerup on failed submit and ret
   let prevented=0;
   const event={preventDefault:()=>{prevented++;}};
   const first=render();assert.equal(first.props.action,undefined);
+  const findFeedback=node=>{
+    if(!node || typeof node!=='object')return [];
+    if(Array.isArray(node))return node.flatMap(findFeedback);
+    return [...(node.type==='UpsellValidationFeedback'?[node]:[]),...findFeedback(node.props?.children)];
+  };
+  const mounted=findFeedback(first);
+  assert.equal(mounted.length,2,'form must mount both summary and inline feedback');
+  assert.ok(mounted.some(node=>node.props.field==='triggerConditions'));
   first.props.onSubmit(event);
   assert.equal(prevented,1);assert.deepEqual(draft.locationIds,['location-m3']);
   render().props.onSubmit(event);
