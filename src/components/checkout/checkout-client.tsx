@@ -388,12 +388,12 @@ function CheckoutForm({ location }: { location: Location }) {
   useEffect(() => {
     let cancelled = false;
     setNewsletterOffer(null);
-    if (!brand || !location || !deliveryType) {
+    if (!brand || !location || !deliveryType || !z.string().email().safeParse(newsletterEmail.trim()).success) {
       setNewsletterOffer(null);
       return;
     }
 
-    void getNewsletterSignupDiscountAction(
+    const timer = setTimeout(() => { void getNewsletterSignupDiscountAction(
       brand.id,
       location.id,
       subtotal,
@@ -403,10 +403,11 @@ function CheckoutForm({ location }: { location: Location }) {
       if (!cancelled) setNewsletterOffer(offer);
     }).catch(() => {
       if (!cancelled) setNewsletterOffer(null);
-    });
+    }); }, 500);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
   }, [brand, location, subtotal, deliveryType, newsletterEmail]);
 
