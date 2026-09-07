@@ -29,3 +29,10 @@ is duplicated, and validation failure clears Gemmer… while retaining form data
 Compare warm timings on landing/dashboard/upsells before and after release.
 
 Reference: https://nextjs.org/docs/15/app/api-reference/functions/use-link-status
+
+Requested sidebar cleanup in #53: remove Discount Validation and Offers/Combos
+Validation links, move Upsells from Catalog to Promotions, place People & Access
+directly before Billing, and remove Code Review, QA and UI Validation from System.
+Standard Discounts remains available. These are navigation changes only; the
+underlying routes are not deleted. Work QA should verify the group order and that
+opening Upsells directly expands Promotions and highlights its link.
