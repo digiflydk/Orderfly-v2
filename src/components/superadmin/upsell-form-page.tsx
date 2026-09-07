@@ -6,6 +6,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { useEffect, useMemo, useState, useTransition, useActionState } from 'react';
 import Link from 'next/link';
+import { UpsellValidationFeedback } from './upsell-validation-feedback';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2, PlusCircle, Trash2, Clock } from 'lucide-react';
@@ -294,6 +295,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 				startTransition(() => formAction(data));
 			}} className="space-y-6">
 				{upsell?.id && <input type="hidden" name="id" value={upsell.id} />}
+				<UpsellValidationFeedback state={state} />
 				<div className="flex items-center justify-between">
 					<div><h1 className="text-2xl font-bold tracking-tight">{title}</h1><p className="text-muted-foreground">{description}</p></div>
 					<div className="flex gap-2"><Button type="button" variant="outline" asChild><Link href="/superadmin/upsells">Cancel</Link></Button><SubmitButton isEditing={!!upsell} pending={isPending} /></div>
@@ -418,6 +420,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 						<Card>
 							<CardHeader><CardTitle>Trigger Conditions</CardTitle><CardDescription>Define when this upsell offer should be shown. The offer triggers if ANY of these conditions are met.</CardDescription></CardHeader>
 							<CardContent className="space-y-4">
+								<UpsellValidationFeedback state={state} field="triggerConditions" />
 								{triggerFields.map((field, index) => {
 									const triggerType = watch(`triggerConditions.${index}.type`);
 									return (
