@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { getActiveStripeSecretKey } from '@/lib/payments/settings';
+import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
 
 export async function POST(req: NextRequest) {
   try {

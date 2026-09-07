@@ -198,11 +198,6 @@ export function ConfirmationClient({ order, brand, location }: ConfirmationClien
                                         <span>- kr. {itemDiscountTotal.toFixed(2)}</span>
                                     </div>
                                 )}
-                                {order.loyalty && <div className="text-sm">
-                                    <p>Loyalty brugt: kr. {(order.loyalty.redeemedOre/100).toFixed(2)}</p>
-                                    <p>Loyalty optjening ved bekræftet betaling: kr. {(order.loyalty.earnedOre/100).toFixed(2)}</p>
-                                    <Link className="underline" href={`/${brand.slug}/loyalty`}>Se saldo og historik</Link>
-                                </div>}
                                 {cartDiscountTotal > 0 && (
                                     <div className="flex justify-between text-green-600">
                                         <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-4 w-4"/>{paymentDetails.cartDiscountName || 'Cart Discount'}</span>

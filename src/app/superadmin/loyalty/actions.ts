@@ -5,11 +5,8 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import type { LoyaltySettings } from '@/types';
-import { z } from 'zod';
-import { getAdminDb } from '@/lib/firebase-admin';
 
 import { scoreSettingsSchema as loyaltySettingsSchema } from '@/lib/loyalty/model';
-import { requireLoyaltyAdmin } from '@/lib/loyalty/identity';
 
 export type FormState = {
     message: string;
@@ -75,11 +72,9 @@ export async function getLoyaltySettingsState(): Promise<{settings:LoyaltySettin
 
 export async function updateLoyaltySettings(
   prevState: FormState,
-  formData: FormData,
-  token: string = ''
+  formData: FormData
 ): Promise<FormState> {
   
-  const actor = await requireLoyaltyAdmin(token);
   const rawData = {
     weights: {
         totalOrders: formData.get('weights.totalOrders'),
@@ -133,10 +128,7 @@ export async function updateLoyaltySettings(
   }
 
   try {
-    const adminDb = getAdminDb(), batch = adminDb.batch();
-    batch.set(adminDb.collection('platform_settings').doc('loyalty'), validatedFields.data);
-    batch.set(adminDb.collection('loyalty_audit').doc(), {actor:actor.uid,kind:'score_settings',settings:validatedFields.data,at:new Date().toISOString()});
-    await batch.commit();
+    await setDoc(doc(db, 'platform_settings', 'loyalty'), validatedFields.data);
     revalidatePath('/superadmin/loyalty');
     return { message: 'Loyalty settings updated successfully.', error: false };
   } catch (e) {

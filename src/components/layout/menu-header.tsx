@@ -42,7 +42,6 @@ export function MenuHeader({ brand }: MenuHeaderProps) {
             <span>{brand.name}</span>
           )}
         </Link>
-        <Link href={`/${brand.slug}/loyalty`} className="text-sm underline">Kundeklub</Link>
         <div className="hidden lg:flex items-center gap-2">
             <TimeSelector timeSlots={timeSlots} />
         </div>

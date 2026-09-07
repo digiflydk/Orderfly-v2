@@ -1,33 +1,32 @@
 import { createHash } from 'node:crypto';
-import { settleRewards } from '@/lib/loyalty/rewards';
-import { getAdminDb } from '@/lib/firebase-admin';
-import { type Transaction } from 'firebase-admin/firestore';
+import { db } from '@/lib/firebase';
+import { doc, runTransaction, type Transaction } from 'firebase/firestore';
 
 function refs(brandId: string, customerId: string, discountId: string | null) {
   const key = (parts: string[]) => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
   return {
-    customer: getAdminDb().collection('checkout_customer_capacity').doc(key([brandId, customerId])),
-    discount: discountId ? getAdminDb().collection('checkout_discount_capacity').doc(key([brandId, discountId])) : null,
-    pair: discountId ? getAdminDb().collection('checkout_customer_discount_capacity').doc(key([brandId, customerId, discountId])) : null,
+    customer: doc(db, 'checkout_customer_capacity', key([brandId, customerId])),
+    discount: discountId ? doc(db, 'checkout_discount_capacity', key([brandId, discountId])) : null,
+    pair: discountId ? doc(db, 'checkout_customer_discount_capacity', key([brandId, customerId, discountId])) : null,
   };
 }
 
 // Every document contains fixed-size counters, never a growing map of customers/orders.
 export async function reserveDiscount(orderId: string, discountId: string | null, customerId: string, brandId: string) {
-  return getAdminDb().runTransaction( async tx => {
-    const orderRef = getAdminDb().collection('orders').doc(orderId), customerRef = getAdminDb().collection('customers').doc(customerId);
+  return runTransaction(db, async tx => {
+    const orderRef = doc(db, 'orders', orderId), customerRef = doc(db, 'customers', customerId);
     const r = refs(brandId, customerId, discountId);
     const [orderSnap, customerSnap, discountSnap, cSnap, dSnap, pSnap] = await Promise.all([
-      tx.get(orderRef), tx.get(customerRef), discountId ? tx.get(getAdminDb().collection('discounts').doc(discountId)) : null,
+      tx.get(orderRef), tx.get(customerRef), discountId ? tx.get(doc(db, 'discounts', discountId)) : null,
       tx.get(r.customer), r.discount ? tx.get(r.discount) : null, r.pair ? tx.get(r.pair) : null,
     ]);
-    if (!orderSnap.exists || orderSnap.data()!.brandId !== brandId || orderSnap.data()!.customerDetails.id !== customerId || orderSnap.data()!.appliedDiscountId !== discountId) throw new Error('Reservation scope mismatch');
-    if (orderSnap.data()!.discountReservation === 'held') return;
-    if (orderSnap.data()!.discountReservation) throw new Error('Checkout reservation already finalized');
-    if (!customerSnap.exists || (discountId && !discountSnap?.exists)) throw new Error('Discount or customer no longer exists');
-    const customer = customerSnap.data()!, discount = discountSnap?.data();
+    if (!orderSnap.exists() || orderSnap.data().brandId !== brandId || orderSnap.data().customerDetails.id !== customerId || orderSnap.data().appliedDiscountId !== discountId) throw new Error('Reservation scope mismatch');
+    if (orderSnap.data().discountReservation === 'held') return;
+    if (orderSnap.data().discountReservation) throw new Error('Checkout reservation already finalized');
+    if (!customerSnap.exists() || (discountId && !discountSnap?.exists())) throw new Error('Discount or customer no longer exists');
+    const customer = customerSnap.data(), discount = discountSnap?.data();
     if (customer.brandId !== brandId || (discount && (discount.brandId !== brandId || !discount.isActive))) throw new Error('Discount no longer available');
-    const c = cSnap.data()! || {}, d = dSnap?.data() || {}, p = pSnap?.data() || {};
+    const c = cSnap.data() || {}, d = dSnap?.data() || {}, p = pSnap?.data() || {};
     const firstTime = !!discount?.firstTimeCustomerOnly;
     // A first-order session and ANY other session cannot coexist for this customer.
     if (c.firstTimeHeld || (firstTime && ((c.held || 0) > 0 || Math.max(c.paid || 0, customer.totalOrders || 0) > 0))) throw new Error('First-order promotion already used or reserved');
@@ -61,17 +60,14 @@ export async function prepareCapacitySettlement(tx: Transaction, order: any, pai
 }
 
 export async function releaseDiscount(orderId: string, brandId: string, sessionId?: string) {
-  const released = await getAdminDb().runTransaction( async tx => {
-    const orderRef = getAdminDb().collection('orders').doc(orderId), orderSnap = await tx.get(orderRef);
-    if (!orderSnap.exists) return;
-    const order = orderSnap.data()!;
+  await runTransaction(db, async tx => {
+    const orderRef = doc(db, 'orders', orderId), orderSnap = await tx.get(orderRef);
+    if (!orderSnap.exists()) return;
+    const order = orderSnap.data();
     if (order.brandId !== brandId || (sessionId && order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== sessionId)) throw new Error('Reservation scope mismatch');
-    if (order.paymentStatus === 'Paid') return false;
-    if (order.discountReservation !== 'held') return true;
+    if (order.paymentStatus === 'Paid' || order.discountReservation !== 'held') return;
     const settle = await prepareCapacitySettlement(tx, order, false);
     settle();
     tx.update(orderRef, { discountReservation: 'released' });
-    return true;
   });
-  if (released) await settleRewards(orderId,brandId,false);
 }

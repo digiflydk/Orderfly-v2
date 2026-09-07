@@ -2,16 +2,17 @@
 
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
-import { getAdminDb } from '@/lib/firebase-admin';
-import { getActiveStripeSecretKey } from '@/lib/payments/settings';
+import { doc, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
 import { releaseDiscount } from '@/lib/discount-reservations';
 
 export async function cancelCheckout(orderId: string, token: string): Promise<{ status: 'canceled' | 'paid' | 'error' }> {
   try {
     if (!/^ORD-[A-Za-z0-9-]+$/.test(orderId) || !/^[a-f0-9]{64}$/.test(token)) return { status: 'error' };
-    const snapshot = await getAdminDb().collection('orders').doc(orderId).get();
-    if (!snapshot.exists) return { status: 'error' };
-    const order = snapshot.data()!;
+    const snapshot = await getDoc(doc(db, 'orders', orderId));
+    if (!snapshot.exists()) return { status: 'error' };
+    const order = snapshot.data();
     if (createHash('sha256').update(token).digest('hex') !== order.cancelTokenHash) return { status: 'error' };
     if (order.paymentStatus === 'Paid') return { status: 'paid' };
     const sessionId = order.psp?.checkoutSessionId;

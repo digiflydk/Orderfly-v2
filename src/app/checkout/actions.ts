@@ -10,8 +10,8 @@ import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
 import { createHash, randomBytes } from 'node:crypto';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
-import { getAdminDb } from '@/lib/firebase-admin';
-import { FieldValue } from 'firebase-admin/firestore';
+import { db } from '@/lib/firebase';
+import { collection, doc, setDoc, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from 'firebase/firestore';
 import type { CartItem, Discount, OrderDetail, Brand, Location, CustomerInfo, Customer, StandardDiscount, Upsell, PaymentDetails, MinimalCartItem, Product, ComboMenu, Topping, ComboSelection, LoyaltySettings, AnonymousCookieConsent } from '@/types';
 import { getDiscountByCode, getDiscountById } from '@/app/superadmin/discounts/actions';
 import { bestAutomaticDiscount, isQuantityMethod, type OfferLine } from '@/lib/automatic-discounts';
@@ -19,10 +19,8 @@ import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
 import { getToppings } from '../superadmin/toppings/actions';
-import { verifiedCustomer } from '@/lib/loyalty/identity';
-import { getProgram, walletView, reserveRewards, settleRewards } from '@/lib/loyalty/rewards';
-import { rewardQuote,ore } from '@/lib/loyalty/model';
-import { getActiveStripeSecretKey } from '@/lib/payments/settings';
+import { getLoyaltySettings } from '../superadmin/loyalty/actions';
+import { getActiveStripeSecretKey } from '../superadmin/settings/actions';
 import { getOrigin } from '@/lib/url';
 import { generateOrderId } from '@/lib/order-id';
 import { getOrderById, getOrderByCheckoutSessionId as getOrderBySessionId } from './order-actions';
@@ -55,10 +53,10 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     const integrated = await findCheckoutCustomer(brandId, normalizedEmail);
     if (integrated) return { customerRef: integrated.ref, customerDoc: integrated, normalizedEmail };
 
-    const scopedRef = getAdminDb().collection('customers').doc(scopedCustomerId(brandId, normalizedEmail));
-    const scopedDoc = await scopedRef.get();
-    if (scopedDoc.exists) {
-        const scopedData = scopedDoc.data()! as Customer;
+    const scopedRef = doc(db, 'customers', scopedCustomerId(brandId, normalizedEmail));
+    const scopedDoc = await getDoc(scopedRef);
+    if (scopedDoc.exists()) {
+        const scopedData = scopedDoc.data() as Customer;
         if (scopedData.brandId !== brandId) {
             throw new Error('Customer identity scope conflict.');
         }
@@ -67,10 +65,10 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
 
     // Backward compatibility: older checkout customers used an email-only hash.
     // Reuse that native id only when the existing document belongs to this exact brand.
-    const legacyRef = getAdminDb().collection('customers').doc(`cust-${simpleHash(customerInfo.email)}`);
-    const legacyDoc = await legacyRef.get();
-    if (legacyDoc.exists) {
-        const legacyData = legacyDoc.data()! as Customer;
+    const legacyRef = doc(db, 'customers', `cust-${simpleHash(customerInfo.email)}`);
+    const legacyDoc = await getDoc(legacyRef);
+    if (legacyDoc.exists()) {
+        const legacyData = legacyDoc.data() as Customer;
         if (legacyData.brandId === brandId) {
             return { customerRef: legacyRef, customerDoc: legacyDoc, normalizedEmail };
         }
@@ -86,10 +84,10 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
         let cookieConsentData: Customer['cookie_consent'] | undefined = undefined;
 
         if (anonymousConsentId) {
-            const anonConsentRef = getAdminDb().collection('anonymous_cookie_consents').doc(anonymousConsentId);
-            const anonConsentSnap = await anonConsentRef.get();
-            if (anonConsentSnap.exists) {
-                const data = anonConsentSnap.data()! as AnonymousCookieConsent;
+            const anonConsentRef = doc(db, 'anonymous_cookie_consents', anonymousConsentId);
+            const anonConsentSnap = await getDoc(anonConsentRef);
+            if (anonConsentSnap.exists()) {
+                const data = anonConsentSnap.data() as AnonymousCookieConsent;
                 cookieConsentData = {
                     marketing: data.marketing,
                     statistics: data.statistics,
@@ -100,14 +98,12 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                     origin_brand: data.origin_brand,
                 };
                  // After fetching, mark the anonymous record as linked
-                await anonConsentRef.update({ linked_to_customer: true });
+                await updateDoc(anonConsentRef, { linked_to_customer: true });
             }
         }
 
-        await getAdminDb().runTransaction(async tx => {
-        const current = await tx.get(customerRef);
-        if (current.exists) {
-            const customerData = current.data()! as Customer;
+        if (customerDoc.exists()) {
+            const customerData = customerDoc.data() as Customer;
             if (customerData.brandId !== brandId) {
                 throw new Error('Customer identity scope conflict.');
             }
@@ -133,7 +129,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
             }
 
             if (newsletterDiscountId && !customerData.marketingConsent) updatedData.pendingNewsletterDiscountId = newsletterDiscountId;
-            tx.update(customerRef, omitUndefinedFields(updatedData));
+            await updateDoc(customerRef, omitUndefinedFields(updatedData));
         } else {
             const newCustomer: Customer & { normalizedEmail: string } = {
                 id: customerId,
@@ -157,10 +153,9 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 cookie_consent: cookieConsentData,
             };
             if (newsletterDiscountId) newCustomer.pendingNewsletterDiscountId = newsletterDiscountId;
-            tx.create(customerRef, omitUndefinedFields(newCustomer));
+            await setDoc(customerRef, omitUndefinedFields(newCustomer));
         }
         
-        });
         return customerId;
     } catch (e: any) {
         console.error("Customer creation/update failed:", e);
@@ -264,11 +259,12 @@ export async function getNewsletterSignupDiscountAction(
 ): Promise<NewsletterDiscountOffer | null> {
     if (!email || !email.includes('@')) return null;
     const resolved = await resolveCheckoutCustomerRef({ email } as CustomerInfo, brandId);
-    const customer = resolved.customerDoc.exists ? resolved.customerDoc.data()! as Customer : undefined;
-    const snapshot = await getAdminDb().collection('discounts').where('brandId', '==', brandId).get();
+    const customer = resolved.customerDoc.exists() ? resolved.customerDoc.data() as Customer : undefined;
+    const discountsQuery = query(collection(db, 'discounts'), where('brandId', '==', brandId));
+    const snapshot = await getDocs(discountsQuery);
 
     for (const discountDoc of snapshot.docs) {
-        const data = discountDoc.data()!;
+        const data = discountDoc.data();
         if (data.applicationType !== 'newsletter_signup') continue;
         const discount = {
             ...data,
@@ -320,11 +316,9 @@ export async function createStripeCheckoutSessionAction(
     brandSlug: string,
     locationSlug: string,
     deliveryTime?: string,
-    anonymousConsentId?: string,
-    loyaltyRequest?: { token: string; redeemOre: number }
+    anonymousConsentId?: string
 ): Promise<{ success: boolean; url?: string | null; error?: string }> {
   let reservedOrderId: string | undefined;
-  let rewardOrderId: string | undefined;
   let sessionRequestStarted = false;
   try {
     const stripeSecretKey = await getActiveStripeSecretKey();
@@ -342,14 +336,14 @@ export async function createStripeCheckoutSessionAction(
     if (!brand || !location || location.brandId !== brand.id) throw new Error("Brand or location not found in the requested tenant scope");
     
     const resolvedCustomer = await resolveCheckoutCustomerRef(customerInfo, brand.id);
-    const existingCustomer = resolvedCustomer.customerDoc.exists
-      ? resolvedCustomer.customerDoc.data()! as Customer
+    const existingCustomer = resolvedCustomer.customerDoc.exists()
+      ? resolvedCustomer.customerDoc.data() as Customer
       : null;
 
     const chargedItemsSubtotal = cartItems.reduce((sum, item) => {
       const lineTotal = toNumber(item.totalPrice);
       if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0 || lineTotal < 0) throw new Error('Invalid cart item quantity or total.');
-      return sum + Math.round(lineTotal*100)/100;
+      return sum + lineTotal;
     }, 0);
     const itemDiscountTotal = Math.max(0, toNumber(paymentDetails.subtotal) - chargedItemsSubtotal);
     const activeStandardDiscounts = await getActiveStandardDiscounts({
@@ -363,21 +357,21 @@ export async function createStripeCheckoutSessionAction(
     const resolvedLines = await Promise.all(cartItems.map(async item => {
       if (!item.id) throw new Error('Please refresh your basket before checking out.');
       let [productSnap, comboSnap] = await Promise.all([
-        getAdminDb().collection('products').doc(item.id).get(), getAdminDb().collection('comboMenus').doc(item.id).get(),
+        getDoc(doc(db, 'products', item.id)), getDoc(doc(db, 'comboMenus', item.id)),
       ]);
-      if (!productSnap.exists && !comboSnap.exists && item.id.endsWith('-offer')) {
-        productSnap = await getAdminDb().collection('products').doc(item.id.slice(0, -6)).get();
+      if (!productSnap.exists() && !comboSnap.exists() && item.id.endsWith('-offer')) {
+        productSnap = await getDoc(doc(db, 'products', item.id.slice(0, -6)));
       }
-      const catalog = productSnap.exists ? productSnap.data()! as Product : null;
-      const combo = comboSnap.exists ? comboSnap.data()! : null;
+      const catalog = productSnap.exists() ? productSnap.data() as Product : null;
+      const combo = comboSnap.exists() ? comboSnap.data() : null;
       const record = catalog || combo;
       if (!record || record.brandId !== brandId || (record.locationIds?.length && !record.locationIds.includes(locationId))) throw new Error('Basket item is unavailable at this restaurant.');
       return { productSnap, catalog, combo, price: combo
         ? (deliveryType === 'delivery' ? combo.deliveryPrice : combo.pickupPrice)
         : (deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price) };
     }));
-    const upsellRows = await getAdminDb().collection('upsells').where('brandId', '==', brandId).where('isActive', '==', true).get();
-    const upsells = upsellRows.docs.map(row => ({ ...row.data()!, id: row.id })) as Upsell[];
+    const upsellRows = await getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true)));
+    const upsells = upsellRows.docs.map(row => ({ ...row.data(), id: row.id })) as Upsell[];
     validateCheckoutPrices(cartItems, resolvedLines.map(({productSnap,catalog,combo,price},i) => ({
       id: catalog ? productSnap.id : cartItems[i].id!, categoryId: catalog?.categoryId, isCombo: !!combo, price,
       tags: catalog ? [...(catalog.isPopular ? ['Popular'] : []), ...(catalog.isFeatured ? ['Recommended'] : []), ...(catalog.isNew ? ['Campaign'] : [])] : [],
@@ -419,36 +413,26 @@ export async function createStripeCheckoutSessionAction(
     }
 
     const manualDiscountWins = selectedDiscountAmount > (automaticCartDiscount?.amount || 0);
-    let cartDiscountTotal = manualDiscountWins
+    const cartDiscountTotal = manualDiscountWins
       ? selectedDiscountAmount
       : (automaticCartDiscount?.amount || 0);
-    let cartDiscountName = manualDiscountWins
+    const cartDiscountName = manualDiscountWins
       ? (selectedDiscount?.applicationType === 'newsletter_signup' ? 'Newsletter signup' : selectedDiscount?.code)
       : automaticCartDiscount?.name;
     const appliedDiscountIdForOrder = manualDiscountWins ? selectedDiscount?.id || null : null;
-    cartDiscountTotal=Math.round(cartDiscountTotal*100)/100;
-
-    const rewardIdentity = loyaltyRequest ? await verifiedCustomer(loyaltyRequest.token,customerInfo.email) : null;
-    const rewardProgram = rewardIdentity ? await getProgram(brandId) : null;
-    const rewardWallet = rewardIdentity ? await walletView(brandId,rewardIdentity.uid) : null;
-    if (loyaltyRequest?.redeemOre && cartDiscountTotal>0) throw new Error('Loyalty kan ikke kombineres med en kurvrabat. Fjern rabatkoden eller brug din saldo næste gang.');
-    const rewardGoodsOre = ore(Math.max(0,chargedItemsSubtotal-cartDiscountTotal));
-    const reward = rewardProgram ? rewardQuote(rewardProgram,rewardWallet!.availableOre,rewardGoodsOre,loyaltyRequest!.redeemOre) : {redeemOre:0,earnOre:0};
-    if (reward.redeemOre) {cartDiscountTotal+=reward.redeemOre/100;cartDiscountName='Loyalty';}
 
     const hasFreeDelivery = deliveryType === 'delivery' && activeStandardDiscounts.some(discount =>
       discount.discountType === 'free_delivery' && chargedItemsSubtotal >= (discount.minOrderValue || 0)
     );
     const effectiveDeliveryFee = deliveryType === 'delivery' && !hasFreeDelivery
-      ? Math.round(Math.max(0, toNumber(location.deliveryFee))*100)/100
+      ? Math.max(0, toNumber(location.deliveryFee))
       : 0;
-    const effectiveBagFee = Math.round(Math.min(Math.max(0, toNumber(paymentDetails.bagFee)), Math.max(0, toNumber(brand.bagFee)))*100)/100;
+    const effectiveBagFee = Math.min(Math.max(0, toNumber(paymentDetails.bagFee)), Math.max(0, toNumber(brand.bagFee)));
     const subtotalAfterDiscount = Math.max(0, chargedItemsSubtotal - cartDiscountTotal);
-    const rawAdminFee = brand.adminFeeType === 'percentage'
+    const effectiveAdminFee = brand.adminFeeType === 'percentage'
       ? subtotalAfterDiscount * (Math.max(0, toNumber(brand.adminFee)) / 100)
       : Math.max(0, toNumber(brand.adminFee));
-    const effectiveAdminFee=Math.round(rawAdminFee*100)/100;
-    const totalAmount = Math.round((subtotalAfterDiscount + effectiveDeliveryFee + effectiveBagFee + effectiveAdminFee)*100)/100;
+    const totalAmount = subtotalAfterDiscount + effectiveDeliveryFee + effectiveBagFee + effectiveAdminFee;
     const serverPaymentDetails: Omit<PaymentDetails, 'paymentRefId'> = {
       ...paymentDetails,
       subtotal: toNumber(paymentDetails.subtotal),
@@ -467,22 +451,17 @@ export async function createStripeCheckoutSessionAction(
     // Step 1: Pre-create order with 'Pending' status
     const orderId = generateOrderId();
     const cancelToken = randomBytes(32).toString('hex');
-    const orderRef = getAdminDb().collection('orders').doc(orderId);
+    const orderRef = doc(db, 'orders', orderId);
 
-    if (rewardIdentity && rewardProgram?.enabled) {
-      await reserveRewards(orderId,brandId,rewardIdentity.uid,reward.redeemOre,rewardGoodsOre,ore(totalAmount)+reward.redeemOre,rewardProgram);
-      rewardOrderId=orderId;
-    }
-    await orderRef.create(omitUndefinedFields({
+    await setDoc(orderRef, omitUndefinedFields({
         id: orderId,
-        createdAt: FieldValue.serverTimestamp(),
+        createdAt: serverTimestamp(),
         status: 'Received',
         paymentStatus: 'Pending',
         brandId,
         locationId,
-        productItems: cartItems.map(item=>({...item,totalPrice:Math.round(item.totalPrice*100)/100})),
+        productItems: cartItems,
         totalAmount,
-        loyalty: rewardIdentity && rewardProgram?.enabled ? {redeemedOre:reward.redeemOre,earnedOre:reward.earnOre} : null,
         paymentDetails: serverPaymentDetails,
         appliedDiscountId: appliedDiscountIdForOrder,
         cancelTokenHash: createHash('sha256').update(cancelToken).digest('hex'),
@@ -511,10 +490,10 @@ export async function createStripeCheckoutSessionAction(
         return {
             price_data: {
                 currency: 'dkk',
-                product_data: { name: `${item.quantity} × ${item.name}`, description: item.toppings?.join(', ') || undefined },
-                unit_amount: Math.round(item.totalPrice * 100),
+                product_data: { name: item.name, description: item.toppings?.join(', ') || undefined },
+                unit_amount: Math.round((item.totalPrice / item.quantity) * 100),
             },
-            quantity: 1,
+            quantity: item.quantity,
         };
     });
 
@@ -574,9 +553,9 @@ export async function createStripeCheckoutSessionAction(
     const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: orderId });
     
     // Step 3: Patch order with session ID
-    await orderRef.update({
+    await updateDoc(orderRef, {
         'psp.checkoutSessionId': session.id,
-        updatedAt: FieldValue.serverTimestamp(),
+        updatedAt: serverTimestamp(),
     });
 
     return { success: true, url: session.url };
@@ -584,10 +563,7 @@ export async function createStripeCheckoutSessionAction(
   } catch (e: any) {
     // Once a request may have reached Stripe, keep the hold until a signed expiration
     // event. A timeout is not proof that a payable session was not created.
-    if (!sessionRequestStarted) {
-      if (reservedOrderId) await releaseDiscount(reservedOrderId, brandId);
-      if (rewardOrderId) await settleRewards(rewardOrderId,brandId,false);
-    }
+    if (reservedOrderId && !sessionRequestStarted) await releaseDiscount(reservedOrderId, brandId);
     console.error("Failed to create Stripe checkout session:", e);
     const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
     return { success: false, error: errorMessage };
@@ -619,7 +595,7 @@ export async function validateDiscountAction(
             subscribeToNewsletter: false,
         }, brandId);
         customerId = resolved.customerRef.id;
-        customer = resolved.customerDoc.exists ? resolved.customerDoc.data()! as Customer : null;
+        customer = resolved.customerDoc.exists() ? resolved.customerDoc.data() as Customer : null;
     }
 
     if ((discount.firstTimeCustomerOnly || discount.assignedToCustomerId || discount.perCustomerLimit > 0) && !customerId) {

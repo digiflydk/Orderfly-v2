@@ -3,13 +3,11 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import { getAdminDb } from '@/lib/firebase-admin';
-import { requireFinancialAdmin } from '@/lib/loyalty/admin-session';
-import { collection, getDocs, query, Timestamp, doc, getDoc, where } from 'firebase/firestore';
-import type { Customer, OrderDetail, LoyaltySettings, Feedback } from '@/types';
+import { collection, getDocs, query, Timestamp, doc, setDoc, updateDoc, deleteDoc, getDoc, where } from 'firebase/firestore';
+import type { Customer, OrderDetail, Feedback } from '@/types';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
-import { customerMetrics,asDate } from '@/lib/loyalty/model';
+import { customerMetrics,asDate,qualifyingOrders } from '@/lib/loyalty/model';
 import { getLoyaltySettings } from '../loyalty/actions';
 
 
@@ -32,7 +30,7 @@ export async function createOrUpdateCustomer(
   formData: FormData
 ): Promise<FormState> {
     const rawData = {
-        id: formData.get('id') as string | undefined,
+        id: formData.get('id') || undefined,
         fullName: formData.get('fullName'),
         email: formData.get('email'),
         phone: formData.get('phone'),
@@ -66,26 +64,25 @@ export async function createOrUpdateCustomer(
     const docId = id || doc(collection(db, 'customers')).id;
 
     try {
-        await requireFinancialAdmin();
-        const customerRef = getAdminDb().collection('customers').doc(docId);
+        const customerRef = doc(db, 'customers', docId);
         
         if (id) {
-             await customerRef.update(customerData);
+             await updateDoc(customerRef, customerData);
         } else {
             const brandId = z.string().min(1).max(150).refine(value => !value.includes('/')).parse(formData.get('brandId'));
-            if (!(await getAdminDb().collection('brands').doc(brandId).get()).exists) throw new Error('Select an existing brand.');
+            if (!(await getDoc(doc(db, 'brands', brandId))).exists()) throw new Error('Select an existing brand.');
             const newCustomerData = {
                 ...customerData,
                 id: docId,
                 brandId,
-                createdAt: new Date(),
+                createdAt: Timestamp.now(),
                 totalOrders: 0,
                 totalSpend: 0,
                 locationIds: [],
                 loyaltyScore: 0,
                 loyaltyClassification: 'New',
             }
-            await customerRef.create(newCustomerData);
+            await setDoc(customerRef, newCustomerData);
         }
 
         return { message: `Customer ${id ? 'updated' : 'created'} successfully.`, error: false };
@@ -97,8 +94,7 @@ export async function createOrUpdateCustomer(
 
 export async function deleteCustomer(customerId: string) {
     try {
-        await requireFinancialAdmin();
-        await getAdminDb().collection('customers').doc(customerId).delete();
+        await deleteDoc(doc(db, "customers", customerId));
         revalidatePath("/superadmin/customers");
         return { message: "Customer deleted successfully.", error: false };
     } catch (e) {
@@ -126,7 +122,7 @@ export async function getCustomers(): Promise<Customer[]> {
       }
       acc[customerId].push(order);
       return acc;
-  }, {} as Record<string, OrderDetail[]>);
+  }, Object.create(null) as Record<string, OrderDetail[]>);
 
   const customers = customerSnapshot.docs.map(doc => {
       const data = doc.data() as Omit<Customer, 'id' | 'createdAt' | 'lastOrderDate'> & { createdAt: Timestamp, lastOrderDate?: Timestamp, cookie_consent?: any };
@@ -134,13 +130,13 @@ export async function getCustomers(): Promise<Customer[]> {
 
       // Convert all timestamps to serializable format
       const customerForCalc: Customer = {
-          id: doc.id,
           ...data,
+          id: doc.id,
           createdAt: asDate(data.createdAt) || new Date(0),
           lastOrderDate: asDate(data.lastOrderDate) || undefined,
           cookie_consent: data.cookie_consent ? {
             ...data.cookie_consent,
-            timestamp: (data.cookie_consent.timestamp as Timestamp).toDate(),
+            timestamp: asDate(data.cookie_consent.timestamp) || new Date(0),
           } : undefined,
       } as Customer;
       
@@ -184,7 +180,7 @@ export async function getCustomerDetails(customerId: string): Promise<{
       lastOrderDate: asDate(customerData.lastOrderDate) || undefined,
       cookie_consent: customerData.cookie_consent ? {
         ...customerData.cookie_consent,
-        timestamp: (customerData.cookie_consent.timestamp as Timestamp).toDate(),
+        timestamp: asDate(customerData.cookie_consent.timestamp) || new Date(0),
       } : undefined,
     };
 
@@ -198,6 +194,7 @@ export async function getCustomerDetails(customerId: string): Promise<{
     );
     
     const ordersSnapshot = await getDocs(ordersQuery);
+    const sourceOrders = ordersSnapshot.docs.map(snapshot => snapshot.data() as OrderDetail);
     const allOrders = ordersSnapshot.docs.map(doc => {
         const data = doc.data();
         return {
@@ -207,16 +204,17 @@ export async function getCustomerDetails(customerId: string): Promise<{
         } as OrderDetail;
     }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort in-memory
         
-    const deliveryOrdersCount = allOrders.filter(o => o.deliveryType === 'Delivery').length;
-    const pickupOrdersCount = allOrders.filter(o => o.deliveryType === 'Pickup').length;
+    const paidOrders = qualifyingOrders(allOrders);
+    const deliveryOrdersCount = paidOrders.filter(o => o.deliveryType === 'Delivery').length;
+    const pickupOrdersCount = paidOrders.filter(o => o.deliveryType === 'Pickup').length;
     
     // Simplified retention rate
     
     const loyaltySettings = await getLoyaltySettings();
-    const metrics = customerMetrics(allOrders.filter(o=>o.brandId===customer.brandId), loyaltySettings);
+    const metrics = customerMetrics(sourceOrders.filter(o=>o.brandId===customer.brandId), loyaltySettings);
     const retentionRate = metrics.totalOrders > 1 ? 100 : 0;
     // Fetch feedback data
-    const feedbackQuery = query(collection(db, 'feedback'), where('customerId', '==', decodedCustomerId));
+    const feedbackQuery = query(collection(db, 'feedback'), where('customerId', '==', decodedCustomerId), where('brandId', '==', customer.brandId));
     const feedbackSnapshot = await getDocs(feedbackQuery);
     const feedbackEntries = feedbackSnapshot.docs.map(doc => {
       const data = doc.data();

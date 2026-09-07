@@ -13,7 +13,7 @@ import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
 import { getToppings } from '@/app/superadmin/toppings/actions';
 import { getLoyaltySettings } from '@/app/superadmin/loyalty/actions';
-import { getActiveStripeSecretKey } from '@/lib/payments/settings';
+import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
 import { getOrigin } from '@/lib/url';
 import { generateOrderId } from '@/lib/order-id';
 import { getOrderById, getOrderByCheckoutSessionId as getOrderBySessionId } from './order-actions';

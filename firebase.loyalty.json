@@ -1,9 +1,0 @@
-{
-  "firestore": { "rules": "firestore.loyalty.rules" },
-  "emulators": {
-    "firestore": { "port": 8088 },
-    "auth": { "port": 9098 },
-    "ui": { "enabled": false },
-    "singleProjectMode": true
-  }
-}

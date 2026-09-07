@@ -11,8 +11,6 @@ export const revalidate = 0;
 import { SuperAdminLayoutClient } from '@/components/superadmin/superadmin-layout-client';
 import { getPlatformBrandingSettings } from './settings/queries';
 import { hasPermission } from '@/lib/permissions';
-import { FinancialAdminAccess } from '@/components/loyalty/admin-access';
-import { financialAdminSession } from '@/lib/loyalty/admin-session';
 import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
 
 export default async function SuperadminLayout({
@@ -20,7 +18,6 @@ export default async function SuperadminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const financialAdmin = await financialAdminSession();
   // Hent branding – fail-sikkert
   let brandingSettings: Awaited<ReturnType<typeof getPlatformBrandingSettings>> | null = null;
   try {
@@ -42,7 +39,6 @@ export default async function SuperadminLayout({
 
   return (
     <SuperAdminLayoutClient brandingSettings={brandingSettings}>
-      <FinancialAdminAccess active={!!financialAdmin} />
       {children}
     </SuperAdminLayoutClient>
   );
