@@ -33,7 +33,7 @@ function CancelMessage() {
                     {status === 'loading' ? 'Canceling payment…' : status === 'canceled' ? 'Payment Canceled' : status === 'paid' ? 'Payment completed' : 'Cancellation not confirmed'}
                 </CardTitle>
                 <CardDescription>
-                    {status === 'loading' ? 'Please wait while we confirm with the payment provider.' : status === 'canceled' ? 'The payment session is closed. Any discount reservation is released and your cart is saved.' : status === 'paid' ? 'Your payment has completed. Do not pay again.' : 'We could not confirm cancellation. Your discount may still be reserved. Please retry.'}
+                    {status === 'loading' ? 'Please wait while we confirm with the payment provider.' : status === 'canceled' ? 'The payment session is closed and any discount reservation is released. Return to checkout to review your saved basket, current prices and available times. Enter your discount code again if needed.' : status === 'paid' ? 'Your payment has completed. Do not pay again.' : 'We could not confirm cancellation. Your discount may still be reserved. Please retry.'}
                 </CardDescription>
             </CardHeader>
             <CardContent>

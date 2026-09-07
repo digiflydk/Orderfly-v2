@@ -1,6 +1,7 @@
 'use client';
 
 import { z } from 'zod';
+import { optionalImageUrl } from '@/lib/optional-image-url';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useEffect, useMemo, useState, useTransition } from 'react';
@@ -116,11 +117,7 @@ const comboMenuSchema = z
       .string()
       .min(2, 'Combo name must be at least 2 characters.'),
     description: z.string().optional(),
-    imageUrl: z
-      .string()
-      .url({ message: 'Please enter a valid URL.' })
-      .optional()
-      .nullable(),
+    imageUrl: optionalImageUrl,
     pickupPrice: z
       .coerce
       .number()

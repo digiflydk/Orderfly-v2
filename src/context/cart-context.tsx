@@ -1,14 +1,18 @@
 
 'use client';
 
-import { createContext, useContext, useState, ReactNode, useCallback, useMemo, useEffect } from 'react';
+import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { Product, CartItemTopping, Brand, Location, ComboMenu, ComboSelection, Discount, StandardDiscount, CartItem, ProductForMenu } from '@/types';
-import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
+import { restoreCartAction } from '@/app/cart-actions';
+import { CART_STORAGE_KEY, cartChoices, readCartSnapshot, requestedDelivery, type CartSnapshot } from '@/lib/cart-snapshot';
 import Cookies from 'js-cookie';
 import { bestAutomaticDiscount } from '@/lib/automatic-discounts';
 import { isLockedItem } from '@/lib/cart-utils';
 
 interface CartContextType {
+  cartReady: boolean;
+  saveCartForCheckout: (orderId: string) => void;
+  completeCheckout: (orderId: string, brandId: string, locationId: string) => void;
   cartItems: CartItem[];
   brand: Brand | null;
   location: Location | null;
@@ -57,32 +61,45 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [standardDiscounts, setStandardDiscounts] = useState<StandardDiscount[]>([]);
   const [isInitialized, setIsInitialized] = useState(false);
   const [includeBagFee, setIncludeBagFee] = useState(true);
+  const snapshotRef = useRef<CartSnapshot | null>(null);
+  const checkoutOrderId = useRef<string>();
+  const scopeRef = useRef('');
+  const readyRef = useRef(false);
+  const generation = useRef(0);
+  const [readyKey, setReadyKey] = useState<string | null>(null);
+  const [restoreError, setRestoreError] = useState(false);
+  const [cartNotice, setCartNotice] = useState('');
+  const [retry, setRetry] = useState(0);
+  const contextKey = brand && location && deliveryType ? `${brand.id}/${location.id}/${deliveryType}` : '';
+  const cartReady = !!contextKey && readyKey === contextKey;
+  const current = useRef({ cartItems, brand, location, deliveryType, includeBagFee });
+  current.current = { cartItems, brand, location, deliveryType, includeBagFee };
 
-  // States for calculated values
-  const [subtotal, setSubtotal] = useState(0);
-  const [itemCount, setItemCount] = useState(0);
-  const [itemDiscount, setItemDiscount] = useState(0);
-  const [automaticCartDiscount, setAutomaticCartDiscount] = useState<{ name: string; amount: number } | null>(null);
-  const [voucherDiscount, setVoucherDiscount] = useState<{ name: string; amount: number } | null>(null);
-  const [deliveryFee, setDeliveryFee] = useState(0);
-  const [freeDeliveryDiscountApplied, setFreeDeliveryDiscountApplied] = useState(false);
-  const [bagFee, setBagFee] = useState(0);
-  const [adminFee, setAdminFee] = useState(0);
-  const [cartTotal, setCartTotal] = useState(0);
-  const [checkoutTotal, setCheckoutTotal] = useState(0);
-  const [vatAmount, setVatAmount] = useState(0);
-  const [finalDiscount, setFinalDiscount] = useState<{ name: string; amount: number } | null>(null);
-
+  const persist = useCallback(() => {
+    if (!readyRef.current) return;
+    const state = current.current;
+    if (!state.brand || !state.location || !state.deliveryType) return;
+    const snapshot: CartSnapshot = {
+      version: 1, brandId: state.brand.id, locationId: state.location.id,
+      deliveryType: state.deliveryType, includeBagFee: state.includeBagFee,
+      choices: cartChoices(state.cartItems), savedAt: Date.now(),
+      ...(checkoutOrderId.current ? { checkoutOrderId: checkoutOrderId.current } : {}),
+    };
+    snapshotRef.current = snapshot;
+    try {
+      if (snapshot.choices.length) localStorage.setItem(CART_STORAGE_KEY, JSON.stringify(snapshot));
+      else localStorage.removeItem(CART_STORAGE_KEY);
+    } catch {
+      setCartNotice('Browseren kan ikke gemme kurven. Den kan derfor gå tabt, hvis du forlader siden.');
+    }
+  }, []);
 
   useEffect(() => {
-    const requestedDeliveryMethod = new URLSearchParams(window.location.search).get('deliveryMethod');
-    const deliveryMethodFromUrl =
-      requestedDeliveryMethod === 'delivery' || requestedDeliveryMethod === 'pickup'
-        ? requestedDeliveryMethod
-        : null;
+    const deliveryMethodFromUrl = requestedDelivery(window.location.search);
 
     let savedDeliveryMethod: 'delivery' | 'pickup' | null = null;
     try {
+      snapshotRef.current = readCartSnapshot(localStorage);
       const savedValue = localStorage.getItem('deliveryMethod');
       if (savedValue === 'delivery' || savedValue === 'pickup') {
         savedDeliveryMethod = savedValue;
@@ -91,7 +108,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       // Browser storage can be unavailable. The URL remains authoritative.
     }
 
-    const initialDeliveryMethod = deliveryMethodFromUrl ?? savedDeliveryMethod;
+    const initialDeliveryMethod = deliveryMethodFromUrl ?? snapshotRef.current?.deliveryType ?? savedDeliveryMethod ?? 'pickup';
     if (initialDeliveryMethod) {
       setDeliveryTypeState(initialDeliveryMethod);
     }
@@ -111,46 +128,91 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const setDeliveryType = (type: 'delivery' | 'pickup') => {
+    if (current.current.deliveryType === type) return;
+    persist();
+    generation.current++;
+    readyRef.current = false;
+    setReadyKey(null);
     try {
       localStorage.setItem('deliveryMethod', type);
     } catch {
       // Keep the in-memory selection when browser storage is unavailable.
     }
     setDeliveryTypeState(type);
+    setAppliedDiscount(null);
     setSelectedTime('asap');
   };
   
   const setCartContext = useCallback((newBrand: Brand, newLocation: Location) => {
-    if (brand && location && (brand.id !== newBrand.id || location.id !== newLocation.id)) {
-        setCartItems([]);
-        setIncludeBagFee(true);
-    }
+    const key = `${newBrand.id}/${newLocation.id}`;
+    if (scopeRef.current === key) return;
+    scopeRef.current = key;
+    generation.current++;
+    readyRef.current = false;
+    setReadyKey(null);
+    setAppliedDiscount(null);
+    setCartItems([]);
+    setStandardDiscounts([]);
+    setIncludeBagFee(true);
+    setSelectedTime('asap');
     setBrand(newBrand);
     setLocation(newLocation);
     Cookies.set('of_location', newLocation.slug, { expires: 1/48, path: '/', sameSite: 'Lax' });
-  }, [brand, location]);
+  }, []);
 
   const recalculateAndValidateDiscount = useCallback(() => {
-    // This is now handled by the main useEffect below.
+    // Totals are derived synchronously below.
     // The function is kept for API compatibility but can be removed later if unused.
   }, []);
 
 
   useEffect(() => {
-    async function fetchDiscounts() {
-      if (isInitialized && brand && location && deliveryType) {
-        const activeDiscounts = await getActiveStandardDiscounts({
-          brandId: brand.id,
-          locationId: location.id,
-          deliveryType,
-        });
-        setStandardDiscounts(activeDiscounts);
-      }
-    }
-    fetchDiscounts();
-  }, [deliveryType, brand, location, isInitialized]);
-  
+    if (!isInitialized || !brand || !location || !deliveryType) return;
+    const request = ++generation.current;
+    readyRef.current = false;
+    setReadyKey(null);
+    setRestoreError(false);
+    const saved = snapshotRef.current;
+    const matching = saved?.brandId === brand.id && saved.locationId === location.id ? saved : null;
+    restoreCartAction({ brandId: brand.id, locationId: location.id, deliveryType, choices: matching?.choices || [] })
+      .then(result => {
+        if (generation.current !== request) return;
+        setCartItems(result.items);
+        setStandardDiscounts(result.discounts);
+        setIncludeBagFee(matching?.includeBagFee ?? true);
+        checkoutOrderId.current = matching?.checkoutOrderId;
+        setCartNotice(result.removed ? 'Nogle varer eller tilvalg er ikke længere tilgængelige og er fjernet. Kontrollér kurven før betaling.' : '');
+        readyRef.current = true;
+        setReadyKey(contextKey);
+      }).catch(() => {
+        if (generation.current === request) setRestoreError(true);
+      });
+    return () => { generation.current++; };
+  }, [brand?.id, location?.id, deliveryType, isInitialized, retry]);
+
   useEffect(() => {
+    if (cartReady) persist();
+  }, [cartItems, includeBagFee, cartReady, persist]);
+
+  const saveCartForCheckout = useCallback((orderId: string) => {
+    checkoutOrderId.current = orderId;
+    persist(); // Flush before leaving the application for Stripe.
+  }, [persist]);
+
+  const completeCheckout = useCallback((orderId: string, brandId: string, locationId: string) => {
+    let saved = snapshotRef.current;
+    try { saved = readCartSnapshot(localStorage); } catch { /* In-memory fallback. */ }
+    if (saved?.checkoutOrderId !== orderId || saved.brandId !== brandId || saved.locationId !== locationId) return;
+    generation.current++;
+    snapshotRef.current = null;
+    checkoutOrderId.current = undefined;
+    try { localStorage.removeItem(CART_STORAGE_KEY); } catch { /* Browser storage is unavailable. */ }
+    setCartItems([]);
+    setAppliedDiscount(null);
+    setIncludeBagFee(true);
+  }, []);
+
+  const { subtotal, itemCount, itemDiscount, automaticCartDiscount, voucherDiscount, deliveryFee, freeDeliveryDiscountApplied, bagFee, adminFee, cartTotal, checkoutTotal, vatAmount, finalDiscount } = useMemo(() => {
     const currentItemCount = cartItems.reduce((count, item) => count + item.quantity, 0);
     const currentSubtotal = cartItems.reduce((total, item) => {
         const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
@@ -219,31 +281,28 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const calculatedCheckoutTotal = calculatedCartTotal + (isFreeDelivery ? 0 : currentDeliveryFee) + currentBagFee + currentAdminFee;
     const vatRate = brand?.vatPercentage || 25;
     
-    setSubtotal(currentSubtotal);
-    setItemCount(currentItemCount);
-    setItemDiscount(currentItemDiscount);
-    setAutomaticCartDiscount(finalCartDiscount);
-    setVoucherDiscount(finalVoucherDiscount);
-    setDeliveryFee(currentDeliveryFee);
-    setFreeDeliveryDiscountApplied(isFreeDelivery);
-    setBagFee(currentBagFee);
-    setAdminFee(currentAdminFee);
-    setCartTotal(Math.max(0, calculatedCartTotal));
-    setCheckoutTotal(Math.max(0, calculatedCheckoutTotal));
-    setVatAmount((calculatedCheckoutTotal * vatRate) / (100 + vatRate));
-
     const allDiscountNames = [
         ...(currentItemDiscount > 0 ? ['Item Offers'] : []),
         ...(finalCartDiscount ? [finalCartDiscount.name] : []),
         ...(finalVoucherDiscount ? [`Code: ${finalVoucherDiscount.name}`] : []),
         ...(isFreeDelivery ? ['Free Delivery'] : []),
     ];
-    setFinalDiscount(allDiscountNames.length > 0 ? { name: allDiscountNames.join(' + '), amount: itemDiscount + totalCartLevelDiscount + (isFreeDelivery ? currentDeliveryFee : 0) } : null);
+    return {
+      subtotal: currentSubtotal, itemCount: currentItemCount, itemDiscount: currentItemDiscount,
+      automaticCartDiscount: finalCartDiscount, voucherDiscount: finalVoucherDiscount,
+      deliveryFee: currentDeliveryFee, freeDeliveryDiscountApplied: isFreeDelivery,
+      bagFee: currentBagFee, adminFee: currentAdminFee,
+      cartTotal: Math.max(0, calculatedCartTotal), checkoutTotal: Math.max(0, calculatedCheckoutTotal),
+      vatAmount: (calculatedCheckoutTotal * vatRate) / (100 + vatRate),
+      finalDiscount: allDiscountNames.length > 0 ? { name: allDiscountNames.join(' + '), amount: currentItemDiscount + totalCartLevelDiscount + (isFreeDelivery ? currentDeliveryFee : 0) } : null,
+    };
 
   }, [cartItems, appliedDiscount, standardDiscounts, deliveryType, location, isInitialized, brand, includeBagFee]);
 
 
   const addToCart = useCallback((product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number) => {
+    if (!readyRef.current) return;
+    checkoutOrderId.current = undefined;
     const sortedToppings = [...toppings].sort((a, b) => a.name.localeCompare(b.name));
     const toppingsKey = sortedToppings.map(t => `${t.name}:${t.price}`).join(',');
     const existingItemKey = `${product.id}-${toppingsKey}`;
@@ -287,6 +346,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const addComboToCart = useCallback((combo: ComboMenu, quantity: number, selections: ComboSelection[], price: number) => {
+      if (!readyRef.current) return;
+      checkoutOrderId.current = undefined;
       const newCartItem: CartItem = {
           id: combo.id,
           cartItemId: `${combo.id}-${Date.now()}`,
@@ -306,10 +367,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
   
   const removeFromCart = useCallback((cartItemId: string) => {
+    if (!readyRef.current) return;
+    checkoutOrderId.current = undefined;
     setCartItems(prevItems => prevItems.filter(item => item.cartItemId !== cartItemId));
   }, []);
 
   const updateQuantity = useCallback((cartItemId: string, newQuantity: number) => {
+    if (!readyRef.current) return;
+    checkoutOrderId.current = undefined;
     if (newQuantity <= 0) {
       removeFromCart(cartItemId);
     } else {
@@ -322,6 +387,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [removeFromCart]);
 
   const clearCart = useCallback(() => {
+    if (!readyRef.current) return;
+    generation.current++;
+    snapshotRef.current = null;
+    checkoutOrderId.current = undefined;
+    try { localStorage.removeItem(CART_STORAGE_KEY); } catch { /* In-memory cart still clears. */ }
     setCartItems([]);
     setAppliedDiscount(null);
     setIncludeBagFee(true);
@@ -336,6 +406,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const value = {
+    cartReady,
+    saveCartForCheckout,
+    completeCheckout,
     cartItems,
     brand,
     location,
@@ -371,7 +444,18 @@ export function CartProvider({ children }: { children: ReactNode }) {
     finalDiscount,
   };
 
-  return <CartContext.Provider value={value}>{children}</CartContext.Provider>;
+  return <CartContext.Provider value={value}>
+    {children}
+    {contextKey && !cartReady && <div className="fixed inset-0 z-[100] flex items-center justify-center bg-background/90 p-6" role="status" aria-live="polite">
+      {restoreError ? <div className="text-center">
+        <p>Kurven kunne ikke indlæses. Prøv igen for at hente aktuelle priser.</p>
+        <button className="mt-4 rounded bg-primary px-4 py-2 text-primary-foreground" onClick={() => setRetry(value => value + 1)}>Prøv igen</button>
+      </div> : <p>Indlæser kurv og aktuelle priser…</p>}
+    </div>}
+    {cartReady && cartNotice && <div role="status" className="fixed bottom-4 left-4 right-4 z-[90] rounded border bg-background p-4 shadow-lg">
+      {cartNotice}<button className="ml-4 underline" onClick={() => setCartNotice('')}>Luk</button>
+    </div>}
+  </CartContext.Provider>;
 }
 
 export function useCart() {
