@@ -4,7 +4,7 @@ import { getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
 import BrandPageClient from "./BrandPageClient";
 import { getActiveCombosForLocation } from "@/app/superadmin/combos/actions";
-import { getActiveStandardDiscounts } from "@/app/superadmin/standard-discounts/actions";
+import { getStorefrontDiscounts as getActiveStandardDiscounts } from '@/app/storefront-actions';
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams } from "@/lib/next/resolve-props";
 import type { MenuData } from "@/types/menu";
@@ -90,8 +90,11 @@ function normalizeProbe(raw: any) {
 
 export default async function Page({
   params,
+  searchParams,
 }: AsyncPageProps<BrandLocationParams>) {
   const { brandSlug, locationSlug } = await resolveParams(params);
+  const query = await searchParams;
+  const initialDeliveryType = query?.deliveryMethod === 'delivery' ? 'delivery' : 'pickup';
 
   try {
     const raw = await getBrandAndLocation(brandSlug, locationSlug);
@@ -118,7 +121,7 @@ export default async function Page({
       getActiveStandardDiscounts({
         brandId: brand.id,
         locationId: location.id,
-        deliveryType: "pickup",
+        deliveryType: initialDeliveryType,
       }),
     ]);
 
@@ -135,6 +138,7 @@ export default async function Page({
 
     return (
       <BrandPageClient
+        initialDeliveryType={initialDeliveryType}
         brand={brand}
         location={location}
         menu={menu}

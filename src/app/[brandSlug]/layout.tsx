@@ -1,12 +1,12 @@
 
 import { notFound } from 'next/navigation';
-import { getBrandBySlug } from '@/app/superadmin/brands/actions';
+import { getBrandBySlug } from '@/lib/data/brand-location';
 import { CartProvider } from '@/context/cart-context';
 import { AnalyticsProvider } from '@/context/analytics-context';
 import DeliveryModalHost from './deliverymodalhost';
 import { resolveParams } from '@/lib/next/resolve-props';
 import { BrandLayoutClient } from './layout-client';
-import { getGeneralSettings } from '@/services/settings';
+import { getStorefrontSettings as getGeneralSettings } from '@/services/settings';
 import { isAdminReady } from '@/lib/runtime';
 
 export default async function BrandLayout({
@@ -27,8 +27,7 @@ export default async function BrandLayout({
   }
   
   // Fetch data on the server. The client component will handle nulls gracefully.
-  const brand = await getBrandBySlug(brandSlug);
-  const settings = await getGeneralSettings();
+  const [brand, settings] = await Promise.all([getBrandBySlug(brandSlug), getGeneralSettings()]);
   
   if (!brand) {
     notFound();

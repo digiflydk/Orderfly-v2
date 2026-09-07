@@ -2,12 +2,18 @@
 'use server';
 
 import { getAdminDb } from "@/lib/firebase-admin";
+import { cache } from 'react';
+import { unstable_cache } from 'next/cache';
+import { storefrontMedia } from '@/lib/storefront-media';
 import type { Brand, Location } from "@/types";
 
 export type BrandDoc = Brand | null;
 export type LocationDoc = Location | null;
 
 export async function getBrandBySlug(slug: string): Promise<BrandDoc> {
+  return cachedBrand(slug);
+}
+const cachedBrand = cache(unstable_cache(async (slug: string): Promise<BrandDoc> => {
   if (!slug) return null;
   const db = getAdminDb();
   try {
@@ -15,12 +21,12 @@ export async function getBrandBySlug(slug: string): Promise<BrandDoc> {
     const snap = await q.get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
-    return { id: doc.id, ...doc.data() } as Brand;
+    return storefrontMedia({ id: doc.id, ...doc.data() } as Brand, 'brands', doc.id);
   } catch (err) {
       console.error(`[data.getBrandBySlug] Failed to fetch brand by slug '${slug}':`, err);
-      return null;
+      throw err;
   }
-}
+}, ['storefront-brand-v1'], {revalidate:60,tags:['storefront']}));
 
 export async function getLocationsForBrand(brandId: string): Promise<Location[]> {
     const db = getAdminDb();

@@ -3,6 +3,8 @@
 'use server';
 
 import "server-only";
+import { unstable_cache } from 'next/cache';
+import { storefrontMedia } from '@/lib/storefront-media';
 import { getAdminDb } from "@/lib/firebase-admin";
 import type { MenuForRender, MenuCategory, MenuProduct, Category } from "@/types/menu";
 import type { Product } from '@/types';
@@ -25,6 +27,9 @@ export async function getCatalogCounts(params: { brandId: string }): Promise<Cat
 }
 
 export async function getMenuForRender({ brandId, locationId }: { brandId: string, locationId: string }): Promise<MenuForRender> {
+  return cachedMenu(brandId, locationId);
+}
+const cachedMenu = unstable_cache(async (brandId: string, locationId: string): Promise<MenuForRender> => {
   const db = getAdminDb();
   
   const categoriesQuery = db.collection("categories").where('locationIds', 'array-contains', locationId).where('isActive', '==', true);
@@ -35,10 +40,10 @@ export async function getMenuForRender({ brandId, locationId }: { brandId: strin
     productsQuery.get(),
   ]);
 
-  const categories: MenuCategory[] = catsSnap.docs.map(d => ({ id:d.id, ...(d.data() as any) }));
+  const categories: MenuCategory[] = catsSnap.docs.map(d => storefrontMedia({ id:d.id, ...(d.data() as any) }, 'categories', d.id));
   
   const allLocationProducts: MenuProduct[] = prodsSnap.docs
-      .map(d => ({ id: d.id, ...(d.data() as any) }))
+      .map(d => storefrontMedia({ id: d.id, ...(d.data() as any) }, 'products', d.id))
       .filter(p => !p.locationIds || p.locationIds.length === 0 || p.locationIds.includes(locationId));
 
   const sortByOrder = (a:any,b:any)=>((typeof a.sortOrder==="number"?a.sortOrder:999999)-(typeof b.sortOrder==="number"?b.sortOrder:999999));
@@ -71,4 +76,4 @@ export async function getMenuForRender({ brandId, locationId }: { brandId: strin
   for(const id of Object.keys(productsByCategory)) productsByCategory[id].sort(sortByOrder);
   
   return { categories, productsByCategory, fallbackUsed:false };
-}
+}, ['storefront-menu-v1'], {revalidate:60,tags:['storefront']});

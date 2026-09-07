@@ -6,6 +6,7 @@ import type { Brand, Category, ComboMenu, Location, ProductForMenu, StandardDisc
 import { MenuClient } from './menu-client';
 
 interface BrandPageClientProps {
+  initialDeliveryType: 'pickup' | 'delivery';
   brand: Brand;
   location: Location;
   menu: {
@@ -18,6 +19,7 @@ interface BrandPageClientProps {
 }
 
 export default function BrandPageClient({
+  initialDeliveryType,
   brand,
   location,
   menu,
@@ -42,6 +44,7 @@ export default function BrandPageClient({
 
     return (
         <MenuClient 
+            initialDeliveryType={initialDeliveryType}
             brand={brand}
             location={location}
             initialCategories={finalCategories}
