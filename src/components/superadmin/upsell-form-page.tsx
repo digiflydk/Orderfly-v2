@@ -1,6 +1,7 @@
 'use client';
 
 import { z } from 'zod';
+import { upsellFormData } from '@/lib/upsell-form-data';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { useEffect, useMemo, useState, useTransition, useActionState } from 'react';
@@ -287,7 +288,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 
 	return (
 		<Form {...form}>
-			<form action={formAction} className="space-y-6">
+			<form action={() => formAction(upsellFormData(getValues(), upsell?.id))} className="space-y-6">
 				{upsell?.id && <input type="hidden" name="id" value={upsell.id} />}
 				<div className="flex items-center justify-between">
 					<div><h1 className="text-2xl font-bold tracking-tight">{title}</h1><p className="text-muted-foreground">{description}</p></div>
