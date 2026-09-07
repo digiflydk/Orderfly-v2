@@ -31,6 +31,7 @@ function Flow() {
     React.createElement('pre',{id:'state'},JSON.stringify(output)),
     React.createElement('button',{id:'pizza',onClick:()=>cart.addToCart(product,1,[],75,75)},'Add pizza'),
     React.createElement('button',{id:'topping',onClick:()=>cart.addToCart(product,1,[{name:'Cheese',price:10}],75,75)},'Add with cheese'),
+    React.createElement('button',{id:'identified-toppings',onClick:()=>cart.addToCart(product,1,[{id:'t',name:'Cheese',price:10},{id:'t2',name:'Cheese',price:5}],75,75)},'Add named options'),
     React.createElement('button',{id:'combo',onClick:()=>cart.addComboToCart(combo,1,[{groupName:'Pizza',products:[{id:'pizza',name:'Italiana'}]}],100)},'Add combo'),
     React.createElement('button',{id:'quantity',onClick:()=>cart.updateQuantity(cart.cartItems[0].cartItemId,3)},'Set three'),
     React.createElement('button',{id:'remove',onClick:()=>cart.removeFromCart(cart.cartItems.at(-1).cartItemId)},'Remove last'),
@@ -209,4 +210,25 @@ test('changed fulfillment or bag choice survives an old paid confirmation in ano
     await paymentTab.waitForFunction(() => window.receiptProcessed === true);
     assert.equal(await saved(paymentTab), null);
   });
+});
+
+
+test('cancel and menu return retain same-name topping choices and new tabs restore the saved basket',async t=>{
+ const page=await setup(t,'/?deliveryMethod=delivery');
+ catalog.products[0].toppingGroupIds.push('g2','other-location-group');
+ catalog.groups.push({id:'g2',locationIds:['l'],minSelection:1,maxSelection:1});
+ catalog.toppings.push({id:'t2',toppingName:'Cheese',price:5,isActive:true,groupId:'g2',locationIds:['l']});
+ await page.click('#identified-toppings');await page.click('#combo');await count(page,2);
+ await page.goto(origin+'/checkout');await ready(page);await count(page,2);
+ const expected=await state(page);
+ assert.deepEqual(expected.items[0].toppings.map(t=>t.id),['t','t2']);
+ await page.click('#pay');await page.waitForURL('**/stripe');await page.click('#cancel');await page.waitForURL('**/checkout/cancel');
+ await page.click('#return');await ready(page);await count(page,2);
+ assert.deepEqual((await state(page)).items,expected.items);
+ assert.equal((await state(page)).total,expected.total);
+ await page.goto(origin+'/?deliveryMethod=delivery');await ready(page);await count(page,2);
+ const context=page.context();await page.close();
+ const reopened=await context.newPage();await reopened.goto(origin+'/');await ready(reopened);await count(reopened,2);
+ assert.deepEqual((await state(reopened)).items,expected.items);
+ assert.equal((await state(reopened)).deliveryType,'delivery');
 });

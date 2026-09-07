@@ -308,14 +308,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (!readyRef.current) return;
     checkoutOrderId.current = undefined;
     const sortedToppings = [...toppings].sort((a, b) => a.name.localeCompare(b.name));
-    const toppingsKey = sortedToppings.map(t => `${t.name}:${t.price}`).join(',');
+    const toppingsKey = sortedToppings.map(t => `${t.id || t.name}:${t.price}`).join(',');
     const existingItemKey = `${product.id}-${toppingsKey}`;
   
     const toppingsTotal = sortedToppings.reduce((sum, t) => sum + t.price, 0);
     const itemTotal = finalPrice + toppingsTotal;
   
     setCartItems(prevItems => {
-      const existingItem = prevItems.find(item => item.itemType === 'product' && `${item.id}-${item.toppings.map(t => `${t.name}:${t.price}`).join(',')}` === existingItemKey);
+      const existingItem = prevItems.find(item => item.itemType === 'product' && `${item.id}-${item.toppings.map(t => `${t.id || t.name}:${t.price}`).join(',')}` === existingItemKey);
   
       if (existingItem) {
         return prevItems.map(item =>

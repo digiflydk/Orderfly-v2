@@ -48,3 +48,13 @@ Use `CART_CHROMIUM_PATH` if Chromium is installed separately. Add the same two-t
 5. Create and edit a controlled test combo with no image; reopen it and verify placeholder rendering. Check that a malformed image URL remains rejected. Remove the test record after verification.
 
 The remaining untested promotion/customer matrix and QA cleanup listed in #56 are separate Work QA items. This change does not declare #47/#51 fully verified. It does not delete QA orders, alter the user's paid ORD-495194 or introduce a general deletion module.
+
+## #62: menu return and selected toppings after cancellation
+
+Checkout now exposes Back to Menu above the nonempty form, retaining the brand, location and fulfillment query. It is disabled while payment is in flight, uncertain or ready for handoff. Navigation uses the existing CartProvider and does not clear the basket. Stripe cancellation retains the existing capability check and provider-confirmed expiration before releasing a reservation; no cancel endpoint or paid-cart clearing rule is relaxed.
+
+The product dialog hides topping groups unavailable at the current location and groups with no active options. Cart restoration previously treated those same referenced groups as invalid and removed the entire product. Restoration now validates the same offered groups as the dialog. Selected unavailable toppings still reject the affected line, and min/max limits on offered groups remain enforced.
+
+New selections persist optional stable topping IDs alongside the legacy names. This distinguishes identically named toppings in different groups and restores current names/prices after a rename. IDs must be unique and match the names-array length. Restored IDs are scoped to the product's offered location groups. Old snapshots remain compatible when names resolve unambiguously; ambiguous legacy choices still require reselection rather than guessing. Cart row matching also uses IDs when available. No personal details or prices were added to browser storage.
+
+Persistence across a closed tab and a new tab in the same browser is intentional: one restaurant's basket is retained for up to 24 hours since the last save. Completing a matching server-confirmed paid checkout clears it; cancellation does not. Other restaurants, expired snapshots and invalid catalog selections retain the established boundaries. The screenshot's exact removed line was not available; the two invalid-removal cases above were reproduced against production code with synthetic fixtures and fixed.

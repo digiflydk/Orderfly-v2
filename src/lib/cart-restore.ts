@@ -26,18 +26,26 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
       : scope.deliveryType === 'delivery' ? combo!.deliveryPrice : combo!.pickupPrice;
     if (typeof basePrice !== 'number' || !Number.isFinite(basePrice) || basePrice < 0) { removed++; continue; }
     const toppings: CartItem['toppings'] = [];
-    let valid = new Set(choice.toppings).size === choice.toppings.length;
+    const identities = choice.toppingIds;
+    let valid = identities
+      ? identities.length === choice.toppings.length && new Set(identities).size === identities.length
+      : new Set(choice.toppings).size === choice.toppings.length;
     if (product) {
-      const allowed = catalog.toppings.filter(t => t.isActive && t.locationIds.includes(scope.locationId) && product.toppingGroupIds?.includes(t.groupId));
-      for (const name of choice.toppings) {
-        const matches = allowed.filter(t => t.toppingName === name);
-        if (matches.length !== 1 || !Number.isFinite(matches[0].price) || matches[0].price < 0) { valid = false; break; }
-        toppings.push({ name, price: matches[0].price });
+      // Match the product dialog: only location groups with active options are
+      // offered. A stale/other-location group reference cannot delete the item.
+      const groups = catalog.groups.filter(g => product.toppingGroupIds?.includes(g.id) && g.locationIds.includes(scope.locationId));
+      const allowed = catalog.toppings.filter(t => t.isActive && t.locationIds.includes(scope.locationId) && groups.some(g => g.id === t.groupId));
+      const selectedIds = new Set<string>();
+      for (const [index, name] of choice.toppings.entries()) {
+        const matches = allowed.filter(t => identities ? t.id === identities[index] : t.toppingName === name);
+        if (matches.length !== 1 || !Number.isFinite(matches[0].price) || matches[0].price < 0 || selectedIds.has(matches[0].id)) { valid = false; break; }
+        selectedIds.add(matches[0].id);
+        toppings.push({ id: matches[0].id, name: matches[0].toppingName, price: matches[0].price });
       }
-      for (const groupId of product.toppingGroupIds || []) {
-        const group = catalog.groups.find(g => g.id === groupId && g.locationIds.includes(scope.locationId));
-        if (!group) { valid = false; break; }
-        const count = allowed.filter(t => t.groupId === groupId && choice.toppings.includes(t.toppingName)).length;
+      for (const group of groups) {
+        const options = allowed.filter(t => t.groupId === group.id);
+        if (!options.length) continue;
+        const count = options.filter(t => selectedIds.has(t.id)).length;
         if (count < group.minSelection || (group.maxSelection > 0 && count > group.maxSelection)) valid = false;
       }
     }

@@ -161,3 +161,11 @@ test('accepting upsell closes immediately even if conversion tracking hangs, and
  await page.waitForURL('**/stripe?*');assert.equal(requests.get('upsell-accept')[0][0].length,2);
  assert.equal(requests.get('upsell-accept')[0][0][1].name,'Drink');
 });
+
+test('Back to Menu is available with a nonempty cart and preserves restaurant and fulfillment in the route',async t=>{
+ const page=await setup(t,'back-to-menu');
+ const back=page.getByRole('link',{name:'Back to Menu',exact:true});
+ assert.equal(await back.getAttribute('href'),'/brand/location?deliveryMethod=pickup');
+ await back.click();await page.waitForURL('**/brand/location?deliveryMethod=pickup');
+ assert.equal(requests.has('back-to-menu'),false);
+});
