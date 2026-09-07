@@ -2,7 +2,8 @@
 
 'use client';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { toZonedTime } from 'date-fns-tz';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -16,9 +17,8 @@ import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { getTimeSlots } from '@/app/superadmin/locations/actions';
 import { useCart } from '@/context/cart-context';
-import { format, addDays, isToday, startOfDay, isSameDay } from 'date-fns';
-import { Loader2, X } from 'lucide-react';
-import { DialogClose } from '@radix-ui/react-dialog';
+import { format, addDays, startOfDay, isSameDay } from 'date-fns';
+import { Loader2 } from 'lucide-react';
 import type { TimeSlotResponse } from '@/types';
 
 interface TimeSlotDialogProps {
@@ -29,26 +29,36 @@ interface TimeSlotDialogProps {
 
 export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialogProps) {
   const { deliveryType, selectedTime, setSelectedTime } = useCart();
-  const [selectedDate, setSelectedDate] = useState<Date>(startOfDay(new Date()));
+  const today = startOfDay(toZonedTime(new Date(), 'Europe/Copenhagen'));
+  const [selectedDate, setSelectedDate] = useState<Date>(today);
   const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const [internalTime, setInternalTime] = useState(selectedTime);
+  const requestId = useRef(0);
 
   useEffect(() => {
     if (isOpen) {
-      handleDateChange(startOfDay(new Date()));
+      handleDateChange(today);
     }
-  }, [isOpen]);
+    return () => { requestId.current++; };
+  }, [isOpen, locationId]);
 
   const handleDateChange = async (date: Date | undefined) => {
     if (!date) return;
+    const request = ++requestId.current;
     setIsLoading(true);
     setSelectedDate(date);
-    const slots = await getTimeSlots(locationId, date.toISOString());
-    setTimeSlots(slots);
-    setIsLoading(false);
-    // Reset time selection if new date has no slots or new date is chosen
-    setInternalTime('asap');
+    setTimeSlots(null);
+    setInternalTime('');
+    try {
+      // Send the selected calendar day, independent of the shopper's timezone.
+      const slots = await getTimeSlots(locationId, `${format(date, 'yyyy-MM-dd')}T12:00:00Z`);
+      if (request === requestId.current) setTimeSlots(slots);
+    } catch {
+      if (request === requestId.current) setTimeSlots(null);
+    } finally {
+      if (request === requestId.current) setIsLoading(false);
+    }
   };
 
   const availableTimes = timeSlots ? (deliveryType === 'delivery' ? timeSlots.delivery_times : timeSlots.pickup_times) : [];
@@ -61,16 +71,18 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
   }, [timeSlots, deliveryType]);
   
   const handleSave = () => {
+    if (!selectionValid) return;
     setSelectedTime(internalTime);
     setIsOpen(false);
   }
   
   const formatTimeForDisplay = (time: string, date: Date) => {
-    const today = new Date();
-    if (isToday(date)) return `Today at ${time}`;
+    if (isSameDay(date, today)) return `Today at ${time}`;
     if (isSameDay(date, addDays(today, 1))) return `Tomorrow at ${time}`;
     return `${format(date, 'eee, MMM d')} at ${time}`;
   }
+  const canSelectAsap = isSameDay(selectedDate, today) && availableTimes.length > 0 && !!(deliveryType === 'delivery' ? timeSlots?.asap_delivery : timeSlots?.asap_pickup);
+  const selectionValid = !isLoading && (internalTime === 'asap' ? canSelectAsap : availableTimes.some(time => formatTimeForDisplay(time, selectedDate) === internalTime));
 
 
   return (
@@ -86,7 +98,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
                 mode="single"
                 selected={selectedDate}
                 onSelect={handleDateChange}
-                disabled={(date) => date < startOfDay(new Date()) || date > addDays(new Date(), 7)}
+                disabled={(date) => date < today || date > addDays(today, 7)}
                 initialFocus
             />
 
@@ -100,7 +112,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
                         <SelectValue placeholder="Select a time" />
                     </SelectTrigger>
                     <SelectContent>
-                        {isToday(selectedDate) && <SelectItem value="asap">{asapText}</SelectItem>}
+                        {canSelectAsap && <SelectItem value="asap">{asapText}</SelectItem>}
                         {availableTimes.map(time => {
                             const displayValue = formatTimeForDisplay(time, selectedDate);
                             return (
@@ -115,7 +127,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
         </div>
         
         <DialogFooter className="p-4 border-t">
-          <Button onClick={handleSave} disabled={isLoading || (availableTimes.length === 0 && !asapText.startsWith('ASAP'))}>
+          <Button onClick={handleSave} disabled={!selectionValid}>
             Save
           </Button>
         </DialogFooter>

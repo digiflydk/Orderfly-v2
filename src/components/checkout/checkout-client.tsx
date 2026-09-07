@@ -383,27 +383,33 @@ function CheckoutForm({ location }: { location: Location }) {
   });
 
   const newsletterSelected = form.watch('subscribeToNewsletter');
+  const newsletterEmail = form.watch('email');
 
   useEffect(() => {
     let cancelled = false;
-    if (!brand || !location || !deliveryType) {
+    setNewsletterOffer(null);
+    if (!brand || !location || !deliveryType || !z.string().email().safeParse(newsletterEmail.trim()).success) {
       setNewsletterOffer(null);
       return;
     }
 
-    void getNewsletterSignupDiscountAction(
+    const timer = setTimeout(() => { void getNewsletterSignupDiscountAction(
       brand.id,
       location.id,
       subtotal,
       deliveryType,
+      newsletterEmail,
     ).then(offer => {
       if (!cancelled) setNewsletterOffer(offer);
-    });
+    }).catch(() => {
+      if (!cancelled) setNewsletterOffer(null);
+    }); }, 500);
 
     return () => {
       cancelled = true;
+      clearTimeout(timer);
     };
-  }, [brand, location, subtotal, deliveryType]);
+  }, [brand, location, subtotal, deliveryType, newsletterEmail]);
 
   useEffect(() => {
     if (
@@ -428,7 +434,7 @@ function CheckoutForm({ location }: { location: Location }) {
         createdAt: new Date(),
         updatedAt: new Date(),
       });
-    } else if (!newsletterSelected && appliedDiscount?.applicationType === 'newsletter_signup') {
+    } else if ((!newsletterSelected || !newsletterOffer) && appliedDiscount?.applicationType === 'newsletter_signup') {
       removeDiscount();
     }
   }, [newsletterSelected, newsletterOffer, appliedDiscount?.applicationType, applyDiscount, removeDiscount, brand, location, deliveryType]);
@@ -508,6 +514,7 @@ function CheckoutForm({ location }: { location: Location }) {
   const proceedToStripe = (formValues: CheckoutFormValues) => {
     startTransition(async () => {
       setIsProcessing(true);
+      try {
       if (!brand || !location) {
         toast({
           variant: 'destructive',
@@ -581,9 +588,14 @@ function CheckoutForm({ location }: { location: Location }) {
         toast({
           variant: 'destructive',
           title: 'Checkout Error',
-          description: `An unexpected error occurred. Please try again. If the problem persists, one of the items in your cart may no longer be available. Details: ${result.error}`,
+          description: result.error || 'Payment could not be opened. Please try again.',
           duration: 20000
         });
+      }
+      } catch {
+        toast({ variant: 'destructive', title: 'Checkout Error', description: 'Payment could not be opened. Please check your connection and try again.' });
+      } finally {
+        setIsProcessing(false);
       }
     });
   };
