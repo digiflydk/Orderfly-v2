@@ -2,7 +2,7 @@
 
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, getDoc, writeBatch } from 'firebase/firestore';
 import type { Category, Location } from '@/types';
@@ -75,6 +75,7 @@ export async function createOrUpdateCategory(
   }
 
   revalidatePath('/superadmin/categories');
+    revalidateTag('storefront');
   redirect('/superadmin/categories');
 }
 
@@ -82,6 +83,7 @@ export async function deleteCategory(categoryId: string) {
     try {
         await deleteDoc(doc(db, "categories", categoryId));
         revalidatePath("/superadmin/categories");
+    revalidateTag('storefront');
         return { message: "Category deleted successfully.", error: false };
     } catch (e) {
         console.error(e);
@@ -99,6 +101,7 @@ export async function updateCategorySortOrder(orderedCategories: {id: string, so
         });
         await batch.commit();
         revalidatePath('/superadmin/categories');
+    revalidateTag('storefront');
         return { message: 'Category order updated.', error: false };
     } catch(e) {
         const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';

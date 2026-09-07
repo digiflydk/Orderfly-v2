@@ -2,7 +2,7 @@
 'use server';
 import { calculateTimeSlots } from '@/lib/time-slots';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, getDoc, limit, writeBatch } from 'firebase/firestore';
 import type { Location, Brand, TimeSlotResponse } from '@/types';
@@ -132,6 +132,7 @@ export async function createOrUpdateLocation(
   }
   
   revalidatePath(`/superadmin/locations`);
+    revalidateTag('storefront');
   redirect(`/superadmin/locations`);
 }
 
@@ -140,7 +141,9 @@ export async function deleteLocation(locationId: string, brandId: string) {
         const db = getAdminDb();
         await db.collection("locations").doc(locationId).delete();
         revalidatePath(`/superadmin/locations`);
+    revalidateTag('storefront');
         revalidatePath(`/superadmin/locations/${brandId}`);
+    revalidateTag('storefront');
         return { message: "Location deleted successfully.", error: false };
     } catch (e) {
         console.error(e);

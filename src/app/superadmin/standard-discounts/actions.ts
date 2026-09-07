@@ -2,7 +2,7 @@
 'use server';
 
 import { restaurantClock } from '@/lib/promotion-rules';
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, where, documentId, updateDoc } from 'firebase/firestore';
 import type { StandardDiscount, CartItem, Product, ProductForMenu } from '@/types';
@@ -144,6 +144,7 @@ export async function createOrUpdateStandardDiscount(
 	}
 
 	revalidatePath('/superadmin/standard-discounts');
+    revalidateTag('storefront');
 	redirect('/superadmin/standard-discounts');
 }
 
@@ -151,6 +152,7 @@ export async function deleteStandardDiscount(id: string): Promise<StandardDiscou
 	try {
 		await deleteDoc(doc(db, "standard_discounts", id));
 		revalidatePath("/superadmin/standard-discounts");
+    revalidateTag('storefront');
 		return { success: true, message: "Discount deleted successfully." };
 	} catch (e) {
 		console.error(e);
@@ -280,6 +282,7 @@ export async function updateStandardDiscountStatus(id: string, isActive: boolean
 		const discountRef = doc(db, "standard_discounts", id);
 		await updateDoc(discountRef, { isActive });
 		revalidatePath('/superadmin/standard-discounts');
+    revalidateTag('storefront');
 		return { success: true, message: 'Standard discount status updated successfully.' };
 	} catch (e) {
 		const errorMessage = e instanceof Error ? e.message : 'Failed to update status.';

@@ -2,7 +2,8 @@
 
 'use server';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
+import { storefrontRows } from '@/lib/storefront-cache';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, Timestamp, getDoc, documentId, runTransaction } from 'firebase/firestore';
 import type { ComboMenu, Product, Category, ProductForMenu } from '@/types';
@@ -195,6 +196,7 @@ export async function createOrUpdateCombo(
   }
 
   revalidatePath('/superadmin/combos');
+    revalidateTag('storefront');
   redirect('/superadmin/combos');
 }
 
@@ -202,6 +204,7 @@ export async function deleteCombo(comboId: string) {
     try {
         await deleteDoc(doc(db, "comboMenus", comboId));
         revalidatePath("/superadmin/combos");
+    revalidateTag('storefront');
         return { message: "Combo deleted successfully.", error: false };
     } catch (e) {
         console.error(e);
@@ -247,21 +250,15 @@ export async function getActiveCombosForLocation(locationId: string): Promise<Co
     const now = new Date();
     const currentDay = now.toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
 
-    const q = query(collection(db, 'comboMenus'), 
-        where('locationIds', 'array-contains', locationId),
-        where('isActive', '==', true),
-    );
-    const snapshot = await getDocs(q);
-    
-    const allCombos = snapshot.docs.map(doc => {
-      const data = doc.data();
+    const rows = await storefrontRows('comboMenus', '', locationId);
+    const allCombos = rows.map((data: any) => {
       return {
         ...data,
-        id: doc.id,
-        startDate: data.startDate ? (data.startDate as Timestamp).toDate().toISOString() : undefined,
-        endDate: data.endDate ? (data.endDate as Timestamp).toDate().toISOString() : undefined,
-        createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
-        updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : new Date(),
+        id: data.id,
+        startDate: data.startDate ? new Date(data.startDate).toISOString() : undefined,
+        endDate: data.endDate ? new Date(data.endDate).toISOString() : undefined,
+        createdAt: data.createdAt ? new Date(data.createdAt) : new Date(),
+        updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
       } as ComboMenu
     });
     

@@ -3,7 +3,7 @@
 
 import 'server-only';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -142,6 +142,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
           updatedAt: now,
         });
         revalidatePath('/superadmin/products');
+    revalidateTag('storefront');
         return { ok: true, id };
       } else {
         const payload = {
@@ -153,6 +154,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
         const ref = await db.collection('products').add(payload);
         await db.collection('products').doc(ref.id).update({ id: ref.id });
         revalidatePath('/superadmin/products');
+    revalidateTag('storefront');
         return { ok: true, id: ref.id };
       }
   
@@ -181,6 +183,7 @@ export async function deleteProduct(productId: string) {
         const db = getAdminDb();
         await db.collection("products").doc(productId).delete();
         revalidatePath("/superadmin/products");
+    revalidateTag('storefront');
         return { message: "Product deleted successfully.", error: false };
     } catch (e) {
         console.error(e);
@@ -199,6 +202,7 @@ export async function updateProductSortOrder(orderedProducts: {id: string, sortO
         });
         await batch.commit();
         revalidatePath('/superadmin/products');
+    revalidateTag('storefront');
         return { message: 'Product order updated.', error: false };
     } catch(e) {
         const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -328,6 +332,7 @@ export async function duplicateProducts({
 
     await batch.commit();
     revalidatePath('/superadmin/products');
+    revalidateTag('storefront');
     return { success: true, message: `${duplicatedCount} products duplicated successfully.` };
   } catch (e: any) {
     console.error('Failed to duplicate products:', e);

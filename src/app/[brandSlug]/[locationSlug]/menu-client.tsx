@@ -11,7 +11,7 @@ import type {
   TimeSlotResponse,
 } from '@/types';
 import { useCart } from '@/context/cart-context';
-import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
+import { getStorefrontDiscounts as getActiveStandardDiscounts } from '@/app/storefront-actions';
 import { getProductsByIds } from '@/app/superadmin/products/actions';
 import { DesktopCart } from '@/components/cart/desktop-cart';
 import { CategoryNav } from '@/components/layout/category-nav';
@@ -28,6 +28,7 @@ import { Info } from 'lucide-react';
 import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
 
 interface MenuClientProps {
+  initialDeliveryType?: 'pickup' | 'delivery';
   brand: Brand;
   location: Location;
   initialCategories: Category[];
@@ -37,6 +38,7 @@ interface MenuClientProps {
 }
 
 export function MenuClient({
+  initialDeliveryType = 'pickup',
   brand,
   location,
   initialCategories,
@@ -47,6 +49,7 @@ export function MenuClient({
   const { setCartContext, deliveryType, itemCount, setSelectedTime } = useCart();
   const { trackEvent } = useAnalytics();
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const initialDiscountsUsed = useRef(false);
 
   const [isLoading, setIsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string>('offers');
@@ -73,8 +76,10 @@ export function MenuClient({
           ),
         ];
         if (comboProductIds.length > 0) {
-          const fetchedComboProducts = await getProductsByIds(comboProductIds);
-          setComboProducts(fetchedComboProducts);
+          const existing = initialProducts.filter(p => comboProductIds.includes(p.id));
+          const missing = comboProductIds.filter(id => !existing.some(p => p.id === id));
+          const fetchedComboProducts = missing.length ? await getProductsByIds(missing, brand.id) : [];
+          setComboProducts([...existing, ...fetchedComboProducts]);
         }
       }
 
@@ -125,20 +130,28 @@ export function MenuClient({
   ]);
 
   useEffect(() => {
-    // Re-fetch discounts when deliveryType changes
+    let cancelled = false;
+    if (!deliveryType) return;
+    if (!initialDiscountsUsed.current && deliveryType === initialDeliveryType) {
+      initialDiscountsUsed.current = true;
+      setActiveStandardDiscounts(initialActiveStandardDiscounts);
+      return;
+    }
+    initialDiscountsUsed.current = true;
     async function fetchDiscounts(type: 'delivery' | 'pickup') {
       const discounts = await getActiveStandardDiscounts({
         brandId: brand.id,
         locationId: location.id,
         deliveryType: type,
       });
-      setActiveStandardDiscounts(discounts);
+      if (!cancelled) setActiveStandardDiscounts(discounts);
     }
 
     if (deliveryType === 'delivery' || deliveryType === 'pickup') {
       void fetchDiscounts(deliveryType);
     }
-  }, [deliveryType, brand.id, location.id]);
+    return () => { cancelled = true; };
+  }, [deliveryType, brand.id, location.id, initialDeliveryType, initialActiveStandardDiscounts]);
 
   useEffect(() => {
     // OF-399: Show delivery modal only if a delivery method has not been previously selected in this session.

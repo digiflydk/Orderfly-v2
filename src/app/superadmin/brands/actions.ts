@@ -4,7 +4,7 @@
 
 import 'server-only';
 
-import { revalidatePath } from 'next/cache';
+import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
@@ -163,7 +163,9 @@ export async function createOrUpdateBrand(
   }
 
   revalidatePath('/superadmin/brands');
+    revalidateTag('storefront');
   revalidatePath('/superadmin/users');
+    revalidateTag('storefront');
   redirect('/superadmin/brands');
 }
 
@@ -173,6 +175,7 @@ export async function deleteBrand(brandId: string) {
         const db = getAdminDb();
         await db.collection("brands").doc(brandId).delete();
         revalidatePath("/superadmin/brands");
+    revalidateTag('storefront');
         return { message: "Brand deleted successfully.", error: false };
     } catch (e) {
         console.error(e);
@@ -244,6 +247,7 @@ export async function updateBrandAppearances(
     await brandRef.update({ appearances: validatedFields.data });
     
     revalidatePath(`/superadmin/brands/edit/${brandId}`);
+    revalidateTag('storefront');
     return { message: 'Appearance settings updated.', error: false };
 
   } catch(e) {
