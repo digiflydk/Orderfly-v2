@@ -3,7 +3,7 @@
 import { z } from 'zod'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { useForm } from 'react-hook-form'
-import { useEffect, useTransition } from 'react'
+import { useEffect, useTransition, useState } from 'react'
 import {
   Dialog,
   DialogContent,
@@ -24,7 +24,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import type { Customer } from '@/types'
+import { getBrands } from '@/app/superadmin/brands/actions'
+import type { Brand, Customer } from '@/types'
 import { createOrUpdateCustomer } from '@/app/superadmin/customers/actions'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2 } from 'lucide-react'
@@ -45,6 +46,9 @@ interface CustomerFormProps {
 }
 
 export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps) {
+  const [brands, setBrands] = useState<Brand[]>([])
+  const [brandId, setBrandId] = useState('')
+  useEffect(() => { if (isOpen && !customer) void getBrands().then(setBrands).catch(() => setBrands([])); }, [isOpen, customer])
   const { toast } = useToast()
   const [isPending, startTransition] = useTransition()
 
@@ -88,6 +92,7 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
   const onSubmit = (data: CustomerFormValues) => {
     const formData = new FormData()
     if (customer?.id) formData.append('id', customer.id)
+    if (!customer) formData.append('brandId', brandId)
     formData.append('fullName', data.fullName)
     formData.append('email', data.email)
     formData.append('phone', data.phone)
@@ -122,6 +127,12 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+            {!customer && <label className="block">Brand
+              <select className="mt-1 w-full rounded-md border p-2" required value={brandId} onChange={event => setBrandId(event.target.value)}>
+                <option value="">Select brand</option>
+                {brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
+              </select>
+            </label>}
             {customer && <input type="hidden" name="id" value={customer.id} />}
 
             <FormField

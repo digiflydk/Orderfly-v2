@@ -1,9 +1,9 @@
 
-import { getLoyaltySettings } from './actions';
+import { getLoyaltySettingsState } from './actions';
 import { LoyaltySettingsClientPage } from './client-page';
 
 export default async function LoyaltySettingsPage() {
-    const settings = await getLoyaltySettings();
+    const {settings,warning} = await getLoyaltySettingsState();
 
     return (
         <div className="space-y-6">
@@ -13,6 +13,7 @@ export default async function LoyaltySettingsPage() {
                     Define and manage the global scoring model for customer loyalty.
                 </p>
             </div>
+            {warning && <p role="alert" className="rounded border p-4">{warning}</p>}
             <LoyaltySettingsClientPage initialSettings={settings} />
         </div>
     );
