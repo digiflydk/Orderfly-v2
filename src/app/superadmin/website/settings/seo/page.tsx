@@ -14,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import type { GeneralSettings } from "@/types/settings";
 import { getSettingsAction, saveSettingsAction } from "@/app/superadmin/website/actions";
 import { Loader2 } from "lucide-react";
-import Link from "next/link";
+import Link from '@/components/superadmin/admin-link';
 import CmsLayout from '../../_cmsLayout';
 
 function SeoSettingsPageContent() {

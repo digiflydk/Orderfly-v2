@@ -11,7 +11,7 @@ import { listBrandWebsitePages } from '@/lib/superadmin/brand-website/pages-acti
 import { getBrandWebsiteMenuSettings } from '@/lib/superadmin/brand-website/menu-settings-actions';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { ExternalLink } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';

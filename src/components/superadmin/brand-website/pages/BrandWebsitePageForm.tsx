@@ -43,7 +43,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Loader2 } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 
 type PageFormValues = z.infer<typeof brandWebsitePageCreateSchema>;
 

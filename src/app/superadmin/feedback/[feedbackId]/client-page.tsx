@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useTransition } from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { format } from 'date-fns';
 import { ArrowLeft, CheckCircle, Home, MessageSquare, Star, Tag, Trash2, User, XCircle } from 'lucide-react';
 

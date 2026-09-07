@@ -2,7 +2,7 @@
 'use client'
 
 import * as React from 'react'
-import Link from 'next/link'
+import Link from '@/components/superadmin/admin-link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
 import {
@@ -27,7 +27,6 @@ import {
   Gift,
   ShieldCheck,
   Percent,
-  ClipboardList,
   SquareStack,
   Layers,
   Utensils,
@@ -38,7 +37,6 @@ import {
   Bookmark,
   Globe,
   Settings as SettingsIcon,
-  Code2,
   LayoutTemplate,
   ChevronDown,
   FileText,
@@ -50,8 +48,6 @@ import {
   Share2,
   Activity,
   Cookie,
-  Beaker,
-  Eye,
 } from 'lucide-react'
 import { getSuperadminUserContext, type SuperadminUser } from '@/lib/auth/superadmin-context'
 
@@ -112,7 +108,6 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/categories', label: 'Categories', icon: SquareStack },
         { href: '/superadmin/food-categories', label: 'Food Categories', icon: Utensils },
         { href: '/superadmin/toppings', label: 'Toppings', icon: Layers },
-        { href: '/superadmin/upsells', label: 'Upsells', icon: Bookmark },
         { href: '/superadmin/allergens', label: 'Allergens', icon: ShieldCheck },
       ],
     },
@@ -122,18 +117,9 @@ export function SuperAdminSidebarClient({
       items: [
         { href: '/superadmin/discounts', label: 'Discounts', icon: Tags },
         { href: '/superadmin/combos', label: 'Combos', icon: Gift },
-        { href: '/superadmin/offers-combos-validation', label: 'Offers/Combos Validation', icon: ClipboardList },
-        { href: '/superadmin/discount-validation', label: 'Discount Validation', icon: Percent },
+        { href: '/superadmin/upsells', label: 'Upsells', icon: Bookmark },
         { href: '/superadmin/standard-discounts', label: 'Standard Discounts', icon: Percent },
         { href: '/superadmin/loyalty', label: 'Loyalty', icon: Trophy },
-      ],
-    },
-    {
-      key: 'people',
-      title: 'People & Access',
-      items: [
-        { href: '/superadmin/roles', label: 'Roles', icon: ShieldCheck },
-        { href: '/superadmin/users', label: 'Users', icon: Users },
       ],
     },
     {
@@ -161,6 +147,14 @@ export function SuperAdminSidebarClient({
         ]
       },
     ]},
+    {
+      key: 'people',
+      title: 'People & Access',
+      items: [
+        { href: '/superadmin/roles', label: 'Roles', icon: ShieldCheck },
+        { href: '/superadmin/users', label: 'Users', icon: Users },
+      ],
+    },
     {
       key: 'billing',
       title: 'Billing',
@@ -204,9 +198,6 @@ export function SuperAdminSidebarClient({
       items: [
         { href: '/superadmin/settings', label: 'Settings', icon: SettingsIcon },
         { href: '/superadmin/docs', label: 'Documentation', icon: FileText },
-        { href: '/superadmin/code-review', label: 'Code Review', icon: Code2 },
-        { href: '/superadmin/qa', label: 'QA', icon: Beaker },
-        { href: '/superadmin/ui-validation', label: 'UI Validation', icon: Eye },
       ],
     },
   ]

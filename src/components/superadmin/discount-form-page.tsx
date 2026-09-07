@@ -5,7 +5,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray } from 'react-hook-form';
 import { useState, useEffect, useMemo, useTransition } from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2, PlusCircle, Trash2, Clock } from 'lucide-react';
 

@@ -4,7 +4,7 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { useMemo, useTransition } from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import Image from 'next/image';
 
 import {

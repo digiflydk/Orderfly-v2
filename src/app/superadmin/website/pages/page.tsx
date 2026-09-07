@@ -5,7 +5,7 @@ import CmsLayout from '../_cmsLayout';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ChevronRight, Home, ArrowUp, ArrowDown } from "lucide-react";
-import Link from "next/link";
+import Link from '@/components/superadmin/admin-link';
 
 const pageSections = [
   {

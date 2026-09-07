@@ -4,7 +4,7 @@
 import { ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "../ui/button";
-import Link from "next/link";
+import Link from '@/components/superadmin/admin-link';
 
 export function AccessDeniedPage() {
     return (

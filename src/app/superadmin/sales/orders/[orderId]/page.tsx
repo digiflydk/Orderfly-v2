@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { OrderDetail } from '@/types';
 import { ArrowLeft, CreditCard, Download, Hash, Link as LinkIcon, Mail, MapPin, Phone, ShoppingCart, Truck, User, MessageSquare } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';

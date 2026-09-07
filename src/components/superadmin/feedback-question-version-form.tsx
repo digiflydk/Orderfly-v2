@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useMemo, useState, useTransition } from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { Loader2, PlusCircle, Trash2 } from 'lucide-react';
 
 import type { FeedbackQuestionsVersion, LanguageSetting } from '@/types';

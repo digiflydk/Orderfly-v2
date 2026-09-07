@@ -4,7 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle, CardFooter }
 import { MOCK_CODE_REVIEWS } from "@/lib/code-review-mock-data";
 import { format } from "date-fns";
 import { CheckCircle, FileDiff, GitBranch, Calendar, Tag } from "lucide-react";
-import Link from "next/link";
+import Link from '@/components/superadmin/admin-link';
 import { Button } from "@/components/ui/button";
 
 export default async function CodeReviewListPage() {

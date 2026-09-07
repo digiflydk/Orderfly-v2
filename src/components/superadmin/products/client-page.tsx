@@ -3,7 +3,7 @@
 'use client';
 
 import { useState, useMemo, useTransition, useEffect } from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import {

@@ -12,7 +12,7 @@ import {
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { MoreHorizontal, Edit, Trash2 } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import {
   DropdownMenu,
   DropdownMenuTrigger,

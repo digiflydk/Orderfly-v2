@@ -15,7 +15,7 @@ import type { AnalyticsSettings, PaymentGatewaySettings, LanguageSettings, Langu
 import { Loader2, Copy, Trash2, Cookie } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { useFieldArray, useForm, FormProvider } from 'react-hook-form';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import Image from 'next/image';
 
 
