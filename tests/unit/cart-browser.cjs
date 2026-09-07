@@ -210,3 +210,20 @@ test('changed fulfillment or bag choice survives an old paid confirmation in ano
     assert.equal(await saved(paymentTab), null);
   });
 });
+
+
+test('cart restoration uses a spinner without loading copy and still waits for current prices', async t => {
+  const page = await setup(t); await page.click('#pizza'); await count(page, 1);
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  await page.route('**/restore', async route => { await held; await route.continue(); });
+  try {
+    await page.reload();
+    // This provider fixture has no Tailwind CSS; check mounting and readiness.
+    await page.locator('[aria-label="Indlæser"]').waitFor({ state: 'attached' });
+    assert.equal(await page.getByText('Indlæser kurv og aktuelle priser…', { exact: true }).count(), 0);
+    assert.equal((await state(page)).ready, false);
+  } finally { release(); }
+  await ready(page); await count(page, 1);
+  assert.equal((await state(page)).total, 79);
+});
