@@ -37,18 +37,8 @@ export function OffersSection({ brand, location, activeDiscounts, allProducts, c
     
     const products = allProducts.filter(p => productIdsInOffers.has(p.id));
 
-    return products.map(p => {
-        const applicableDiscount = promotionalDiscounts.find(d => 
-            (d.discountType === 'product' && d.referenceIds.includes(p.id)) ||
-            (d.discountType === 'category' && p.categoryId && d.referenceIds.includes(p.categoryId))
-        );
-        const basePrice = deliveryType === 'delivery' ? (p.priceDelivery ?? p.price) : p.price;
-        const discountedPrice = applicableDiscount && applicableDiscount.discountValue ? 
-        (applicableDiscount.discountMethod === 'percentage' ? basePrice * (1 - (applicableDiscount.discountValue / 100)) : Math.max(0, basePrice - applicableDiscount.discountValue))
-        : basePrice;
-        
-        return { ...p, id: `${p.id}-offer`, categoryId: 'offers', price: discountedPrice, basePrice };
-    });
+    // Keep native IDs and category scope; ProductCard applies the best item price.
+    return products;
 
   }, [activeDiscounts, allProducts, deliveryType]);
 

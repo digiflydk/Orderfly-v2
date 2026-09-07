@@ -193,7 +193,7 @@ export function StandardDiscountsClientPage({ initialDiscounts, brands, location
                   <TableCell>{d.brandName}</TableCell>
                   <TableCell className="capitalize">{d.discountType}</TableCell>
                   <TableCell>
-                    {d.discountValue ? (d.discountMethod === 'percentage' ? `${d.discountValue}%` : `kr. ${d.discountValue.toFixed(2)}`) : 'Free Delivery'}
+                    {d.discountMethod === 'buy_x_pay_y' ? `${d.buyQuantity} for ${d.payQuantity}` : d.discountValue ? (d.discountMethod === 'percentage' ? `${d.discountValue}%` : `kr. ${d.discountValue.toFixed(2)}`) : 'Free Delivery'}
                   </TableCell>
                   <TableCell>
                     <Badge variant={d.allowStacking ? 'default' : 'secondary'}>{d.allowStacking ? 'Allowed' : 'Not Allowed'}</Badge>

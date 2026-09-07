@@ -31,66 +31,7 @@ import { Checkbox } from '../ui/checkbox';
 import { SerializedStandardDiscount } from '@/app/superadmin/standard-discounts/actions';
 
 
-const activeTimeSlotSchema = z.object({
-	start: z.string(),
-	end: z.string(),
-});
-
-const standardDiscountSchema = z.object({
-	id: z.string().optional(),
-	brandId: z.string().min(1, 'A brand must be selected.'),
-	locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
-	discountName: z.string().min(2, 'Discount name is required.'),
-	discountType: z.enum(['product', 'category', 'cart', 'free_delivery']),
-	referenceIds: z.array(z.string()).optional().default([]),
-	discountMethod: z.enum(['percentage', 'fixed_amount']),
-	discountValue: z.coerce.number().positive('Discount value must be positive.').optional(),
-	minOrderValue: z.coerce.number().min(0).optional(),
-	isActive: z.boolean().default(true),
-	orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type is required.'),
-	activeDays: z.array(z.string()).optional().default([]),
-	activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
-	timeSlotValidationType: z.enum(['orderTime', 'pickupTime']),
-	startDate: z.date().optional(),
-	endDate: z.date().optional(),
-	allowStacking: z.boolean().default(false),
-	// New marketing fields
-	discountHeading: z.string().optional(),
-	discountDescription: z.string().optional(),
-	discountImageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
-	assignToOfferCategory: z.boolean().default(false),
-}).superRefine((data, ctx) => {
-	if (data.discountType === 'product' && (!data.referenceIds || data.referenceIds.length === 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['referenceIds'],
-			message: 'At least one Product must be selected for this discount type.',
-		});
-	}
-	if (data.discountType === 'category' && (!data.referenceIds || data.referenceIds.length === 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['referenceIds'],
-			message: 'At least one Category must be selected for this discount type.',
-		});
-	}
-	if ((data.discountType === 'cart' || data.discountType === 'free_delivery') && (!data.minOrderValue || data.minOrderValue <= 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['minOrderValue'],
-			message: 'A minimum order value is required for this discount type.',
-		});
-	}
-	if ((data.discountMethod === 'percentage' || data.discountMethod === 'fixed_amount') && data.discountType !== 'free_delivery' && (!data.discountValue || data.discountValue <= 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['discountValue'],
-			message: 'A positive discount value is required for this discount method.',
-		});
-	}
-});
-
-
+import { standardDiscountSchema } from '@/lib/standard-discount-schema';
 
 type DiscountFormValues = z.input<typeof standardDiscountSchema>;
 
@@ -168,9 +109,15 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 
 	useEffect(() => {
 		if (discountType === 'cart' || discountType === 'free_delivery') {
+            if (discountMethod === 'buy_x_pay_y') setValue('discountMethod', 'percentage');
 			setValue('referenceIds', []);
 		}
-	}, [discountType, setValue]);
+	}, [discountType, discountMethod, setValue]);
+
+ useEffect(() => {
+   if (discountMethod === 'buy_x_pay_y' || discountType === 'free_delivery') setValue('discountValue', undefined);
+   if (discountMethod !== 'buy_x_pay_y') { setValue('buyQuantity', undefined); setValue('payQuantity', undefined); }
+ }, [discountMethod, discountType, setValue]);
 
 	const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
@@ -377,11 +324,16 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 												<FormItem><FormLabel>Discount Method</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a method" /></SelectTrigger></FormControl><SelectContent>
 													<SelectItem value="percentage">Percentage (%)</SelectItem>
 													<SelectItem value="fixed_amount">Fixed Amount (DKK)</SelectItem>
+{(discountType === 'product' || discountType === 'category') && <SelectItem value="buy_x_pay_y">Buy X, pay for Y (e.g. 3 for 2)</SelectItem>}
 												</SelectContent></Select><FormMessage /></FormItem>
 											)} />
-											<FormField control={control} name="discountValue" render={({ field }) => (
+											{discountMethod === 'buy_x_pay_y' ? <div className="space-y-3">
+<FormField control={control} name="buyQuantity" render={({ field }) => (<FormItem><FormLabel>Buy quantity (X)</FormLabel><FormControl><Input type="number" min="2" max="1000" step="1" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+<FormField control={control} name="payQuantity" render={({ field }) => (<FormItem><FormLabel>Pay for quantity (Y)</FormLabel><FormControl><Input type="number" min="1" max="999" step="1" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />
+<p className="text-sm text-muted-foreground">Cheapest eligible items free per complete group. Extras charged normally. Cannot combine with other item discounts; the best cart offer or code wins.</p>
+</div> : (<FormField control={control} name="discountValue" render={({ field }) => (
 												<FormItem><FormLabel>Discount Value</FormLabel><FormControl><Input type="number" step="0.01" placeholder="e.g. 10 or 50" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-											)} />
+											)} />)}
 										</div>
 									</>
 								)}
@@ -416,7 +368,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Active</FormLabel></div><FormControl><Switch name="isActive" checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
 								)} />
 								<FormField control={control} name="allowStacking" render={({ field }) => (
-									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Allow Stacking</FormLabel></div><FormControl><Switch name="allowStacking" checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
+									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Allow Stacking</FormLabel>{discountMethod === 'buy_x_pay_y' && <FormDescription>Quantity offers cannot be stacked.</FormDescription>}</div><FormControl><Switch name="allowStacking" disabled={discountMethod === 'buy_x_pay_y'} checked={discountMethod === 'buy_x_pay_y' ? false : field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
 								)} />
 								<FormField control={control} name="assignToOfferCategory" render={({ field }) => (
 									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Show in "Offers" Category</FormLabel></div><FormControl><Switch name="assignToOfferCategory" checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
@@ -492,4 +444,3 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 		</Form>
 	);
 }
-

@@ -69,10 +69,10 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
     }
 
     const applicableDiscount = activeDiscounts
-      .filter(d => 
+      .filter(d => d.discountMethod !== 'buy_x_pay_y' && (
           (d.discountType === 'product' && d.referenceIds.includes(product.id)) || 
           (d.discountType === 'category' && product.categoryId && d.referenceIds.includes(product.categoryId))
-      )
+      ))
       .reduce<StandardDiscount | null>((best, current) => {
           if (!best) return current;
           const bestDiscountedPrice = applyDiscount(originalPrice, best);
@@ -111,6 +111,10 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
 
   const getBadgeText = () => {
     if (hasOffer) return "Offer";
+    const quantityOffer = activeDiscounts.find(d => d.discountMethod === 'buy_x_pay_y' &&
+      ((d.discountType === 'product' && d.referenceIds.includes(product.id)) ||
+       (d.discountType === 'category' && !!product.categoryId && d.referenceIds.includes(product.categoryId))));
+    if (quantityOffer) return `${quantityOffer.buyQuantity} for ${quantityOffer.payQuantity}`;
     if (product.isFeatured) return "Featured";
     if (product.isNew) return "New";
     if (product.isPopular) return "Popular";

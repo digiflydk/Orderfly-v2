@@ -12,6 +12,7 @@ import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from 'firebase/firestore';
 import type { CartItem, Discount, OrderDetail, Brand, Location, CustomerInfo, Customer, StandardDiscount, PaymentDetails, MinimalCartItem, Product, ComboMenu, Topping, ComboSelection, LoyaltySettings, AnonymousCookieConsent } from '@/types';
 import { getDiscountByCode, getDiscountById } from '@/app/superadmin/discounts/actions';
+import { bestAutomaticDiscount, type OfferLine } from '@/lib/automatic-discounts';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
@@ -339,7 +340,7 @@ export async function createStripeCheckoutSessionAction(
 
     const chargedItemsSubtotal = cartItems.reduce((sum, item) => {
       const lineTotal = toNumber(item.totalPrice);
-      if (item.quantity <= 0 || lineTotal < 0) throw new Error('Invalid cart item quantity or total.');
+      if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0 || lineTotal < 0) throw new Error('Invalid cart item quantity or total.');
       return sum + lineTotal;
     }, 0);
     const itemDiscountTotal = Math.max(0, toNumber(paymentDetails.subtotal) - chargedItemsSubtotal);
@@ -350,6 +351,7 @@ export async function createStripeCheckoutSessionAction(
     });
 
     // Resolve eligibility from native catalog records; the browser cannot mark a combo as a product.
+    const quantityLines: OfferLine[] = [];
     const eligibleLines = await Promise.all(cartItems.map(async item => {
       if (!item.id) throw new Error('Please refresh your basket before checking out.');
       let [productSnap, comboSnap] = await Promise.all([
@@ -365,22 +367,23 @@ export async function createStripeCheckoutSessionAction(
       if (combo) return 0;
       const catalogPrice = deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price;
       const itemOffer = activeStandardDiscounts.some(d =>
-        (d.discountType === 'product' && d.referenceIds.includes(productSnap.id)) ||
-        (d.discountType === 'category' && d.referenceIds.includes(catalog!.categoryId))
+        d.discountMethod !== 'buy_x_pay_y' && ((d.discountType === 'product' && d.referenceIds.includes(productSnap.id)) ||
+        (d.discountType === 'category' && d.referenceIds.includes(catalog!.categoryId)))
       );
-      return cartLineEligible(false, catalogPrice, item.unitPrice, itemOffer) ? item.totalPrice : 0;
+      const eligible = cartLineEligible(false, catalogPrice, item.unitPrice, itemOffer);
+      if (eligible && activeStandardDiscounts.some(d => d.discountMethod === 'buy_x_pay_y') &&
+          Math.round(item.totalPrice * 100) < Math.round(catalogPrice * 100) * item.quantity) {
+        throw new Error('Basket prices have changed. Please refresh your basket.');
+      }
+      if (eligible && Number.isSafeInteger(item.quantity) && item.quantity > 0) quantityLines.push({
+        id: productSnap.id, categoryId: catalog!.categoryId, quantity: item.quantity,
+        unitPrice: Math.max(0, Math.min(catalogPrice, item.unitPrice, item.totalPrice / item.quantity)),
+      });
+      return eligible ? item.totalPrice : 0;
     }));
     const eligibleSubtotal = eligibleLines.reduce((sum, amount) => sum + amount, 0);
 
-    const automaticCartDiscount = activeStandardDiscounts
-      .filter(discount => discount.discountType === 'cart' && eligibleSubtotal >= (discount.minOrderValue || 0))
-      .map(discount => ({
-        name: discount.discountName,
-        amount: discount.discountMethod === 'percentage'
-          ? eligibleSubtotal * ((discount.discountValue || 0) / 100)
-          : Math.min(eligibleSubtotal, discount.discountValue || 0),
-      }))
-      .reduce<{ name: string; amount: number } | null>((best, current) => !best || current.amount > best.amount ? current : best, null);
+    const automaticCartDiscount = bestAutomaticDiscount(activeStandardDiscounts, eligibleSubtotal, quantityLines);
 
     let selectedDiscount: Discount | null = null;
     let selectedDiscountAmount = 0;
