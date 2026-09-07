@@ -454,7 +454,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       {restoreError ? <div className="text-center">
         <p>Kurven kunne ikke indlæses. Prøv igen for at hente aktuelle priser.</p>
         <button className="mt-4 rounded bg-primary px-4 py-2 text-primary-foreground" onClick={() => setRetry(value => value + 1)}>Prøv igen</button>
-      </div> : <p>Indlæser kurv og aktuelle priser…</p>}
+      </div> : <span className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" aria-label="Indlæser" />}
     </div>}
     {cartReady && cartNotice && <div role="status" className="fixed bottom-4 left-4 right-4 z-[90] rounded border bg-background p-4 shadow-lg">
       {cartNotice}<button className="ml-4 underline" onClick={() => setCartNotice('')}>Luk</button>
