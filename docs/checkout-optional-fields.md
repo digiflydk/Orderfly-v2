@@ -28,3 +28,9 @@ Work Release must review, merge and deploy the hotfix. Work QA
 must then verify that these checkout scenarios reach Stripe in the released
 build. Local mocked tests are not evidence of live payment success. Do not mark the incident resolved
 until the deployed version and live handoff have been verified.
+
+The follow-up [checkout reliability change (#60)](checkout-reliability.md) keeps
+this normalization at both customer and order boundaries. New orders are now
+created transactionally so a duplicate reference cannot overwrite another order.
+Its shared fixture retains the original eight new/returning-customer and discount
+scenarios while adding failure and reservation coverage.

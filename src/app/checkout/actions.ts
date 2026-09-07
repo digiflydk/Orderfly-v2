@@ -2,6 +2,8 @@
 
 'use server';
 
+import { optionalCheckoutValue } from '@/lib/optional-checkout';
+import { isDefinitiveStripeRejection } from '@/lib/stripe-checkout-failure';
 import { validateCheckoutPrices } from '@/lib/checkout-price-validation';
 import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
 import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
@@ -31,8 +33,10 @@ function sanitizeDescriptor(s: string, max: number) {
   const allowed = s.toUpperCase().replace(/[^A-Z0-9 .\-&]/g, " ").replace(/\s+/g, " ").trim();
   return allowed.slice(0, max);
 }
-function makeDescriptorPrefix(brand: string) { return sanitizeDescriptor(`OFLY*${brand}`, 22); }
-function makeDescriptorSuffix(city: string) { return sanitizeDescriptor(city, 10); }
+function makeDescriptorSuffix(city: string) {
+  const suffix = sanitizeDescriptor(city || '', 10);
+  return /[A-Z]/.test(suffix) ? suffix : 'ORDERFLY';
+}
 
 function normalizeCustomerEmail(value: string): string {
     return value.trim().toLowerCase();
@@ -84,22 +88,20 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
         let cookieConsentData: Customer['cookie_consent'] | undefined = undefined;
 
         if (anonymousConsentId) {
-            const anonConsentRef = doc(db, 'anonymous_cookie_consents', anonymousConsentId);
-            const anonConsentSnap = await getDoc(anonConsentRef);
-            if (anonConsentSnap.exists()) {
-                const data = anonConsentSnap.data() as AnonymousCookieConsent;
-                cookieConsentData = {
-                    marketing: data.marketing,
-                    statistics: data.statistics,
-                    functional: data.functional,
-                    timestamp: (data.last_seen as any).toDate(),
-                    consent_version: data.consent_version,
-                    linked_anon_id: anonymousConsentId,
-                    origin_brand: data.origin_brand,
+            cookieConsentData = await optionalCheckoutValue(async () => {
+                const ref = doc(db, 'anonymous_cookie_consents', anonymousConsentId);
+                const snapshot = await getDoc(ref);
+                if (!snapshot.exists()) return undefined;
+                const data = snapshot.data() as AnonymousCookieConsent;
+                const timestamp = asDate(data.last_seen);
+                if (!timestamp || Number.isNaN(timestamp.getTime())) return undefined;
+                await updateDoc(ref, { linked_to_customer: true });
+                return {
+                    marketing: data.marketing, statistics: data.statistics, functional: data.functional,
+                    timestamp, consent_version: data.consent_version,
+                    linked_anon_id: anonymousConsentId, origin_brand: data.origin_brand,
                 };
-                 // After fetching, mark the anonymous record as linked
-                await updateDoc(anonConsentRef, { linked_to_customer: true });
-            }
+            }, undefined);
         }
 
         if (customerDoc.exists()) {
@@ -158,7 +160,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
         
         return customerId;
     } catch (e: any) {
-        console.error("Customer creation/update failed:", e);
+        console.error('checkout_customer_failed', { code: e?.code || 'unknown' });
         throw new Error(`Could not create or update customer profile: ${e.message}`);
     }
 }
@@ -317,15 +319,17 @@ export async function createStripeCheckoutSessionAction(
     locationSlug: string,
     deliveryTime?: string,
     anonymousConsentId?: string
-): Promise<{ success: boolean; url?: string | null; orderId?: string; error?: string }> {
+): Promise<{ success: boolean; url?: string | null; orderId?: string; error?: string; retryable?: boolean }> {
   let reservedOrderId: string | undefined;
   let sessionRequestStarted = false;
+  let stage = 'configuration';
   try {
     const stripeSecretKey = await getActiveStripeSecretKey();
     if (!stripeSecretKey) {
         throw new Error('Stripe API key is not configured.');
     }
-    const stripe = new Stripe(stripeSecretKey);
+    const stripe = new Stripe(stripeSecretKey, { timeout: 15000, maxNetworkRetries: 2 });
+    stage = 'validation';
 
     const origin = await getOrigin();
     
@@ -446,6 +450,7 @@ export async function createStripeCheckoutSessionAction(
       vatAmount: totalAmount * ((brand.vatPercentage || 25) / (100 + (brand.vatPercentage || 25))),
     };
 
+    stage = 'customer';
     const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, anonymousConsentId, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined);
 
     // Step 1: Pre-create order with 'Pending' status
@@ -453,7 +458,8 @@ export async function createStripeCheckoutSessionAction(
     const cancelToken = randomBytes(32).toString('hex');
     const orderRef = doc(db, 'orders', orderId);
 
-    await setDoc(orderRef, omitUndefinedFields({
+    stage = 'order';
+    const orderData = omitUndefinedFields({
         id: orderId,
         createdAt: serverTimestamp(),
         status: 'Received',
@@ -476,11 +482,19 @@ export async function createStripeCheckoutSessionAction(
             address: deliveryType === 'delivery' ? `${customerInfo.street}, ${customerInfo.zipCode} ${customerInfo.city}` : 'For Pickup',
         },
         psp: { provider: 'stripe' },
-    }));
+    });
+    // Six-digit order references can collide. Never overwrite another order or
+    // reuse its Stripe idempotency key; a collision must fail before payment.
+    await runTransaction(db, async transaction => {
+      const existing = await transaction.get(orderRef);
+      if (existing.exists()) throw new Error('Order reference already exists. Please retry.');
+      transaction.set(orderRef, orderData);
+    });
 
 
-    await reserveDiscount(orderId, appliedDiscountIdForOrder, customerId, brandId);
+    stage = 'reservation';
     reservedOrderId = orderId;
+    await reserveDiscount(orderId, appliedDiscountIdForOrder, customerId, brandId);
 
     const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => {
         if (item.unitPrice == null) {
@@ -532,12 +546,12 @@ export async function createStripeCheckoutSessionAction(
             anonymousConsentId: anonymousConsentId || '',
         },
         payment_intent_data: {
-            statement_descriptor: makeDescriptorPrefix(brand.name),
             statement_descriptor_suffix: makeDescriptorSuffix(location.city),
             metadata: { orderId, brandId, locationId },
         },
     };
 
+    stage = 'coupon';
     if (cartDiscountTotal > 0) {
         const coupon = await stripe.coupons.create({
             amount_off: Math.round(cartDiscountTotal * 100),
@@ -548,25 +562,58 @@ export async function createStripeCheckoutSessionAction(
         sessionParams.discounts = [{ coupon: coupon.id }];
     }
     
-    // Step 2: Create Stripe session with orderId in metadata
+    // Retry network failures with the same parameters/idempotency key in the SDK.
+    // A confirmed 4xx rejection has no payable session; a timeout/5xx is uncertain.
+    stage = 'stripe_session';
     sessionRequestStarted = true;
-    const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: orderId });
-    
-    // Step 3: Patch order with session ID
-    await updateDoc(orderRef, {
-        'psp.checkoutSessionId': session.id,
-        updatedAt: serverTimestamp(),
-    });
+    let session: Stripe.Checkout.Session;
+    let sessionRequests = 0;
+    const countSessionRequest = () => { sessionRequests++; };
+    stripe.on('request', countSessionRequest);
+    try {
+      session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: orderId });
+    } catch (error) {
+      // A later 4xx can precede Stripe's idempotency layer (e.g. rate limiting)
+      // after an earlier request succeeded but its response was lost.
+      if (sessionRequests === 1 && isDefinitiveStripeRejection(error)) sessionRequestStarted = false;
+      throw error;
+    } finally {
+      stripe.off('request', countSessionRequest);
+    }
 
+    stage = 'session_link';
+    try {
+      if (!session.url) throw new Error('Stripe did not return a hosted payment URL.');
+      const patch = { 'psp.checkoutSessionId': session.id, updatedAt: serverTimestamp() };
+      // The patch is idempotent. A transient write failure must not strand an
+      // otherwise valid session or reserve another discount on retry.
+      try { await updateDoc(orderRef, patch); }
+      catch { await updateDoc(orderRef, patch); }
+    } catch (error) {
+      // A known but undeliverable session must be confirmed expired before a
+      // fresh attempt is safe. Never assume expiration on a network exception.
+      try {
+        const expired = await stripe.checkout.sessions.expire(session.id);
+        if (expired.status === 'expired' && expired.payment_status !== 'paid') sessionRequestStarted = false;
+      } catch { /* Keep the reservation until signed Stripe reconciliation. */ }
+      throw error;
+    }
     return { success: true, url: session.url, orderId };
 
   } catch (e: any) {
-    // Once a request may have reached Stripe, keep the hold until a signed expiration
-    // event. A timeout is not proof that a payable session was not created.
-    if (reservedOrderId && !sessionRequestStarted) await releaseDiscount(reservedOrderId, brandId);
-    console.error("Failed to create Stripe checkout session:", e);
-    const errorMessage = e instanceof Error ? e.message : "An unknown error occurred";
-    return { success: false, error: errorMessage };
+    let retryable = !sessionRequestStarted;
+    if (reservedOrderId && retryable) {
+      try { await releaseDiscount(reservedOrderId, brandId); }
+      catch { retryable = false; }
+    }
+    // Correlate stages without logging customer details, secrets or session URLs.
+    console.error('checkout_failed', { stage, orderId: reservedOrderId, code: e?.code || e?.type || 'unknown', retryable });
+    const errorMessage = !retryable
+      ? `We could not confirm the payment status. Please contact the restaurant before retrying.${reservedOrderId ? ` Reference: ${reservedOrderId}.` : ''}`
+      : ['validation', 'reservation'].includes(stage) && e instanceof Error
+        ? e.message
+        : 'Payment could not be opened. Please try again or contact the restaurant.';
+    return { success: false, error: errorMessage, retryable };
   }
 }
 
