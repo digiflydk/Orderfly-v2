@@ -3,7 +3,9 @@
 'use server';
 
 import { db } from '@/lib/firebase';
-import { collection, getDocs, query, orderBy, Timestamp, doc, writeBatch, setDoc, deleteDoc, getDoc, where } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { requireFinancialAdmin } from '@/lib/loyalty/admin-session';
+import { collection, getDocs, query, Timestamp, doc, getDoc, where } from 'firebase/firestore';
 import type { Customer, OrderDetail, LoyaltySettings, Feedback } from '@/types';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -39,7 +41,7 @@ export async function createOrUpdateCustomer(
     
     const mappedData = {
         ...rawData,
-        status: formData.get('status') ? 'active' : 'inactive',
+        status: formData.get('status') === 'active' ? 'active' : 'inactive',
     };
 
     const validationSchema = z.object({
@@ -64,23 +66,26 @@ export async function createOrUpdateCustomer(
     const docId = id || doc(collection(db, 'customers')).id;
 
     try {
-        const customerRef = doc(db, 'customers', docId);
+        await requireFinancialAdmin();
+        const customerRef = getAdminDb().collection('customers').doc(docId);
         
         if (id) {
-             await setDoc(customerRef, customerData, { merge: true });
+             await customerRef.update(customerData);
         } else {
+            const brandId = z.string().min(1).max(150).refine(value => !value.includes('/')).parse(formData.get('brandId'));
+            if (!(await getAdminDb().collection('brands').doc(brandId).get()).exists) throw new Error('Select an existing brand.');
             const newCustomerData = {
                 ...customerData,
                 id: docId,
-                brandId: 'brand-gourmet', // Placeholder
-                createdAt: Timestamp.now(),
+                brandId,
+                createdAt: new Date(),
                 totalOrders: 0,
                 totalSpend: 0,
                 locationIds: [],
                 loyaltyScore: 0,
                 loyaltyClassification: 'New',
             }
-            await setDoc(customerRef, newCustomerData);
+            await customerRef.create(newCustomerData);
         }
 
         return { message: `Customer ${id ? 'updated' : 'created'} successfully.`, error: false };
@@ -92,7 +97,8 @@ export async function createOrUpdateCustomer(
 
 export async function deleteCustomer(customerId: string) {
     try {
-        await deleteDoc(doc(db, "customers", customerId));
+        await requireFinancialAdmin();
+        await getAdminDb().collection('customers').doc(customerId).delete();
         revalidatePath("/superadmin/customers");
         return { message: "Customer deleted successfully.", error: false };
     } catch (e) {
@@ -145,7 +151,7 @@ export async function getCustomers(): Promise<Customer[]> {
       } as Customer;
   });
 
-  return customers;
+  return customers.sort((a, b) => (asDate(b.lastOrderDate)?.getTime() ?? -Infinity) - (asDate(a.lastOrderDate)?.getTime() ?? -Infinity) || a.id.localeCompare(b.id));
 }
 
 

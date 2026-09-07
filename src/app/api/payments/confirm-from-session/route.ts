@@ -1,6 +1,6 @@
 import { NextRequest,NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
+import { getActiveStripeSecretKey } from '@/lib/payments/settings';
 import { fulfillPaidSession } from '@/lib/payments/settlement';
 
 export async function POST(req:NextRequest) {

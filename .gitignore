@@ -71,3 +71,5 @@ coverage/
 /workspace/
 /usr/
 /src/workspace/
+
+/tests/loyalty-app/.next/

@@ -6,6 +6,9 @@ import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import type { AnalyticsSettings, PaymentGatewaySettings, LanguageSettings, Brand, PlatformBrandingSettings } from '@/types';
 import { db } from '@/lib/firebase';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { requireFinancialAdmin, financialAdminSession } from '@/lib/loyalty/admin-session';
+import { readPaymentGatewaySettings } from '@/lib/payments/settings';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { getPlatformBrandingSettings } from './queries';
 
@@ -165,8 +168,11 @@ export async function updatePaymentGatewaySettings(
 	}
 
 	try {
-		const settingsRef = doc(db, 'platform_settings', 'payment_gateway');
-		await setDoc(settingsRef, validatedFields.data);
+		const actor = await requireFinancialAdmin();
+		const adminDb = getAdminDb(), batch = adminDb.batch();
+		batch.set(adminDb.collection('platform_settings').doc('payment_gateway'), validatedFields.data);
+		batch.create(adminDb.collection('loyalty_audit').doc(), { kind: 'payment_settings_updated', actor: actor.uid, at: new Date().toISOString() });
+		await batch.commit();
 		revalidatePath('/superadmin/settings');
 		return { message: 'Payment gateway settings updated successfully.', error: false };
 	} catch (e) {
@@ -241,7 +247,7 @@ export async function getPlatformSettings(): Promise<{
 	brandingSettings: PlatformBrandingSettings | null;
 }> {
 	const analyticsDoc = await getDoc(doc(db, 'platform_settings', 'analytics'));
-	const paymentDoc = await getDoc(doc(db, 'platform_settings', 'payment_gateway'));
+	const financialAdmin = await financialAdminSession();
 	const languagesDoc = await getDoc(doc(db, 'platform_settings', 'languages'));
 	const brandingSettings = await getPlatformBrandingSettings();
 
@@ -249,9 +255,7 @@ export async function getPlatformSettings(): Promise<{
 		? (analyticsDoc.data() as AnalyticsSettings)
 		: defaultAnalyticsSettings;
 
-	const paymentGatewaySettings: PaymentGatewaySettings = paymentDoc.exists()
-		? (paymentDoc.data() as PaymentGatewaySettings)
-		: defaultPaymentGatewaySettings;
+	const paymentGatewaySettings = financialAdmin ? await readPaymentGatewaySettings() : defaultPaymentGatewaySettings;
 
 	const languageSettings: LanguageSettings = languagesDoc.exists()
 		? (languagesDoc.data() as LanguageSettings)
@@ -266,21 +270,8 @@ export async function getPlatformSettings(): Promise<{
 }
 
 
-// Helpers to get active Stripe keys
+// Only the publishable key is exposed through a public server action.
 export async function getActiveStripeKey(): Promise<string | null> {
-	const settings = await getPlatformSettings();
-	const mode = settings.paymentGatewaySettings.activeMode;
-	return settings.paymentGatewaySettings[mode]?.publishableKey || null;
-}
-
-export async function getActiveStripeSecretKey(): Promise<string | null> {
-	const settings = await getPlatformSettings();
-	const mode = settings.paymentGatewaySettings.activeMode;
-	return settings.paymentGatewaySettings[mode]?.secretKey || null;
-}
-
-export async function getActiveStripeWebhookSecret(): Promise<string | null> {
-	const settings = await getPlatformSettings();
-	const mode = settings.paymentGatewaySettings.activeMode;
-	return settings.paymentGatewaySettings[mode]?.webhookSecret || null;
+  const settings = await readPaymentGatewaySettings();
+  return settings[settings.activeMode]?.publishableKey || null;
 }

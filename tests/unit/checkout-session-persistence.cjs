@@ -18,7 +18,7 @@ async function checkout({existing=false,kind='none',identityCleaner=false,loyalt
  const mocks=Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],{}]));
  const events=[];const writes=[];let coupon,sessionParams,rewardReservation;
  const record={id:'c',brandId:'b',locationIds:['l'],marketingConsent:false};
- const snap={ref:{id:'c',collection:'customers'},exists:()=>true,data:()=>record};
+ const snap={ref:{id:'c',collection:'customers'},exists:true,data:()=>record};
  Object.assign(mocks,{
   '@/lib/loyalty/model':load('src/lib/loyalty/model.ts'),
   '@/lib/loyalty/identity':{verifiedCustomer:async()=>({uid:'verified-user',email:'test@example.test'})},
@@ -32,7 +32,7 @@ async function checkout({existing=false,kind='none',identityCleaner=false,loyalt
   '@/lib/discount-reservations':{reserveDiscount:async()=>events.push('reserve'),releaseDiscount:async()=>events.push('release')},
   '@/lib/order-id':{generateOrderId:()=> 'ORD-TEST'},'@/lib/firebase':{db:{}},
   '@/lib/url':{getOrigin:async()=> 'https://example.test'},
-  '../superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
+  '@/lib/payments/settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
   '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b',name:'Test brand',bagFee:4,adminFee:0})},
   '@/app/superadmin/locations/actions':{getLocationById:async()=>({id:'l',brandId:'b',city:'Hellerup',name:'Test location'})},
   '@/app/superadmin/discounts/actions':{getDiscountById:async()=>({...offer,applicationType:kind==='newsletter'?'newsletter_signup':'code'})},
@@ -41,15 +41,15 @@ async function checkout({existing=false,kind='none',identityCleaner=false,loyalt
    coupons={create:async params=>{if(failStage==='coupon')throw Error('coupon failed');coupon=params;return {id:'coupon'};}};
    checkout={sessions:{create:async params=>{events.push('stripe');sessionParams=params;if(failStage==='session')throw Error('request timeout');assert.equal(writes.find(w=>w.ref.collection==='orders').data.paymentDetails.cartDiscountTotal,loyalty?20:kind==='none'?0:10);return {id:'cs_test_mock',url:'https://checkout.stripe.test/session'};}}};
   }},
-  'firebase/firestore':{
-   collection:(_,name)=>name,where:()=>null,query:value=>value,getDocs:async()=>({docs:[]}),
-   doc:(_,collection,id)=>({collection,id}),
-   getDoc:async ref=>({id:ref.id,exists:()=>ref.collection==='products',data:()=>({brandId:'b',locationIds:['l'],categoryId:'pizza',price:100})}),
-   serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),
-   setDoc:async(ref,data)=>{strictWrite(data);writes.push({ref,data});events.push(ref.collection);},
-   updateDoc:async(ref,data)=>{strictWrite(data);writes.push({ref,data});events.push('patch');},
-  },
+  '@/lib/firebase-admin': {getAdminDb:()=>adminDb},
+  'firebase-admin/firestore':{FieldValue:{serverTimestamp:()=>new Date('2026-09-07T00:00:00Z')}},
  });
+ const makeRef=(collection,id)=>({collection,id,
+   get:async()=>({id,exists:collection==='products'||(collection==='customers'&&existing),data:()=>collection==='customers'?record:{brandId:'b',locationIds:['l'],categoryId:'pizza',price:100}}),
+   create:async(data)=>{strictWrite(data);writes.push({ref:{collection,id},data});events.push(collection);},
+   update:async(data)=>{strictWrite(data);writes.push({ref:{collection,id},data});events.push('patch');},
+ });
+ const adminDb={collection:name=>({doc:id=>makeRef(name,id),where(){return this;},get:async()=>({docs:[]})}),runTransaction:async fn=>fn({get:ref=>makeRef(ref.collection,ref.id).get(),create:(ref,data)=>makeRef(ref.collection,ref.id).create(data),update:(ref,data)=>makeRef(ref.collection,ref.id).update(data)})};
  const api=load(path,mocks);
  const result=await api.createStripeCheckoutSessionAction([{id:'p',name:'Pizza',quantity:fractional?3:1,unitPrice:fractional?66.666667:100,totalPrice:fractional?200.000001:100,toppings:identityCleaner?[]:undefined}],{name:'Test',email:'test@example.test',phone:'12345678',subscribeToNewsletter:kind==='newsletter',...(identityCleaner?{street:'',zipCode:'',city:''}:{})},'pickup','b','l',{subtotal:fractional?300:100,bagFee:4,cartDiscountName:undefined},['code','newsletter'].includes(kind)?'d':null,'brand','location',undefined,undefined,loyalty?{token:'verified-token',redeemOre:2000}:undefined);
  return {result,writes,events,coupon,sessionParams,rewardReservation};

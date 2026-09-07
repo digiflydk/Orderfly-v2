@@ -45,13 +45,14 @@ test('actual checkout action rejects tampering before side effects, allows valid
   '@/lib/loyalty/model':load('src/lib/loyalty/model.ts'),
   '@/lib/checkout-price-validation':pricing,'@/lib/promotion-rules':rules,'@/lib/automatic-discounts':automatic,
   stripe:{default:class Stripe {}},'@/lib/firebase':{db:{}},
-  '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>{if(++identityCalls===2)throw Error('AFTER_PRICE_VALIDATION');return {ref:{id:'c'},exists:()=>true,data:()=>({brandId:'b'})};}},
-  '../superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
+  '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>{if(++identityCalls===2)throw Error('AFTER_PRICE_VALIDATION');return {ref:{id:'c'},exists:true,data:()=>({brandId:'b'})};}},
+  '@/lib/payments/settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
   '@/lib/url':{getOrigin:async()=> 'https://example.test'},
   '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b'})},
   '@/app/superadmin/locations/actions':{getLocationById:async()=>({id:'l',brandId:'b'})},
   '@/app/superadmin/standard-discounts/actions':{getActiveStandardDiscounts:async()=>[offer]},
-  'firebase/firestore':{doc:(_,collection,id)=>({collection,id}),getDoc:async ref=>({id:ref.id,exists:()=>ref.collection==='products',data:()=>({brandId:'b',locationIds:['l'],categoryId:'pizza',price:100})}),collection:()=>({}),where:()=>({}),query:()=>({}),getDocs:async()=>({docs:[]}),setDoc:async()=>{writes++;}},
+  '@/lib/firebase-admin':{getAdminDb:()=>({collection:collection=>({doc:id=>({id,get:async()=>({id,exists:collection==='products',data:()=>({brandId:'b',locationIds:['l'],categoryId:'pizza',price:100})})}),where(){return this;},get:async()=>({docs:[]})})})},
+  'firebase-admin/firestore':{FieldValue:{}},
  });
  const api=load(path,mocks);
  async function run(line){identityCalls=0;return api.createStripeCheckoutSessionAction([line],{email:'test@example.test'},'pickup','b','l',{subtotal:300},null,'brand','location');}

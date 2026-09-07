@@ -47,6 +47,7 @@ function loadServiceAccount(): ServiceAccount | null {
 			);
 		}
 
+		if (parsed.project_id !== 'orderfly-39325') throw new Error('Admin credentials must target the production data project orderfly-39325.');
 		return parsed;
 	} catch (error) {
 		const message =

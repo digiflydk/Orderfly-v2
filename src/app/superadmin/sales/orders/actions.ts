@@ -1,31 +1,28 @@
-
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, getDoc } from 'firebase/firestore';
-import type { OrderDetail, OrderStatus } from '@/types';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { requireFinancialAdmin } from '@/lib/loyalty/admin-session';
+import type { OrderStatus } from '@/types';
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
     try {
-        const orderRef = doc(db, 'orders', orderId);
-        
-        if (status === 'Delivered' || status === 'Canceled') {
-            const orderSnap = await getDoc(orderRef);
-            if (!orderSnap.exists()) {
-                return { success: false, message: 'Order not found.' };
+        const actor = await requireFinancialAdmin();
+        if (!['Received', 'In Progress', 'Ready', 'Completed', 'Delivered', 'Canceled', 'Error'].includes(status)) throw new Error('Invalid order status.');
+        const db = getAdminDb(), orderRef = db.collection('orders').doc(orderId);
+        // Read payment/refund state and write status together. A concurrent payment
+        // must not turn a pending cancellation into cancellation of an unrefunded sale.
+        await db.runTransaction(async tx => {
+            const snap = await tx.get(orderRef);
+            if (!snap.exists) throw new Error('Order not found.');
+            const order = snap.data()!;
+            if (status === 'Canceled' && order.paymentStatus === 'Paid' && (order.refundedAmountOre || 0) < Math.round(order.totalAmount * 100)) {
+                throw new Error('Refundér betalingen i Stripe før den betalte ordre annulleres. Loyalty korrigeres ved refunderingen.');
             }
-            const orderData = orderSnap.data() as OrderDetail;
-            if (status === 'Canceled' && orderData.paymentStatus === 'Paid' && (orderData.refundedAmountOre||0)<Math.round(orderData.totalAmount*100)) {
-                return {success:false,message:'Refundér betalingen i Stripe før den betalte ordre annulleres. Loyalty korrigeres ved refunderingen.'};
-            }
-            if (status === 'Delivered' && orderData.paymentStatus !== 'Paid') {
-                return { success: false, message: 'Cannot mark order as Delivered until payment is confirmed.' };
-            }
-        }
-        
-        await updateDoc(orderRef, { status: status });
-        
+            if (status === 'Delivered' && order.paymentStatus !== 'Paid') throw new Error('Cannot mark order as Delivered until payment is confirmed.');
+            tx.update(orderRef, { status });
+            tx.create(db.collection('loyalty_audit').doc(), { kind: 'order_status_updated', actor: actor.uid, orderId, brandId: order.brandId, status, at: new Date().toISOString() });
+        });
         revalidatePath('/superadmin/sales/orders');
         revalidatePath(`/superadmin/sales/orders/${orderId}`);
         revalidatePath('/superadmin/sales/dashboard');

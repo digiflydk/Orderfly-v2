@@ -1,5 +1,6 @@
 'use client';
 import '@/lib/firebase';
+import { closeFinancialAdminSession } from '@/app/loyalty/admin-session-actions';
 import { getApp } from 'firebase/app';
 import { getAuth,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmailAndPassword,sendEmailVerification,sendPasswordResetEmail,signOut,type User } from 'firebase/auth';
 import { useEffect,useState } from 'react';
@@ -17,7 +18,7 @@ export function LoyaltyAuth({onUser}:{onUser:(user:User|null)=>void}) {
       if(kind==='create'){const result=await createUserWithEmailAndPassword(auth,email,password);await sendEmailVerification(result.user);setMessage('Bekræft din e-mail via linket, vi har sendt.');}
       if(kind==='verify'&&auth.currentUser){await sendEmailVerification(auth.currentUser);setMessage('Bekræftelsesmail sendt.');}
       if(kind==='refresh'&&auth.currentUser){await auth.currentUser.reload();await auth.currentUser.getIdToken(true);setUser(auth.currentUser);onUser(auth.currentUser.emailVerified?auth.currentUser:null);}
-      if(kind==='logout'){await signOut(auth);onUser(null);}
+      if(kind==='logout'){await closeFinancialAdminSession();await signOut(auth);onUser(null);window.dispatchEvent(new Event('financial-admin-logout'));}
       if(kind==='reset'){await sendPasswordResetEmail(auth,email);setMessage('Hvis kontoen findes, modtager du et link til at nulstille adgangskoden.');}
       setPassword('');
     }catch{setMessage('Kunne ikke gennemføre. Kontrollér oplysningerne eller prøv igen senere.');}finally{setBusy(false);}

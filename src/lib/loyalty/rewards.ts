@@ -8,7 +8,10 @@ export async function getProgram(brandId:string):Promise<LoyaltyProgram> {
   const db=getAdminDb();
   if(!(await db.collection('brands').doc(brandId).get()).exists)throw new Error('Brand not found');
   const snap=await db.collection('loyalty_programs').doc(brandId).get();
-  return snap.exists?programSchema.parse(snap.data()?.program):defaultProgram;
+  const program = snap.exists ? programSchema.parse(snap.data()?.program) : defaultProgram;
+  // Fail closed during the coordinated backend/rules rollout, including records
+  // that may have been created while the previous client rules were permissive.
+  return process.env.LOYALTY_FINANCIAL_RULES_READY === 'true' ? program : {...program, enabled:false};
 }
 export async function walletView(brandId:string,uid:string) {
   const db=getAdminDb(),ref=db.collection('loyalty_wallets').doc(key(brandId,uid));

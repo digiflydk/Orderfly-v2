@@ -3,7 +3,7 @@
 import type { NextRequest } from 'next/server';
 import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
-import { getActiveStripeSecretKey, getActiveStripeWebhookSecret } from '@/app/superadmin/settings/actions';
+import { getActiveStripeSecretKey, getActiveStripeWebhookSecret } from '@/lib/payments/settings';
 import { headers } from 'next/headers';
 import { db } from '@/lib/firebase';
 import { doc, setDoc, getDoc, updateDoc, serverTimestamp, runTransaction, collection, where, query } from 'firebase/firestore';

@@ -69,16 +69,21 @@ order/brand/location/session/currency/amount and actual paid status. A merely
 complete unpaid session cannot mark an order paid. Line amounts, fees and coupon
 are rounded consistently so Stripe and stored receipt totals agree in ore.
 
-Existing order/capacity settlement and Admin wallet settlement are separate
+Order/capacity settlement and wallet settlement use the Admin SDK in separate
 idempotent transactions. If the latter fails, webhook returns 500 for retry; a
 repeated payment still retries the wallet step without incrementing order counts.
-Do not claim an atomic cross-SDK transaction. Monitor/replay failed webhooks.
+Do not claim an atomic cross-ledger transaction. Monitor/replay failed webhooks.
 Refunds arriving before payment are retained and netted on later settlement.
 `charge.refunded` is cumulative, so repeats and older events do not double-reverse.
 
 ## Release activation gates (Work Release)
 
-1. Review/merge/deploy the entire PR. No Actions/full Playwright requested by PO.
+1. Review the entire PR. Before its initial deployment, provision hosting runtime
+   secrets `LOYALTY_ADMIN_UIDS` (only Omair's verified native Auth UID) and
+   `LOYALTY_FINANCIAL_RULES_READY` (initial value `false`) and grant the App Hosting
+   backend access. `apphosting.yaml` declares both as RUNTIME-only references.
+   Missing secrets will block App Hosting deployment. Merge/deploy the backend
+   only after this preparation. No Actions/full Playwright requested by PO.
 2. Use production data project `orderfly-39325` for Firebase Auth and data; hosting
    project remains `orderfly-v21-10334086-b3076`. Verify client project and Admin
    service account agree. Enable Firebase email/password auth, authorized domains
@@ -86,30 +91,46 @@ Refunds arriving before payment are retained and netted on later settlement.
 3. Create/verify the intended account. Set `LOYALTY_ADMIN_UIDS` to Omair's exact
    Firebase Auth UID. Do not use names, email or the legacy permissive admin guard.
    New program/score/reconciliation mutations verify token revocation and UID.
-4. Verify deployed Firestore rules deny all browser access to loyalty_programs,
-   loyalty_orders, loyalty_wallets (including entries), loyalty_audit and direct
-   writes to platform_settings/loyalty. Server Admin SDK owns them. Broad allow
-   rules must exclude these collections: adding a deny beside a wildcard allow
-   does not override it. No rules file from this PR should replace existing rules.
-   Also review existing order/customer financial-field protection separately;
-   the existing checkout still uses its established Firestore client-SDK server
-   access. This PR does not migrate the whole platform's authorization system.
+4. Deploy the reviewed backend first with loyalty disabled, then the scoped
+   `firestore.loyalty.rules` to **data project `orderfly-39325`** using
+   `firebase deploy --only firestore:rules --project orderfly-39325 --config firebase.loyalty.json`.
+   Compare with the active rules before replacement. This file is based on the
+   wildcard observed by Work Release and Work dev on 2026-09-07. If production
+   rules changed since then, merge its explicit exclusions into the current rules.
+   Browser clients cannot read/write loyalty financial records, capacity records
+   or payment gateway secrets, or write orders/customers/score settings, including
+   nested paths. The one compatibility wildcard explicitly excludes these paths;
+   no overlapping allow bypasses the restriction. Existing unrelated permissions
+   and order/customer reads remain unchanged. This is not a complete platform ACL.
+   Checkout customer upsert, order creation, reservation, settlement, cancel and
+   refund now use native Admin SDK access. Customer creation rereads inside a
+   transaction; order UUIDs use create-only writes. Protected customer/status/
+   payment-settings mutations require a revoked-token-checked, allowlisted 15-minute
+   HttpOnly admin session. The UI provides explicit login/confirmation and logout.
+   Check the deployed protections before enabling. Inspect any pre-existing
+   loyalty documents; do not adopt untrusted balances written under the old rules.
+   The previous payment gateway document and exported key getters were public.
+   Rotate the Stripe secret/webhook credentials after this boundary is deployed;
+   key getters now live in an internal `server-only` module and settings are only
+   returned to an authenticated financial administrator. Never log secret values.
 5. Only after that verification set `LOYALTY_FINANCIAL_RULES_READY=true` in runtime.
-   Program activation refuses without this operator gate. This variable is an
+   Roll out that secret version on the reviewed SHA. Program activation and public
+   program reads fail closed without this operator gate, even if a stored record
+   already says enabled. This variable is an
    explicit operator attestation, not an automated rules inspection.
 6. Verify Stripe webhook signature config and subscribed events:
    checkout.session.completed, checkout.session.async_payment_succeeded,
    checkout.session.expired and charge.refunded. Scope/currency checks use DKK.
 7. PO selects rates/minimum/cap and enables the brand from Superadmin Loyalty.
-   No economic configuration, auth user, secret, rules or live order was changed
-   by Work dev. Financial release is not Done until controlled live QA passes.
+   Record exact SHA, deployed rules, verified UID/provider/domain, Stripe mode/events
+   and chosen economic configuration as release evidence. Financial release is not Done until controlled live QA passes.
 
 ## Targeted verification
 
 Run `npm run typecheck` and:
 
 ```
-node --test tests/unit/loyalty-release.cjs tests/unit/loyalty-payments.cjs tests/unit/checkout-session-persistence.cjs tests/unit/checkout-price-validation.cjs
+node --test tests/unit/loyalty-release.cjs tests/unit/loyalty-payments.cjs tests/unit/checkout-session-persistence.cjs tests/unit/checkout-price-validation.cjs tests/unit/loyalty-boundary.cjs
 ```
 
 Tests exercise actual score/ledger/payment/action code with mocked Firebase/Stripe,
@@ -118,6 +139,23 @@ refund events, refund-before-payment, debt, deleted customer, incorrect scope,
 invalid amounts, verified identity, quote caps, legacy checkout scenarios and
 fractional percentage prices. They do not verify real Firestore contention, auth
 mail delivery, browser redirects or deployed rules.
+
+Focused local emulator and browser commands (Firebase CLI and Java 21 required):
+
+```
+firebase emulators:exec --project demo-orderfly-loyalty --config firebase.loyalty.json --only firestore,auth 'node --test tests/loyalty-emulator.cjs'
+firebase emulators:exec --project demo-orderfly-loyalty --config firebase.loyalty.json --only firestore,auth 'npx playwright test --config playwright.loyalty.config.ts'
+```
+
+Both refuse to run without the exact loopback emulator hosts. Never point these
+fixtures at production. The emulator suite exercises actual authorization rules,
+Admin transactions/Firestore contention, token checks, payment/cancel/refund and
+brand separation. The small browser application under `tests/loyalty-app` imports
+production checkout, login, account, server actions and ledger. Only unrelated
+cart/catalog configuration and external Stripe are simulated; Firebase Auth and
+Firestore run locally. Fixture aliases exist only in the test application's
+Next config, never in production. This does not prove real Stripe checkout,
+mail delivery, production session config or live rules deployment.
 
 Work QA on the exact released SHA: new/returning verified accounts; unverified,
 wrong email and unauthorized admin refusal; program save/reopen; real Stripe test
@@ -131,3 +169,18 @@ Do not retroactively award historical credit. Retain failed webhook evidence.
 Reference: Firebase ID-token verification and Stripe event types:
 https://firebase.google.com/docs/auth/admin/verify-id-tokens
 https://docs.stripe.com/api/events/types
+
+## Local verification of the release-blocker correction
+
+The correction includes explicit native brand selection for new admin-created
+customers, preservation of their financial counters, and paid cancellation checks
+inside the same transaction as the status update. The archived order action
+forwards to that same guarded implementation. Existing financial admin sessions
+are cleared by the shared logout action.
+
+Current focused evidence: 29 local unit tests, 3 Firebase emulator scenarios and
+4 Chromium checkout scenarios. The Chromium fixture exercises actual checkout
+UI, token handoff and payment actions against local Firebase with simulated
+Stripe. The full Playwright suite and GitHub Actions are not used. Production
+Auth/UID, rules, credential rotation, historical Stripe reconciliation, brand
+activation and live purchase/refund verification are separate release evidence.

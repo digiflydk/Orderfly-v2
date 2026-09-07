@@ -4,10 +4,10 @@ function fixture(){
  const rows=new Map([['orders/o',{brandId:'b',locationId:'l',customerDetails:{id:'c'},totalAmount:100,paymentStatus:'Pending',psp:{checkoutSessionId:'cs_o'}}],['customers/c',{brandId:'b',totalOrders:0,totalSpend:0}]]),events=[];
  const firestore={doc:(_,coll,id)=>coll+'/'+id,serverTimestamp:()=>new Date(),runTransaction:async(_,fn)=>{
   const writes=[];let wrote=false;
-  const result=await fn({get:async ref=>{assert.equal(wrote,false);return {exists:()=>rows.has(ref),data:()=>structuredClone(rows.get(ref))};},update:(ref,patch)=>{wrote=true;writes.push(()=>{const data=rows.get(ref);for(const [key,v]of Object.entries(patch)){const parts=key.split('.');if(parts.length===2){data[parts[0]]||={};data[parts[0]][parts[1]]=v;}else data[key]=v;}});}});
+  const result=await fn({get:async ref=>{assert.equal(wrote,false);return {exists:rows.has(ref),data:()=>structuredClone(rows.get(ref))};},update:(ref,patch)=>{wrote=true;writes.push(()=>{const data=rows.get(ref);for(const [key,v]of Object.entries(patch)){const parts=key.split('.');if(parts.length===2){data[parts[0]]||={};data[parts[0]][parts[1]]=v;}else data[key]=v;}});}});
   writes.forEach(w=>w());return result;
  }};
- const mocks={'server-only':{},'@/lib/firebase':{db:{}},'firebase/firestore':firestore,'@/lib/discount-reservations':{prepareCapacitySettlement:async()=>()=>events.push('capacity')},'@/lib/loyalty/rewards':{settleRewards:async(...args)=>events.push(args),refundRewards:async(...args)=>events.push(args)}};
+ const mocks={'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>({collection:coll=>({doc:id=>coll+'/'+id}),runTransaction:fn=>firestore.runTransaction({},fn)})},'firebase-admin/firestore':{FieldValue:{serverTimestamp:firestore.serverTimestamp}},'@/lib/discount-reservations':{prepareCapacitySettlement:async()=>()=>events.push('capacity')},'@/lib/loyalty/rewards':{settleRewards:async(...args)=>events.push(args),refundRewards:async(...args)=>events.push(args)}};
  return {rows,events,pay:load('src/lib/payments/settlement.ts',mocks).fulfillPaidSession,refund:load('src/lib/payments/refunds.ts',mocks).processRefund};
 }
 const session={id:'cs_o',created:1788782400,metadata:{orderId:'o',brandId:'b',locationId:'l'},payment_status:'paid',status:'complete',currency:'dkk',amount_total:10000,payment_intent:'pi_o'};

@@ -5,3 +5,11 @@ env:
     secret: FIREBASE_SERVICE_ACCOUNT_JSON
   - variable: ORDERFLY_ESMERALDA_INTEGRATION_SECRET
     secret: ORDERFLY_ESMERALDA_INTEGRATION_SECRET
+  - variable: LOYALTY_ADMIN_UIDS
+    secret: LOYALTY_ADMIN_UIDS
+    availability:
+      - RUNTIME
+  - variable: LOYALTY_FINANCIAL_RULES_READY
+    secret: LOYALTY_FINANCIAL_RULES_READY
+    availability:
+      - RUNTIME

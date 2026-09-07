@@ -10,8 +10,8 @@ import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
 import { createHash, randomBytes } from 'node:crypto';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { FieldValue } from 'firebase-admin/firestore';
 import type { CartItem, Discount, OrderDetail, Brand, Location, CustomerInfo, Customer, StandardDiscount, Upsell, PaymentDetails, MinimalCartItem, Product, ComboMenu, Topping, ComboSelection, LoyaltySettings, AnonymousCookieConsent } from '@/types';
 import { getDiscountByCode, getDiscountById } from '@/app/superadmin/discounts/actions';
 import { bestAutomaticDiscount, isQuantityMethod, type OfferLine } from '@/lib/automatic-discounts';
@@ -22,7 +22,7 @@ import { getToppings } from '../superadmin/toppings/actions';
 import { verifiedCustomer } from '@/lib/loyalty/identity';
 import { getProgram, walletView, reserveRewards, settleRewards } from '@/lib/loyalty/rewards';
 import { rewardQuote,ore } from '@/lib/loyalty/model';
-import { getActiveStripeSecretKey } from '../superadmin/settings/actions';
+import { getActiveStripeSecretKey } from '@/lib/payments/settings';
 import { getOrigin } from '@/lib/url';
 import { generateOrderId } from '@/lib/order-id';
 import { getOrderById, getOrderByCheckoutSessionId as getOrderBySessionId } from './order-actions';
@@ -55,10 +55,10 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     const integrated = await findCheckoutCustomer(brandId, normalizedEmail);
     if (integrated) return { customerRef: integrated.ref, customerDoc: integrated, normalizedEmail };
 
-    const scopedRef = doc(db, 'customers', scopedCustomerId(brandId, normalizedEmail));
-    const scopedDoc = await getDoc(scopedRef);
-    if (scopedDoc.exists()) {
-        const scopedData = scopedDoc.data() as Customer;
+    const scopedRef = getAdminDb().collection('customers').doc(scopedCustomerId(brandId, normalizedEmail));
+    const scopedDoc = await scopedRef.get();
+    if (scopedDoc.exists) {
+        const scopedData = scopedDoc.data()! as Customer;
         if (scopedData.brandId !== brandId) {
             throw new Error('Customer identity scope conflict.');
         }
@@ -67,10 +67,10 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
 
     // Backward compatibility: older checkout customers used an email-only hash.
     // Reuse that native id only when the existing document belongs to this exact brand.
-    const legacyRef = doc(db, 'customers', `cust-${simpleHash(customerInfo.email)}`);
-    const legacyDoc = await getDoc(legacyRef);
-    if (legacyDoc.exists()) {
-        const legacyData = legacyDoc.data() as Customer;
+    const legacyRef = getAdminDb().collection('customers').doc(`cust-${simpleHash(customerInfo.email)}`);
+    const legacyDoc = await legacyRef.get();
+    if (legacyDoc.exists) {
+        const legacyData = legacyDoc.data()! as Customer;
         if (legacyData.brandId === brandId) {
             return { customerRef: legacyRef, customerDoc: legacyDoc, normalizedEmail };
         }
@@ -86,10 +86,10 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
         let cookieConsentData: Customer['cookie_consent'] | undefined = undefined;
 
         if (anonymousConsentId) {
-            const anonConsentRef = doc(db, 'anonymous_cookie_consents', anonymousConsentId);
-            const anonConsentSnap = await getDoc(anonConsentRef);
-            if (anonConsentSnap.exists()) {
-                const data = anonConsentSnap.data() as AnonymousCookieConsent;
+            const anonConsentRef = getAdminDb().collection('anonymous_cookie_consents').doc(anonymousConsentId);
+            const anonConsentSnap = await anonConsentRef.get();
+            if (anonConsentSnap.exists) {
+                const data = anonConsentSnap.data()! as AnonymousCookieConsent;
                 cookieConsentData = {
                     marketing: data.marketing,
                     statistics: data.statistics,
@@ -100,12 +100,14 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                     origin_brand: data.origin_brand,
                 };
                  // After fetching, mark the anonymous record as linked
-                await updateDoc(anonConsentRef, { linked_to_customer: true });
+                await anonConsentRef.update({ linked_to_customer: true });
             }
         }
 
-        if (customerDoc.exists()) {
-            const customerData = customerDoc.data() as Customer;
+        await getAdminDb().runTransaction(async tx => {
+        const current = await tx.get(customerRef);
+        if (current.exists) {
+            const customerData = current.data()! as Customer;
             if (customerData.brandId !== brandId) {
                 throw new Error('Customer identity scope conflict.');
             }
@@ -131,7 +133,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
             }
 
             if (newsletterDiscountId && !customerData.marketingConsent) updatedData.pendingNewsletterDiscountId = newsletterDiscountId;
-            await updateDoc(customerRef, omitUndefinedFields(updatedData));
+            tx.update(customerRef, omitUndefinedFields(updatedData));
         } else {
             const newCustomer: Customer & { normalizedEmail: string } = {
                 id: customerId,
@@ -155,9 +157,10 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 cookie_consent: cookieConsentData,
             };
             if (newsletterDiscountId) newCustomer.pendingNewsletterDiscountId = newsletterDiscountId;
-            await setDoc(customerRef, omitUndefinedFields(newCustomer));
+            tx.create(customerRef, omitUndefinedFields(newCustomer));
         }
         
+        });
         return customerId;
     } catch (e: any) {
         console.error("Customer creation/update failed:", e);
@@ -261,12 +264,11 @@ export async function getNewsletterSignupDiscountAction(
 ): Promise<NewsletterDiscountOffer | null> {
     if (!email || !email.includes('@')) return null;
     const resolved = await resolveCheckoutCustomerRef({ email } as CustomerInfo, brandId);
-    const customer = resolved.customerDoc.exists() ? resolved.customerDoc.data() as Customer : undefined;
-    const discountsQuery = query(collection(db, 'discounts'), where('brandId', '==', brandId));
-    const snapshot = await getDocs(discountsQuery);
+    const customer = resolved.customerDoc.exists ? resolved.customerDoc.data()! as Customer : undefined;
+    const snapshot = await getAdminDb().collection('discounts').where('brandId', '==', brandId).get();
 
     for (const discountDoc of snapshot.docs) {
-        const data = discountDoc.data();
+        const data = discountDoc.data()!;
         if (data.applicationType !== 'newsletter_signup') continue;
         const discount = {
             ...data,
@@ -340,8 +342,8 @@ export async function createStripeCheckoutSessionAction(
     if (!brand || !location || location.brandId !== brand.id) throw new Error("Brand or location not found in the requested tenant scope");
     
     const resolvedCustomer = await resolveCheckoutCustomerRef(customerInfo, brand.id);
-    const existingCustomer = resolvedCustomer.customerDoc.exists()
-      ? resolvedCustomer.customerDoc.data() as Customer
+    const existingCustomer = resolvedCustomer.customerDoc.exists
+      ? resolvedCustomer.customerDoc.data()! as Customer
       : null;
 
     const chargedItemsSubtotal = cartItems.reduce((sum, item) => {
@@ -361,21 +363,21 @@ export async function createStripeCheckoutSessionAction(
     const resolvedLines = await Promise.all(cartItems.map(async item => {
       if (!item.id) throw new Error('Please refresh your basket before checking out.');
       let [productSnap, comboSnap] = await Promise.all([
-        getDoc(doc(db, 'products', item.id)), getDoc(doc(db, 'comboMenus', item.id)),
+        getAdminDb().collection('products').doc(item.id).get(), getAdminDb().collection('comboMenus').doc(item.id).get(),
       ]);
-      if (!productSnap.exists() && !comboSnap.exists() && item.id.endsWith('-offer')) {
-        productSnap = await getDoc(doc(db, 'products', item.id.slice(0, -6)));
+      if (!productSnap.exists && !comboSnap.exists && item.id.endsWith('-offer')) {
+        productSnap = await getAdminDb().collection('products').doc(item.id.slice(0, -6)).get();
       }
-      const catalog = productSnap.exists() ? productSnap.data() as Product : null;
-      const combo = comboSnap.exists() ? comboSnap.data() : null;
+      const catalog = productSnap.exists ? productSnap.data()! as Product : null;
+      const combo = comboSnap.exists ? comboSnap.data()! : null;
       const record = catalog || combo;
       if (!record || record.brandId !== brandId || (record.locationIds?.length && !record.locationIds.includes(locationId))) throw new Error('Basket item is unavailable at this restaurant.');
       return { productSnap, catalog, combo, price: combo
         ? (deliveryType === 'delivery' ? combo.deliveryPrice : combo.pickupPrice)
         : (deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price) };
     }));
-    const upsellRows = await getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true)));
-    const upsells = upsellRows.docs.map(row => ({ ...row.data(), id: row.id })) as Upsell[];
+    const upsellRows = await getAdminDb().collection('upsells').where('brandId', '==', brandId).where('isActive', '==', true).get();
+    const upsells = upsellRows.docs.map(row => ({ ...row.data()!, id: row.id })) as Upsell[];
     validateCheckoutPrices(cartItems, resolvedLines.map(({productSnap,catalog,combo,price},i) => ({
       id: catalog ? productSnap.id : cartItems[i].id!, categoryId: catalog?.categoryId, isCombo: !!combo, price,
       tags: catalog ? [...(catalog.isPopular ? ['Popular'] : []), ...(catalog.isFeatured ? ['Recommended'] : []), ...(catalog.isNew ? ['Campaign'] : [])] : [],
@@ -465,15 +467,15 @@ export async function createStripeCheckoutSessionAction(
     // Step 1: Pre-create order with 'Pending' status
     const orderId = generateOrderId();
     const cancelToken = randomBytes(32).toString('hex');
-    const orderRef = doc(db, 'orders', orderId);
+    const orderRef = getAdminDb().collection('orders').doc(orderId);
 
     if (rewardIdentity && rewardProgram?.enabled) {
       await reserveRewards(orderId,brandId,rewardIdentity.uid,reward.redeemOre,rewardGoodsOre,ore(totalAmount)+reward.redeemOre,rewardProgram);
       rewardOrderId=orderId;
     }
-    await setDoc(orderRef, omitUndefinedFields({
+    await orderRef.create(omitUndefinedFields({
         id: orderId,
-        createdAt: serverTimestamp(),
+        createdAt: FieldValue.serverTimestamp(),
         status: 'Received',
         paymentStatus: 'Pending',
         brandId,
@@ -572,9 +574,9 @@ export async function createStripeCheckoutSessionAction(
     const session = await stripe.checkout.sessions.create(sessionParams, { idempotencyKey: orderId });
     
     // Step 3: Patch order with session ID
-    await updateDoc(orderRef, {
+    await orderRef.update({
         'psp.checkoutSessionId': session.id,
-        updatedAt: serverTimestamp(),
+        updatedAt: FieldValue.serverTimestamp(),
     });
 
     return { success: true, url: session.url };
@@ -617,7 +619,7 @@ export async function validateDiscountAction(
             subscribeToNewsletter: false,
         }, brandId);
         customerId = resolved.customerRef.id;
-        customer = resolved.customerDoc.exists() ? resolved.customerDoc.data() as Customer : null;
+        customer = resolved.customerDoc.exists ? resolved.customerDoc.data()! as Customer : null;
     }
 
     if ((discount.firstTimeCustomerOnly || discount.assignedToCustomerId || discount.perCustomerLimit > 0) && !customerId) {

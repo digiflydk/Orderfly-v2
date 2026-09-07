@@ -1,0 +1,26 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function privateFinancialCollection(collection) {
+      return collection in [
+        'loyalty_programs', 'loyalty_orders', 'loyalty_wallets', 'loyalty_audit',
+        'checkout_customer_capacity', 'checkout_discount_capacity',
+        'checkout_customer_discount_capacity'
+      ];
+    }
+    function privateSettings(collection, document) {
+      return collection == 'platform_settings' && document == 'payment_gateway';
+    }
+    // Compatibility with the observed production wildcard, with explicit exclusions.
+    // Admin SDK bypasses client rules. Unrelated collections retain their existing
+    // access in this scoped rollout; this is NOT platform-wide authorization.
+    match /{collection}/{document}/{rest=**} {
+      allow read: if !privateFinancialCollection(collection)
+        && !privateSettings(collection, document);
+      allow write: if !privateFinancialCollection(collection)
+        && !(collection in ['orders', 'customers'])
+        && !privateSettings(collection, document)
+        && !(collection == 'platform_settings' && document == 'loyalty');
+    }
+  }
+}
