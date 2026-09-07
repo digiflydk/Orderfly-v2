@@ -1,5 +1,6 @@
 
 import { getStandardDiscounts } from './actions';
+import { upsellClientData } from '@/lib/upsell-serialization';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { StandardDiscountsClientPage } from './client-page';
 import { getAllLocations } from '../locations/actions';
@@ -23,8 +24,8 @@ async function StandardDiscountsPageContent() {
     return (
        <StandardDiscountsClientPage 
             initialDiscounts={discountsWithDetails} 
-            brands={brands} 
-            locations={locations}
+            brands={upsellClientData(brands)}
+            locations={upsellClientData(locations)}
         />
     );
 }

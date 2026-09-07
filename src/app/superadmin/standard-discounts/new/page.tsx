@@ -1,3 +1,4 @@
+import { upsellClientData } from '@/lib/upsell-serialization';
 
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
@@ -15,10 +16,10 @@ export default async function NewStandardDiscountPage() {
     
     return (
         <StandardDiscountFormPage 
-            brands={brands} 
-            locations={locations}
-            products={products}
-            categories={categories}
+            brands={upsellClientData(brands)}
+            locations={upsellClientData(locations)}
+            products={upsellClientData(products)}
+            categories={upsellClientData(categories)}
         />
     );
 }
