@@ -9,7 +9,6 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2, PlusCircle, Trash2, Clock } from 'lucide-react';
-import { useFormStatus } from 'react-dom';
 import { getCategoriesForBrand, getProductsForBrand } from '@/app/superadmin/upsells/actions';
 
 import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, FormMessage } from '@/components/ui/form';
@@ -96,8 +95,7 @@ interface UpsellFormPageProps {
 const WEEKDAYS = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
 const UPSELL_TAGS = ['Popular', 'Recommended', 'Campaign'];
 
-function SubmitButton({ isEditing }: { isEditing: boolean }) {
-	const { pending } = useFormStatus();
+function SubmitButton({ isEditing, pending }: { isEditing: boolean; pending: boolean }) {
 	return <Button type="submit" disabled={pending}>{pending ? <Loader2 className="animate-spin" /> : (isEditing ? 'Save Changes' : 'Create Upsell')}</Button>;
 }
 
@@ -173,7 +171,8 @@ function ProductGroupCard({ index, control, remove, brandProducts, brandCategori
 
 export function UpsellFormPage({ upsell, brands, locations, products, categories }: UpsellFormPageProps) {
 	const { toast } = useToast();
-	const [state, formAction] = useActionState(createOrUpdateUpsell, null);
+	const [state, formAction, isPending] = useActionState(createOrUpdateUpsell, null);
+	const [, startTransition] = useTransition();
 
 	const [brandProducts, setBrandProducts] = useState<ProductForMenu[]>(products || []);
 	const [brandCategories, setBrandCategories] = useState<Category[]>(categories || []);
@@ -288,11 +287,16 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 
 	return (
 		<Form {...form}>
-			<form action={() => formAction(upsellFormData(getValues(), upsell?.id))} className="space-y-6">
+			<form onSubmit={(event) => {
+				event.preventDefault();
+				if (isPending) return;
+				const data = upsellFormData(getValues(), upsell?.id);
+				startTransition(() => formAction(data));
+			}} className="space-y-6">
 				{upsell?.id && <input type="hidden" name="id" value={upsell.id} />}
 				<div className="flex items-center justify-between">
 					<div><h1 className="text-2xl font-bold tracking-tight">{title}</h1><p className="text-muted-foreground">{description}</p></div>
-					<div className="flex gap-2"><Button type="button" variant="outline" asChild><Link href="/superadmin/upsells">Cancel</Link></Button><SubmitButton isEditing={!!upsell} /></div>
+					<div className="flex gap-2"><Button type="button" variant="outline" asChild><Link href="/superadmin/upsells">Cancel</Link></Button><SubmitButton isEditing={!!upsell} pending={isPending} /></div>
 				</div>
 
 				<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
