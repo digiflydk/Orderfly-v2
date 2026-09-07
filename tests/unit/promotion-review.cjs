@@ -121,15 +121,27 @@ test('reservation serializes concurrent sessions, releases safely, preserves pai
  for (const [key,value] of Object.entries(state)) if(key.startsWith('checkout_customer_capacity/')) value.firstTimeHeld=true;
  state['orders/o1'].appliedDiscountId='e';
  await assert.rejects(api.reserveDiscount('o1','e','c2','b'),/First-order/);
- // Mixed ordinary/first-order sessions reject in both directions.
+ // #62: first-order eligibility applies to a newly requested first-order offer.
+ // A later ordinary checkout is allowed, but must retain the earlier offer's hold.
  for (const first of [null,'e']) {
   for (const key of Object.keys(state)) if(key.startsWith('checkout_')) delete state[key];
   state['orders/o1']={brandId:'b',customerDetails:{id:'c'},appliedDiscountId:first};
   state['orders/o2']={brandId:'b',customerDetails:{id:'c'},appliedDiscountId:first ? null : 'e'};
   await api.reserveDiscount('o1',first,'c','b');
-  await assert.rejects(api.reserveDiscount('o2',first ? null : 'e','c','b'),/First-order/);
-  await api.releaseDiscount('o1','b');
-  await api.reserveDiscount('o2',first ? null : 'e','c','b');
+  if (first) {
+   await api.reserveDiscount('o2',null,'c','b');
+   const customerCapacity=Object.entries(state).find(([key])=>key.startsWith('checkout_customer_capacity/'))[1];
+   assert.equal(customerCapacity.firstTimeHeld,true);
+   assert.equal(customerCapacity.held,2);
+   await api.releaseDiscount('o2','b');
+   assert.equal(state['orders/o1'].discountReservation,'held');
+   assert.equal(Object.entries(state).find(([key])=>key.startsWith('checkout_customer_capacity/'))[1].firstTimeHeld,true);
+   await api.releaseDiscount('o1','b');
+  } else {
+   await assert.rejects(api.reserveDiscount('o2','e','c','b'),/First-order/);
+   await api.releaseDiscount('o1','b');
+   await api.reserveDiscount('o2','e','c','b');
+  }
  }
  for (const [key,value] of Object.entries(state)) if(key.startsWith('checkout_')) assert.ok(Object.keys(value).length <= 3);
 

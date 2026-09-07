@@ -28,8 +28,9 @@ export async function reserveDiscount(orderId: string, discountId: string | null
     if (customer.brandId !== brandId || (discount && (discount.brandId !== brandId || !discount.isActive))) throw new Error('Discount no longer available');
     const c = cSnap.data() || {}, d = dSnap?.data() || {}, p = pSnap?.data() || {};
     const firstTime = !!discount?.firstTimeCustomerOnly;
-    // A first-order session and ANY other session cannot coexist for this customer.
-    if (c.firstTimeHeld || (firstTime && ((c.held || 0) > 0 || Math.max(c.paid || 0, customer.totalOrders || 0) > 0))) throw new Error('First-order promotion already used or reserved');
+    // Eligibility applies when reserving a first-order promotion. An earlier
+    // first-order hold must not block a later checkout without that restriction.
+    if (firstTime && (c.firstTimeHeld || (c.held || 0) > 0 || Math.max(c.paid || 0, customer.totalOrders || 0) > 0)) throw new Error('First-order promotion already used or reserved');
     if (discount) {
       const usage = Math.max(discount.usedCount || 0, d.paid || 0);
       const personalUsage = Math.max(customer.discountUsage?.[discountId!] || 0, p.paid || 0);
@@ -39,7 +40,7 @@ export async function reserveDiscount(orderId: string, discountId: string | null
       tx.set(r.discount!, { paid: usage, held: (d.held || 0) + 1 });
       tx.set(r.pair!, { paid: personalUsage, held: (p.held || 0) + 1 });
     }
-    tx.set(r.customer, { paid: Math.max(c.paid || 0, customer.totalOrders || 0), held: (c.held || 0) + 1, firstTimeHeld: firstTime });
+    tx.set(r.customer, { paid: Math.max(c.paid || 0, customer.totalOrders || 0), held: (c.held || 0) + 1, firstTimeHeld: firstTime || !!c.firstTimeHeld });
     tx.update(orderRef, { discountReservation: 'held', firstTimeReservation: firstTime });
   });
 }
