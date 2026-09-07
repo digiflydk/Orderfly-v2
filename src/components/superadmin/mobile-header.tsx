@@ -4,7 +4,7 @@ import { OrderFlyLogo } from '@/components/icons';
 import { SidebarTrigger } from '@/components/ui/sidebar';
 import type { PlatformBrandingSettings } from '@/types';
 import Image from 'next/image';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 
 interface MobileHeaderProps {
   brandingSettings: PlatformBrandingSettings;

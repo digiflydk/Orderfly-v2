@@ -17,7 +17,7 @@ import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Slider } from '@/components/ui/slider';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
 import {

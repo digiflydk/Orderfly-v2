@@ -1,7 +1,7 @@
 
 'use client';
 
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { useState } from 'react';
 import type { QaTestcase } from './actions';
 import { Play, Edit3, Plus } from 'lucide-react';

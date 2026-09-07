@@ -10,7 +10,7 @@ import {
   useState,
 } from 'react';
 import { useFormStatus } from 'react-dom';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';

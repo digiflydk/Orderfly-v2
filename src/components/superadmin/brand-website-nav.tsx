@@ -1,7 +1,7 @@
 
 'use client';
 
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { usePathname } from 'next/navigation';
 import { Tabs, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CheckCircle2 } from 'lucide-react';

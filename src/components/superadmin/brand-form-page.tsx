@@ -27,7 +27,7 @@ import { countries } from '@/lib/countries';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
 import { Separator } from '../ui/separator';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { debounce } from 'lodash';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { BrandAppearancesForm } from './brand-appearances-form';
@@ -192,7 +192,6 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
             }
         }
     }
-    
     startTransition(async () => {
       const result = await createOrUpdateBrand(null, formData);
       if (result?.error) {
@@ -623,5 +622,3 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
     </div>
   );
 }
-
-    

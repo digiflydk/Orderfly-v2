@@ -4,7 +4,7 @@ import { requireSuperadmin } from '@/lib/auth/superadmin';
 import { listBrandWebsitePages } from '@/lib/superadmin/brand-website/pages-actions';
 import { BrandWebsitePagesClient } from '@/components/superadmin/brand-website/pages/BrandWebsitePagesClient';
 import { Button } from '@/components/ui/button';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { PlusCircle } from 'lucide-react';
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams } from "@/lib/next/resolve-props";

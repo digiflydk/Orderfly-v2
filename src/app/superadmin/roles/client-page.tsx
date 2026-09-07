@@ -7,7 +7,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { PlusCircle, MoreHorizontal, Edit, Trash2 } from "lucide-react";
 import type { Role } from '@/types';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import {
   DropdownMenu,
   DropdownMenuContent,

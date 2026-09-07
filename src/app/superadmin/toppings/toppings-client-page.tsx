@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo, useEffect, useTransition } from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import {
   DndContext,
   closestCenter,

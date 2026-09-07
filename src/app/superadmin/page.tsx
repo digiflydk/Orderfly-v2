@@ -1,6 +1,6 @@
 // src/app/superadmin/page.tsx
 import React from "react"
-import Link from "next/link"
+import Link from '@/components/superadmin/admin-link'
 import { getFiltersData } from "./_filters-data"
 import FiltersBar from "./FiltersBar"
 

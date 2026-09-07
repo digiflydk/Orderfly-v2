@@ -41,8 +41,9 @@ export default async function SuperadminDashboardPage({ params, searchParams }: 
     locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc as string]) : [],
   };
 
-  const { kpis, totalActiveBrands, totalActiveLocations } = await getSalesDashboardData(filters);
-  const [brands, locations] = await Promise.all([getBrands(), getAllLocations()]);
+  const [{ kpis, totalActiveBrands, totalActiveLocations }, brands, locations] = await Promise.all([
+    getSalesDashboardData(filters), getBrands(), getAllLocations(),
+  ]);
 
   const fmt = (n: number) => n.toLocaleString('da-DK');
   const kr = (n: number) => (n).toLocaleString('da-DK', { style: 'currency', currency: 'DKK' });

@@ -11,14 +11,16 @@ export async function getFiltersData(): Promise<{
   initial: SACommonFilters
 }> {
   // Hent brands
-  const brandsSnap = await getDocs(query(collection(db, 'brands'), orderBy('name', 'asc')))
+  const [brandsSnap, locSnap] = await Promise.all([
+    getDocs(query(collection(db, 'brands'), orderBy('name', 'asc'))),
+    getDocs(collection(db, 'locations')),
+  ])
   const brands: { id: string; name: string }[] = brandsSnap.docs.map(d => {
     const data = d.data() as Partial<Brand>
     return { id: d.id, name: data.name ?? 'Unnamed' }
   })
 
   // Hent locations
-  const locSnap = await getDocs(collection(db, 'locations'))
   const locations: { id: string; name: string; brandId: string }[] = locSnap.docs.map(d => {
     const data = d.data() as Partial<Location>
     return { id: d.id, name: data.name ?? 'Unnamed', brandId: data.brandId ?? '' }

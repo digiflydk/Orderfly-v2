@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Badge } from '@/components/ui/badge';
 import { format } from 'date-fns';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 
 type CookieTextsWithBrand = CookieTexts & { brandName?: string };
 
@@ -84,4 +84,3 @@ export function CookieTextsClientPage({ initialTexts, brands }: CookieTextsClien
     </>
   );
 }
-

@@ -1,7 +1,7 @@
 
 // src/app/superadmin/docs/page.tsx
 import React from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { DEV_DOCS, DEV_UTILITIES } from '@/lib/superadmin/docs-config';
 import DocsLayout from '@/components/superadmin/docs/DocsLayout';
 import DocsNav from '@/components/superadmin/docs/DocsNav';

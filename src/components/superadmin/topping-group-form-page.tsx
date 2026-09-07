@@ -3,7 +3,7 @@
 
 import { useEffect, useMemo, useState, useActionState } from 'react';
 import { useFormStatus } from 'react-dom';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 
 import {
 	Select,

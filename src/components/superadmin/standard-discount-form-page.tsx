@@ -6,7 +6,8 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { useEffect, useMemo, useState, useTransition, useActionState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
+import { PendingFeedback } from './pending-feedback';
 import { isQuantityMethod } from '@/lib/automatic-discounts';
 import Image from 'next/image';
 import { format } from 'date-fns';
@@ -205,6 +206,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 				{discount?.id && <input type="hidden" name="id" value={discount.id} />}
 				<div className="flex items-center justify-between">
 					<div><h1 className="text-2xl font-bold tracking-tight">{title}</h1><p className="text-muted-foreground">{description}</p></div>
+					{isPending && <PendingFeedback label="Gemmer…" />}
 					<div className="flex gap-2"><Button type="button" variant="outline" asChild><Link href="/superadmin/standard-discounts">Cancel</Link></Button><Button type="submit" disabled={isPending}>{isPending ? <Loader2 className="animate-spin" /> : (discount ? 'Save Changes' : 'Create Discount')}</Button></div>
 				</div>
 

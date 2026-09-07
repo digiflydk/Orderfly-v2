@@ -1,6 +1,6 @@
 
 // src/components/superadmin/docs/DocsNav.tsx
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import type { DevDocMeta, DevUtilityMeta } from '@/lib/superadmin/docs-config';
 
 type Props = {

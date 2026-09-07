@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { MOCK_CODE_REVIEWS } from '@/lib/code-review-mock-data';
 import type { CodeReview } from '@/types';
 import { ArrowLeft, CheckCircle, FileDiff, GitBranch, GitCommit, User, Calendar, Tag } from 'lucide-react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { format } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { Badge } from '@/components/ui/badge';

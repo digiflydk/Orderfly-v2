@@ -1,7 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { format } from 'date-fns';
 import { Eye, MoreHorizontal, Star, Trash2, X } from 'lucide-react';
 

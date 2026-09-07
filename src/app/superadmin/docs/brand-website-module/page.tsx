@@ -6,7 +6,7 @@ import DocsLayout from '@/components/superadmin/docs/DocsLayout';
 import DocsNav from '@/components/superadmin/docs/DocsNav';
 import DocsCard from '@/components/superadmin/docs/DocsCard';
 import { DEV_DOCS, DEV_UTILITIES } from '@/lib/superadmin/docs-config';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 
 const MODULE_KEY = "brand-website";
 

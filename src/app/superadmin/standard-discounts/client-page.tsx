@@ -2,7 +2,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { isQuantityMethod, quantityOfferLabel } from '@/lib/automatic-discounts';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';

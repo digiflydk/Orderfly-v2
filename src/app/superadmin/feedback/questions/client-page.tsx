@@ -1,6 +1,6 @@
 "use client";
 
-import Link from "next/link";
+import Link from '@/components/superadmin/admin-link';
 
 type Version = {
   id: string;

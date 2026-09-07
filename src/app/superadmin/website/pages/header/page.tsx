@@ -14,7 +14,7 @@ import { Loader2, Trash2, Monitor, Smartphone, AlignHorizontalJustifyStart, Alig
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from '@/components/ui/accordion';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { cn } from '@/lib/utils';
 import {
   DndContext,

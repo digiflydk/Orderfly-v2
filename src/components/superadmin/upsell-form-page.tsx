@@ -5,7 +5,8 @@ import { upsellFormData } from '@/lib/upsell-form-data';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { useEffect, useMemo, useState, useTransition, useActionState } from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
+import { PendingFeedback } from './pending-feedback';
 import { UpsellValidationFeedback } from './upsell-validation-feedback';
 import Image from 'next/image';
 import { format } from 'date-fns';
@@ -295,6 +296,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 				startTransition(() => formAction(data));
 			}} className="space-y-6">
 				{upsell?.id && <input type="hidden" name="id" value={upsell.id} />}
+				{isPending && <PendingFeedback label="Gemmer…" />}
 				<UpsellValidationFeedback state={state} />
 				<div className="flex items-center justify-between">
 					<div><h1 className="text-2xl font-bold tracking-tight">{title}</h1><p className="text-muted-foreground">{description}</p></div>

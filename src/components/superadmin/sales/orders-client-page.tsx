@@ -1,7 +1,7 @@
 'use client';
 
 import * as React from 'react';
-import Link from 'next/link';
+import Link from '@/components/superadmin/admin-link';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import {
   CalendarDays,
