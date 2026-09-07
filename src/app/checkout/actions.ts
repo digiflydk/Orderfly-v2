@@ -2,6 +2,7 @@
 
 'use server';
 
+import { validateCheckoutPrices } from '@/lib/checkout-price-validation';
 import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
 import { newsletterEligible, cartLineEligible, assignedCustomerMatches, restaurantClock } from '@/lib/promotion-rules';
 import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
@@ -10,7 +11,7 @@ import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from 'firebase/firestore';
-import type { CartItem, Discount, OrderDetail, Brand, Location, CustomerInfo, Customer, StandardDiscount, PaymentDetails, MinimalCartItem, Product, ComboMenu, Topping, ComboSelection, LoyaltySettings, AnonymousCookieConsent } from '@/types';
+import type { CartItem, Discount, OrderDetail, Brand, Location, CustomerInfo, Customer, StandardDiscount, Upsell, PaymentDetails, MinimalCartItem, Product, ComboMenu, Topping, ComboSelection, LoyaltySettings, AnonymousCookieConsent } from '@/types';
 import { getDiscountByCode, getDiscountById } from '@/app/superadmin/discounts/actions';
 import { bestAutomaticDiscount, isQuantityMethod, type OfferLine } from '@/lib/automatic-discounts';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
@@ -352,7 +353,7 @@ export async function createStripeCheckoutSessionAction(
 
     // Resolve eligibility from native catalog records; the browser cannot mark a combo as a product.
     const quantityLines: OfferLine[] = [];
-    const eligibleLines = await Promise.all(cartItems.map(async item => {
+    const resolvedLines = await Promise.all(cartItems.map(async item => {
       if (!item.id) throw new Error('Please refresh your basket before checking out.');
       let [productSnap, comboSnap] = await Promise.all([
         getDoc(doc(db, 'products', item.id)), getDoc(doc(db, 'comboMenus', item.id)),
@@ -364,23 +365,30 @@ export async function createStripeCheckoutSessionAction(
       const combo = comboSnap.exists() ? comboSnap.data() : null;
       const record = catalog || combo;
       if (!record || record.brandId !== brandId || (record.locationIds?.length && !record.locationIds.includes(locationId))) throw new Error('Basket item is unavailable at this restaurant.');
+      return { productSnap, catalog, combo, price: combo
+        ? (deliveryType === 'delivery' ? combo.deliveryPrice : combo.pickupPrice)
+        : (deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price) };
+    }));
+    const upsellRows = await getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true)));
+    const upsells = upsellRows.docs.map(row => ({ ...row.data(), id: row.id })) as Upsell[];
+    validateCheckoutPrices(cartItems, resolvedLines.map(({productSnap,catalog,combo,price},i) => ({
+      id: catalog ? productSnap.id : cartItems[i].id!, categoryId: catalog?.categoryId, isCombo: !!combo, price,
+      tags: catalog ? [...(catalog.isPopular ? ['Popular'] : []), ...(catalog.isFeatured ? ['Recommended'] : []), ...(catalog.isNew ? ['Campaign'] : [])] : [],
+    })), activeStandardDiscounts, upsells, {brandId,locationId,deliveryType});
+    const eligibleLines = resolvedLines.map(({productSnap,catalog,combo,price:catalogPrice},index) => {
+      const item = cartItems[index];
       if (combo) return 0;
-      const catalogPrice = deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price;
       const itemOffer = activeStandardDiscounts.some(d =>
         !isQuantityMethod(d.discountMethod) && ((d.discountType === 'product' && d.referenceIds.includes(productSnap.id)) ||
         (d.discountType === 'category' && d.referenceIds.includes(catalog!.categoryId)))
       );
       const eligible = cartLineEligible(false, catalogPrice, item.unitPrice, itemOffer);
-      if (eligible && activeStandardDiscounts.some(d => isQuantityMethod(d.discountMethod)) &&
-          Math.round(item.totalPrice * 100) < Math.round(catalogPrice * 100) * item.quantity) {
-        throw new Error('Basket prices have changed. Please refresh your basket.');
-      }
       if (eligible && Number.isSafeInteger(item.quantity) && item.quantity > 0) quantityLines.push({
         id: productSnap.id, categoryId: catalog!.categoryId, quantity: item.quantity,
         unitPrice: Math.max(0, Math.min(catalogPrice, item.unitPrice, item.totalPrice / item.quantity)),
       });
       return eligible ? item.totalPrice : 0;
-    }));
+    });
     const eligibleSubtotal = eligibleLines.reduce((sum, amount) => sum + amount, 0);
 
     const automaticCartDiscount = bestAutomaticDiscount(activeStandardDiscounts, eligibleSubtotal, quantityLines);
