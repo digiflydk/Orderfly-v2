@@ -18,7 +18,7 @@ function date(value: unknown): Date | undefined {
 }
 
 // Catalog records and campaign rows are loaded by the server, never from the request.
-export function validateCheckoutPrices(items: MinimalCartItem[], catalog: CatalogPriceLine[], discounts: StandardDiscount[], upsells: Upsell[], scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }) {
+export function minimumCheckoutPrices(items: MinimalCartItem[], catalog: CatalogPriceLine[], discounts: StandardDiscount[], upsells: Upsell[], scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }) {
   const now = scope.now || new Date();
   const clock = restaurantClock(now);
   const active = (d: StandardDiscount | Upsell) => {
@@ -32,7 +32,7 @@ export function validateCheckoutPrices(items: MinimalCartItem[], catalog: Catalo
     ((d.discountType === 'product' && d.referenceIds.includes(line.id)) || (d.discountType === 'category' && !!line.categoryId && d.referenceIds.includes(line.categoryId))))
     .reduce((price,d) => Math.min(price,reducedPrice(line.price,d.discountMethod,d.discountValue)),line.price));
 
-  items.forEach((item,index) => {
+  return items.map((item,index) => {
     const line = catalog[index];
     if (!line || !Number.isFinite(line.price) || line.price < 0 || !Number.isSafeInteger(item.quantity) || item.quantity <= 0 ||
         !Number.isFinite(item.unitPrice) || item.unitPrice < 0 || !Number.isFinite(item.totalPrice) || item.totalPrice < 0) throw new Error('Invalid basket price or quantity.');
@@ -53,6 +53,14 @@ export function validateCheckoutPrices(items: MinimalCartItem[], catalog: Catalo
       });
       if (triggered) minimum = Math.min(minimum,reducedPrice(line.price,upsell.discountType,upsell.discountValue));
     }
+    return minimum;
+  });
+}
+
+export function validateCheckoutPrices(items: MinimalCartItem[], catalog: CatalogPriceLine[], discounts: StandardDiscount[], upsells: Upsell[], scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }) {
+  const minimums = minimumCheckoutPrices(items, catalog, discounts, upsells, scope);
+  items.forEach((item, index) => {
+    const minimum = minimums[index];
     // Compare rounded line amounts, accommodating legitimate fractional-cent
     // percentage unit prices while rejecting a whole-cent shortfall.
     if (Math.round(item.unitPrice * item.quantity * 100) < Math.round(minimum * item.quantity * 100) ||

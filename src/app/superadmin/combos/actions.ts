@@ -10,6 +10,8 @@ import type { ComboMenu, Product, Category, ProductForMenu } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { getProductsByIds } from '../products/actions';
+import { optionalImageUrl } from '@/lib/optional-image-url';
+import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
 
 const productGroupSchema = z.object({
   id: z.string(),
@@ -33,7 +35,7 @@ const comboMenuSchema = z.object({
     locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
     comboName: z.string().min(2, 'Combo name must be at least 2 characters.'),
     description: z.string().optional(),
-    imageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
+    imageUrl: optionalImageUrl,
     pickupPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
     deliveryPrice: z.coerce.number().min(0, "Price must be a non-negative number.").optional(),
     isActive: z.boolean().default(true),
@@ -187,7 +189,7 @@ export async function createOrUpdateCombo(
     }
     
     const comboRef = doc(db, 'comboMenus', comboIdToSave);
-    await setDoc(comboRef, dataToSave, { merge: true });
+    await setDoc(comboRef, omitUndefinedFields(dataToSave), { merge: true });
     
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';

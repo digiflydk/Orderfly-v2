@@ -32,6 +32,7 @@ import {
   AlertDialogTitle
 } from "@/components/ui/alert-dialog";
 import type {
+  Brand,
   PaymentDetails,
   TimeSlotResponse,
   MinimalCartItem,
@@ -89,6 +90,7 @@ interface CheckoutFormValues {
 }
 
 interface CheckoutClientProps {
+  brand: Brand;
   location: Location;
 }
 
@@ -322,7 +324,7 @@ function CheckoutForm({ location }: { location: Location }) {
     itemDiscount,
     cartDiscount,
     voucherDiscount,
-    setCartContext,
+    saveCartForCheckout,
     setSelectedTime
   } = useCart();
 
@@ -346,12 +348,6 @@ function CheckoutForm({ location }: { location: Location }) {
 
   const minOrderAmount = location?.minOrder ?? 0;
   const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
-
-  useEffect(() => {
-    if (brand && location) {
-      setCartContext(brand, location);
-    }
-  }, [brand, location, setCartContext]);
 
   useEffect(() => {
     if (location?.id) {
@@ -583,6 +579,7 @@ function CheckoutForm({ location }: { location: Location }) {
       setIsProcessing(false);
 
       if (result.success && result.url) {
+        if (result.orderId) saveCartForCheckout(result.orderId);
         router.push(result.url);
       } else {
         toast({
@@ -1031,7 +1028,9 @@ function CheckoutForm({ location }: { location: Location }) {
   );
 }
 
-export function CheckoutClient({ location }: CheckoutClientProps) {
+export function CheckoutClient({ brand, location }: CheckoutClientProps) {
+  const { setCartContext, cartReady } = useCart();
+  React.useEffect(() => { setCartContext(brand, location); }, [brand, location, setCartContext]);
   const [stripePromise, setStripePromise] =
     React.useState<ReturnType<typeof loadStripe> | null>(null);
   const [error, setError] = React.useState<string | null>(null);
@@ -1064,7 +1063,7 @@ export function CheckoutClient({ location }: CheckoutClientProps) {
     );
   }
 
-  if (!stripePromise) {
+  if (!stripePromise || !cartReady) {
     return (
       <div className="flex items-center justify-center p-8">
         <Loader2 className="animate-spin h-8 w-8" />

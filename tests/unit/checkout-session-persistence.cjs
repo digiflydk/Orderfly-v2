@@ -58,6 +58,7 @@ test('fixture reproduces the old nested undefined failure before Stripe',async()
 for(const existing of [false,true])for(const kind of ['none','automatic','code','newsletter'])test(`${existing?'returning':'new'} customer ${kind}: persists order and reaches Stripe session`,async()=>{
  const {result,writes,events,coupon}=await checkout({existing,kind});
  assert.equal(result.success,true,result.error);assert.equal(result.url,'https://checkout.stripe.test/session');
+ assert.equal(result.orderId,'ORD-TEST');
  assert.ok(events.indexOf('orders')<events.indexOf('reserve'));assert.ok(events.indexOf('reserve')<events.indexOf('stripe'));
  const order=writes.find(w=>w.ref.collection==='orders').data;
  assert.equal(order.paymentDetails.cartDiscountTotal,kind==='none'?0:10);

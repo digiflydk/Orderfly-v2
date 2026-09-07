@@ -62,13 +62,13 @@ const toNumber = (value: string | number | undefined | null): number => {
 
 
 export function ConfirmationClient({ order, brand, location }: ConfirmationClientProps) {
-    const { clearCart } = useCart();
+    const { completeCheckout } = useCart();
 
     useEffect(() => {
-        if (order) {
-            clearCart();
+        if (order?.paymentStatus === 'Paid' && brand && location) {
+            completeCheckout(order.id, brand.id, location.id);
         }
-    }, [order, clearCart]);
+    }, [order, brand, location, completeCheckout]);
 
     if (!order || !brand || !location) {
         return (

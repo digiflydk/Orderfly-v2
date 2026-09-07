@@ -22,7 +22,7 @@ export default async function CheckoutPage({
 
   return (
     <div className="bg-[#FFF8F0] container mx-auto py-8 flex-1 max-w-[1140px] px-4">
-      <CheckoutClient location={location} />
+      <CheckoutClient brand={brand} location={location} />
     </div>
   );
 }

@@ -317,7 +317,7 @@ export async function createStripeCheckoutSessionAction(
     locationSlug: string,
     deliveryTime?: string,
     anonymousConsentId?: string
-): Promise<{ success: boolean; url?: string | null; error?: string }> {
+): Promise<{ success: boolean; url?: string | null; orderId?: string; error?: string }> {
   let reservedOrderId: string | undefined;
   let sessionRequestStarted = false;
   try {
@@ -558,7 +558,7 @@ export async function createStripeCheckoutSessionAction(
         updatedAt: serverTimestamp(),
     });
 
-    return { success: true, url: session.url };
+    return { success: true, url: session.url, orderId };
 
   } catch (e: any) {
     // Once a request may have reached Stripe, keep the hold until a signed expiration
