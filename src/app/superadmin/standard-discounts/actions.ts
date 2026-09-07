@@ -1,6 +1,7 @@
 
 'use server';
 
+import { isQuantityMethod } from '@/lib/automatic-discounts';
 import { restaurantClock } from '@/lib/promotion-rules';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { db } from '@/lib/firebase';
@@ -9,64 +10,9 @@ import type { StandardDiscount, CartItem, Product, ProductForMenu } from '@/type
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 
-const activeTimeSlotSchema = z.object({
-	start: z.string(),
-	end: z.string(),
-});
+import { standardDiscountSchema } from '@/lib/standard-discount-schema';
 
-const standardDiscountSchema = z.object({
-	id: z.string().optional(),
-	brandId: z.string().min(1, 'A brand must be selected.'),
-	locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
-	discountName: z.string().min(2, 'Discount name is required.'),
-	discountType: z.enum(['product', 'category', 'cart', 'free_delivery']),
-	referenceIds: z.array(z.string()).optional().default([]),
-	discountMethod: z.enum(['percentage', 'fixed_amount']),
-	discountValue: z.coerce.number().positive('Discount value must be positive.').optional(),
-	minOrderValue: z.coerce.number().min(0).optional(),
-	isActive: z.boolean().default(true),
-	orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type is required.'),
-	activeDays: z.array(z.string()).optional().default([]),
-	activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
-	timeSlotValidationType: z.enum(['orderTime', 'pickupTime']),
-	startDate: z.string().or(z.date()).optional(),
-	endDate: z.string().or(z.date()).optional(),
-	allowStacking: z.boolean().default(false),
-	// New marketing fields
-	discountHeading: z.string().optional(),
-	discountDescription: z.string().optional(),
-	discountImageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
-	assignToOfferCategory: z.boolean().default(false),
-}).superRefine((data, ctx) => {
-	if (data.discountType === 'product' && (!data.referenceIds || data.referenceIds.length === 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['referenceIds'],
-			message: 'At least one Product must be selected for this discount type.',
-		});
-	}
-	if (data.discountType === 'category' && (!data.referenceIds || data.referenceIds.length === 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['referenceIds'],
-			message: 'At least one Category must be selected for this discount type.',
-		});
-	}
-	if ((data.discountType === 'cart' || data.discountType === 'free_delivery') && (!data.minOrderValue || data.minOrderValue <= 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['minOrderValue'],
-			message: 'A minimum order value is required for this discount type.',
-		});
-	}
-	if ((data.discountMethod === 'percentage' || data.discountMethod === 'fixed_amount') && data.discountType !== 'free_delivery' && (!data.discountValue || data.discountValue <= 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['discountValue'],
-			message: 'A positive discount value is required for this discount method.',
-		});
-	}
-});
+
 
 
 export type FormState = {
@@ -105,8 +51,15 @@ export async function createOrUpdateStandardDiscount(
 
 		// Handle optional numbers: convert empty strings to undefined so Zod doesn't try to coerce them
 		if (rawData.minOrderValue === '') rawData.minOrderValue = undefined;
-		if (rawData.discountValue === '') rawData.discountValue = undefined;
+		if (rawData.discountValue === '' || isQuantityMethod(rawData.discountMethod) || rawData.discountType === 'free_delivery') rawData.discountValue = undefined;
+        for (const key of ['buyQuantity', 'payQuantity', 'bundlePrice']) if (rawData[key] === '') delete rawData[key];
+        if (!['buy_x_pay_y', 'bundle_price'].includes(rawData.discountMethod)) delete rawData.buyQuantity;
+        if (rawData.discountMethod !== 'buy_x_pay_y') delete rawData.payQuantity;
+        if (rawData.discountMethod !== 'bundle_price') delete rawData.bundlePrice;
+        rawData.quantityTiers = rawData.discountMethod === 'quantity_tiers' ? JSON.parse(String(formData.get('quantityTiers') || '[]')) : undefined;
 
+        for (const key of ['startDate', 'endDate']) rawData[key] = rawData[key] ? new Date(rawData[key]) : undefined;
+        if (isQuantityMethod(rawData.discountMethod)) rawData.allowStacking = false;
 		const validatedFields = standardDiscountSchema.safeParse(rawData);
 
 		if (!validatedFields.success) {
@@ -119,6 +72,28 @@ export async function createOrUpdateStandardDiscount(
 		}
 
 		const { id, ...discountData } = validatedFields.data;
+        if (!(await getDoc(doc(db, 'brands', discountData.brandId))).exists()) throw new Error('Brand not found.');
+        if (id) {
+          const existing = await getDoc(doc(db, 'standard_discounts', id));
+          if (!existing.exists() || existing.data().brandId !== discountData.brandId) throw new Error('Discount not found for this brand.');
+        }
+        for (const locationId of discountData.locationIds) {
+          const location = await getDoc(doc(db, 'locations', locationId));
+          if (!location.exists() || location.data().brandId !== discountData.brandId) throw new Error('Location does not belong to this brand.');
+        }
+        if (discountData.discountType === 'product' || discountData.discountType === 'category') {
+          const collectionName = discountData.discountType === 'product' ? 'products' : 'categories';
+          for (const ref of discountData.referenceIds) {
+            const record = await getDoc(doc(db, collectionName, ref));
+            if (!record.exists()) throw new Error('Selected product or category does not exist.');
+            const value = record.data();
+            // Categories derive ownership from locations; they do not store brandId.
+            const matches = discountData.discountType === 'category'
+              ? discountData.locationIds.some(loc => (value.locationIds || []).includes(loc))
+              : value.brandId === discountData.brandId;
+            if (!matches) throw new Error('Selected product or category does not belong to this brand/location.');
+          }
+        }
 
 		const docId = id || doc(collection(db, 'standard_discounts')).id;
 
@@ -245,8 +220,8 @@ export async function getActiveStandardDiscounts({ brandId, locationId, delivery
 				id: doc.id,
 				startDate: data.startDate?.toDate(),
 				endDate: data.endDate?.toDate(),
-				createdAt: data.createdAt.toDate(),
-				updatedAt: data.updatedAt.toDate(),
+				createdAt: data.createdAt?.toDate(),
+				updatedAt: data.updatedAt?.toDate(),
 			} as StandardDiscount
 		});
 	}

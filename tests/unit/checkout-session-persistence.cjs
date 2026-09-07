@@ -23,6 +23,8 @@ async function checkout({existing=false,kind='none',identityCleaner=false}={}) {
   'node:crypto':require('node:crypto'),
   '@/lib/firestore-optional-fields':identityCleaner?{omitUndefinedFields:v=>v}:optional,
   '@/lib/promotion-rules':load('src/lib/promotion-rules.ts'),
+  '@/lib/automatic-discounts':load('src/lib/automatic-discounts.ts'),
+  '@/lib/checkout-price-validation':load('src/lib/checkout-price-validation.ts',{'./promotion-rules':load('src/lib/promotion-rules.ts')}),
   '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>existing?snap:null},
   '@/lib/discount-reservations':{reserveDiscount:async()=>events.push('reserve'),releaseDiscount:async()=>events.push('release')},
   '@/lib/order-id':{generateOrderId:()=> 'ORD-TEST'},'@/lib/firebase':{db:{}},
@@ -37,6 +39,7 @@ async function checkout({existing=false,kind='none',identityCleaner=false}={}) {
    checkout={sessions:{create:async params=>{events.push('stripe');assert.equal(writes.find(w=>w.ref.collection==='orders').data.paymentDetails.cartDiscountTotal,kind==='none'?0:10);return {id:'cs_test_mock',url:'https://checkout.stripe.test/session'};}}};
   }},
   'firebase/firestore':{
+   collection:(_,name)=>name,where:()=>null,query:value=>value,getDocs:async()=>({docs:[]}),
    doc:(_,collection,id)=>({collection,id}),
    getDoc:async ref=>({id:ref.id,exists:()=>ref.collection==='products',data:()=>({brandId:'b',locationIds:['l'],categoryId:'pizza',price:100})}),
    serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),

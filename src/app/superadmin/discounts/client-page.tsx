@@ -91,15 +91,15 @@ export function DiscountsClientPage({ initialDiscounts, brands }: DiscountsClien
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Discounts</h1>
           <p className="text-muted-foreground">
-            Create and track discount codes and automatic newsletter signup discounts.
+            Manage codes and newsletter discounts here, or open automatic product, category and quantity offers.
           </p>
         </div>
-        <Button asChild>
+        <div className="flex gap-2"><Button variant="outline" asChild><Link href="/superadmin/standard-discounts">Automatic discounts · products / categories / X for Y</Link></Button><Button asChild>
             <Link href="/superadmin/discounts/new">
                 <PlusCircle className="mr-2" />
-                Add New Discount
+                Add code / newsletter discount
             </Link>
-        </Button>
+        </Button></div>
       </div>
 
        <Card>

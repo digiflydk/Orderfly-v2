@@ -7,6 +7,7 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm, useFieldArray, useWatch } from 'react-hook-form';
 import { useEffect, useMemo, useState, useTransition, useActionState } from 'react';
 import Link from 'next/link';
+import { isQuantityMethod } from '@/lib/automatic-discounts';
 import Image from 'next/image';
 import { format } from 'date-fns';
 import { CalendarIcon, Loader2, PlusCircle, Trash2, Clock } from 'lucide-react';
@@ -31,66 +32,7 @@ import { Checkbox } from '../ui/checkbox';
 import { SerializedStandardDiscount } from '@/app/superadmin/standard-discounts/actions';
 
 
-const activeTimeSlotSchema = z.object({
-	start: z.string(),
-	end: z.string(),
-});
-
-const standardDiscountSchema = z.object({
-	id: z.string().optional(),
-	brandId: z.string().min(1, 'A brand must be selected.'),
-	locationIds: z.array(z.string()).min(1, { message: 'At least one location must be selected.' }),
-	discountName: z.string().min(2, 'Discount name is required.'),
-	discountType: z.enum(['product', 'category', 'cart', 'free_delivery']),
-	referenceIds: z.array(z.string()).optional().default([]),
-	discountMethod: z.enum(['percentage', 'fixed_amount']),
-	discountValue: z.coerce.number().positive('Discount value must be positive.').optional(),
-	minOrderValue: z.coerce.number().min(0).optional(),
-	isActive: z.boolean().default(true),
-	orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type is required.'),
-	activeDays: z.array(z.string()).optional().default([]),
-	activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
-	timeSlotValidationType: z.enum(['orderTime', 'pickupTime']),
-	startDate: z.date().optional(),
-	endDate: z.date().optional(),
-	allowStacking: z.boolean().default(false),
-	// New marketing fields
-	discountHeading: z.string().optional(),
-	discountDescription: z.string().optional(),
-	discountImageUrl: z.string().url({ message: "Please enter a valid URL." }).optional().nullable(),
-	assignToOfferCategory: z.boolean().default(false),
-}).superRefine((data, ctx) => {
-	if (data.discountType === 'product' && (!data.referenceIds || data.referenceIds.length === 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['referenceIds'],
-			message: 'At least one Product must be selected for this discount type.',
-		});
-	}
-	if (data.discountType === 'category' && (!data.referenceIds || data.referenceIds.length === 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['referenceIds'],
-			message: 'At least one Category must be selected for this discount type.',
-		});
-	}
-	if ((data.discountType === 'cart' || data.discountType === 'free_delivery') && (!data.minOrderValue || data.minOrderValue <= 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['minOrderValue'],
-			message: 'A minimum order value is required for this discount type.',
-		});
-	}
-	if ((data.discountMethod === 'percentage' || data.discountMethod === 'fixed_amount') && data.discountType !== 'free_delivery' && (!data.discountValue || data.discountValue <= 0)) {
-		ctx.addIssue({
-			code: z.ZodIssueCode.custom,
-			path: ['discountValue'],
-			message: 'A positive discount value is required for this discount method.',
-		});
-	}
-});
-
-
+import { standardDiscountSchema } from '@/lib/standard-discount-schema';
 
 type DiscountFormValues = z.input<typeof standardDiscountSchema>;
 
@@ -168,9 +110,18 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 
 	useEffect(() => {
 		if (discountType === 'cart' || discountType === 'free_delivery') {
+            if (isQuantityMethod(discountMethod)) setValue('discountMethod', 'percentage');
 			setValue('referenceIds', []);
 		}
-	}, [discountType, setValue]);
+	}, [discountType, discountMethod, setValue]);
+
+ useEffect(() => {
+   if (isQuantityMethod(discountMethod) || discountType === 'free_delivery') setValue('discountValue', undefined);
+   if (!['buy_x_pay_y', 'bundle_price'].includes(discountMethod)) setValue('buyQuantity', undefined);
+   if (discountMethod !== 'buy_x_pay_y') setValue('payQuantity', undefined);
+   if (discountMethod !== 'bundle_price') setValue('bundlePrice', undefined);
+   if (discountMethod !== 'quantity_tiers') setValue('quantityTiers', undefined);
+ }, [discountMethod, discountType, setValue]);
 
 	const handleImageChange = (event: React.ChangeEvent<HTMLInputElement>) => {
 		const file = event.target.files?.[0];
@@ -195,7 +146,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 		Object.entries(data).forEach(([key, value]) => {
 			if (value === undefined || value === null) return;
 
-			if (key === 'activeTimeSlots' || key === 'imageUrl') return;
+			if (key === 'activeTimeSlots' || key === 'quantityTiers' || key === 'imageUrl') return;
 
 			if (key === 'startDate' || key === 'endDate') {
 				if (value) {
@@ -219,6 +170,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 		});
 
 		formData.append('activeTimeSlots', JSON.stringify(data.activeTimeSlots));
+        formData.append('quantityTiers', JSON.stringify(data.quantityTiers || []));
 
 		if (imageInput?.files?.[0]) {
 			formData.append('discountImageUrl', imageInput.files[0]);
@@ -377,11 +329,27 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 												<FormItem><FormLabel>Discount Method</FormLabel><Select onValueChange={field.onChange} value={field.value}><FormControl><SelectTrigger><SelectValue placeholder="Select a method" /></SelectTrigger></FormControl><SelectContent>
 													<SelectItem value="percentage">Percentage (%)</SelectItem>
 													<SelectItem value="fixed_amount">Fixed Amount (DKK)</SelectItem>
+{(discountType === 'product' || discountType === 'category') && <><SelectItem value="buy_x_pay_y">Buy X, pay for Y (e.g. 3 for 2)</SelectItem><SelectItem value="bundle_price">Fixed bundle price (e.g. 3 for 200 DKK)</SelectItem><SelectItem value="quantity_tiers">Quantity tiers</SelectItem></>}
 												</SelectContent></Select><FormMessage /></FormItem>
 											)} />
-											<FormField control={control} name="discountValue" render={({ field }) => (
+											{isQuantityMethod(discountMethod) ? <div className="space-y-3">
+{discountMethod !== 'quantity_tiers' && <FormField control={control} name="buyQuantity" render={({ field }) => (<FormItem><FormLabel>Bundle quantity</FormLabel><FormControl><Input type="number" min="2" max="1000" step="1" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />}
+{discountMethod === 'buy_x_pay_y' && <FormField control={control} name="payQuantity" render={({ field }) => (<FormItem><FormLabel>Pay for quantity</FormLabel><FormControl><Input type="number" min="1" max="999" step="1" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />}
+{discountMethod === 'bundle_price' && <FormField control={control} name="bundlePrice" render={({ field }) => (<FormItem><FormLabel>Total bundle price (DKK)</FormLabel><FormControl><Input type="number" min="0.01" step="0.01" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>)} />}
+{discountMethod === 'quantity_tiers' && <FormField control={control} name="quantityTiers" render={() => (<FormItem>
+<FormLabel>Quantity tiers</FormLabel>
+{(watch('quantityTiers') || []).map((tier,index) => <div key={index} className="space-y-2 rounded border p-3">
+<FormField control={control} name={`quantityTiers.${index}.minQuantity`} render={({field}) => (<FormItem><FormLabel>From quantity</FormLabel><FormControl><Input type="number" min="2" step="1" {...field} /></FormControl><FormMessage /></FormItem>)} />
+<FormField control={control} name={`quantityTiers.${index}.method`} render={({field}) => (<FormItem><FormLabel>Reduction per item</FormLabel><Select value={field.value} onValueChange={field.onChange}><FormControl><SelectTrigger><SelectValue /></SelectTrigger></FormControl><SelectContent><SelectItem value="percentage">Percentage (%)</SelectItem><SelectItem value="fixed_amount">Fixed amount (DKK)</SelectItem></SelectContent></Select><FormMessage /></FormItem>)} />
+<FormField control={control} name={`quantityTiers.${index}.value`} render={({field}) => (<FormItem><FormLabel>Discount value</FormLabel><FormControl><Input type="number" min="0.01" step="0.01" {...field} /></FormControl><FormMessage /></FormItem>)} />
+<Button type="button" variant="outline" onClick={() => setValue('quantityTiers',(getValues('quantityTiers') || []).filter((_,i) => i !== index),{shouldValidate:true})}>Remove tier</Button>
+</div>)}
+<Button type="button" variant="outline" disabled={(watch('quantityTiers') || []).length >= 20} onClick={() => setValue('quantityTiers',[...(getValues('quantityTiers') || []),{minQuantity:2,method:'percentage',value:10}])}>Add tier</Button>
+<FormMessage /></FormItem>)} />}
+<p className="text-sm text-muted-foreground">{discountMethod === 'quantity_tiers' ? 'Highest reached tier applies to all eligible items.' : discountMethod === 'bundle_price' ? 'Complete bundles repeat. Most expensive items bundled first; remaining items keep normal prices. Never increases the price.' : 'Cheapest eligible items free per complete group.'} Extras charged normally. The best cart offer or code wins.</p>
+</div> : (<FormField control={control} name="discountValue" render={({ field }) => (
 												<FormItem><FormLabel>Discount Value</FormLabel><FormControl><Input type="number" step="0.01" placeholder="e.g. 10 or 50" {...field} value={field.value ?? ''} /></FormControl><FormMessage /></FormItem>
-											)} />
+											)} />)}
 										</div>
 									</>
 								)}
@@ -416,7 +384,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Active</FormLabel></div><FormControl><Switch name="isActive" checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
 								)} />
 								<FormField control={control} name="allowStacking" render={({ field }) => (
-									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Allow Stacking</FormLabel></div><FormControl><Switch name="allowStacking" checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
+									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Allow Stacking</FormLabel>{isQuantityMethod(discountMethod) && <FormDescription>Quantity offers cannot be stacked.</FormDescription>}</div><FormControl><Switch name="allowStacking" disabled={isQuantityMethod(discountMethod)} checked={isQuantityMethod(discountMethod) ? false : field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
 								)} />
 								<FormField control={control} name="assignToOfferCategory" render={({ field }) => (
 									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Show in "Offers" Category</FormLabel></div><FormControl><Switch name="assignToOfferCategory" checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
@@ -492,4 +460,3 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 		</Form>
 	);
 }
-

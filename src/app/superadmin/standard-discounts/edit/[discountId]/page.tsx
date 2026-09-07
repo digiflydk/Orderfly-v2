@@ -1,3 +1,4 @@
+import { upsellClientData } from '@/lib/upsell-serialization';
 
 import { notFound } from 'next/navigation';
 import type { AsyncPageProps } from "@/types/next-async-props";
@@ -32,10 +33,10 @@ export default async function EditStandardDiscountPage({ params }: AsyncPageProp
         <StandardDiscountFormPage 
             key={discount.id}
             discount={discount}
-            brands={brands} 
-            locations={locations}
-            products={products}
-            categories={categories}
+            brands={upsellClientData(brands)}
+            locations={upsellClientData(locations)}
+            products={upsellClientData(products)}
+            categories={upsellClientData(categories)}
         />
     );
 }

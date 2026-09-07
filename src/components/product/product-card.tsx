@@ -2,6 +2,7 @@
 'use client';
 
 import Image from 'next/image';
+import { isQuantityMethod, quantityOfferLabel } from '@/lib/automatic-discounts';
 import type { StandardDiscount, ProductForMenu } from '@/types';
 import { useState, useMemo, useTransition } from 'react';
 import { ProductDialog } from "./product-dialog";
@@ -69,10 +70,10 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
     }
 
     const applicableDiscount = activeDiscounts
-      .filter(d => 
+      .filter(d => !isQuantityMethod(d.discountMethod) && (
           (d.discountType === 'product' && d.referenceIds.includes(product.id)) || 
           (d.discountType === 'category' && product.categoryId && d.referenceIds.includes(product.categoryId))
-      )
+      ))
       .reduce<StandardDiscount | null>((best, current) => {
           if (!best) return current;
           const bestDiscountedPrice = applyDiscount(originalPrice, best);
@@ -111,6 +112,10 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
 
   const getBadgeText = () => {
     if (hasOffer) return "Offer";
+    const quantityOffer = activeDiscounts.find(d => isQuantityMethod(d.discountMethod) &&
+      ((d.discountType === 'product' && d.referenceIds.includes(product.id)) ||
+       (d.discountType === 'category' && !!product.categoryId && d.referenceIds.includes(product.categoryId))));
+    if (quantityOffer) return quantityOfferLabel(quantityOffer);
     if (product.isFeatured) return "Featured";
     if (product.isNew) return "New";
     if (product.isPopular) return "Popular";

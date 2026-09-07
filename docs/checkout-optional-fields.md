@@ -20,8 +20,11 @@ automatic, code and newsletter discounts. It also checks preservation of SDK
 objects and rejection of undefined array entries. No production orders or real
 payments are created by this test.
 
-Work Release must review, merge and deploy the hotfix separately from #47. Work QA
+While this hotfix was prepared, #47 merged as e624100. The hotfix incorporates
+that main revision, and the same persistence scenarios run with its real price
+validation and quantity-discount helpers.
+
+Work Release must review, merge and deploy the hotfix. Work QA
 must then verify that these checkout scenarios reach Stripe in the released
-build. Local mocked tests are not evidence of live payment success. Carry this
-fix into #47 before releasing that feature. Do not mark the incident resolved
+build. Local mocked tests are not evidence of live payment success. Do not mark the incident resolved
 until the deployed version and live handoff have been verified.

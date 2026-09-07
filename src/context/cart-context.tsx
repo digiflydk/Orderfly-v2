@@ -5,6 +5,7 @@ import { createContext, useContext, useState, ReactNode, useCallback, useMemo, u
 import type { Product, CartItemTopping, Brand, Location, ComboMenu, ComboSelection, Discount, StandardDiscount, CartItem, ProductForMenu } from '@/types';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import Cookies from 'js-cookie';
+import { bestAutomaticDiscount } from '@/lib/automatic-discounts';
 import { isLockedItem } from '@/lib/cart-utils';
 
 interface CartContextType {
@@ -167,29 +168,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         return sum + ((item.basePrice + toppingsTotal) * item.quantity);
     }, 0);
 
-    let bestAutoDiscount: { name: string; amount: number } | null = null;
-    if (discountableSubtotal > 0) {
-        const applicableCartDiscounts = standardDiscounts.filter(d => 
-            d.discountType === 'cart' && discountableSubtotal >= (d.minOrderValue || 0)
-        );
-
-        if (applicableCartDiscounts.length > 0) {
-            const bestAuto = applicableCartDiscounts.reduce((best, current) => {
-                const bestAmount = best.discountMethod === 'percentage' ? discountableSubtotal * ((best.discountValue || 0) / 100) : (best.discountValue || 0);
-                const currentAmount = current.discountMethod === 'percentage' ? discountableSubtotal * ((current.discountValue || 0) / 100) : (current.discountValue || 0);
-                return currentAmount > bestAmount ? current : best;
-            });
-            let amount = 0;
-            if (bestAuto.discountMethod === 'percentage' && bestAuto.discountValue) {
-                amount = discountableSubtotal * (bestAuto.discountValue / 100);
-            } else if (bestAuto.discountMethod === 'fixed_amount' && bestAuto.discountValue) {
-                amount = Math.min(discountableSubtotal, bestAuto.discountValue);
-            }
-            if (amount > 0) {
-                bestAutoDiscount = { name: bestAuto.discountName, amount };
-            }
-        }
-    }
+    const bestAutoDiscount = bestAutomaticDiscount(standardDiscounts, discountableSubtotal,
+      unlockedItems.map(item => ({ id: item.id, categoryId: item.categoryId, quantity: item.quantity, unitPrice: item.basePrice })));
 
     let calculatedVoucher: { name: string; amount: number } | null = null;
     if (appliedDiscount && discountableSubtotal >= (appliedDiscount.minOrderValue || 0)) {
