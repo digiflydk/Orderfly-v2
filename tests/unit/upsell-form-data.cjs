@@ -4,7 +4,7 @@ const fs=require('node:fs');
 const ts=require('typescript');
 function load(path,mocks={}) {
   const mod={exports:{}};
-  const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
+  const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
   new Function('require','module','exports',code)(name=>name in mocks?mocks[name]:require(name),mod,mod.exports);
   return mod.exports;
 }
@@ -34,4 +34,29 @@ test('edit includes locked brand and preserves category offer / unchecked activa
   assert.equal(data.get('id'),'existing');assert.equal(data.get('brandId'),'brand-cph');
   assert.equal(data.has('isActive'),false);assert.equal(data.get('discountValue'),'10');
   assert.deepEqual(data.getAll('offerCategoryIds'),['c1']);assert.deepEqual(data.getAll('offerProductIds'),[]);
+});
+test('actual form prevents native reset, keeps Hellerup on failed submit and retries',()=>{
+  const path='src/components/superadmin/upsell-form-page.tsx';
+  const ui=new Proxy({}, {get:(_,key)=>key});
+  const mocks=Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],ui]));
+  let pending=false, serverState=null, attempts=[];
+  const draft=structuredClone(values);
+  const form={control:{},watch:key=>draft[key],getValues:()=>draft,setValue:(key,value)=>draft[key]=value,formState:{}};
+  Object.assign(mocks,{
+    zod:require('zod'),'@hookform/resolvers/zod':{zodResolver:()=>{}},
+    'react-hook-form':{useForm:()=>form,useFieldArray:()=>({fields:[]})},
+    react:{useEffect:()=>{},useMemo:fn=>fn(),useState:v=>[v,()=>{}],useTransition:()=>[pending,fn=>fn()],useActionState:()=>[serverState,data=>{attempts.push(data);serverState={error:true,message:'Correct trigger'};},pending]},
+    '@/hooks/use-toast':{useToast:()=>({toast:()=>{}})},'@/lib/upsell-form-data':{upsellFormData},
+  });
+  const {UpsellFormPage}=load(path,mocks);
+  const render=()=>UpsellFormPage({brands:[],locations:[],products:[],categories:[]}).props.children;
+  let prevented=0;
+  const event={preventDefault:()=>{prevented++;}};
+  const first=render();assert.equal(first.props.action,undefined);
+  first.props.onSubmit(event);
+  assert.equal(prevented,1);assert.deepEqual(draft.locationIds,['location-m3']);
+  render().props.onSubmit(event);
+  assert.equal(attempts.length,2);
+  assert.deepEqual(attempts[1].getAll('locationIds'),['location-m3']);
+  pending=true;render().props.onSubmit(event);assert.equal(attempts.length,2);
 });
