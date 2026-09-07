@@ -4,6 +4,7 @@
 
 import { validateCheckoutPrices } from '@/lib/checkout-price-validation';
 import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
+import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
 import { newsletterEligible, cartLineEligible, assignedCustomerMatches, restaurantClock } from '@/lib/promotion-rules';
 import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
 import { createHash, randomBytes } from 'node:crypto';
@@ -128,7 +129,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
             }
 
             if (newsletterDiscountId && !customerData.marketingConsent) updatedData.pendingNewsletterDiscountId = newsletterDiscountId;
-            await updateDoc(customerRef, updatedData);
+            await updateDoc(customerRef, omitUndefinedFields(updatedData));
         } else {
             const newCustomer: Customer & { normalizedEmail: string } = {
                 id: customerId,
@@ -152,7 +153,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 cookie_consent: cookieConsentData,
             };
             if (newsletterDiscountId) newCustomer.pendingNewsletterDiscountId = newsletterDiscountId;
-            await setDoc(customerRef, newCustomer);
+            await setDoc(customerRef, omitUndefinedFields(newCustomer));
         }
         
         return customerId;
@@ -452,7 +453,7 @@ export async function createStripeCheckoutSessionAction(
     const cancelToken = randomBytes(32).toString('hex');
     const orderRef = doc(db, 'orders', orderId);
 
-    await setDoc(orderRef, {
+    await setDoc(orderRef, omitUndefinedFields({
         id: orderId,
         createdAt: serverTimestamp(),
         status: 'Received',
@@ -475,7 +476,7 @@ export async function createStripeCheckoutSessionAction(
             address: deliveryType === 'delivery' ? `${customerInfo.street}, ${customerInfo.zipCode} ${customerInfo.city}` : 'For Pickup',
         },
         psp: { provider: 'stripe' },
-    });
+    }));
 
 
     await reserveDiscount(orderId, appliedDiscountIdForOrder, customerId, brandId);
