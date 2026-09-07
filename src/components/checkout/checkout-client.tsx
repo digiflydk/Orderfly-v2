@@ -1,5 +1,7 @@
 'use client';
 
+import { requestHostedCheckout } from '@/lib/checkout-request';
+import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
 import * as React from 'react';
 import { useCart } from "@/context/cart-context";
@@ -12,15 +14,15 @@ import Link from "next/link";
 import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { useEffect, useState, useMemo, useCallback, useTransition } from "react";
-import { createStripeCheckoutSessionAction, getNewsletterSignupDiscountAction, validateDiscountAction } from "@/app/checkout/actions";
+import { useEffect, useState, useMemo, useCallback, useRef } from "react";
+import { getNewsletterSignupDiscountAction, validateDiscountAction } from "@/app/checkout/actions";
 import type { NewsletterDiscountOffer } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, X, Tag, Truck, Store, Clock, ShoppingCart, AlertTriangle } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
-import { useParams, useRouter } from "next/navigation";
+import { useParams } from "next/navigation";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -45,10 +47,7 @@ import { TimeSlotDialog } from "./timeslot-dialog";
 import { Alert, AlertTitle, AlertDescription } from "../ui/alert";
 import Cookies from "js-cookie";
 import { useAnalytics } from '@/context/analytics-context';
-import { loadStripe } from '@stripe/stripe-js';
-import { Elements } from '@stripe/react-stripe-js';
 import { cn } from '@/lib/utils';
-import { getActiveStripeKey } from '@/app/superadmin/settings/actions';
 import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
 import { UpsellDialog } from './upsell-dialog';
 import { isLockedItem } from '@/lib/cart-utils';
@@ -328,10 +327,13 @@ function CheckoutForm({ location }: { location: Location }) {
     setSelectedTime
   } = useCart();
 
-  const router = useRouter();
   const { toast } = useToast();
   const params = useParams();
   const [isProcessing, setIsProcessing] = useState(false);
+  const requestInFlight = useRef(false);
+  const [checkoutError, setCheckoutError] = useState<string | null>(null);
+  const [paymentUncertain, setPaymentUncertain] = useState(false);
+  const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
   const [discountCode, setDiscountCode] = useState('');
   const [isTimeDialogOpen, setIsTimeDialogOpen] = useState(false);
   const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
@@ -339,9 +341,8 @@ function CheckoutForm({ location }: { location: Location }) {
   const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
   const [discountErrorMessage, setDiscountErrorMessage] = useState('');
   const [newsletterOffer, setNewsletterOffer] = useState<NewsletterDiscountOffer | null>(null);
-  const [isPending, startTransition] = useTransition();
 
-  const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell' | 'processing'>('form');
+  const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell'>('form');
 
   const [activeUpsell, setActiveUpsell] =
     useState<{ upsell: Upsell; products: ProductForMenu[] } | null>(null);
@@ -436,56 +437,65 @@ function CheckoutForm({ location }: { location: Location }) {
   }, [newsletterSelected, newsletterOffer, appliedDiscount?.applicationType, applyDiscount, removeDiscount, brand, location, deliveryType]);
 
   const handleApplyDiscount = useCallback(async () => {
-    if (!discountCode || !brand || !location || !deliveryType) return;
+    if (!discountCode || !brand || !location || !deliveryType || requestInFlight.current || paymentUncertain || paymentUrl) return;
+    requestInFlight.current = true;
 
     setIsProcessing(true);
-    const currentDiscountableSubtotal = cartItems
-      .filter(item => !isLockedItem(item))
-      .reduce((sum, item) => {
-        const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-        return sum + (item.basePrice + toppingsTotal) * item.quantity;
-      }, 0);
+    try {
+      const currentDiscountableSubtotal = cartItems
+        .filter(item => !isLockedItem(item))
+        .reduce((sum, item) => {
+          const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
+          return sum + (item.basePrice + toppingsTotal) * item.quantity;
+        }, 0);
 
-    const result = await validateDiscountAction(
-      discountCode,
-      brand.id,
-      location.id,
-      currentDiscountableSubtotal,
-      deliveryType,
-      form.getValues('email')
-    );
+      const result = await optionalCheckoutValue(() => validateDiscountAction(
+        discountCode,
+        brand.id,
+        location.id,
+        currentDiscountableSubtotal,
+        deliveryType,
+        form.getValues('email')
+      ), { success: false, message: 'Discount could not be checked. Please try again.' }, 8000);
 
-    if (result.success && result.discount) {
-      applyDiscount(result.discount);
-      toast({ title: 'Success!', description: 'Discount code applied.' });
-    } else {
-      removeDiscount();
-      setDiscountErrorMessage(result.message);
-      setIsDiscountErrorOpen(true);
+      if (result.success && result.discount) {
+        applyDiscount(result.discount);
+        toast({ title: 'Success!', description: 'Discount code applied.' });
+      } else {
+        removeDiscount();
+        setDiscountErrorMessage(result.message);
+        setIsDiscountErrorOpen(true);
+      }
+    } finally {
+      requestInFlight.current = false;
+      setIsProcessing(false);
     }
-    setIsProcessing(false);
-  }, [discountCode, brand, location, deliveryType, cartItems, applyDiscount, removeDiscount, toast]);
+  }, [paymentUncertain, paymentUrl, form, discountCode, brand, location, deliveryType, cartItems, applyDiscount, removeDiscount, toast]);
 
   useEffect(() => {
-    const hasTracked = sessionStorage.getItem('checkout_started');
-    if (!hasTracked) {
-      trackEvent('start_checkout', {
-        cartValue: checkoutTotal,
-        itemsCount: itemCount,
-        deliveryType: deliveryType
-      });
-      sessionStorage.setItem('checkout_started', 'true');
-    }
+    try {
+      const hasTracked = sessionStorage.getItem('checkout_started');
+      if (!hasTracked) {
+        trackEvent('start_checkout', {
+          cartValue: checkoutTotal,
+          itemsCount: itemCount,
+          deliveryType: deliveryType
+        });
+        sessionStorage.setItem('checkout_started', 'true');
+      }
+    } catch { /* Browser storage and analytics are optional. */ }
   }, [trackEvent, checkoutTotal, itemCount, deliveryType]);
 
   useEffect(() => {
     const subscription = form.watch((_, { name, type }) => {
       if (type === 'change' && ['name', 'email', 'phone'].includes(name as string)) {
-        const hasTracked = sessionStorage.getItem('customer_info_started');
-        if (!hasTracked) {
-          trackEvent('customer_info_started');
-          sessionStorage.setItem('customer_info_started', 'true');
-        }
+        try {
+          const hasTracked = sessionStorage.getItem('customer_info_started');
+          if (!hasTracked) {
+            trackEvent('customer_info_started');
+            sessionStorage.setItem('customer_info_started', 'true');
+          }
+        } catch { /* Browser storage and analytics are optional. */ }
       }
     });
     return () => subscription.unsubscribe();
@@ -507,9 +517,10 @@ function CheckoutForm({ location }: { location: Location }) {
     );
   }, [displayTime]);
 
-  const proceedToStripe = (formValues: CheckoutFormValues) => {
-    startTransition(async () => {
-      setIsProcessing(true);
+  const proceedToStripe = async (formValues: CheckoutFormValues) => {
+      // A slow payment request is not evidence that no session exists. Keep the
+      // submission locked until a definitive response; never race it with retry.
+      const waiting = setTimeout(() => setCheckoutError('Payment is taking longer than usual. Please keep this page open while we check it.'), 15000);
       try {
       if (!brand || !location) {
         toast({
@@ -522,7 +533,7 @@ function CheckoutForm({ location }: { location: Location }) {
         return;
       }
 
-      trackEvent('click_purchase', { cartValue: checkoutTotal });
+      try { trackEvent('click_purchase', { cartValue: checkoutTotal }); } catch { /* Optional telemetry. */ }
 
       const totalDiscount =
         (itemDiscount || 0) + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0);
@@ -543,7 +554,8 @@ function CheckoutForm({ location }: { location: Location }) {
       };
 
       const finalDeliveryTime = selectedTime === 'asap' ? displayTime : selectedTime;
-      const anonymousId = Cookies.get('orderfly_anonymous_id');
+      let anonymousId: string | undefined;
+      try { anonymousId = Cookies.get('orderfly_anonymous_id'); } catch { /* Optional consent linkage. */ }
 
       const minimalCartItems: MinimalCartItem[] = cartItems.map(item => ({
         id: item.id,
@@ -556,13 +568,13 @@ function CheckoutForm({ location }: { location: Location }) {
         toppings: item.toppings.map(t => t.name)
       }));
 
-      // 🔧 Force subscribeToNewsletter til at være boolean
+      // The server receives an explicit consent boolean.
       const customerInfo: CustomerInfo = {
         ...formValues,
         subscribeToNewsletter: !!formValues.subscribeToNewsletter
       };
 
-      const result = await createStripeCheckoutSessionAction(
+      const result = await requestHostedCheckout(
         minimalCartItems,
         customerInfo,
         deliveryType!,
@@ -576,83 +588,73 @@ function CheckoutForm({ location }: { location: Location }) {
         anonymousId
       );
 
-      setIsProcessing(false);
-
+      setCheckoutError(null);
       if (result.success && result.url) {
-        if (result.orderId) saveCartForCheckout(result.orderId);
-        router.push(result.url);
+        // Keep the URL if navigation is interrupted, so continuing never creates
+        // a second order. Storage failure must not prevent hosted payment.
+        setPaymentUrl(result.url);
+        try { if (result.orderId) saveCartForCheckout(result.orderId); } catch { /* Best-effort browser persistence. */ }
+        window.location.assign(result.url);
       } else {
-        toast({
-          variant: 'destructive',
-          title: 'Checkout Error',
-          description: result.error || 'Payment could not be opened. Please try again.',
-          duration: 20000
-        });
+        setPaymentUncertain(result.retryable === false);
+        setCheckoutError(result.error || 'Payment could not be opened. Please try again.');
       }
       } catch {
-        toast({ variant: 'destructive', title: 'Checkout Error', description: 'Payment could not be opened. Please check your connection and try again.' });
+        setPaymentUncertain(true);
+        setCheckoutError('We could not confirm whether the payment page was created. Please contact the restaurant before starting another payment.');
       } finally {
-        setIsProcessing(false);
+        clearTimeout(waiting);
       }
-    });
   };
 
-  const handleFormSubmit = form.handleSubmit(async (formValues: CheckoutFormValues) => {
-    if (
-      deliveryType === 'delivery' &&
-      (!formValues.street || !formValues.zipCode || !formValues.city)
-    ) {
-      if (!formValues.street)
-        form.setError('street', { message: 'Street name is required.' });
-      if (!formValues.zipCode)
-        form.setError('zipCode', { message: 'Postal code is required.' });
-      if (!formValues.city) form.setError('city', { message: 'City is required.' });
+  const submitCheckout = async (formValues: CheckoutFormValues, skipUpsell = false) => {
+    if (requestInFlight.current || paymentUncertain || paymentUrl || (activeUpsell && !skipUpsell)) return;
+    setCheckoutError(null);
+    if (!brand || !location || !deliveryType || !cartItems.length || isDeliveryBelowMinOrder || !isOrderTimeValid) {
+      setCheckoutError('Please check your basket, delivery method and available order time.');
       return;
     }
-
-    if (checkoutStep !== 'form') {
-      proceedToStripe(formValues);
+    if (deliveryType === 'delivery' && (!formValues.street?.trim() || !formValues.zipCode?.trim() || !formValues.city?.trim())) {
+      if (!formValues.street?.trim()) form.setError('street', { message: 'Street name is required.' });
+      if (!formValues.zipCode?.trim()) form.setError('zipCode', { message: 'Postal code is required.' });
+      if (!formValues.city?.trim()) form.setError('city', { message: 'City is required.' });
+      setCheckoutError('Please complete your delivery address.');
       return;
     }
-
+    requestInFlight.current = true;
     setIsProcessing(true);
-    const minimalCartItems = cartItems.map(item => ({
-      id: item.id,
-      categoryId: item.categoryId,
-      itemType: item.itemType,
-      tags: item.tags,
-    }));
-    const currentDiscountableSubtotal = cartItems
-      .filter(item => !isLockedItem(item))
-      .reduce((sum, item) => {
-        const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-        return sum + (item.basePrice + toppingsTotal) * item.quantity;
-      }, 0);
-
-    const upsellData = await getActiveUpsellForCart({
-      brandId: brand!.id,
-      locationId: location!.id,
-      deliveryType: deliveryType!,
-      cartItems: minimalCartItems,
-      cartTotal: currentDiscountableSubtotal,
-      excludedUpsellIds: handledUpsells(),
-    });
-
-    setIsProcessing(false);
-
-    if (upsellData) {
-      markUpsellHandled(upsellData.upsell.id);
-      setActiveUpsell(upsellData);
-      setCheckoutStep('upsell');
-    } else {
-      proceedToStripe(formValues);
+    try {
+      if (!skipUpsell) {
+        const upsellData = await optionalCheckoutValue(() => getActiveUpsellForCart({
+          brandId: brand.id,
+          locationId: location.id,
+          deliveryType,
+          cartItems: cartItems.map(item => ({ id: item.id, categoryId: item.categoryId, itemType: item.itemType, tags: item.tags })),
+          cartTotal: cartItems.filter(item => !isLockedItem(item)).reduce((sum, item) =>
+            sum + (item.basePrice + item.toppings.reduce((total, topping) => total + topping.price, 0)) * item.quantity, 0),
+          excludedUpsellIds: handledUpsells(),
+        }), null);
+        if (upsellData) {
+          markUpsellHandled(upsellData.upsell.id);
+          setActiveUpsell(upsellData);
+          setCheckoutStep('upsell');
+          return;
+        }
+      }
+      await proceedToStripe(formValues);
+    } finally {
+      requestInFlight.current = false;
+      setIsProcessing(false);
     }
-  });
+  };
 
+  const showValidationError = () => setCheckoutError('Please check the highlighted fields before continuing to payment.');
+  const handleFormSubmit = form.handleSubmit(values => submitCheckout(values), showValidationError);
   const onUpsellDialogContinue = () => {
     setActiveUpsell(null);
-    setCheckoutStep('processing');
-    proceedToStripe(form.getValues());
+    setCheckoutStep('form');
+    // Validate again after the dialog; do not bypass required customer fields.
+    void form.handleSubmit(values => submitCheckout(values, true), showValidationError)();
   };
 
   const handleRemoveDiscount = () => {
@@ -722,24 +724,27 @@ function CheckoutForm({ location }: { location: Location }) {
           isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg"
         )}
         disabled={
-          isProcessing ||
+          isProcessing || paymentUncertain || !!paymentUrl || !!activeUpsell ||
           !isTermsAccepted ||
           isDeliveryBelowMinOrder ||
           !isOrderTimeValid
         }
       >
         <div className="flex w-full justify-between items-center px-4">
-          <span>{isProcessing ? <Loader2 className="animate-spin" /> : 'Complete Order'}</span>
+          <span>{isProcessing ? <><Loader2 className="inline animate-spin mr-2" />Opening payment…</> : 'Complete Order'}</span>
           <span>kr. {checkoutTotal.toFixed(2)}</span>
         </div>
       </Button>
+      {checkoutError && <p role="alert" className="mt-3 text-sm text-destructive">{checkoutError}</p>}
+      {paymentUrl && <a className="block mt-3 underline" href={paymentUrl}>Continue to payment</a>}
     </div>
   );
 
   return (
     <>
       <FormProvider {...form}>
-        <form onSubmit={handleFormSubmit}>
+        <form onSubmit={handleFormSubmit} noValidate>
+          <fieldset className="min-w-0" disabled={isProcessing || paymentUncertain || !!paymentUrl}>
           <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-32 lg:pb-0">
             {/* Left column */}
             <div className="space-y-10">
@@ -986,6 +991,7 @@ function CheckoutForm({ location }: { location: Location }) {
           <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-0 z-50 lg:hidden">
             <AcceptTermsAndCompleteOrder isSticky />
           </div>
+          </fieldset>
         </form>
       </FormProvider>
 
@@ -1031,49 +1037,9 @@ function CheckoutForm({ location }: { location: Location }) {
 export function CheckoutClient({ brand, location }: CheckoutClientProps) {
   const { setCartContext, cartReady } = useCart();
   React.useEffect(() => { setCartContext(brand, location); }, [brand, location, setCartContext]);
-  const [stripePromise, setStripePromise] =
-    React.useState<ReturnType<typeof loadStripe> | null>(null);
-  const [error, setError] = React.useState<string | null>(null);
-
-  React.useEffect(() => {
-    getActiveStripeKey()
-      .then(key => {
-        if (key) {
-          setStripePromise(loadStripe(key));
-        } else {
-          console.error("Stripe publishable key is not configured.");
-          setError("Payment processing is not configured. Please contact support.");
-        }
-      })
-      .catch(err => {
-        console.error("Failed to get Stripe key:", err);
-        setError("Could not initialize payment processing.");
-      });
-  }, []);
-
-  if (error) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Alert variant="destructive">
-          <AlertTriangle className="h-4 w-4" />
-          <AlertTitle>Payment Error</AlertTitle>
-          <AlertDescription>{error}</AlertDescription>
-        </Alert>
-      </div>
-    );
+  // Hosted Checkout needs only the server-created URL, not Stripe.js or Elements.
+  if (!cartReady) {
+    return <div className="flex items-center justify-center p-8"><Loader2 className="animate-spin h-8 w-8" /></div>;
   }
-
-  if (!stripePromise || !cartReady) {
-    return (
-      <div className="flex items-center justify-center p-8">
-        <Loader2 className="animate-spin h-8 w-8" />
-      </div>
-    );
-  }
-
-  return (
-    <Elements stripe={stripePromise}>
-      <CheckoutForm location={location} />
-    </Elements>
-  );
+  return <CheckoutForm location={location} />;
 }

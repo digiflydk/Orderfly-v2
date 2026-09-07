@@ -31,60 +31,63 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
   const pathname = usePathname();
 
   useEffect(() => {
-    // This code now runs only on the client, after hydration
-    let sid = Cookies.get(SESSION_ID_COOKIE);
-    if (!sid) {
-      sid = crypto.randomUUID();
-      Cookies.set(SESSION_ID_COOKIE, sid, { expires: ONE_YEAR_DAYS, path: '/', sameSite: 'Lax' });
-    }
-    setSessionId(sid);
-
-    if (!Cookies.get(ATTRIBUTION_COOKIE)) {
-      const attributionData = {
-        utm_source: searchParams.get('utm_source'),
-        utm_medium: searchParams.get('utm_medium'),
-        utm_campaign: searchParams.get('utm_campaign'),
-        utm_term: searchParams.get('utm_term'),
-        utm_content: searchParams.get('utm_content'),
-        referrer: document.referrer,
-        landingPage: pathname,
-      };
-      const filteredData = Object.fromEntries(Object.entries(attributionData).filter(([_, v]) => v != null));
-      if (Object.keys(filteredData).length > 0) {
-        Cookies.set(ATTRIBUTION_COOKIE, JSON.stringify(filteredData), { expires: 30, path: '/', sameSite: 'Lax' });
+    try {
+      // This code now runs only on the client, after hydration
+      let sid = Cookies.get(SESSION_ID_COOKIE);
+      if (!sid) {
+        sid = crypto.randomUUID();
+        Cookies.set(SESSION_ID_COOKIE, sid, { expires: ONE_YEAR_DAYS, path: '/', sameSite: 'Lax' });
       }
-    }
-    
-    if (!brandProp) {
-      const parts = pathname.split('/').filter(Boolean);
-      if (parts.length > 0) {
-          const brandSlug = parts[0];
-          getBrandBySlug(brandSlug).then(setBrand);
-      }
-    }
+      setSessionId(sid);
 
+      if (!Cookies.get(ATTRIBUTION_COOKIE)) {
+        const attributionData = {
+          utm_source: searchParams.get('utm_source'),
+          utm_medium: searchParams.get('utm_medium'),
+          utm_campaign: searchParams.get('utm_campaign'),
+          utm_term: searchParams.get('utm_term'),
+          utm_content: searchParams.get('utm_content'),
+          referrer: document.referrer,
+          landingPage: pathname,
+        };
+        const filteredData = Object.fromEntries(Object.entries(attributionData).filter(([_, v]) => v != null));
+        if (Object.keys(filteredData).length > 0) {
+          Cookies.set(ATTRIBUTION_COOKIE, JSON.stringify(filteredData), { expires: 30, path: '/', sameSite: 'Lax' });
+        }
+      }
+
+      if (!brandProp) {
+        const parts = pathname.split('/').filter(Boolean);
+        if (parts.length > 0) {
+            const brandSlug = parts[0];
+            getBrandBySlug(brandSlug).then(setBrand).catch(() => {});
+        }
+      }
+
+    } catch { /* Analytics must not break the storefront when cookies are unavailable. */ }
   }, [searchParams, pathname, brandProp]);
-  
+
   const trackEvent = useCallback((eventName: AnalyticsEventName, props: Record<string, any> = {}) => {
-    const effectiveBrand = brandProp || brand;
-    if (!sessionId || !effectiveBrand) return;
+    try {
+      const effectiveBrand = brandProp || brand;
+      if (!sessionId || !effectiveBrand) return;
 
-    const attributionCookie = Cookies.get(ATTRIBUTION_COOKIE);
-    const attributionData = attributionCookie ? JSON.parse(attributionCookie) : {};
-    
-    const eventData: Record<string, any> = {
-      brandId: effectiveBrand.id,
-      brandSlug: effectiveBrand.slug,
-      brandGtmId: effectiveBrand.gtmContainerId, // For GTM logic
-      sessionId,
-      deviceType: window.innerWidth < 768 ? 'mobile' : 'desktop',
-      urlPath: window.location.pathname,
-      ...attributionData,
-      ...props, // Pass all props directly
-    };
-    
-    trackClientEvent(eventName, eventData);
+      const attributionCookie = Cookies.get(ATTRIBUTION_COOKIE);
+      const attributionData = attributionCookie ? JSON.parse(attributionCookie) : {};
 
+      const eventData: Record<string, any> = {
+        brandId: effectiveBrand.id,
+        brandSlug: effectiveBrand.slug,
+        brandGtmId: effectiveBrand.gtmContainerId, // For GTM logic
+        sessionId,
+        deviceType: window.innerWidth < 768 ? 'mobile' : 'desktop',
+        urlPath: window.location.pathname,
+        ...attributionData,
+        ...props, // Pass all props directly
+      };
+
+      trackClientEvent(eventName, eventData);
+    } catch { /* Malformed attribution or telemetry failures must never block checkout. */ }
   }, [sessionId, brand, brandProp]);
 
   return (

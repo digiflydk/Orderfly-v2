@@ -37,9 +37,11 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
   const { toast } = useToast();
   const { upsell, products: upsellProducts } = upsellData;
   const [isPending, startTransition] = useTransition();
+  const handled = useRef(false);
 
   useEffect(() => {
     if (isOpen) {
+      handled.current = false;
       trackEvent('upsell_offer_shown', {
         upsellId: upsell.id,
         upsellName: upsell.upsellName,
@@ -68,13 +70,16 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
   }
 
   const handleProductClick = (product: ProductForMenu) => {
-    startTransition(async () => {
+    if (handled.current) return;
+    handled.current = true;
+    startTransition(() => {
         const { originalPrice, finalPrice } = calculatePrices(product);
         
         // Add item to cart and close dialog. The parent component will handle the next step.
         addToCart(product, 1, [], originalPrice, finalPrice);
         
-        await incrementUpsellConversion(upsell.id);
+        // Conversion tracking is optional and must not hold the dialog open.
+        void incrementUpsellConversion(upsell.id).catch(() => {});
 
         trackEvent('upsell_accepted', {
             upsellId: upsell.id,
@@ -94,6 +99,8 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
   };
   
   const handleSkipAndContinue = () => {
+    if (handled.current) return;
+    handled.current = true;
     trackEvent('upsell_rejected', {
         upsellId: upsell.id,
         upsellName: upsell.upsellName,
