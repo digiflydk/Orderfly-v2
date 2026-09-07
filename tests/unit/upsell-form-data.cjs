@@ -9,12 +9,14 @@ function load(path,mocks={}) {
   return mod.exports;
 }
 const {upsellFormData}=load('src/lib/upsell-form-data.ts');
+const serialization=load('src/lib/upsell-serialization.ts');
 const values={brandId:'brand-cph',locationIds:['location-m3'],upsellName:'Andre købte også',description:'',imageUrl:'',offerType:'product',offerProductIds:['p1','p2'],offerCategoryIds:[],discountType:'none',isActive:true,orderTypes:['pickup','delivery'],activeDays:['monday'],tags:['Popular'],triggerConditions:[{id:'t1',type:'cart_value_over',referenceId:'100'}],activeTimeSlots:[{start:'11:00',end:'22:00'}],startDate:new Date('2026-09-07T09:00:00Z')};
 test('controlled create values satisfy the real server parser and persist native IDs',async()=>{
   let saved;
   const api=load('src/app/superadmin/upsells/actions.ts',{
+    '@/lib/upsell-serialization':serialization,
     '@/lib/promotion-rules':{},'next/cache':{revalidatePath:()=>{}},'next/navigation':{redirect:()=>{throw Error('REDIRECT');}},'../products/actions':{},
-    '@/lib/firebase-admin':{admin:{firestore:{Timestamp:{now:()=>0,fromDate:d=>d.toISOString()}}},getAdminDb:()=>({collection:()=>({doc:()=>({id:'new-upsell',set:async data=>{saved=data;}})})})},
+    '@/lib/firebase-admin':{admin:{firestore:{Timestamp:{now:()=>0,fromDate:d=>d.toISOString()}}},getAdminDb:()=>({collection:()=>({doc:()=>({id:'new-upsell',set:async data=>{const check=v=>{assert.notEqual(v,undefined,'Firestore rejects undefined');if(v && typeof v==='object')Object.values(v).forEach(check);};check(data);saved=data;}})})})},
   });
   await assert.rejects(api.createOrUpdateUpsell(null,upsellFormData(values)),/REDIRECT/);
   assert.equal(saved.brandId,'brand-cph');
@@ -24,10 +26,23 @@ test('controlled create values satisfy the real server parser and persist native
   assert.deepEqual(saved.triggerConditions,values.triggerConditions);
   assert.deepEqual(saved.activeTimeSlots,values.activeTimeSlots);
   assert.equal(saved.startDate,values.startDate.toISOString());
+  await assert.rejects(api.createOrUpdateUpsell(null,upsellFormData({...values,imageUrl:undefined,description:undefined,discountValue:undefined})),/REDIRECT/);
+  assert.equal(saved.imageUrl,null);assert.equal(saved.description,null);
+  assert.equal('discountValue' in saved,false);assert.equal(saved.createdAt,0);
   saved=null;
   const invalid=await api.createOrUpdateUpsell(null,upsellFormData({...values,locationIds:[]}));
   assert.equal(invalid.error,true);assert.equal(saved,null);
   assert.ok(invalid.errors.some(e=>e.path[0]==='locationIds'));
+});
+test('existing upsell and nested related data expose Dates rather than Firestore prototypes',async()=>{
+  class Timestamp {toDate(){return new Date('2026-09-07T10:00:00Z');}}
+  const api=load('src/app/superadmin/upsells/actions.ts',{
+    '@/lib/upsell-serialization':serialization,'@/lib/promotion-rules':{},'next/cache':{},'next/navigation':{},'../products/actions':{},
+    '@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({doc:()=>({get:async()=>({id:'existing',exists:true,data:()=>({brandId:'b',startDate:new Timestamp(),createdAt:new Timestamp(),nested:{updatedAt:new Timestamp()}})})})})})},
+  });
+  const upsell=await api.getUpsellById('existing');
+  assert.ok(upsell.startDate instanceof Date);assert.ok(upsell.createdAt instanceof Date);
+  assert.ok(upsell.nested.updatedAt instanceof Date);assert.equal(upsell.id,'existing');
 });
 test('edit includes locked brand and preserves category offer / unchecked activation',()=>{
   const data=upsellFormData({...values,isActive:false,offerType:'category',offerCategoryIds:['c1'],offerProductIds:[],discountType:'percentage',discountValue:10},'existing');
