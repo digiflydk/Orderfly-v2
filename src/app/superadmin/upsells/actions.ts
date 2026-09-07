@@ -2,6 +2,7 @@
 'use server';
 
 import { restaurantClock } from '@/lib/promotion-rules';
+import { upsellClientData } from '@/lib/upsell-serialization';
 import { revalidatePath } from 'next/cache';
 import { getAdminDb, admin } from '@/lib/firebase-admin';
 import type { Upsell, Product, Category, CartItem, ProductForMenu, Brand, Location } from '@/types';
@@ -153,8 +154,8 @@ export async function createOrUpdateUpsell(
     
     const normalised = {
         ...rest,
-        description: description ?? undefined,
-        imageUrl: imageUrl ?? undefined,
+        description: description ?? null,
+        imageUrl: imageUrl ?? null,
     };
 
     const db = getAdminDb();
@@ -179,10 +180,12 @@ export async function createOrUpdateUpsell(
     
     if (startDate) dataToSave.startDate = admin.firestore.Timestamp.fromDate(startDate);
     if (endDate) dataToSave.endDate = admin.firestore.Timestamp.fromDate(endDate);
+    if (!existing) dataToSave.createdAt = admin.firestore.Timestamp.now();
 
     const upsellRef = id ? db.collection('upsells').doc(id) : db.collection('upsells').doc();
     
-    await upsellRef.set({ ...dataToSave, id: upsellRef.id }, { merge: true });
+    const writeData = Object.fromEntries(Object.entries({ ...dataToSave, id: upsellRef.id }).filter(([, value]) => value !== undefined));
+    await upsellRef.set(writeData, { merge: true });
     
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -213,10 +216,10 @@ export async function getUpsells(): Promise<Upsell[]> {
   const querySnapshot = await q.get();
   return querySnapshot.docs.map(doc => {
     const data = doc.data() as Omit<Upsell, 'id'>;
-    return {
+    return upsellClientData({
       ...data,
       id: doc.id,
-    } as Upsell;
+    } as Upsell);
   });
 }
 
@@ -226,10 +229,10 @@ export async function getUpsellById(upsellId: string): Promise<Upsell | null> {
     const docSnap = await docRef.get();
     if (docSnap.exists) {
         const data = docSnap.data() as Omit<Upsell, 'id'>;
-        return {
+        return upsellClientData({
             ...data,
             id: docSnap.id,
-        } as Upsell;
+        } as Upsell);
     }
     return null;
 }
@@ -390,7 +393,7 @@ export async function getProductsForBrand(brandId: string): Promise<ProductForMe
   const querySnapshot = await q.get();
   const products = querySnapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Product[];
   // Sort in memory to avoid needing a composite index for sorting
-  return products.sort((a,b) => (a.sortOrder || 999) - (b.sortOrder || 999));
+  return upsellClientData(products.sort((a,b) => (a.sortOrder || 999) - (b.sortOrder || 999)));
 }
 
 export async function getCategoriesForBrand(brandId: string): Promise<Category[]> {
@@ -422,5 +425,5 @@ export async function getCategoriesForBrand(brandId: string): Promise<Category[]
         });
     });
 
-    return categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName));
+    return upsellClientData(categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName)));
 }

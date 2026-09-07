@@ -1,6 +1,7 @@
 
 
 import { getBrands } from '@/app/superadmin/brands/actions';
+import { upsellClientData } from '@/lib/upsell-serialization';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { UpsellFormPage } from '@/components/superadmin/upsell-form-page';
 import { getCategoriesForBrand, getProductsForBrand } from '@/app/superadmin/upsells/actions';
@@ -16,14 +17,13 @@ export default async function NewUpsellPage() {
 
 	return (
 		<UpsellFormPage
-			brands={brands}
-			locations={locations}
+			brands={upsellClientData(brands)}
+			locations={upsellClientData(locations)}
 			products={products}
 			categories={categories}
 		/>
 	);
 }
-
 
 
 

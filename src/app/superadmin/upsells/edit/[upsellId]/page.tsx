@@ -1,6 +1,7 @@
 
 
 import { notFound } from 'next/navigation';
+import { upsellClientData } from '@/lib/upsell-serialization';
 import { getUpsellById } from '@/app/superadmin/upsells/actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { UpsellFormPage } from '@/components/superadmin/upsell-form-page';
@@ -25,10 +26,10 @@ export default async function EditUpsellPage({ params }: { params: Promise<{ ups
     return (
         <UpsellFormPage 
             upsell={upsell} 
-            brands={brands} 
-            locations={locations}
-            products={products}
-            categories={categories}
+            brands={upsellClientData(brands)}
+            locations={upsellClientData(locations)}
+            products={upsellClientData(products)}
+            categories={upsellClientData(categories)}
         />
     );
 }
