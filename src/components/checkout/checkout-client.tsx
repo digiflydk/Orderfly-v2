@@ -1,4 +1,5 @@
 'use client';
+import { useCheckoutKeyboard } from '@/hooks/use-checkout-keyboard';
 import { statisticsAllowed } from '@/lib/analytics';
 
 import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillment-time';
@@ -306,6 +307,7 @@ function OrderSummaryContent() {
 }
 
 function CheckoutForm({ location }: { location: Location }) {
+  const keyboardOpen = useCheckoutKeyboard();
   const { trackEvent, sessionId: analyticsSessionId } = useAnalytics();
   const {
     cartItems,
@@ -751,7 +753,7 @@ function CheckoutForm({ location }: { location: Location }) {
         )}
       </div>
       <FormProvider {...form}>
-        <form data-commerce-root onSubmit={handleFormSubmit} noValidate>
+        <form data-commerce-root data-keyboard-open={keyboardOpen} onSubmit={handleFormSubmit} noValidate>
           <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-44 lg:pb-0">
             {/* Left column */}
             <fieldset className="min-w-0 space-y-10" disabled={isFormLocked}>
@@ -808,7 +810,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       <FormItem>
                         <FormLabel>Full Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="John Doe" {...field} />
+                          <Input autoComplete="name" enterKeyHint="next" placeholder="John Doe" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -821,7 +823,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="john@example.com" {...field} />
+                          <Input autoComplete="email" inputMode="email" autoCapitalize="none" autoCorrect="off" enterKeyHint="next" type="email" placeholder="john@example.com" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -834,7 +836,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       <FormItem>
                         <FormLabel>Phone Number</FormLabel>
                         <FormControl>
-                          <Input type="tel" placeholder="+123456789" {...field} />
+                          <Input autoComplete="tel" inputMode="tel" enterKeyHint="next" type="tel" placeholder="+123456789" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -849,7 +851,7 @@ function CheckoutForm({ location }: { location: Location }) {
                           <FormItem>
                             <FormLabel>Street Name</FormLabel>
                             <FormControl>
-                              <Input placeholder="123 Main St" {...field} />
+                              <Input autoComplete="address-line1" enterKeyHint="next" placeholder="123 Main St" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -863,7 +865,7 @@ function CheckoutForm({ location }: { location: Location }) {
                             <FormItem>
                               <FormLabel>Postal Code</FormLabel>
                               <FormControl>
-                                <Input placeholder="12345" {...field} />
+                                <Input autoComplete="postal-code" inputMode="numeric" enterKeyHint="next" placeholder="12345" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -876,7 +878,7 @@ function CheckoutForm({ location }: { location: Location }) {
                             <FormItem>
                               <FormLabel>City</FormLabel>
                               <FormControl>
-                                <Input placeholder="Anytown" {...field} />
+                                <Input autoComplete="address-level2" enterKeyHint="done" placeholder="Anytown" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -998,7 +1000,7 @@ function CheckoutForm({ location }: { location: Location }) {
             </div>
           </div>
 
-          <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-0 z-50 lg:hidden">
+          <div className="commerce-checkout-bar fixed bottom-0 left-0 right-0 bg-background border-t p-0 z-50 lg:hidden">
             <AcceptTermsAndCompleteOrder isSticky />
           </div>
         </form>

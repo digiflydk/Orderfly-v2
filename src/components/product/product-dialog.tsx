@@ -57,7 +57,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   const [selectedToppings, setSelectedToppings] = useState<Record<string, CartItemTopping>>({});
   const [allergens, setAllergens] = useState<Allergen[]>([]);
   const [allergenError, setAllergenError] = useState(false);
-  const { addToCart, deliveryType, location, cartTotal } = useCart();
+  const { cartReady, addToCart, deliveryType, location, cartTotal } = useCart();
   const { toast } = useToast();
   const { trackEvent } = useAnalytics();
   
@@ -166,9 +166,10 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
 }, [selectedToppings, relevantToppingGroups]);
 
   const handleAddToCart = () => {
-    if (!isSelectionValid) return;
+    if (!cartReady || !isSelectionValid) return;
     const finalToppings = Object.values(selectedToppings);
     addToCart(product, quantity, finalToppings, basePrice, finalPrice);
+    toast({title: 'Tilføjet til kurven', description: `${quantity} × ${product.productName}`, duration: 2200});
     
     trackEvent('add_to_cart', {
         productId: product.id,
@@ -310,7 +311,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     size="lg"
                     className="w-full h-[64.4px] bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
                     onClick={handleAddToCart}
-                    disabled={!isSelectionValid}
+                    disabled={!cartReady || !isSelectionValid}
                 >
                     <div className="flex w-full justify-between items-center">
                         <span>Add to Cart</span>

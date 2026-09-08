@@ -245,3 +245,32 @@ test('UI69 terms spacing and eligible newsletter highlight preserve explicit con
  assert.equal(await payButton.evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(255, 189, 2)');
  if(process.env.UI69_SCREENSHOTS)await page.screenshot({path:process.env.UI69_SCREENSHOTS+'/checkout.png',fullPage:true});
 });
+
+test('native mobile checkout supports autofill and hides sticky bar only for a focused keyboard',async t=>{
+ const page=await setup(t,'native-mobile');
+ await page.setViewportSize({width:390,height:900});
+ await page.addInitScript(()=>{
+  const viewport=new EventTarget();viewport.height=window.innerHeight;viewport.scale=1;
+  Object.defineProperty(window,'visualViewport',{configurable:true,get:()=>viewport});
+  window.resizeTestViewport=(height,scale=1)=>{viewport.height=height;viewport.scale=scale;viewport.dispatchEvent(new Event('resize'));};
+ });
+ await page.reload();
+ const name=page.getByPlaceholder('John Doe',{exact:true}),email=page.getByPlaceholder('john@example.com',{exact:true});
+ await name.waitFor();
+ assert.equal(await name.getAttribute('autocomplete'),'name');
+ assert.equal(await email.getAttribute('autocomplete'),'email');
+ assert.equal(await email.getAttribute('inputmode'),'email');
+ assert.equal(await page.getByPlaceholder('+123456789').getAttribute('inputmode'),'tel');
+ assert.equal(await name.evaluate(node=>getComputedStyle(node).fontSize),'16px');
+ await name.focus();await page.evaluate(()=>window.resizeTestViewport(430));
+ await page.waitForFunction(()=>document.querySelector('form').dataset.keyboardOpen==='true');
+ assert.equal(await page.locator('.commerce-checkout-bar').isVisible(),false);
+ await page.evaluate(()=>window.resizeTestViewport(900));
+ await page.waitForFunction(()=>document.querySelector('form').dataset.keyboardOpen==='false');
+ assert.equal(await page.locator('.commerce-checkout-bar').isVisible(),true);
+ await page.evaluate(()=>window.resizeTestViewport(430,2));
+ assert.equal(await page.locator('form').getAttribute('data-keyboard-open'),'false','pinch zoom does not hide the bar');
+ await name.blur();await page.evaluate(()=>window.resizeTestViewport(430));
+ assert.equal(await page.locator('form').getAttribute('data-keyboard-open'),'false','viewport change without editing is harmless');
+ assert.equal(requests.has('native-mobile'),false);
+});

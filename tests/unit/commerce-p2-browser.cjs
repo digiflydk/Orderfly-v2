@@ -43,7 +43,7 @@ before(async()=>{
   '@/app/cart-actions':fixture('cart-action',`export async function restoreCartAction(data){return fetch('/restore',{method:'POST',body:JSON.stringify(data)}).then(r=>r.json());}`),
   '@/app/superadmin/brands/actions':fixture('brand-action','export const getBrandBySlug=async()=>null;'),
   '@/app/superadmin/upsells/actions':fixture('upsells','export const getActiveUpsellForCart=async()=>null;export const incrementUpsellConversion=async()=>{};'),
-  '@/hooks/use-toast':fixture('toast','export const useToast=()=>({toast:()=>{}});'),
+  '@/hooks/use-toast':fixture('toast','export const useToast=()=>({toast:(message)=>{window.lastCartToast=message;}});'),
   'next/navigation':navigation,
   'next/image':fixture('image',`import React from'react';export default function Image({fill,priority,...props}){return <img {...props}/>;}`),
   'next/link':fixture('link',`import React from'react';export default function Link(props){return <a {...props}/>;}`),
@@ -105,6 +105,7 @@ for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulf
  if(process.env.UI69_SCREENSHOTS)await page.screenshot({path:process.env.UI69_SCREENSHOTS+'/options-'+width+'.png'});
  await page.getByRole('dialog').getByRole('button',{name:/Add to cart|Tilføj til kurv/i}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
+ assert.equal(await page.evaluate(()=>window.lastCartToast?.title),'Tilføjet til kurven');
  assert.equal(optionReads,2);
  if(width===390){
    await page.getByRole('button',{name:/View cart/}).click();

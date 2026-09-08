@@ -45,7 +45,7 @@ const getSelectionText = (group: ComboMenu['productGroups'][0]): string => {
 }
 
 export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: ComboBuilderDialogProps) {
-  const { addComboToCart, deliveryType, location } = useCart();
+  const { cartReady, addComboToCart, deliveryType, location } = useCart();
   const { trackEvent } = useAnalytics();
   const { toast } = useToast();
 
@@ -118,7 +118,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
   }, [selection, combo.productGroups, brandProducts]);
 
   const handleAddToCart = () => {
-    if (!isSelectionValid || comboPrice === undefined) return;
+    if (!cartReady || !isSelectionValid || comboPrice === undefined) return;
     const comboSelections: ComboSelection[] = Object.entries(selection).map(([groupId, ids]) => {
       const group = combo.productGroups.find(g => g.id === groupId);
       return {
@@ -131,6 +131,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
       };
     });
     addComboToCart(combo, quantity, comboSelections, comboPrice);
+    toast({title: 'Tilføjet til kurven', description: `${quantity} × ${combo.comboName}`, duration: 2200});
     trackEvent('add_to_cart', {productId: combo.id, locationId: location?.id, itemsCount: quantity, cartValue: money(comboPrice * quantity), deliveryType});
     setIsOpen(false);
   };
@@ -234,7 +235,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                     size="lg"
                     className="w-full h-[64.4px] bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
                     onClick={handleAddToCart}
-                    disabled={!isSelectionValid}
+                    disabled={!cartReady || !isSelectionValid}
                 >
                     <div className="flex w-full justify-between items-center">
                         <span>Add to Cart</span>

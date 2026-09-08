@@ -70,3 +70,20 @@ body:has([data-commerce-root]) button[data-state="active"] { box-shadow: inset 0
 body:has([data-commerce-root]) button [class*="bg-primary-foreground"] { background: transparent; color: inherit; }
 
 .commerce-newsletter [role="checkbox"], [data-option-row] [role="checkbox"], [data-option-row] [role="radio"] { border: 1.5px solid #665205; }
+
+/* App-like touch response, scoped to the public ordering flow. */
+body:has([data-commerce-root]) :is(button, [data-ui-button], [data-option-row]) { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+body:has([data-commerce-root]) [data-ui-button] { transition: background-color 120ms ease, transform 120ms ease; }
+body:has([data-commerce-root]) [data-ui-button]:not(:disabled):active { transform: scale(.97); }
+body:has([data-commerce-root]) [data-ui-size="icon"] { min-width: 44px; min-height: 44px; }
+body:has([data-commerce-root]) [data-toast-viewport] { padding-top: max(16px, env(safe-area-inset-top)); pointer-events: none; }
+[data-commerce-panel] [data-radix-scroll-area-viewport] { overscroll-behavior-y: contain; }
+.commerce-checkout-bar { padding-bottom: env(safe-area-inset-bottom); }
+@media (max-width: 1023px) {
+  form[data-commerce-root] :is(input, textarea, select) { font-size: 16px; scroll-margin-block: 100px; }
+  form[data-commerce-root][data-keyboard-open="true"] .commerce-checkout-bar { visibility: hidden; pointer-events: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  body:has([data-commerce-root]) [data-ui-button] { transition: none; }
+  body:has([data-commerce-root]) [data-ui-button]:active { transform: none; }
+}
