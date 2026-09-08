@@ -1,4 +1,5 @@
 import './globals.css';
+import '@/styles/commerce-ui.css';
 import { StorefrontVitals } from '@/components/storefront-vitals';
 import type { Metadata } from 'next';
 

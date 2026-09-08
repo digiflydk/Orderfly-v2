@@ -127,7 +127,7 @@ export function MenuClient({
   );
 
   return (
-    <div className="bg-[#FFF8F0]">
+    <div data-commerce-root className="bg-[#FFF8F0]">
       <div className="container mx-auto max-w-[1140px] px-4">
         <div className="py-4">
           <TimeSelector timeSlots={timeSlots} />

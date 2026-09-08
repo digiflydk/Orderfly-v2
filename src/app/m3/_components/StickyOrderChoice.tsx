@@ -11,7 +11,7 @@ export default function StickyOrderChoice({ onOrderClick }: StickyOrderChoicePro
   return (
     <>
       {/* Spacer so content is not hidden behind the sticky bar */}
-      <div className="h-14 md:hidden" aria-hidden="true" />
+      <div className="h-[64.4px] md:hidden" aria-hidden="true" />
 
       <div
         data-testid="template1-sticky-cta"
@@ -23,7 +23,7 @@ export default function StickyOrderChoice({ onOrderClick }: StickyOrderChoicePro
       >
         <Button
           size="lg"
-          className="w-full h-14 bg-m3-button text-m3-dark hover:bg-m3-button-hover font-bold uppercase text-base rounded-none"
+          className="w-full h-[64.4px] bg-m3-button text-m3-dark hover:bg-m3-button-hover font-bold uppercase text-base rounded-none"
           onClick={onOrderClick}
         >
           BESTIL HER

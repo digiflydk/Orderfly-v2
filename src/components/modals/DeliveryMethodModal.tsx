@@ -22,7 +22,7 @@ export default function DeliveryMethodModal() {
     setPayload(null);
   }
   return <Dialog open={!!payload} onOpenChange={value => {if (!value) setPayload(null);}}>
-    <DialogContent><DialogHeader><DialogTitle>Delivery method</DialogTitle>
+    <DialogContent data-commerce-panel="delivery"><DialogHeader><DialogTitle>Delivery method</DialogTitle>
       <DialogDescription>Choose pick-up or delivery. You can change this later.</DialogDescription></DialogHeader>
       <Button disabled={!activeLocation?.deliveryTypes.includes('pickup')} onClick={() => choose('pickup')}><Store className="mr-2 h-4 w-4" />Pick-up</Button>
       <Button disabled={!activeLocation?.deliveryTypes.includes('delivery')} onClick={() => choose('delivery')}><Truck className="mr-2 h-4 w-4" />Delivery</Button>

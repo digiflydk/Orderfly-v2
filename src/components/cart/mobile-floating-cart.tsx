@@ -173,7 +173,7 @@ export function MobileFloatingCart() {
 
   return (
     <>
-      <div className="h-14 md:hidden" aria-hidden="true" />
+      <div className="h-[64.4px] md:hidden" aria-hidden="true" />
       <Sheet>
         <SheetTrigger asChild>
             <div
@@ -181,7 +181,7 @@ export function MobileFloatingCart() {
             >
                 <Button
                     size="lg"
-                    className="w-full h-14 rounded-none text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
+                    className="w-full h-[64.4px] rounded-none text-base font-bold bg-primary hover:bg-primary/90 text-primary-foreground"
                 >
                     <div className="w-full flex justify-between items-center px-4">
                         <div className="flex items-center gap-3">
@@ -195,7 +195,7 @@ export function MobileFloatingCart() {
                 </Button>
             </div>
         </SheetTrigger>
-        <SheetContent className="flex flex-col w-[99vw] p-0">
+        <SheetContent side="bottom" data-commerce-panel="cart" className="flex flex-col p-0">
             <SheetHeader className="p-4">
                 <SheetTitle>{itemCount} products in your cart</SheetTitle>
                 <SheetDescription>
@@ -204,7 +204,7 @@ export function MobileFloatingCart() {
             </SheetHeader>
             <CartContents/>
             <SheetFooter className="p-0">
-                <Button onClick={handleCheckoutClick} className="w-full h-14 rounded-none text-base font-bold" disabled={isPending}>
+                <Button onClick={handleCheckoutClick} className="w-full h-[64.4px] rounded-none text-base font-bold" disabled={isPending}>
                     {isPending ? <Loader2 className="animate-spin" /> : 'Proceed to Checkout'}
                 </Button>
             </SheetFooter>

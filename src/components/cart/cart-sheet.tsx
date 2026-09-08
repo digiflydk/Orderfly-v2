@@ -43,7 +43,7 @@ export function CartSheet() {
             <ShoppingBag />
           </Button>
         </SheetTrigger>
-        <SheetContent className="flex flex-col w-[99vw] p-0">
+        <SheetContent side="bottom" data-commerce-panel="cart" className="flex flex-col p-0">
           <SheetHeader className="p-4">
             <SheetTitle>{itemCount} products in your cart</SheetTitle>
           </SheetHeader>
@@ -166,7 +166,7 @@ export function CartSheet() {
                     </div>
                   </div>
                 <SheetClose asChild>
-                  <Button onClick={handleCheckoutClick} className="w-full h-14 rounded-none text-base font-bold" disabled={isPending}>
+                  <Button onClick={handleCheckoutClick} className="w-full h-[64.4px] rounded-none text-base font-bold" disabled={isPending}>
                     {isPending ? <Loader2 className="animate-spin" /> : 'Proceed to Checkout'}
                   </Button>
                 </SheetClose>

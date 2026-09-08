@@ -1,4 +1,5 @@
 'use client';
+import { useCheckoutKeyboard } from '@/hooks/use-checkout-keyboard';
 import { statisticsAllowed } from '@/lib/analytics';
 
 import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillment-time';
@@ -306,6 +307,7 @@ function OrderSummaryContent() {
 }
 
 function CheckoutForm({ location }: { location: Location }) {
+  const keyboardOpen = useCheckoutKeyboard();
   const { trackEvent, sessionId: analyticsSessionId } = useAnalytics();
   const {
     cartItems,
@@ -384,6 +386,8 @@ function CheckoutForm({ location }: { location: Location }) {
 
   const newsletterSelected = form.watch('subscribeToNewsletter');
   const newsletterEmail = form.watch('email');
+  const newsletterSavingApplied = !!newsletterOffer && newsletterSelected &&
+    appliedDiscount?.applicationType === 'newsletter_signup' && appliedDiscount.id === newsletterOffer.id;
 
   useEffect(() => {
     let cancelled = false;
@@ -688,7 +692,7 @@ function CheckoutForm({ location }: { location: Location }) {
           control={form.control}
           name="acceptTerms"
           render={({ field }) => (
-            <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+            <FormItem className="commerce-terms flex flex-row items-center gap-3 space-y-0">
               <FormControl>
                 <Checkbox
                   checked={field.value}
@@ -719,7 +723,7 @@ function CheckoutForm({ location }: { location: Location }) {
         type="submit"
         className={cn(
           "w-full font-bold",
-          isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg"
+          isSticky ? "h-[73.6px] rounded-none text-base" : "h-[55.2px] text-lg"
         )}
         disabled={
           isProcessing || (!paymentUrl && (
@@ -751,8 +755,8 @@ function CheckoutForm({ location }: { location: Location }) {
         )}
       </div>
       <FormProvider {...form}>
-        <form onSubmit={handleFormSubmit} noValidate>
-          <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-32 lg:pb-0">
+        <form data-commerce-root data-keyboard-open={keyboardOpen} onSubmit={handleFormSubmit} noValidate>
+          <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-44 lg:pb-0">
             {/* Left column */}
             <fieldset className="min-w-0 space-y-10" disabled={isFormLocked}>
               <section>
@@ -808,7 +812,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       <FormItem>
                         <FormLabel>Full Name</FormLabel>
                         <FormControl>
-                          <Input placeholder="John Doe" {...field} />
+                          <Input autoComplete="name" enterKeyHint="next" placeholder="John Doe" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -821,7 +825,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       <FormItem>
                         <FormLabel>Email</FormLabel>
                         <FormControl>
-                          <Input type="email" placeholder="john@example.com" {...field} />
+                          <Input autoComplete="email" inputMode="email" autoCapitalize="none" autoCorrect="off" enterKeyHint="next" type="email" placeholder="john@example.com" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -834,7 +838,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       <FormItem>
                         <FormLabel>Phone Number</FormLabel>
                         <FormControl>
-                          <Input type="tel" placeholder="+123456789" {...field} />
+                          <Input autoComplete="tel" inputMode="tel" enterKeyHint="next" type="tel" placeholder="+123456789" {...field} />
                         </FormControl>
                         <FormMessage />
                       </FormItem>
@@ -849,7 +853,7 @@ function CheckoutForm({ location }: { location: Location }) {
                           <FormItem>
                             <FormLabel>Street Name</FormLabel>
                             <FormControl>
-                              <Input placeholder="123 Main St" {...field} />
+                              <Input autoComplete="address-line1" enterKeyHint="next" placeholder="123 Main St" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -863,7 +867,7 @@ function CheckoutForm({ location }: { location: Location }) {
                             <FormItem>
                               <FormLabel>Postal Code</FormLabel>
                               <FormControl>
-                                <Input placeholder="12345" {...field} />
+                                <Input autoComplete="postal-code" inputMode="numeric" enterKeyHint="next" placeholder="12345" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -876,7 +880,7 @@ function CheckoutForm({ location }: { location: Location }) {
                             <FormItem>
                               <FormLabel>City</FormLabel>
                               <FormControl>
-                                <Input placeholder="Anytown" {...field} />
+                                <Input autoComplete="address-level2" enterKeyHint="done" placeholder="Anytown" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -890,7 +894,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     control={form.control}
                     name="subscribeToNewsletter"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormItem data-newsletter-offer={newsletterSavingApplied} className="commerce-newsletter flex flex-row items-start gap-3 space-y-0 rounded-xl border p-5">
                         <FormControl>
                           <Checkbox
                             checked={!!field.value}
@@ -898,11 +902,12 @@ function CheckoutForm({ location }: { location: Location }) {
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
-                          <FormLabel>Subscribe to newsletter</FormLabel>
+                          <FormLabel className="text-base font-semibold leading-relaxed">{newsletterSavingApplied ? `Signed up — saving ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`}` : 'Subscribe to newsletter'}</FormLabel>
                           <FormDescription>
-                            {newsletterOffer
-                              ? `Receive updates and get ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`} off this order.`
+                            {newsletterSavingApplied
+                              ? `Your ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`} newsletter saving is applied to this order.`
                               : 'Receive updates and special offers from us.'}
+                            <span className="block mt-2 text-xs">Optional. You can unsubscribe at any time.</span>
                           </FormDescription>
                         </div>
                       </FormItem>
@@ -997,7 +1002,7 @@ function CheckoutForm({ location }: { location: Location }) {
             </div>
           </div>
 
-          <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-0 z-50 lg:hidden">
+          <div className="commerce-checkout-bar fixed bottom-0 left-0 right-0 bg-background border-t p-0 z-50 lg:hidden">
             <AcceptTermsAndCompleteOrder isSticky />
           </div>
         </form>

@@ -54,6 +54,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
              <div className="grid grid-cols-2 gap-1 rounded-lg border p-1 bg-background">
                  <Button
+                    aria-pressed={deliveryType === 'pickup'}
                     variant={deliveryType === 'pickup' ? 'secondary' : 'ghost'}
                     size="sm"
                     onClick={() => setDeliveryType('pickup')}
@@ -67,6 +68,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
                     <span>Pick-up</span>
                 </Button>
                 <Button
+                    aria-pressed={deliveryType === 'delivery'}
                     variant={deliveryType === 'delivery' ? 'secondary' : 'ghost'}
                     size="sm"
                     onClick={() => setDeliveryType('delivery')}

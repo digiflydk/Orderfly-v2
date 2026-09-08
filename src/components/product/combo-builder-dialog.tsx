@@ -45,7 +45,7 @@ const getSelectionText = (group: ComboMenu['productGroups'][0]): string => {
 }
 
 export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: ComboBuilderDialogProps) {
-  const { addComboToCart, deliveryType, location } = useCart();
+  const { cartReady, addComboToCart, deliveryType, location } = useCart();
   const { trackEvent } = useAnalytics();
   const { toast } = useToast();
 
@@ -118,7 +118,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
   }, [selection, combo.productGroups, brandProducts]);
 
   const handleAddToCart = () => {
-    if (!isSelectionValid || comboPrice === undefined) return;
+    if (!cartReady || !isSelectionValid || comboPrice === undefined) return;
     const comboSelections: ComboSelection[] = Object.entries(selection).map(([groupId, ids]) => {
       const group = combo.productGroups.find(g => g.id === groupId);
       return {
@@ -131,6 +131,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
       };
     });
     addComboToCart(combo, quantity, comboSelections, comboPrice);
+    toast({title: 'Tilføjet til kurven', description: `${quantity} × ${combo.comboName}`, duration: 2200});
     trackEvent('add_to_cart', {productId: combo.id, locationId: location?.id, itemsCount: quantity, cartValue: money(comboPrice * quantity), deliveryType});
     setIsOpen(false);
   };
@@ -139,7 +140,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
+      <DialogContent data-commerce-panel="options" className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
         <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
                 <div className="relative aspect-video w-full shrink-0">
@@ -183,10 +184,10 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                         {isSingleSelect ? (
                             <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleSelectionChange(group.id, val, false)}>
                                 {productsInGroup.map(p => (
-                                <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
+                                <label htmlFor={`${group.id}-${p.id}`} key={p.id} data-option-row className="flex items-center gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
                                     <RadioGroupItem value={p.id} id={`${group.id}-${p.id}`} />
-                                    <Label htmlFor={`${group.id}-${p.id}`} className="flex-1 cursor-pointer font-normal">{p.productName}</Label>
-                                </div>
+                                    <span className="flex-1 font-normal">{p.productName}</span>
+                                </label>
                                 ))}
                             </RadioGroup>
                         ) : (
@@ -194,15 +195,15 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                             const isChecked = currentSelection.includes(p.id);
                             const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
                             return (
-                                <div key={p.id} className="flex items-center space-x-3 p-2 rounded-md hover:bg-accent">
+                                <label htmlFor={`${group.id}-${p.id}`} key={p.id} data-option-row className="flex items-center gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
                                 <Checkbox
                                     id={`${group.id}-${p.id}`}
                                     onCheckedChange={(checked) => handleSelectionChange(group.id, p.id, true, !!checked)}
                                     checked={isChecked}
                                     disabled={!isChecked && maxReached}
                                 />
-                                <Label htmlFor={`${group.id}-${p.id}`} className="flex-1 cursor-pointer font-normal">{p.productName}</Label>
-                                </div>
+                                <span className="flex-1 font-normal">{p.productName}</span>
+                                </label>
                             )
                             })
                         )}
@@ -232,9 +233,9 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                 </div>
                 <Button
                     size="lg"
-                    className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
+                    className="w-full h-[64.4px] bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
                     onClick={handleAddToCart}
-                    disabled={!isSelectionValid}
+                    disabled={!cartReady || !isSelectionValid}
                 >
                     <div className="flex w-full justify-between items-center">
                         <span>Add to Cart</span>

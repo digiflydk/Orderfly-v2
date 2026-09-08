@@ -67,7 +67,7 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onOpenChange(false); } }} className="p-0 border-none bg-m3-cream left-0 right-0 bottom-0 top-auto translate-x-0 translate-y-0 max-w-none rounded-t-lg sm:left-1/2 sm:right-auto sm:bottom-auto sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-sm sm:rounded-lg">
+      <DialogContent data-commerce-panel="delivery" onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onOpenChange(false); } }} className="p-0 border-none bg-m3-cream left-0 right-0 bottom-0 top-auto translate-x-0 translate-y-0 max-w-none rounded-t-lg sm:left-1/2 sm:right-auto sm:bottom-auto sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-sm sm:rounded-lg">
         {content}
       </DialogContent>
     </Dialog>

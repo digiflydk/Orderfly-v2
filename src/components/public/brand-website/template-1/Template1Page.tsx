@@ -18,7 +18,7 @@ export function Template1Page({children, brand, onOrderClick, config, onCookieSe
   const router = useRouter();
   const order = onOrderClick || (() => router.push(headerProps?.orderHref || `/${brand?.slug || ''}`));
   if (!brand) return <div>{headerProps && <Header config={headerProps.header} navLinks={[...(headerProps.navLinks || []), {label: headerProps.ctaText, href: headerProps.orderHref}]} />}<main>{children}</main></div>;
-  return <div className="bg-m3-cream min-h-screen text-m3-dark">
+  return <div data-commerce-root className="bg-m3-cream min-h-screen text-m3-dark">
     <header data-testid="template1-header" className="sticky top-0 z-50 bg-m3-cream shadow-md" onKeyDown={event => {if (event.key === 'Escape') setOpen(false);}}>
       <div className="mx-auto max-w-[1200px] px-4 h-20 flex items-center justify-between gap-4">
         <Link href="/" aria-label={brand.name}>{brand.logoUrl ? <Image src={brand.logoUrl} alt={brand.name} width={120} height={48} sizes="120px" className="h-12 w-28 object-contain" /> : brand.name}</Link>

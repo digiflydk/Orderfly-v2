@@ -12,7 +12,7 @@ export function FooterCTA({brandName, onOrderClick}: {brandName: string; onOrder
         <Button
           onClick={onOrderClick}
           size="lg"
-          className="mt-8 bg-m3-white hover:bg-m3-gray text-[#2D2D2D] font-bold uppercase tracking-wide transition-colors"
+          className="h-[50.6px] mt-8 bg-m3-white hover:bg-m3-gray text-[#2D2D2D] font-bold uppercase tracking-wide transition-colors"
         >
           Bestil nu
         </Button>

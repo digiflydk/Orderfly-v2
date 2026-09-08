@@ -148,7 +148,7 @@ export function DesktopCart() {
                         <span>Total</span>
                         <span>kr.{menuTotal.toFixed(2)}</span>
                     </div>
-                    <Button onClick={handleCheckoutClick} className="w-full font-bold" disabled={isPending}>
+                    <Button onClick={handleCheckoutClick} className="w-full h-[46px] font-bold" disabled={isPending}>
                         <div className="flex w-full justify-between items-center">
                             <span>{isPending ? <Loader2 className="animate-spin" /> : 'Proceed to Checkout'}</span>
                             <span>kr.{menuTotal.toFixed(2)}</span>
