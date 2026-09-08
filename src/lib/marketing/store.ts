@@ -16,7 +16,7 @@ export async function recordNewsletterConsent(db: Firestore, input: {
     const key = contactKey(input.brandId, email);
     // Old clients get one stable, legacy event. They cannot refresh its timestamp
     // on retries or cause a new subscription after an opt-out.
-    const legacy = !input.submissionId;
+    const legacy = !input.submissionId || input.version !== NEWSLETTER_CONSENT_VERSION;
     const id = createHash('sha256').update(`${key}\n${input.submissionId || 'legacy-checkout-v1'}`).digest('hex');
     const event: ConsentEvent = { id, brandId: input.brandId, customerId: input.customerId, locationId: input.locationId, email, channel: 'email', source: 'checkout',
         capturedAt: Date.now(), version: legacy ? 'checkout-email-en-v1' : NEWSLETTER_CONSENT_VERSION,

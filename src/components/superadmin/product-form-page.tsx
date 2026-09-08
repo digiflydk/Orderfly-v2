@@ -936,7 +936,7 @@ export function ProductFormPage({
                 </CardHeader>
 
                 <CardContent className="space-y-4">
-                  <FormField control={form.control} name="isTestData" render={({field})=><label className="flex gap-3 rounded-lg border p-4"><Switch checked={field.value===true} onCheckedChange={field.onChange} /><span>Testdata: skjul i menuen og afvis i checkout</span></label>} />
+                  <FormField control={form.control} name="isTestData" render={({field})=><label className="flex gap-3 rounded-lg border p-4"><input type="hidden" name="isTestData" value={field.value === true ? 'true' : 'false'} /><Switch checked={field.value===true} onCheckedChange={field.onChange} /><span>Testdata: skjul i menuen og afvis i checkout</span></label>} />
                   <FormField
                     control={form.control}
                     name="locationIds"

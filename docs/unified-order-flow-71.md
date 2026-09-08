@@ -98,10 +98,10 @@ inside the payment action.
 
 ## Omnisend implementation and activation gates
 
-The connected Work account was inspected read-only: it belongs to **Esmeralda
-Pizza & Restaurant**, website `esmeraldapizza.dk`. It is not evidence of a CPH
-Pizza connection. No default account, customer import, secret or production
-mapping has been added. A CPH Pizza mapping remains an activation prerequisite.
+PO confirms this Orderfly integration is for **Esmeralda Pizza & Restaurant**,
+website `esmeraldapizza.dk`, and must use Esmeralda's connected Omnisend account.
+CPH Pizza is not a target for this integration. No customer import, secret or
+enabled runtime mapping is committed in the repository.
 
 The provider follows the current [contacts API](https://api-docs.omnisend.com/reference/post_contacts)
 and [contact synchronization guide](https://api-docs.omnisend.com/docs/how-to-sync-contacts),
@@ -128,15 +128,16 @@ Missing/invalid/duplicate mappings fail closed with `configuration_required`.
 The code does not add mandatory secret bindings to App Hosting YAML that could
 break a build before operators have provisioned them.
 
-**Required before production collection of these new records:** deny all direct
+**Required before activation for real customer contacts:** deny all direct
 client reads/writes to `marketingConsents`, `marketingContacts` and
 `marketingOutbox` in the **data** project `orderfly-39325`. They are accessed only
 through Admin SDK and guarded server routes. A specific `allow ...: if false`
 does not override an existing permissive wildcard: Firestore grants are ORed.
 Exclude all three collections from every broader granting match, and prove
 anonymous and ordinary-client reads/writes fail. This narrow prerequisite does
-not claim to solve the separate #57 database-security scope. Do not deploy new
-PII collection until this check is complete.
+not claim to solve the separate #57 database-security scope. A QA deployment may
+proceed with provider sending disabled and synthetic data only; do not activate
+real customer collection or sending until this check is complete.
 
 Create/verify the `marketingOutbox` composite index `brandId ASC, createdAt DESC`
 for the admin view. Worker queries require single-field ascending indexes on

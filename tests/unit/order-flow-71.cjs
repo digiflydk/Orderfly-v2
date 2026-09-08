@@ -36,6 +36,15 @@ test('#71 duplicate and concurrent submissions create one durable consent and jo
  assert.equal(db.rows.get('customers/c').marketingConsent,true);assert.equal(db.rows.get('marketingOutbox/'+ids[0]).state,'pending');
  const timestamp=event.capturedAt;await recordNewsletterConsent(db,consent);assert.equal(db.rows.get('marketingConsents/'+ids[0]).capturedAt,timestamp);
 });
+test('#71 incomplete consent metadata is legacy and cannot claim the current wording',async()=>{
+ const db=database();const id=await recordNewsletterConsent(db,{...consent,version:undefined});
+ const event=db.rows.get('marketingConsents/'+id);
+ assert.equal(event.version,'checkout-email-en-v1');assert.doesNotMatch(event.wording,/Fixture via e-mail/);
+});
+test('#71 product test-data selection is always included in native form submission',()=>{
+ const source=require('node:fs').readFileSync('src/components/superadmin/product-form-page.tsx','utf8');
+ assert.match(source,/type="hidden" name="isTestData" value=\{field\.value === true \? 'true' : 'false'\}/);
+});
 test('#71 consent write is atomic on tenant mismatch and never grants SMS or tracking consent',async()=>{
  const db=database();await assert.rejects(recordNewsletterConsent(db,{...consent,brandId:'other'}),/scope/);assert.equal(db.rows.size,1);
  const payload=consentPayload({...consent,email:'buyer@example.test',id:'event',capturedAt:Date.now(),source:'checkout',channel:'email',wording:'test'});

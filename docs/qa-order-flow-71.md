@@ -81,11 +81,12 @@ The following checks have not been performed against live services by Work Dev:
    combinations against current catalog configuration. Check stale campaigns,
    wrong store, unavailable options, after-close/time expiry, missing delivery
    minimum, stored old carts, blocked storage and network recovery.
-4. Before provider activation: approve native-to-Omnisend brand mapping,
-   single-opt-in policy, API key access and existing welcome automation. Verify
-   private Firestore access and indexes, then the guarded administrator session,
-   scheduler and retry view. The connected Esmeralda account must not receive
-   CPH Pizza contacts by default.
+4. The approved provider target is Esmeralda Pizza's connected Omnisend account;
+   CPH Pizza is outside this integration. For QA, keep customer sends disabled,
+   use synthetic contacts and invoke sync manually. Before real customer
+   activation, configure the Esmeralda mapping/API key, verify private Firestore
+   access and indexes, then enable the guarded administrator session, scheduler
+   and retry view under the approved single-opt-in policy.
 5. Only after authorizing a specific test brand/contact with customer sends
    disabled: check one unique grant, duplicates, timeout/429/retry and opt-out
    before/during retry in that exact Omnisend account. Verify no SMS or welcome

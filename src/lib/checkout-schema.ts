@@ -10,6 +10,10 @@ const customer = z.object({
   newsletterConsentId: z.string().uuid().optional(),
   newsletterConsentVersion: z.literal('checkout-email-da-2026-09-08').optional(),
   subscribeToNewsletter: z.boolean(), acceptTerms: z.literal(true),
+}).superRefine((value, context) => {
+  if (!!value.newsletterConsentId !== !!value.newsletterConsentVersion) {
+    context.addIssue({ code: 'custom', message: 'Newsletter consent ID and version must be supplied together' });
+  }
 });
 export const checkoutRequestSchema = z.tuple([
   z.array(z.object({ id, name: z.string().min(1).max(200), quantity: z.number().int().min(1).max(999),
