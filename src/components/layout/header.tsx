@@ -27,7 +27,13 @@ type Props = {
 
 export function Header({ brand, settings, config, navLinks, linkClass, logoUrl, logoAlt }: Props) {
   const [scrolled, setScrolled] = useState(false);
-  const effectiveNavLinks: NavLink[] = navLinks || settings?.headerNavLinks || [];
+  const [menuOpen, setMenuOpen] = useState(false);
+  useEffect(() => {
+    const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuOpen(false); };
+    window.addEventListener('keydown', close);
+    return () => window.removeEventListener('keydown', close);
+  }, []);
+  const effectiveNavLinks: NavLink[] = navLinks || settings?.headerNavLinks || (brand ? [{label: 'Bestil', href: `/${brand.slug}`} ] : []);
 
   useEffect(() => {
     const onScroll = () => setScrolled(window.scrollY > 10);
@@ -38,7 +44,7 @@ export function Header({ brand, settings, config, navLinks, linkClass, logoUrl, 
   
   const finalLogoUrl = logoUrl || brand?.logoUrl;
   const finalLogoAlt = logoAlt || brand?.name || "Orderfly Logo";
-  const finalLinkClass = linkClass || 'text-white hover:text-primary';
+  const finalLinkClass = linkClass || 'text-foreground hover:text-primary';
 
   return (
     <header data-header>
@@ -71,10 +77,13 @@ export function Header({ brand, settings, config, navLinks, linkClass, logoUrl, 
           ))}
         </nav>
 
-        <button className={cn('md:hidden text-sm', finalLinkClass)} aria-label="Open menu">
+        <button type="button" onClick={() => setMenuOpen(value => !value)} aria-expanded={menuOpen} aria-controls="storefront-mobile-navigation" className={cn('md:hidden text-sm', finalLinkClass)} aria-label="Open menu">
           Menu
         </button>
       </div>
+      {menuOpen && <nav id="storefront-mobile-navigation" aria-label="Mobilmenu" className="md:hidden border-t bg-background p-4 flex flex-col gap-4">
+        {effectiveNavLinks.map(link => <Link key={link.label} href={link.href} onClick={() => setMenuOpen(false)} className="text-foreground">{link.label}</Link>)}
+      </nav>}
     </header>
   );
 }

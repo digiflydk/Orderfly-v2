@@ -8,7 +8,7 @@ import { Input } from '@/components/ui/input';
 import { Gift, Pizza, Salad, CupSoda, Tag, Package, Search, ListFilter } from 'lucide-react';
 import type { Brand, Category } from '@/types';
 import { cn } from '@/lib/utils';
-import { DynamicIcon } from '../superadmin/dynamic-icon';
+import { CategoryIcon as DynamicIcon } from '../catalog/category-icon';
 import { ScrollArea, ScrollBar } from '../ui/scroll-area';
 
 interface CategoryNavProps {
@@ -17,6 +17,8 @@ interface CategoryNavProps {
     hasPromotionalDiscounts: boolean;
     brand: Brand;
     activeCategory: string;
+    search?: string;
+    onSearchChange?: (value: string) => void;
 }
 
 const getIconForCategory = (category: Category) => {
@@ -38,7 +40,7 @@ const getIconForSpecialCategory = (type: 'offers' | 'combos') => {
     return null;
 }
 
-export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, brand, activeCategory }: CategoryNavProps) {
+export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, brand, activeCategory, search = '', onSearchChange }: CategoryNavProps) {
     const navRef = useRef<HTMLDivElement>(null);
     const activeRef = useRef<HTMLButtonElement>(null);
     
@@ -69,7 +71,7 @@ export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, br
     const regularCategories = sortedCategories.filter(c => c.id !== 'offers');
 
     return (
-        <div className="flex items-center justify-between gap-4">
+        <div className="flex flex-wrap md:flex-nowrap items-center justify-between gap-4">
              <ScrollArea className="w-full whitespace-nowrap">
                 <div ref={navRef} className="flex w-max space-x-2">
                     {hasPromotionalDiscounts && offersCategory && (
@@ -114,9 +116,9 @@ export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, br
                 <ScrollBar orientation="horizontal" className="h-0" />
             </ScrollArea>
 
-            <div className="relative hidden md:block">
+            <div className="relative w-full md:w-auto">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input placeholder="Search..." className="pl-10 h-9 w-40" />
+                <Input type="search" aria-label="Søg i menuen" value={search} onChange={event => onSearchChange?.(event.target.value)} onKeyDown={event => { if (event.key === 'Escape') onSearchChange?.(''); }} placeholder="Søg i menuen..." className="pl-10 h-9 w-full md:w-48" />
             </div>
         </div>
     );

@@ -1,6 +1,7 @@
 
 
 'use client';
+import { money, discountedUnit } from '@/lib/money';
 
 import Image from 'next/image';
 import type { Product, Upsell, ProductForMenu } from '@/types';
@@ -51,16 +52,16 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
   }, [isOpen, upsell.id, upsell.upsellName, cartTotal, trackEvent]);
 
   const calculatePrices = (product: ProductForMenu) => {
-    const originalPrice = deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price;
+    const originalPrice = money(deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price);
     let finalPrice = originalPrice;
     let discountPercentage = 0;
 
     if (upsell.discountType !== 'none' && upsell.discountValue) {
         if (upsell.discountType === 'percentage') {
             discountPercentage = upsell.discountValue;
-            finalPrice = originalPrice * (1 - (discountPercentage / 100));
+            finalPrice = discountedUnit(originalPrice, 'percentage', discountPercentage);
         } else if (upsell.discountType === 'fixed_amount') {
-            finalPrice = Math.max(0, originalPrice - upsell.discountValue);
+            finalPrice = discountedUnit(originalPrice, 'fixed_amount', upsell.discountValue);
             if (originalPrice > 0) {
               discountPercentage = Math.round(((originalPrice - finalPrice) / originalPrice) * 100);
             }

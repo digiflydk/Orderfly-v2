@@ -1,5 +1,8 @@
 'use client';
+import { statisticsAllowed } from '@/lib/analytics';
 
+import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillment-time';
+import { checkoutItems } from '@/lib/checkout-items';
 import { requestHostedCheckout } from '@/lib/checkout-request';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
@@ -303,7 +306,7 @@ function OrderSummaryContent() {
 }
 
 function CheckoutForm({ location }: { location: Location }) {
-  const { trackEvent } = useAnalytics();
+  const { trackEvent, sessionId: analyticsSessionId } = useAnalytics();
   const {
     cartItems,
     subtotal,
@@ -351,12 +354,12 @@ function CheckoutForm({ location }: { location: Location }) {
   const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
 
   useEffect(() => {
-    if (location?.id) {
-      setIsLoadingTimes(true);
-      const slots = calculateTimeSlots(location);
-      setTimeSlots(slots);
-      setIsLoadingTimes(false);
-    }
+    if (!location?.id) return;
+    const refresh = () => { setTimeSlots(calculateTimeSlots(location)); setIsLoadingTimes(false); };
+    refresh();
+    const interval = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return () => { clearInterval(interval); window.removeEventListener('focus', refresh); };
   }, [location]);
 
   const availableTimes = timeSlots
@@ -472,19 +475,12 @@ function CheckoutForm({ location }: { location: Location }) {
     }
   }, [paymentUncertain, paymentUrl, form, discountCode, brand, location, deliveryType, cartItems, applyDiscount, removeDiscount, toast]);
 
+  const checkoutTracked = useRef('');
   useEffect(() => {
-    try {
-      const hasTracked = sessionStorage.getItem('checkout_started');
-      if (!hasTracked) {
-        trackEvent('start_checkout', {
-          cartValue: checkoutTotal,
-          itemsCount: itemCount,
-          deliveryType: deliveryType
-        });
-        sessionStorage.setItem('checkout_started', 'true');
-      }
-    } catch { /* Browser storage and analytics are optional. */ }
-  }, [trackEvent, checkoutTotal, itemCount, deliveryType]);
+    const key = `${brand?.id}/${location?.id}`;
+    if (!itemCount || checkoutTracked.current === key) return;
+    if (trackEvent('start_checkout', {locationId: location?.id, cartValue: checkoutTotal, itemsCount: itemCount, deliveryType})) checkoutTracked.current = key;
+  }, [trackEvent, brand?.id, location?.id, checkoutTotal, itemCount, deliveryType]);
 
   useEffect(() => {
     const subscription = form.watch((_, { name, type }) => {
@@ -507,15 +503,12 @@ function CheckoutForm({ location }: { location: Location }) {
     return text || "Currently unavailable";
   }, [timeSlots, deliveryType]);
 
-  const displayTime = selectedTime === 'asap' ? asapText : selectedTime;
+  const displayTime = selectedTime === 'asap' ? asapText : displayFulfillmentTime(selectedTime);
 
   const isOrderTimeValid = useMemo(() => {
-    return (
-      !!displayTime &&
-      !displayTime.toLowerCase().includes('loading') &&
-      !displayTime.toLowerCase().includes('unavailable')
-    );
-  }, [displayTime]);
+    try { if (!deliveryType) return false; resolveFulfillmentTime(location, deliveryType, selectedTime); return true; }
+    catch { return false; }
+  }, [location, selectedTime, deliveryType, timeSlots]);
 
   const proceedToStripe = async (formValues: CheckoutFormValues) => {
       // A slow payment request is not evidence that no session exists. Keep the
@@ -553,25 +546,20 @@ function CheckoutForm({ location }: { location: Location }) {
         taxes: 0
       };
 
-      const finalDeliveryTime = selectedTime === 'asap' ? displayTime : selectedTime;
+      // Recheck even if the page or an upsell dialog has been open for a while.
+      try { resolveFulfillmentTime(location, deliveryType!, selectedTime); }
+      catch { setCheckoutError('Please choose a new available order time.'); setIsTimeDialogOpen(true); return; }
+      const finalDeliveryTime = selectedTime;
       let anonymousId: string | undefined;
       try { anonymousId = Cookies.get('orderfly_anonymous_id'); } catch { /* Optional consent linkage. */ }
 
-      const minimalCartItems: MinimalCartItem[] = cartItems.map(item => ({
-        id: item.id,
-        name: item.productName,
-        quantity: item.quantity,
-        unitPrice: item.price,
-        totalPrice:
-          item.price * item.quantity +
-          item.toppings.reduce((sum, t) => sum + t.price, 0) * item.quantity,
-        toppings: item.toppings.map(t => t.name)
-      }));
+      const minimalCartItems = checkoutItems(cartItems);
 
       // The server receives an explicit consent boolean.
       const customerInfo: CustomerInfo = {
         ...formValues,
-        subscribeToNewsletter: !!formValues.subscribeToNewsletter
+        subscribeToNewsletter: !!formValues.subscribeToNewsletter,
+        ...(statisticsAllowed() && analyticsSessionId ? {analyticsSessionId, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const} : {})
       };
 
       const result = await requestHostedCheckout(

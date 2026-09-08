@@ -1,13 +1,9 @@
-import { releaseDiscount, prepareCapacitySettlement } from '@/lib/discount-reservations';
+import { settlePaidCheckoutSession } from '@/lib/server/settle-checkout';
+import { releaseDiscount } from '@/lib/discount-reservations';
 
-import type { NextRequest } from 'next/server';
-import { NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { getActiveStripeSecretKey, getActiveStripeWebhookSecret } from '@/app/superadmin/settings/actions';
 import { headers } from 'next/headers';
-import { db } from '@/lib/firebase';
-import { doc, setDoc, getDoc, updateDoc, serverTimestamp, runTransaction, collection, where, query } from 'firebase/firestore';
-import { trackServerEvent } from '@/lib/analytics-server';
 
 
 export const runtime = "nodejs";
@@ -59,64 +55,18 @@ export async function POST(req: Request) {
       try {
         const metadata = session.metadata;
         if (!metadata || !metadata.orderId) {
-            console.error(`Webhook Error: No orderId found in Stripe session metadata for session ${session.id}. Cannot process.`);
+            console.error('checkout_webhook_missing_order');
             return new Response('Webhook Error: Missing orderId in metadata.', { status: 400 });
         }
 
-        const orderRef = doc(db, 'orders', metadata.orderId);
-        if (session.payment_status !== 'paid') return new Response('Payment pending', { status: 200 });
-        const piId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
-        const fulfilled = await runTransaction(db, async transaction => {
-          const orderSnap = await transaction.get(orderRef);
-          if (!orderSnap.exists()) throw new Error('Order not found');
-          const order = orderSnap.data();
-          if (order.paymentStatus === 'Paid') return false;
-          if (order.brandId !== metadata.brandId || order.locationId !== metadata.locationId || (order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== session.id)) throw new Error('Payment scope mismatch');
-          const customerRef = doc(db, 'customers', order.customerDetails.id);
-          const customerSnap = await transaction.get(customerRef);
-          if (customerSnap.exists() && customerSnap.data().brandId !== order.brandId) throw new Error('Customer scope mismatch');
-          const discountId = order.appliedDiscountId;
-          const discountRef = discountId ? doc(db, 'discounts', discountId) : null;
-          const discountSnap = discountRef ? await transaction.get(discountRef) : null;
-          if (discountSnap?.exists() && discountSnap.data().brandId !== order.brandId) throw new Error('Discount scope mismatch');
-          const settleCapacity = await prepareCapacitySettlement(transaction, order, true);
-          settleCapacity();
-          const customer = customerSnap.data() || {};
-          const usage = { ...(customer.discountUsage || {}) };
-          if (discountRef && discountSnap?.exists()) {
-            usage[discountId] = (usage[discountId] || 0) + 1;
-            transaction.update(discountRef, { usedCount: (discountSnap.data().usedCount || 0) + 1 });
-          }
-          if (customerSnap.exists()) transaction.update(customerRef, {
-            totalOrders: (customer.totalOrders || 0) + 1,
-            totalSpend: (customer.totalSpend || 0) + order.totalAmount,
-            lastOrderDate: serverTimestamp(),
-            discountUsage: usage,
-          });
-          transaction.update(orderRef, {
-            discountReservation: discountId ? 'consumed' : 'none',
-            fulfillmentWarnings: [!customerSnap.exists() ? 'customer_deleted' : '', discountId && !discountSnap?.exists() ? 'discount_deleted' : ''].filter(Boolean),
-            'psp.checkoutSessionId': session.id,
-            paymentStatus: 'Paid', paidAt: serverTimestamp(),
-            'psp.paymentIntentId': piId || null, updatedAt: serverTimestamp(),
-          });
-          return true;
-        });
-        if (fulfilled) {
-          await trackServerEvent('payment_succeeded', {
-            brandId: metadata.brandId, locationId: metadata.locationId,
-            sessionId: metadata.anonymousConsentId || 'unknown-session',
-            orderId: metadata.orderId, cartValue: (session.amount_total || 0) / 100,
-            paymentIntentId: piId,
-          });
-        }
+        await settlePaidCheckoutSession(session);
 
-        console.log(`✅ Webhook idempotently confirmed order ${metadata.orderId} for session ${session.id}`);
+        console.info('checkout_webhook_processed', { orderId: metadata.orderId, paymentStatus: session.payment_status });
 
       } catch (err) {
         const errorMessage = err instanceof Error ? err.message : 'Unknown error during order fulfillment';
-        console.error(`Error fulfilling order for session ${session.id}: ${errorMessage}`);
-        return new Response(`Webhook Handler Error: ${errorMessage}`, { status: 500 });
+        console.error('checkout_settlement_failed', { orderId: session.metadata?.orderId });
+        return new Response('Webhook settlement failed', { status: 500 });
       }
 
       break;

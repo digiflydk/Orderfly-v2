@@ -34,7 +34,7 @@ function Flow() {
     React.createElement('button',{id:'identified-toppings',onClick:()=>cart.addToCart(product,1,[{id:'t',name:'Cheese',price:10},{id:'t2',name:'Cheese',price:5}],75,75)},'Add named options'),
     React.createElement('button',{id:'identified-toppings-reversed',onClick:()=>cart.addToCart(product,1,[{id:'t2',name:'Cheese',price:5},{id:'t',name:'Cheese',price:10}],75,75)},'Add reversed named options'),
     React.createElement('button',{id:'identified-toppings-renamed',onClick:()=>cart.addToCart(product,1,[{id:'t',name:'Zeta',price:10},{id:'t2',name:'Alpha',price:5}],75,75)},'Add renamed options'),
-    React.createElement('button',{id:'combo',onClick:()=>cart.addComboToCart(combo,1,[{groupName:'Pizza',products:[{id:'pizza',name:'Italiana'}]}],100)},'Add combo'),
+    React.createElement('button',{id:'combo',onClick:()=>cart.addComboToCart(combo,1,[{groupId:'pg',groupName:'Pizza',products:[{id:'pizza',name:'Italiana'}]}],100)},'Add combo'),
     React.createElement('button',{id:'quantity',onClick:()=>cart.updateQuantity(cart.cartItems[0].cartItemId,3)},'Set three'),
     React.createElement('button',{id:'remove',onClick:()=>cart.removeFromCart(cart.cartItems.at(-1).cartItemId)},'Remove last'),
     React.createElement('button',{id:'pickup',onClick:()=>cart.setDeliveryType('pickup')},'Pickup'),
@@ -50,7 +50,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
 `;
 const html = `<!doctype html><div id="root"></div>
 <script src="/react.js"></script><script src="/react-dom.js"></script>
-<script type="importmap">{"imports":{"react":"/react-module","react/jsx-runtime":"/jsx-runtime","zod":"/zod/v3/index.js","js-cookie":"/cookies"}}</script>
+<script type="importmap">{"imports":{"react":"/react-module","react/jsx-runtime":"/jsx-runtime","zod":"/zod/v3/index.js","js-cookie":"/cookies","next/navigation":"/navigation"}}</script>
 <script type="module" src="/fixture.js"></script>`;
 before(async () => {
   server = http.createServer(async (req, res) => {
@@ -68,6 +68,7 @@ before(async () => {
       if (route === '/react-dom.js') return res.end(fs.readFileSync('node_modules/react-dom/umd/react-dom.development.js'));
       if (route === '/react-module') return res.end('export default window.React; export const {createContext,useContext,useState,useCallback,useEffect,useRef,useMemo}=window.React;');
       if (route === '/jsx-runtime') return res.end('export const Fragment=React.Fragment;export function jsx(type,props,key){return React.createElement(type,{...props,key});}export const jsxs=jsx;');
+      if (route === '/navigation') return res.end('export function useSearchParams(){return new URLSearchParams(window.location.search);}');
       if (route === '/cookies') return res.end('export default {set(){}};');
       if (route === '/fixture.js') return res.end(app);
       if (route === '/src/app/cart-actions') return res.end(`export async function restoreCartAction(input){const r=await fetch('/restore',{method:'POST',body:JSON.stringify(input)});if(!r.ok)throw Error('catalog unavailable');return r.json();}`);

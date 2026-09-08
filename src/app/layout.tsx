@@ -1,4 +1,5 @@
 import './globals.css';
+import { StorefrontVitals } from '@/components/storefront-vitals';
 import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
@@ -9,7 +10,7 @@ export const metadata: Metadata = {
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="da">
-      <body>{children}</body>
+      <body>{children}<StorefrontVitals /></body>
     </html>
   );
 }

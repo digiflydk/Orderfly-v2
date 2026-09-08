@@ -71,8 +71,8 @@ export function LocationCard({ location }: LocationCardProps) {
   const onSelect = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    openDeliveryModal({ brandSlug: location.brandSlug, locationSlug: location.slug });
-  }, [location.brandSlug, location.slug]);
+    openDeliveryModal({ brandSlug: location.brandSlug, locationSlug: location.slug, location });
+  }, [location]);
 
   const getOpeningStatusText = () => {
     if (isOpenNow) {

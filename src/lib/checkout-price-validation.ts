@@ -1,15 +1,10 @@
+import { discountedUnit, ore } from './money';
 import type { MinimalCartItem, StandardDiscount, Upsell } from '@/types';
 import { restaurantClock } from './promotion-rules';
 
 export type CatalogPriceLine = {
   id: string; categoryId?: string; tags: string[]; isCombo: boolean; price: number;
 };
-
-function reducedPrice(price: number, method: string, value?: number) {
-  if (!Number.isFinite(value) || !value || value < 0) return price;
-  if (method === 'percentage') return Math.max(0, price * (1 - Math.min(100,value) / 100));
-  return method === 'fixed_amount' ? Math.max(0,price - value) : price;
-}
 
 function date(value: unknown): Date | undefined {
   if (!value) return undefined;
@@ -30,7 +25,7 @@ export function minimumCheckoutPrices(items: MinimalCartItem[], catalog: Catalog
   };
   const standardPrices = catalog.map(line => discounts.filter(d => active(d) && !line.isCombo &&
     ((d.discountType === 'product' && d.referenceIds.includes(line.id)) || (d.discountType === 'category' && !!line.categoryId && d.referenceIds.includes(line.categoryId))))
-    .reduce((price,d) => Math.min(price,reducedPrice(line.price,d.discountMethod,d.discountValue)),line.price));
+    .reduce((price,d) => Math.min(price,discountedUnit(line.price,d.discountMethod,d.discountValue)),line.price));
 
   return items.map((item,index) => {
     const line = catalog[index];
@@ -51,9 +46,9 @@ export function minimumCheckoutPrices(items: MinimalCartItem[], catalog: Catalog
           t.type === 'combo_in_cart' ? record.isCombo && record.id === t.referenceId :
           t.type === 'product_tag_in_cart' && record.tags.includes(t.referenceId));
       });
-      if (triggered) minimum = Math.min(minimum,reducedPrice(line.price,upsell.discountType,upsell.discountValue));
+      if (triggered) minimum = Math.min(minimum,discountedUnit(line.price,upsell.discountType,upsell.discountValue));
     }
-    return minimum;
+    return ore(minimum) / 100;
   });
 }
 
@@ -61,10 +56,9 @@ export function validateCheckoutPrices(items: MinimalCartItem[], catalog: Catalo
   const minimums = minimumCheckoutPrices(items, catalog, discounts, upsells, scope);
   items.forEach((item, index) => {
     const minimum = minimums[index];
-    // Compare rounded line amounts, accommodating legitimate fractional-cent
-    // percentage unit prices while rejecting a whole-cent shortfall.
-    if (Math.round(item.unitPrice * item.quantity * 100) < Math.round(minimum * item.quantity * 100) ||
-        Math.round(item.totalPrice * 100) < Math.round(item.unitPrice * item.quantity * 100)) {
+    // Round a unit once, before quantity. Eligibility never bypasses this floor.
+    if (ore(item.unitPrice) < ore(minimum) ||
+        ore(item.totalPrice) < ore(item.unitPrice) * item.quantity) {
       throw new Error('Basket prices have changed. Please refresh your basket.');
     }
   });

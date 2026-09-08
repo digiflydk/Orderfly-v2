@@ -2,30 +2,28 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, doc, serverTimestamp, setDoc } from 'firebase/firestore';
-import type { AnalyticsEvent } from '@/types';
+import { randomUUID } from 'node:crypto';
+import { metricPayload } from '@/lib/commerce-metrics';
+import { recordCommerceMetric } from '@/lib/server/record-commerce-metric';
 
+export const runtime = 'nodejs';
 export async function POST(req: NextRequest) {
   try {
-    const eventData: Omit<AnalyticsEvent, 'id' | 'ts'> = await req.json();
-
-    if (!eventData.name || !eventData.sessionId) {
+    if (Number(req.headers.get('content-length') || 0) > 8192) {
+      return NextResponse.json({ error: 'Event is too large.' }, { status: 413 });
+    }
+    const origin = req.headers.get('origin');
+    if (origin && origin !== req.nextUrl.origin) {
+      return NextResponse.json({ error: 'Invalid origin.' }, { status: 403 });
+    }
+    const raw = await req.json() as Record<string, unknown>;
+    const eventId = typeof raw.eventId === 'string' ? raw.eventId : randomUUID();
+    const event = metricPayload(raw.name, { ...raw, eventId });
+    if (!event?.sessionId || !event.eventId) {
       return NextResponse.json({ error: 'Missing required event data.' }, { status: 400 });
     }
-
-    const eventRef = doc(collection(db, 'analytics_events'));
-
-    const finalEvent: AnalyticsEvent = {
-      ...eventData,
-      id: eventRef.id,
-      ts: serverTimestamp() as any, // Firestore will replace this
-    };
-    
-    // We use setDoc to ensure the id is the same as the document's ID
-    await setDoc(eventRef, finalEvent);
-
-    return NextResponse.json({ success: true, eventId: eventRef.id });
+    await recordCommerceMetric(raw.name, event);
+    return NextResponse.json({ success: true, eventId });
 
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error tracking event';

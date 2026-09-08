@@ -1,7 +1,7 @@
 
 
 import { addMinutes, format, isBefore, isEqual, roundToNearestMinutes, addDays, set, parseISO, startOfDay, isSameDay, isAfter, subMinutes } from 'date-fns';
-import { toZonedTime } from 'date-fns-tz';
+import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import type { Location, TimeSlotResponse } from '@/types';
 
 // This function needs to be in a client-safe file because it's imported by client components.
@@ -31,7 +31,7 @@ export function calculateTimeSlots(location: Location, forDateStr?: string, curr
         return { openingTime, closingTime };
     };
 
-    const generateSlots = (earliest: Date, latest: Date): string[] => {
+    const generateSlots = (earliest: Date, latest: Date, minInstant?: Date): string[] => {
         if (isAfter(earliest, latest)) return [];
         const slots = [];
         let current = roundToNearestMinutes(earliest, { nearestTo: tidsinterval });
@@ -39,7 +39,9 @@ export function calculateTimeSlots(location: Location, forDateStr?: string, curr
             current = addMinutes(current, tidsinterval);
         }
         while (isBefore(current, latest) || isEqual(current, latest)) {
-            slots.push(format(current, 'HH:mm'));
+            const wall = format(current, "yyyy-MM-dd'T'HH:mm:ss");
+            const instant = fromZonedTime(wall, timeZone);
+            if (format(toZonedTime(instant, timeZone), "yyyy-MM-dd'T'HH:mm:ss") === wall && (!minInstant || instant >= minInstant)) slots.push(format(current, 'HH:mm'));
             current = addMinutes(current, tidsinterval);
         }
         return slots;
@@ -83,7 +85,9 @@ export function calculateTimeSlots(location: Location, forDateStr?: string, curr
                 } else if (!dateIsToday) {
                     asap_pickup = `${format(forDate, 'eee, MMM d')} - ${format(addMinutes(openingTime, effectivePrep), 'HH:mm')}`;
                 }
-                pickup_times = generateSlots(earliestPickupTime, lastPossiblePickupTime);
+                pickup_times = generateSlots(earliestPickupTime, lastPossiblePickupTime, addMinutes(isCurrentlyOpen ? currentDate : fromZonedTime(openingTime, timeZone), effectivePrep));
+                if (!pickup_times.length) asap_pickup = '';
+                else if (!isCurrentlyOpen) asap_pickup = `${isBeforeOpening ? 'Today' : format(forDate, 'eee, MMM d')} - ${pickup_times[0]}`;
             }
         }
         
@@ -99,7 +103,9 @@ export function calculateTimeSlots(location: Location, forDateStr?: string, curr
                 } else if (!dateIsToday) {
                     asap_delivery = `${format(forDate, 'eee, MMM d')} - ${format(addMinutes(openingTime, effectivePrep + deliveryMinutes), 'HH:mm')}`;
                 }
-                delivery_times = generateSlots(earliestDeliveryTime, lastPossibleDeliveryTime);
+                delivery_times = generateSlots(earliestDeliveryTime, lastPossibleDeliveryTime, addMinutes(isCurrentlyOpen ? currentDate : fromZonedTime(openingTime, timeZone), effectivePrep + deliveryMinutes));
+                if (!delivery_times.length) asap_delivery = '';
+                else if (!isCurrentlyOpen) asap_delivery = `${isBeforeOpening ? 'Today' : format(forDate, 'eee, MMM d')} - ${delivery_times[0]}`;
             }
         }
     }
@@ -112,10 +118,12 @@ export function calculateTimeSlots(location: Location, forDateStr?: string, curr
             if (nextDayInfo) {
                 const label = i === 1 ? 'Tomorrow' : format(nextDate, 'eee, MMM d');
                 if (!asap_pickup && location.deliveryTypes.includes('pickup') && !isAfter(addMinutes(nextDayInfo.openingTime, effectivePrep), subMinutes(nextDayInfo.closingTime, effectivePrep))) {
-                    asap_pickup = `${label} - ${format(addMinutes(nextDayInfo.openingTime, effectivePrep), 'HH:mm')}`;
+                    const next = generateSlots(addMinutes(nextDayInfo.openingTime, effectivePrep), subMinutes(nextDayInfo.closingTime, effectivePrep), addMinutes(fromZonedTime(nextDayInfo.openingTime, timeZone), effectivePrep));
+                    if (next.length) asap_pickup = `${label} - ${next[0]}`;
                 }
                 if (!asap_delivery && location.deliveryTypes.includes('delivery') && !isAfter(addMinutes(nextDayInfo.openingTime, effectivePrep + deliveryMinutes), subMinutes(nextDayInfo.closingTime, effectivePrep + deliveryMinutes))) {
-                    asap_delivery = `${label} - ${format(addMinutes(nextDayInfo.openingTime, effectivePrep + deliveryMinutes), 'HH:mm')}`;
+                    const next = generateSlots(addMinutes(nextDayInfo.openingTime, effectivePrep + deliveryMinutes), subMinutes(nextDayInfo.closingTime, effectivePrep + deliveryMinutes), addMinutes(fromZonedTime(nextDayInfo.openingTime, timeZone), effectivePrep + deliveryMinutes));
+                    if (next.length) asap_delivery = `${label} - ${next[0]}`;
                 }
                 if ((asap_pickup || !location.deliveryTypes.includes('pickup')) && (asap_delivery || !location.deliveryTypes.includes('delivery'))) break;
             }

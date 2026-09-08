@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { CartItem } from '@/types';
+import { MAX_TOPPINGS_PER_ITEM } from './commerce-limits';
 
 export const CART_STORAGE_KEY = 'orderfly.cart.v1';
 export const CART_MAX_AGE = 24 * 60 * 60 * 1000;
@@ -7,10 +8,11 @@ const id = z.string().min(1).max(200).refine(value => !value.includes('/'));
 export const cartChoiceSchema = z.object({
   id, cartItemId: id, itemType: z.enum(['product', 'combo']),
   quantity: z.number().int().min(1).max(100),
-  toppings: z.array(z.string().min(1).max(200)).max(40),
-  toppingIds: z.array(id).max(40).optional(),
+  toppings: z.array(z.string().min(1).max(200)).max(MAX_TOPPINGS_PER_ITEM),
+  toppingIds: z.array(id).max(MAX_TOPPINGS_PER_ITEM).optional(),
   offered: z.boolean().default(false),
   comboSelections: z.array(z.object({
+    groupId: id.optional(),
     groupName: z.string().min(1).max(200),
     products: z.array(z.object({ id })).max(40),
   })).max(20).optional(),
@@ -33,6 +35,7 @@ export function cartChoices(items: CartItem[]): CartChoice[] {
     ...(item.toppings.length && item.toppings.every(topping => topping.id) ? { toppingIds: item.toppings.map(topping => topping.id!) } : {}),
     offered: item.price < item.basePrice,
     ...(item.comboSelections ? { comboSelections: item.comboSelections.map(group => ({
+      ...(group.groupId ? { groupId: group.groupId } : {}),
       groupName: group.groupName, products: group.products.map(product => ({ id: product.id })),
     })) } : {}),
   }));

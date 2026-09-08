@@ -1,18 +1,21 @@
 
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { ctaDeckContent } from "../_data/constants";
+import type { PromotionTile } from '@/lib/storefront-promotion';
+import { safeImage } from '@/lib/images';
 
 function CTAFullWidthCard({
   title,
   description,
   imageUrl,
   ctaText,
+  onOrderClick,
 }: {
   title: string;
   description: string;
   imageUrl: string;
   ctaText: string;
+  onOrderClick: () => void;
 }) {
   return (
     <div className="relative h-[340px] overflow-hidden group cursor-pointer shadow-md hover:shadow-xl transition-shadow">
@@ -28,7 +31,7 @@ function CTAFullWidthCard({
           {title}
         </h3>
         <p className="text-sm mb-4 max-w-md opacity-80">{description}</p>
-        <Button className="bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] rounded-md px-8 py-3 text-xs uppercase font-bold tracking-wide transition-colors">
+        <Button onClick={onOrderClick} className="bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] rounded-md px-8 py-3 text-xs uppercase font-bold tracking-wide transition-colors">
           {ctaText}
         </Button>
       </div>
@@ -36,23 +39,11 @@ function CTAFullWidthCard({
   );
 }
 
-export function CTADeck() {
-  return (
-    <section className="container mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-8">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <CTAFullWidthCard
-          title={ctaDeckContent.m3point.title}
-          description={ctaDeckContent.m3point.description}
-          imageUrl={ctaDeckContent.m3point.imageUrl}
-          ctaText={ctaDeckContent.m3point.ctaText}
-        />
-        <CTAFullWidthCard
-          title={ctaDeckContent.m3plus.title}
-          description={ctaDeckContent.m3plus.description}
-          imageUrl={ctaDeckContent.m3plus.imageUrl}
-          ctaText={ctaDeckContent.m3plus.ctaText}
-        />
-      </div>
-    </section>
-  );
+export function CTADeck({promotions, onOrderClick}: {promotions: PromotionTile[]; onOrderClick: () => void}) {
+  if (!promotions.length) return null;
+  return <section className="container mx-auto max-w-[1200px] px-4 py-8" aria-label="Aktuelle tilbud">
+    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">{promotions.map(promotion =>
+      <CTAFullWidthCard key={promotion.id} title={promotion.title} description={promotion.description}
+        imageUrl={safeImage(promotion.imageUrl)} ctaText="Se tilbud i menuen" onOrderClick={onOrderClick} />)}</div>
+  </section>;
 }

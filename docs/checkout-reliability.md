@@ -131,3 +131,16 @@ payment produces a paid receipt for the same restaurant and exactly one order.
 Inspect `checkout_failed` and signed webhook outcomes. Production deployment and
 that controlled payment verification remain pending; do not mark #60 Done from
 local tests alone.
+
+## P1 follow-up from #67
+
+See [commerce P1 corrections](commerce-p1-67.md) for receipt capabilities, truthful
+payment states, shared settlement, current fulfillment/catalog validation,
+preserved combo selections and the shared menu upsell fallback. That document
+contains the current release and targeted QA contract for these changed paths.
+
+## Commerce audit #67
+
+The coordinated P1/P2 release is documented in [commerce-p1-67.md](commerce-p1-67.md)
+and [commerce-p2-67.md](commerce-p2-67.md), including integer-øre pricing, scoped
+read caching, optional telemetry and the exact-release QA handoff.

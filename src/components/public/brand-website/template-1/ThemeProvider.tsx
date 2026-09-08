@@ -1,7 +1,6 @@
 'use client';
 
 import * as React from 'react';
-import { merge } from 'lodash';
 
 // Local type definitions to remove dependency on obsolete module
 type DesignSystemInput = {
@@ -70,7 +69,13 @@ const defaultDesignSystem: DesignSystemInput = {
 };
 
 export function Template1ThemeProvider({ designSystem, children }: ThemeProviderProps) {
-  const finalDesignSystem = merge({}, defaultDesignSystem, designSystem);
+  const finalDesignSystem = {
+    typography: {...defaultDesignSystem.typography, ...designSystem.typography},
+    colors: {...defaultDesignSystem.colors, ...designSystem.colors},
+    buttons: {...defaultDesignSystem.buttons, ...designSystem.buttons,
+      primaryVariant: {...defaultDesignSystem.buttons.primaryVariant, ...designSystem.buttons?.primaryVariant},
+      secondaryVariant: {...defaultDesignSystem.buttons.secondaryVariant, ...designSystem.buttons?.secondaryVariant}},
+  };
   const { typography, colors, buttons } = finalDesignSystem;
 
   const cssVariables = {

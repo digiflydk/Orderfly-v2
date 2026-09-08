@@ -1,5 +1,7 @@
 
 'use client';
+import { lineMoney, money, sumMoney } from '@/lib/money';
+import { MAX_TOPPINGS_PER_ITEM } from '@/lib/commerce-limits';
 
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
@@ -21,8 +23,8 @@ import { Label } from '../ui/label';
 import { ScrollArea } from '../ui/scroll-area';
 import { Separator } from '../ui/separator';
 import { Badge } from '../ui/badge';
-import { DynamicIcon } from '../superadmin/dynamic-icon';
-import { getAllergens } from '@/app/superadmin/allergens/actions';
+import { CategoryIcon as DynamicIcon } from '../catalog/category-icon';
+import { publicRead } from '@/lib/public-read';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { useAnalytics } from '@/context/analytics-context';
 import { safeImage } from '@/lib/images';
@@ -54,6 +56,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   const [quantity, setQuantity] = useState(1);
   const [selectedToppings, setSelectedToppings] = useState<Record<string, CartItemTopping>>({});
   const [allergens, setAllergens] = useState<Allergen[]>([]);
+  const [allergenError, setAllergenError] = useState(false);
   const { addToCart, deliveryType, location, cartTotal } = useCart();
   const { toast } = useToast();
   const { trackEvent } = useAnalytics();
@@ -84,8 +87,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
       const defaultToppings: Record<string, CartItemTopping> = {};
       relevantToppingGroups.forEach(group => {
           group.toppings.forEach(topping => {
-              if (topping.isDefault) {
-                  defaultToppings[topping.id] = { id: topping.id, name: topping.toppingName, price: topping.price };
+              if (topping.isDefault && Object.keys(defaultToppings).length < MAX_TOPPINGS_PER_ITEM) {
+                  defaultToppings[topping.id] = { id: topping.id, name: topping.toppingName, price: money(topping.price) };
               }
           });
       });
@@ -93,9 +96,12 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
       
       async function fetchAllergens() {
         if(product.allergenIds && product.allergenIds.length > 0) {
-            const all = await getAllergens();
-            const productAllergens = all.filter(a => product.allergenIds?.includes(a.id));
-            setAllergens(productAllergens);
+            setAllergenError(false);
+            try {
+              const all = await publicRead<Allergen[]>('/api/public/allergens');
+              const productAllergens = all.filter(a => product.allergenIds?.includes(a.id));
+              setAllergens(productAllergens);
+            } catch { setAllergenError(true); }
         } else {
             setAllergens([]);
         }
@@ -128,11 +134,13 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 delete newSelected[t.id];
             });
             if (isChecked) {
-                newSelected[topping.id] = { id: topping.id, name: topping.toppingName, price: topping.price };
+                if (!newSelected[topping.id] && Object.keys(newSelected).length >= MAX_TOPPINGS_PER_ITEM) return prev;
+                newSelected[topping.id] = { id: topping.id, name: topping.toppingName, price: money(topping.price) };
             }
         } else {
             if (isChecked) {
-                newSelected[topping.id] = { id: topping.id, name: topping.toppingName, price: topping.price };
+                if (!newSelected[topping.id] && Object.keys(newSelected).length >= MAX_TOPPINGS_PER_ITEM) return prev;
+                newSelected[topping.id] = { id: topping.id, name: topping.toppingName, price: money(topping.price) };
             } else {
                 delete newSelected[topping.id];
             }
@@ -141,11 +149,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     });
   };
   
-  const toppingsTotal = Object.values(selectedToppings).reduce((sum, topping) => sum + topping.price, 0);
-  const totalItemPrice = (finalPrice + toppingsTotal) * quantity;
+  const toppingsTotal = sumMoney(Object.values(selectedToppings).map(topping => topping.price));
+  const totalItemPrice = lineMoney(finalPrice, quantity, [toppingsTotal]);
 
   const isSelectionValid = useMemo(() => {
-    return relevantToppingGroups.every(group => {
+    return Object.keys(selectedToppings).length <= MAX_TOPPINGS_PER_ITEM && relevantToppingGroups.every(group => {
         const count = Object.keys(selectedToppings).filter(tid => group.toppings.some(t => t.id === tid)).length;
         const min = Number(group.minSelection);
         const max = Number(group.maxSelection);
@@ -173,7 +181,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     setIsOpen(false);
   }
   
-  const hasOptions = allergens.length > 0 || relevantToppingGroups.length > 0;
+  const hasOptions = allergenError || allergens.length > 0 || relevantToppingGroups.length > 0;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -204,7 +212,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     {hasOptions && (
                         <>
                             <Separator />
-                            {allergens.length > 0 && (
+                            {allergenError && <p role="status" className="text-sm">Allergenoplysninger kunne ikke indlæses. Kontakt restauranten ved allergi.</p>}
+                        {allergens.length > 0 && (
                                 <div>
                                     <h3 className="font-semibold text-lg mb-2">Allergens</h3>
                                     <div className="flex flex-wrap gap-2">
@@ -236,7 +245,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                                     {group.toppings.map(topping => (
                                                     <div key={`${product.id}-${topping.id}`} className="flex items-center justify-between p-2 rounded-md hover:bg-accent">
                                                         <div className="flex items-center space-x-3">
-                                                            <RadioGroupItem value={topping.id} id={`${product.id}-${topping.id}`} />
+                                                    <RadioGroupItem
+                                                        value={topping.id}
+                                                        id={`${product.id}-${topping.id}`}
+                                                        disabled={!currentSelection.length && Object.keys(selectedToppings).length >= MAX_TOPPINGS_PER_ITEM}
+                                                    />
                                                             <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">{topping.toppingName}</Label>
                                                         </div>
                                                         <span className="text-sm text-muted-foreground">+DKK {topping.price.toFixed(2)}</span>
@@ -254,7 +267,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                                                 id={`${product.id}-${topping.id}`} 
                                                                 onCheckedChange={(checked) => handleToppingChange(topping, !!checked, false)}
                                                                 checked={!!selectedToppings[topping.id]}
-                                                                disabled={!selectedToppings[topping.id] && maxReached}
+                                                                disabled={!selectedToppings[topping.id] && (maxReached || Object.keys(selectedToppings).length >= MAX_TOPPINGS_PER_ITEM)}
                                                             />
                                                             <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">
                                                                 {topping.toppingName}

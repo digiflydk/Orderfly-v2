@@ -97,6 +97,9 @@ export type Role = {
  * @description Customer information provided during checkout.
  */
 export interface CustomerInfo {
+    analyticsSessionId?: string;
+    analyticsDevice?: 'mobile' | 'desktop';
+    analyticsConsent?: boolean;
     name: string;
     email: string;
     phone: string;
@@ -482,6 +485,7 @@ export type ProductGroup = {
  * @description Defines the selected products for a combo item in the cart.
  */
 export type ComboSelection = {
+    groupId?: string; // Native ID; missing only in legacy baskets.
     groupName: string;
     products: {
         id: string;
@@ -545,6 +549,9 @@ export interface CartItem {
  * @description A minimal representation of a cart item sent to the server.
  */
 export type MinimalCartItem = {
+    itemType?: 'product' | 'combo';
+    toppingIds?: string[];
+    comboSelections?: ComboSelection[];
     id?: string;
     name: string;
     quantity: number;

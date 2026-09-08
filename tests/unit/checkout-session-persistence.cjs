@@ -13,7 +13,8 @@ for(const existing of [false,true])for(const kind of ['none','automatic','code',
  const order=writes.find(w=>w.ref.collection==='orders').data;
  assert.equal(order.paymentDetails.cartDiscountTotal,kind==='none'?0:10);
  assert.equal('cartDiscountName' in order.paymentDetails,kind!=='none');
- assert.equal('deliveryTime' in order,false);assert.equal('toppings' in order.productItems[0],false);
+ assert.match(order.deliveryTime,/\d{2}:\d{2}/);assert.ok(Date.parse(order.fulfillmentAt)>Date.now());assert.deepEqual(order.productItems[0].toppings,[]);
+ assert.match(order.receiptTokenHash,/^[a-f0-9]{64}$/);
  if(kind!=='none')assert.equal(coupon.amount_off,1000);
  assert.ok(writes.some(w=>w.data['psp.checkoutSessionId']==='cs_test_mock'));
 });
