@@ -153,6 +153,21 @@ test('#71 stale upsell products cannot hide a later scoped public offer',async()
  const result=await getActiveUpsellForCart({brandId:'b',locationId:'l',deliveryType:'pickup',cartItems:[{id:'cart'}],cartTotal:1});
  assert.equal(result.upsell.id,'valid');assert.deepEqual(calls,[[['stale-product'],'b','l'],[['valid-product'],'b','l']]);
 });
+test('#71 scoped upsell products preserve brand-wide availability and exclude private inventory',async()=>{
+ const products=[
+  {id:'global',brandId:'b',isActive:true,locationIds:[]},
+  {id:'local',brandId:'b',isActive:true,locationIds:['l']},
+  {id:'elsewhere',brandId:'b',isActive:true,locationIds:['other']},
+  {id:'test',brandId:'b',isActive:true,isTestData:true,locationIds:[]},
+  {id:'inactive',brandId:'b',isActive:false,locationIds:[]},
+ ];
+ const docs=products.map(data=>({id:data.id,data:()=>data}));
+ const {getProductsByIds}=loadTs('src/app/superadmin/products/actions.ts',{
+  'server-only':{},'next/cache':{},'next/navigation':{},'firebase-admin':{firestore:{FieldPath:{documentId:()=>''}}},
+  '@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({where(){return this},get:async()=>({docs})})})},
+ });
+ const result=await getProductsByIds(products.map(p=>p.id),'b','l');assert.deepEqual(result.map(p=>p.id),['global','local']);
+});
 
 test('#71 actual checkout stores explicit consent before Stripe and retains it if payment fails',async()=>{
  const {checkout}=require('../helpers/checkout-fixture.cjs');

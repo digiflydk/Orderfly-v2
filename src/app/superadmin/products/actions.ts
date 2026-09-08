@@ -247,7 +247,7 @@ export async function getProductsByIds(productIds: string[], brandId?: string, l
     const allProducts = productArrays.flat().filter(product => !locationId || (
         product.isActive === true &&
         product.isTestData !== true &&
-        (product.locationIds || []).includes(locationId)
+        (!(product.locationIds || []).length || product.locationIds.includes(locationId))
     ));
 
     const finalProducts: ProductForMenu[] = allProducts.map(p => ({
