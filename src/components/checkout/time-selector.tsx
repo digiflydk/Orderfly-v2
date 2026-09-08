@@ -9,7 +9,8 @@ import { cn } from "@/lib/utils";
 import { useEffect, useState, useMemo } from "react";
 import type { TimeSlotResponse } from "@/types";
 import { Skeleton } from "../ui/skeleton";
-import { TimeSlotDialog } from "./timeslot-dialog";
+import dynamic from 'next/dynamic';
+const TimeSlotDialog = dynamic(() => import('./timeslot-dialog').then(module => module.TimeSlotDialog));
 import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
 
 
@@ -56,6 +57,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
                     variant={deliveryType === 'pickup' ? 'secondary' : 'ghost'}
                     size="sm"
                     onClick={() => setDeliveryType('pickup')}
+                    disabled={!location.deliveryTypes.includes('pickup')}
                     className={cn(
                         "h-auto flex flex-1 items-center justify-center gap-2 rounded-md border-0 px-2 py-2 text-sm font-semibold transition-all duration-200",
                         deliveryType !== 'pickup' && "bg-transparent text-muted-foreground hover:bg-muted"
@@ -68,6 +70,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
                     variant={deliveryType === 'delivery' ? 'secondary' : 'ghost'}
                     size="sm"
                     onClick={() => setDeliveryType('delivery')}
+                    disabled={!location.deliveryTypes.includes('delivery')}
                     className={cn(
                         "h-auto flex flex-1 items-center justify-center gap-2 rounded-md border-0 px-2 py-2 text-sm font-semibold transition-all duration-200",
                          deliveryType !== 'delivery' && "bg-transparent text-muted-foreground hover:bg-muted"
@@ -93,11 +96,11 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
                  )}
             </div>
 
-             <TimeSlotDialog
+             {isTimeDialogOpen && <TimeSlotDialog
                 isOpen={isTimeDialogOpen}
                 setIsOpen={setIsTimeDialogOpen}
                 locationId={location.id}
-             />
+             />}
         </div>
     )
 }

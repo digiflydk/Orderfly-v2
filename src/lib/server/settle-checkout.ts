@@ -12,10 +12,12 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
   const orderRef = doc(db, 'orders', metadata.orderId);
   if (session.payment_status !== 'paid') return false;
   const piId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+  let analytics: {sessionId?: string; deviceType?: string} | undefined;
   const fulfilled = await runTransaction(db, async transaction => {
     const orderSnap = await transaction.get(orderRef);
     if (!orderSnap.exists()) throw new Error('Order not found');
     const order = orderSnap.data();
+    analytics = order.analytics;
     if (order.brandId !== metadata.brandId || order.locationId !== metadata.locationId || (order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== session.id)) throw new Error('Payment scope mismatch');
     if (order.paymentStatus === 'Paid') return false;
     const customerRef = doc(db, 'customers', order.customerDetails.id);
@@ -52,9 +54,8 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     // Analytics are optional after an authoritative, idempotent settlement.
     try { await trackServerEvent('payment_succeeded', {
       brandId: metadata.brandId, locationId: metadata.locationId,
-      sessionId: metadata.anonymousConsentId || 'unknown-session',
+      ...(analytics?.sessionId ? {sessionId: analytics.sessionId, deviceType: analytics.deviceType} : {}),
       orderId: metadata.orderId, cartValue: (session.amount_total || 0) / 100,
-      paymentIntentId: piId,
     }); } catch { /* Never report a successful payment as failed due to telemetry. */ }
   }
   return fulfilled;

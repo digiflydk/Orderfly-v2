@@ -40,10 +40,10 @@ const cachedMenu = unstable_cache(async (brandId: string, locationId: string): P
     productsQuery.get(),
   ]);
 
-  const categories: MenuCategory[] = catsSnap.docs.map(d => storefrontMedia({ id:d.id, ...(d.data() as any) }, 'categories', d.id));
+  const categories: MenuCategory[] = catsSnap.docs.filter(d => !d.data().brandId || d.data().brandId === brandId).map(d => storefrontMedia({ ...(d.data() as any), id:d.id }, 'categories', d.id));
   
   const allLocationProducts: MenuProduct[] = prodsSnap.docs
-      .map(d => storefrontMedia({ id: d.id, ...(d.data() as any) }, 'products', d.id))
+      .map(d => storefrontMedia({ ...(d.data() as any), id: d.id }, 'products', d.id))
       .filter(p => !p.locationIds || p.locationIds.length === 0 || p.locationIds.includes(locationId));
 
   const sortByOrder = (a:any,b:any)=>((typeof a.sortOrder==="number"?a.sortOrder:999999)-(typeof b.sortOrder==="number"?b.sortOrder:999999));

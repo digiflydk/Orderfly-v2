@@ -2,6 +2,7 @@
 "use client";
 
 import { useMemo } from 'react';
+import { flattenMenu } from '@/lib/menu-display';
 import type { Brand, Category, ComboMenu, Location, ProductForMenu, StandardDiscount } from '@/types';
 import { MenuClient } from './menu-client';
 
@@ -28,7 +29,7 @@ export default function BrandPageClient({
 }: BrandPageClientProps) {
     
     const allProductsForLocation = useMemo(() => {
-        return Object.values(menu.productsByCategory).flat();
+        return flattenMenu(menu.productsByCategory);
     }, [menu.productsByCategory]);
 
     const offerCategoryPlaceholder: Category = {

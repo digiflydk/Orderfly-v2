@@ -60,7 +60,7 @@ export function DesktopCart() {
                                 <Image
                                     src={safeImage(item.imageUrl)}
                                     alt={item.productName}
-                                    fill
+                                    fill sizes="64px"
                                     className="rounded-md object-cover"
                                     data-ai-hint="delicious food"
                                 />

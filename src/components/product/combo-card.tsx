@@ -1,12 +1,14 @@
 
 
 'use client';
+import { money } from '@/lib/money';
 
 import Image from "next/image";
 import { useState, useMemo } from "react";
 import type { ComboMenu, Product, ProductForMenu } from "@/types";
 import { useCart } from "@/context/cart-context";
-import { ComboBuilderDialog } from "./combo-builder-dialog";
+import dynamic from 'next/dynamic';
+const ComboBuilderDialog = dynamic(() => import('./combo-builder-dialog').then(module => module.ComboBuilderDialog));
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import { Plus } from "lucide-react";
@@ -21,20 +23,23 @@ export function ComboCard({ combo, brandProducts }: ComboCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const { deliveryType } = useCart();
   
-  const price = useMemo(() => (deliveryType === 'delivery' ? combo.deliveryPrice : combo.pickupPrice), [deliveryType, combo]);
+  const price = useMemo(() => {
+    const amount = deliveryType === 'delivery' ? combo.deliveryPrice : combo.pickupPrice;
+    return typeof amount === 'number' && Number.isFinite(amount) && amount >= 0 ? money(amount) : undefined;
+  }, [deliveryType, combo]);
 
   return (
     <>
       <div 
         className="group flex w-full items-start gap-4 cursor-pointer border-b py-4"
-        onClick={() => setIsDialogOpen(true)}
+        onClick={() => { if (price !== undefined) setIsDialogOpen(true); }}
       >
         <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md">
           <Image
             src={safeImage(combo.imageUrl)}
             alt={combo.comboName}
             fill
-            sizes="(max-width: 768px) 25vw, 15vw"
+            sizes="96px"
             className="object-cover"
             data-ai-hint="delicious food"
           />
@@ -57,18 +62,18 @@ export function ComboCard({ combo, brandProducts }: ComboCardProps) {
           </div>
           <div className="flex items-center justify-between mt-2">
             <p className="font-semibold text-foreground">kr. {price?.toFixed(2) ?? 'N/A'}</p>
-            <Button size="icon" className="h-10 w-10 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
+            <Button disabled={price === undefined} type="button" aria-label={`Tilføj ${combo.comboName}`} size="icon" className="h-10 w-10 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
               <Plus className="h-5 w-5"/>
             </Button>
           </div>
         </div>
       </div>
-      <ComboBuilderDialog
+      {isDialogOpen && <ComboBuilderDialog
         combo={combo}
         isOpen={isDialogOpen}
         setIsOpen={setIsDialogOpen}
         brandProducts={brandProducts}
-      />
+      />}
     </>
   );
 }

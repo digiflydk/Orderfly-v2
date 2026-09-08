@@ -1,4 +1,5 @@
 'use client';
+import { statisticsAllowed } from '@/lib/analytics';
 
 import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillment-time';
 import { checkoutItems } from '@/lib/checkout-items';
@@ -305,7 +306,7 @@ function OrderSummaryContent() {
 }
 
 function CheckoutForm({ location }: { location: Location }) {
-  const { trackEvent } = useAnalytics();
+  const { trackEvent, sessionId: analyticsSessionId } = useAnalytics();
   const {
     cartItems,
     subtotal,
@@ -474,19 +475,12 @@ function CheckoutForm({ location }: { location: Location }) {
     }
   }, [paymentUncertain, paymentUrl, form, discountCode, brand, location, deliveryType, cartItems, applyDiscount, removeDiscount, toast]);
 
+  const checkoutTracked = useRef('');
   useEffect(() => {
-    try {
-      const hasTracked = sessionStorage.getItem('checkout_started');
-      if (!hasTracked) {
-        trackEvent('start_checkout', {
-          cartValue: checkoutTotal,
-          itemsCount: itemCount,
-          deliveryType: deliveryType
-        });
-        sessionStorage.setItem('checkout_started', 'true');
-      }
-    } catch { /* Browser storage and analytics are optional. */ }
-  }, [trackEvent, checkoutTotal, itemCount, deliveryType]);
+    const key = `${brand?.id}/${location?.id}`;
+    if (!itemCount || checkoutTracked.current === key) return;
+    if (trackEvent('start_checkout', {locationId: location?.id, cartValue: checkoutTotal, itemsCount: itemCount, deliveryType})) checkoutTracked.current = key;
+  }, [trackEvent, brand?.id, location?.id, checkoutTotal, itemCount, deliveryType]);
 
   useEffect(() => {
     const subscription = form.watch((_, { name, type }) => {
@@ -564,7 +558,8 @@ function CheckoutForm({ location }: { location: Location }) {
       // The server receives an explicit consent boolean.
       const customerInfo: CustomerInfo = {
         ...formValues,
-        subscribeToNewsletter: !!formValues.subscribeToNewsletter
+        subscribeToNewsletter: !!formValues.subscribeToNewsletter,
+        ...(statisticsAllowed() && analyticsSessionId ? {analyticsSessionId, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const} : {})
       };
 
       const result = await requestHostedCheckout(

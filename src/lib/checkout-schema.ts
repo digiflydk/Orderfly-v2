@@ -3,6 +3,7 @@ const amount = z.number().finite().nonnegative();
 const id = z.string().min(1).max(160).regex(/^[^/\\?#]+$/);
 const optionalText = z.string().max(250).nullish().transform(value => value ?? undefined);
 const customer = z.object({
+  analyticsSessionId: z.string().uuid().optional(), analyticsDevice: z.enum(['mobile','desktop']).optional(), analyticsConsent: z.boolean().optional(),
   name: z.string().trim().min(2).max(200), email: z.string().trim().email().max(254),
   phone: z.string().trim().min(5).max(50), street: optionalText, zipCode: optionalText, city: optionalText,
   subscribeToNewsletter: z.boolean(), acceptTerms: z.literal(true),
@@ -10,7 +11,7 @@ const customer = z.object({
 export const checkoutRequestSchema = z.tuple([
   z.array(z.object({ id, name: z.string().min(1).max(200), quantity: z.number().int().min(1).max(999),
     itemType: z.enum(['product', 'combo']).optional(),
-    toppingIds: z.array(id).max(40).optional(),
+    toppingIds: z.array(id).max(50).optional(),
     comboSelections: z.array(z.object({ groupId: id.optional(), groupName: z.string().min(1).max(200),
       products: z.array(z.object({ id, name: z.string().max(200) })).max(40),
     })).max(20).optional(),

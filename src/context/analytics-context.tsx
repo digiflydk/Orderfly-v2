@@ -5,11 +5,12 @@ import { createContext, useContext, useState, useEffect, useCallback, ReactNode 
 import Cookies from 'js-cookie';
 import { useSearchParams, usePathname } from 'next/navigation';
 import type { AnalyticsEventName, Brand } from '@/types';
+import { commercePage } from '@/lib/commerce-metrics';
 import { trackClientEvent } from '@/lib/analytics';
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 
 interface AnalyticsContextType {
-  trackEvent: (eventName: AnalyticsEventName, props?: Record<string, any>) => void;
+  trackEvent: (eventName: AnalyticsEventName, props?: Record<string, any>) => boolean;
   sessionId: string | null;
 }
 
@@ -70,10 +71,7 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
   const trackEvent = useCallback((eventName: AnalyticsEventName, props: Record<string, any> = {}) => {
     try {
       const effectiveBrand = brandProp || brand;
-      if (!sessionId || !effectiveBrand) return;
-
-      const attributionCookie = Cookies.get(ATTRIBUTION_COOKIE);
-      const attributionData = attributionCookie ? JSON.parse(attributionCookie) : {};
+      if (!sessionId || !effectiveBrand) return false;
 
       const eventData: Record<string, any> = {
         brandId: effectiveBrand.id,
@@ -82,12 +80,11 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
         sessionId,
         deviceType: window.innerWidth < 768 ? 'mobile' : 'desktop',
         urlPath: window.location.pathname,
-        ...attributionData,
         ...props, // Pass all props directly
       };
 
-      trackClientEvent(eventName, eventData);
-    } catch { /* Malformed attribution or telemetry failures must never block checkout. */ }
+      return trackClientEvent(eventName, {...eventData, pageType: commercePage(window.location.pathname)});
+    } catch { return false; /* Malformed attribution or telemetry failures must never block checkout. */ }
   }, [sessionId, brand, brandProp]);
 
   return (

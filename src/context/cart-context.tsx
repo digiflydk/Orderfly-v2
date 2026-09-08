@@ -6,7 +6,10 @@ import type { Product, CartItemTopping, Brand, Location, ComboMenu, ComboSelecti
 import { restoreCartAction } from '@/app/cart-actions';
 import { CART_STORAGE_KEY, cartChoices, readCartSnapshot, requestedDelivery, type CartSnapshot } from '@/lib/cart-snapshot';
 import Cookies from 'js-cookie';
-import { bestAutomaticDiscount } from '@/lib/automatic-discounts';
+import { useSearchParams } from 'next/navigation';
+import { syncDeliveryUrl } from '@/lib/delivery-url';
+import { money, sumMoney, lineMoney } from '@/lib/money';
+import { basketTotals } from '@/lib/basket-totals';
 import { isLockedItem } from '@/lib/cart-utils';
 
 interface CartContextType {
@@ -31,7 +34,7 @@ interface CartContextType {
   removeFromCart: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, newQuantity: number) => void;
   clearCart: () => void;
-  setCartContext: (brand: Brand, location: Location) => void;
+  setCartContext: (brand: Brand, location: Location, seed?: {deliveryType: 'pickup' | 'delivery'; discounts: StandardDiscount[]}) => void;
   recalculateAndValidateDiscount: () => void;
   cartTotal: number;
   checkoutTotal: number;
@@ -52,6 +55,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 
 export function CartProvider({ children }: { children: ReactNode }) {
+  const searchParams = useSearchParams();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [brand, setBrand] = useState<Brand | null>(null);
   const [location, setLocation] = useState<Location | null>(null);
@@ -64,6 +68,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const snapshotRef = useRef<CartSnapshot | null>(null);
   const checkoutOrderId = useRef<string>();
   const scopeRef = useRef('');
+  const seedRef = useRef<{key: string; discounts: StandardDiscount[]} | null>(null);
   const readyRef = useRef(false);
   const generation = useRef(0);
   const [readyKey, setReadyKey] = useState<string | null>(null);
@@ -123,6 +128,17 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setIsInitialized(true);
   }, []);
 
+  useEffect(() => {
+    const onNavigation = () => { const requested = requestedDelivery(window.location.search); if (requested) setDeliveryType(requested); };
+    window.addEventListener('popstate', onNavigation);
+    return () => window.removeEventListener('popstate', onNavigation);
+  });
+
+  const requestedMode = requestedDelivery(`?${searchParams.toString()}`);
+  useEffect(() => {
+    if (isInitialized && requestedMode) setDeliveryType(requestedMode);
+  }, [requestedMode, isInitialized]);
+
   const toggleBagFee = (include: boolean) => {
     if (current.current.includeBagFee === include) return;
     checkoutOrderId.current = undefined;
@@ -131,6 +147,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   };
 
   const setDeliveryType = (type: 'delivery' | 'pickup') => {
+    syncDeliveryUrl(type);
     if (current.current.deliveryType === type) return;
     checkoutOrderId.current = undefined;
     persist();
@@ -147,10 +164,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setSelectedTime('asap');
   };
   
-  const setCartContext = useCallback((newBrand: Brand, newLocation: Location) => {
+  const setCartContext = useCallback((newBrand: Brand, newLocation: Location, seed?: {deliveryType: 'pickup' | 'delivery'; discounts: StandardDiscount[]}) => {
     const key = `${newBrand.id}/${newLocation.id}`;
     if (scopeRef.current === key) return;
     scopeRef.current = key;
+    seedRef.current = seed ? {key: `${key}/${seed.deliveryType}`, discounts: seed.discounts} : null;
     generation.current++;
     readyRef.current = false;
     setReadyKey(null);
@@ -161,7 +179,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setSelectedTime('asap');
     setBrand(newBrand);
     setLocation(newLocation);
-    Cookies.set('of_location', newLocation.slug, { expires: 1/48, path: '/', sameSite: 'Lax' });
+    try { Cookies.set('of_location', newLocation.slug, { expires: 1/48, path: '/', sameSite: 'Lax' }); } catch { /* Context remains in memory. */ }
   }, []);
 
   const recalculateAndValidateDiscount = useCallback(() => {
@@ -178,9 +196,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setRestoreError(false);
     const saved = snapshotRef.current;
     const matching = saved?.brandId === brand.id && saved.locationId === location.id ? saved : null;
-    restoreCartAction({ brandId: brand.id, locationId: location.id, deliveryType, choices: matching?.choices || [] })
+    const seed = seedRef.current;
+    const restoration = !matching?.choices.length && seed?.key === contextKey
+      ? Promise.resolve({items: [], removed: 0, discounts: seed.discounts})
+      : restoreCartAction({ brandId: brand.id, locationId: location.id, deliveryType, choices: matching?.choices || [] });
+    restoration
       .then(result => {
         if (generation.current !== request) return;
+        seedRef.current = null;
         setCartItems(result.items);
         setStandardDiscounts(result.discounts);
         setIncludeBagFee(matching?.includeBagFee ?? true);
@@ -217,89 +240,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const { subtotal, itemCount, itemDiscount, automaticCartDiscount, voucherDiscount, deliveryFee, freeDeliveryDiscountApplied, bagFee, adminFee, cartTotal, checkoutTotal, vatAmount, finalDiscount } = useMemo(() => {
-    const currentItemCount = cartItems.reduce((count, item) => count + item.quantity, 0);
-    const currentSubtotal = cartItems.reduce((total, item) => {
-        const toppingsPrice = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-        return total + ((item.itemType === 'combo' ? item.price : item.basePrice) * item.quantity) + (toppingsPrice * item.quantity);
-    }, 0);
-    const currentItemDiscount = cartItems.reduce((total, item) => {
-        const originalLinePrice = item.basePrice * item.quantity;
-        const discountedLinePrice = item.price * item.quantity;
-        return total + (originalLinePrice - discountedLinePrice);
-    }, 0);
-    
-    const unlockedItems = cartItems.filter(item => !isLockedItem(item));
-    const discountableSubtotal = unlockedItems.reduce((sum, item) => {
-        const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-        return sum + ((item.basePrice + toppingsTotal) * item.quantity);
-    }, 0);
-
-    const bestAutoDiscount = bestAutomaticDiscount(standardDiscounts, discountableSubtotal,
-      unlockedItems.map(item => ({ id: item.id, categoryId: item.categoryId, quantity: item.quantity, unitPrice: item.basePrice })));
-
-    let calculatedVoucher: { name: string; amount: number } | null = null;
-    if (appliedDiscount && discountableSubtotal >= (appliedDiscount.minOrderValue || 0)) {
-        let voucherAmount = 0;
-        if (appliedDiscount.discountType === 'percentage') {
-            voucherAmount = discountableSubtotal * (appliedDiscount.discountValue / 100);
-        } else {
-            voucherAmount = Math.min(discountableSubtotal, appliedDiscount.discountValue);
-        }
-        if (voucherAmount > 0) {
-            calculatedVoucher = { name: appliedDiscount.code, amount: voucherAmount };
-        }
-    }
-    
-    const finalCartDiscount = (calculatedVoucher && (!bestAutoDiscount || calculatedVoucher.amount > bestAutoDiscount.amount))
-        ? null
-        : bestAutoDiscount;
-    const finalVoucherDiscount = (calculatedVoucher && (!bestAutoDiscount || calculatedVoucher.amount > bestAutoDiscount.amount))
-        ? calculatedVoucher
-        : null;
-
-    let currentDeliveryFee = 0;
-    let isFreeDelivery = false;
-    if (deliveryType === 'delivery' && location) {
-      currentDeliveryFee = location.deliveryFee;
-      const freeDeliveryDiscount = standardDiscounts.find(d =>
-        d.discountType === 'free_delivery' && (currentSubtotal - currentItemDiscount) >= (d.minOrderValue || 0)
-      );
-      if (freeDeliveryDiscount) {
-        isFreeDelivery = true;
-      }
-    }
-    
-    const totalCartLevelDiscount = (finalCartDiscount?.amount || 0) + (finalVoucherDiscount?.amount || 0);
-    const calculatedCartTotal = currentSubtotal - currentItemDiscount - totalCartLevelDiscount;
-    
-    const currentBagFee = includeBagFee && brand?.bagFee ? brand.bagFee : 0;
-    let currentAdminFee = 0;
-    if (brand?.adminFee && brand.adminFee > 0) {
-        if (brand.adminFeeType === 'fixed') {
-            currentAdminFee = brand.adminFee;
-        } else if (brand.adminFeeType === 'percentage') {
-            currentAdminFee = Math.max(0, calculatedCartTotal) * (brand.adminFee / 100);
-        }
-    }
-
-    const calculatedCheckoutTotal = calculatedCartTotal + (isFreeDelivery ? 0 : currentDeliveryFee) + currentBagFee + currentAdminFee;
-    const vatRate = brand?.vatPercentage || 25;
-    
-    const allDiscountNames = [
-        ...(currentItemDiscount > 0 ? ['Item Offers'] : []),
-        ...(finalCartDiscount ? [finalCartDiscount.name] : []),
-        ...(finalVoucherDiscount ? [`Code: ${finalVoucherDiscount.name}`] : []),
-        ...(isFreeDelivery ? ['Free Delivery'] : []),
-    ];
-    return {
-      subtotal: currentSubtotal, itemCount: currentItemCount, itemDiscount: currentItemDiscount,
-      automaticCartDiscount: finalCartDiscount, voucherDiscount: finalVoucherDiscount,
-      deliveryFee: currentDeliveryFee, freeDeliveryDiscountApplied: isFreeDelivery,
-      bagFee: currentBagFee, adminFee: currentAdminFee,
-      cartTotal: Math.max(0, calculatedCartTotal), checkoutTotal: Math.max(0, calculatedCheckoutTotal),
-      vatAmount: (calculatedCheckoutTotal * vatRate) / (100 + vatRate),
-      finalDiscount: allDiscountNames.length > 0 ? { name: allDiscountNames.join(' + '), amount: currentItemDiscount + totalCartLevelDiscount + (isFreeDelivery ? currentDeliveryFee : 0) } : null,
-    };
+    return basketTotals({cartItems, appliedDiscount, standardDiscounts, deliveryType, location, brand, includeBagFee});
 
   }, [cartItems, appliedDiscount, standardDiscounts, deliveryType, location, isInitialized, brand, includeBagFee]);
 
@@ -319,12 +260,13 @@ export function CartProvider({ children }: { children: ReactNode }) {
       if (nameOrder !== 0) return nameOrder;
       return a.price - b.price;
     });
-    const sortedToppings = canonicalizeToppings(toppings);
+    basePrice = money(basePrice); finalPrice = money(finalPrice);
+    const sortedToppings = canonicalizeToppings(toppings.map(t => ({...t, price: money(t.price)})));
     const toppingsKey = sortedToppings.map(t => `${t.id || t.name}:${t.price}`).join(',');
     const existingItemKey = `${product.id}-${toppingsKey}`;
   
     const toppingsTotal = sortedToppings.reduce((sum, t) => sum + t.price, 0);
-    const itemTotal = finalPrice + toppingsTotal;
+    const itemTotal = sumMoney([finalPrice, toppingsTotal]);
   
     setCartItems(prevItems => {
       const existingItem = prevItems.find(item => item.itemType === 'product' && `${item.id}-${canonicalizeToppings(item.toppings).map(t => `${t.id || t.name}:${t.price}`).join(',')}` === existingItemKey);
@@ -364,6 +306,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addComboToCart = useCallback((combo: ComboMenu, quantity: number, selections: ComboSelection[], price: number) => {
       if (!readyRef.current) return;
       checkoutOrderId.current = undefined;
+      price = money(price);
       const newCartItem: CartItem = {
           id: combo.id,
           cartItemId: `${combo.id}-${Date.now()}`,

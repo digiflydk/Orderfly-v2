@@ -6,7 +6,7 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 function load(path, mocks = {}) {
   const mod = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-  new Function('require', 'module', 'exports', code)(name => name in mocks ? mocks[name] : require(name), mod, mod.exports);
+  new Function('require', 'module', 'exports', code)(name => ['./money','@/lib/money'].includes(name) ? require('../helpers/load-ts.cjs').loadTs('src/lib/money.ts') : name in mocks ? mocks[name] : require(name), mod, mod.exports);
   return mod.exports;
 }
 const { calculateTimeSlots } = load('src/lib/time-slots.ts');
@@ -23,7 +23,7 @@ function serverSlots() {
   mocks['@/lib/firebase-admin'] = {getAdminDb:()=>({collection:()=>({doc:()=>({get:async()=>({id:'l',exists:true,data:()=>location})})})})};
   return load(path,mocks).getTimeSlots;
 }
-test('Change dialog uses server calculator: expired day cannot be selected, next day can', async () => {
+test('Change dialog uses shared calculator: expired day cannot be selected, next day can', async () => {
   const RealDate = Date;
   let now='2026-09-06T21:00:00Z';
   global.Date = class extends RealDate { constructor(...args) { super(...(args.length ? args : [now])); } static now(){return new RealDate(now).getTime();} };
@@ -40,6 +40,7 @@ test('Change dialog uses server calculator: expired day cannot be selected, next
     const mocks = Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],ui]));
     Object.assign(mocks, {react:hooks,'date-fns':require('date-fns'),'date-fns-tz':require('date-fns-tz'),
       '@/app/superadmin/locations/actions':{getTimeSlots},
+      '@/lib/time-slots':{calculateTimeSlots},
       '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),
       '@/context/cart-context':{useCart:()=>({location,deliveryType:'pickup',selectedTime:'asap',setSelectedTime:v=>saved=v})},
     });

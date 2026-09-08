@@ -1,5 +1,7 @@
 'use server';
 
+import { ore, money, sumMoney, percentageMoney } from '@/lib/money';
+import { trackServerEvent } from '@/lib/analytics-server';
 import { checkoutRequestSchema } from '@/lib/checkout-schema';
 import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillment-time';
 import { validateCheckoutItems } from '@/lib/checkout-items';
@@ -199,9 +201,9 @@ function asDate(value: unknown): Date | undefined {
 function calculateDiscountAmount(discount: Discount, subtotal: number): number {
     if (subtotal <= 0) return 0;
     if (discount.discountType === 'percentage') {
-        return Math.min(subtotal, subtotal * (discount.discountValue / 100));
+        return money(Math.min(subtotal, percentageMoney(subtotal, discount.discountValue)));
     }
-    return Math.min(subtotal, discount.discountValue);
+    return money(Math.min(subtotal, discount.discountValue));
 }
 
 type DiscountEligibilityContext = {
@@ -353,7 +355,7 @@ export async function createStripeCheckoutSessionAction(
     const chargedItemsSubtotal = cartItems.reduce((sum, item) => {
       const lineTotal = toNumber(item.totalPrice);
       if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0 || lineTotal < 0) throw new Error('Invalid cart item quantity or total.');
-      return sum + lineTotal;
+      return sumMoney([sum, lineTotal]);
     }, 0);
 
     const activeStandardDiscounts = await getActiveStandardDiscounts({
@@ -403,7 +405,7 @@ export async function createStripeCheckoutSessionAction(
     if (deliveryType === 'delivery' && validated.subtotal < Math.max(0, toNumber(location.minOrder))) {
       throw new Error(`Minimum delivery order is kr. ${Number(location.minOrder).toFixed(2)} before discounts and fees.`);
     }
-    const itemDiscountTotal = Math.max(0, validated.subtotal - chargedItemsSubtotal);
+    const itemDiscountTotal = money(Math.max(0, validated.subtotal - chargedItemsSubtotal));
     const upsellRows = await getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true)));
     const upsells = upsellRows.docs.map(row => ({ ...row.data(), id: row.id })) as Upsell[];
     validateCheckoutPrices(cartItems, resolvedLines.map(({productSnap,catalog,combo,price},i) => ({
@@ -424,7 +426,7 @@ export async function createStripeCheckoutSessionAction(
       });
       return eligible ? item.totalPrice : 0;
     });
-    const eligibleSubtotal = eligibleLines.reduce((sum, amount) => sum + amount, 0);
+    const eligibleSubtotal = sumMoney(eligibleLines);
 
     const automaticCartDiscount = bestAutomaticDiscount(activeStandardDiscounts, eligibleSubtotal, quantityLines);
 
@@ -459,25 +461,25 @@ export async function createStripeCheckoutSessionAction(
       discount.discountType === 'free_delivery' && chargedItemsSubtotal >= (discount.minOrderValue || 0)
     );
     const effectiveDeliveryFee = deliveryType === 'delivery' && !hasFreeDelivery
-      ? Math.max(0, toNumber(location.deliveryFee))
+      ? money(Math.max(0, toNumber(location.deliveryFee)))
       : 0;
-    const effectiveBagFee = Math.min(Math.max(0, toNumber(paymentDetails.bagFee)), Math.max(0, toNumber(brand.bagFee)));
-    const subtotalAfterDiscount = Math.max(0, chargedItemsSubtotal - cartDiscountTotal);
+    const effectiveBagFee = money(Math.min(Math.max(0, toNumber(paymentDetails.bagFee)), Math.max(0, toNumber(brand.bagFee))));
+    const subtotalAfterDiscount = money(Math.max(0, chargedItemsSubtotal - cartDiscountTotal));
     const effectiveAdminFee = brand.adminFeeType === 'percentage'
-      ? subtotalAfterDiscount * (Math.max(0, toNumber(brand.adminFee)) / 100)
-      : Math.max(0, toNumber(brand.adminFee));
-    const totalAmount = subtotalAfterDiscount + effectiveDeliveryFee + effectiveBagFee + effectiveAdminFee;
+      ? percentageMoney(subtotalAfterDiscount, Math.max(0, toNumber(brand.adminFee)))
+      : money(Math.max(0, toNumber(brand.adminFee)));
+    const totalAmount = sumMoney([subtotalAfterDiscount, effectiveDeliveryFee, effectiveBagFee, effectiveAdminFee]);
     const serverPaymentDetails: Omit<PaymentDetails, 'paymentRefId'> = {
       ...paymentDetails,
       subtotal: validated.subtotal,
       itemDiscountTotal,
       cartDiscountTotal,
       cartDiscountName,
-      discountTotal: itemDiscountTotal + cartDiscountTotal,
+      discountTotal: sumMoney([itemDiscountTotal, cartDiscountTotal]),
       deliveryFee: effectiveDeliveryFee,
       bagFee: effectiveBagFee,
       adminFee: effectiveAdminFee,
-      vatAmount: totalAmount * ((brand.vatPercentage || 25) / (100 + (brand.vatPercentage || 25))),
+      vatAmount: money(totalAmount * ((brand.vatPercentage || 25) / (100 + (brand.vatPercentage || 25)))),
     };
 
     stage = 'customer';
@@ -503,6 +505,7 @@ export async function createStripeCheckoutSessionAction(
         appliedDiscountId: appliedDiscountIdForOrder,
         cancelTokenHash: createHash('sha256').update(cancelToken).digest('hex'),
         receiptTokenHash: createHash('sha256').update(receiptToken).digest('hex'),
+        ...(customerInfo.analyticsConsent && customerInfo.analyticsSessionId ? {analytics: {sessionId: customerInfo.analyticsSessionId, deviceType: customerInfo.analyticsDevice || 'desktop'}} : {}),
         customerName: customerInfo.name,
         customerContact: customerInfo.email,
         deliveryType: deliveryType === 'delivery' ? 'Delivery' : 'Pickup',
@@ -538,7 +541,7 @@ export async function createStripeCheckoutSessionAction(
             price_data: {
                 currency: 'dkk',
                 product_data: { name: item.name, description: [...(item.toppings || []), ...(item.comboSelections || []).map(group => `${group.groupName}: ${group.products.map(product => product.name).join(', ')}`)].join('; ').slice(0, 500) || undefined },
-                unit_amount: Math.round((item.totalPrice / item.quantity) * 100),
+                unit_amount: ore(item.totalPrice / item.quantity),
             },
             quantity: item.quantity,
         };
@@ -546,19 +549,19 @@ export async function createStripeCheckoutSessionAction(
 
     if (deliveryType === 'delivery' && serverPaymentDetails.deliveryFee > 0) {
         line_items.push({
-            price_data: { currency: 'dkk', product_data: { name: 'Delivery Fee' }, unit_amount: Math.round(serverPaymentDetails.deliveryFee * 100) },
+            price_data: { currency: 'dkk', product_data: { name: 'Delivery Fee' }, unit_amount: ore(serverPaymentDetails.deliveryFee) },
             quantity: 1,
         });
     }
     if (serverPaymentDetails.bagFee && serverPaymentDetails.bagFee > 0) {
         line_items.push({
-            price_data: { currency: 'dkk', product_data: { name: 'Bag Fee' }, unit_amount: Math.round(serverPaymentDetails.bagFee * 100) },
+            price_data: { currency: 'dkk', product_data: { name: 'Bag Fee' }, unit_amount: ore(serverPaymentDetails.bagFee) },
             quantity: 1,
         });
     }
     if (serverPaymentDetails.adminFee && serverPaymentDetails.adminFee > 0) {
         line_items.push({
-            price_data: { currency: 'dkk', product_data: { name: 'Admin Fee' }, unit_amount: Math.round(serverPaymentDetails.adminFee * 100) },
+            price_data: { currency: 'dkk', product_data: { name: 'Admin Fee' }, unit_amount: ore(serverPaymentDetails.adminFee) },
             quantity: 1,
         });
     }
@@ -587,7 +590,7 @@ export async function createStripeCheckoutSessionAction(
     stage = 'coupon';
     if (cartDiscountTotal > 0) {
         const coupon = await stripe.coupons.create({
-            amount_off: Math.round(cartDiscountTotal * 100),
+            amount_off: ore(cartDiscountTotal),
             currency: 'dkk',
             duration: 'once',
             name: serverPaymentDetails.cartDiscountName || 'Discount',
@@ -634,6 +637,9 @@ export async function createStripeCheckoutSessionAction(
         if (expired.status === 'expired' && expired.payment_status !== 'paid') sessionRequestStarted = false;
       } catch { /* Keep the reservation until signed Stripe reconciliation. */ }
       throw error;
+    }
+    if (customerInfo.analyticsConsent && customerInfo.analyticsSessionId) {
+      try { await trackServerEvent('payment_session_created', {brandId, locationId, orderId, sessionId: customerInfo.analyticsSessionId, deviceType: customerInfo.analyticsDevice, cartValue: totalAmount}); } catch { /* Optional. */ }
     }
     return { success: true, url: session.url, orderId };
 

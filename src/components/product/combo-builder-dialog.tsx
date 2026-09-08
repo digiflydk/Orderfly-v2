@@ -1,5 +1,6 @@
 
 'use client';
+import { money } from '@/lib/money';
 
 import { useState, useEffect, useMemo } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
@@ -9,6 +10,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
 import { useCart } from '@/context/cart-context';
+import { useAnalytics } from '@/context/analytics-context';
 import { useToast } from '@/hooks/use-toast';
 import type { ComboMenu, Product, ComboSelection, ProductForMenu } from '@/types';
 import { Minus, Plus, X } from 'lucide-react';
@@ -43,14 +45,16 @@ const getSelectionText = (group: ComboMenu['productGroups'][0]): string => {
 }
 
 export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: ComboBuilderDialogProps) {
-  const { addComboToCart, deliveryType } = useCart();
+  const { addComboToCart, deliveryType, location } = useCart();
+  const { trackEvent } = useAnalytics();
   const { toast } = useToast();
 
   const [quantity, setQuantity] = useState(1);
   const [selection, setSelection] = useState<SelectionState>({});
 
   const comboPrice = useMemo(() => {
-    return deliveryType === 'delivery' ? combo.deliveryPrice : combo.pickupPrice;
+    const amount = deliveryType === 'delivery' ? combo.deliveryPrice : combo.pickupPrice;
+    return typeof amount === 'number' && Number.isFinite(amount) && amount >= 0 ? money(amount) : undefined;
   }, [deliveryType, combo]);
 
   useEffect(() => {
@@ -127,6 +131,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
       };
     });
     addComboToCart(combo, quantity, comboSelections, comboPrice);
+    trackEvent('add_to_cart', {productId: combo.id, locationId: location?.id, itemsCount: quantity, cartValue: money(comboPrice * quantity), deliveryType});
     setIsOpen(false);
   };
   

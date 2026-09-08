@@ -1,7 +1,13 @@
+let releaseSha = process.env.COMMIT_SHA || process.env.GITHUB_SHA || process.env.NEXT_PUBLIC_RELEASE_SHA || '';
+if (!/^[a-f0-9]{7,40}$/.test(releaseSha)) {
+  try { releaseSha = require('node:child_process').execFileSync('git', ['rev-parse', 'HEAD'], {encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore']}).trim(); }
+  catch { releaseSha = 'unknown'; }
+}
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  env: {NEXT_PUBLIC_RELEASE_SHA: releaseSha},
   async headers() {
     return [
       { source: '/:brandSlug/:locationSlug/checkout/confirmation', headers: [

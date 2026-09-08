@@ -97,6 +97,9 @@ export type Role = {
  * @description Customer information provided during checkout.
  */
 export interface CustomerInfo {
+    analyticsSessionId?: string;
+    analyticsDevice?: 'mobile' | 'desktop';
+    analyticsConsent?: boolean;
     name: string;
     email: string;
     phone: string;

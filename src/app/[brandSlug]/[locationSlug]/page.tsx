@@ -3,7 +3,7 @@ import { getBrandAndLocation } from "@/lib/data/brand-location";
 import { getMenuForRender } from "@/lib/server/catalog";
 import { logDiag } from "@/lib/log";
 import BrandPageClient from "./BrandPageClient";
-import { getActiveCombosForLocation } from "@/app/superadmin/combos/actions";
+import { getStorefrontCombos } from '@/app/storefront-actions';
 import { getStorefrontDiscounts as getActiveStandardDiscounts } from '@/app/storefront-actions';
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams } from "@/lib/next/resolve-props";
@@ -117,7 +117,7 @@ export default async function Page({
         brandId: brand.id,
         locationId: location.id,
       }),
-      getActiveCombosForLocation(location.id),
+      getStorefrontCombos(brand.id, location.id),
       getActiveStandardDiscounts({
         brandId: brand.id,
         locationId: location.id,

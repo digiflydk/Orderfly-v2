@@ -18,8 +18,11 @@ export function fulfillmentSlots(location: Location, mode: 'pickup' | 'delivery'
   return times.map(time => {
     // An opening period may finish after midnight on the following calendar day.
     const date = opening && time < opening ? format(addDays(parseISO(day), 1), 'yyyy-MM-dd') : day;
-    return fromZonedTime(`${date}T${time}:00`, zone).toISOString();
-  }).filter(at => new Date(at) > now);
+    const wallTime = `${date}T${time}:00`;
+    const instant = fromZonedTime(wallTime, zone);
+    // A nonexistent spring-forward wall time must never become another slot.
+    return format(toZonedTime(instant, zone), "yyyy-MM-dd'T'HH:mm:ss") === wallTime ? instant.toISOString() : null;
+  }).filter((at): at is string => !!at && new Date(at) > now).filter((at, index, all) => all.indexOf(at) === index);
 }
 
 export function resolveFulfillmentTime(location: Location, mode: 'pickup' | 'delivery', selection = 'asap', now = new Date()): string {

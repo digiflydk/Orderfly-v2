@@ -1,3 +1,4 @@
+import { ore, money, percentageMoney } from './money';
 import type { StandardDiscount } from '@/types';
 
 export type OfferLine = { id: string; categoryId?: string; quantity: number; unitPrice: number };
@@ -29,8 +30,8 @@ export function quantityDiscount(discount: StandardDiscount, lines: OfferLine[])
       .sort((a,b) => b.minQuantity - a.minQuantity)[0];
     if (!tier) return 0;
     return eligible.reduce((cents,line) => {
-      const price = Math.round(line.unitPrice * 100);
-      const reduction = tier.method === 'percentage' ? Math.round(price * Math.min(100,tier.value) / 100) : Math.round(tier.value * 100);
+      const price = ore(line.unitPrice);
+      const reduction = tier.method === 'percentage' ? Math.round(price * Math.min(100,tier.value) / 100) : ore(tier.value);
       return cents + Math.min(price,reduction) * line.quantity;
     },0) / 100;
   }
@@ -39,11 +40,11 @@ export function quantityDiscount(discount: StandardDiscount, lines: OfferLine[])
     if (!discount.bundlePrice || !Number.isFinite(discount.bundlePrice) || discount.bundlePrice <= 0) return 0;
     // Most expensive eligible units form bundles first; leftovers remain full price.
     let remaining = Math.floor(totalQuantity / buy) * buy, count = 0, groupCost = 0, savings = 0;
-    const bundleCents = Math.round(discount.bundlePrice * 100);
+    const bundleCents = ore(discount.bundlePrice);
     for (const line of [...eligible].reverse()) {
       let units = Math.min(line.quantity, remaining);
       remaining -= units;
-      const price = Math.round(line.unitPrice * 100);
+      const price = ore(line.unitPrice);
       if (count && units) {
         const take = Math.min(buy - count, units);
         count += take; groupCost += take * price; units -= take;
@@ -62,7 +63,7 @@ export function quantityDiscount(discount: StandardDiscount, lines: OfferLine[])
   let cents = 0;
   for (const line of eligible) {
     const count = Math.min(freeUnits, line.quantity);
-    cents += count * Math.round(line.unitPrice * 100);
+    cents += count * ore(line.unitPrice);
     freeUnits -= count;
     if (!freeUnits) break;
   }
@@ -77,10 +78,10 @@ export function bestAutomaticDiscount(discounts: StandardDiscount[], eligibleSub
     if (isQuantityMethod(discount.discountMethod)) amount = quantityDiscount(discount, lines);
     else if (discount.discountType === 'cart') {
       amount = discount.discountMethod === 'percentage'
-        ? eligibleSubtotal * (Math.min(100, discount.discountValue || 0) / 100)
+        ? percentageMoney(eligibleSubtotal, Math.min(100, discount.discountValue || 0))
         : discount.discountValue || 0;
     }
-    amount = Math.round(Math.max(0, Math.min(eligibleSubtotal, amount)) * 100) / 100;
+    amount = money(Math.max(0, Math.min(eligibleSubtotal, amount)));
     if (amount > (best?.amount || 0)) best = { name: discount.discountName, amount };
   }
   return best;

@@ -9,7 +9,7 @@ import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import type { MenuData, Category, Product } from "@/types/menu";
 import { productsForCategory } from "@/lib/menu-helpers";
-import { getBrandBySlug } from "@/app/superadmin/brands/actions";
+import { getBrandBySlug } from "@/lib/data/brand-location";
 import { getLocationsForBrand } from "@/lib/data/brand-location";
 import type { Brand, Location } from "@/types";
 import { BrandLayoutClient } from "@/components/layout/BrandLayoutClient";
@@ -25,7 +25,7 @@ function BrandPageComponent({ brand, locations }: PageProps) {
   const locationsWithBrandSlug = locations.map(location => ({...location, brandSlug: brand.slug}));
   
   return (
-    <BrandLayoutClient brand={brand}>
+    <>
         <div className="mx-auto max-w-[1140px] px-4 py-8 w-full">
         <div className="space-y-8">
             <div>
@@ -44,7 +44,7 @@ function BrandPageComponent({ brand, locations }: PageProps) {
             </div>
         </div>
         </div>
-    </BrandLayoutClient>
+    </>
   );
 }
 

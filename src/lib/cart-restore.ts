@@ -1,30 +1,24 @@
+import { money, sumMoney } from './money';
 import type { CartItem, ComboMenu, Product, StandardDiscount, Topping, ToppingGroup, Upsell } from '@/types';
 import type { CartChoice } from './cart-snapshot';
 import { minimumCheckoutPrices } from './checkout-price-validation';
-import { restaurantClock } from './promotion-rules';
+import { comboEligible } from './combo-eligibility';
 
 export type RestoreCatalog = { products: Product[]; combos: ComboMenu[]; toppings: Topping[]; groups: ToppingGroup[]; discounts: StandardDiscount[]; upsells: Upsell[] };
-function date(value: unknown): Date {
-  return typeof (value as { toDate?: unknown })?.toDate === 'function'
-    ? (value as { toDate: () => Date }).toDate() : new Date(value as string);
-}
 export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog, scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }) {
-  const now = scope.now || new Date(), clock = restaurantClock(now);
+  const now = scope.now || new Date();
   const scoped = (record: { brandId: string; locationIds?: string[]; isActive: boolean }) => record.isActive && record.brandId === scope.brandId && (!record.locationIds?.length || record.locationIds.includes(scope.locationId));
-  const activeCombo = (combo: ComboMenu) => scoped(combo) && combo.orderTypes.includes(scope.deliveryType)
-    && (!combo.startDate || date(combo.startDate) <= now) && (!combo.endDate || date(combo.endDate) >= now)
-    && (!combo.activeDays?.length || combo.activeDays.includes(clock.day))
-    && (!combo.activeTimeSlots?.length || combo.activeTimeSlots.some(slot => clock.time >= slot.start && clock.time <= slot.end));
   let removed = 0;
   const items: CartItem[] = [];
   for (const choice of choices) {
     const product = choice.itemType === 'product' ? catalog.products.find(p => p.id === choice.id || `${p.id}-offer` === choice.id) : undefined;
     const combo = choice.itemType === 'combo' ? catalog.combos.find(c => c.id === choice.id) : undefined;
     const record = product || combo;
-    if (!record || !scoped(record) || (combo && !activeCombo(combo))) { removed++; continue; }
-    const basePrice = product ? (scope.deliveryType === 'delivery' ? product.priceDelivery ?? product.price : product.price)
+    if (!record || !scoped(record) || (combo && !comboEligible(combo, {...scope, now}))) { removed++; continue; }
+    const rawPrice = product ? (scope.deliveryType === 'delivery' ? product.priceDelivery ?? product.price : product.price)
       : scope.deliveryType === 'delivery' ? combo!.deliveryPrice : combo!.pickupPrice;
-    if (typeof basePrice !== 'number' || !Number.isFinite(basePrice) || basePrice < 0) { removed++; continue; }
+    if (typeof rawPrice !== 'number' || !Number.isFinite(rawPrice) || rawPrice < 0) { removed++; continue; }
+    const basePrice = money(rawPrice);
     const toppings: CartItem['toppings'] = [];
     const identities = choice.toppingIds;
     let valid = identities
@@ -40,7 +34,7 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
         const matches = allowed.filter(t => identities ? t.id === identities[index] : t.toppingName === name);
         if (matches.length !== 1 || !Number.isFinite(matches[0].price) || matches[0].price < 0 || selectedIds.has(matches[0].id)) { valid = false; break; }
         selectedIds.add(matches[0].id);
-        toppings.push({ id: matches[0].id, name: matches[0].toppingName, price: matches[0].price });
+        toppings.push({ id: matches[0].id, name: matches[0].toppingName, price: money(matches[0].price) });
       }
       for (const group of groups) {
         const options = allowed.filter(t => t.groupId === group.id);
@@ -87,7 +81,7 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
   const offered = minimumCheckoutPrices(minimal.map((item, i) => ({ ...item, unitPrice: standard[i], totalPrice: standard[i] * item.quantity })), lines, catalog.discounts, catalog.upsells, scope);
   items.forEach((item, i) => {
     item.price = choices.find(c => c.cartItemId === item.cartItemId)?.offered ? offered[i] : standard[i];
-    item.itemTotal = item.price + item.toppings.reduce((sum, topping) => sum + topping.price, 0);
+    item.itemTotal = sumMoney([item.price, ...item.toppings.map(topping => topping.price)]);
   });
   return { items, removed };
 }

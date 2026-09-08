@@ -1,18 +1,16 @@
 'use client';
 
-import { Drawer, DrawerContent, DrawerHeader, DrawerTitle, DrawerDescription } from "@/components/ui/drawer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
-import { useIsMobile } from "@/hooks/use-mobile";
 import { ShoppingBag, Truck } from "lucide-react";
 
 interface OrderModalProps {
+  modes?: string[];
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onDeliveryMethodSelected: (method: 'takeaway' | 'delivery') => void;
 }
 
-export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected }: OrderModalProps) {
-  const isMobile = useIsMobile();
+export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes = ['pickup', 'delivery'] }: OrderModalProps) {
 
   const handlePickup = () => {
     onDeliveryMethodSelected('takeaway');
@@ -34,12 +32,10 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected }: Ord
       </DialogHeader>
       <div className="grid grid-cols-1 gap-4 px-6 pb-6">
         <button
+          disabled={!modes.includes('delivery')}
           onClick={handleDelivery}
-          className="relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden"
+          className="disabled:opacity-40 disabled:cursor-not-allowed relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden"
         >
-          <div className="absolute top-0 left-0 bg-m3-orange text-m3-dark px-3 py-1.5 rounded-br-lg text-[10px] uppercase font-bold tracking-wide">
-            Gratis levering
-          </div>
           <div className="flex flex-col items-center text-center pt-4">
             <div className="mb-4 bg-white/10 rounded-full p-4">
               <Truck className="h-10 w-10 text-white" />
@@ -51,12 +47,10 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected }: Ord
           </div>
         </button>
         <button
+          disabled={!modes.includes('pickup')}
           onClick={handlePickup}
-          className="relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden"
+          className="disabled:opacity-40 disabled:cursor-not-allowed relative bg-m3-dark hover:bg-m3-dark/90 text-white rounded-lg p-6 transition-all group overflow-hidden"
         >
-          <div className="absolute top-0 left-0 bg-m3-orange text-m3-dark px-3 py-1.5 rounded-br-lg text-[10px] uppercase font-bold tracking-wide">
-            Spar 25 %
-          </div>
           <div className="flex flex-col items-center text-center pt-4">
             <div className="mb-4 bg-white/10 rounded-full p-4">
               <ShoppingBag className="h-10 w-10 text-white" />
@@ -71,19 +65,9 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected }: Ord
     </>
   );
 
-  if (isMobile) {
-    return (
-      <Drawer open={open} onOpenChange={onOpenChange}>
-        <DrawerContent className="p-0 border-none bg-m3-cream rounded-t-lg">
-            {content}
-        </DrawerContent>
-      </Drawer>
-    );
-  }
-
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="p-0 border-none bg-m3-cream max-w-sm rounded-lg">
+      <DialogContent onKeyDown={event => { if (event.key === 'Escape') { event.stopPropagation(); onOpenChange(false); } }} className="p-0 border-none bg-m3-cream left-0 right-0 bottom-0 top-auto translate-x-0 translate-y-0 max-w-none rounded-t-lg sm:left-1/2 sm:right-auto sm:bottom-auto sm:top-1/2 sm:-translate-x-1/2 sm:-translate-y-1/2 sm:max-w-sm sm:rounded-lg">
         {content}
       </DialogContent>
     </Dialog>

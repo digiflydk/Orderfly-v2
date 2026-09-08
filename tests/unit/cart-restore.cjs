@@ -63,7 +63,7 @@ test('restore action verifies native restaurant ownership and bounds selectors b
   const db = { collection: name => ({ doc: id => ({ get: async () => { reads++; return { exists: true, data: () => ({ brandId: 'other' }) }; } }) }) };
   const { restoreCartAction } = loadTs('src/app/cart-actions.ts', {
     '@/lib/firebase-admin': { getAdminDb: () => db },
-    '@/app/superadmin/standard-discounts/actions': {},
+    '@/app/storefront-actions': {},
   });
   await assert.rejects(restoreCartAction({ ...f.scope, choices: [f.choice] }), /context is invalid/);
   assert.equal(reads, 2);

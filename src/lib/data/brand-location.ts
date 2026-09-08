@@ -21,7 +21,7 @@ const cachedBrand = cache(unstable_cache(async (slug: string): Promise<BrandDoc>
     const snap = await q.get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
-    return storefrontMedia({ id: doc.id, ...doc.data() } as Brand, 'brands', doc.id);
+    return storefrontMedia({ ...doc.data(), id: doc.id } as Brand, 'brands', doc.id);
   } catch (err) {
       console.error(`[data.getBrandBySlug] Failed to fetch brand by slug '${slug}':`, err);
       throw err;
@@ -32,11 +32,14 @@ export async function getLocationsForBrand(brandId: string): Promise<Location[]>
     const db = getAdminDb();
     const q = db.collection('locations').where('brandId', '==', brandId);
     const querySnapshot = await q.get();
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Location[];
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Location[];
 }
 
 
 export async function getLocationBySlug(brandId: string, locationSlug: string): Promise<LocationDoc> {
+  return cachedLocation(brandId, locationSlug);
+}
+const cachedLocation = cache(unstable_cache(async (brandId: string, locationSlug: string): Promise<LocationDoc> => {
   const db = getAdminDb();
   const q = db.collection("locations").where("brandId", "==", brandId).where("slug", "==", locationSlug).limit(1);
   const querySnapshot = await q.get();
@@ -46,8 +49,9 @@ export async function getLocationBySlug(brandId: string, locationSlug: string): 
   
   const locationDoc = querySnapshot.docs[0];
   const data = locationDoc.data();
-  return { id: locationDoc.id, ...data } as Location;
-}
+  return storefrontMedia({ ...data, id: locationDoc.id } as Location, 'locations', locationDoc.id);
+}, ['storefront-location-v1'], {revalidate: 60, tags: ['storefront']}));
+
 
 export async function getBrandAndLocation(brandSlug: string, locationSlug: string) {
   const brand = await getBrandBySlug(brandSlug);

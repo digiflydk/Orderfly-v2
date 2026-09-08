@@ -2,15 +2,18 @@
 'use client';
 
 import Image from 'next/image';
+import { discountedUnit, money } from '@/lib/money';
 import { isQuantityMethod, quantityOfferLabel } from '@/lib/automatic-discounts';
 import type { StandardDiscount, ProductForMenu } from '@/types';
-import { useState, useMemo, useTransition } from 'react';
-import { ProductDialog } from "./product-dialog";
+import { useState, useMemo, useRef, useEffect } from 'react';
+import dynamic from 'next/dynamic';
+import { publicRead } from '@/lib/public-read';
+import type { Topping, ToppingGroup } from '@/types';
+const ProductDialog = dynamic(() => import('./product-dialog').then(module => module.ProductDialog));
 import { useCart } from "@/context/cart-context";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { Skeleton } from "../ui/skeleton";
-import { getToppings, getToppingGroups } from "@/app/superadmin/toppings/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "../ui/button";
@@ -22,13 +25,7 @@ interface ProductCardProps {
 }
 
 function applyDiscount(price: number, discount: StandardDiscount): number {
-    if (discount.discountMethod === 'percentage' && discount.discountValue) {
-        return price * (1 - (discount.discountValue / 100));
-    }
-    if (discount.discountMethod === 'fixed_amount' && discount.discountValue) {
-        return Math.max(0, price - discount.discountValue);
-    }
-    return price;
+  return discountedUnit(price, discount.discountMethod, discount.discountValue);
 }
 
 export function ProductCardSkeleton() {
@@ -51,15 +48,18 @@ export function ProductCardSkeleton() {
 
 export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [allToppingGroups, setAllToppingGroups] = useState([]);
-  const [allToppings, setAllToppings] = useState([]);
-  const [isPending, startTransition] = useTransition();
+  const [allToppingGroups, setAllToppingGroups] = useState<any[]>([]);
+  const [allToppings, setAllToppings] = useState<any[]>([]);
+  const [isPending, setIsPending] = useState(false);
+  const [optionError, setOptionError] = useState(false);
+  const pending = useRef(false);
+  const generation = useRef(0);
   const { toast } = useToast();
 
   const { deliveryType, location } = useCart();
 
   const priceData = useMemo(() => {
-    const originalPrice = deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price;
+    const originalPrice = money(deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price);
 
     if ((product as any).basePrice) {
         return {
@@ -104,11 +104,11 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
 
   const { basePrice, finalPrice, hasOffer, applicableDiscount } = priceData;
 
-  const productForDialog: ProductForMenu & { basePrice?: number } = {
+  const productForDialog: ProductForMenu & { basePrice?: number } = useMemo(() => ({
       ...product,
       price: finalPrice,
       basePrice: hasOffer ? basePrice : undefined,
-  };
+  }), [product, finalPrice, basePrice, hasOffer]);
 
   const getBadgeText = () => {
     if (hasOffer) return "Offer";
@@ -124,27 +124,21 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
 
   const badgeText = getBadgeText();
   
-  const handleCardClick = () => {
-    if (!location) {
-        toast({ variant: 'destructive', title: 'Error', description: 'Location not set.'});
-        return;
-    }
-
-    if (product.toppingGroupIds && product.toppingGroupIds.length > 0) {
-        startTransition(async () => {
-            const [toppings, toppingGroups] = await Promise.all([
-                getToppings(location.id),
-                getToppingGroups(location.id)
-            ]);
-            setAllToppings(toppings as any);
-            setAllToppingGroups(toppingGroups as any);
-            setIsDialogOpen(true);
-        });
-    } else {
-        setAllToppings([]);
-        setAllToppingGroups([]);
-        setIsDialogOpen(true);
-    }
+  useEffect(() => () => { generation.current++; pending.current = false; }, [product.id, location?.id]);
+  const handleCardClick = async () => {
+    if (!location || pending.current) return;
+    const request = ++generation.current;
+    pending.current = true;
+    setIsPending(true); setOptionError(false);
+    try {
+      const options = product.toppingGroupIds?.length
+        ? await publicRead<{toppings: Topping[]; groups: ToppingGroup[]}>(`/api/public/product-options?${new URLSearchParams({brandId: product.brandId, locationId: location.id})}`)
+        : {toppings: [], groups: []};
+      if (request !== generation.current) return;
+      if (!Array.isArray(options.toppings) || !Array.isArray(options.groups)) throw new Error('Invalid option response');
+      setAllToppings(options.toppings); setAllToppingGroups(options.groups); setIsDialogOpen(true);
+    } catch { if (request === generation.current) setOptionError(true); }
+    finally { if (request === generation.current) {pending.current = false; setIsPending(false);} }
   };
 
 
@@ -159,7 +153,7 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
             src={safeImage(product.imageUrl)}
             alt={product.productName || 'Product image'}
             fill
-            sizes="(max-width: 768px) 25vw, 15vw"
+            sizes="96px"
             className="object-cover"
             data-ai-hint="delicious food"
           />
@@ -189,20 +183,21 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
                 <p className="font-semibold text-foreground">kr. {finalPrice.toFixed(2)}</p>
               )}
             </div>
-            <Button size="icon" className="h-10 w-10 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
+            <Button type="button" aria-label={`Tilføj ${product.productName}`} aria-busy={isPending} disabled={isPending} size="icon" className="h-10 w-10 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
                 {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5"/>}
             </Button>
           </div>
         </div>
       </div>
-      <ProductDialog
+      {optionError && <p role="alert" className="text-sm text-destructive">Tilvalg kunne ikke indlæses. <button className="underline" onClick={handleCardClick}>Prøv igen</button></p>}
+      {isDialogOpen && <ProductDialog
         product={productForDialog}
         allToppingGroups={allToppingGroups}
         allToppings={allToppings}
         isOpen={isDialogOpen}
         setIsOpen={setIsDialogOpen}
         applicableDiscount={applicableDiscount}
-      />
+      />}
     </>
   );
 }

@@ -3,7 +3,7 @@ import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { cartChoicesSchema } from '@/lib/cart-snapshot';
 import { restoreCartItems, type RestoreCatalog } from '@/lib/cart-restore';
-import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
+import { getStorefrontDiscounts as getActiveStandardDiscounts } from '@/app/storefront-actions';
 
 const id = z.string().min(1).max(200).refine(value => !value.includes('/'));
 const requestSchema = z.object({ brandId: id, locationId: id, deliveryType: z.enum(['pickup', 'delivery']), choices: cartChoicesSchema });

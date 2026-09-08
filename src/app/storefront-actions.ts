@@ -8,3 +8,7 @@ export async function getStorefrontDiscounts(params: {brandId:string;locationId:
   const discounts = rows.map((row: any) => ({...row, startDate:row.startDate ? new Date(row.startDate) : undefined, endDate:row.endDate ? new Date(row.endDate) : undefined})) as StandardDiscount[];
   return getActiveStandardDiscounts({...params,discountsForTest:discounts});
 }
+
+export async function getStorefrontCombos(brandId: string, locationId: string) {
+  return await storefrontRows('comboMenus', brandId, locationId) as import('@/types').ComboMenu[];
+}

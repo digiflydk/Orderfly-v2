@@ -3,6 +3,7 @@
 'use server';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
+import { comboEligible } from '@/lib/combo-eligibility';
 import { storefrontRows } from '@/lib/storefront-cache';
 import { db } from '@/lib/firebase';
 import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, Timestamp, getDoc, documentId, runTransaction } from 'firebase/firestore';
@@ -96,14 +97,14 @@ export async function createOrUpdateCombo(
       activeDays: formData.getAll('activeDays'),
       tags: formData.getAll('tags'),
     };
-    
+
     if (id) rawData.id = id;
 
     const startDate = formData.get('startDate');
     if (startDate) rawData.startDate = new Date(startDate as string);
     const endDate = formData.get('endDate');
     if (endDate) rawData.endDate = new Date(endDate as string);
-    
+
     const productGroupsJSON = formData.get('productGroups');
     if (typeof productGroupsJSON === 'string' && productGroupsJSON.trim() !== '') {
         let parsedGroups = JSON.parse(productGroupsJSON);
@@ -122,9 +123,9 @@ export async function createOrUpdateCombo(
     } else {
         rawData.activeTimeSlots = [];
     }
-    
+
     const validatedFields = comboMenuSchema.safeParse(rawData);
-    
+
     if (!validatedFields.success) {
       console.error('Validation errors:', validatedFields.error.flatten());
       return {
@@ -133,18 +134,18 @@ export async function createOrUpdateCombo(
         errors: validatedFields.error.issues,
       };
     }
-    
+
     const comboData = validatedFields.data;
 
     const allProductIds = comboData.productGroups.flatMap(g => g.productIds);
     if (allProductIds.length === 0) {
       return { message: "Combo must contain at least one product.", error: true };
     }
-    
+
     if (allProductIds.length > 30) {
         return { message: "Cannot fetch more than 30 products for a combo.", error: true };
     }
-    
+
     const products = await getProductsByIds(allProductIds, comboData.brandId);
 
     if(products.some(p => p.brandId !== comboData.brandId)) {
@@ -177,7 +178,7 @@ export async function createOrUpdateCombo(
         priceDifferenceDelivery,
         updatedAt: Timestamp.now(),
       } as any;
-    
+
     if (comboData.startDate) dataToSave.startDate = Timestamp.fromDate(comboData.startDate);
     if (comboData.endDate) dataToSave.endDate = Timestamp.fromDate(comboData.endDate);
 
@@ -187,10 +188,10 @@ export async function createOrUpdateCombo(
     if (!id) {
       dataToSave.createdAt = Timestamp.now();
     }
-    
+
     const comboRef = doc(db, 'comboMenus', comboIdToSave);
     await setDoc(comboRef, omitUndefinedFields(dataToSave), { merge: true });
-    
+
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
     console.error('Error in createOrUpdateCombo:', e);
@@ -220,7 +221,7 @@ export async function getCombos(): Promise<ComboMenu[]> {
   const querySnapshot = await getDocs(q);
   return querySnapshot.docs.map(doc => {
     const data = doc.data();
-    return { 
+    return {
       ...data,
       id: doc.id,
       startDate: data.startDate ? (data.startDate as Timestamp).toDate().toISOString() : undefined,
@@ -236,7 +237,7 @@ export async function getComboById(comboId: string): Promise<ComboMenu | null> {
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
         const data = docSnap.data();
-        return { 
+        return {
             ...data,
             id: docSnap.id,
             startDate: data.startDate ? (data.startDate as Timestamp).toDate().toISOString() : undefined,
@@ -250,7 +251,7 @@ export async function getComboById(comboId: string): Promise<ComboMenu | null> {
 
 export async function getActiveCombosForLocation(locationId: string): Promise<ComboMenu[]> {
     const now = new Date();
-    const currentDay = now.toLocaleString('en-US', { weekday: 'long' }).toLowerCase();
+
 
     const rows = await storefrontRows('comboMenus', '', locationId);
     const allCombos = rows.map((data: any) => {
@@ -263,24 +264,6 @@ export async function getActiveCombosForLocation(locationId: string): Promise<Co
         updatedAt: data.updatedAt ? new Date(data.updatedAt) : new Date(),
       } as ComboMenu
     });
-    
-    // Filter by date, day, and time in code
-    const activeNowCombos = allCombos.filter(combo => {
-        const startDate = combo.startDate ? new Date(combo.startDate) : null;
-        const endDate = combo.endDate ? new Date(combo.endDate) : null;
 
-        if (startDate && now < startDate) return false;
-        if (endDate && now > endDate) return false;
-
-        if (combo.activeDays.length > 0 && !combo.activeDays.includes(currentDay)) return false;
-
-        if (combo.activeTimeSlots.length > 0) {
-            const currentTime = now.toTimeString().slice(0,5);
-            const inActiveTime = combo.activeTimeSlots.some(slot => currentTime >= slot.start && currentTime <= slot.end);
-            if(!inActiveTime) return false;
-        }
-        return true;
-    });
-
-    return activeNowCombos;
+    return allCombos.filter(combo => comboEligible(combo, {locationId, now}));
 }

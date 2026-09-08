@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import Cookies from 'js-cookie';
+import { optionalGet, optionalSet, optionalRemove } from '@/lib/optional-storage';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from './ui/dialog';
@@ -14,7 +15,6 @@ import { usePathname } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import { Badge } from './ui/badge';
-import { saveAnonymousCookieConsent } from '@/app/superadmin/analytics/cookies/actions';
 import type { AnonymousCookieConsent } from '@/types';
 
 interface CookieConsentProps {
@@ -30,17 +30,18 @@ const ONE_YEAR_DAYS = 365;
 
 function getOrCreateAnonId() {
   const COOKIE_DOMAIN = window.location.hostname.includes('orderfly.app') ? '.orderfly.app' : undefined;
-  let id = localStorage.getItem('orderfly_anonymous_id') || Cookies.get(ANONYMOUS_ID_COOKIE_NAME);
+  let id = optionalGet('orderfly_anonymous_id');
+  try { id ||= Cookies.get(ANONYMOUS_ID_COOKIE_NAME) || null; } catch { /* Cookies unavailable. */ }
   if (!id) {
     id = crypto.randomUUID();
   }
-  localStorage.setItem('orderfly_anonymous_id', id);
-  Cookies.set(ANONYMOUS_ID_COOKIE_NAME, id, {
+  optionalSet('orderfly_anonymous_id', id);
+  try { Cookies.set(ANONYMOUS_ID_COOKIE_NAME, id, {
     expires: ONE_YEAR_DAYS,
     path: '/',
     ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
     sameSite: 'Lax'
-  });
+  }); } catch { /* Keep the in-memory identity. */ }
   return id;
 }
 
@@ -76,23 +77,25 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
     const data = JSON.stringify(payload);
 
     // 1) sendBeacon first
-    if (navigator.sendBeacon) {
+    try { if (navigator.sendBeacon) {
       const blob = new Blob([data], { type: 'application/json' });
       const ok = navigator.sendBeacon('/api/consent/save-anonymous', blob);
-      if (ok) return;
-    }
+      if (ok) { optionalRemove(PENDING_CONSENT_KEY); return; }
+    } } catch { /* Try the bounded HTTP fallback. */ }
 
     // 2) fallback to await server action
     try {
-      await saveAnonymousCookieConsent(payload);
+      const response = await fetch('/api/consent/save-anonymous', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: data, signal: AbortSignal.timeout(5000)});
+      if (!response.ok) throw new Error('Consent save unavailable');
+      optionalRemove(PENDING_CONSENT_KEY);
       return;
     } catch (e) {
-      console.error('Consent save failed, saving to localStorage', e);
+      // Keep the explicit choice for a later retry.
     }
 
     // 3) last fallback – save locally for later sending
     try {
-      localStorage.setItem(PENDING_CONSENT_KEY, data);
+      optionalSet(PENDING_CONSENT_KEY, data);
     } catch (e) {
       console.error('Failed to store pending consent', e);
     }
@@ -100,7 +103,8 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
 
   useEffect(() => {
     if (typeof window !== 'undefined' && texts.consent_version) {
-        const existingConsentCookie = Cookies.get(CONSENT_COOKIE_NAME);
+        let existingConsentCookie = optionalGet(CONSENT_COOKIE_NAME);
+        try { existingConsentCookie ||= Cookies.get(CONSENT_COOKIE_NAME) || null; } catch { /* No consent inferred. */ }
         if (existingConsentCookie) {
             try {
                 // Ensure the cookie string is a valid JSON before parsing.
@@ -125,13 +129,12 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
         }
     }
   }, [texts.consent_version]);
-  
+
   useEffect(() => {
-    const pending = localStorage.getItem(PENDING_CONSENT_KEY);
+    const pending = optionalGet(PENDING_CONSENT_KEY);
     if (pending) {
       try {
-        sendConsentData(JSON.parse(pending));
-        localStorage.removeItem(PENDING_CONSENT_KEY);
+        void sendConsentData(JSON.parse(pending));
       } catch (e) {
         console.error('Retry consent send failed', e);
       }
@@ -165,14 +168,16 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
     setShowBanner(false);
     setIsModalOpen(false);
     const COOKIE_DOMAIN = window.location.hostname.includes('orderfly.app') ? '.orderfly.app' : undefined;
-    
-    Cookies.set(CONSENT_COOKIE_NAME, JSON.stringify(consentData), { 
+
+    optionalSet(CONSENT_COOKIE_NAME, JSON.stringify(consentData));
+    try { Cookies.set(CONSENT_COOKIE_NAME, JSON.stringify(consentData), {
         expires: ONE_YEAR_DAYS,
         path: '/',
         ...(COOKIE_DOMAIN ? { domain: COOKIE_DOMAIN } : {}),
         sameSite: 'Lax'
     });
 
+    } catch { /* The user's explicit choice remains in memory. */ }
     const anonymousId = getOrCreateAnonId();
 
     const dataToSend: Omit<AnonymousCookieConsent, 'id' | 'first_seen' | 'last_seen' | 'linked_to_customer'> = {
@@ -186,10 +191,10 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
         brand_id: brandId,
         shared_scope: 'orderfly',
     };
-    
+
     sendConsentData(dataToSend);
   };
-  
+
   const handleAcceptAll = () => {
     const consent = { ...preferences, functional: true, statistics: true, marketing: true, necessary: true, consent_version: texts.consent_version };
     saveConsent(consent);
@@ -205,7 +210,7 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
     setShowBanner(false);
     setIsModalOpen(true);
   };
-  
+
   if (loading || (!showBanner && !isModalOpen) || !compatCategories.necessary || !compatCategories.statistics) {
     return null;
   }
@@ -247,14 +252,14 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
                 onCheckedChange={(checked) => setPreferences(p => ({...p, functional: checked}))}
               />
                <Separator />
-              <CookieCategory 
+              <CookieCategory
                 title={compatCategories.statistics.title}
                 description={compatCategories.statistics.description}
                 checked={preferences.statistics}
                 onCheckedChange={(checked) => setPreferences(p => ({...p, statistics: checked}))}
               />
                <Separator />
-              <CookieCategory 
+              <CookieCategory
                 title={compatCategories.marketing.title}
                 description={compatCategories.marketing.description}
                 checked={preferences.marketing}

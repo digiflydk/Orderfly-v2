@@ -3,8 +3,8 @@
 ## Scope and release baseline
 
 Developed from main `a433dbee0dc045bae97d3964a85ae545f12775e7`, including #63.
-This change implements the four P1 work packages in #67. The P2 navigation,
-storage and performance backlog stays open. No new customer login, configured
+This change implements the four P1 work packages in #67. The subsequent P2
+implementation is included in the same PR; see [commerce-p2-67.md](commerce-p2-67.md). No new customer login, configured
 secret, production data migration or external payment is required to install
 this code. Review, PO acceptance, merge, Firebase release and live QA remain
 separate gates. Local tests are not live release evidence.
@@ -81,8 +81,8 @@ mode, address requirement and minimum, and does not invent geographic coverage.
 
 The existing price floor, discount eligibility, reservation, idempotency and
 uncertain-payment handling remain in place. Toppings must have current catalog
-prices in the submitted line total. A stale price is rejected for review. Existing
-fractional-øre rounding policy remains a separate P2 finding.
+prices in the submitted line total. A stale price is rejected for review. The subsequent P2
+implementation unifies fractional-øre rounding; see the P2 document.
 
 ## Combo and option identity
 
@@ -131,7 +131,7 @@ counts describe local synthetic fixtures, not production test payments.
 
 Review and release the exact PR head with `[skip ci]`. Do not dispatch Actions.
 Deploy through the established Firebase App Hosting flow after merge and verify
-the actual running source SHA. Keep #67 open for its P2 work and live verification.
+the actual running source SHA. Keep #67 open for independent review and exact-release live verification of P1/P2.
 
 Targeted QA after release, using only authorized synthetic orders/test payments:
 

@@ -16,7 +16,7 @@ import {
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { resolveFulfillmentTime, fulfillmentSlots } from '@/lib/fulfillment-time';
-import { getTimeSlots } from '@/app/superadmin/locations/actions';
+import { calculateTimeSlots } from '@/lib/time-slots';
 import { useCart } from '@/context/cart-context';
 import { format, addDays, startOfDay, isSameDay } from 'date-fns';
 import { Loader2 } from 'lucide-react';
@@ -70,7 +70,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
     setInternalTime('');
     try {
       // Send the selected calendar day, independent of the shopper's timezone.
-      const slots = await getTimeSlots(locationId, `${format(date, 'yyyy-MM-dd')}T12:00:00Z`);
+      const slots = location ? calculateTimeSlots(location, `${format(date, 'yyyy-MM-dd')}T12:00:00Z`) : null;
       if (request === requestId.current) setTimeSlots(slots);
     } catch {
       if (request === requestId.current) setTimeSlots(null);

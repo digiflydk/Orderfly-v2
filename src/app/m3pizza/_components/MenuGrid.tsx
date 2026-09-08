@@ -1,18 +1,22 @@
 
 import Image from "next/image";
 import { Button } from "@/components/ui/button";
-import { menuGridContent } from "../_data/constants";
+import type { ProductForMenu } from '@/types';
+import { safeImage } from '@/lib/images';
+import { money } from '@/lib/money';
 
 function PizzaCard({
   name,
   description,
   price,
   imageUrl,
+  onOrderClick,
 }: {
   name: string;
   description: string;
   price: number;
   imageUrl: string;
+  onOrderClick: () => void;
 }) {
   return (
     <div className="relative h-96 overflow-hidden group cursor-pointer shadow-md hover:shadow-xl transition-shadow">
@@ -29,8 +33,9 @@ function PizzaCard({
         </h3>
         <p className="text-sm mb-4 opacity-90">{description}</p>
         <div className="flex items-center justify-between">
-          <span className="text-xl font-bold">{price} kr</span>
+          <span className="text-xl font-bold">Fra {price.toFixed(2)} kr.</span>
           <Button
+            onClick={onOrderClick}
             size="sm"
             className="bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] rounded-md px-6 py-2 text-xs uppercase font-bold tracking-wide transition-colors"
           >
@@ -42,27 +47,18 @@ function PizzaCard({
   );
 }
 
-export function MenuGrid() {
-  return (
-    <section className="container mx-auto max-w-[1200px] px-4 sm:px-6 lg:px-8 py-8">
-      <div className="text-center mb-12">
-        <h2 className="text-3xl lg:text-4xl font-bold uppercase">
-          {menuGridContent.title}
-        </h2>
-        <p className="text-base lg:text-lg text-muted-foreground mt-2 max-w-2xl mx-auto">
-          {menuGridContent.description}
-        </p>
-      </div>
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {menuGridContent.pizzas.slice(0, 9).map((pizza) => (
-          <PizzaCard key={pizza.name} {...pizza} />
-        ))}
-      </div>
-      <div className="text-center mt-12">
-        <Button size="lg" className="bg-m3-button hover:bg-m3-buttonHover text-[#2D2D2D] uppercase font-bold tracking-wide transition-colors">
-          {menuGridContent.ctaText}
-        </Button>
-      </div>
-    </section>
-  );
+export function MenuGrid({products, modes, onOrderClick}: {products: ProductForMenu[]; modes: string[]; onOrderClick: () => void}) {
+  return <section id="menu" className="container mx-auto max-w-[1200px] px-4 py-8 scroll-mt-24">
+    <h2 className="text-center text-3xl font-bold mb-8">Fra vores menu</h2>
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+      {products.slice(0, 9).map(product => {
+        const prices = [modes.includes('pickup') ? product.price : undefined, modes.includes('delivery') ? product.priceDelivery ?? product.price : undefined]
+          .filter((value): value is number => typeof value === 'number' && Number.isFinite(value) && value >= 0);
+        if (!prices.length) return null;
+        return <PizzaCard key={product.id} name={product.productName} description={product.description || ''}
+          price={money(Math.min(...prices))} imageUrl={safeImage(product.imageUrl)} onOrderClick={onOrderClick} />;
+      })}
+    </div>
+    <div className="text-center mt-8"><Button size="lg" onClick={onOrderClick}>Se hele menuen</Button></div>
+  </section>;
 }

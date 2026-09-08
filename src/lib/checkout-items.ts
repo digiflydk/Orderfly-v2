@@ -1,3 +1,4 @@
+import { ore, money, sumMoney, lineMoney } from './money';
 import type { CartItem, MinimalCartItem } from '@/types';
 import type { RestoreCatalog } from './cart-restore';
 import { restoreCartItems } from './cart-restore';
@@ -5,8 +6,8 @@ import { restoreCartItems } from './cart-restore';
 export function checkoutItems(items: CartItem[]): MinimalCartItem[] {
   return items.map(item => ({
     id: item.id, itemType: item.itemType, name: item.productName,
-    quantity: item.quantity, unitPrice: item.price,
-    totalPrice: (item.price + item.toppings.reduce((sum, topping) => sum + topping.price, 0)) * item.quantity,
+    quantity: item.quantity, unitPrice: money(item.price),
+    totalPrice: lineMoney(item.price, item.quantity, item.toppings.map(topping => topping.price)),
     toppings: item.toppings.map(topping => topping.name),
     ...(item.toppings.every(topping => topping.id) ? { toppingIds: item.toppings.map(topping => topping.id!) } : {}),
     ...(item.comboSelections ? { comboSelections: item.comboSelections.map(group => ({
@@ -36,12 +37,12 @@ export function validateCheckoutItems(items: MinimalCartItem[], catalog: Restore
   let subtotal = 0;
   const validated = restored.items.map((line, index) => {
     const item = items[index];
-    const toppingPrice = line.toppings.reduce((sum, topping) => sum + topping.price, 0);
-    if (Math.round(item.totalPrice * 100) !== Math.round((item.unitPrice + toppingPrice) * item.quantity * 100)) {
+    const toppingPrices = line.toppings.map(topping => topping.price);
+    if (ore(item.totalPrice) !== ore(lineMoney(item.unitPrice, item.quantity, toppingPrices))) {
       throw new Error('Option prices have changed. Please refresh your basket.');
     }
-    subtotal += (line.basePrice + toppingPrice) * item.quantity;
-    return { ...item, id: line.id, itemType: line.itemType, name: line.productName,
+    subtotal = sumMoney([subtotal, lineMoney(line.basePrice, item.quantity, toppingPrices)]);
+    return { ...item, unitPrice: money(item.unitPrice), totalPrice: lineMoney(item.unitPrice, item.quantity, toppingPrices), id: line.id, itemType: line.itemType, name: line.productName,
       toppings: line.toppings.map(topping => topping.name), toppingIds: line.toppings.map(topping => topping.id!),
       ...(line.comboSelections ? { comboSelections: line.comboSelections } : {}),
     };

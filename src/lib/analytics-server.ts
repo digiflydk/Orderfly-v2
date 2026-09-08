@@ -1,8 +1,9 @@
-// NO 'use client' here
+import 'server-only';
+import { after } from 'next/server';
 import type { AnalyticsEventName } from '@/types';
-
-export async function trackServerEvent(eventName: AnalyticsEventName, props: Record<string, any>) {
-  // Minimal server logger (kan senere kobles til Sentry/BigQuery)
-  console.log(`[SERVER EVENT]: ${eventName}`, props);
-  // evt. fremtidig server-side tracking kan tilføjes her
+import { recordCommerceMetric } from './server/record-commerce-metric';
+export async function trackServerEvent(name: AnalyticsEventName, props: Record<string, any>) {
+  try {
+    after(() => recordCommerceMetric(name, {...props, release: process.env.NEXT_PUBLIC_RELEASE_SHA || 'unknown'}, true).catch(() => {}));
+  } catch { /* No request context or failed optional telemetry must not block payment. */ }
 }

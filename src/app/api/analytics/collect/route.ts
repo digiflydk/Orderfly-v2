@@ -1,19 +1,17 @@
+import { metricPayload } from '@/lib/commerce-metrics';
+import { recordCommerceMetric } from '@/lib/server/record-commerce-metric';
 export const runtime = 'nodejs';
-
-export async function POST(req: Request) {
-  const { name, params } = await req.json().catch(() => ({}));
-  const measurement_id = process.env.GA_MEASUREMENT_ID || process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID || '';
-  const api_secret = process.env.GA_API_SECRET || '';
-  if (!measurement_id || !api_secret) return new Response(null, { status: 204 });
-
-  // simpelt client_id (kan udskiftes med rigtigt cookie-id)
-  const client_id = 'web.' + Math.random().toString(36).slice(2);
-
-  await fetch(`https://www.google-analytics.com/mp/collect?measurement_id=${measurement_id}&api_secret=${api_secret}`, {
-    method: 'POST',
-    headers: { 'content-type': 'application/json' },
-    body: JSON.stringify({ client_id, events: [{ name: name || 'page_view', params: params || {} }] }),
-  }).catch(() => { /* ignore */ });
-
-  return new Response(null, { status: 204 });
+export async function POST(request: Request) {
+  if (Number(request.headers.get('content-length') || 0) > 8192) return new Response(null, {status: 413});
+  const origin = request.headers.get('origin');
+  if (origin && origin !== new URL(request.url).origin) return new Response(null, {status: 403});
+  try {
+    const raw = await request.text();
+    if (raw.length > 8192) return new Response(null, {status: 413});
+    const {name, params} = JSON.parse(raw);
+    const event = metricPayload(name, params);
+    if (!event?.eventId || !event.sessionId) return new Response(null, {status: 400});
+    await recordCommerceMetric(name, event);
+  } catch { /* Optional diagnostics never affect orders. */ }
+  return new Response(null, {status: 204});
 }

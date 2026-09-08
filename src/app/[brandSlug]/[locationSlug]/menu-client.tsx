@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import type {
   Brand,
   Category,
@@ -11,8 +11,8 @@ import type {
   TimeSlotResponse,
 } from '@/types';
 import { useCart } from '@/context/cart-context';
-import { getStorefrontDiscounts as getActiveStandardDiscounts } from '@/app/storefront-actions';
-import { getProductsByIds } from '@/app/superadmin/products/actions';
+import { comboEligible } from '@/lib/combo-eligibility';
+import { searchMenu, type DisplayProduct } from '@/lib/menu-display';
 import { DesktopCart } from '@/components/cart/desktop-cart';
 import { CategoryNav } from '@/components/layout/category-nav';
 import { MobileFloatingCart } from '@/components/cart/mobile-floating-cart';
@@ -25,14 +25,14 @@ import { useAnalytics } from '@/context/analytics-context';
 import { openDeliveryModal } from '@/components/modals/DeliveryMethodModal';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
-import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
+import { calculateTimeSlots } from '@/lib/time-slots';
 
 interface MenuClientProps {
   initialDeliveryType?: 'pickup' | 'delivery';
   brand: Brand;
   location: Location;
   initialCategories: Category[];
-  initialProducts: ProductForMenu[]; // All products passed from server
+  initialProducts: DisplayProduct[]; // All products passed from server
   initialActiveCombos: ComboMenu[];
   initialActiveStandardDiscounts: StandardDiscount[];
 }
@@ -46,112 +46,35 @@ export function MenuClient({
   initialActiveCombos,
   initialActiveStandardDiscounts,
 }: MenuClientProps) {
-  const { setCartContext, deliveryType, itemCount, setSelectedTime } = useCart();
+  const { setCartContext, deliveryType, itemCount, standardDiscounts, cartReady } = useCart();
   const { trackEvent } = useAnalytics();
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
-  const initialDiscountsUsed = useRef(false);
-
-  const [isLoading, setIsLoading] = useState(true);
   const [activeCategory, setActiveCategory] = useState<string>('offers');
-  const [activeStandardDiscounts, setActiveStandardDiscounts] = useState<
-    StandardDiscount[]
-  >(initialActiveStandardDiscounts);
-  const [comboProducts, setComboProducts] = useState<ProductForMenu[]>([]);
-  const [showPreorderAlert, setShowPreorderAlert] = useState(false);
-  const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
+  const [search, setSearch] = useState('');
+  const [now, setNow] = useState(() => new Date());
+  const activeStandardDiscounts = cartReady ? standardDiscounts : deliveryType === initialDeliveryType || !deliveryType ? initialActiveStandardDiscounts : [];
+  const mode = deliveryType || initialDeliveryType;
+  const activeCombos = useMemo(() => initialActiveCombos.filter(combo => comboEligible(combo, {brandId: brand.id, locationId: location.id, deliveryType: mode, now})), [initialActiveCombos, brand.id, location.id, mode, now]);
+  const visibleProducts = useMemo(() => searchMenu(initialProducts, search), [initialProducts, search]);
+  const visibleCombos = useMemo(() => searchMenu(activeCombos, search), [activeCombos, search]);
+  const visibleCategories = initialCategories.filter(c => c.id === 'offers' || visibleProducts.some(p => (p.displayCategoryId || p.categoryId) === c.id));
+  const timeSlots = useMemo(() => calculateTimeSlots(location, undefined, now), [location, now]);
 
   useEffect(() => {
-    setCartContext(brand, location);
-
-    async function fetchInitialData() {
-      setIsLoading(true);
-
-      // Fetch products for combos if they exist
-      if (initialActiveCombos.length > 0) {
-        const comboProductIds = [
-          ...new Set(
-            initialActiveCombos.flatMap((c) =>
-              c.productGroups.flatMap((g) => g.productIds),
-            ),
-          ),
-        ];
-        if (comboProductIds.length > 0) {
-          const existing = initialProducts.filter(p => comboProductIds.includes(p.id));
-          const missing = comboProductIds.filter(id => !existing.some(p => p.id === id));
-          const fetchedComboProducts = missing.length ? await getProductsByIds(missing, brand.id) : [];
-          setComboProducts([...existing, ...fetchedComboProducts]);
-        }
-      }
-
-      // OF-424: Handle pre-order logic + time slots
-      const fetchedTimeSlots = calculateTimeSlots(location);
-      setTimeSlots(fetchedTimeSlots);
-
-      const isAsapAvailable =
-        deliveryType === 'delivery'
-          ? fetchedTimeSlots.asap_delivery
-          : fetchedTimeSlots.asap_pickup;
-
-      if (
-        !isAsapAvailable &&
-        location.allowPreOrder &&
-        fetchedTimeSlots.nextAvailableDate
-      ) {
-        setShowPreorderAlert(true);
-        const nextAvailableTime =
-          deliveryType === 'delivery'
-            ? fetchedTimeSlots.asap_delivery
-            : fetchedTimeSlots.asap_pickup;
-        if (nextAvailableTime) {
-          setSelectedTime(nextAvailableTime);
-        }
-      } else {
-        setShowPreorderAlert(false);
-      }
-
-      setIsLoading(false);
-    }
-
-    fetchInitialData();
-
-    // Track view_menu event on initial load
-    trackEvent('view_menu', {
-      locationId: location.id,
-      locationSlug: location.slug,
-    });
-  }, [
-    brand,
-    location,
-    setCartContext,
-    initialActiveCombos,
-    trackEvent,
-    deliveryType,
-    setSelectedTime,
-  ]);
-
+    setCartContext(brand, location, {deliveryType: initialDeliveryType, discounts: initialActiveStandardDiscounts});
+  }, [brand, location, setCartContext, initialDeliveryType, initialActiveStandardDiscounts]);
   useEffect(() => {
-    let cancelled = false;
-    if (!deliveryType) return;
-    if (!initialDiscountsUsed.current && deliveryType === initialDeliveryType) {
-      initialDiscountsUsed.current = true;
-      setActiveStandardDiscounts(initialActiveStandardDiscounts);
-      return;
-    }
-    initialDiscountsUsed.current = true;
-    async function fetchDiscounts(type: 'delivery' | 'pickup') {
-      const discounts = await getActiveStandardDiscounts({
-        brandId: brand.id,
-        locationId: location.id,
-        deliveryType: type,
-      });
-      if (!cancelled) setActiveStandardDiscounts(discounts);
-    }
-
-    if (deliveryType === 'delivery' || deliveryType === 'pickup') {
-      void fetchDiscounts(deliveryType);
-    }
-    return () => { cancelled = true; };
-  }, [deliveryType, brand.id, location.id, initialDeliveryType, initialActiveStandardDiscounts]);
+    const tick = () => setNow(new Date());
+    const timer = setInterval(tick, 30000);
+    window.addEventListener('focus', tick);
+    return () => { clearInterval(timer); window.removeEventListener('focus', tick); };
+  }, []);
+  const trackedMenu = useRef('');
+  useEffect(() => {
+    const key = `${brand.id}/${location.id}`;
+    if (trackedMenu.current === key) return;
+    if (trackEvent('view_menu', {locationId: location.id})) trackedMenu.current = key;
+  }, [brand.id, location.id, trackEvent]);
 
   useEffect(() => {
     // OF-399: Show delivery modal only if a delivery method has not been previously selected in this session.
@@ -164,15 +87,14 @@ export function MenuClient({
         // The query parameter can still provide a valid selection.
       }
       const hasRequestedDeliveryMethod =
-        requestedDeliveryMethod === 'delivery' || requestedDeliveryMethod === 'pickup';
+        requestedDeliveryMethod === 'delivery' || requestedDeliveryMethod === 'pickup' || requestedDeliveryMethod === 'takeaway';
       if (!hasRequestedDeliveryMethod && !savedDeliveryMethod) {
-        openDeliveryModal({ brandSlug: brand.slug, locationSlug: location.slug });
+        openDeliveryModal({ brandSlug: brand.slug, locationSlug: location.slug, location });
       }
     }
   }, [brand.slug, location.slug]);
 
   useEffect(() => {
-    if (isLoading) return; // Don't run observer until everything is loaded
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
@@ -195,7 +117,7 @@ export function MenuClient({
         if (el) observer.unobserve(el);
       });
     };
-  }, [initialCategories, initialActiveCombos.length, isLoading]);
+  }, [initialCategories, visibleCombos.length, search]);
 
   const hasPromotionalDiscounts = activeStandardDiscounts.some(
     (d) => d.assignToOfferCategory,
@@ -204,63 +126,41 @@ export function MenuClient({
   return (
     <div className="bg-[#FFF8F0]">
       <div className="container mx-auto max-w-[1140px] px-4">
-        {showPreorderAlert && (
-          <Alert className="my-4">
-            <Info className="h-4 w-4" />
-            <AlertTitle>Location Closed</AlertTitle>
-            <AlertDescription>
-              This location is currently closed. You are placing a pre-order for the
-              next available time.
-            </AlertDescription>
-          </Alert>
-        )}
-
-        <div className="lg:hidden py-4">
+        <div className="py-4">
           <TimeSelector timeSlots={timeSlots} />
         </div>
 
         <div className="sticky top-16 z-30 bg-[#FFF8F0]/90 backdrop-blur-sm -mx-4 px-4 py-2 border-t border-b">
-          {isLoading ? (
-            <div className="flex items-center gap-2 h-9">
-              <Skeleton className="h-full w-24 rounded-md" />
-              <Skeleton className="h-full w-28 rounded-md" />
-              <Skeleton className="h-full w-20 rounded-md" />
-            </div>
-          ) : (
-            <CategoryNav
-              categories={initialCategories}
-              hasCombos={initialActiveCombos.length > 0}
-              hasPromotionalDiscounts={hasPromotionalDiscounts}
-              brand={brand}
-              activeCategory={activeCategory}
-            />
-          )}
+          <CategoryNav categories={visibleCategories} hasCombos={visibleCombos.length > 0}
+            hasPromotionalDiscounts={hasPromotionalDiscounts} brand={brand} activeCategory={activeCategory}
+            search={search} onSearchChange={setSearch} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6">
           <div className="lg:col-span-2">
             <div className="space-y-12 py-6">
+              {!visibleProducts.length && !visibleCombos.length && <p role="status">Ingen varer matcher søgningen.</p>}
               {hasPromotionalDiscounts && (
                 <OffersSection
                   brand={brand}
                   location={location}
                   activeDiscounts={activeStandardDiscounts}
-                  allProducts={initialProducts}
+                  allProducts={visibleProducts}
                   categoryRef={(el) => (categoryRefs.current['offers'] = el)}
                 />
               )}
 
-              {initialActiveCombos.length > 0 && (
+              {visibleCombos.length > 0 && (
                 <ComboSection
                   brand={brand}
                   location={location}
-                  combos={initialActiveCombos}
-                  comboProducts={comboProducts}
+                  combos={visibleCombos}
+                  comboProducts={initialProducts}
                   categoryRef={(el) => (categoryRefs.current['combos'] = el)}
                 />
               )}
 
-              {initialCategories
+              {visibleCategories
                 .filter((c) => c.id !== 'offers')
                 .map((category) => (
                   <CategorySection
@@ -268,8 +168,8 @@ export function MenuClient({
                     brandId={brand.id}
                     locationId={location.id}
                     category={category}
-                    products={initialProducts.filter(
-                      (p) => p.categoryId === category.id,
+                    products={visibleProducts.filter(
+                      (p) => (p.displayCategoryId || p.categoryId) === category.id,
                     )}
                     activeDiscounts={activeStandardDiscounts}
                     categoryRef={(el) =>
