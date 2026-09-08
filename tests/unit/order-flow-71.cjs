@@ -168,6 +168,15 @@ test('#71 scoped upsell products preserve brand-wide availability and exclude pr
  });
  const result=await getProductsByIds(products.map(p=>p.id),'b','l');assert.deepEqual(result.map(p=>p.id),['global','local']);
 });
+test('#71 inline upsell always uses the best eligible unit price',()=>{
+ const {productPriceData}=loadTs('src/lib/product-price.ts');
+ const product={id:'drink',brandId:'b',categoryId:'beverage',price:90,basePrice:100};
+ const discount=(id,value,type='product',referenceIds=['drink'])=>({id,discountMethod:'percentage',discountValue:value,discountType:type,referenceIds});
+ assert.equal(productPriceData(product,[discount('better',20)],'pickup').finalPrice,80);
+ assert.equal(productPriceData(product,[discount('worse',5)],'pickup').finalPrice,90);
+ assert.equal(productPriceData(product,[discount('category',25,'category',['beverage'])],'pickup').finalPrice,75);
+ assert.equal(productPriceData(product,[{...discount('quantity',50),discountMethod:'buy_x_pay_y'}],'pickup').finalPrice,90);
+});
 
 test('#71 actual checkout stores explicit consent before Stripe and retains it if payment fails',async()=>{
  const {checkout}=require('../helpers/checkout-fixture.cjs');

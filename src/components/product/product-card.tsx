@@ -2,8 +2,8 @@
 'use client';
 
 import Image from 'next/image';
-import { discountedUnit, money } from '@/lib/money';
 import { isQuantityMethod, quantityOfferLabel } from '@/lib/automatic-discounts';
+import { productPriceData } from '@/lib/product-price';
 import type { StandardDiscount, ProductForMenu } from '@/types';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
@@ -25,10 +25,6 @@ interface ProductCardProps {
   product: ProductForMenu;
   activeDiscounts: StandardDiscount[];
   upsellId?: string;
-}
-
-function applyDiscount(price: number, discount: StandardDiscount): number {
-  return discountedUnit(price, discount.discountMethod, discount.discountValue);
 }
 
 export function ProductCardSkeleton() {
@@ -65,48 +61,7 @@ export function ProductCard({ product, activeDiscounts, upsellId }: ProductCardP
   const count = cartItems.filter(item => item.itemType === 'product' && item.id === product.id).reduce((n,item)=>n+item.quantity,0);
   const onAdded = () => {if (upsellId) {upsellAdded.current=true;} if (upsellId) trackEvent('upsell_accepted',{upsellId,productId:product.id});};
 
-  const priceData = useMemo(() => {
-    const originalPrice = money(deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price);
-
-    if (typeof (product as any).basePrice === "number") {
-        return {
-            basePrice: (product as any).basePrice,
-            finalPrice: product.price,
-            hasOffer: product.price < (product as any).basePrice
-        };
-    }
-
-    const applicableDiscount = activeDiscounts
-      .filter(d => !isQuantityMethod(d.discountMethod) && (
-          (d.discountType === 'product' && d.referenceIds.includes(product.id)) || 
-          (d.discountType === 'category' && product.categoryId && d.referenceIds.includes(product.categoryId))
-      ))
-      .reduce<StandardDiscount | null>((best, current) => {
-          if (!best) return current;
-          const bestDiscountedPrice = applyDiscount(originalPrice, best);
-          const currentDiscountedPrice = applyDiscount(originalPrice, current);
-          return currentDiscountedPrice < bestDiscountedPrice ? current : best;
-      }, null);
-
-    if (applicableDiscount) {
-        const discountedPrice = applyDiscount(originalPrice, applicableDiscount);
-        if (discountedPrice < originalPrice) {
-            return {
-                basePrice: originalPrice,
-                finalPrice: discountedPrice,
-                hasOffer: true,
-                applicableDiscount,
-            };
-        }
-    }
-    
-    return {
-        basePrice: originalPrice,
-        finalPrice: originalPrice,
-        hasOffer: false,
-        applicableDiscount: null,
-    };
-  }, [product, activeDiscounts, deliveryType]);
+  const priceData = useMemo(() => productPriceData(product, activeDiscounts, deliveryType), [product, activeDiscounts, deliveryType]);
 
 
   const { basePrice, finalPrice, hasOffer, applicableDiscount } = priceData;
