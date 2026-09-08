@@ -308,10 +308,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (!readyRef.current) return;
     checkoutOrderId.current = undefined;
     const canonicalizeToppings = (values: CartItemTopping[]) => [...values].sort((a, b) => {
+      if (a.id && b.id) {
+        const identityOrder = a.id.localeCompare(b.id);
+        if (identityOrder !== 0) return identityOrder;
+        return a.price - b.price;
+      }
+      if (a.id) return -1;
+      if (b.id) return 1;
       const nameOrder = a.name.localeCompare(b.name);
       if (nameOrder !== 0) return nameOrder;
-      const identityOrder = (a.id || a.name).localeCompare(b.id || b.name);
-      if (identityOrder !== 0) return identityOrder;
       return a.price - b.price;
     });
     const sortedToppings = canonicalizeToppings(toppings);
