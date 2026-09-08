@@ -11,7 +11,9 @@ export async function recordCommerceMetric(name: unknown, props: Record<string, 
   if (!trusted && !event.eventId) return;
   const id = 'commerce-' + createHash('sha256').update(key).digest('hex');
   await optionalCheckoutValue(() => getAdminDb().collection('analytics_events').doc(id).set({
-    ...event, id, ts: new Date(), source: 'commerce-v1', verifiedPayment: trusted && name === 'payment_succeeded',
+    ...event, id, ts: new Date(), source: 'commerce-v1',
+    verifiedPayment: trusted && name === 'payment_succeeded',
+    provenance: trusted && name === 'payment_succeeded' ? 'server-verified-payment-v1' : 'client-commerce-v1',
   }), undefined, 1500);
   const measurementId = process.env.GA_MEASUREMENT_ID || process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
   const apiSecret = process.env.GA_API_SECRET;
