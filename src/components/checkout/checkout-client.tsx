@@ -386,6 +386,8 @@ function CheckoutForm({ location }: { location: Location }) {
 
   const newsletterSelected = form.watch('subscribeToNewsletter');
   const newsletterEmail = form.watch('email');
+  const newsletterSavingApplied = !!newsletterOffer && newsletterSelected &&
+    appliedDiscount?.applicationType === 'newsletter_signup' && appliedDiscount.id === newsletterOffer.id;
 
   useEffect(() => {
     let cancelled = false;
@@ -892,7 +894,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     control={form.control}
                     name="subscribeToNewsletter"
                     render={({ field }) => (
-                      <FormItem data-newsletter-offer={!!newsletterOffer} className="commerce-newsletter flex flex-row items-start gap-3 space-y-0 rounded-xl border p-5">
+                      <FormItem data-newsletter-offer={newsletterSavingApplied} className="commerce-newsletter flex flex-row items-start gap-3 space-y-0 rounded-xl border p-5">
                         <FormControl>
                           <Checkbox
                             checked={!!field.value}
@@ -900,10 +902,10 @@ function CheckoutForm({ location }: { location: Location }) {
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
-                          <FormLabel className="text-base font-semibold leading-relaxed">{newsletterOffer ? `Sign up and save ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`}` : 'Subscribe to newsletter'}</FormLabel>
+                          <FormLabel className="text-base font-semibold leading-relaxed">{newsletterSavingApplied ? `Signed up — saving ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`}` : 'Subscribe to newsletter'}</FormLabel>
                           <FormDescription>
-                            {newsletterOffer
-                              ? `Receive updates and get ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`} off this order.`
+                            {newsletterSavingApplied
+                              ? `Your ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`} newsletter saving is applied to this order.`
                               : 'Receive updates and special offers from us.'}
                             <span className="block mt-2 text-xs">Optional. You can unsubscribe at any time.</span>
                           </FormDescription>
