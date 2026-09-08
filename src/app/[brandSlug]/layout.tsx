@@ -36,7 +36,7 @@ export default async function BrandLayout({
   return (
     <AnalyticsProvider brand={brand}>
       <CartProvider>
-        <div
+        <div data-commerce-root
           style={
             {
               '--primary': brand.appearances?.colors.primary,

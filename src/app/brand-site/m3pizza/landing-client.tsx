@@ -1,6 +1,5 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import type { Brand, Location, ProductForMenu, StandardDiscount, BrandWebsiteConfig } from '@/types';
 import { Hero } from '@/app/m3pizza/_components/Hero';
@@ -15,7 +14,7 @@ import { promotionTile } from '@/lib/storefront-promotion';
 import { comboEligible } from '@/lib/combo-eligibility';
 import { AnalyticsProvider } from '@/context/analytics-context';
 import { CookieConsent } from '@/components/cookie-consent';
-const OrderModal = dynamic(() => import('@/app/m3pizza/_components/OrderModal').then(module => module.OrderModal));
+import { OrderModal } from '@/app/m3pizza/_components/OrderModal';
 
 export default function LandingClient({brand, location, products, discounts, config}: {
   brand: Brand; location: Location; products: ProductForMenu[]; discounts: StandardDiscount[]; config: BrandWebsiteConfig | null;

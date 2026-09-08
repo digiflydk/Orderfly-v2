@@ -59,6 +59,6 @@ export function MenuGrid({products, modes, onOrderClick}: {products: ProductForM
           price={money(Math.min(...prices))} imageUrl={safeImage(product.imageUrl)} onOrderClick={onOrderClick} />;
       })}
     </div>
-    <div className="text-center mt-8"><Button size="lg" onClick={onOrderClick}>Se hele menuen</Button></div>
+    <div className="text-center mt-8"><Button size="lg" className="h-[50.6px]" onClick={onOrderClick}>Se hele menuen</Button></div>
   </section>;
 }

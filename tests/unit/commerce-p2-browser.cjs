@@ -55,7 +55,7 @@ before(async()=>{
  server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
   if(url.pathname.endsWith('.js')){const file=path.join(dir,path.basename(url.pathname));if(fs.existsSync(file)){res.setHeader('Content-Type','application/javascript; charset=utf-8');return res.end(fs.readFileSync(file));}}
-  if(url.pathname==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css);}
+  if(url.pathname==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8'));}
   if(url.pathname==='/image.png'){res.setHeader('Content-Type','image/png');return res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l1YAAAAASUVORK5CYII=','base64'));}
   res.setHeader('Content-Type','application/json');
   if(url.pathname==='/restore'){restoreReads++;let raw='';for await(const c of req)raw+=c;const input=JSON.parse(raw);return res.end(JSON.stringify({...restoreCartItems(input.choices,{products,combos:[],toppings,groups,discounts:[],upsells:[]},input),discounts:[]}));}
@@ -92,10 +92,27 @@ for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulf
  await page.getByRole('button',{name:'Tilføj Fixture Pizza'}).click();
  await page.getByRole('alert').getByRole('button',{name:'Prøv igen'}).click();
  await page.getByRole('dialog').waitFor();
- assert.equal(await page.getByRole('checkbox',{name:'Ost'}).isChecked(),true);
+ assert.equal(await page.getByRole('checkbox',{name:/Ost/}).isChecked(),true);
+ const panel=page.locator('[data-commerce-panel="options"]');
+ await panel.evaluate(async node=>{await Promise.all(node.getAnimations().map(a=>a.finished.catch(()=>{})));});
+ const bounds=await panel.boundingBox();assert.ok(Math.abs(bounds.y+bounds.height-900)<2,'options opens at bottom');
+ const row=page.locator('[data-option-row]').filter({hasText:'Ost'});
+ await row.getByText(/DKK/).click();assert.equal(await page.getByRole('checkbox',{name:/Ost/}).isChecked(),false,'price area toggles exactly once');
+ await row.getByText('Ost',{exact:true}).click();assert.equal(await page.getByRole('checkbox',{name:/Ost/}).isChecked(),true,'label toggles exactly once');
+ const cta=page.getByRole('dialog').getByRole('button',{name:/Add to cart|Tilføj til kurv/i});
+ assert.ok(Math.abs((await cta.boundingBox()).height-64.4)<1);
+ assert.equal(await cta.evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(255, 189, 2)');
+ if(process.env.UI69_SCREENSHOTS)await page.screenshot({path:process.env.UI69_SCREENSHOTS+'/options-'+width+'.png'});
  await page.getByRole('dialog').getByRole('button',{name:/Add to cart|Tilføj til kurv/i}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
  assert.equal(optionReads,2);
+ if(width===390){
+   await page.getByRole('button',{name:/View cart/}).click();
+   const cartPanel=page.locator('[data-commerce-panel="cart"]');await cartPanel.waitFor();
+   await cartPanel.evaluate(async node=>{await Promise.all(node.getAnimations().map(a=>a.finished.catch(()=>{})));});
+   const box=await cartPanel.boundingBox();assert.ok(Math.abs(box.y+box.height-900)<2);
+   await page.keyboard.press('Escape');await cartPanel.waitFor({state:'hidden'});
+ }
  await page.getByRole('button',{name:'Tilføj Fixture Pizza'}).click();await page.getByRole('dialog').waitFor();assert.equal(optionReads,2,'second open reuses options');await page.keyboard.press('Escape');
  await page.getByRole('button',{name:'Delivery',exact:true}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready&&JSON.parse(document.getElementById('cart-state').textContent).mode==='delivery');

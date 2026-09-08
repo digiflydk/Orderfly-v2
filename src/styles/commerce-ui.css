@@ -1,0 +1,72 @@
+/* Public ordering only, including Radix portals. Superadmin keeps its theme. */
+body:has([data-commerce-root]),
+[data-commerce-root] {
+  --commerce-yellow: #ffbd02;
+  --commerce-yellow-hover: #e0a800;
+  --primary: 44.6 100% 50.4% !important;
+  --primary-foreground: 0 0% 0% !important;
+}
+body:has([data-commerce-root]) :is(button, [data-ui-button]):not([role="checkbox"]):not([role="radio"]):not([role="switch"]) {
+  background-color: var(--commerce-yellow) !important;
+  color: #000 !important;
+  border-color: var(--commerce-yellow) !important;
+}
+body:has([data-commerce-root]) :is(button, [data-ui-button]):not([role="checkbox"]):not([role="radio"]):not([role="switch"]):not(:disabled):not([aria-disabled="true"]):hover {
+  background-color: var(--commerce-yellow-hover) !important;
+}
+body:has([data-commerce-root]) button:focus-visible,
+body:has([data-commerce-root]) [data-option-row]:focus-within {
+  outline: 2px solid #111;
+  outline-offset: 3px;
+}
+/* Nested text/icons must not retain the previous white-on-black button palette. */
+body:has([data-commerce-root]) :is(button, [data-ui-button]):not([role="checkbox"]):not([role="radio"]):not([role="switch"]) :is(h3,p,span,svg) {
+  color: inherit;
+}
+[data-commerce-panel] {
+  position: fixed !important;
+  top: auto !important;
+  bottom: 0 !important;
+  left: 50% !important;
+  right: auto !important;
+  width: 100% !important;
+  max-width: 640px !important;
+  max-height: 90dvh !important;
+  min-height: 0;
+  transform: translateX(-50%) !important;
+  border-radius: 20px 20px 0 0 !important;
+  padding-bottom: env(safe-area-inset-bottom);
+  animation-duration: 220ms !important;
+  animation-timing-function: ease-out !important;
+}
+[data-commerce-panel="options"] { height: 90dvh !important; }
+[data-commerce-panel="cart"] { height: 85dvh; }
+[data-commerce-panel] > .flex-1 { min-height: 0; }
+[data-commerce-panel][data-state="open"] { animation-name: commerce-rise !important; }
+[data-commerce-panel][data-state="closed"] { animation-name: commerce-fall !important; }
+/* Use individual translate for motion so positioning remains stable. */
+@keyframes commerce-rise { from { translate: 0 100%; } to { translate: 0 0; } }
+@keyframes commerce-fall { from { translate: 0 0; } to { translate: 0 100%; } }
+@media (prefers-reduced-motion: reduce) {
+  [data-commerce-panel] { animation-duration: 1ms !important; }
+}
+.commerce-terms {
+  min-height: 48.4px;
+  padding-block: 12px;
+}
+.commerce-terms [role="checkbox"] { flex-shrink: 0; }
+.commerce-terms label { line-height: 1.5; }
+.commerce-newsletter { background: #fffaf0; border-color: #e5d7ad; color: #111; }
+.commerce-newsletter[data-newsletter-offer="true"] {
+  background: #fff3c4;
+  border: 2px solid #ffbd02;
+  box-shadow: 0 3px 14px #ffbd021a;
+}
+.commerce-newsletter [role="checkbox"] { margin-top: 4px; flex-shrink: 0; }
+.commerce-newsletter p { color: #4b4130; line-height: 1.5; }
+
+body:has([data-commerce-root]) button[aria-pressed="true"],
+body:has([data-commerce-root]) button[data-state="active"] { box-shadow: inset 0 0 0 2px #111; }
+body:has([data-commerce-root]) button [class*="bg-primary-foreground"] { background: transparent; color: inherit; }
+
+.commerce-newsletter [role="checkbox"], [data-option-row] [role="checkbox"], [data-option-row] [role="radio"] { border: 1.5px solid #665205; }

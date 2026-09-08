@@ -688,7 +688,7 @@ function CheckoutForm({ location }: { location: Location }) {
           control={form.control}
           name="acceptTerms"
           render={({ field }) => (
-            <FormItem className="flex flex-row items-center space-x-3 space-y-0">
+            <FormItem className="commerce-terms flex flex-row items-center gap-3 space-y-0">
               <FormControl>
                 <Checkbox
                   checked={field.value}
@@ -719,7 +719,7 @@ function CheckoutForm({ location }: { location: Location }) {
         type="submit"
         className={cn(
           "w-full font-bold",
-          isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg"
+          isSticky ? "h-[73.6px] rounded-none text-base" : "h-[55.2px] text-lg"
         )}
         disabled={
           isProcessing || (!paymentUrl && (
@@ -751,8 +751,8 @@ function CheckoutForm({ location }: { location: Location }) {
         )}
       </div>
       <FormProvider {...form}>
-        <form onSubmit={handleFormSubmit} noValidate>
-          <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-32 lg:pb-0">
+        <form data-commerce-root onSubmit={handleFormSubmit} noValidate>
+          <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-44 lg:pb-0">
             {/* Left column */}
             <fieldset className="min-w-0 space-y-10" disabled={isFormLocked}>
               <section>
@@ -890,7 +890,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     control={form.control}
                     name="subscribeToNewsletter"
                     render={({ field }) => (
-                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4">
+                      <FormItem data-newsletter-offer={!!newsletterOffer} className="commerce-newsletter flex flex-row items-start gap-3 space-y-0 rounded-xl border p-5">
                         <FormControl>
                           <Checkbox
                             checked={!!field.value}
@@ -898,11 +898,12 @@ function CheckoutForm({ location }: { location: Location }) {
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
-                          <FormLabel>Subscribe to newsletter</FormLabel>
+                          <FormLabel className="text-base font-semibold leading-relaxed">{newsletterOffer ? `Sign up and save ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`}` : 'Subscribe to newsletter'}</FormLabel>
                           <FormDescription>
                             {newsletterOffer
                               ? `Receive updates and get ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`} off this order.`
                               : 'Receive updates and special offers from us.'}
+                            <span className="block mt-2 text-xs">Optional. You can unsubscribe at any time.</span>
                           </FormDescription>
                         </div>
                       </FormItem>

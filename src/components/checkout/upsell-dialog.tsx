@@ -158,7 +158,7 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
                                         <p className="text-sm text-muted-foreground line-through">kr. {originalPrice.toFixed(2)}</p>
                                     )}
                                 </div>
-                                <Button className="w-full mt-auto" onClick={() => handleProductClick(product)} disabled={isPending}>
+                                <Button className="w-full h-[46px] mt-auto" onClick={() => handleProductClick(product)} disabled={isPending}>
                                     {isPending ? <Loader2 className="animate-spin" /> : 'Add to cart'}
                                 </Button>
                             </div>
@@ -167,7 +167,7 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
                 })}
             </div>
              <DialogFooter className="px-0 pb-6 pt-4 mt-auto sm:justify-center">
-                <Button variant="link" size="sm" onClick={handleSkipAndContinue} className="w-full sm:w-auto text-muted-foreground">
+                <Button variant="link" size="sm" onClick={handleSkipAndContinue} className="w-full h-[41.4px] sm:w-auto text-muted-foreground">
                     No thanks, continue to payment
                 </Button>
             </DialogFooter>

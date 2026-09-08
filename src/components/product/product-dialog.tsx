@@ -185,7 +185,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-      <DialogContent className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
+      <DialogContent data-commerce-panel="options" className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
         <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
                 <div className="relative aspect-video w-full shrink-0">
@@ -243,17 +243,17 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                             {isSingleSelect ? (
                                                 <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleToppingChange(group.toppings.find(t => t.id === val)!, true, true)}>
                                                     {group.toppings.map(topping => (
-                                                    <div key={`${product.id}-${topping.id}`} className="flex items-center justify-between p-2 rounded-md hover:bg-accent">
-                                                        <div className="flex items-center space-x-3">
+                                                    <label htmlFor={`${product.id}-${topping.id}`} key={`${product.id}-${topping.id}`} data-option-row className="flex items-center justify-between gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
+                                                        <span className="flex items-center space-x-3">
                                                     <RadioGroupItem
                                                         value={topping.id}
                                                         id={`${product.id}-${topping.id}`}
                                                         disabled={!currentSelection.length && Object.keys(selectedToppings).length >= MAX_TOPPINGS_PER_ITEM}
                                                     />
-                                                            <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">{topping.toppingName}</Label>
-                                                        </div>
+                                                            <span className="flex-1 font-normal">{topping.toppingName}</span>
+                                                        </span>
                                                         <span className="text-sm text-muted-foreground">+DKK {topping.price.toFixed(2)}</span>
-                                                    </div>
+                                                    </label>
                                                     ))}
                                                 </RadioGroup>
                                             ) : (
@@ -261,22 +261,22 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                                 const isChecked = currentSelection.includes(topping.id);
                                                 const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
                                                 return (
-                                                    <div key={`${product.id}-${topping.id}`} className="flex items-center justify-between p-2 rounded-md hover:bg-accent">
-                                                        <div className="flex items-center space-x-3">
+                                                    <label htmlFor={`${product.id}-${topping.id}`} key={`${product.id}-${topping.id}`} data-option-row className="flex items-center justify-between gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
+                                                        <span className="flex items-center space-x-3">
                                                             <Checkbox 
                                                                 id={`${product.id}-${topping.id}`} 
                                                                 onCheckedChange={(checked) => handleToppingChange(topping, !!checked, false)}
                                                                 checked={!!selectedToppings[topping.id]}
                                                                 disabled={!selectedToppings[topping.id] && (maxReached || Object.keys(selectedToppings).length >= MAX_TOPPINGS_PER_ITEM)}
                                                             />
-                                                            <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">
+                                                            <span className="flex-1 font-normal">
                                                                 {topping.toppingName}
-                                                            </Label>
-                                                        </div>
+                                                            </span>
+                                                        </span>
                                                         <span className="text-sm text-muted-foreground">
                                                             +DKK {topping.price.toFixed(2)}
                                                         </span>
-                                                </div>
+                                                </label>
                                                 )
                                             })
                                             )}
@@ -308,7 +308,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 </div>
                 <Button
                     size="lg"
-                    className="w-full h-14 bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
+                    className="w-full h-[64.4px] bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
                     onClick={handleAddToCart}
                     disabled={!isSelectionValid}
                 >

@@ -42,7 +42,7 @@ before(async()=>{
  `);
  const actions=fixture('actions',`
  import {scenario} from ${JSON.stringify(settings)};
- export const getNewsletterSignupDiscountAction=async()=>null;
+ export const getNewsletterSignupDiscountAction=async()=>scenario==='ui-newsletter'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:0}:null;
  export async function validateDiscountAction(){throw Error('discount network failed');}
  export async function createStripeCheckoutSessionAction(...args){
   window.checkoutArguments=args;
@@ -94,8 +94,10 @@ before(async()=>{
  // Specific aliases must precede the generic @ prefix.
  delete aliases['@'];aliases['@']=path.join(root,'src');
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
+ const css=(await require('postcss')([require('tailwindcss')({content:[path.join(root,'src/**/*.{ts,tsx}')],theme:{extend:{}},plugins:[]})]).process('@tailwind base;@tailwind components;@tailwind utilities;',{from:undefined})).css+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8');
  server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');res.setHeader('Cache-Control','no-store');
+  if(url.pathname==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css);}
   if(url.pathname==='/bundle.js'){res.setHeader('Content-Type','application/javascript');return res.end(fs.readFileSync(path.join(dir,'bundle.js')));}
   if(url.pathname==='/session'||url.pathname==='/api/checkout/session'){
    let raw='';for await(const chunk of req)raw+=chunk;
@@ -110,7 +112,7 @@ before(async()=>{
   }
   if(url.pathname==='/stripe')return res.end('Hosted payment fixture');
   if(url.pathname==='/image.png'){res.statusCode=204;return res.end();}
-  res.setHeader('Content-Type','text/html');res.end('<!doctype html><div id="root"></div><script src="/bundle.js"></script>');
+  res.setHeader('Content-Type','text/html');res.end('<!doctype html><meta charset="utf-8"><link rel="stylesheet" href="/style.css"><div id="root"></div><script src="/bundle.js"></script>');
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;
  browser=await chromium.launch({headless:true,...(process.env.CART_CHROMIUM_PATH?{executablePath:process.env.CART_CHROMIUM_PATH}:{}),args:['--no-sandbox','--disable-dev-shm-usage','--no-zygote','--use-gl=angle','--use-angle=swiftshader']});
@@ -225,4 +227,21 @@ for(const surface of ['desktop','mobile'])for(const failure of ['error','timeout
  } else await page.getByRole('button',{name:/Proceed to Checkout/}).first().click();
  await page.waitForURL('**/brand/location/checkout');
  assert.equal(requests.has('menu-setup-'+surface+'-'+failure),false);
+});
+
+test('UI69 terms spacing and eligible newsletter highlight preserve explicit consent',async t=>{
+ const page=await setup(t,'ui-newsletter');
+ const card=page.locator('.commerce-newsletter');
+ await page.getByText('Sign up and save 10%',{exact:true}).waitFor();
+ assert.equal(await card.getAttribute('data-newsletter-offer'),'true');
+ const consent=card.getByRole('checkbox');assert.equal(await consent.isChecked(),false);
+ await card.locator('label').click();assert.equal(await consent.isChecked(),true);
+ await card.locator('label').click();assert.equal(await consent.isChecked(),false);
+ await page.getByText(/Discount Applied:/).waitFor({state:'hidden'});
+ const terms=page.locator('.commerce-terms').filter({visible:true}).first();
+ assert.ok((await terms.boundingBox()).height>=48.3);
+ const payButton=page.getByRole('button',{name:/Complete Order/}).filter({visible:true}).first();
+ assert.ok(Math.abs((await payButton.boundingBox()).height-55.2)<1);
+ assert.equal(await payButton.evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(255, 189, 2)');
+ if(process.env.UI69_SCREENSHOTS)await page.screenshot({path:process.env.UI69_SCREENSHOTS+'/checkout.png',fullPage:true});
 });

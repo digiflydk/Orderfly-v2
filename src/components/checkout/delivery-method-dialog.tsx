@@ -42,7 +42,7 @@ export function DeliveryMethodDialog({ isOpen, setIsOpen, onSelect }: DeliveryMe
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
-       <DialogContent 
+       <DialogContent data-commerce-panel="delivery"
         className="w-full sm:max-w-lg p-0 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 border-0
                    bottom-0 rounded-t-2xl top-auto translate-y-0 sm:bottom-auto sm:top-1/2 sm:-translate-y-1/2
                    data-[state=closed]:slide-out-to-bottom sm:data-[state=closed]:slide-out-to-top-[48%]
@@ -53,7 +53,7 @@ export function DeliveryMethodDialog({ isOpen, setIsOpen, onSelect }: DeliveryMe
           <DialogDescription>Do you want to order for pick-up or delivery? You can always change your choice later.</DialogDescription>
         </DialogHeader>
         <div className="flex flex-col gap-2 px-4 pb-6 pt-0">
-          
+
           {/* Pickup Button */}
           <button
             onClick={() => handleSelect('pickup')}
@@ -73,7 +73,7 @@ export function DeliveryMethodDialog({ isOpen, setIsOpen, onSelect }: DeliveryMe
                 </Badge>
             )}
           </button>
-          
+
           {/* Delivery Button */}
           <button
             onClick={() => handleSelect('delivery')}
