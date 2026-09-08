@@ -1,6 +1,7 @@
 
 'use client';
 import { lineMoney, money, sumMoney } from '@/lib/money';
+import { MAX_TOPPINGS_PER_ITEM } from '@/lib/commerce-limits';
 
 import { useState, useMemo, useEffect } from 'react';
 import Image from 'next/image';
@@ -260,7 +261,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                                                 id={`${product.id}-${topping.id}`} 
                                                                 onCheckedChange={(checked) => handleToppingChange(topping, !!checked, false)}
                                                                 checked={!!selectedToppings[topping.id]}
-                                                                disabled={!selectedToppings[topping.id] && (maxReached || Object.keys(selectedToppings).length >= 50)}
+                                                                disabled={!selectedToppings[topping.id] && (maxReached || Object.keys(selectedToppings).length >= MAX_TOPPINGS_PER_ITEM)}
                                                             />
                                                             <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">
                                                                 {topping.toppingName}
