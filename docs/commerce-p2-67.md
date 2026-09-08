@@ -133,10 +133,13 @@ or conversion lift is claimed from implementation or small local fixtures.
 ## Focused local verification
 
 No Actions, broad Playwright suite, production writes or real Stripe payments.
-Tests execute actual production code with synthetic external I/O. Final local
-results: typecheck passed; 70 selected server/component cases passed (including
-19 new P2 cases); five P2 storefront Chromium cases, three checkout/upsell cases
-and six cart completion cases passed.
+Tests execute actual production code with synthetic external I/O. The implementation
+handoff recorded a browser-enabled pass of the original five P2 storefront cases,
+three checkout/upsell cases and six cart completion cases. The final release runner
+passed typecheck, the production build and 72 selected server/component cases.
+It also compiled the updated six-case P2 storefront fixture, including the new
+topping-cap regression, but could not execute Chromium because this runner has no
+browser binary. Browser-enabled execution of all six cases remains a QA requirement.
 
 ```sh
 npm run typecheck
@@ -151,8 +154,9 @@ blocked storage, public projections, read deduplication/timeouts/retry, exact
 basket/order/Stripe amounts for ordinary/item/code/automatic discounts, malicious
 price rejection, safe metrics and paid-event deduplication. Browser cases cover
 mobile/desktop CTAs, options defaults/retry/cache, search, canonical fulfillment,
-reload persistence, keyboard/mobile navigation, storage failure, successful
-checkout and upsell accept/skip. P1 receipt/availability/combo rejections run again.
+reload persistence, keyboard/mobile navigation, storage failure, the 50-topping
+cap across defaults/checkboxes/radios, successful checkout and upsell accept/skip.
+P1 receipt/availability/combo rejections run again.
 The P1 document's earlier test counts describe its earlier revision, not a rerun
 of a broad suite for P2.
 
