@@ -14,6 +14,10 @@ const product={id:'p',brandId:'b',locationIds:['l'],isActive:true,productName:'F
 const products=[product,{...product,id:'drink',productName:'Fixture Soda',description:'Kold drik',price:25,priceDelivery:30,toppingGroupIds:[]}];
 const groups=[{id:'g',locationIds:['l'],groupName:'Ekstra',minSelection:0,maxSelection:2}];
 const toppings=[{id:'t',groupId:'g',locationIds:['l'],isActive:true,isDefault:true,toppingName:'Ost',price:5}];
+const capGroups=Array.from({length:51},(_,i)=>({id:`cap-g-${i}`,locationIds:['l'],groupName:`Cap group ${i}`,minSelection:0,maxSelection:2}));
+capGroups.push({id:'cap-radio',locationIds:['l'],groupName:'Cap radio',minSelection:0,maxSelection:1});
+const capToppings=capGroups.slice(0,51).map((group,i)=>({id:`cap-t-${i}`,groupId:group.id,locationIds:['l'],isActive:true,isDefault:true,toppingName:`Default ${i}`,price:1}));
+capToppings.push({id:'cap-r-1',groupId:'cap-radio',locationIds:['l'],isActive:true,toppingName:'Radio 1',price:1});
 function fixture(name,code){const file=path.join(dir,name+'.js');fs.writeFileSync(file,code);return file;}
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'commerce-p2-browser-'));
@@ -21,15 +25,19 @@ before(async()=>{
  const original=history.replaceState.bind(history);history.replaceState=(...args)=>{original(...args);window.dispatchEvent(new Event('fixture-navigation'));};
  export function useSearchParams(){const [search,setSearch]=useState(location.search);useEffect(()=>{const update=()=>setSearch(location.search);window.addEventListener('fixture-navigation',update);window.addEventListener('popstate',update);return()=>{window.removeEventListener('fixture-navigation',update);window.removeEventListener('popstate',update);};},[]);return new URLSearchParams(search);}
  export const usePathname=()=>location.pathname;export const useParams=()=>({brandSlug:'fixture',locationSlug:'restaurant'});export const useRouter=()=>({push:href=>location.assign(href)});`);
- const entry=fixture('entry',`import React from 'react';import{createRoot}from'react-dom/client';
+ const entry=fixture('entry',`import React,{useEffect} from 'react';import{createRoot}from'react-dom/client';
  import LandingClient from ${JSON.stringify(path.join(root,'src/app/brand-site/m3pizza/landing-client.tsx'))};
  import {MenuClient} from ${JSON.stringify(path.join(root,'src/app/[brandSlug]/[locationSlug]/menu-client.tsx'))};
+ import {ProductDialog} from ${JSON.stringify(path.join(root,'src/components/product/product-dialog.tsx'))};
  import {CartProvider,useCart} from ${JSON.stringify(path.join(root,'src/context/cart-context.tsx'))};
  import {AnalyticsProvider} from ${JSON.stringify(path.join(root,'src/context/analytics-context.tsx'))};
  const brand=${JSON.stringify(brand)},location=${JSON.stringify(location)},products=${JSON.stringify(products)};
- function Debug(){const cart=useCart();return <pre id="cart-state">{JSON.stringify({ready:cart.cartReady,count:cart.itemCount,mode:cart.deliveryType,total:cart.checkoutTotal})}</pre>;}
+ const capGroups=${JSON.stringify(capGroups)},capToppings=${JSON.stringify(capToppings)};
+ const capProduct={...products[0],id:'cap-product',productName:'Cap Product',toppingGroupIds:capGroups.map(group=>group.id)};
+ function Debug(){const cart=useCart();return <pre id="cart-state">{JSON.stringify({ready:cart.cartReady,count:cart.itemCount,mode:cart.deliveryType,total:cart.checkoutTotal,toppingIds:cart.cartItems[0]?.toppings.map(topping=>topping.id)||[]})}</pre>;}
+ function ToppingCapFixture(){const cart=useCart();useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);return <><ProductDialog product={capProduct} isOpen={true} setIsOpen={()=>{}} allToppingGroups={capGroups} allToppings={capToppings}/><Debug/></>;}
  const mode=new URLSearchParams(window.location.search).get('deliveryMethod')==='delivery'?'delivery':'pickup';
- createRoot(document.getElementById('root')).render(window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}><CartProvider><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[]} initialActiveStandardDiscounts={[]}/><Debug/></CartProvider></AnalyticsProvider>);`);
+ createRoot(document.getElementById('root')).render(window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}><CartProvider>{window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const aliases={
   '@/app/cart-actions':fixture('cart-action',`export async function restoreCartAction(data){return fetch('/restore',{method:'POST',body:JSON.stringify(data)}).then(r=>r.json());}`),
@@ -94,6 +102,23 @@ for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulf
  assert.equal(new URL(page.url()).searchParams.get('deliveryMethod'),'delivery');await page.reload();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
  const state=JSON.parse(await page.locator('#cart-state').textContent());assert.equal(state.mode,'delivery');assert.equal(state.count,1);assert.equal(state.total,109); // 80 + 5 extra + 20 delivery + 4 bag.
+});
+
+test('P2 topping cap covers defaults, checkboxes, radios and a valid 50-option cart',async t=>{
+ const page=await setup(t,1280,'/topping-cap');
+ await page.getByRole('dialog').waitFor();
+ await page.waitForFunction(()=>document.querySelectorAll('[role="checkbox"][data-state="checked"]').length===50);
+ assert.equal(await page.getByRole('checkbox',{name:'Default 50'}).isDisabled(),true,'51st default is capped and disabled');
+ assert.equal(await page.getByRole('radio',{name:'Radio 1'}).isDisabled(),true,'an empty radio group cannot exceed the global cap');
+ await page.getByRole('checkbox',{name:'Default 0'}).click();
+ await page.getByRole('checkbox',{name:'Default 50'}).click();
+ assert.equal(await page.getByRole('checkbox',{name:'Default 2'}).isDisabled(),false,'selected options remain removable at the cap');
+ await page.getByRole('checkbox',{name:'Default 1'}).click();
+ await page.getByRole('radio',{name:'Radio 1'}).click();
+ await page.getByRole('dialog').getByRole('button',{name:/Add to cart|Tilføj til kurv/i}).click();
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
+ const state=JSON.parse(await page.locator('#cart-state').textContent());
+ assert.equal(state.toppingIds.length,50);assert.ok(state.toppingIds.includes('cap-r-1'));assert.ok(state.toppingIds.includes('cap-t-50'));
 });
 
 test('P2 mobile navigation, keyboard and lower order CTAs remain usable with blocked storage', async t=>{
