@@ -24,4 +24,3 @@ export const checkoutRequestSchema = z.tuple([
   }),
   id.nullable(), id, id, optionalText, id.nullish().transform(value => value ?? undefined),
 ]).refine(args => args[2] !== 'delivery' || !!(args[1].street?.trim() && args[1].zipCode?.trim() && args[1].city?.trim()), 'Delivery address required');
-
