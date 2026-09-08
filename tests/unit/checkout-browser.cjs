@@ -20,13 +20,14 @@ before(async()=>{
  const settings=fixture('scenario',`export const scenario=new URLSearchParams(window.location.search).get('case')||'success';`);
  const cart=fixture('cart',`
  import React from 'react';
- const presentation=new URLSearchParams(window.location.search).get('case')?.startsWith('presentation');
+ const scenario=new URLSearchParams(window.location.search).get('case')||'success';
+ const presentation=scenario.startsWith('presentation');
  export const brand={...${JSON.stringify(brand)},bagFee:presentation?4:0}, location=${JSON.stringify(location)};
  const context=React.createContext(null);
  const item={id:'pizza',cartItemId:'pizza',productName:'Pizza',quantity:1,basePrice:100,price:100,toppings:[],itemType:'product',imageUrl:'/image.png'};
  export function FixtureCart({children}) {
   const [includeBagFee,toggleBagFee]=React.useState(true);
-  const [items,setItems]=React.useState([item]),[discount,setDiscount]=React.useState(null);
+  const [items,setItems]=React.useState([item]),[discount,setDiscount]=React.useState(scenario==='ui-newsletter-conflict'?{id:'stronger',applicationType:'automatic',discountType:'percentage',discountValue:20,code:'SAVE20'}:null);
   const addToCart=React.useCallback((product,q,t,basePrice,price)=>setItems(old=>[...old,{...item,...product,cartItemId:product.id,basePrice,price}]),[]);
   const applyDiscount=React.useCallback(d=>setDiscount(d),[]),removeDiscount=React.useCallback(()=>setDiscount(null),[]);
   const setCartContext=React.useCallback(()=>{},[]),setSelectedTime=React.useCallback(()=>{},[]);
@@ -42,7 +43,7 @@ before(async()=>{
  `);
  const actions=fixture('actions',`
  import {scenario} from ${JSON.stringify(settings)};
- export const getNewsletterSignupDiscountAction=async()=>scenario==='ui-newsletter'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:0}:null;
+ export const getNewsletterSignupDiscountAction=async()=>scenario.startsWith('ui-newsletter')?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:0}:null;
  export async function validateDiscountAction(){throw Error('discount network failed');}
  export async function createStripeCheckoutSessionAction(...args){
   window.checkoutArguments=args;
@@ -232,11 +233,15 @@ for(const surface of ['desktop','mobile'])for(const failure of ['error','timeout
 test('UI69 terms spacing and eligible newsletter highlight preserve explicit consent',async t=>{
  const page=await setup(t,'ui-newsletter');
  const card=page.locator('.commerce-newsletter');
- await page.getByText('Sign up and save 10%',{exact:true}).waitFor();
- assert.equal(await card.getAttribute('data-newsletter-offer'),'true');
+ await page.getByText('Subscribe to newsletter',{exact:true}).waitFor();
+ assert.equal(await card.getAttribute('data-newsletter-offer'),'false');
  const consent=card.getByRole('checkbox');assert.equal(await consent.isChecked(),false);
  await card.locator('label').click();assert.equal(await consent.isChecked(),true);
+ await page.getByText('Signed up — saving 10%',{exact:true}).waitFor();
+ assert.equal(await card.getAttribute('data-newsletter-offer'),'true');
  await card.locator('label').click();assert.equal(await consent.isChecked(),false);
+ await page.getByText('Subscribe to newsletter',{exact:true}).waitFor();
+ assert.equal(await card.getAttribute('data-newsletter-offer'),'false');
  await page.getByText(/Discount Applied:/).waitFor({state:'hidden'});
  const terms=page.locator('.commerce-terms').filter({visible:true}).first();
  assert.ok((await terms.boundingBox()).height>=48.3);
@@ -244,6 +249,16 @@ test('UI69 terms spacing and eligible newsletter highlight preserve explicit con
  assert.ok(Math.abs((await payButton.boundingBox()).height-55.2)<1);
  assert.equal(await payButton.evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(255, 189, 2)');
  if(process.env.UI69_SCREENSHOTS)await page.screenshot({path:process.env.UI69_SCREENSHOTS+'/checkout.png',fullPage:true});
+});
+
+test('UI69 newsletter makes no saving promise while another discount remains applied',async t=>{
+ const page=await setup(t,'ui-newsletter-conflict');
+ const card=page.locator('.commerce-newsletter');
+ await page.getByText('Discount Applied:').waitFor();
+ await card.getByRole('checkbox').check();
+ assert.equal(await card.getAttribute('data-newsletter-offer'),'false');
+ assert.equal(await card.getByText(/saving|save .*order/i).count(),0);
+ assert.match(await page.getByText(/Discount Applied:/).locator('..').textContent(),/SAVE20/);
 });
 
 test('native mobile checkout supports autofill and hides sticky bar only for a focused keyboard',async t=>{
