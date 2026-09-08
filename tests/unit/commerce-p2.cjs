@@ -7,7 +7,7 @@ const {basketTotals}=loadTs('src/lib/basket-totals.ts');
 const {checkoutItems}=loadTs('src/lib/checkout-items.ts');
 const {fulfillmentSlots}=loadTs('src/lib/fulfillment-time.ts');
 const {calculateTimeSlots}=loadTs('src/lib/time-slots.ts');
-const {comboEligible}=loadTs('src/lib/combo-eligibility.ts');
+const {comboEligible,comboProductsAvailable}=loadTs('src/lib/combo-eligibility.ts');
 const {flattenMenu,searchMenu}=loadTs('src/lib/menu-display.ts');
 const {checkoutRequestSchema}=loadTs('src/lib/checkout-schema.ts');
 const {metricPayload,commercePage}=loadTs('src/lib/commerce-metrics.ts');
@@ -22,6 +22,10 @@ test('topping identities and labels accept the same 50-option limit',()=>{
  const args=[[{id:'p',name:'Pizza',quantity:1,unitPrice:100,totalPrice:100,toppings:Array.from({length:50},(_,i)=>`T${i}`),toppingIds:Array.from({length:50},(_,i)=>`t${i}`)}],{name:'Test',email:'test@example.test',phone:'12345678',acceptTerms:true,subscribeToNewsletter:false},'pickup','b','l',{subtotal:100,deliveryFee:0,discountTotal:0,tips:0,taxes:0},null,'brand','location',undefined,undefined];
  assert.equal(checkoutRequestSchema.safeParse(args).success,true);
  args[0][0].toppingIds.push('t51');assert.equal(checkoutRequestSchema.safeParse(args).success,false);
+ const {cartChoiceSchema}=loadTs('src/lib/cart-snapshot.ts');
+ const choice={id:'p',cartItemId:'line',itemType:'product',quantity:1,toppings:Array.from({length:50},(_,i)=>`T${i}`),toppingIds:Array.from({length:50},(_,i)=>`t${i}`),offered:false};
+ assert.equal(cartChoiceSchema.safeParse(choice).success,true);
+ choice.toppingIds.push('t51');choice.toppings.push('T51');assert.equal(cartChoiceSchema.safeParse(choice).success,false);
 });
 test('Copenhagen spring-forward has no impossible or duplicate slots and preserves real preparation minutes',()=>{
  const now=new Date('2026-03-29T00:50:00Z'); // 01:50 CET, 20 min later is 03:10 CEST.
@@ -44,6 +48,12 @@ test('combo menu and restored cart share Copenhagen schedule and fulfillment eli
  const choice={id:'d',cartItemId:'one',itemType:'combo',quantity:1,toppings:[],comboSelections:[]};
  assert.equal(restoreCartItems([choice],catalog,{...scope,deliveryType:'delivery',now}).removed,0);
  assert.equal(restoreCartItems([choice],catalog,{...scope,now}).removed,1);
+});
+test('rendered combos require every configured product to be available in the scoped menu',()=>{
+ const combo={productGroups:[{productIds:['p','side']}]};
+ assert.equal(comboProductsAvailable(combo,[{id:'p'},{id:'side'}]),true);
+ assert.equal(comboProductsAvailable(combo,[{id:'p'}]),false);
+ assert.equal(comboProductsAvailable({productGroups:[]},[{id:'p'}]),false);
 });
 test('virtual category preserves products without altering native promotion scope; search matches name and description',()=>{
  const products=flattenMenu({__virtual_menu__:[{...product,description:'Tomat og basilikum'}]});
@@ -124,8 +134,10 @@ test('performance report separates devices/releases, computes p75 and counts pai
  const common={source:'commerce-v1',release:'abcdef0',deviceType:'mobile',pageType:'menu'};
  const rows=[1000,2000,3000,4000].map((value,i)=>({...common,name:'web_vital',metricName:'LCP',metricId:'m'+i,sessionId:'s'+i,value}));
  rows.push({...rows[3]}); // repeated final metric must not bias p75.
- rows.push({...common,name:'payment_succeeded',verifiedPayment:true,orderId:'ORD-1',brandId:'b',sessionId:'s0'});
- rows.push({...rows.at(-1)},{...rows.at(-1),verifiedPayment:false,orderId:'fake'},{...rows[0],release:'different',value:99999});
+ rows.push({...common,id:'commerce-trusted',name:'payment_succeeded',verifiedPayment:true,provenance:'server-verified-payment-v1',orderId:'ORD-1',brandId:'b',sessionId:'s0'});
+ rows.push({...rows.at(-1)},{...rows.at(-1),verifiedPayment:false,orderId:'fake'},
+   {...common,id:'attacker',name:'payment_succeeded',verifiedPayment:true,orderId:'FORGED',brandId:'b',sessionId:'forged'},
+   {...rows[0],release:'different',value:99999});
  const report=summarize(rows,'abcdef0');assert.equal(report.vitals[0].samples,4);assert.equal(report.vitals[0].p75,3000);assert.equal(report.vitals[0].meetsTarget,false);
  assert.equal(report.funnel[0].verifiedOrders,1);assert.equal(report.funnel[0].sessions.payment_succeeded,1);
  assert.ok(!JSON.stringify(report).includes('ORD-1'));
@@ -136,8 +148,18 @@ test('native metric records deduplicate signed payment notifications and do not 
  const {recordCommerceMetric}=loadTs('src/lib/server/record-commerce-metric.ts',{'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({doc:id=>({set:async value=>docs.set(id,value)})})})}});
  const event={brandId:'b',locationId:'l',sessionId:'opaque',orderId:'ORD-1',paymentIntentId:'pi_secret',receipt_token:'secret',email:'customer@example.test',cartValue:123.45};
  await recordCommerceMetric('payment_succeeded',event,true);await recordCommerceMetric('payment_succeeded',event,true);assert.equal(docs.size,1);
- assert.equal([...docs.values()][0].verifiedPayment,true);assert.ok(!JSON.stringify([...docs]).includes('secret'));assert.ok(!JSON.stringify([...docs]).includes('customer@example.test'));
+ assert.equal([...docs.values()][0].verifiedPayment,true);assert.equal([...docs.values()][0].provenance,'server-verified-payment-v1');assert.ok(!JSON.stringify([...docs]).includes('secret'));assert.ok(!JSON.stringify([...docs]).includes('customer@example.test'));
  }finally{if(savedEnvironment.GA_API_SECRET!==undefined)process.env.GA_API_SECRET=savedEnvironment.GA_API_SECRET;}
+});
+test('legacy analytics route sanitizes public events before the server write',async()=>{
+ let seen;
+ const {POST}=loadTs('src/app/api/analytics/route.ts',{
+  '@/lib/server/record-commerce-metric':{recordCommerceMetric:async(name,event)=>{seen={name,event};}},
+ });
+ const response=await POST(new Request('https://test/api/analytics',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'add_to_cart',sessionId:'session',eventId:'event',productId:'p',source:'commerce-v1',verifiedPayment:true,orderId:'FORGED'})}));
+ assert.equal(response.status,200);assert.deepEqual(seen,{name:'add_to_cart',event:{name:'add_to_cart',sessionId:'session',eventId:'event',productId:'p'}});
+ const forged=await POST(new Request('https://test/api/analytics',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'payment_succeeded',sessionId:'session',eventId:'event',source:'commerce-v1',verifiedPayment:true,orderId:'FORGED'})}));
+ assert.equal(forged.status,400);
 });
 test('public product options require the native restaurant owner and preserve default selection and ordering',async()=>{
  const query=name=>({where(){return this;},get:async()=>({docs:name==='toppings'?[{id:'t',data:()=>({brandId:'b',toppingName:'Extra',price:1.005,isDefault:true,sortOrder:4,groupId:'g',secret:'private'})}]:[{id:'g',data:()=>({groupName:'Extras',minSelection:1,maxSelection:1})}]})});
