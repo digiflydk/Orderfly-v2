@@ -1,5 +1,7 @@
 'use server';
 
+import {getAdminDb} from '@/lib/firebase-admin';
+import {recordNewsletterConsent} from '@/lib/marketing/store';
 import { ore, money, sumMoney, percentageMoney } from '@/lib/money';
 import { trackServerEvent } from '@/lib/analytics-server';
 import { checkoutRequestSchema } from '@/lib/checkout-schema';
@@ -125,7 +127,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 // totalSpend: (customerData.totalSpend || 0) + newOrderTotal,
                 // lastOrderDate: new Date(),
                 locationIds: Array.from(new Set([...(customerData.locationIds || []), locationId])),
-                marketingConsent: customerData.marketingConsent || customerInfo.subscribeToNewsletter,
+                // Marketing consent is changed only with the durable consent/outbox transaction.
             };
             
             // Only update cookie consent if new data is available and not already set
@@ -147,7 +149,7 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                 zipCode: customerInfo.zipCode,
                 city: customerInfo.city,
                 country: 'DK',
-                marketingConsent: customerInfo.subscribeToNewsletter,
+                marketingConsent: false,
                 status: 'active',
                 createdAt: new Date(),
                 totalOrders: 0, // Initial creation, will be updated by webhook
@@ -485,6 +487,12 @@ export async function createStripeCheckoutSessionAction(
     stage = 'customer';
     const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, anonymousConsentId, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined);
 
+    if (customerInfo.subscribeToNewsletter) {
+      stage = 'newsletter_consent';
+      await recordNewsletterConsent(getAdminDb(),{brandId:brand.id,brandName:brand.name,locationId:location.id,customerId,email:customerInfo.email,
+        submissionId:customerInfo.newsletterConsentId,version:customerInfo.newsletterConsentVersion});
+    }
+
     // Step 1: Pre-create order with 'Pending' status
     const orderId = generateOrderId();
     const cancelToken = randomBytes(32).toString('hex');
@@ -652,10 +660,11 @@ export async function createStripeCheckoutSessionAction(
     // Correlate stages without logging customer details, secrets or session URLs.
     console.error('checkout_failed', { stage, orderId: reservedOrderId, code: e?.code || e?.type || 'unknown', retryable });
     const errorMessage = !retryable
-      ? `We could not confirm the payment status. Please contact the restaurant before retrying.${reservedOrderId ? ` Reference: ${reservedOrderId}.` : ''}`
+      ? `Betalingsstatus kunne ikke bekræftes. Kontakt restauranten, før du prøver igen.${reservedOrderId ? ` Reference: ${reservedOrderId}.` : ''}`
+      : stage === 'newsletter_consent' ? 'Tilmeldingen kunne ikke gemmes. Prøv igen, eller fjern afkrydsningen for nyhedsbrev og fortsæt uden tilmelding.'
       : ['validation', 'reservation'].includes(stage) && e instanceof Error
         ? e.message
-        : 'Payment could not be opened. Please try again or contact the restaurant.';
+        : 'Betalingen kunne ikke åbnes. Prøv igen, eller kontakt restauranten.';
     return { success: false, error: errorMessage, retryable };
   }
 }

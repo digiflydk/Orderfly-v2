@@ -42,6 +42,7 @@ test('Change dialog uses shared calculator: expired day cannot be selected, next
       '@/app/superadmin/locations/actions':{getTimeSlots},
       '@/lib/time-slots':{calculateTimeSlots},
       '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),
+      '@/lib/storefront-format':loadTs('src/lib/storefront-format.ts'),
       '@/context/cart-context':{useCart:()=>({location,deliveryType:'pickup',selectedTime:'asap',setSelectedTime:v=>saved=v})},
     });
     const {TimeSlotDialog} = load(path,mocks);

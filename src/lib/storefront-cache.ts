@@ -8,5 +8,5 @@ export const storefrontRows = unstable_cache(async (collection: string, brandId:
   if (brandId) query = query.where('brandId', '==', brandId);
   if (locationId) query = query.where('locationIds', 'array-contains', locationId);
   const snapshot = await query.where('isActive', '==', true).get();
-  return snapshot.docs.map(doc => storefrontMedia({ ...doc.data(), id: doc.id }, collection, doc.id));
+  return snapshot.docs.filter(doc=>doc.data().isTestData!==true).map(doc => storefrontMedia({ ...doc.data(), id: doc.id }, collection, doc.id));
 }, ['storefront-rows-v1'], {revalidate:60,tags:['storefront']});

@@ -16,6 +16,7 @@ import { searchMenu, type DisplayProduct } from '@/lib/menu-display';
 import { DesktopCart } from '@/components/cart/desktop-cart';
 import { CategoryNav } from '@/components/layout/category-nav';
 import { MobileFloatingCart } from '@/components/cart/mobile-floating-cart';
+import {PromotionStrip} from '@/components/product/promotion-strip';
 import { OffersSection } from '@/components/product/offers-section';
 import { ComboSection } from '@/components/product/combo-section';
 import { CategorySection } from '@/components/product/category-section';
@@ -25,6 +26,9 @@ import { useAnalytics } from '@/context/analytics-context';
 import { openDeliveryModal } from '@/components/modals/DeliveryMethodModal';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
+import {StorefrontCatalog} from '@/context/storefront-catalog';
+import {CartEditor} from '@/components/cart/cart-editor';
+import {formatPrice} from '@/lib/storefront-format';
 import { calculateTimeSlots } from '@/lib/time-slots';
 
 interface MenuClientProps {
@@ -51,6 +55,18 @@ export function MenuClient({
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [activeCategory, setActiveCategory] = useState<string>('offers');
   const [search, setSearch] = useState('');
+  const viewKey = `orderfly.menu-view.${brand.id}.${location.id}`;
+  useEffect(() => {
+    try {
+      const view = JSON.parse(sessionStorage.getItem(viewKey) || 'null');
+      if (view && typeof view.search === 'string') setSearch(view.search.slice(0,200));
+      if (view && typeof view.scroll === 'number') requestAnimationFrame(() => window.scrollTo(0,view.scroll));
+    } catch { /* Browsing still works without storage. */ }
+    const save = () => {try {const view = JSON.parse(sessionStorage.getItem(viewKey)||'{}'); sessionStorage.setItem(viewKey,JSON.stringify({...view,scroll:window.scrollY}));} catch {}};
+    window.addEventListener('pagehide',save);
+    return () => {save(); window.removeEventListener('pagehide',save);};
+  }, [viewKey]);
+  const changeSearch = (value: string) => {setSearch(value); try {sessionStorage.setItem(viewKey,JSON.stringify({search:value,scroll:window.scrollY}));} catch {}};
   const [now, setNow] = useState(() => new Date());
   const activeStandardDiscounts = cartReady ? standardDiscounts : deliveryType === initialDeliveryType || !deliveryType ? initialActiveStandardDiscounts : [];
   const mode = deliveryType || initialDeliveryType;
@@ -127,20 +143,22 @@ export function MenuClient({
   );
 
   return (
-    <div data-commerce-root className="bg-[#FFF8F0]">
+    <StorefrontCatalog products={initialProducts} combos={activeCombos}><div data-commerce-root className="bg-[#FFF8F0]">
       <div className="container mx-auto max-w-[1140px] px-4">
         <div className="py-4">
           <TimeSelector timeSlots={timeSlots} />
+          {mode === 'delivery' && location.minOrder > 0 && <p className="mt-2 text-sm text-muted-foreground">Minimumsbestilling til levering: {formatPrice(location.minOrder)} før rabatter.</p>}
         </div>
 
         <div className="sticky top-16 z-30 bg-[#FFF8F0]/90 backdrop-blur-sm -mx-4 px-4 py-2 border-t border-b">
           <CategoryNav categories={visibleCategories} hasCombos={visibleCombos.length > 0}
             hasPromotionalDiscounts={hasPromotionalDiscounts} brand={brand} activeCategory={activeCategory}
-            search={search} onSearchChange={setSearch} />
+            search={search} onSearchChange={changeSearch} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 lg:gap-6">
-          <div className="lg:col-span-2">
+          <div className="lg:col-span-2 min-w-0">
+            {!search && <PromotionStrip discounts={activeStandardDiscounts} products={initialProducts} />}
             <div className="space-y-12 py-6">
               {!visibleProducts.length && !visibleCombos.length && <p role="status">Ingen varer matcher søgningen.</p>}
               {hasPromotionalDiscounts && (
@@ -192,6 +210,7 @@ export function MenuClient({
       </div>
 
       {itemCount > 0 && <MobileFloatingCart />}
-    </div>
+      <CartEditor />
+    </div></StorefrontCatalog>
   );
 }

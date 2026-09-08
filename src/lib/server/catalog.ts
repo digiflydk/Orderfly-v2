@@ -43,6 +43,7 @@ const cachedMenu = unstable_cache(async (brandId: string, locationId: string): P
   const categories: MenuCategory[] = catsSnap.docs.filter(d => !d.data().brandId || d.data().brandId === brandId).map(d => storefrontMedia({ ...(d.data() as any), id:d.id }, 'categories', d.id));
   
   const allLocationProducts: MenuProduct[] = prodsSnap.docs
+      .filter(d=>d.data().isTestData!==true)
       .map(d => storefrontMedia({ ...(d.data() as any), id: d.id }, 'products', d.id))
       .filter(p => !p.locationIds || p.locationIds.length === 0 || p.locationIds.includes(locationId));
 

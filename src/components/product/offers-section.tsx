@@ -44,7 +44,7 @@ export function OffersSection({ brand, location, activeDiscounts, allProducts, c
 
   const offersCategory: Category = {
       id: 'offers',
-      categoryName: brand.offersHeading || 'Offers',
+      categoryName: brand.offersHeading || 'Tilbud',
       locationIds: [location.id],
       isActive: true,
       sortOrder: -1,

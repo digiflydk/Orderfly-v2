@@ -97,6 +97,8 @@ export type Role = {
  * @description Customer information provided during checkout.
  */
 export interface CustomerInfo {
+    newsletterConsentId?: string;
+    newsletterConsentVersion?: string;
     analyticsSessionId?: string;
     analyticsDevice?: 'mobile' | 'desktop';
     analyticsConsent?: boolean;
@@ -236,6 +238,7 @@ export interface TimeSlotResponse {
  * @collection products
  */
 export type Product = {
+  isTestData?: boolean;
   id: string;
   brandId: string;
   locationIds: string[];
@@ -495,6 +498,8 @@ export type ComboSelection = {
  * @collection comboMenus
  */
 export type ComboMenu = {
+  isTestData?: boolean;
+  upgradeProductIds?: string[];
   id: string;
   brandId: string;
   locationIds: string[];
@@ -839,7 +844,9 @@ export type AnalyticsEventName =
   | 'order_confirmed_view' 
   | 'upsell_offer_shown' 
   | 'upsell_accepted' 
-  | 'upsell_rejected';
+  | 'upsell_rejected'
+  | 'newsletter_opt_in_selected'
+  | 'combo_upgrade_accepted';
 
 export type AnalyticsEvent = {
   id: string;

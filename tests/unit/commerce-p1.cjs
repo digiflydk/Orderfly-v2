@@ -138,43 +138,26 @@ test('delayed webhook reconciliation reports paid only after shared settlement; 
  assert.equal((await expired.api.readGuestReceipt(expired.proof)).paymentStatus,'Failed');assert.equal(expired.settlements(),0);
 });
 
-function hookFixture(read,analytics=()=>{}) {
- const state=[],effects=[];let index=0,navigations=0,offers=0;
- const hooks={useRef:value=>{const i=index++;return state[i]||=( {current:value});},useState:value=>{const i=index++;if(!(i in state))state[i]=value;return[state[i],next=>{state[i]=typeof next==='function'?next(state[i]):next}]},useEffect:fn=>effects.push(fn)};
- const optional=loadTs('src/lib/optional-checkout.ts');
+function hookFixture({analytics=()=>{},cart={}}={}) {
+ const state=[];let index=0;const navigations=[];
+ const hooks={useRef:value=>{const i=index++;return state[i]||=( {current:value});},useState:value=>{const i=index++;if(!(i in state))state[i]=value;return[state[i],next=>{state[i]=typeof next==='function'?next(state[i]):next}]}};
  const api=loadTs('src/hooks/use-menu-checkout.ts',{
-  react:hooks,'next/navigation':{useRouter:()=>({push:()=>navigations++})},
-  '@/context/cart-context':{useCart:()=>({brand:{id:'b',slug:'brand'},location:{id:'l',slug:'location'},deliveryType:'pickup',cartItems:[{...comboCart('p'),tags:[]}],checkoutTotal:100,itemCount:1})},
+  react:hooks,'next/navigation':{useRouter:()=>({push:path=>navigations.push(path)})},
+  '@/context/cart-context':{useCart:()=>({brand:{id:'b',slug:'brand'},location:{id:'l',slug:'location'},cartReady:true,deliveryType:'pickup',cartItems:[{...comboCart('p'),tags:[]}],checkoutTotal:100,itemCount:1,...cart})},
   '@/context/analytics-context':{useAnalytics:()=>({trackEvent:analytics})},
-  '@/app/superadmin/upsells/actions':{getActiveUpsellForCart:async()=>{offers++;return read();}},
-  '@/lib/optional-checkout':{optionalCheckoutValue:(fn,fallback)=>optional.optionalCheckoutValue(fn,fallback,15)},
-  '@/lib/handled-upsells':{handledUpsells:()=>[],markUpsellHandled:()=>{}},
  });
- const render=()=>{index=0;return api.useMenuCheckout()};const first=render();const clean=effects[0]();
- return{first,render,clean,navigations:()=>navigations,offers:()=>offers};
+ const render=()=>{index=0;return api.useMenuCheckout()};
+ return{first:render(),render,navigations};
 }
-test('menu checkout survives rejected optional upsell/analytics and repeated clicks navigate only once',async()=>{
- const f=hookFixture(()=>{throw Error('upsell offline')},()=>{throw Error('analytics offline')});
- await Promise.all([f.first.handleCheckoutClick(),f.first.handleCheckoutClick()]);
- assert.equal(f.offers(),1);assert.equal(f.navigations(),1);assert.equal(f.render().isPending,true);
- await f.render().handleCheckoutClick();f.render().proceedToCheckout();assert.equal(f.navigations(),1);f.clean();
+test('menu checkout navigates immediately, ignores optional analytics failure and repeated clicks',()=>{
+ const f=hookFixture({analytics:()=>{throw Error('analytics offline')}});
+ f.first.handleCheckoutClick();f.first.handleCheckoutClick();f.render().handleCheckoutClick();
+ assert.deepEqual(f.navigations,['/brand/location/checkout']);assert.equal(f.render().isPending,true);
 });
-test('menu timeout proceeds once; late offer cannot reopen a dialog after navigation',async()=>{
- let resolve;const f=hookFixture(()=>new Promise(r=>resolve=r));
- await f.first.handleCheckoutClick();assert.equal(f.navigations(),1);
- resolve({upsell:{id:'u'},products:[]});await Promise.resolve();
- assert.equal(f.render().activeUpsell,null);assert.equal(f.navigations(),1);f.clean();
-});
-test('valid upsell can be accepted or skipped, with only one subsequent navigation',async()=>{
- const f=hookFixture(()=>({upsell:{id:'u'},products:[]}));
- await f.first.handleCheckoutClick();const state=f.render();
- assert.equal(state.isUpsellDialogOpen,true);assert.equal(state.isPending,false);assert.equal(f.navigations(),0);
- await state.handleCheckoutClick();assert.equal(f.offers(),1);
- state.proceedToCheckout();state.proceedToCheckout();assert.equal(f.navigations(),1);f.clean();
-});
-test('leaving the menu while the upsell read is pending never navigates back to checkout',async()=>{
- let resolve;const f=hookFixture(()=>new Promise(r=>resolve=r));
- const pending=f.first.handleCheckoutClick();await Promise.resolve();f.clean();resolve(null);await pending;assert.equal(f.navigations(),0);
+test('menu checkout stays put until the cart context is ready and complete',()=>{
+ for(const cart of [{cartReady:false},{brand:null},{location:null},{deliveryType:null},{cartItems:[]}]) {
+  const f=hookFixture({cart});f.first.handleCheckoutClick();assert.deepEqual(f.navigations,[]);
+ }
 });
 
 function loadComponent(file,mocks={}) {
@@ -190,12 +173,13 @@ test('real receipt component displays Pending/Failed truthfully and includes com
  const React=require('react'),{renderToStaticMarkup}=require('react-dom/server');
  const {ConfirmationClient}=loadComponent('src/app/[brandSlug]/[locationSlug]/checkout/confirmation/confirmation-client.tsx',{
   '@/context/cart-context':{useCart:()=>({completeCheckout:()=>{throw Error('SSR must not clear cart')}})},
+  '@/lib/storefront-format':loadTs('src/lib/storefront-format.ts'),
  });
  const f=receiptFixture();const order=await f.api.readGuestReceipt(f.proof);
  const render=paymentStatus=>renderToStaticMarkup(React.createElement(ConfirmationClient,{order:{...order,paymentStatus,productItems:[{...order.productItems[0],comboSelections:[{groupId:'g',groupName:'Pizza choice',products:[{id:'p2',name:'Pepperoni'}]}]}]},brand:{id:'b',slug:'brand'},location:{id:'l',slug:'location'},sessionId:f.proof.sessionId,receiptToken:f.proof.receiptToken}));
- assert.match(render('Pending'),/Awaiting payment confirmation/);assert.doesNotMatch(render('Pending'),/has been confirmed/);
- assert.match(render('Failed'),/Payment not completed/);assert.doesNotMatch(render('Failed'),/has been confirmed/);
- assert.match(render('Paid'),/has been confirmed/);assert.match(render('Paid'),/Pizza choice: Pepperoni/);
+ assert.match(render('Pending'),/Afventer bekræftelse af betaling/);assert.doesNotMatch(render('Pending'),/er bekræftet/);
+ assert.match(render('Failed'),/Betalingen blev ikke gennemført/);assert.doesNotMatch(render('Failed'),/er bekræftet/);
+ assert.match(render('Paid'),/er bekræftet/);assert.match(render('Paid'),/Pizza choice: Pepperoni/);
 });
 
 test('lookup endpoint enforces store scope and returns no cacheable receipt or error details',async()=>{

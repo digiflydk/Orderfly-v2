@@ -7,7 +7,7 @@ import { comboEligible } from './combo-eligibility';
 export type RestoreCatalog = { products: Product[]; combos: ComboMenu[]; toppings: Topping[]; groups: ToppingGroup[]; discounts: StandardDiscount[]; upsells: Upsell[] };
 export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog, scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }) {
   const now = scope.now || new Date();
-  const scoped = (record: { brandId: string; locationIds?: string[]; isActive: boolean }) => record.isActive && record.brandId === scope.brandId && (!record.locationIds?.length || record.locationIds.includes(scope.locationId));
+  const scoped = (record: { brandId: string; locationIds?: string[]; isActive: boolean; isTestData?: boolean }) => record.isActive && record.isTestData !== true && record.brandId === scope.brandId && (!record.locationIds?.length || record.locationIds.includes(scope.locationId));
   let removed = 0;
   const items: CartItem[] = [];
   for (const choice of choices) {
@@ -25,8 +25,8 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
       ? identities.length === choice.toppings.length && new Set(identities).size === identities.length
       : new Set(choice.toppings).size === choice.toppings.length;
     if (product) {
-      // Match the product dialog: only location groups with active options are
-      // offered. A stale/other-location group reference cannot delete the item.
+      // Validate all groups configured for this location, including mandatory
+      // groups whose options have become unavailable.
       const groups = catalog.groups.filter(g => product.toppingGroupIds?.includes(g.id) && g.locationIds.includes(scope.locationId));
       const allowed = catalog.toppings.filter(t => t.isActive && t.locationIds.includes(scope.locationId) && groups.some(g => g.id === t.groupId));
       const selectedIds = new Set<string>();
@@ -38,7 +38,6 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
       }
       for (const group of groups) {
         const options = allowed.filter(t => t.groupId === group.id);
-        if (!options.length) continue;
         const count = options.filter(t => selectedIds.has(t.id)).length;
         if (count < group.minSelection || (group.maxSelection > 0 && count > group.maxSelection)) valid = false;
       }

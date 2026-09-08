@@ -1,4 +1,6 @@
 'use client';
+import {NEWSLETTER_CONSENT_VERSION,newsletterConsentText} from '@/lib/marketing/consent';
+import {formatPrice,localizeTime} from '@/lib/storefront-format';
 import { useCheckoutKeyboard } from '@/hooks/use-checkout-keyboard';
 import { statisticsAllowed } from '@/lib/analytics';
 
@@ -6,7 +8,7 @@ import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillmen
 import { checkoutItems } from '@/lib/checkout-items';
 import { requestHostedCheckout } from '@/lib/checkout-request';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
-import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
+
 import * as React from 'react';
 import { useCart } from "@/context/cart-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -52,8 +54,8 @@ import { Alert, AlertTitle, AlertDescription } from "../ui/alert";
 import Cookies from "js-cookie";
 import { useAnalytics } from '@/context/analytics-context';
 import { cn } from '@/lib/utils';
-import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
-import { UpsellDialog } from './upsell-dialog';
+
+
 import { isLockedItem } from '@/lib/cart-utils';
 import { calculateTimeSlots } from '@/app/superadmin/locations/client-actions';
 import { safeImage } from '@/lib/images';
@@ -68,15 +70,15 @@ import {
 } from '@/components/ui/form';
 
 const checkoutSchema = z.object({
-  name: z.string().min(2, "Name is required"),
-  email: z.string().email("Invalid email address"),
-  phone: z.string().min(5, "Phone number is required"),
+  name: z.string().min(2, "Indtast dit navn"),
+  email: z.string().email("Indtast en gyldig e-mailadresse"),
+  phone: z.string().min(5, "Indtast dit telefonnummer"),
   street: z.string().optional(),
   zipCode: z.string().optional(),
   city: z.string().optional(),
   subscribeToNewsletter: z.boolean().default(false),
   acceptTerms: z.boolean().refine(val => val === true, {
-    message: "You must accept the terms and conditions."
+    message: "Du skal acceptere handelsbetingelserne."
   }),
 });
 
@@ -131,9 +133,9 @@ function BagFeeRow() {
           >
             <X className="h-4 w-4" />
           </Button>
-          <span>Bag</span>
+          <span>Pose</span>
         </div>
-        <span>kr.{brand.bagFee.toFixed(2)}</span>
+        <span>{formatPrice(brand.bagFee)}</span>
       </div>
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
@@ -144,8 +146,8 @@ function BagFeeRow() {
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={handleConfirmRemove}>Yes, remove</AlertDialogAction>
+            <AlertDialogCancel>Annuller</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmRemove}>Ja, fjern</AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -199,15 +201,15 @@ function OrderSummaryContent() {
                   {hasDiscount ? (
                     <>
                       <span className="font-bold text-foreground">
-                        kr.{discountedLinePrice.toFixed(2)}
+                        {formatPrice(discountedLinePrice)}
                       </span>
                       <span className="text-muted-foreground line-through ml-2">
-                        kr.{originalLinePrice.toFixed(2)}
+                        {formatPrice(originalLinePrice)}
                       </span>
                     </>
                   ) : (
                     <span className="text-muted-foreground">
-                      kr.{discountedLinePrice.toFixed(2)}
+                      {formatPrice(discountedLinePrice)}
                     </span>
                   )}
                 </p>
@@ -215,7 +217,7 @@ function OrderSummaryContent() {
                   <ul className="text-xs text-muted-foreground pl-4 mt-1 list-disc">
                     {item.toppings.map(topping => (
                       <li key={topping.name}>
-                        {topping.name} (+kr.{topping.price.toFixed(2)})
+                        {topping.name} (+{formatPrice(topping.price)})
                       </li>
                     ))}
                   </ul>
@@ -231,7 +233,7 @@ function OrderSummaryContent() {
             </div>
             <div className="text-right">
               <p className="font-medium">
-                kr. {(item.price * item.quantity + toppingsPrice).toFixed(2)}
+                {formatPrice((item.price * item.quantity + toppingsPrice))}
               </p>
             </div>
           </div>
@@ -240,14 +242,14 @@ function OrderSummaryContent() {
       <Separator />
       <div className="space-y-2 text-sm">
         <div className="flex justify-between">
-          <span>Subtotal</span>
-          <span>kr.{subtotal.toFixed(2)}</span>
+          <span>Varer</span>
+          <span>{formatPrice(subtotal)}</span>
         </div>
 
         {itemDiscount > 0 && (
           <div className="flex justify-between text-green-600">
-            <span>Item Discounts</span>
-            <span>- kr.{itemDiscount.toFixed(2)}</span>
+            <span>Varerabat</span>
+            <span>- {formatPrice(itemDiscount)}</span>
           </div>
         )}
         {cartDiscount && (
@@ -256,7 +258,7 @@ function OrderSummaryContent() {
               <Tag className="h-4 w-4" />
               <span>{cartDiscount.name}</span>
             </div>
-            <span>- kr.{cartDiscount.amount.toFixed(2)}</span>
+            <span>- {formatPrice(cartDiscount.amount)}</span>
           </div>
         )}
         {voucherDiscount && (
@@ -265,17 +267,17 @@ function OrderSummaryContent() {
               <Tag className="h-4 w-4" />
               <span>Code: {voucherDiscount.name}</span>
             </div>
-            <span>- kr.{voucherDiscount.amount.toFixed(2)}</span>
+            <span>- {formatPrice(voucherDiscount.amount)}</span>
           </div>
         )}
 
         {deliveryType === 'delivery' && (
           <div className="flex justify-between">
-            <span>Delivery Fee</span>
+            <span>Levering</span>
             {freeDeliveryDiscountApplied ? (
-              <span className="font-semibold text-green-600">Free</span>
+              <span className="font-semibold text-green-600">Gratis</span>
             ) : (
-              <span>kr.{deliveryFee.toFixed(2)}</span>
+              <span>{formatPrice(deliveryFee)}</span>
             )}
           </div>
         )}
@@ -284,21 +286,21 @@ function OrderSummaryContent() {
 
         {adminFee > 0 && (
           <div className="flex justify-between">
-            <span>Admin Fee</span>
-            <span>kr.{adminFee.toFixed(2)}</span>
+            <span>Servicegebyr</span>
+            <span>{formatPrice(adminFee)}</span>
           </div>
         )}
 
         <Separator />
         <div className="flex justify-between font-bold text-lg">
-          <span>Total</span>
-          <span>kr.{checkoutTotal.toFixed(2)}</span>
+          <span>I alt</span>
+          <span>{formatPrice(checkoutTotal)}</span>
         </div>
 
         {vatAmount > 0 && (
           <div className="flex justify-between text-xs text-muted-foreground pt-1">
             <span>VAT Included ({brand?.vatPercentage || 25}%)</span>
-            <span>kr.{vatAmount.toFixed(2)}</span>
+            <span>{formatPrice(vatAmount)}</span>
           </div>
         )}
       </div>
@@ -347,10 +349,9 @@ function CheckoutForm({ location }: { location: Location }) {
   const [discountErrorMessage, setDiscountErrorMessage] = useState('');
   const [newsletterOffer, setNewsletterOffer] = useState<NewsletterDiscountOffer | null>(null);
 
-  const [checkoutStep, setCheckoutStep] = useState<'form' | 'upsell'>('form');
 
-  const [activeUpsell, setActiveUpsell] =
-    useState<{ upsell: Upsell; products: ProductForMenu[] } | null>(null);
+
+
 
   const minOrderAmount = location?.minOrder ?? 0;
   const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
@@ -384,9 +385,14 @@ function CheckoutForm({ location }: { location: Location }) {
     }
   });
 
+  const consentAttempt = React.useRef<{key:string;id:string}|null>(null);
   const newsletterSelected = form.watch('subscribeToNewsletter');
   const newsletterEmail = form.watch('email');
-  const newsletterSavingApplied = !!newsletterOffer && newsletterSelected &&
+  useEffect(()=>{consentAttempt.current=null;},[newsletterSelected,newsletterEmail]);
+  const newsletterBase = cartItems.filter(item=>!isLockedItem(item)).reduce((n,item)=>n+(item.basePrice+item.toppings.reduce((sum,t)=>sum+t.price,0))*item.quantity,0);
+  const newsletterPotential = newsletterOffer ? Math.min(newsletterBase,newsletterOffer.discountType==='percentage'?newsletterBase*newsletterOffer.discountValue/100:newsletterOffer.discountValue) : 0;
+  const newsletterBenefitAvailable = !!newsletterOffer && newsletterPotential>0 && newsletterPotential>(cartDiscount?.amount || 0) && (!appliedDiscount || appliedDiscount.applicationType==='newsletter_signup');
+  const newsletterSavingApplied = !!newsletterOffer && newsletterSelected && !!voucherDiscount?.amount &&
     appliedDiscount?.applicationType === 'newsletter_signup' && appliedDiscount.id === newsletterOffer.id;
 
   useEffect(() => {
@@ -425,7 +431,7 @@ function CheckoutForm({ location }: { location: Location }) {
         ...newsletterOffer,
         brandId: brand!.id,
         locationIds: [location!.id],
-        code: 'Newsletter signup',
+        code: 'Nyhedsbrev',
         isActive: true,
         orderTypes: [deliveryType!],
         activeDays: [],
@@ -463,11 +469,11 @@ function CheckoutForm({ location }: { location: Location }) {
         currentDiscountableSubtotal,
         deliveryType,
         form.getValues('email')
-      ), { success: false, message: 'Discount could not be checked. Please try again.' }, 8000);
+      ), { success: false, message: 'Rabatten kunne ikke kontrolleres. Prøv igen.' }, 8000);
 
       if (result.success && result.discount) {
         applyDiscount(result.discount);
-        toast({ title: 'Success!', description: 'Discount code applied.' });
+        toast({ title: 'Rabat tilføjet', description: 'Rabatkoden er tilføjet.' });
       } else {
         removeDiscount();
         setDiscountErrorMessage(result.message);
@@ -517,14 +523,14 @@ function CheckoutForm({ location }: { location: Location }) {
   const proceedToStripe = async (formValues: CheckoutFormValues) => {
       // A slow payment request is not evidence that no session exists. Keep the
       // submission locked until a definitive response; never race it with retry.
-      const waiting = setTimeout(() => setCheckoutError('Payment is taking longer than usual. Please keep this page open while we check it.'), 15000);
+      const waiting = setTimeout(() => setCheckoutError('Det tager lidt længere tid at åbne betalingen. Hold siden åben, mens vi kontrollerer den.'), 15000);
       try {
       if (!brand || !location) {
         toast({
           variant: 'destructive',
           title: 'Error',
           description:
-            'Brand or location information is missing. Please refresh and try again.'
+            'Restaurantoplysninger mangler. Genindlæs siden og prøv igen.'
         });
         setIsProcessing(false);
         return;
@@ -552,17 +558,22 @@ function CheckoutForm({ location }: { location: Location }) {
 
       // Recheck even if the page or an upsell dialog has been open for a while.
       try { resolveFulfillmentTime(location, deliveryType!, selectedTime); }
-      catch { setCheckoutError('Please choose a new available order time.'); setIsTimeDialogOpen(true); return; }
+      catch { setCheckoutError('Vælg et nyt ledigt tidspunkt.'); setIsTimeDialogOpen(true); return; }
       const finalDeliveryTime = selectedTime;
       let anonymousId: string | undefined;
       try { anonymousId = Cookies.get('orderfly_anonymous_id'); } catch { /* Optional consent linkage. */ }
 
       const minimalCartItems = checkoutItems(cartItems);
 
-      // The server receives an explicit consent boolean.
+      if(formValues.subscribeToNewsletter) {
+        const key=`${brand.id}/${formValues.email.trim().toLowerCase()}`;
+        if(consentAttempt.current?.key!==key)consentAttempt.current={key,id:crypto.randomUUID()};
+      }
+      // The server receives an explicit consent boolean and stable retry identity.
       const customerInfo: CustomerInfo = {
         ...formValues,
         subscribeToNewsletter: !!formValues.subscribeToNewsletter,
+        ...(formValues.subscribeToNewsletter && consentAttempt.current ? {newsletterConsentId:consentAttempt.current.id,newsletterConsentVersion:NEWSLETTER_CONSENT_VERSION}:{}),
         ...(statisticsAllowed() && analyticsSessionId ? {analyticsSessionId, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const} : {})
       };
 
@@ -589,50 +600,33 @@ function CheckoutForm({ location }: { location: Location }) {
         window.location.assign(result.url);
       } else {
         setPaymentUncertain(result.retryable === false);
-        setCheckoutError(result.error || 'Payment could not be opened. Please try again.');
+        setCheckoutError(result.error || 'Betalingen kunne ikke åbnes. Prøv igen.');
       }
       } catch {
         setPaymentUncertain(true);
-        setCheckoutError('We could not confirm whether the payment page was created. Please contact the restaurant before starting another payment.');
+        setCheckoutError('Vi kunne ikke bekræfte, om betalingen blev oprettet. Kontakt restauranten, før du starter en ny betaling.');
       } finally {
         clearTimeout(waiting);
       }
   };
 
-  const submitCheckout = async (formValues: CheckoutFormValues, skipUpsell = false) => {
-    if (requestInFlight.current || paymentUncertain || paymentUrl || (activeUpsell && !skipUpsell)) return;
+  const submitCheckout = async (formValues: CheckoutFormValues) => {
+    if (requestInFlight.current || paymentUncertain || paymentUrl) return;
     setCheckoutError(null);
     if (!brand || !location || !deliveryType || !cartItems.length || isDeliveryBelowMinOrder || !isOrderTimeValid) {
-      setCheckoutError('Please check your basket, delivery method and available order time.');
+      setCheckoutError('Kontrollér kurven, leveringsmetoden og tidspunktet.');
       return;
     }
     if (deliveryType === 'delivery' && (!formValues.street?.trim() || !formValues.zipCode?.trim() || !formValues.city?.trim())) {
-      if (!formValues.street?.trim()) form.setError('street', { message: 'Street name is required.' });
-      if (!formValues.zipCode?.trim()) form.setError('zipCode', { message: 'Postal code is required.' });
-      if (!formValues.city?.trim()) form.setError('city', { message: 'City is required.' });
-      setCheckoutError('Please complete your delivery address.');
+      if (!formValues.street?.trim()) form.setError('street', { message: 'Indtast din adresse.' });
+      if (!formValues.zipCode?.trim()) form.setError('zipCode', { message: 'Indtast postnummer.' });
+      if (!formValues.city?.trim()) form.setError('city', { message: 'Indtast by.' });
+      setCheckoutError('Udfyld leveringsadressen.');
       return;
     }
     requestInFlight.current = true;
     setIsProcessing(true);
     try {
-      if (!skipUpsell) {
-        const upsellData = await optionalCheckoutValue(() => getActiveUpsellForCart({
-          brandId: brand.id,
-          locationId: location.id,
-          deliveryType,
-          cartItems: cartItems.map(item => ({ id: item.id, categoryId: item.categoryId, itemType: item.itemType, tags: item.tags })),
-          cartTotal: cartItems.filter(item => !isLockedItem(item)).reduce((sum, item) =>
-            sum + (item.basePrice + item.toppings.reduce((total, topping) => total + topping.price, 0)) * item.quantity, 0),
-          excludedUpsellIds: handledUpsells(),
-        }), null);
-        if (upsellData) {
-          markUpsellHandled(upsellData.upsell.id);
-          setActiveUpsell(upsellData);
-          setCheckoutStep('upsell');
-          return;
-        }
-      }
       await proceedToStripe(formValues);
     } finally {
       requestInFlight.current = false;
@@ -640,7 +634,7 @@ function CheckoutForm({ location }: { location: Location }) {
     }
   };
 
-  const showValidationError = () => setCheckoutError('Please check the highlighted fields before continuing to payment.');
+  const showValidationError = () => setCheckoutError('Kontrollér de markerede felter, før du går til betaling.');
   const handleFormSubmit: React.FormEventHandler<HTMLFormElement> = event => {
     if (paymentUrl) {
       event.preventDefault();
@@ -650,13 +644,6 @@ function CheckoutForm({ location }: { location: Location }) {
     }
     void form.handleSubmit(values => submitCheckout(values), showValidationError)(event);
   };
-  const onUpsellDialogContinue = () => {
-    setActiveUpsell(null);
-    setCheckoutStep('form');
-    // Validate again after the dialog; do not bypass required customer fields.
-    void form.handleSubmit(values => submitCheckout(values, true), showValidationError)();
-  };
-
   const handleRemoveDiscount = () => {
     removeDiscount();
     setDiscountCode('');
@@ -665,10 +652,10 @@ function CheckoutForm({ location }: { location: Location }) {
   if (cartItems.length === 0 && !isProcessing) {
     return (
       <div className="text-center">
-        <h1 className="text-2xl font-bold">Your Cart is Empty</h1>
+        <h1 className="text-2xl font-bold">Din kurv er tom</h1>
         <p className="text-muted-foreground">You can't check out with an empty cart.</p>
         <Button asChild className="mt-4">
-          <Link href={`/${params.brandSlug}/${params.locationSlug}`}>Back to Menu</Link>
+          <Link href={`/${params.brandSlug}/${params.locationSlug}`}>Tilbage til menuen</Link>
         </Button>
       </div>
     );
@@ -683,7 +670,7 @@ function CheckoutForm({ location }: { location: Location }) {
         <Alert variant="warning" className="mb-4">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>
-            Minimum order for delivery is not met (kr. {minOrderAmount.toFixed(2)})
+            Minimumsbestillingen til levering er ikke nået ({formatPrice(minOrderAmount)})
           </AlertTitle>
         </Alert>
       )}
@@ -703,13 +690,13 @@ function CheckoutForm({ location }: { location: Location }) {
               </FormControl>
               <div className="space-y-1 leading-none">
                 <FormLabel className="text-sm">
-                  I accept the{" "}
+                  Jeg accepterer{" "}
                   <Link
                     href={brand?.termsUrl || '/terms'}
                     target="_blank"
                     className="underline"
                   >
-                    terms and conditions
+                    handelsbetingelserne
                   </Link>
                   .
                 </FormLabel>
@@ -727,14 +714,14 @@ function CheckoutForm({ location }: { location: Location }) {
         )}
         disabled={
           isProcessing || (!paymentUrl && (
-            paymentUncertain || !!activeUpsell || !isTermsAccepted ||
+            paymentUncertain || !isTermsAccepted ||
             isDeliveryBelowMinOrder || !isOrderTimeValid
           ))
         }
       >
         <div className="flex w-full justify-between items-center px-4">
-          <span>{isProcessing ? <><Loader2 className="inline animate-spin mr-2" />Opening payment…</> : 'Complete Order'}</span>
-          <span>kr. {checkoutTotal.toFixed(2)}</span>
+          <span>{isProcessing ? <><Loader2 className="inline animate-spin mr-2" />Åbner betaling…</> : 'Gå til betaling'}</span>
+          <span>{formatPrice(checkoutTotal)}</span>
         </div>
       </Button>
       {checkoutError && <p role="alert" className="mt-3 text-sm text-destructive">{checkoutError}</p>}
@@ -745,11 +732,11 @@ function CheckoutForm({ location }: { location: Location }) {
     <>
       <div className="mb-6">
         {isProcessing || paymentUncertain || paymentUrl ? (
-          <Button type="button" variant="outline" disabled><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Back to Menu</Button>
+          <Button type="button" variant="outline" disabled><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Tilbage til menuen</Button>
         ) : (
           <Button type="button" variant="outline" asChild>
             <Link href={`/${params.brandSlug}/${params.locationSlug}?deliveryMethod=${deliveryType || 'pickup'}`}>
-              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Back to Menu
+              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Tilbage til menuen
             </Link>
           </Button>
         )}
@@ -760,7 +747,7 @@ function CheckoutForm({ location }: { location: Location }) {
             {/* Left column */}
             <fieldset className="min-w-0 space-y-10" disabled={isFormLocked}>
               <section>
-                <h2 className="text-2xl font-bold mb-4">Delivery & Time</h2>
+                <h2 className="text-2xl font-bold mb-4">Levering og tidspunkt</h2>
                 <div className="space-y-4">
                   <div className="flex items-center justify-between rounded-lg border bg-muted p-4">
                     <div className="flex items-center gap-3">
@@ -770,7 +757,7 @@ function CheckoutForm({ location }: { location: Location }) {
                         <Store className="h-6 w-6 text-muted-foreground" />
                       )}
                       <div>
-                        <p className="font-semibold capitalize">{deliveryType}</p>
+                        <p className="font-semibold capitalize">{deliveryType==='delivery'?'Levering':'Afhentning'}</p>
                         {deliveryType === 'pickup' && location && (
                           <p className="text-sm text-muted-foreground">
                             {location.address}
@@ -786,7 +773,7 @@ function CheckoutForm({ location }: { location: Location }) {
                         {isLoadingTimes ? (
                           <Loader2 className="h-5 w-5 animate-spin" />
                         ) : (
-                          <p className="font-semibold">{displayTime}</p>
+                          <p className="font-semibold">{localizeTime(displayTime)}</p>
                         )}
                       </div>
                     </div>
@@ -796,21 +783,21 @@ function CheckoutForm({ location }: { location: Location }) {
                       onClick={() => setIsTimeDialogOpen(true)}
                       disabled={isLoadingTimes}
                     >
-                      Change
+                      Ændr tidspunkt
                     </Button>
                   </div>
                 </div>
               </section>
 
               <section>
-                <h2 className="text-2xl font-bold mb-4">Customer Information</h2>
+                <h2 className="text-2xl font-bold mb-4">Dine oplysninger</h2>
                 <div className="space-y-4">
                   <FormField
                     control={form.control}
                     name="name"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Full Name</FormLabel>
+                        <FormLabel>Fulde navn</FormLabel>
                         <FormControl>
                           <Input autoComplete="name" enterKeyHint="next" placeholder="John Doe" {...field} />
                         </FormControl>
@@ -823,7 +810,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     name="email"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Email</FormLabel>
+                        <FormLabel>E-mail</FormLabel>
                         <FormControl>
                           <Input autoComplete="email" inputMode="email" autoCapitalize="none" autoCorrect="off" enterKeyHint="next" type="email" placeholder="john@example.com" {...field} />
                         </FormControl>
@@ -836,7 +823,7 @@ function CheckoutForm({ location }: { location: Location }) {
                     name="phone"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Phone Number</FormLabel>
+                        <FormLabel>Telefonnummer</FormLabel>
                         <FormControl>
                           <Input autoComplete="tel" inputMode="tel" enterKeyHint="next" type="tel" placeholder="+123456789" {...field} />
                         </FormControl>
@@ -851,9 +838,9 @@ function CheckoutForm({ location }: { location: Location }) {
                         name="street"
                         render={({ field }) => (
                           <FormItem>
-                            <FormLabel>Street Name</FormLabel>
+                            <FormLabel>Adresse</FormLabel>
                             <FormControl>
-                              <Input autoComplete="address-line1" enterKeyHint="next" placeholder="123 Main St" {...field} />
+                              <Input autoComplete="address-line1" enterKeyHint="next" placeholder="Vejnavn og husnummer" {...field} />
                             </FormControl>
                             <FormMessage />
                           </FormItem>
@@ -865,9 +852,9 @@ function CheckoutForm({ location }: { location: Location }) {
                           name="zipCode"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>Postal Code</FormLabel>
+                              <FormLabel>Postnummer</FormLabel>
                               <FormControl>
-                                <Input autoComplete="postal-code" inputMode="numeric" enterKeyHint="next" placeholder="12345" {...field} />
+                                <Input autoComplete="postal-code" inputMode="numeric" enterKeyHint="next" placeholder="Postnummer" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -878,9 +865,9 @@ function CheckoutForm({ location }: { location: Location }) {
                           name="city"
                           render={({ field }) => (
                             <FormItem>
-                              <FormLabel>City</FormLabel>
+                              <FormLabel>By</FormLabel>
                               <FormControl>
-                                <Input autoComplete="address-level2" enterKeyHint="done" placeholder="Anytown" {...field} />
+                                <Input autoComplete="address-level2" enterKeyHint="done" placeholder="By" {...field} />
                               </FormControl>
                               <FormMessage />
                             </FormItem>
@@ -894,20 +881,19 @@ function CheckoutForm({ location }: { location: Location }) {
                     control={form.control}
                     name="subscribeToNewsletter"
                     render={({ field }) => (
-                      <FormItem data-newsletter-offer={newsletterSavingApplied} className="commerce-newsletter flex flex-row items-start gap-3 space-y-0 rounded-xl border p-5">
+                      <FormItem data-newsletter-offer={newsletterBenefitAvailable} className="commerce-newsletter flex flex-row items-start gap-3 space-y-0 rounded-xl border p-5">
                         <FormControl>
                           <Checkbox
                             checked={!!field.value}
-                            onCheckedChange={field.onChange}
+                            onCheckedChange={checked=>{field.onChange(checked);trackEvent('newsletter_opt_in_selected',{value:checked===true?1:0});}}
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
-                          <FormLabel className="text-base font-semibold leading-relaxed">{newsletterSavingApplied ? `Signed up — saving ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`}` : 'Subscribe to newsletter'}</FormLabel>
+                          <FormLabel className="text-base font-semibold leading-relaxed">{newsletterBenefitAvailable && newsletterOffer ? `Få ${newsletterOffer.discountType==='percentage'?`${newsletterOffer.discountValue}%`:formatPrice(newsletterOffer.discountValue)} ved tilmelding` : 'Få nyheder og tilbud'}</FormLabel>
                           <FormDescription>
-                            {newsletterSavingApplied
-                              ? `Your ${newsletterOffer.discountType === 'percentage' ? `${newsletterOffer.discountValue}%` : `kr. ${newsletterOffer.discountValue.toFixed(2)}`} newsletter saving is applied to this order.`
-                              : 'Receive updates and special offers from us.'}
-                            <span className="block mt-2 text-xs">Optional. You can unsubscribe at any time.</span>
+                            {newsletterConsentText(brand?.name || 'restauranten')}
+                            {newsletterSavingApplied && <span className="block mt-2 font-semibold text-green-700">Nyhedsbrevsrabatten er valgt til denne ordre.</span>}
+                            {newsletterOffer && !newsletterBenefitAvailable && <span className="block mt-2">Dine nuværende rabatter eller menupriser bevares. Nyhedsbrevsrabatten lægges ikke oveni.</span>}
                           </FormDescription>
                         </div>
                       </FormItem>
@@ -916,14 +902,14 @@ function CheckoutForm({ location }: { location: Location }) {
                 </div>
               </section>
 
-              <section>
-                <h2 className="text-2xl font-bold mb-4">Discount Code</h2>
+              <details open={appliedDiscount && appliedDiscount.applicationType!=='newsletter_signup' ? true : undefined} className="rounded-lg border p-4">
+                <summary className="cursor-pointer font-semibold min-h-11 flex items-center">Har du en rabatkode?</summary>
                 {appliedDiscount && appliedDiscount.applicationType !== 'newsletter_signup' ? (
                   <div className="flex justify-between items-center text-green-600">
                     <div className="flex items-center gap-2">
                       <Tag className="h-4 w-4" />
                       <span>
-                        Discount Applied:{" "}
+                        Rabatkode:{" "}
                         <span className="font-mono">{appliedDiscount.code}</span>
                       </span>
                     </div>
@@ -940,7 +926,7 @@ function CheckoutForm({ location }: { location: Location }) {
                 ) : (
                   <div className="flex items-center gap-2">
                     <Input
-                      placeholder="Enter discount code"
+                      placeholder="Indtast rabatkode"
                       className="h-9"
                       value={discountCode}
                       onChange={e => setDiscountCode(e.target.value)}
@@ -951,11 +937,11 @@ function CheckoutForm({ location }: { location: Location }) {
                       onClick={handleApplyDiscount}
                       disabled={isProcessing || !discountCode}
                     >
-                      {isProcessing ? <Loader2 className="animate-spin" /> : 'Apply'}
+                      {isProcessing ? <Loader2 className="animate-spin" /> : 'Anvend'}
                     </Button>
                   </div>
                 )}
-              </section>
+              </details>
 
               <div className="lg:hidden">
                 <Accordion
@@ -969,7 +955,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       <div className="flex items-center gap-2">
                         <ShoppingCart className="h-5 w-5" />
                         <h2 className="text-lg font-bold">
-                          Order summary ({itemCount} items)
+                          Ordreoversigt ({itemCount} varer)
                         </h2>
                       </div>
                     </AccordionTrigger>
@@ -986,8 +972,8 @@ function CheckoutForm({ location }: { location: Location }) {
               <div className="flex flex-col sticky top-6 h-[calc(100vh-3rem)]">
                 <Card className="flex flex-col flex-1">
                   <CardHeader>
-                    <CardTitle>Order Summary</CardTitle>
-                    <CardDescription>Review the items in your cart.</CardDescription>
+                    <CardTitle>Ordreoversigt</CardTitle>
+                    <CardDescription>Kontrollér varerne i din kurv.</CardDescription>
                   </CardHeader>
                   <CardContent className="flex-1 overflow-y-auto pr-4">
                     <fieldset className="min-w-0" disabled={isFormLocked}>
@@ -1019,7 +1005,7 @@ function CheckoutForm({ location }: { location: Location }) {
       <AlertDialog open={isDiscountErrorOpen} onOpenChange={setIsDiscountErrorOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Invalid Discount Code</AlertDialogTitle>
+            <AlertDialogTitle>Rabatkoden kunne ikke bruges</AlertDialogTitle>
             <AlertDialogDescription>{discountErrorMessage}</AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1030,19 +1016,7 @@ function CheckoutForm({ location }: { location: Location }) {
         </AlertDialogContent>
       </AlertDialog>
 
-      {activeUpsell && (
-        <UpsellDialog
-          isOpen={checkoutStep === 'upsell'}
-          setIsOpen={open => {
-            if (!open) {
-              setActiveUpsell(null);
-              setCheckoutStep('form');
-            }
-          }}
-          upsellData={activeUpsell}
-          onContinue={onUpsellDialogContinue}
-        />
-      )}
+
     </>
   );
 }

@@ -6,6 +6,7 @@ import type { Product, CartItemTopping, Brand, Location, ComboMenu, ComboSelecti
 import { restoreCartAction } from '@/app/cart-actions';
 import { CART_STORAGE_KEY, cartChoices, readCartSnapshot, requestedDelivery, type CartSnapshot } from '@/lib/cart-snapshot';
 import Cookies from 'js-cookie';
+import { putCartItem } from '@/lib/cart-edit';
 import { useSearchParams } from 'next/navigation';
 import { syncDeliveryUrl } from '@/lib/delivery-url';
 import { money, sumMoney, lineMoney } from '@/lib/money';
@@ -14,6 +15,8 @@ import { isLockedItem } from '@/lib/cart-utils';
 
 interface CartContextType {
   cartReady: boolean;
+  editingItem: CartItem | null;
+  setEditingItem: (item: CartItem | null) => void;
   saveCartForCheckout: (orderId: string) => void;
   completeCheckout: (orderId: string, brandId: string, locationId: string) => void;
   cartItems: CartItem[];
@@ -29,8 +32,8 @@ interface CartContextType {
   includeBagFee: boolean;
   toggleBagFee: (include: boolean) => void;
   setDeliveryType: (type: 'delivery' | 'pickup') => void;
-  addToCart: (product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number) => void;
-  addComboToCart: (combo: ComboMenu, quantity: number, selections: ComboSelection[], price: number) => void;
+  addToCart: (product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number, expected?: CartItem) => boolean;
+  addComboToCart: (combo: ComboMenu, quantity: number, selections: ComboSelection[], price: number, expected?: CartItem) => boolean;
   removeFromCart: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, newQuantity: number) => void;
   clearCart: () => void;
@@ -57,6 +60,7 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export function CartProvider({ children }: { children: ReactNode }) {
   const searchParams = useSearchParams();
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
+  const [editingItem, setEditingItem] = useState<CartItem | null>(null);
   const [brand, setBrand] = useState<Brand | null>(null);
   const [location, setLocation] = useState<Location | null>(null);
   const [deliveryType, setDeliveryTypeState] = useState<'delivery' | 'pickup' | null>(null);
@@ -149,6 +153,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const setDeliveryType = (type: 'delivery' | 'pickup') => {
     syncDeliveryUrl(type);
     if (current.current.deliveryType === type) return;
+    setEditingItem(null);
     checkoutOrderId.current = undefined;
     persist();
     generation.current++;
@@ -168,6 +173,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const key = `${newBrand.id}/${newLocation.id}`;
     if (scopeRef.current === key) return;
     scopeRef.current = key;
+    setEditingItem(null);
     seedRef.current = seed ? {key: `${key}/${seed.deliveryType}`, discounts: seed.discounts} : null;
     generation.current++;
     readyRef.current = false;
@@ -245,105 +251,53 @@ export function CartProvider({ children }: { children: ReactNode }) {
   }, [cartItems, appliedDiscount, standardDiscounts, deliveryType, location, isInitialized, brand, includeBagFee]);
 
 
-  const addToCart = useCallback((product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number) => {
-    if (!readyRef.current) return;
+  const commitItem = useCallback((next: CartItem, expected?: CartItem) => {
+    const state = current.current;
+    if (!readyRef.current || !state.brand || next.brandId !== state.brand.id ||
+        !Number.isSafeInteger(next.quantity) || next.quantity < 1 || next.quantity > 100) return false;
+    const items = putCartItem(state.cartItems, next, expected);
+    if (!items) return false;
     checkoutOrderId.current = undefined;
-    const canonicalizeToppings = (values: CartItemTopping[]) => [...values].sort((a, b) => {
-      if (a.id && b.id) {
-        const identityOrder = a.id.localeCompare(b.id);
-        if (identityOrder !== 0) return identityOrder;
-        return a.price - b.price;
-      }
-      if (a.id) return -1;
-      if (b.id) return 1;
-      const nameOrder = a.name.localeCompare(b.name);
-      if (nameOrder !== 0) return nameOrder;
-      return a.price - b.price;
-    });
-    basePrice = money(basePrice); finalPrice = money(finalPrice);
-    const sortedToppings = canonicalizeToppings(toppings.map(t => ({...t, price: money(t.price)})));
-    const toppingsKey = sortedToppings.map(t => `${t.id || t.name}:${t.price}`).join(',');
-    const existingItemKey = `${product.id}-${toppingsKey}`;
-  
-    const toppingsTotal = sortedToppings.reduce((sum, t) => sum + t.price, 0);
-    const itemTotal = sumMoney([finalPrice, toppingsTotal]);
-  
-    setCartItems(prevItems => {
-      const existingItem = prevItems.find(item => item.itemType === 'product' && `${item.id}-${canonicalizeToppings(item.toppings).map(t => `${t.id || t.name}:${t.price}`).join(',')}` === existingItemKey);
-  
-      if (existingItem) {
-        return prevItems.map(item =>
-          item.cartItemId === existingItem.cartItemId
-            ? { ...item, quantity: item.quantity + quantity }
-            : item
-        );
-      } else {
-        const newCartItem: CartItem = {
-          id: product.id,
-          cartItemId: `${product.id}-${Date.now()}`,
-          itemType: 'product',
-          productName: product.productName,
-          description: product.description,
-          imageUrl: product.imageUrl,
-          basePrice: basePrice,
-          price: finalPrice,
-          quantity,
-          toppings: sortedToppings,
-          itemTotal,
-          categoryId: product.categoryId,
-          tags: [
-            ...(product.isPopular ? ['Popular'] : []),
-            ...(product.isFeatured ? ['Recommended'] : []),
-            ...(product.isNew ? ['Campaign'] : []),
-          ],
-          brandId: product.brandId,
-        };
-        return [...prevItems, newCartItem];
-      }
-    });
-  }, []);
+    current.current = { ...state, cartItems: items };
+    persist(); // Invalidate old payment proof in shared storage before exposing the edit.
+    setCartItems(items);
+    return true;
+  }, [persist]);
 
-  const addComboToCart = useCallback((combo: ComboMenu, quantity: number, selections: ComboSelection[], price: number) => {
-      if (!readyRef.current) return;
-      checkoutOrderId.current = undefined;
-      price = money(price);
-      const newCartItem: CartItem = {
-          id: combo.id,
-          cartItemId: `${combo.id}-${Date.now()}`,
-          itemType: 'combo',
-          productName: combo.comboName,
-          description: combo.description,
-          imageUrl: combo.imageUrl || undefined,
-          basePrice: price,
-          price: price,
-          quantity: quantity,
-          itemTotal: price,
-          toppings: [],
-          brandId: combo.brandId,
-          comboSelections: selections,
-      };
-      setCartItems(prev => [...prev, newCartItem]);
-  }, []);
-  
+  const addToCart = useCallback((product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number, expected?: CartItem) => {
+    const sorted = [...toppings].map(t => ({...t, price: money(t.price)})).sort((a,b) => (a.id || a.name).localeCompare(b.id || b.name));
+    return commitItem({
+      id: product.id, cartItemId: crypto.randomUUID(), itemType: 'product',
+      productName: product.productName, description: product.description, imageUrl: product.imageUrl,
+      basePrice: money(basePrice), price: money(finalPrice), quantity, toppings: sorted,
+      itemTotal: sumMoney([finalPrice, ...sorted.map(t => t.price)]), categoryId: product.categoryId,
+      tags: [...(product.isPopular ? ['Popular'] : []), ...(product.isFeatured ? ['Recommended'] : []), ...(product.isNew ? ['Campaign'] : [])],
+      brandId: product.brandId,
+    }, expected);
+  }, [commitItem]);
+
+  const addComboToCart = useCallback((combo: ComboMenu, quantity: number, selections: ComboSelection[], price: number, expected?: CartItem) => {
+    return commitItem({
+      id: combo.id, cartItemId: crypto.randomUUID(), itemType: 'combo', productName: combo.comboName,
+      description: combo.description, imageUrl: combo.imageUrl || undefined, basePrice: money(price),
+      price: money(price), quantity, itemTotal: money(price), toppings: [], brandId: combo.brandId,
+      comboSelections: selections,
+    }, expected);
+  }, [commitItem]);
+
   const removeFromCart = useCallback((cartItemId: string) => {
     if (!readyRef.current) return;
     checkoutOrderId.current = undefined;
-    setCartItems(prevItems => prevItems.filter(item => item.cartItemId !== cartItemId));
-  }, []);
+    const items = current.current.cartItems.filter(item=>item.cartItemId!==cartItemId);
+    current.current = {...current.current,cartItems:items}; persist(); setCartItems(items);
+  }, [persist]);
 
   const updateQuantity = useCallback((cartItemId: string, newQuantity: number) => {
-    if (!readyRef.current) return;
-    checkoutOrderId.current = undefined;
-    if (newQuantity <= 0) {
-      removeFromCart(cartItemId);
-    } else {
-      setCartItems(prevItems =>
-        prevItems.map(item =>
-          item.cartItemId === cartItemId ? { ...item, quantity: newQuantity } : item
-        )
-      );
-    }
-  }, [removeFromCart]);
+    if (!readyRef.current || !Number.isSafeInteger(newQuantity) || newQuantity>100) return;
+    if (newQuantity<=0) {removeFromCart(cartItemId);return;}
+    const expected = current.current.cartItems.find(item=>item.cartItemId===cartItemId);
+    if(expected) commitItem({...expected,quantity:newQuantity},expected);
+  }, [removeFromCart,commitItem]);
 
   const clearCart = useCallback(() => {
     if (!readyRef.current) return;
@@ -366,6 +320,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   const value = {
     cartReady,
+    editingItem, setEditingItem,
     saveCartForCheckout,
     completeCheckout,
     cartItems,

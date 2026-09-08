@@ -21,10 +21,10 @@ export function Footer({ brand, location, onOpenCookieSettings, version }: Foote
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <button onClick={onOpenCookieSettings} className="flex items-center gap-1 hover:text-foreground">
             <Globe className="h-4 w-4" />
-            <span>English</span>
+            <span>Cookieindstillinger</span>
           </button>
           <div className="flex items-center gap-2">
-            {version && <span>1.0.224</span>}
+
             <span className="opacity-50">·</span>
             <span>Powered by OrderFly</span>
           </div>

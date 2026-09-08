@@ -242,7 +242,7 @@ type GetActiveUpsellParams = {
   brandId: string;
   locationId: string;
   deliveryType: 'pickup' | 'delivery';
-  cartItems: { id: string; categoryId?: string; itemType?: 'product' | 'combo'; tags?: string[] }[];
+  cartItems: { id: string; categoryId?: string; itemType?: 'product' | 'combo'; tags?: string[]; includedProductIds?: string[] }[];
   cartTotal: number;
   excludedUpsellIds?: string[];
 };
@@ -322,36 +322,27 @@ export async function getActiveUpsellForCart({
       if (isTriggered) {
            // 4. If triggered, fetch the offered products
           let offeredProductIds: string[] = [];
+          if (upsell.offerType !== 'product' && !upsell.offerCategoryIds?.length) continue;
           if (upsell.offerType === 'product') {
               offeredProductIds = upsell.offerProductIds;
           } else { // offerType is 'category'
-              const catProductsQuery = db.collection('products').where('categoryId', 'in', upsell.offerCategoryIds);
+              const catProductsQuery = db.collection('products').where('brandId', '==', brandId).where('categoryId', 'in', upsell.offerCategoryIds.slice(0,30));
               const catProductsSnapshot = await catProductsQuery.get();
               offeredProductIds = catProductsSnapshot.docs.map(doc => doc.id);
           }
           
           // 5. Suppression Logic: Filter out products already in the cart
-          const currentCartProductIds = new Set(cartItems.map(item => item.id));
+          const currentCartProductIds = new Set(cartItems.flatMap(item => [item.id, ...(item.includedProductIds || [])]));
           const finalProductIds = offeredProductIds.filter(id => !currentCartProductIds.has(id));
 
           if (finalProductIds.length > 0) {
               // Fetch full product details
-              const products = await getProductsByIds(finalProductIds, brandId);
+              // Only return products that are currently public at this restaurant.
+              // If an old offer has no valid products, continue to the next offer.
+              const products = await getProductsByIds(finalProductIds, brandId, locationId);
               
               if (products.length > 0) {
-                  // Increment the views count
-                  try {
-                      const upsellRef = db.collection('upsells').doc(upsell.id);
-                      await db.runTransaction(async (transaction) => {
-                          const sfDoc = await transaction.get(upsellRef);
-                          if (!sfDoc.exists) { throw "Document does not exist!"; }
-                          const newViews = (sfDoc.data()!.views || 0) + 1;
-                          transaction.update(upsellRef, { views: newViews });
-                      });
-                  } catch(e) {
-                      console.error("Failed to increment upsell views:", e);
-                  }
-                  
+                  // Read only. UI telemetry records impressions when actually visible.
                   const serializableUpsell = {
                     ...upsell,
                     startDate: toDate(upsell.startDate)?.toISOString(),

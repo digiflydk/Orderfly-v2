@@ -28,6 +28,7 @@ const baseFields = {
   priceDelivery: z.coerce.number().min(0, 'Delivery price must be a non-negative number.').optional(),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
+  isTestData: z.preprocess(asBool,z.boolean()).optional(),
   imageUrl: z.any().optional(),
 };
 
@@ -227,7 +228,7 @@ export async function getProductById(productId: string): Promise<Product | null>
     return null;
 }
 
-export async function getProductsByIds(productIds: string[], brandId?: string): Promise<ProductForMenu[]> {
+export async function getProductsByIds(productIds: string[], brandId?: string, locationId?: string): Promise<ProductForMenu[]> {
     if (!productIds || productIds.length === 0) return [];
     const db = getAdminDb();
     
@@ -243,7 +244,11 @@ export async function getProductsByIds(productIds: string[], brandId?: string): 
     }
     
     const productArrays = await Promise.all(productPromises);
-    const allProducts = productArrays.flat();
+    const allProducts = productArrays.flat().filter(product => !locationId || (
+        product.isActive === true &&
+        product.isTestData !== true &&
+        (!(product.locationIds || []).length || product.locationIds.includes(locationId))
+    ));
 
     const finalProducts: ProductForMenu[] = allProducts.map(p => ({
         id: p.id,

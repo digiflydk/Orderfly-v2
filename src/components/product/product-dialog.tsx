@@ -3,10 +3,10 @@
 import { lineMoney, money, sumMoney } from '@/lib/money';
 import { MAX_TOPPINGS_PER_ITEM } from '@/lib/commerce-limits';
 
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef, useId } from 'react';
 import Image from 'next/image';
 import { Minus, Plus, X } from 'lucide-react';
-import type { Topping, ToppingGroup, CartItemTopping, StandardDiscount, Allergen, ProductForMenu } from '@/types';
+import type { CartItem, ComboMenu, Topping, ToppingGroup, CartItemTopping, StandardDiscount, Allergen, ProductForMenu } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { useToast } from '@/hooks/use-toast';
 import {
@@ -28,9 +28,14 @@ import { publicRead } from '@/lib/public-read';
 import { RadioGroup, RadioGroupItem } from '../ui/radio-group';
 import { useAnalytics } from '@/context/analytics-context';
 import { safeImage } from '@/lib/images';
+import {formatPrice} from '@/lib/storefront-format';
+import {useStorefrontCatalog} from '@/context/storefront-catalog';
+import {ComboBuilderDialog} from './combo-builder-dialog';
 
 interface ProductDialogProps {
   product: ProductForMenu;
+  initialItem?: CartItem;
+  onAdded?: () => void;
   allToppingGroups: ToppingGroup[];
   allToppings: Topping[];
   isOpen: boolean;
@@ -47,12 +52,18 @@ const getSelectionText = (group: ToppingGroup): string => {
   if (min > 0 && max === 0) return `Vælg mindst ${min}`;
   if (max > 1 && min <= 1) return `Vælg op til ${max}`;
   if (max === 1 && min === 1) return `Vælg 1`;
-  
+
   return "Vælg en";
 };
 
 
-export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, allToppings, applicableDiscount }: ProductDialogProps) {
+export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, allToppings, applicableDiscount, initialItem, onAdded }: ProductDialogProps) {
+  const {combos, products} = useStorefrontCatalog();
+  const [upgrade, setUpgrade] = useState<ComboMenu | null>(null);
+  const [showErrors, setShowErrors] = useState(false);
+  const initialized = useRef('');
+  const committed = useRef(false);
+  const dialogId = useId();
   const [quantity, setQuantity] = useState(1);
   const [selectedToppings, setSelectedToppings] = useState<Record<string, CartItemTopping>>({});
   const [allergens, setAllergens] = useState<Allergen[]>([]);
@@ -60,13 +71,13 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   const { cartReady, addToCart, deliveryType, location, cartTotal } = useCart();
   const { toast } = useToast();
   const { trackEvent } = useAnalytics();
-  
+
   const relevantToppingGroups = useMemo(() => {
     if (!product.toppingGroupIds || !allToppingGroups || !allToppings) return [];
-    
+
     const productToppingGroupIds = new Set(product.toppingGroupIds);
     const allActiveToppings = allToppings.filter(t => t.isActive);
-    
+
     return allToppingGroups
         .filter(group => productToppingGroupIds.has(group.id))
         .map(group => ({
@@ -75,14 +86,19 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 .filter(topping => topping.groupId === group.id)
                 .sort((a,b) => (a.sortOrder ?? 999) - (b.sortOrder ?? 999))
         }))
-        .filter(group => group.toppings.length > 0);
+        .filter(group => group.toppings.length > 0 || Number(group.minSelection) > 0)
+        .sort((a,b) => Number(Number(b.minSelection) > 0) - Number(Number(a.minSelection) > 0));
   }, [product.toppingGroupIds, allToppingGroups, allToppings]);
 
   const finalPrice = product.price;
 
   useEffect(() => {
-    if (isOpen && location) {
-      setQuantity(1);
+    if (!isOpen) {initialized.current = ''; return;}
+    const key = `${product.id}/${location?.id}/${deliveryType}/${initialItem?.cartItemId || ''}`;
+    if (isOpen && location && initialized.current !== key) {
+      if (initialized.current) {setIsOpen(false); return;}
+      initialized.current = key; committed.current = false; setShowErrors(false);
+      setQuantity(initialItem?.quantity || 1);
 
       const defaultToppings: Record<string, CartItemTopping> = {};
       relevantToppingGroups.forEach(group => {
@@ -92,8 +108,12 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
               }
           });
       });
-      setSelectedToppings(defaultToppings);
-      
+      const selected = initialItem ? Object.fromEntries(initialItem.toppings.flatMap(t => {
+        const match = relevantToppingGroups.flatMap(g => g.toppings).find(candidate => t.id ? candidate.id === t.id : candidate.toppingName === t.name);
+        return match ? [[match.id,{id:match.id,name:match.toppingName,price:money(match.price)}]] : [];
+      })) : defaultToppings;
+      setSelectedToppings(selected);
+
       async function fetchAllergens() {
         if(product.allergenIds && product.allergenIds.length > 0) {
             setAllergenError(false);
@@ -117,17 +137,17 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
       });
 
     }
-  }, [isOpen, product, relevantToppingGroups, trackEvent, location, finalPrice]);
-  
+  }, [isOpen, product, relevantToppingGroups, trackEvent, location, finalPrice, deliveryType, initialItem, setIsOpen]);
+
   const basePrice = useMemo(() => {
     return (product as any).basePrice ?? (deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price);
   }, [product, deliveryType]);
-  
+
 
   const handleToppingChange = (topping: Topping, isChecked: boolean, isSingleSelect: boolean) => {
     setSelectedToppings(prev => {
         const newSelected = { ...prev };
-        
+
         if (isSingleSelect) {
             const groupToppings = relevantToppingGroups.find(g => g.id === topping.groupId)?.toppings || [];
             groupToppings.forEach(t => {
@@ -148,7 +168,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
         return newSelected;
     });
   };
-  
+
   const toppingsTotal = sumMoney(Object.values(selectedToppings).map(topping => topping.price));
   const totalItemPrice = lineMoney(finalPrice, quantity, [toppingsTotal]);
 
@@ -160,17 +180,30 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
 
         if (count < min) return false;
         if (max > 0 && count > max) return false;
-        
+
         return true;
     });
 }, [selectedToppings, relevantToppingGroups]);
 
   const handleAddToCart = () => {
-    if (!cartReady || !isSelectionValid) return;
+    if (!cartReady || committed.current) return;
+    if (!isSelectionValid) {
+      setShowErrors(true);
+      const group = relevantToppingGroups.find(g => {
+        const n = g.toppings.filter(t => selectedToppings[t.id]).length;
+        return n < Number(g.minSelection) || (Number(g.maxSelection) > 0 && n > Number(g.maxSelection));
+      });
+      const element = group && document.getElementById(`${dialogId}-group-${group.id}`);
+      if (element) {if (element instanceof HTMLDetailsElement) element.open = true; element.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); element.focus();}
+      return;
+    }
     const finalToppings = Object.values(selectedToppings);
-    addToCart(product, quantity, finalToppings, basePrice, finalPrice);
-    toast({title: 'Tilføjet til kurven', description: `${quantity} × ${product.productName}`, duration: 2200});
-    
+    const saved = addToCart(product, quantity, finalToppings, basePrice, finalPrice, initialItem);
+    if (saved === false) {toast({variant:'destructive',title:'Kurven blev ændret',description:'Luk tilvalg og åbn varen igen for at fortsætte.'}); return;}
+    committed.current = true;
+    onAdded?.();
+    toast({title: initialItem ? 'Kurven er opdateret' : 'Tilføjet til kurven', description: `${quantity} × ${product.productName}`, duration: 2200});
+
     trackEvent('add_to_cart', {
         productId: product.id,
         productName: product.productName,
@@ -181,42 +214,27 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
 
     setIsOpen(false);
   }
-  
+
   const hasOptions = allergenError || allergens.length > 0 || relevantToppingGroups.length > 0;
 
+  if (upgrade) return <ComboBuilderDialog combo={upgrade} brandProducts={products} initialItem={initialItem} initialQuantity={quantity} preselectedProductId={product.id} isOpen={isOpen} setIsOpen={open => {if (!open) setUpgrade(null);}} onSaved={() => {trackEvent('combo_upgrade_accepted',{productId:upgrade.id});setUpgrade(null); setIsOpen(false);}} />;
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent data-commerce-panel="options" className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
         <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
-                <div className="relative aspect-video w-full shrink-0">
-                    <Image 
-                        src={safeImage(product.imageUrl)} 
-                        alt={product.productName || 'Product image'}
-                        fill
-                        sizes="(max-width: 640px) 100vw, 512px"
-                        className="object-cover"
-                        data-ai-hint="delicious food"
-                    />
-                    <DialogClose asChild>
-                        <Button variant="ghost" size="icon" className="absolute top-2 right-2 bg-black/30 hover:bg-black/50 text-white rounded-full">
-                            <X className="h-4 w-4" />
-                        </Button>
-                    </DialogClose>
+                <div className="commerce-option-header">
+                  <div className="commerce-option-image"><Image src={safeImage(product.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
+                  <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="font-semibold">{formatPrice(finalPrice)}</p></DialogHeader>
                 </div>
-                <div className="p-6 space-y-6">
-                    <DialogHeader className="text-left space-y-2">
-                        <DialogTitle className="text-2xl">{product.productName}</DialogTitle>
-                        {product.description && <DialogDescription className="text-base">{product.description}</DialogDescription>}
-                    </DialogHeader>
-                    
+                <div className="p-4 space-y-4">
                     {hasOptions && (
                         <>
                             <Separator />
                             {allergenError && <p role="status" className="text-sm">Allergenoplysninger kunne ikke indlæses. Kontakt restauranten ved allergi.</p>}
                         {allergens.length > 0 && (
                                 <div>
-                                    <h3 className="font-semibold text-lg mb-2">Allergens</h3>
+                                    <h3 className="font-semibold text-lg mb-2">Allergener</h3>
                                     <div className="flex flex-wrap gap-2">
                                     {allergens.map(allergen => (
                                         <Badge key={allergen.id} variant="secondary" className="gap-1.5">
@@ -235,7 +253,8 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                 const currentSelection = Object.keys(selectedToppings).filter(tid => group.toppings.some(t => t.id === tid));
 
                                 return (
-                                    <div key={group.id}>
+                                    <details key={group.id} id={`${dialogId}-group-${group.id}`} tabIndex={-1} className="commerce-option-group" open={Number(group.minSelection) > 0 ? true : undefined} data-invalid={showErrors && currentSelection.length < Number(group.minSelection)}>
+                                      <summary className="font-semibold">{group.groupName} · {Number(group.minSelection) > 0 ? 'Påkrævet' : 'Valgfrit'}<span className="block text-sm font-normal text-muted-foreground">{currentSelection.map(id => selectedToppings[id]?.name).filter(Boolean).join(', ') || getSelectionText(group)}</span></summary>
                                         <div className="mb-2">
                                         <h3 className="font-semibold text-lg">{group.groupName}</h3>
                                         <p className="text-sm text-muted-foreground">{getSelectionText(group)}</p>
@@ -244,16 +263,16 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                             {isSingleSelect ? (
                                                 <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleToppingChange(group.toppings.find(t => t.id === val)!, true, true)}>
                                                     {group.toppings.map(topping => (
-                                                    <label htmlFor={`${product.id}-${topping.id}`} key={`${product.id}-${topping.id}`} data-option-row className="flex items-center justify-between gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
+                                                    <label htmlFor={`${dialogId}-${topping.id}`} key={`${dialogId}-${topping.id}`} data-option-row className="flex items-center justify-between gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
                                                         <span className="flex items-center space-x-3">
                                                     <RadioGroupItem
                                                         value={topping.id}
-                                                        id={`${product.id}-${topping.id}`}
+                                                        id={`${dialogId}-${topping.id}`}
                                                         disabled={!currentSelection.length && Object.keys(selectedToppings).length >= MAX_TOPPINGS_PER_ITEM}
                                                     />
                                                             <span className="flex-1 font-normal">{topping.toppingName}</span>
                                                         </span>
-                                                        <span className="text-sm text-muted-foreground">+DKK {topping.price.toFixed(2)}</span>
+                                                        <span className="text-sm text-muted-foreground">+{formatPrice(topping.price)}</span>
                                                     </label>
                                                     ))}
                                                 </RadioGroup>
@@ -262,10 +281,10 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                                 const isChecked = currentSelection.includes(topping.id);
                                                 const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
                                                 return (
-                                                    <label htmlFor={`${product.id}-${topping.id}`} key={`${product.id}-${topping.id}`} data-option-row className="flex items-center justify-between gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
+                                                    <label htmlFor={`${dialogId}-${topping.id}`} key={`${dialogId}-${topping.id}`} data-option-row className="flex items-center justify-between gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
                                                         <span className="flex items-center space-x-3">
-                                                            <Checkbox 
-                                                                id={`${product.id}-${topping.id}`} 
+                                                            <Checkbox
+                                                                id={`${dialogId}-${topping.id}`}
                                                                 onCheckedChange={(checked) => handleToppingChange(topping, !!checked, false)}
                                                                 checked={!!selectedToppings[topping.id]}
                                                                 disabled={!selectedToppings[topping.id] && (maxReached || Object.keys(selectedToppings).length >= MAX_TOPPINGS_PER_ITEM)}
@@ -275,25 +294,36 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                                             </span>
                                                         </span>
                                                         <span className="text-sm text-muted-foreground">
-                                                            +DKK {topping.price.toFixed(2)}
+                                                            +{formatPrice(topping.price)}
                                                         </span>
                                                 </label>
                                                 )
                                             })
                                             )}
                                         </div>
-                                    </div>
+                                    </details>
                                 );
                             })}
                         </>
                     )}
+                  {combos.filter(c => c.upgradeProductIds?.includes(product.id) && c.productGroups.some(g => g.productIds.includes(product.id))).slice(0,2).map(c => {
+                    const price = deliveryType === 'delivery' ? c.deliveryPrice : c.pickupPrice;
+                    if (price === undefined) return null;
+                    const delta=price-finalPrice-toppingsTotal;
+                    return <section className="commerce-inline-offers" key={c.id}>
+                      <h3 className="font-semibold">Gør det til {c.comboName}</h3><p className="text-sm">{c.description || c.productGroups.map(g=>g.groupName).join(' + ')}</p>
+                      <p className="text-sm">{formatPrice(price)} pr. menu · {delta>=0?`+${formatPrice(delta)}`:`Spar ${formatPrice(-delta)}`} pr. stk.</p>
+                      {Object.keys(selectedToppings).length>0 && <p className="text-xs">Menuen har egne tilvalg. Dine produkttilvalg følger ikke med.</p>}
+                      <Button className="mt-2 w-full" onClick={() => setUpgrade(c)}>Vælg menu</Button>
+                    </section>;
+                  })}
                 </div>
             </ScrollArea>
              <div className="w-full mt-auto sticky bottom-0">
                 <div className="flex items-center justify-center gap-3 p-3 bg-[#FFF8F0] border-t">
                     <Button
                         variant="outline"
-                        onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                        aria-label="Reducer antal" onClick={() => setQuantity(q => Math.max(1, q - 1))}
                         className="w-11 h-11 rounded-lg bg-gray-200 text-gray-800 flex items-center justify-center transition-all hover:bg-gray-300"
                     >
                         <Minus className="h-6 w-6" />
@@ -301,7 +331,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     <span className="text-2xl font-bold w-12 text-center">{quantity}</span>
                     <Button
                         variant="outline"
-                        onClick={() => setQuantity(q => q + 1)}
+                        aria-label="Øg antal" disabled={quantity >= 100} onClick={() => setQuantity(q => Math.min(100,q + 1))}
                         className="w-11 h-11 rounded-lg bg-gray-200 text-gray-800 flex items-center justify-center transition-all hover:bg-gray-300"
                     >
                         <Plus className="h-6 w-6" />
@@ -311,11 +341,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                     size="lg"
                     className="w-full h-[64.4px] bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
                     onClick={handleAddToCart}
-                    disabled={!cartReady || !isSelectionValid}
+                    disabled={!cartReady}
                 >
                     <div className="flex w-full justify-between items-center">
-                        <span>Add to Cart</span>
-                        <span>DKK {totalItemPrice.toFixed(2)}</span>
+                        <span>{!isSelectionValid ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'}</span>
+                        <span>{formatPrice(totalItemPrice)}</span>
                     </div>
                 </Button>
             </div>

@@ -27,6 +27,15 @@ test('topping identities and labels accept the same 50-option limit',()=>{
  assert.equal(cartChoiceSchema.safeParse(choice).success,true);
  choice.toppingIds.push('t51');choice.toppings.push('T51');assert.equal(cartChoiceSchema.safeParse(choice).success,false);
 });
+test('newsletter consent ID and version must be submitted together',()=>{
+ const base=[[{id:'p',name:'Pizza',quantity:1,unitPrice:100,totalPrice:100,toppings:[],toppingIds:[]}],{name:'Test',email:'test@example.test',phone:'12345678',acceptTerms:true,subscribeToNewsletter:true},'pickup','b','l',{subtotal:100,deliveryFee:0,discountTotal:0,tips:0,taxes:0},null,'brand','location',undefined,undefined];
+ const idOnly=structuredClone(base);idOnly[1].newsletterConsentId='4a660928-2188-4b2b-a2d7-354a923db5ab';
+ const versionOnly=structuredClone(base);versionOnly[1].newsletterConsentVersion='checkout-email-da-2026-09-08';
+ assert.equal(checkoutRequestSchema.safeParse(idOnly).success,false);
+ assert.equal(checkoutRequestSchema.safeParse(versionOnly).success,false);
+ const complete=structuredClone(idOnly);complete[1].newsletterConsentVersion='checkout-email-da-2026-09-08';
+ assert.equal(checkoutRequestSchema.safeParse(complete).success,true);
+});
 test('Copenhagen spring-forward has no impossible or duplicate slots and preserves real preparation minutes',()=>{
  const now=new Date('2026-03-29T00:50:00Z'); // 01:50 CET, 20 min later is 03:10 CEST.
  const times=calculateTimeSlots(location,'2026-03-29T12:00:00Z',now);

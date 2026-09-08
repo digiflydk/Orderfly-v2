@@ -118,6 +118,7 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/discounts', label: 'Discounts', icon: Tags },
         { href: '/superadmin/combos', label: 'Combos', icon: Gift },
         { href: '/superadmin/upsells', label: 'Upsells', icon: Bookmark },
+        { href: '/superadmin/marketing', label: 'Newsletter & Omnisend', icon: Bookmark },
         { href: '/superadmin/standard-discounts', label: 'Standard Discounts', icon: Percent },
         { href: '/superadmin/loyalty', label: 'Loyalty', icon: Trophy },
       ],

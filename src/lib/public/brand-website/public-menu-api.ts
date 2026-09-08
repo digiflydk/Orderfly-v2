@@ -10,6 +10,7 @@ interface BrandMenuProductDocument {
   categoryId?: string;
   sortOrder?: number;
   isActive?: boolean;
+  isTestData?: boolean;
 }
 
 interface BrandMenuCategoryDocument {
@@ -66,7 +67,7 @@ export async function getPublicBrandMenuData(
           ...data,
         };
       })
-      .filter((product) => product.isActive === true)
+      .filter((product) => product.isActive === true && product.isTestData !== true)
       .map(
         (product): PublicMenuProduct => ({
           id: product.id,

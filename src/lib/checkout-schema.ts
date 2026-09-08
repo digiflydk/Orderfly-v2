@@ -7,7 +7,13 @@ const customer = z.object({
   analyticsSessionId: z.string().uuid().optional(), analyticsDevice: z.enum(['mobile','desktop']).optional(), analyticsConsent: z.boolean().optional(),
   name: z.string().trim().min(2).max(200), email: z.string().trim().email().max(254),
   phone: z.string().trim().min(5).max(50), street: optionalText, zipCode: optionalText, city: optionalText,
+  newsletterConsentId: z.string().uuid().optional(),
+  newsletterConsentVersion: z.literal('checkout-email-da-2026-09-08').optional(),
   subscribeToNewsletter: z.boolean(), acceptTerms: z.literal(true),
+}).superRefine((value, context) => {
+  if (!!value.newsletterConsentId !== !!value.newsletterConsentVersion) {
+    context.addIssue({ code: 'custom', message: 'Newsletter consent ID and version must be supplied together' });
+  }
 });
 export const checkoutRequestSchema = z.tuple([
   z.array(z.object({ id, name: z.string().min(1).max(200), quantity: z.number().int().min(1).max(999),

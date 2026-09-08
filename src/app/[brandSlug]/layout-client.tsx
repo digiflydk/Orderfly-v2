@@ -34,22 +34,18 @@ export function BrandLayoutClient({
     );
   }
   
-  const isCheckoutPage = pathname?.includes('/checkout');
-  const isMenuPage = !!location && !isCheckoutPage;
-  const isBrandHomePage = !location;
-
-  const showGlobalHeader = isBrandHomePage || isCheckoutPage;
-  const showMenuHeader = isMenuPage;
-  
-  const isConfirmationPage = pathname?.includes('/checkout/confirmation');
-  const showFooter = isBrandHomePage || isMenuPage || isConfirmationPage;
+  const segments = pathname?.split('/').filter(Boolean) || [];
+  const isOrderPage = segments.length >= 2 && !['about','contact','privacy','terms','order'].includes(segments[1]);
+  const showGlobalHeader = !isOrderPage;
+  const showMenuHeader = isOrderPage;
+  const showFooter = true;
 
   return (
       <div
         className="flex flex-col min-h-screen"
       >
         {showGlobalHeader && <Header brand={brand} settings={settings || null} />}
-        {showMenuHeader && location && <MenuHeader brand={brand} />}
+        {showMenuHeader && <MenuHeader brand={brand} />}
         <main className="flex-1 w-full">
             {children}
         </main>

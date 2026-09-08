@@ -29,6 +29,7 @@ function Flow() {
   const output = {ready:cart.cartReady,items:cart.cartItems,total:cart.checkoutTotal,deliveryType:cart.deliveryType,includeBagFee:cart.includeBagFee,brandId:cart.brand?.id};
   return React.createElement('div',null,
     React.createElement('pre',{id:'state'},JSON.stringify(output)),
+    React.createElement('button',{id:'edit-line',onClick:()=>cart.addToCart(product,2,[{id:'t',name:'Cheese',price:10}],75,75,cart.cartItems[0])},'Edit line'),
     React.createElement('button',{id:'pizza',onClick:()=>cart.addToCart(product,1,[],75,75)},'Add pizza'),
     React.createElement('button',{id:'topping',onClick:()=>cart.addToCart(product,1,[{name:'Cheese',price:10}],75,75)},'Add with cheese'),
     React.createElement('button',{id:'identified-toppings',onClick:()=>cart.addToCart(product,1,[{id:'t',name:'Cheese',price:10},{id:'t2',name:'Cheese',price:5}],75,75)},'Add named options'),
@@ -259,4 +260,12 @@ test('cancel and menu return retain same-name topping choices and new tabs resto
  const reopened=await context.newPage();await reopened.goto(origin+'/');await ready(reopened);await count(reopened,2);
  assert.deepEqual((await state(reopened)).items,expected.items);
  assert.equal((await state(reopened)).deliveryType,'delivery');
+});
+
+test('#71 editing a line invalidates old payment before another tab confirms it',async t=>{
+ const payment=await setup(t);await payment.click('#pizza');await count(payment,1);await payment.click('#pay');await payment.waitForURL('**/stripe');
+ const cart=await payment.context().newPage();await cart.goto(origin+'/checkout');await ready(cart);await cart.click('#edit-line');await count(cart,2);
+ const edited=await saved(cart);assert.equal(edited.checkoutOrderId,undefined);assert.deepEqual(edited.choices[0].toppingIds,['t']);
+ await payment.goto(origin+'/checkout/confirmation?order=ORD-ONE&status=Paid');await payment.waitForFunction(()=>window.receiptProcessed);
+ assert.deepEqual(await saved(payment),edited);await cart.reload();await ready(cart);await count(cart,2);
 });

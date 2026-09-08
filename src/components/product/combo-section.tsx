@@ -21,7 +21,7 @@ export function ComboSection({ combos, brand, comboProducts, categoryRef }: Comb
   return (
     <div id="category-combos" ref={categoryRef} className="space-y-6 scroll-mt-24">
       <div>
-        <h2 className="text-2xl font-bold">{brand.combosHeading || 'Combo Deals'}</h2>
+        <h2 className="text-2xl font-bold">{brand.combosHeading || 'Menuer'}</h2>
       </div>
       <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6 gap-y-2">
         {combos.map(combo => (

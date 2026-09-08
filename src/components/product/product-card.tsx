@@ -2,8 +2,8 @@
 'use client';
 
 import Image from 'next/image';
-import { discountedUnit, money } from '@/lib/money';
 import { isQuantityMethod, quantityOfferLabel } from '@/lib/automatic-discounts';
+import { productPriceData } from '@/lib/product-price';
 import type { StandardDiscount, ProductForMenu } from '@/types';
 import { useState, useMemo, useRef, useEffect } from 'react';
 import dynamic from 'next/dynamic';
@@ -18,14 +18,13 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, Plus } from "lucide-react";
 import { Button } from "../ui/button";
 import { safeImage } from '@/lib/images';
+import {formatPrice} from '@/lib/storefront-format';
+import {useAnalytics} from '@/context/analytics-context';
 
 interface ProductCardProps {
   product: ProductForMenu;
   activeDiscounts: StandardDiscount[];
-}
-
-function applyDiscount(price: number, discount: StandardDiscount): number {
-  return discountedUnit(price, discount.discountMethod, discount.discountValue);
+  upsellId?: string;
 }
 
 export function ProductCardSkeleton() {
@@ -46,60 +45,23 @@ export function ProductCardSkeleton() {
 }
 
 
-export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
+export function ProductCard({ product, activeDiscounts, upsellId }: ProductCardProps) {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [allToppingGroups, setAllToppingGroups] = useState<any[]>([]);
   const [allToppings, setAllToppings] = useState<any[]>([]);
   const [isPending, setIsPending] = useState(false);
   const [optionError, setOptionError] = useState(false);
   const pending = useRef(false);
+  const upsellAdded = useRef(false);
   const generation = useRef(0);
   const { toast } = useToast();
 
-  const { deliveryType, location } = useCart();
+  const { deliveryType, location, cartReady, cartItems, addToCart } = useCart();
+  const {trackEvent} = useAnalytics();
+  const count = cartItems.filter(item => item.itemType === 'product' && item.id === product.id).reduce((n,item)=>n+item.quantity,0);
+  const onAdded = () => {if (upsellId) {upsellAdded.current=true;} if (upsellId) trackEvent('upsell_accepted',{upsellId,productId:product.id});};
 
-  const priceData = useMemo(() => {
-    const originalPrice = money(deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price);
-
-    if ((product as any).basePrice) {
-        return {
-            basePrice: (product as any).basePrice,
-            finalPrice: product.price,
-            hasOffer: true
-        };
-    }
-
-    const applicableDiscount = activeDiscounts
-      .filter(d => !isQuantityMethod(d.discountMethod) && (
-          (d.discountType === 'product' && d.referenceIds.includes(product.id)) || 
-          (d.discountType === 'category' && product.categoryId && d.referenceIds.includes(product.categoryId))
-      ))
-      .reduce<StandardDiscount | null>((best, current) => {
-          if (!best) return current;
-          const bestDiscountedPrice = applyDiscount(originalPrice, best);
-          const currentDiscountedPrice = applyDiscount(originalPrice, current);
-          return currentDiscountedPrice < bestDiscountedPrice ? current : best;
-      }, null);
-
-    if (applicableDiscount) {
-        const discountedPrice = applyDiscount(originalPrice, applicableDiscount);
-        if (discountedPrice < originalPrice) {
-            return {
-                basePrice: originalPrice,
-                finalPrice: discountedPrice,
-                hasOffer: true,
-                applicableDiscount,
-            };
-        }
-    }
-    
-    return {
-        basePrice: originalPrice,
-        finalPrice: originalPrice,
-        hasOffer: false,
-        applicableDiscount: null,
-    };
-  }, [product, activeDiscounts, deliveryType]);
+  const priceData = useMemo(() => productPriceData(product, activeDiscounts, deliveryType), [product, activeDiscounts, deliveryType]);
 
 
   const { basePrice, finalPrice, hasOffer, applicableDiscount } = priceData;
@@ -107,18 +69,18 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
   const productForDialog: ProductForMenu & { basePrice?: number } = useMemo(() => ({
       ...product,
       price: finalPrice,
-      basePrice: hasOffer ? basePrice : undefined,
+      basePrice,
   }), [product, finalPrice, basePrice, hasOffer]);
 
   const getBadgeText = () => {
-    if (hasOffer) return "Offer";
+    if (hasOffer) return "Tilbud";
     const quantityOffer = activeDiscounts.find(d => isQuantityMethod(d.discountMethod) &&
       ((d.discountType === 'product' && d.referenceIds.includes(product.id)) ||
        (d.discountType === 'category' && !!product.categoryId && d.referenceIds.includes(product.categoryId))));
     if (quantityOffer) return quantityOfferLabel(quantityOffer);
-    if (product.isFeatured) return "Featured";
-    if (product.isNew) return "New";
-    if (product.isPopular) return "Popular";
+    if (product.isFeatured) return "Udvalgt";
+    if (product.isNew) return "Nyhed";
+    if (product.isPopular) return "Populær";
     return null;
   };
 
@@ -144,14 +106,14 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
 
   return (
     <>
-      <div 
+      <article
         className="group flex w-full items-start gap-4 cursor-pointer border-b py-4"
         onClick={handleCardClick}
       >
         <div className="relative h-24 w-24 shrink-0 overflow-hidden rounded-md">
           <Image
             src={safeImage(product.imageUrl)}
-            alt={product.productName || 'Product image'}
+            alt={product.productName || 'Produktbillede'}
             fill
             sizes="96px"
             className="object-cover"
@@ -167,28 +129,34 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
           )}
         </div>
 
-        <div className="flex-1 flex flex-col h-full">
+        <div className="min-w-0 flex-1 flex flex-col h-full">
           <div className="flex-1">
-            <h4 className="font-semibold">{product.productName}</h4>
+            <h4 className="font-semibold"><button type="button" className="text-left" aria-label={`Se ${product.productName}`} onClick={event=>{event.stopPropagation();void handleCardClick();}}>{product.productName}</button></h4>{count > 0 && <span className="text-xs font-medium">{count} i kurven</span>}
             <p className="text-sm text-muted-foreground line-clamp-2">{product.description}</p>
           </div>
           <div className="flex items-center justify-between mt-2">
             <div>
               {hasOffer ? (
                 <>
-                  <p className="font-semibold text-sm text-destructive">kr. {finalPrice?.toFixed(2)}</p>
-                  <p className="text-xs text-muted-foreground line-through">kr. {basePrice?.toFixed(2)}</p>
+                  <p className="font-semibold text-sm text-destructive">{formatPrice(finalPrice)}</p>
+                  <p className="text-xs text-muted-foreground line-through">{formatPrice(basePrice)}</p>
                 </>
               ) : (
-                <p className="font-semibold text-foreground">kr. {finalPrice.toFixed(2)}</p>
+                <p className="font-semibold text-foreground">{formatPrice(finalPrice)}</p>
               )}
             </div>
-            <Button type="button" aria-label={`Tilføj ${product.productName}`} aria-busy={isPending} disabled={isPending} size="icon" className="h-10 w-10 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
+            <Button type="button" aria-label={`Tilføj ${product.productName}`} aria-busy={isPending} disabled={isPending || !cartReady} onClick={event => {
+              event.stopPropagation();
+              if(upsellId && upsellAdded.current)return;
+              if (product.toppingGroupIds?.length) {void handleCardClick(); return;}
+              if (addToCart(product,1,[],basePrice,finalPrice) === false) {toast({title:'Varen kunne ikke tilføjes',description:'Prøv igen, når kurven er klar.'}); return;}
+              onAdded(); toast({title:'Tilføjet til kurven',description:product.productName,duration:2200});
+            }} size="icon" className="h-11 w-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
                 {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5"/>}
             </Button>
           </div>
         </div>
-      </div>
+      </article>
       {optionError && <p role="alert" className="text-sm text-destructive">Tilvalg kunne ikke indlæses. <button className="underline" onClick={handleCardClick}>Prøv igen</button></p>}
       {isDialogOpen && <ProductDialog
         product={productForDialog}
@@ -197,6 +165,7 @@ export function ProductCard({ product, activeDiscounts }: ProductCardProps) {
         isOpen={isDialogOpen}
         setIsOpen={setIsDialogOpen}
         applicableDiscount={applicableDiscount}
+        onAdded={onAdded}
       />}
     </>
   );
