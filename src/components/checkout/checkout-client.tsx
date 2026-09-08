@@ -649,7 +649,15 @@ function CheckoutForm({ location }: { location: Location }) {
   };
 
   const showValidationError = () => setCheckoutError('Please check the highlighted fields before continuing to payment.');
-  const handleFormSubmit = form.handleSubmit(values => submitCheckout(values), showValidationError);
+  const handleFormSubmit: React.FormEventHandler<HTMLFormElement> = event => {
+    if (paymentUrl) {
+      event.preventDefault();
+      // Retry navigation to the existing session, never a new checkout request.
+      if (!isProcessing) window.location.assign(paymentUrl);
+      return;
+    }
+    void form.handleSubmit(values => submitCheckout(values), showValidationError)(event);
+  };
   const onUpsellDialogContinue = () => {
     setActiveUpsell(null);
     setCheckoutStep('form');
@@ -675,6 +683,7 @@ function CheckoutForm({ location }: { location: Location }) {
   }
 
   const isTermsAccepted = form.watch('acceptTerms');
+  const isFormLocked = isProcessing || paymentUncertain || !!paymentUrl;
 
   const AcceptTermsAndCompleteOrder = ({ isSticky }: { isSticky?: boolean }) => (
     <div className={cn(isSticky && "container mx-auto max-w-[1140px] px-0")}>
@@ -696,6 +705,7 @@ function CheckoutForm({ location }: { location: Location }) {
                 <Checkbox
                   checked={field.value}
                   onCheckedChange={field.onChange}
+                  disabled={isFormLocked}
                   className="h-5 w-5"
                 />
               </FormControl>
@@ -724,10 +734,10 @@ function CheckoutForm({ location }: { location: Location }) {
           isSticky ? "h-16 rounded-none text-base" : "h-12 text-lg"
         )}
         disabled={
-          isProcessing || paymentUncertain || !!paymentUrl || !!activeUpsell ||
-          !isTermsAccepted ||
-          isDeliveryBelowMinOrder ||
-          !isOrderTimeValid
+          isProcessing || (!paymentUrl && (
+            paymentUncertain || !!activeUpsell || !isTermsAccepted ||
+            isDeliveryBelowMinOrder || !isOrderTimeValid
+          ))
         }
       >
         <div className="flex w-full justify-between items-center px-4">
@@ -736,7 +746,6 @@ function CheckoutForm({ location }: { location: Location }) {
         </div>
       </Button>
       {checkoutError && <p role="alert" className="mt-3 text-sm text-destructive">{checkoutError}</p>}
-      {paymentUrl && <a className="block mt-3 underline" href={paymentUrl}>Continue to payment</a>}
     </div>
   );
 
@@ -755,10 +764,9 @@ function CheckoutForm({ location }: { location: Location }) {
       </div>
       <FormProvider {...form}>
         <form onSubmit={handleFormSubmit} noValidate>
-          <fieldset className="min-w-0" disabled={isProcessing || paymentUncertain || !!paymentUrl}>
           <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-32 lg:pb-0">
             {/* Left column */}
-            <div className="space-y-10">
+            <fieldset className="min-w-0 space-y-10" disabled={isFormLocked}>
               <section>
                 <h2 className="text-2xl font-bold mb-4">Delivery & Time</h2>
                 <div className="space-y-4">
@@ -978,7 +986,7 @@ function CheckoutForm({ location }: { location: Location }) {
                   </AccordionItem>
                 </Accordion>
               </div>
-            </div>
+            </fieldset>
 
             {/* Right column (desktop) */}
             <div className="hidden lg:block">
@@ -989,7 +997,9 @@ function CheckoutForm({ location }: { location: Location }) {
                     <CardDescription>Review the items in your cart.</CardDescription>
                   </CardHeader>
                   <CardContent className="flex-1 overflow-y-auto pr-4">
-                    <OrderSummaryContent />
+                    <fieldset className="min-w-0" disabled={isFormLocked}>
+                      <OrderSummaryContent />
+                    </fieldset>
                   </CardContent>
                 </Card>
                 <div className="p-4 bg-background border border-t-0 rounded-b-lg">
@@ -1002,7 +1012,6 @@ function CheckoutForm({ location }: { location: Location }) {
           <div className="fixed bottom-0 left-0 right-0 bg-background border-t p-0 z-50 lg:hidden">
             <AcceptTermsAndCompleteOrder isSticky />
           </div>
-          </fieldset>
         </form>
       </FormProvider>
 

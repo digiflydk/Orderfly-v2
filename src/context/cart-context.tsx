@@ -307,7 +307,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addToCart = useCallback((product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number) => {
     if (!readyRef.current) return;
     checkoutOrderId.current = undefined;
-    const sortedToppings = [...toppings].sort((a, b) => a.name.localeCompare(b.name));
+    const canonicalizeToppings = (values: CartItemTopping[]) => [...values].sort((a, b) => {
+      const nameOrder = a.name.localeCompare(b.name);
+      if (nameOrder !== 0) return nameOrder;
+      const identityOrder = (a.id || a.name).localeCompare(b.id || b.name);
+      if (identityOrder !== 0) return identityOrder;
+      return a.price - b.price;
+    });
+    const sortedToppings = canonicalizeToppings(toppings);
     const toppingsKey = sortedToppings.map(t => `${t.id || t.name}:${t.price}`).join(',');
     const existingItemKey = `${product.id}-${toppingsKey}`;
   
@@ -315,7 +322,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     const itemTotal = finalPrice + toppingsTotal;
   
     setCartItems(prevItems => {
-      const existingItem = prevItems.find(item => item.itemType === 'product' && `${item.id}-${item.toppings.map(t => `${t.id || t.name}:${t.price}`).join(',')}` === existingItemKey);
+      const existingItem = prevItems.find(item => item.itemType === 'product' && `${item.id}-${canonicalizeToppings(item.toppings).map(t => `${t.id || t.name}:${t.price}`).join(',')}` === existingItemKey);
   
       if (existingItem) {
         return prevItems.map(item =>
@@ -454,7 +461,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       {restoreError ? <div className="text-center">
         <p>Kurven kunne ikke indlæses. Prøv igen for at hente aktuelle priser.</p>
         <button className="mt-4 rounded bg-primary px-4 py-2 text-primary-foreground" onClick={() => setRetry(value => value + 1)}>Prøv igen</button>
-      </div> : <p>Indlæser kurv og aktuelle priser…</p>}
+      </div> : <span className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" aria-label="Indlæser" />}
     </div>}
     {cartReady && cartNotice && <div role="status" className="fixed bottom-4 left-4 right-4 z-[90] rounded border bg-background p-4 shadow-lg">
       {cartNotice}<button className="ml-4 underline" onClick={() => setCartNotice('')}>Luk</button>

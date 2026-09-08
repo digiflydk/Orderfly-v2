@@ -20,18 +20,21 @@ before(async()=>{
  const settings=fixture('scenario',`export const scenario=new URLSearchParams(window.location.search).get('case')||'success';`);
  const cart=fixture('cart',`
  import React from 'react';
- export const brand=${JSON.stringify(brand)}, location=${JSON.stringify(location)};
+ const presentation=new URLSearchParams(window.location.search).get('case')?.startsWith('presentation');
+ export const brand={...${JSON.stringify(brand)},bagFee:presentation?4:0}, location=${JSON.stringify(location)};
  const context=React.createContext(null);
  const item={id:'pizza',cartItemId:'pizza',productName:'Pizza',quantity:1,basePrice:100,price:100,toppings:[],itemType:'product',imageUrl:'/image.png'};
  export function FixtureCart({children}) {
+  const [includeBagFee,toggleBagFee]=React.useState(true);
   const [items,setItems]=React.useState([item]),[discount,setDiscount]=React.useState(null);
   const addToCart=React.useCallback((product,q,t,basePrice,price)=>setItems(old=>[...old,{...item,...product,cartItemId:product.id,basePrice,price}]),[]);
   const applyDiscount=React.useCallback(d=>setDiscount(d),[]),removeDiscount=React.useCallback(()=>setDiscount(null),[]);
   const setCartContext=React.useCallback(()=>{},[]),setSelectedTime=React.useCallback(()=>{},[]);
   const saveCartForCheckout=React.useCallback(id=>{if(window.storageUnavailable)throw Error('storage denied');window.savedCheckout=id;},[]);
   const total=items.reduce((sum,i)=>sum+i.price*i.quantity,0);
-  const value={brand,location,cartReady:true,cartItems:items,subtotal:total,checkoutTotal:total,cartTotal:total,itemCount:items.length,
-   deliveryType:'pickup',selectedTime:'asap',itemDiscount:0,cartDiscount:null,voucherDiscount:null,deliveryFee:0,bagFee:0,adminFee:0,vatAmount:20,
+  const bagFee=includeBagFee?brand.bagFee:0;
+  const value={brand,location,cartReady:true,cartItems:items,subtotal:total,checkoutTotal:total+bagFee,cartTotal:total,itemCount:items.length,includeBagFee,toggleBagFee,
+   deliveryType:'pickup',selectedTime:'asap',itemDiscount:0,cartDiscount:null,voucherDiscount:null,deliveryFee:0,bagFee,adminFee:0,vatAmount:20,
    applyDiscount,removeDiscount,appliedDiscount:discount,setCartContext,setSelectedTime,saveCartForCheckout,addToCart};
   return React.createElement(context.Provider,{value},children);
  }
@@ -63,9 +66,12 @@ before(async()=>{
  const entry=fixture('entry',`
  import React from 'react';import {createRoot} from 'react-dom/client';
  import {CheckoutClient} from ${JSON.stringify(path.join(root,'src/components/checkout/checkout-client.tsx'))};
+ import {DesktopCart} from ${JSON.stringify(path.join(root,'src/components/cart/desktop-cart.tsx'))};
+ import {MobileFloatingCart} from ${JSON.stringify(path.join(root,'src/components/cart/mobile-floating-cart.tsx'))};
  import {AnalyticsProvider} from ${JSON.stringify(path.join(root,'src/context/analytics-context.tsx'))};
  import {FixtureCart,brand,location} from ${JSON.stringify(cart)};
- createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},React.createElement(CheckoutClient,{brand,location}))));
+ const menu=new URLSearchParams(window.location.search).get('view')==='menu';
+ createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},menu?React.createElement(React.Fragment,null,React.createElement(DesktopCart),React.createElement(MobileFloatingCart)):React.createElement(CheckoutClient,{brand,location}))));
  `);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=function(source){if(process.env.CHECKOUT_BASELINE&&this.resourcePath.startsWith(${JSON.stringify(root)}+'/src/'))source=require('node:child_process').execFileSync('git',['show',process.env.CHECKOUT_BASELINE+':'+require('node:path').relative(${JSON.stringify(root)},this.resourcePath)],{cwd:${JSON.stringify(root)},encoding:'utf8'});return ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;};`);
  const aliases={
@@ -160,6 +166,44 @@ test('accepting upsell closes immediately even if conversion tracking hangs, and
  await pay(page);
  await page.waitForURL('**/stripe?*');assert.equal(requests.get('upsell-accept')[0][0].length,2);
  assert.equal(requests.get('upsell-accept')[0][0][1].name,'Drink');
+});
+
+// Presentation changes must preserve the actual payment and bag opt-out behavior.
+for (const [surface,index] of [['desktop',0],['mobile',1]]) test(`presentation: ${surface} payment button resumes the same session without an extra link`,async t=>{
+ const scenario='presentation-resume-'+surface;
+ const page=await setup(t,scenario);
+ await page.route('**/stripe?*',route=>route.abort('aborted'));
+ const firstNavigation=page.waitForEvent('requestfailed',req=>req.url().includes('/stripe?'));
+ await page.getByRole('button',{name:/Complete Order/}).nth(index).click();await firstNavigation;
+ assert.equal(requests.get(scenario).length,1);
+ assert.equal(requests.get(scenario)[0][5].bagFee,4);
+ assert.equal(await page.getByRole('link',{name:'Continue to payment',exact:true}).count(),0);
+ assert.equal(await page.getByPlaceholder('John Doe',{exact:true}).isDisabled(),true);
+ assert.equal(await page.getByRole('checkbox',{name:/I accept the/}).nth(index).isDisabled(),true);
+ assert.equal(await page.getByRole('button',{name:'Change',exact:true}).isDisabled(),true);
+ for(const row of await page.getByText('Bag',{exact:true}).all())assert.equal(await row.locator('..').getByRole('button').isDisabled(),true);
+ await page.unroute('**/stripe?*');
+ await page.getByRole('button',{name:/Complete Order/}).nth(index).click();
+ await page.waitForURL('**/stripe?*');assert.equal(requests.get(scenario).length,1);
+});
+test('presentation: menu desktop, mobile drawer and floating amount exclude bag; checkout shows it and supports removal',async t=>{
+ const page=await setup(t,'presentation-bag');
+ await page.goto(origin+'/?case=presentation-bag&view=menu');
+ await page.getByText('Your Cart',{exact:true}).waitFor();
+ assert.match(await page.getByRole('button',{name:/Proceed to Checkout/}).textContent(),/kr\.100\.00/);
+ assert.match(await page.getByText('Total',{exact:true}).locator('..').textContent(),/kr\.100\.00/);
+ const floating=page.getByRole('button',{name:/View cart/});
+ assert.match(await floating.textContent(),/kr\. 100\.00/);await floating.click();
+ const drawer=page.getByRole('dialog');
+ assert.match(await drawer.getByText('Total',{exact:true}).locator('..').textContent(),/kr\.100\.00/);
+ assert.equal(await drawer.getByText('Bag',{exact:true}).count(),0);
+ await page.goto(origin+'/?case=presentation-bag');
+ await page.getByText('Bag',{exact:true}).first().waitFor();
+ assert.match(await page.getByRole('button',{name:/Complete Order/}).first().textContent(),/kr\. 104\.00/);
+ await page.getByText('Bag',{exact:true}).first().locator('..').getByRole('button').click();
+ await page.getByRole('button',{name:'Yes, remove',exact:true}).click();
+ assert.equal(await page.getByText('Bag',{exact:true}).count(),0);
+ assert.match(await page.getByRole('button',{name:/Complete Order/}).first().textContent(),/kr\. 100\.00/);
 });
 
 test('Back to Menu is available with a nonempty cart and preserves restaurant and fulfillment in the route',async t=>{

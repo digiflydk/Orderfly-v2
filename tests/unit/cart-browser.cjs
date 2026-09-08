@@ -32,6 +32,7 @@ function Flow() {
     React.createElement('button',{id:'pizza',onClick:()=>cart.addToCart(product,1,[],75,75)},'Add pizza'),
     React.createElement('button',{id:'topping',onClick:()=>cart.addToCart(product,1,[{name:'Cheese',price:10}],75,75)},'Add with cheese'),
     React.createElement('button',{id:'identified-toppings',onClick:()=>cart.addToCart(product,1,[{id:'t',name:'Cheese',price:10},{id:'t2',name:'Cheese',price:5}],75,75)},'Add named options'),
+    React.createElement('button',{id:'identified-toppings-reversed',onClick:()=>cart.addToCart(product,1,[{id:'t2',name:'Cheese',price:5},{id:'t',name:'Cheese',price:10}],75,75)},'Add reversed named options'),
     React.createElement('button',{id:'combo',onClick:()=>cart.addComboToCart(combo,1,[{groupName:'Pizza',products:[{id:'pizza',name:'Italiana'}]}],100)},'Add combo'),
     React.createElement('button',{id:'quantity',onClick:()=>cart.updateQuantity(cart.cartItems[0].cartItemId,3)},'Set three'),
     React.createElement('button',{id:'remove',onClick:()=>cart.removeFromCart(cart.cartItems.at(-1).cartItemId)},'Remove last'),
@@ -212,6 +213,31 @@ test('changed fulfillment or bag choice survives an old paid confirmation in ano
   });
 });
 
+
+test('cart restoration uses a spinner without loading copy and still waits for current prices', async t => {
+  const page = await setup(t); await page.click('#pizza'); await count(page, 1);
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  await page.route('**/restore', async route => { await held; await route.continue(); });
+  try {
+    await page.reload();
+    // This provider fixture has no Tailwind CSS; check mounting and readiness.
+    await page.locator('[aria-label="Indlæser"]').waitFor({ state: 'attached' });
+    assert.equal(await page.getByText('Indlæser kurv og aktuelle priser…', { exact: true }).count(), 0);
+    assert.equal((await state(page)).ready, false);
+  } finally { release(); }
+  await ready(page); await count(page, 1);
+  assert.equal((await state(page)).total, 79);
+});
+
+test('same-name topping IDs are canonicalized before cart row matching',async t=>{
+ const page=await setup(t);
+ await page.click('#identified-toppings');await page.click('#identified-toppings-reversed');await count(page,2);
+ const current=await state(page);
+ assert.equal(current.items.length,1);
+ assert.equal(current.items[0].quantity,2);
+ assert.deepEqual(current.items[0].toppings.map(t=>t.id),['t','t2']);
+});
 
 test('cancel and menu return retain same-name topping choices and new tabs restore the saved basket',async t=>{
  const page=await setup(t,'/?deliveryMethod=delivery');

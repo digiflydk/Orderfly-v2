@@ -49,8 +49,13 @@ changed by this PR.
 - Analytics, session storage and optional cookie-consent lookup cannot block
   payment. Customer persistence remains mandatory. No consent is inferred when
   optional linkage fails.
-- Navigation uses the returned hosted Checkout URL. The URL remains available as
-  a continuation link if navigation is interrupted; that link reuses the session.
+- Navigation uses the returned hosted Checkout URL. If navigation is interrupted,
+  the existing Complete Order button retries that same URL without another checkout
+  request. There is no separate continuation link. Customer details, terms, time,
+  discounts and bag controls stay locked to the existing payment snapshot.
+- Menu cart amounts exclude the bag fee on desktop, the mobile drawer and the
+  floating mobile button. Checkout shows the configured bag fee and includes it
+  unless the customer removes the bag. See [presentation QA](menu-cart-presentation-65.md).
 
 ## Server and reservation safety
 
