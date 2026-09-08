@@ -4,6 +4,8 @@
 const fs = require('node:fs');
 function summarize(rows, release) {
   const events = rows.filter(row => row.source === 'commerce-v1' && (!release || row.release === release));
+  const verified = row => row.name === 'payment_succeeded' && row.verifiedPayment === true &&
+    row.provenance === 'server-verified-payment-v1' && typeof row.id === 'string' && row.id.startsWith('commerce-');
   const groups = new Map();
   for (const row of events) {
     if (row.name !== 'web_vital' || !['LCP','INP','CLS'].includes(row.metricName) || !Number.isFinite(row.value)) continue;
@@ -20,8 +22,8 @@ function summarize(rows, release) {
   const stages = ['view_menu','add_to_cart','start_checkout','payment_session_created','payment_succeeded'];
   const funnel = ['mobile','desktop','unknown'].map(device => {
     const scoped = events.filter(row => (row.deviceType || 'unknown') === device);
-    const counts = Object.fromEntries(stages.map(stage => [stage, new Set(scoped.filter(row => row.name === stage && row.sessionId && (stage !== 'payment_succeeded' || row.verifiedPayment === true)).map(row => row.sessionId)).size]));
-    return {device, sessions: counts, verifiedOrders: new Set(scoped.filter(row => row.name === 'payment_succeeded' && row.verifiedPayment === true && row.orderId).map(row => `${row.brandId}/${row.orderId}`)).size};
+    const counts = Object.fromEntries(stages.map(stage => [stage, new Set(scoped.filter(row => row.name === stage && row.sessionId && (stage !== 'payment_succeeded' || verified(row))).map(row => row.sessionId)).size]));
+    return {device, sessions: counts, verifiedOrders: new Set(scoped.filter(row => verified(row) && row.orderId).map(row => `${row.brandId}/${row.orderId}`)).size};
   });
   return {release:release || 'all', vitals, funnel, note:'Consented session counts, not guaranteed complete attribution. Verified orders include unlinked transactions. p75 needs representative traffic; do not infer improvement from small samples.'};
 }
