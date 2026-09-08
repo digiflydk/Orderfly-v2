@@ -2,6 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs');
 const ts=require('typescript');
+const {loadTs}=require('../helpers/load-ts.cjs');
 function load(path,mocks={}) {
  const mod={exports:{}};
  const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
@@ -43,17 +44,20 @@ test('actual checkout action rejects tampering before side effects, allows valid
  let identityCalls=0;let writes=0;
  Object.assign(mocks,{
   '@/lib/checkout-price-validation':pricing,'@/lib/promotion-rules':rules,'@/lib/automatic-discounts':automatic,
+  '@/lib/checkout-schema':loadTs('src/lib/checkout-schema.ts'),
+  '@/lib/checkout-items':loadTs('src/lib/checkout-items.ts'),
+  '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),
   stripe:{default:class Stripe {}},'@/lib/firebase':{db:{}},
   '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>{if(++identityCalls===2)throw Error('AFTER_PRICE_VALIDATION');return {ref:{id:'c'},exists:()=>true,data:()=>({brandId:'b'})};}},
   '../superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
   '@/lib/url':{getOrigin:async()=> 'https://example.test'},
-  '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b'})},
-  '@/app/superadmin/locations/actions':{getLocationById:async()=>({id:'l',brandId:'b'})},
+  '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b',slug:'brand'})},
+  '@/app/superadmin/locations/actions':{getLocationById:async()=>({id:'l',brandId:'b',slug:'location',isActive:true,deliveryTypes:['pickup'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'12:00',close:'22:00'}]))})},
   '@/app/superadmin/standard-discounts/actions':{getActiveStandardDiscounts:async()=>[offer]},
-  'firebase/firestore':{doc:(_,collection,id)=>({collection,id}),getDoc:async ref=>({id:ref.id,exists:()=>ref.collection==='products',data:()=>({brandId:'b',locationIds:['l'],categoryId:'pizza',price:100})}),collection:()=>({}),where:()=>({}),query:()=>({}),getDocs:async()=>({docs:[]}),setDoc:async()=>{writes++;}},
+  'firebase/firestore':{doc:(_,collection,id)=>({collection,id}),getDoc:async ref=>({id:ref.id,exists:()=>ref.collection==='products',data:()=>({brandId:'b',locationIds:['l'],categoryId:'pizza',price:100,isActive:true,productName:'Pizza'})}),collection:()=>({}),where:()=>({}),query:()=>({}),getDocs:async()=>({docs:[]}),setDoc:async()=>{writes++;}},
  });
  const api=load(path,mocks);
- async function run(line){identityCalls=0;return api.createStripeCheckoutSessionAction([line],{email:'test@example.test'},'pickup','b','l',{subtotal:300},null,'brand','location');}
+ async function run(line){identityCalls=0;return api.createStripeCheckoutSessionAction([line],{email:'test@example.test',name:'Test',phone:'12345678',subscribeToNewsletter:false,acceptTerms:true},'pickup','b','l',{subtotal:300,deliveryFee:0,discountTotal:0,tips:0,taxes:0},null,'brand','location');}
  const bad=await run({...item,unitPrice:1,totalPrice:3});assert.equal(bad.success,false);assert.match(bad.error,/Basket prices/);assert.equal(identityCalls,1);assert.equal(writes,0);
  // Customer persistence failures now return a safe public error rather than the
  // injected internal exception. Reaching the second lookup proves the valid

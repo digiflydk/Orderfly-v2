@@ -13,7 +13,7 @@ let dir,server,browser,origin;
 const requests=new Map();const attemptKeys=new Set();
 const root=process.cwd();
 const brand={id:'b',slug:'brand',name:'Fixture',bagFee:0,vatPercentage:25};
-const location={id:'l',slug:'location',brandId:'b',name:'Fixture',city:'Hellerup',minOrder:0};
+const location={id:'l',slug:'location',brandId:'b',name:'Fixture',city:'Hellerup',minOrder:0,isActive:true,deliveryTypes:['pickup','delivery'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'12:00',close:'22:00'}]))};
 function fixture(name,content){const file=path.join(dir,name+'.js');fs.writeFileSync(file,content);return file;}
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'checkout-browser-'));
@@ -212,4 +212,17 @@ test('Back to Menu is available with a nonempty cart and preserves restaurant an
  assert.equal(await back.getAttribute('href'),'/brand/location?deliveryMethod=pickup');
  await back.click();await page.waitForURL('**/brand/location?deliveryMethod=pickup');
  assert.equal(requests.has('back-to-menu'),false);
+});
+
+for(const surface of ['desktop','mobile'])for(const failure of ['error','timeout'])test(`P1 menu ${surface}: upsell ${failure} still opens checkout without starting payment`,async t=>{
+ const scenario='upsell-'+failure;
+ const page=await setup(t,'menu-setup-'+surface+'-'+failure);
+ await page.goto(origin+'/?case='+scenario+'&view=menu');
+ if(surface==='mobile') {
+  await page.setViewportSize({width:390,height:844});
+  await page.getByRole('button',{name:/View cart/}).click();
+  await page.getByRole('dialog').getByRole('button',{name:/Proceed to Checkout/}).click();
+ } else await page.getByRole('button',{name:/Proceed to Checkout/}).first().click();
+ await page.waitForURL('**/brand/location/checkout');
+ assert.equal(requests.has('menu-setup-'+surface+'-'+failure),false);
 });

@@ -11,6 +11,7 @@ export const cartChoiceSchema = z.object({
   toppingIds: z.array(id).max(40).optional(),
   offered: z.boolean().default(false),
   comboSelections: z.array(z.object({
+    groupId: id.optional(),
     groupName: z.string().min(1).max(200),
     products: z.array(z.object({ id })).max(40),
   })).max(20).optional(),
@@ -33,6 +34,7 @@ export function cartChoices(items: CartItem[]): CartChoice[] {
     ...(item.toppings.length && item.toppings.every(topping => topping.id) ? { toppingIds: item.toppings.map(topping => topping.id!) } : {}),
     offered: item.price < item.basePrice,
     ...(item.comboSelections ? { comboSelections: item.comboSelections.map(group => ({
+      ...(group.groupId ? { groupId: group.groupId } : {}),
       groupName: group.groupName, products: group.products.map(product => ({ id: product.id })),
     })) } : {}),
   }));

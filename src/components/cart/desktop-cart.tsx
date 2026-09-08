@@ -2,24 +2,18 @@
 
 'use client';
 
-import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
+import { useMenuCheckout } from '@/hooks/use-menu-checkout';
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { useState, useTransition } from 'react';
 
 import { useCart } from '@/context/cart-context';
-import type { Product, Upsell, ProductForMenu } from '@/types';
-import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
 import { UpsellDialog } from '@/components/checkout/upsell-dialog';
-import { useAnalytics } from '@/context/analytics-context';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '../ui/badge';
-import { useToast } from '@/hooks/use-toast';
 import { safeImage } from '@/lib/images';
 
 export function DesktopCart() {
@@ -41,61 +35,7 @@ export function DesktopCart() {
       bagFee,
   } = useCart();
   const menuTotal = Math.max(0, checkoutTotal - bagFee);
-  const [isPending, startTransition] = useTransition();
-  const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
-  const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
-  const router = useRouter();
-  const { toast } = useToast();
-  const { trackEvent } = useAnalytics();
-
-
-  const proceedToCheckout = () => {
-    if (brand && location) {
-      router.push(`/${brand.slug}/${location.slug}/checkout`);
-    }
-  };
-
-  const handleCheckoutClick = () => {
-    if (!location) return;
-
-    trackEvent('start_checkout', { 
-        cartValue: checkoutTotal, 
-        itemsCount: itemCount, 
-        deliveryType: deliveryType,
-        locationId: location.id,
-        locationSlug: location.slug,
-    });
-
-    startTransition(async () => {
-      if (brand && location) {
-        const minimalCartItems = cartItems.map(item => ({
-            id: item.id,
-            categoryId: item.categoryId,
-            itemType: item.itemType,
-            tags: item.tags,
-        }));
-        
-        const upsellData = await getActiveUpsellForCart({
-            brandId: brand.id,
-            locationId: location.id,
-            deliveryType: deliveryType!,
-            cartItems: minimalCartItems,
-            cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0)),
-            excludedUpsellIds: handledUpsells(),
-        });
-
-        if (upsellData) {
-            markUpsellHandled(upsellData.upsell.id);
-            setActiveUpsell(upsellData);
-            setIsUpsellDialogOpen(true);
-        } else {
-            proceedToCheckout();
-        }
-      } else {
-        proceedToCheckout();
-      }
-    });
-  };
+  const { isPending, activeUpsell, isUpsellDialogOpen, setIsUpsellDialogOpen, proceedToCheckout, handleCheckoutClick } = useMenuCheckout();
 
   return (
     <>

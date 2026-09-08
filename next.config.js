@@ -2,6 +2,18 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   output: 'standalone',
+  async headers() {
+    return [
+      { source: '/:brandSlug/:locationSlug/checkout/confirmation', headers: [
+        { key: 'Referrer-Policy', value: 'no-referrer' },
+        { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+      ] },
+      { source: '/:brandSlug/checkout/confirmation', headers: [
+        { key: 'Referrer-Policy', value: 'no-referrer' },
+        { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
+      ] },
+    ];
+  },
   experimental: {
     serverActions: {},
   },

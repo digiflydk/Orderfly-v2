@@ -2,7 +2,7 @@
 
 'use client';
 
-import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
+import { useMenuCheckout } from '@/hooks/use-menu-checkout';
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
 import Image from 'next/image';
 import Link from 'next/link';
@@ -19,74 +19,14 @@ import {
 } from '@/components/ui/sheet';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
-import { useState, useTransition } from 'react';
-import { useRouter } from 'next/navigation';
-import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
-import type { Product, Upsell, ProductForMenu } from '@/types';
 import { UpsellDialog } from '@/components/checkout/upsell-dialog';
 import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
-import { useToast } from '@/hooks/use-toast';
-import { useAnalytics } from '@/context/analytics-context';
 import { safeImage } from '@/lib/images';
 
 export function CartSheet() {
   const { cartItems, removeFromCart, updateQuantity, itemCount, brand, location, subtotal, itemDiscount, cartDiscount, cartTotal, deliveryFee, freeDeliveryDiscountApplied, deliveryType } = useCart();
-  const [isPending, startTransition] = useTransition();
-  const [isUpsellDialogOpen, setIsUpsellDialogOpen] = useState(false);
-  const [activeUpsell, setActiveUpsell] = useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
-  const router = useRouter();
-  const { toast } = useToast();
-  const { trackEvent } = useAnalytics();
-
-
-  const proceedToCheckout = () => {
-    if (brand && location) {
-      router.push(`/${brand.slug}/${location.slug}/checkout`);
-    }
-  };
-
-  const handleCheckoutClick = () => {
-    if (!location) return;
-
-    trackEvent('start_checkout', { 
-        cartValue: cartTotal, 
-        itemsCount: itemCount, 
-        deliveryType: deliveryType,
-        locationId: location.id,
-        locationSlug: location.slug,
-    });
-
-    startTransition(async () => {
-      if (brand && location) {
-        const minimalCartItems = cartItems.map(item => ({
-            id: item.id,
-            categoryId: item.categoryId,
-            itemType: item.itemType,
-            tags: item.tags,
-        }));
-        
-        const upsellData = await getActiveUpsellForCart({
-            brandId: brand.id,
-            locationId: location.id,
-            deliveryType: deliveryType!,
-            cartItems: minimalCartItems,
-            cartTotal: subtotal - (itemDiscount + (cartDiscount?.amount || 0)),
-            excludedUpsellIds: handledUpsells(),
-        });
-
-        if (upsellData) {
-            markUpsellHandled(upsellData.upsell.id);
-            setActiveUpsell(upsellData);
-            setIsUpsellDialogOpen(true);
-        } else {
-            proceedToCheckout();
-        }
-      } else {
-        proceedToCheckout();
-      }
-    });
-  };
+  const { isPending, activeUpsell, isUpsellDialogOpen, setIsUpsellDialogOpen, proceedToCheckout, handleCheckoutClick } = useMenuCheckout();
 
   return (
     <>

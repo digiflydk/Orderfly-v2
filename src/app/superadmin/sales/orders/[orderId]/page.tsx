@@ -119,6 +119,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 											<TableCell>
 												<p className="font-medium">{item.name}</p>
 												{item.toppings && item.toppings.length > 0 && <p className="text-xs text-muted-foreground">{item.toppings.join(', ')}</p>}
+                                                {item.comboSelections?.map(group => <p key={group.groupId || group.groupName} className="text-xs text-muted-foreground">{group.groupName}: {group.products.map(product => product.name).join(', ')}</p>)}
 											</TableCell>
 											<TableCell>{item.quantity}</TableCell>
 											<TableCell>kr. {(item.unitPrice ?? 0).toFixed(2)}</TableCell>

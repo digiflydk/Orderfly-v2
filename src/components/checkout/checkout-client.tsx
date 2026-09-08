@@ -1,5 +1,7 @@
 'use client';
 
+import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillment-time';
+import { checkoutItems } from '@/lib/checkout-items';
 import { requestHostedCheckout } from '@/lib/checkout-request';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
@@ -351,12 +353,12 @@ function CheckoutForm({ location }: { location: Location }) {
   const isDeliveryBelowMinOrder = deliveryType === 'delivery' && subtotal < minOrderAmount;
 
   useEffect(() => {
-    if (location?.id) {
-      setIsLoadingTimes(true);
-      const slots = calculateTimeSlots(location);
-      setTimeSlots(slots);
-      setIsLoadingTimes(false);
-    }
+    if (!location?.id) return;
+    const refresh = () => { setTimeSlots(calculateTimeSlots(location)); setIsLoadingTimes(false); };
+    refresh();
+    const interval = setInterval(refresh, 30000);
+    window.addEventListener('focus', refresh);
+    return () => { clearInterval(interval); window.removeEventListener('focus', refresh); };
   }, [location]);
 
   const availableTimes = timeSlots
@@ -507,15 +509,12 @@ function CheckoutForm({ location }: { location: Location }) {
     return text || "Currently unavailable";
   }, [timeSlots, deliveryType]);
 
-  const displayTime = selectedTime === 'asap' ? asapText : selectedTime;
+  const displayTime = selectedTime === 'asap' ? asapText : displayFulfillmentTime(selectedTime);
 
   const isOrderTimeValid = useMemo(() => {
-    return (
-      !!displayTime &&
-      !displayTime.toLowerCase().includes('loading') &&
-      !displayTime.toLowerCase().includes('unavailable')
-    );
-  }, [displayTime]);
+    try { if (!deliveryType) return false; resolveFulfillmentTime(location, deliveryType, selectedTime); return true; }
+    catch { return false; }
+  }, [location, selectedTime, deliveryType, timeSlots]);
 
   const proceedToStripe = async (formValues: CheckoutFormValues) => {
       // A slow payment request is not evidence that no session exists. Keep the
@@ -553,20 +552,14 @@ function CheckoutForm({ location }: { location: Location }) {
         taxes: 0
       };
 
-      const finalDeliveryTime = selectedTime === 'asap' ? displayTime : selectedTime;
+      // Recheck even if the page or an upsell dialog has been open for a while.
+      try { resolveFulfillmentTime(location, deliveryType!, selectedTime); }
+      catch { setCheckoutError('Please choose a new available order time.'); setIsTimeDialogOpen(true); return; }
+      const finalDeliveryTime = selectedTime;
       let anonymousId: string | undefined;
       try { anonymousId = Cookies.get('orderfly_anonymous_id'); } catch { /* Optional consent linkage. */ }
 
-      const minimalCartItems: MinimalCartItem[] = cartItems.map(item => ({
-        id: item.id,
-        name: item.productName,
-        quantity: item.quantity,
-        unitPrice: item.price,
-        totalPrice:
-          item.price * item.quantity +
-          item.toppings.reduce((sum, t) => sum + t.price, 0) * item.quantity,
-        toppings: item.toppings.map(t => t.name)
-      }));
+      const minimalCartItems = checkoutItems(cartItems);
 
       // The server receives an explicit consent boolean.
       const customerInfo: CustomerInfo = {

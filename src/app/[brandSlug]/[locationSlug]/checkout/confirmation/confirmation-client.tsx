@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from "next/link";
 import { format as formatDate, toZonedTime } from 'date-fns-tz';
 
@@ -15,13 +15,7 @@ import { Separator } from '@/components/ui/separator';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 
-// Define the shape of the order prop for the client component
-type ClientOrderDetail = Omit<OrderDetail, 'createdAt' | 'paidAt' | 'updatedAt'> & {
-  createdAt: string; // createdAt is now a string
-  paidAt?: string; // paidAt is now an optional string
-  updatedAt?: string;
-};
-
+import type { GuestReceipt } from '@/lib/server/guest-receipt';
 
 function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) {
     return (
@@ -45,7 +39,10 @@ function formatDisplayTime(timeString: string): string {
 }
 
 interface ConfirmationClientProps {
-    order: ClientOrderDetail | null;
+    order: GuestReceipt | null;
+    sessionId?: string;
+    receiptToken?: string;
+    orderId?: string;
     brand: Brand | null;
     location: Location | null;
 }
@@ -61,7 +58,37 @@ const toNumber = (value: string | number | undefined | null): number => {
 };
 
 
-export function ConfirmationClient({ order, brand, location }: ConfirmationClientProps) {
+export function ConfirmationClient({ order: initialOrder, brand, location, sessionId, orderId, receiptToken }: ConfirmationClientProps) {
+    const [order, setOrder] = useState(initialOrder);
+    const [checking, setChecking] = useState(true);
+    const [retry, setRetry] = useState(0);
+    useEffect(() => { setOrder(initialOrder); }, [initialOrder]);
+    useEffect(() => {
+        if (!sessionId || !brand || !location || (order && order.paymentStatus !== 'Pending')) { setChecking(false); return; }
+        let stopped = false, attempts = 0;
+        let timer: ReturnType<typeof setTimeout>;
+        const controller = new AbortController();
+        const deadline = setTimeout(() => { stopped = true; controller.abort(); clearTimeout(timer); setChecking(false); }, 45000);
+        setChecking(true);
+        const poll = async () => {
+            try {
+                const query = new URLSearchParams({ session_id: sessionId, brand_id: brand.id, location_id: location.id });
+                if (orderId) query.set('order_id', orderId);
+                if (receiptToken) query.set('receipt_token', receiptToken);
+                const response = await fetch(`/api/orders/lookup-by-session?${query}`, { cache: 'no-store', signal: controller.signal });
+                const result = await response.json();
+                if (stopped) return;
+                if (response.ok && result.found && result.order) {
+                    setOrder(result.order);
+                    if (result.order.paymentStatus !== 'Pending') { setChecking(false); return; }
+                }
+            } catch { /* Temporary read failure is not a failed payment. */ }
+            if (!stopped && ++attempts < 10) timer = setTimeout(poll, 3000);
+            else if (!stopped) setChecking(false);
+        };
+        timer = setTimeout(poll, 1500);
+        return () => { stopped = true; controller.abort(); clearTimeout(timer); clearTimeout(deadline); };
+    }, [sessionId, receiptToken, orderId, brand?.id, location?.id, order?.paymentStatus, retry]);
     const { completeCheckout } = useCart();
 
     useEffect(() => {
@@ -79,12 +106,13 @@ export function ConfirmationClient({ order, brand, location }: ConfirmationClien
                             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100">
                                <AlertTriangle className="h-8 w-8 text-yellow-600" />
                             </div>
-                            <CardTitle className="mt-4 text-2xl">Order Not Found</CardTitle>
+                            <CardTitle className="mt-4 text-2xl">{checking && sessionId ? 'Checking payment' : 'Order details unavailable'}</CardTitle>
                             <CardDescription>
-                                We couldn't find the details for your order. It might still be processing. Please check your email for a confirmation or contact support if you have any questions.
+                                We couldn't find the details for your order. It might still be processing. Please contact the restaurant before making another payment if you have already paid.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
+                             <Button variant="outline" disabled={checking || !sessionId} onClick={() => setRetry(value => value + 1)}>Check payment status</Button>
                              <Button asChild className="mt-6">
                                 <Link href={`/`}>Back to Home</Link>
                             </Button>
@@ -95,6 +123,20 @@ export function ConfirmationClient({ order, brand, location }: ConfirmationClien
         )
     }
     
+    if (order.paymentStatus !== 'Paid') {
+        const failed = order.paymentStatus === 'Failed';
+        return <main className="mx-auto max-w-lg p-8 text-center" aria-live="polite">
+            <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-amber-600" />
+            <h1 className="text-2xl font-bold">{failed ? 'Payment not completed' : 'Awaiting payment confirmation'}</h1>
+            <p className="my-4">{failed ? 'This payment session has ended without payment.' :
+              checking ? 'We are checking your payment. Please keep this page open.' :
+              'Payment has not been confirmed yet. Check the status again or contact the restaurant before paying again.'}</p>
+            <p className="mb-4">Order reference: {order.id}</p>
+            {!failed && <Button disabled={checking} onClick={() => setRetry(value => value + 1)}>Check payment status</Button>}
+            <Button asChild variant="outline" className="ml-2"><Link href={`/${brand.slug}/${location.slug}`}>Back to Menu</Link></Button>
+        </main>;
+    }
+
     const {
         id, createdAt, customerName, customerContact,
         deliveryType, status, productItems, paymentDetails, customerDetails, deliveryTime,
@@ -179,6 +221,7 @@ export function ConfirmationClient({ order, brand, location }: ConfirmationClien
                                             <TableCell>
                                                 <p className="font-medium">{item.name}</p>
                                                 {item.toppings && item.toppings.length > 0 && <p className="text-xs text-muted-foreground">{item.toppings.join(', ')}</p>}
+                                                {item.comboSelections?.map(group => <p key={group.groupId || group.groupName} className="text-xs text-muted-foreground">{group.groupName}: {group.products.map(product => product.name).join(', ')}</p>)}
                                             </TableCell>
                                             <TableCell>{item.quantity}</TableCell>
                                             <TableCell className="text-right">kr. {toNumber(item.totalPrice).toFixed(2)}</TableCell>

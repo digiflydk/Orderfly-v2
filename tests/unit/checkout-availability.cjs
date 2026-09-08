@@ -2,6 +2,7 @@ const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const ts = require('typescript');
+const {loadTs}=require('../helpers/load-ts.cjs');
 function load(path, mocks = {}) {
   const mod = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
@@ -10,7 +11,7 @@ function load(path, mocks = {}) {
 }
 const { calculateTimeSlots } = load('src/lib/time-slots.ts');
 const location = {
-  deliveryTypes: ['pickup', 'delivery'], allowPreOrder: true, prep_time: 20, delivery_time: 20,
+  isActive:true, deliveryTypes: ['pickup', 'delivery'], allowPreOrder: true, prep_time: 20, delivery_time: 20,
   openingHours: Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day => [day, { isOpen: true, open: '12:00', close: '22:00' }])),
 };
 function serverSlots() {
@@ -24,7 +25,8 @@ function serverSlots() {
 }
 test('Change dialog uses server calculator: expired day cannot be selected, next day can', async () => {
   const RealDate = Date;
-  global.Date = class extends RealDate { constructor(...args) { super(...(args.length ? args : ['2026-09-06T21:00:00Z'])); } };
+  let now='2026-09-06T21:00:00Z';
+  global.Date = class extends RealDate { constructor(...args) { super(...(args.length ? args : [now])); } static now(){return new RealDate(now).getTime();} };
   try {
     const getTimeSlots = serverSlots();
     const state = [], effects = []; let index = 0, saved;
@@ -38,23 +40,29 @@ test('Change dialog uses server calculator: expired day cannot be selected, next
     const mocks = Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],ui]));
     Object.assign(mocks, {react:hooks,'date-fns':require('date-fns'),'date-fns-tz':require('date-fns-tz'),
       '@/app/superadmin/locations/actions':{getTimeSlots},
-      '@/context/cart-context':{useCart:()=>({deliveryType:'pickup',selectedTime:'asap',setSelectedTime:v=>saved=v})},
+      '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),
+      '@/context/cart-context':{useCart:()=>({location,deliveryType:'pickup',selectedTime:'asap',setSelectedTime:v=>saved=v})},
     });
     const {TimeSlotDialog} = load(path,mocks);
     const render = () => {index=0;return TimeSlotDialog({isOpen:true,setIsOpen:()=>{},locationId:'l'});};
     const find = (node,type) => { if (!node || typeof node !== 'object') return null; if (node.type===type) return node; for (const child of [node.props?.children].flat(Infinity)) {const found=find(child,type);if(found)return found;}return null; };
-    render(); effects.shift()(); await new Promise(resolve=>setImmediate(resolve));
+    render(); effects[1](); await new Promise(resolve=>setImmediate(resolve));
     let tree=render();
     assert.equal(find(tree,'SelectItem'),null);
     assert.equal(find(tree,'Button').props.disabled,true);
     find(tree,'Button').props.onClick(); assert.equal(saved,undefined);
     await find(tree,'Calendar').props.onSelect(new Date('2026-09-07T12:00:00Z'));
     tree=render();
-    assert.equal(find(tree,'SelectItem').props.value,'Tomorrow at 12:20');
+    assert.equal(find(tree,'SelectItem').props.value,'2026-09-07T10:20:00.000Z');
     assert.equal(find(tree,'Button').props.disabled,true);
-    find(tree,'Select').props.onValueChange('Tomorrow at 12:20');
+    find(tree,'Select').props.onValueChange('2026-09-07T10:20:00.000Z');
     tree=render(); find(tree,'Button').props.onClick();
-    assert.equal(saved,'Tomorrow at 12:20');
+    assert.equal(saved,'2026-09-07T10:20:00.000Z');
+    // The dialog remains open in this fixture. Time passing between render and
+    // Save must invalidate the old choice without changing the saved value.
+    saved=undefined;now='2026-09-07T10:05:00Z';
+    find(tree,'Button').props.onClick();assert.equal(saved,undefined);
+    assert.equal(find(render(),'Button').props.disabled,true);
     assert.deepEqual((await getTimeSlots('l','2026-09-05T12:00:00Z')).pickup_times,[]);
   } finally {global.Date=RealDate;}
 });

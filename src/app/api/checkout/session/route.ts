@@ -1,28 +1,9 @@
-import { z } from 'zod';
+import { checkoutRequestSchema } from '@/lib/checkout-schema';
 import { runCheckoutAttempt } from '@/lib/checkout-attempt';
 import { createStripeCheckoutSessionAction } from '@/app/checkout/actions';
 import { getOrigin } from '@/lib/url';
 
 export const runtime = 'nodejs';
-const amount = z.number().finite().nonnegative();
-const id = z.string().min(1).max(160).regex(/^[^/\\?#]+$/);
-const optionalText = z.string().max(250).nullish().transform(value => value ?? undefined);
-const customer = z.object({
-  name: z.string().trim().min(2).max(200), email: z.string().trim().email().max(254),
-  phone: z.string().trim().min(5).max(50), street: optionalText, zipCode: optionalText, city: optionalText,
-  subscribeToNewsletter: z.boolean(), acceptTerms: z.literal(true),
-});
-const requestSchema = z.tuple([
-  z.array(z.object({ id, name: z.string().min(1).max(200), quantity: z.number().int().min(1).max(999),
-    unitPrice: amount, totalPrice: amount, toppings: z.array(z.string().max(200)).max(50).optional(),
-  })).min(1).max(97), // Stripe supports 100 lines, leaving room for the three fees.
-  customer, z.enum(['pickup', 'delivery']), id, id,
-  z.object({ subtotal: amount, deliveryFee: amount, bagFee: amount.optional(), adminFee: amount.optional(),
-    vatAmount: amount.optional(), discountTotal: amount, itemDiscountTotal: amount.optional(),
-    cartDiscountTotal: amount.optional(), cartDiscountName: z.string().max(250).optional(), tips: amount, taxes: amount,
-  }),
-  id.nullable(), id, id, optionalText, id.nullish().transform(value => value ?? undefined),
-]).refine(args => args[2] !== 'delivery' || !!(args[1].street?.trim() && args[1].zipCode?.trim() && args[1].city?.trim()), 'Delivery address required');
 
 const reply = (body: object, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store' } });
 async function readBody(request: Request) {
@@ -52,7 +33,7 @@ export async function POST(request: Request) {
   }
   const key = request.headers.get('idempotency-key');
   if (!key || !/^[a-f0-9]{64}$/.test(key)) return reply({ success: false, retryable: true, error: 'Invalid payment attempt. Please retry.' }, 400);
-  const parsed = requestSchema.safeParse(await readBody(request).catch(() => null));
+  const parsed = checkoutRequestSchema.safeParse(await readBody(request).catch(() => null));
   if (!parsed.success) return reply({ success: false, retryable: true, error: 'Please check your basket and customer information.' }, 400);
   try {
     const result = await runCheckoutAttempt(key, parsed.data, () => createStripeCheckoutSessionAction(...parsed.data));

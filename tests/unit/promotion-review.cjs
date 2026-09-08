@@ -39,7 +39,8 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
  let fail = true;
  const session={id:'s',payment_status:'paid',payment_intent:'pi',amount_total:10000,metadata:{orderId:'o',brandId:'b',locationId:'l'}};
  class Stripe { webhooks = {constructEventAsync: async()=>({type:'checkout.session.completed',data:{object:session}})}; }
- const route=load('src/app/api/stripe/webhook/route.ts',{
+ const mocks={
+  'server-only':{},
   '@/lib/discount-reservations':{
    releaseDiscount:async()=>{},
    prepareCapacitySettlement:async(tx,order,paid)=>load('src/lib/discount-reservations.ts',{
@@ -62,7 +63,9 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
     state=draft; return result;
    },
   },
- });
+ };
+ mocks['@/lib/server/settle-checkout']=load('src/lib/server/settle-checkout.ts',mocks);
+ const route=load('src/app/api/stripe/webhook/route.ts',mocks);
  assert.equal((await route.POST(new Request('https://test',{method:'POST',body:'event'}))).status,500);
  assert.equal(state['orders/o'].paymentStatus,'Pending');
  assert.equal(state['discounts/d'].usedCount,0);

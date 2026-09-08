@@ -58,7 +58,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
       const initialSelection: SelectionState = {};
       combo.productGroups.forEach(group => {
         if (Number(group.maxSelection) === 1 && group.productIds.length > 0) {
-          initialSelection[group.id] = [group.productIds[0]];
+          initialSelection[group.id] = group.productIds.filter(id => brandProducts.some(p => p.id === id)).slice(0, 1);
         } else {
           initialSelection[group.id] = [];
         }
@@ -105,18 +105,20 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
       const min = Number(group.minSelection);
       const max = Number(group.maxSelection);
 
+      if ((selection[group.id] || []).some(id => !group.productIds.includes(id) || !brandProducts.some(p => p.id === id))) return false;
       if (count < min) return false;
       if (max > 0 && count > max) return false;
       
       return true;
     });
-  }, [selection, combo.productGroups]);
+  }, [selection, combo.productGroups, brandProducts]);
 
   const handleAddToCart = () => {
     if (!isSelectionValid || comboPrice === undefined) return;
     const comboSelections: ComboSelection[] = Object.entries(selection).map(([groupId, ids]) => {
       const group = combo.productGroups.find(g => g.id === groupId);
       return {
+        groupId,
         groupName: group?.groupName || '',
         products: ids.map(pid => {
           const product = brandProducts.find(p => p.id === pid);

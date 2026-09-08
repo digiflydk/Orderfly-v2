@@ -22,7 +22,7 @@ test('quantity, topping and combo selections survive with current catalog prices
   const catalog = f.catalog(); catalog.products[0].price = 90; catalog.toppings[0].price = 12;
   const { items, removed } = restore([{ ...f.choice, toppings: ['Cheese'], price: 1 }, f.comboChoice], catalog);
   assert.equal(removed, 0); assert.equal(items[0].quantity, 2); assert.equal(items[0].price, 90); assert.equal(items[0].itemTotal, 102);
-  assert.deepEqual(items[1].comboSelections, [{ groupName: 'Pizza', products: [{ id: 'pizza', name: 'Italiana' }] }]);
+  assert.deepEqual(items[1].comboSelections, [{ groupId: 'pg', groupName: 'Pizza', products: [{ id: 'pizza', name: 'Italiana' }] }]);
   assert.equal(restore([f.choice], catalog, { ...f.scope, deliveryType: 'delivery' }).items[0].price, 80);
 });
 

@@ -479,6 +479,7 @@ export type ProductGroup = {
  * @description Defines the selected products for a combo item in the cart.
  */
 export type ComboSelection = {
+    groupId?: string; // Native ID; missing only in legacy baskets.
     groupName: string;
     products: {
         id: string;
@@ -541,6 +542,10 @@ export interface CartItem {
  * @description A minimal representation of a cart item sent to the server.
  */
 export type MinimalCartItem = {
+    id?: string;
+    itemType?: 'product' | 'combo';
+    toppingIds?: string[];
+    comboSelections?: ComboSelection[];
     name: string;
     quantity: number;
     unitPrice: number;

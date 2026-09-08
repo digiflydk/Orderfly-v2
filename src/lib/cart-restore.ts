@@ -53,16 +53,23 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
     if (combo) {
       if (choice.toppings.length) valid = false;
       const selected = choice.comboSelections || [];
-      if (selected.length !== combo.productGroups.length || new Set(selected.map(g => g.groupName)).size !== selected.length) valid = false;
+      const matchesGroup = (selection: typeof selected[number], group: typeof combo.productGroups[number]) =>
+        selection.groupId ? selection.groupId === group.id : selection.groupName === group.groupName;
+      // Each submitted group must resolve exactly once, including optional groups.
+      // Do not silently discard unknown groups merely because minSelection is zero.
+      if (selected.length !== combo.productGroups.length || selected.some(selection =>
+        combo.productGroups.filter(group => matchesGroup(selection, group)).length !== 1)) valid = false;
       comboSelections = combo.productGroups.map(group => {
-        const ids = selected.find(s => s.groupName === group.groupName)?.products.map(p => p.id) || [];
+        const matches = selected.filter(selection => matchesGroup(selection, group));
+        if (matches.length !== 1) valid = false;
+        const ids = matches[0]?.products.map(p => p.id) || [];
         if (ids.length < group.minSelection || (group.maxSelection > 0 && ids.length > group.maxSelection) || new Set(ids).size !== ids.length) valid = false;
         const products = ids.flatMap(id => {
           const selectedProduct = catalog.products.find(p => p.id === id && scoped(p) && group.productIds.includes(id));
           if (!selectedProduct) { valid = false; return []; }
           return [{ id, name: selectedProduct.productName }];
         });
-        return { groupName: group.groupName, products };
+        return { groupId: group.id, groupName: group.groupName, products };
       });
     }
     if (!valid) { removed++; continue; }

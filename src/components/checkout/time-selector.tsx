@@ -1,6 +1,7 @@
 
 'use client';
 
+import { displayFulfillmentTime } from '@/lib/fulfillment-time';
 import { useCart } from "@/context/cart-context";
 import { Button } from "../ui/button";
 import { Truck, Clock, Store } from "lucide-react";
@@ -46,7 +47,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
     // the first render, so returning before useMemo changes the hook order.
     if (!location) return null;
     
-    const displayTime = selectedTime === 'asap' ? asapText : selectedTime;
+    const displayTime = selectedTime === 'asap' ? asapText : displayFulfillmentTime(selectedTime);
 
     return (
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2">

@@ -1,7 +1,8 @@
-
-
 'use server';
 
+import { checkoutRequestSchema } from '@/lib/checkout-schema';
+import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillment-time';
+import { validateCheckoutItems } from '@/lib/checkout-items';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { isDefinitiveStripeRejection } from '@/lib/stripe-checkout-failure';
 import { validateCheckoutPrices } from '@/lib/checkout-price-validation';
@@ -25,7 +26,7 @@ import { getLoyaltySettings } from '../superadmin/loyalty/actions';
 import { getActiveStripeSecretKey } from '../superadmin/settings/actions';
 import { getOrigin } from '@/lib/url';
 import { generateOrderId } from '@/lib/order-id';
-import { getOrderById, getOrderByCheckoutSessionId as getOrderBySessionId } from './order-actions';
+import { readGuestReceipt, type GuestReceipt } from '@/lib/server/guest-receipt';
 
 
 // Helper functions for Stripe statement descriptors
@@ -324,6 +325,9 @@ export async function createStripeCheckoutSessionAction(
   let sessionRequestStarted = false;
   let stage = 'configuration';
   try {
+    const parsed = checkoutRequestSchema.safeParse([cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId]);
+    if (!parsed.success) return { success: false, retryable: true, error: 'Please check your basket and customer information, then reload checkout.' };
+    [cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId] = parsed.data;
     const stripeSecretKey = await getActiveStripeSecretKey();
     if (!stripeSecretKey) {
         throw new Error('Stripe API key is not configured.');
@@ -339,6 +343,8 @@ export async function createStripeCheckoutSessionAction(
     ]);
     if (!brand || !location || location.brandId !== brand.id) throw new Error("Brand or location not found in the requested tenant scope");
     
+    if (brand.slug !== brandSlug || location.slug !== locationSlug) throw new Error('Restaurant address has changed. Please reload the menu.');
+    let fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
     const resolvedCustomer = await resolveCheckoutCustomerRef(customerInfo, brand.id);
     const existingCustomer = resolvedCustomer.customerDoc.exists()
       ? resolvedCustomer.customerDoc.data() as Customer
@@ -349,7 +355,7 @@ export async function createStripeCheckoutSessionAction(
       if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0 || lineTotal < 0) throw new Error('Invalid cart item quantity or total.');
       return sum + lineTotal;
     }, 0);
-    const itemDiscountTotal = Math.max(0, toNumber(paymentDetails.subtotal) - chargedItemsSubtotal);
+
     const activeStandardDiscounts = await getActiveStandardDiscounts({
       brandId,
       locationId,
@@ -366,14 +372,38 @@ export async function createStripeCheckoutSessionAction(
       if (!productSnap.exists() && !comboSnap.exists() && item.id.endsWith('-offer')) {
         productSnap = await getDoc(doc(db, 'products', item.id.slice(0, -6)));
       }
-      const catalog = productSnap.exists() ? productSnap.data() as Product : null;
-      const combo = comboSnap.exists() ? comboSnap.data() : null;
+      const catalog = productSnap.exists() ? { ...productSnap.data(), id: productSnap.id } as Product : null;
+      const combo = comboSnap.exists() ? { ...comboSnap.data(), id: comboSnap.id } as ComboMenu : null;
       const record = catalog || combo;
       if (!record || record.brandId !== brandId || (record.locationIds?.length && !record.locationIds.includes(locationId))) throw new Error('Basket item is unavailable at this restaurant.');
-      return { productSnap, catalog, combo, price: combo
-        ? (deliveryType === 'delivery' ? combo.deliveryPrice : combo.pickupPrice)
-        : (deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price) };
+      const price = combo ? (deliveryType === 'delivery' ? combo.deliveryPrice : combo.pickupPrice)
+        : (deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price);
+      if (typeof price !== 'number' || !Number.isFinite(price) || price < 0) throw new Error('Basket price is unavailable. Please refresh the menu.');
+      return { productSnap, catalog, combo, price };
     }));
+    const selectedProductIds = [...new Set(cartItems.flatMap(item => item.comboSelections?.flatMap(group => group.products.map(product => product.id)) || []))];
+    if (selectedProductIds.length > 400) throw new Error('Too many combo selections.');
+    const needsOptions = resolvedLines.some(line => line.catalog?.toppingGroupIds?.length);
+    const [comboProducts, toppingRows, groupRows] = await Promise.all([
+      Promise.all(selectedProductIds.map(id => getDoc(doc(db, 'products', id)))),
+      needsOptions ? getDocs(query(collection(db, 'toppings'), where('locationIds', 'array-contains', locationId))) : { docs: [] },
+      needsOptions ? getDocs(query(collection(db, 'topping_groups'), where('locationIds', 'array-contains', locationId))) : { docs: [] },
+    ]);
+    const catalogProducts = new Map(resolvedLines.flatMap(line => line.catalog ? [[line.catalog.id, line.catalog] as const] : []));
+    for (const snapshot of comboProducts) if (snapshot.exists()) catalogProducts.set(snapshot.id, { ...snapshot.data(), id: snapshot.id } as Product);
+    const validated = validateCheckoutItems(cartItems, {
+      products: [...catalogProducts.values()], combos: resolvedLines.flatMap(line => line.combo ? [line.combo] : []),
+      toppings: toppingRows.docs.map(row => ({ ...row.data(), id: row.id })) as Topping[],
+      groups: groupRows.docs.map(row => ({ ...row.data(), id: row.id })) as import('@/types').ToppingGroup[],
+      discounts: [], upsells: [],
+    }, { brandId, locationId, deliveryType });
+    cartItems = validated.items;
+    // Existing store policy: delivery minimum is the catalog subtotal including
+    // options, before promotions and excluding delivery/bag/admin fees.
+    if (deliveryType === 'delivery' && validated.subtotal < Math.max(0, toNumber(location.minOrder))) {
+      throw new Error(`Minimum delivery order is kr. ${Number(location.minOrder).toFixed(2)} before discounts and fees.`);
+    }
+    const itemDiscountTotal = Math.max(0, validated.subtotal - chargedItemsSubtotal);
     const upsellRows = await getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true)));
     const upsells = upsellRows.docs.map(row => ({ ...row.data(), id: row.id })) as Upsell[];
     validateCheckoutPrices(cartItems, resolvedLines.map(({productSnap,catalog,combo,price},i) => ({
@@ -439,7 +469,7 @@ export async function createStripeCheckoutSessionAction(
     const totalAmount = subtotalAfterDiscount + effectiveDeliveryFee + effectiveBagFee + effectiveAdminFee;
     const serverPaymentDetails: Omit<PaymentDetails, 'paymentRefId'> = {
       ...paymentDetails,
-      subtotal: toNumber(paymentDetails.subtotal),
+      subtotal: validated.subtotal,
       itemDiscountTotal,
       cartDiscountTotal,
       cartDiscountName,
@@ -456,6 +486,7 @@ export async function createStripeCheckoutSessionAction(
     // Step 1: Pre-create order with 'Pending' status
     const orderId = generateOrderId();
     const cancelToken = randomBytes(32).toString('hex');
+    const receiptToken = randomBytes(32).toString('hex');
     const orderRef = doc(db, 'orders', orderId);
 
     stage = 'order';
@@ -471,10 +502,12 @@ export async function createStripeCheckoutSessionAction(
         paymentDetails: serverPaymentDetails,
         appliedDiscountId: appliedDiscountIdForOrder,
         cancelTokenHash: createHash('sha256').update(cancelToken).digest('hex'),
+        receiptTokenHash: createHash('sha256').update(receiptToken).digest('hex'),
         customerName: customerInfo.name,
         customerContact: customerInfo.email,
         deliveryType: deliveryType === 'delivery' ? 'Delivery' : 'Pickup',
-        deliveryTime,
+        deliveryTime: displayFulfillmentTime(fulfillmentAt),
+        fulfillmentAt,
         brandName: brand.name,
         locationName: location.name,
         customerDetails: {
@@ -504,7 +537,7 @@ export async function createStripeCheckoutSessionAction(
         return {
             price_data: {
                 currency: 'dkk',
-                product_data: { name: item.name, description: item.toppings?.join(', ') || undefined },
+                product_data: { name: item.name, description: [...(item.toppings || []), ...(item.comboSelections || []).map(group => `${group.groupName}: ${group.products.map(product => product.name).join(', ')}`)].join('; ').slice(0, 500) || undefined },
                 unit_amount: Math.round((item.totalPrice / item.quantity) * 100),
             },
             quantity: item.quantity,
@@ -536,7 +569,7 @@ export async function createStripeCheckoutSessionAction(
         mode: 'payment',
         expires_at: Math.floor(Date.now() / 1000) + 31 * 60,
         customer_email: customerInfo.email,
-        success_url: `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}`,
+        success_url: `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}&receipt_token=${receiptToken}`,
         cancel_url: `${origin}/${brandSlug}/${locationSlug}/checkout/cancel?order_id=${orderId}&token=${cancelToken}`,
         metadata: {
             orderId,
@@ -564,6 +597,10 @@ export async function createStripeCheckoutSessionAction(
     
     // Retry network failures with the same parameters/idempotency key in the SDK.
     // A confirmed 4xx rejection has no payable session; a timeout/5xx is uncertain.
+    stage = 'validation';
+    // Optional reads/customer creation may take time. Recheck immediately before payment.
+    fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
+    await updateDoc(orderRef, { fulfillmentAt, deliveryTime: displayFulfillmentTime(fulfillmentAt) });
     stage = 'stripe_session';
     sessionRequestStarted = true;
     let session: Stripe.Checkout.Session;
@@ -663,20 +700,11 @@ export async function validateDiscountAction(
 }
 
 // New helper functions for confirmation page
-export async function getOrderByCheckoutSessionId(sessionId: string): Promise<OrderDetail | null> {
-    return await getOrderBySessionId(sessionId);
+export async function getOrderByCheckoutSessionId(sessionId: string, receiptToken?: string): Promise<GuestReceipt | null> {
+    return await readGuestReceipt({ sessionId, receiptToken });
 }
 
-export async function waitForOrderBySessionId(sessionId: string, timeoutMs = 20000, stepMs = 1000): Promise<OrderDetail | null> {
-    const start = Date.now();
-    while (Date.now() - start < timeoutMs) {
-        const order = await getOrderBySessionId(sessionId);
-        if (order) return order;
-        await new Promise(r => setTimeout(r, stepMs));
-    }
-    return null;
+export async function waitForOrderBySessionId(sessionId: string, receiptToken?: string): Promise<GuestReceipt | null> {
+    // Retained compatibility entry, with the same proof and minimal projection.
+    return readGuestReceipt({ sessionId, receiptToken });
 }
-
-    
-
-    

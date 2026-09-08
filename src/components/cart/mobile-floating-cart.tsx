@@ -2,24 +2,18 @@
 
 'use client';
 
-import { handledUpsells, markUpsellHandled } from '@/lib/handled-upsells';
+import { useMenuCheckout } from '@/hooks/use-menu-checkout';
 import { ShoppingBag, Trash2, Loader2, Tag } from 'lucide-react';
 import Image from 'next/image';
-import { useRouter } from 'next/navigation';
-import { useState, useTransition, useEffect, useMemo } from 'react';
 
 import { useCart } from '@/context/cart-context';
-import type { Product, Upsell, ProductForMenu } from '@/types';
-import { getActiveUpsellForCart } from '@/app/superadmin/upsells/actions';
 import { UpsellDialog } from '@/components/checkout/upsell-dialog';
-import { useAnalytics } from '@/context/analytics-context';
 
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from '@/components/ui/card';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Separator } from '@/components/ui/separator';
 import { Badge } from '../ui/badge';
-import { useToast } from '@/hooks/use-toast';
 import {
   Sheet,
   SheetContent,
@@ -32,7 +26,6 @@ import {
 } from '@/components/ui/sheet';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
-import { isLockedItem } from '@/lib/cart-utils';
 import { safeImage } from '@/lib/images';
 
 function CartContents() {
@@ -175,69 +168,8 @@ function CartContents() {
 export function MobileFloatingCart() {
   const { cartItems, itemCount, cartTotal, checkoutTotal, bagFee, brand, location, subtotal, itemDiscount, cartDiscount, voucherDiscount, deliveryType } = useCart();
   const menuTotal = Math.max(0, checkoutTotal - bagFee);
-  const [isPending, startTransition] = useTransition();
-  const [isUpsellDialogOpen, setIsUpsellDialogOpen] = React.useState(false);
-  const [activeUpsell, setActiveUpsell] = React.useState<{upsell: Upsell, products: ProductForMenu[]} | null>(null);
-  const router = useRouter();
-  const { toast } = useToast();
-  const { trackEvent } = useAnalytics();
-
-  if (itemCount === 0) {
-    return null;
-  }
-  
-  const proceedToCheckout = () => {
-    if (brand && location) {
-      router.push(`/${brand.slug}/${location.slug}/checkout`);
-    }
-  };
-
-  const handleCheckoutClick = () => {
-    if (!location) return;
-
-    trackEvent('start_checkout', { 
-        cartValue: checkoutTotal, 
-        itemsCount: itemCount, 
-        deliveryType: deliveryType,
-    });
-
-    startTransition(async () => {
-      if (brand && location) {
-        const minimalCartItems = cartItems.map(item => ({
-            id: item.id,
-            categoryId: item.categoryId,
-            itemType: item.itemType,
-            tags: item.tags,
-        }));
-        
-        const currentDiscountableSubtotal = cartItems
-            .filter(item => !isLockedItem(item))
-            .reduce((sum, item) => {
-                const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-                return sum + ((item.basePrice + toppingsTotal) * item.quantity);
-            }, 0);
-        
-        const upsellData = await getActiveUpsellForCart({
-            brandId: brand.id,
-            locationId: location.id,
-            deliveryType: deliveryType!,
-            cartItems: minimalCartItems,
-            cartTotal: currentDiscountableSubtotal,
-            excludedUpsellIds: handledUpsells(),
-        });
-
-        if (upsellData) {
-            markUpsellHandled(upsellData.upsell.id);
-            setActiveUpsell(upsellData);
-            setIsUpsellDialogOpen(true);
-        } else {
-            proceedToCheckout();
-        }
-      } else {
-        proceedToCheckout();
-      }
-    });
-  };
+  const { isPending, activeUpsell, isUpsellDialogOpen, setIsUpsellDialogOpen, proceedToCheckout, handleCheckoutClick } = useMenuCheckout();
+  if (itemCount === 0) return null;
 
   return (
     <>

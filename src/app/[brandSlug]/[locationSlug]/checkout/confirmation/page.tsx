@@ -2,53 +2,16 @@
 
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
 import { getLocationBySlug } from '@/lib/data/brand-location';
-import { getOrderById, getOrderByCheckoutSessionId } from '@/app/checkout/order-actions';
+import { readGuestReceipt } from '@/lib/server/guest-receipt';
 import { ConfirmationClient } from './confirmation-client';
-import { OrderDetail } from '@/types';
 import type { AsyncPageProps } from '@/types/next-async-props';
 import { resolveParams, resolveSearchParams } from '@/lib/next/resolve-props';
 
-function serializeDate(value: unknown): string | undefined {
-  if (!value) return undefined;
-
-  if (value instanceof Date) {
-    return value.toISOString();
-  }
-
-  if (typeof value === 'string') {
-    const parsedDate = new Date(value);
-    return Number.isNaN(parsedDate.getTime()) ? undefined : parsedDate.toISOString();
-  }
-
-  if (
-    typeof value === 'object' &&
-    value !== null &&
-    'toDate' in value &&
-    typeof (value as { toDate?: unknown }).toDate === 'function'
-  ) {
-    return (value as { toDate: () => Date }).toDate().toISOString();
-  }
-
-  return undefined;
-}
-
-function serializeOrder(order: OrderDetail | null): any {
-  if (!order) return null;
-
-  const runtimeOrder = order as OrderDetail & { updatedAt?: unknown };
-  const { psp, ...safeOrder } = runtimeOrder;
-  void psp;
-
-  return {
-    ...safeOrder,
-    createdAt: serializeDate(order.createdAt) ?? new Date().toISOString(),
-    paidAt: serializeDate(order.paidAt),
-    updatedAt: serializeDate(runtimeOrder.updatedAt),
-  };
-}
+export const dynamic = 'force-dynamic';
+export const metadata = { robots: { index: false, follow: false }, referrer: 'no-referrer' };
 
 type ConfirmationParams = { brandSlug: string; locationSlug: string };
-type ConfirmationQuery = { order_id?: string; session_id?: string };
+type ConfirmationQuery = { order_id?: string; session_id?: string; receipt_token?: string };
 
 export default async function ConfirmationPage({
   params,
@@ -64,27 +27,9 @@ export default async function ConfirmationPage({
   const brand = await getBrandBySlug(brandSlug);
   const location = brand ? await getLocationBySlug(brand.id, locationSlug) : null;
 
-  // Attempt to fetch the order.
-  let order = orderId ? await getOrderById(orderId) : null;
-  if (!order && sessionId) {
-    order = await getOrderByCheckoutSessionId(sessionId);
-  }
+  const order = brand && location && sessionId ? await readGuestReceipt({
+    orderId, sessionId, receiptToken: query.receipt_token, brandId: brand.id, locationId: location.id,
+  }).catch(() => null) : null;
 
-  const orderMatchesStore = Boolean(
-    order &&
-    brand &&
-    location &&
-    order.brandId === brand.id &&
-    order.locationId === location.id,
-  );
-
-  // We pass serialized dates to avoid hydration errors.
-  // The client component handles cases where any data is not found.
-  return (
-    <ConfirmationClient
-      order={serializeOrder(orderMatchesStore ? order : null)}
-      brand={brand}
-      location={location}
-    />
-  );
+  return <ConfirmationClient order={order} brand={brand} location={location} sessionId={sessionId} orderId={orderId} receiptToken={query.receipt_token} />;
 }
