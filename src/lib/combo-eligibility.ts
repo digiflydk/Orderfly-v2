@@ -13,3 +13,12 @@ export function comboEligible(combo: Schedule, scope: {brandId?: string; locatio
     (!combo.activeDays?.length || combo.activeDays.includes(clock.day)) &&
     (!combo.activeTimeSlots?.length || combo.activeTimeSlots.some(slot => clock.time >= slot.start && clock.time <= slot.end));
 }
+
+export function comboProductsAvailable(
+  combo: Pick<ComboMenu, 'productGroups'>,
+  products: Array<{id: string}>,
+) {
+  const available = new Set(products.map(product => product.id));
+  return combo.productGroups.length > 0 &&
+    combo.productGroups.every(group => group.productIds.length > 0 && group.productIds.every(id => available.has(id)));
+}
