@@ -307,15 +307,27 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const addToCart = useCallback((product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number) => {
     if (!readyRef.current) return;
     checkoutOrderId.current = undefined;
-    const sortedToppings = [...toppings].sort((a, b) => a.name.localeCompare(b.name));
-    const toppingsKey = sortedToppings.map(t => `${t.name}:${t.price}`).join(',');
+    const canonicalizeToppings = (values: CartItemTopping[]) => [...values].sort((a, b) => {
+      if (a.id && b.id) {
+        const identityOrder = a.id.localeCompare(b.id);
+        if (identityOrder !== 0) return identityOrder;
+        return a.price - b.price;
+      }
+      if (a.id) return -1;
+      if (b.id) return 1;
+      const nameOrder = a.name.localeCompare(b.name);
+      if (nameOrder !== 0) return nameOrder;
+      return a.price - b.price;
+    });
+    const sortedToppings = canonicalizeToppings(toppings);
+    const toppingsKey = sortedToppings.map(t => `${t.id || t.name}:${t.price}`).join(',');
     const existingItemKey = `${product.id}-${toppingsKey}`;
   
     const toppingsTotal = sortedToppings.reduce((sum, t) => sum + t.price, 0);
     const itemTotal = finalPrice + toppingsTotal;
   
     setCartItems(prevItems => {
-      const existingItem = prevItems.find(item => item.itemType === 'product' && `${item.id}-${item.toppings.map(t => `${t.name}:${t.price}`).join(',')}` === existingItemKey);
+      const existingItem = prevItems.find(item => item.itemType === 'product' && `${item.id}-${canonicalizeToppings(item.toppings).map(t => `${t.id || t.name}:${t.price}`).join(',')}` === existingItemKey);
   
       if (existingItem) {
         return prevItems.map(item =>

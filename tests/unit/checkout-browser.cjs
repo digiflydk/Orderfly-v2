@@ -205,3 +205,11 @@ test('presentation: menu desktop, mobile drawer and floating amount exclude bag;
  assert.equal(await page.getByText('Bag',{exact:true}).count(),0);
  assert.match(await page.getByRole('button',{name:/Complete Order/}).first().textContent(),/kr\. 100\.00/);
 });
+
+test('Back to Menu is available with a nonempty cart and preserves restaurant and fulfillment in the route',async t=>{
+ const page=await setup(t,'back-to-menu');
+ const back=page.getByRole('link',{name:'Back to Menu',exact:true});
+ assert.equal(await back.getAttribute('href'),'/brand/location?deliveryMethod=pickup');
+ await back.click();await page.waitForURL('**/brand/location?deliveryMethod=pickup');
+ assert.equal(requests.has('back-to-menu'),false);
+});

@@ -8,12 +8,13 @@ export const cartChoiceSchema = z.object({
   id, cartItemId: id, itemType: z.enum(['product', 'combo']),
   quantity: z.number().int().min(1).max(100),
   toppings: z.array(z.string().min(1).max(200)).max(40),
+  toppingIds: z.array(id).max(40).optional(),
   offered: z.boolean().default(false),
   comboSelections: z.array(z.object({
     groupName: z.string().min(1).max(200),
     products: z.array(z.object({ id })).max(40),
   })).max(20).optional(),
-});
+}).refine(choice => !choice.toppingIds || (choice.toppingIds.length === choice.toppings.length && new Set(choice.toppingIds).size === choice.toppingIds.length), 'Invalid topping identities.');
 export const cartChoicesSchema = z.array(cartChoiceSchema).max(100)
   .refine(choices => new Set(choices.map(c => c.cartItemId)).size === choices.length, 'Duplicate cart rows.')
   .refine(choices => choices.reduce((count, c) => count + (c.comboSelections || []).reduce((sum, g) => sum + g.products.length, 0), 0) <= 400, 'Too many combo selections.');
@@ -28,7 +29,9 @@ export type CartSnapshot = z.infer<typeof cartSnapshotSchema>;
 export function cartChoices(items: CartItem[]): CartChoice[] {
   return items.map(item => ({
     id: item.id, cartItemId: item.cartItemId, itemType: item.itemType, quantity: item.quantity,
-    toppings: item.toppings.map(topping => topping.name), offered: item.price < item.basePrice,
+    toppings: item.toppings.map(topping => topping.name),
+    ...(item.toppings.length && item.toppings.every(topping => topping.id) ? { toppingIds: item.toppings.map(topping => topping.id!) } : {}),
+    offered: item.price < item.basePrice,
     ...(item.comboSelections ? { comboSelections: item.comboSelections.map(group => ({
       groupName: group.groupName, products: group.products.map(product => ({ id: product.id })),
     })) } : {}),

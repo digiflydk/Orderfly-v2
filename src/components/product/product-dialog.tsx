@@ -85,7 +85,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
       relevantToppingGroups.forEach(group => {
           group.toppings.forEach(topping => {
               if (topping.isDefault) {
-                  defaultToppings[topping.id] = { name: topping.toppingName, price: topping.price };
+                  defaultToppings[topping.id] = { id: topping.id, name: topping.toppingName, price: topping.price };
               }
           });
       });
@@ -128,11 +128,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 delete newSelected[t.id];
             });
             if (isChecked) {
-                newSelected[topping.id] = { name: topping.toppingName, price: topping.price };
+                newSelected[topping.id] = { id: topping.id, name: topping.toppingName, price: topping.price };
             }
         } else {
             if (isChecked) {
-                newSelected[topping.id] = { name: topping.toppingName, price: topping.price };
+                newSelected[topping.id] = { id: topping.id, name: topping.toppingName, price: topping.price };
             } else {
                 delete newSelected[topping.id];
             }

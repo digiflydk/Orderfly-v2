@@ -18,7 +18,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from "react";
 import { getNewsletterSignupDiscountAction, validateDiscountAction } from "@/app/checkout/actions";
 import type { NewsletterDiscountOffer } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, X, Tag, Truck, Store, Clock, ShoppingCart, AlertTriangle } from "lucide-react";
+import { Loader2, X, Tag, Truck, Store, Clock, ShoppingCart, AlertTriangle, ArrowLeft } from "lucide-react";
 import { Badge } from "../ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
@@ -751,6 +751,17 @@ function CheckoutForm({ location }: { location: Location }) {
 
   return (
     <>
+      <div className="mb-6">
+        {isProcessing || paymentUncertain || paymentUrl ? (
+          <Button type="button" variant="outline" disabled><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Back to Menu</Button>
+        ) : (
+          <Button type="button" variant="outline" asChild>
+            <Link href={`/${params.brandSlug}/${params.locationSlug}?deliveryMethod=${deliveryType || 'pickup'}`}>
+              <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Back to Menu
+            </Link>
+          </Button>
+        )}
+      </div>
       <FormProvider {...form}>
         <form onSubmit={handleFormSubmit} noValidate>
           <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-32 lg:pb-0">

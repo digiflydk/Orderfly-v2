@@ -320,6 +320,7 @@ export type Topping = {
  * @description A selected topping for a specific item in the cart.
  */
 export type CartItemTopping = {
+    id?: string; // Stable catalog identity; optional for legacy saved baskets.
     name: string;
     price: number;
 };
