@@ -87,7 +87,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
       const defaultToppings: Record<string, CartItemTopping> = {};
       relevantToppingGroups.forEach(group => {
           group.toppings.forEach(topping => {
-              if (topping.isDefault) {
+              if (topping.isDefault && Object.keys(defaultToppings).length < MAX_TOPPINGS_PER_ITEM) {
                   defaultToppings[topping.id] = { id: topping.id, name: topping.toppingName, price: money(topping.price) };
               }
           });
@@ -134,10 +134,12 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 delete newSelected[t.id];
             });
             if (isChecked) {
+                if (!newSelected[topping.id] && Object.keys(newSelected).length >= MAX_TOPPINGS_PER_ITEM) return prev;
                 newSelected[topping.id] = { id: topping.id, name: topping.toppingName, price: money(topping.price) };
             }
         } else {
             if (isChecked) {
+                if (!newSelected[topping.id] && Object.keys(newSelected).length >= MAX_TOPPINGS_PER_ITEM) return prev;
                 newSelected[topping.id] = { id: topping.id, name: topping.toppingName, price: money(topping.price) };
             } else {
                 delete newSelected[topping.id];
@@ -151,7 +153,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   const totalItemPrice = lineMoney(finalPrice, quantity, [toppingsTotal]);
 
   const isSelectionValid = useMemo(() => {
-    return relevantToppingGroups.every(group => {
+    return Object.keys(selectedToppings).length <= MAX_TOPPINGS_PER_ITEM && relevantToppingGroups.every(group => {
         const count = Object.keys(selectedToppings).filter(tid => group.toppings.some(t => t.id === tid)).length;
         const min = Number(group.minSelection);
         const max = Number(group.maxSelection);
@@ -243,7 +245,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                                     {group.toppings.map(topping => (
                                                     <div key={`${product.id}-${topping.id}`} className="flex items-center justify-between p-2 rounded-md hover:bg-accent">
                                                         <div className="flex items-center space-x-3">
-                                                            <RadioGroupItem value={topping.id} id={`${product.id}-${topping.id}`} />
+                                                    <RadioGroupItem
+                                                        value={topping.id}
+                                                        id={`${product.id}-${topping.id}`}
+                                                        disabled={!currentSelection.length && Object.keys(selectedToppings).length >= MAX_TOPPINGS_PER_ITEM}
+                                                    />
                                                             <Label htmlFor={`${product.id}-${topping.id}`} className="flex-1 cursor-pointer font-normal">{topping.toppingName}</Label>
                                                         </div>
                                                         <span className="text-sm text-muted-foreground">+DKK {topping.price.toFixed(2)}</span>
