@@ -11,7 +11,7 @@ import type {
   TimeSlotResponse,
 } from '@/types';
 import { useCart } from '@/context/cart-context';
-import { comboEligible } from '@/lib/combo-eligibility';
+import { comboEligible, comboProductsAvailable } from '@/lib/combo-eligibility';
 import { searchMenu, type DisplayProduct } from '@/lib/menu-display';
 import { DesktopCart } from '@/components/cart/desktop-cart';
 import { CategoryNav } from '@/components/layout/category-nav';
@@ -54,7 +54,10 @@ export function MenuClient({
   const [now, setNow] = useState(() => new Date());
   const activeStandardDiscounts = cartReady ? standardDiscounts : deliveryType === initialDeliveryType || !deliveryType ? initialActiveStandardDiscounts : [];
   const mode = deliveryType || initialDeliveryType;
-  const activeCombos = useMemo(() => initialActiveCombos.filter(combo => comboEligible(combo, {brandId: brand.id, locationId: location.id, deliveryType: mode, now})), [initialActiveCombos, brand.id, location.id, mode, now]);
+  const activeCombos = useMemo(() => initialActiveCombos.filter(combo =>
+    comboProductsAvailable(combo, initialProducts) &&
+    comboEligible(combo, {brandId: brand.id, locationId: location.id, deliveryType: mode, now})
+  ), [initialActiveCombos, initialProducts, brand.id, location.id, mode, now]);
   const visibleProducts = useMemo(() => searchMenu(initialProducts, search), [initialProducts, search]);
   const visibleCombos = useMemo(() => searchMenu(activeCombos, search), [activeCombos, search]);
   const visibleCategories = initialCategories.filter(c => c.id === 'offers' || visibleProducts.some(p => (p.displayCategoryId || p.categoryId) === c.id));
