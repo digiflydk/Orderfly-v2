@@ -83,6 +83,12 @@ test('#71 missing mapping is actionable and manual retry is scoped',async()=>{
  assert.equal(db.rows.get('marketingOutbox/'+id).lastError,'configuration_required');
  assert.equal(await retryMarketingJob(db,'other',id),false);assert.equal(await retryMarketingJob(db,'b',id),true);
 });
+test('#71 disabled mapping reschedules reconciliation so it cannot starve configured brands',async()=>{
+ process.env.ORDERFLY_OMNISEND_BRANDS='[]';const db=database(),now=Date.now();
+ db.rows.set('marketingContacts/disabled',{brandId:'disabled',customerId:'c',latestEventId:'event',nextReconcileAt:now-1,state:'synced'});
+ await runMarketingWorker(db,now,()=>{throw Error('must not contact provider');});
+ const contact=db.rows.get('marketingContacts/disabled');assert.equal(contact.nextReconcileAt,now+3600000);assert.equal(contact.updatedAt,now);
+});
 test('#71 suppressed reconciliation cannot be undone by an old queue event',async()=>{
  process.env.ORDERFLY_OMNISEND_BRANDS=JSON.stringify([config]);const db=database(),id=await recordNewsletterConsent(db,consent);const key=contactKey('b',consent.email);
  let state='subscribed';const provider=()=>({verifyBrand:async()=>{},sync:async()=> 'synced',contact:async()=>channel(state)});
@@ -134,6 +140,18 @@ test('#71 public recommendations validate restaurant scope and expose only displ
  assert.deepEqual(await (await POST(request(body))).json(),{upsell:{id:'u',upsellName:'Drink',discountType:'none'},products:[{id:'drink'}]});
  owner='other';assert.equal((await POST(request(body))).status,404);assert.equal(reads,1);
  assert.equal((await POST(request({...body,cartTotal:-1}))).status,400);
+});
+
+test('#71 stale upsell products cannot hide a later scoped public offer',async()=>{
+ const offer=id=>({id,brandId:'b',locationIds:['l'],isActive:true,orderTypes:['pickup'],activeDays:[],activeTimeSlots:[],offerType:'product',offerProductIds:[id+'-product'],offerCategoryIds:[],triggerConditions:[{type:'cart_value_over',referenceId:'0'}],upsellName:id,discountType:'none'});
+ const docs=[offer('stale'),offer('valid')].map(data=>({id:data.id,data:()=>data}));const calls=[];
+ const {getActiveUpsellForCart}=loadTs('src/app/superadmin/upsells/actions.ts',{
+  '@/lib/promotion-rules':{restaurantClock:()=>({day:'monday',time:'12:00'})},'next/cache':{},'next/navigation':{},'@/lib/upsell-serialization':{},
+  '@/lib/firebase-admin':{admin:{firestore:{Timestamp:{now:()=>0,fromDate:d=>d},FieldPath:{documentId:()=>''}}},getAdminDb:()=>({collection:()=>({where(){return this},get:async()=>({docs})})})},
+  '../products/actions':{getProductsByIds:async(ids,brandId,locationId)=>{calls.push([ids,brandId,locationId]);return ids[0]==='valid-product'?[{id:'valid-product'}]:[];}},
+ });
+ const result=await getActiveUpsellForCart({brandId:'b',locationId:'l',deliveryType:'pickup',cartItems:[{id:'cart'}],cartTotal:1});
+ assert.equal(result.upsell.id,'valid');assert.deepEqual(calls,[[['stale-product'],'b','l'],[['valid-product'],'b','l']]);
 });
 
 test('#71 actual checkout stores explicit consent before Stripe and retains it if payment fails',async()=>{
