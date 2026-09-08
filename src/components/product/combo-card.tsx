@@ -3,6 +3,7 @@
 'use client';
 import { money } from '@/lib/money';
 
+import {formatPrice} from '@/lib/storefront-format';
 import Image from "next/image";
 import { useState, useMemo } from "react";
 import type { ComboMenu, Product, ProductForMenu } from "@/types";
@@ -57,12 +58,12 @@ export function ComboCard({ combo, brandProducts }: ComboCardProps) {
 
         <div className="flex-1 flex flex-col h-full">
           <div className="flex-1">
-            <h4 className="font-semibold">{combo.comboName}</h4>
+            <h4 className="font-semibold"><button type="button" aria-label={`Se ${combo.comboName}`} onClick={event=>{event.stopPropagation();if(price!==undefined)setIsDialogOpen(true);}}>{combo.comboName}</button></h4>
             <p className="text-sm text-muted-foreground line-clamp-2">{combo.description}</p>
           </div>
           <div className="flex items-center justify-between mt-2">
-            <p className="font-semibold text-foreground">kr. {price?.toFixed(2) ?? 'N/A'}</p>
-            <Button disabled={price === undefined} type="button" aria-label={`Tilføj ${combo.comboName}`} size="icon" className="h-10 w-10 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
+            <p className="font-semibold text-foreground">{price===undefined?'Ikke tilgængelig':formatPrice(price)}</p>
+            <Button disabled={price === undefined} type="button" aria-label={`Tilføj ${combo.comboName}`} size="icon" className="h-11 w-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
               <Plus className="h-5 w-5"/>
             </Button>
           </div>

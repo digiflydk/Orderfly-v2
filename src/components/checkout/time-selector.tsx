@@ -5,6 +5,7 @@ import { displayFulfillmentTime } from '@/lib/fulfillment-time';
 import { useCart } from "@/context/cart-context";
 import { Button } from "../ui/button";
 import { Truck, Clock, Store } from "lucide-react";
+import {localizeTime} from '@/lib/storefront-format';
 import { cn } from "@/lib/utils";
 import { useEffect, useState, useMemo } from "react";
 import type { TimeSlotResponse } from "@/types";
@@ -65,7 +66,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
                     )}
                 >
                     <Store className="h-4 w-4" />
-                    <span>Pick-up</span>
+                    <span>Afhentning</span>
                 </Button>
                 <Button
                     aria-pressed={deliveryType === 'delivery'}
@@ -79,7 +80,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
                     )}
                 >
                     <Truck className="h-4 w-4" />
-                    <span>Delivery</span>
+                    <span>Levering</span>
                 </Button>
             </div>
             <div className="flex items-center justify-between border rounded-lg bg-card p-2 px-3 flex-1">
@@ -89,10 +90,10 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
                     <>
                         <div className="flex items-center gap-2">
                             <Clock className="h-4 w-4 text-muted-foreground" />
-                            <span className="text-sm font-semibold">{displayTime}</span>
+                            <span className="text-sm font-semibold">{localizeTime(displayTime)}</span>
                         </div>
                         <Button variant="link" size="sm" className="h-auto p-0 ml-2 text-xs" onClick={() => setIsTimeDialogOpen(true)}>
-                            Change
+                            Ændr tidspunkt
                         </Button>
                     </>
                  )}

@@ -18,6 +18,7 @@ async function checkout({existing=false,kind='none',identityCleaner=false, fault
  const mocks=Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],{}]));
  const events=[];const writes=[];let coupon, persistenceError, sessionParams;let patchCalls=0;
  const records=new Map();
+ const marketingDb=require('./marketing-db.cjs').memoryDb(records);
  const firestoreRef=(collection,id)=>({collection,id});
  const snapshot=ref=>({id:ref.id,ref,exists:()=>records.has(ref.collection+'/'+ref.id),data:()=>records.get(ref.collection+'/'+ref.id)});
  const save=(ref,data,merge=false)=>{
@@ -33,6 +34,8 @@ async function checkout({existing=false,kind='none',identityCleaner=false, fault
  const snap=snapshot(firestoreRef('customers','c'));
  Object.assign(mocks,{
   'node:crypto':require('node:crypto'),
+  '@/lib/firebase-admin':{getAdminDb:()=>marketingDb},
+  '@/lib/marketing/store':{recordNewsletterConsent:async(...args)=>{events.push('newsletter-consent');if(fault==='newsletter-consent')throw Error('consent storage offline');return loadTs('src/lib/marketing/store.ts',{'server-only':{}}).recordNewsletterConsent(...args);}},
   '@/lib/checkout-schema':loadTs('src/lib/checkout-schema.ts'),
   '@/lib/checkout-items':loadTs('src/lib/checkout-items.ts'),
   '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),

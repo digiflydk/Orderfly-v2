@@ -79,9 +79,10 @@ export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, br
                             key={offersCategory.id}
                             variant={activeCategory === offersCategory.id ? 'brand' : 'outline'}
                             size="sm"
+                            aria-current={activeCategory === offersCategory.id ? "true" : undefined}
                             ref={activeCategory === offersCategory.id ? activeRef : null}
                             onClick={() => handleCategoryClick(offersCategory.id)}
-                            className="h-9 shrink-0"
+                            className="h-11 shrink-0"
                         >
                             {getIconForSpecialCategory('offers')}
                             {offersCategory.categoryName}
@@ -91,12 +92,13 @@ export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, br
                         <Button
                             variant={activeCategory === 'combos' ? 'brand' : 'outline'}
                             size="sm"
+                            aria-current={activeCategory === 'combos' ? 'true' : undefined}
                             ref={activeCategory === 'combos' ? activeRef : null}
                             onClick={() => handleCategoryClick('combos')}
-                            className="h-9 shrink-0"
+                            className="h-11 shrink-0"
                         >
                             {getIconForSpecialCategory('combos')}
-                            {brand.combosHeading || 'Combo Deals'}
+                            {brand.combosHeading || 'Menuer'}
                         </Button>
                     )}
                     {regularCategories.map(category => (
@@ -104,9 +106,10 @@ export function CategoryNav({ categories, hasCombos, hasPromotionalDiscounts, br
                             key={category.id}
                             variant={activeCategory === category.id ? 'brand' : 'outline'}
                             size="sm"
+                            aria-current={activeCategory === category.id ? "true" : undefined}
                             ref={activeCategory === category.id ? activeRef : null}
                             onClick={() => handleCategoryClick(category.id)}
-                            className="h-9 shrink-0"
+                            className="h-11 shrink-0"
                         >
                             {getIconForCategory(category)}
                             {category.categoryName}

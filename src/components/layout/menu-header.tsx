@@ -1,51 +1,22 @@
-
 'use client';
-
-import Link from "next/link";
-import Image from "next/image";
-import { useEffect, useState } from "react";
-
-import type { Brand, TimeSlotResponse } from "@/types";
-import { getTimeSlots } from "@/app/superadmin/locations/actions";
-import { useCart } from "@/context/cart-context";
-import { TimeSelector } from "../checkout/time-selector";
-
-interface MenuHeaderProps {
-  brand: Brand;
-}
-
-export function MenuHeader({ brand }: MenuHeaderProps) {
-  const { location } = useCart();
-  const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
-
-  useEffect(() => {
-    if (location?.id) {
-        getTimeSlots(location.id).then(setTimeSlots);
-    }
-  }, [location?.id]);
-
-  return (
-    <header className="sticky top-0 z-40 w-full" style={{ backgroundColor: '#FFF8F0', borderBottom: '1px solid #F2E8DA' }}>
-      <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-center md:justify-between px-4">
-        <Link href={`/${brand.slug}`} className="flex items-center text-[#E94F26] text-[32px] uppercase tracking-tight" style={{ fontWeight: 700 }}>
-          {brand.logoUrl ? (
-            <div className="relative h-12 w-24">
-                <Image
-                    src={brand.logoUrl}
-                    alt={`${brand.name} logo`}
-                    fill
-                    className="object-contain"
-                    data-ai-hint="logo"
-                />
-            </div>
-          ) : (
-            <span>{brand.name}</span>
-          )}
-        </Link>
-        <div className="hidden lg:flex items-center gap-2">
-            <TimeSelector timeSlots={timeSlots} />
-        </div>
-      </div>
-    </header>
-  );
+import Link from 'next/link';
+import Image from 'next/image';
+import { usePathname } from 'next/navigation';
+import type { Brand } from '@/types';
+import { useCart } from '@/context/cart-context';
+import { safeImage } from '@/lib/images';
+export function MenuHeader({ brand }: {
+    brand: Brand;
+}) {
+    const { location } = useCart();
+    const pathname = usePathname();
+    const checkout = pathname?.includes('/checkout');
+    const href = location ? `/${brand.slug}/${location.slug}` : `/${brand.slug}`;
+    const Logo = <>{brand.logoUrl ? <Image src={safeImage(brand.logoUrl)} alt={brand.name} fill sizes="80px" className="object-contain"/> : <span className="font-bold">{brand.name}</span>}</>;
+    return <header className="sticky top-0 z-40 w-full border-b bg-[#FFF8F0]">
+    <div className="mx-auto flex h-16 max-w-[1140px] items-center justify-between gap-4 px-4">
+      {checkout ? <div className="relative h-10 w-20 shrink-0">{Logo}</div> : <Link href={href} aria-label={brand.name} className="relative h-10 w-20 shrink-0">{Logo}</Link>}
+      <p className="truncate text-right text-sm font-semibold">{location?.name || brand.name}</p>
+    </div>
+  </header>;
 }

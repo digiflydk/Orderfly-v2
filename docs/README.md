@@ -1,5 +1,8 @@
 # Orderfly — Documentation Index
 
+- **[unified-order-flow-71.md](unified-order-flow-71.md)** — Unified cart, inline upsell, newsletter consent and Omnisend activation
+- **[qa-order-flow-71.md](qa-order-flow-71.md)** — Focused local evidence and remaining release QA
+
 - **development-workflow.md** — PM → PO → Work automated development, CI, code review, PO acceptance and live-verification gates
 - **deployment-flow.md** — Production merge/deployment, Firebase boundaries, live acceptance and rollback procedure
 - **FILE-MAP.md** — Source file locations and feature map  

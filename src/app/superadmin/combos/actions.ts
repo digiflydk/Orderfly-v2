@@ -46,6 +46,8 @@ const comboMenuSchema = z.object({
     activeTimeSlots: z.array(activeTimeSlotSchema).optional().default([]),
     orderTypes: z.array(z.enum(['pickup', 'delivery'])).min(1, 'At least one order type must be selected.'),
     tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])).optional().default([]),
+    isTestData: z.boolean().optional(),
+    upgradeProductIds: z.array(z.string()).max(30).default([]),
     productGroups: z.array(productGroupSchema).min(1, 'At least one product group must be configured.'),
 }).refine(data => data.pickupPrice !== undefined || data.deliveryPrice !== undefined, {
     message: "At least one price (Pickup or Delivery) must be provided.",
@@ -93,9 +95,11 @@ export async function createOrUpdateCombo(
       pickupPrice: safeParseFloat(formData.get('pickupPrice')),
       deliveryPrice: safeParseFloat(formData.get('deliveryPrice')),
       isActive: formData.has('isActive'),
+      isTestData: formData.has('isTestData') ? ['true','on'].includes(String(formData.get('isTestData'))) : undefined,
       orderTypes: formData.getAll('orderTypes'),
       activeDays: formData.getAll('activeDays'),
       tags: formData.getAll('tags'),
+      upgradeProductIds: formData.getAll('upgradeProductIds'),
     };
 
     if (id) rawData.id = id;
@@ -138,6 +142,7 @@ export async function createOrUpdateCombo(
     const comboData = validatedFields.data;
 
     const allProductIds = comboData.productGroups.flatMap(g => g.productIds);
+    if (comboData.upgradeProductIds.some(id => !allProductIds.includes(id))) return {message:'Every upgrade product must also be an option in this combo.',error:true};
     if (allProductIds.length === 0) {
       return { message: "Combo must contain at least one product.", error: true };
     }
@@ -148,7 +153,7 @@ export async function createOrUpdateCombo(
 
     const products = await getProductsByIds(allProductIds, comboData.brandId);
 
-    if(products.some(p => p.brandId !== comboData.brandId)) {
+    if(allProductIds.some(id => !products.some(p => p.id === id && p.brandId === comboData.brandId))) {
       return { message: "Error: All selected products must belong to the selected brand.", error: true };
     }
 

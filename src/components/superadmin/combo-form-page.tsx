@@ -148,6 +148,8 @@ const comboMenuSchema = z
       )
       .optional()
       .default([]),
+    isTestData: z.boolean().default(false),
+    upgradeProductIds: z.array(z.string()).default([]),
     productGroups: z
       .array(productGroupSchema)
       .min(1, 'At least one product group must be configured.'),
@@ -424,6 +426,8 @@ export function ComboFormPage({
             combo.deliveryPrice ?? undefined,
           productGroups:
             combo.productGroups || [],
+          upgradeProductIds: combo.upgradeProductIds || [],
+          isTestData: combo.isTestData || false,
           activeTimeSlots:
             combo.activeTimeSlots || [],
         }
@@ -440,6 +444,8 @@ export function ComboFormPage({
             { start: '00:00', end: '23:59' },
           ],
           productGroups: [],
+          upgradeProductIds: [],
+          isTestData: false,
           tags: [],
         },
   });
@@ -484,6 +490,8 @@ export function ComboFormPage({
           combo.deliveryPrice ?? undefined,
         productGroups:
           combo.productGroups || [],
+        upgradeProductIds: combo.upgradeProductIds || [],
+          isTestData: combo.isTestData || false,
         activeTimeSlots:
           combo.activeTimeSlots || [],
       } as any);
@@ -492,6 +500,12 @@ export function ComboFormPage({
 
   const selectedBrandId = watch('brandId');
   const watchedProductGroups = watch('productGroups') || [];
+  const upgradeChoicesKey = JSON.stringify(watchedProductGroups.flatMap((group:any)=>group.productIds || []));
+  useEffect(()=>{
+    const valid = new Set<string>(JSON.parse(upgradeChoicesKey));
+    const selected:string[] = form.getValues('upgradeProductIds') || [];
+    if(selected.some(id=>!valid.has(id)))setValue('upgradeProductIds',selected.filter(id=>valid.has(id)));
+  },[upgradeChoicesKey,setValue,form]);
   const pickupPrice = watch('pickupPrice');
   const deliveryPrice = watch('deliveryPrice');
   const orderTypes: string[] = watch('orderTypes') || [];
@@ -524,6 +538,7 @@ export function ComboFormPage({
       if (combo?.brandId !== selectedBrandId) {
         setValue('locationIds', []);
         setValue('productGroups', []);
+        setValue('upgradeProductIds', []);
       }
     } else {
       setBrandProducts([]);
@@ -971,7 +986,11 @@ export function ComboFormPage({
 
             <Card>
               <CardHeader>
-                <CardTitle>
+                <FormField control={control} name="isTestData" render={({field})=><label className="flex gap-3 rounded-lg border p-4"><Checkbox checked={field.value===true} onCheckedChange={field.onChange} /><span>Testdata: skjul i den offentlige menu og afvis i checkout</span></label>} />
+              <Card><CardHeader><CardTitle>Opgradering fra produkt</CardTitle><CardDescription>Vis denne menu som en opgradering på de valgte produkter. Produktet skal indgå i en af menuens grupper.</CardDescription></CardHeader><CardContent>
+                <FormField control={control} name="upgradeProductIds" render={({field}) => <div className="space-y-2">{Array.from(new Set<string>(watchedProductGroups.flatMap((g: any)=>g.productIds || []))).map(id => <label key={id} className="flex items-center gap-3 p-2"><Checkbox checked={(field.value || []).includes(id)} onCheckedChange={checked => field.onChange(checked ? [...(field.value || []),id] : (field.value || []).filter((value: string)=>value !== id))} /><span>{brandProducts.find(p=>p.id===id)?.productName || id}</span></label>)}</div>} />
+              </CardContent></Card>
+              <CardTitle>
                   Product Groups
                 </CardTitle>
                 <CardDescription>

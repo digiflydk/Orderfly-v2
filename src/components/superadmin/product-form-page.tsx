@@ -62,6 +62,7 @@ import { useToast } from '@/hooks/use-toast';
 import { safeImage } from '@/lib/images';
 
 type ProductFlag =
+  | 'isTestData'
   | 'isActive'
   | 'isFeatured'
   | 'isNew'
@@ -139,6 +140,7 @@ const baseFields = {
     .optional()
     .default([]),
 
+  isTestData: z.preprocess(asBool,z.boolean()).optional(),
   imageUrl: z.any().optional(),
 };
 
@@ -279,6 +281,7 @@ export function ProductFormPage({
             product.priceDelivery ?? 0,
           isActive:
             product.isActive ?? false,
+          isTestData: product.isTestData || false,
           isFeatured:
             product.isFeatured ?? false,
           isNew: product.isNew ?? false,
@@ -304,6 +307,7 @@ export function ProductFormPage({
           price: 0,
           priceDelivery: 0,
           isActive: true,
+          isTestData: false,
           isFeatured: false,
           isNew: false,
           isPopular: false,
@@ -932,6 +936,7 @@ export function ProductFormPage({
                 </CardHeader>
 
                 <CardContent className="space-y-4">
+                  <FormField control={form.control} name="isTestData" render={({field})=><label className="flex gap-3 rounded-lg border p-4"><Switch checked={field.value===true} onCheckedChange={field.onChange} /><span>Testdata: skjul i menuen og afvis i checkout</span></label>} />
                   <FormField
                     control={form.control}
                     name="locationIds"

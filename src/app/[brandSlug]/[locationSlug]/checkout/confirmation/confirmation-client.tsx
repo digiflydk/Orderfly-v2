@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import Link from "next/link";
-import { format as formatDate, toZonedTime } from 'date-fns-tz';
+import { formatPrice, localizeTime } from '@/lib/storefront-format';
 
 import type { Brand, Location, OrderDetail, PaymentDetails } from "@/types";
 import { useCart } from '@/context/cart-context';
@@ -31,11 +31,7 @@ function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType, la
 
 function formatDisplayTime(timeString: string): string {
     if (!timeString) return '';
-    const timeMatch = timeString.match(/(\d{2}:\d{2})/);
-    if (timeMatch) return timeMatch[0];
-    const durationMatch = timeString.match(/(\(\d+-\d+\s*min\))/);
-    if (durationMatch) return durationMatch[0];
-    return timeString;
+    return localizeTime(timeString);
 }
 
 interface ConfirmationClientProps {
@@ -106,15 +102,15 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                             <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100">
                                <AlertTriangle className="h-8 w-8 text-yellow-600" />
                             </div>
-                            <CardTitle className="mt-4 text-2xl">{checking && sessionId ? 'Checking payment' : 'Order details unavailable'}</CardTitle>
+                            <CardTitle className="mt-4 text-2xl">{checking && sessionId ? 'Kontrollerer betaling' : 'Ordreoplysninger er ikke tilgængelige'}</CardTitle>
                             <CardDescription>
-                                We couldn't find the details for your order. It might still be processing. Please contact the restaurant before making another payment if you have already paid.
+                                Vi kunne ikke finde din ordre endnu. Betalingen kan stadig være under behandling. Kontakt restauranten, før du betaler igen, hvis beløbet allerede er trukket.
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
-                             <Button variant="outline" disabled={checking || !sessionId} onClick={() => setRetry(value => value + 1)}>Check payment status</Button>
+                             <Button variant="outline" disabled={checking || !sessionId} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>
                              <Button asChild className="mt-6">
-                                <Link href={`/`}>Back to Home</Link>
+                                <Link href={brand && location ? `/${brand.slug}/${location.slug}` : brand ? `/${brand.slug}` : `/`}>Tilbage til menuen</Link>
                             </Button>
                         </CardContent>
                     </Card>
@@ -127,13 +123,13 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
         const failed = order.paymentStatus === 'Failed';
         return <main className="mx-auto max-w-lg p-8 text-center" aria-live="polite">
             <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-amber-600" />
-            <h1 className="text-2xl font-bold">{failed ? 'Payment not completed' : 'Awaiting payment confirmation'}</h1>
-            <p className="my-4">{failed ? 'This payment session has ended without payment.' :
-              checking ? 'We are checking your payment. Please keep this page open.' :
-              'Payment has not been confirmed yet. Check the status again or contact the restaurant before paying again.'}</p>
-            <p className="mb-4">Order reference: {order.id}</p>
-            {!failed && <Button disabled={checking} onClick={() => setRetry(value => value + 1)}>Check payment status</Button>}
-            <Button asChild variant="outline" className="ml-2"><Link href={`/${brand.slug}/${location.slug}`}>Back to Menu</Link></Button>
+            <h1 className="text-2xl font-bold">{failed ? 'Betalingen blev ikke gennemført' : 'Afventer bekræftelse af betaling'}</h1>
+            <p className="my-4">{failed ? 'Betalingsvinduet er lukket uden betaling.' :
+              checking ? 'Vi kontrollerer din betaling. Behold siden åben.' :
+              'Betalingen er endnu ikke bekræftet. Kontrollér status igen, eller kontakt restauranten, før du betaler igen.'}</p>
+            <p className="mb-4">Ordrenummer: {order.id}</p>
+            {!failed && <Button disabled={checking} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>}
+            <Button asChild variant="outline" className="ml-2"><Link href={`/${brand.slug}/${location.slug}`}>Tilbage til menuen</Link></Button>
         </main>;
     }
 
@@ -154,8 +150,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
 
 
     // Convert the ISO string back to a Date object and specify the timezone for formatting
-    const zonedDate = toZonedTime(new Date(createdAt), 'Europe/Copenhagen');
-    const formattedCreatedAt = formatDate(zonedDate, 'MMMM d, yyyy HH:mm', { timeZone: 'Europe/Copenhagen' });
+    const formattedCreatedAt = new Intl.DateTimeFormat('da-DK', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Copenhagen' }).format(new Date(createdAt));
 
     const fullAddress = customerDetails.address;
 
@@ -167,52 +162,52 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                         <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-full bg-green-100 mb-4">
                            <CheckCircle2 className="h-10 w-10 text-green-600" />
                         </div>
-                        <h1 className="text-3xl font-bold tracking-tight">Thank you for your order!</h1>
+                        <h1 className="text-3xl font-bold tracking-tight">Tak for din bestilling!</h1>
                         <p className="text-muted-foreground mt-2">
-                           Your order <span className="font-mono text-foreground bg-muted p-1 rounded-sm">{id}</span> has been confirmed.
+                           Din ordre <span className="font-mono text-foreground bg-muted p-1 rounded-sm">{id}</span> er bekræftet.
                         </p>
                     </div>
 
                     <div className="grid md:grid-cols-2 gap-6">
                         <Card>
-                             <CardHeader><CardTitle>Customer Information</CardTitle></CardHeader>
+                             <CardHeader><CardTitle>Kundeoplysninger</CardTitle></CardHeader>
                              <CardContent className="space-y-4">
-                                <InfoItem icon={User} label="Name">{customerName}</InfoItem>
-                                <InfoItem icon={Mail} label="Email">{customerContact}</InfoItem>
+                                <InfoItem icon={User} label="Navn">{customerName}</InfoItem>
+                                <InfoItem icon={Mail} label="E-mail">{customerContact}</InfoItem>
                                 {deliveryType === 'Delivery' && (
-                                     <InfoItem icon={Home} label="Delivery Address">{fullAddress}</InfoItem>
+                                     <InfoItem icon={Home} label="Leveringsadresse">{fullAddress}</InfoItem>
                                 )}
                              </CardContent>
                         </Card>
                          <Card>
-                             <CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
+                             <CardHeader><CardTitle>Ordreoplysninger</CardTitle></CardHeader>
                              <CardContent className="space-y-4">
-                                <InfoItem icon={deliveryType === 'Delivery' ? Truck : ShoppingCart} label="Order Type">{deliveryType}</InfoItem>
+                                <InfoItem icon={deliveryType === 'Delivery' ? Truck : ShoppingCart} label="Bestillingstype">{deliveryType === 'Delivery' ? 'Levering' : 'Afhentning'}</InfoItem>
                                 {deliveryTime && (
-                                    <InfoItem icon={Clock} label={deliveryType === 'Delivery' ? "Expected Delivery" : "Expected Pickup"}>
+                                    <InfoItem icon={Clock} label={deliveryType === 'Delivery' ? "Forventet levering" : "Forventet afhentning"}>
                                         {formatDisplayTime(deliveryTime)}
                                     </InfoItem>
                                 )}
-                                <InfoItem icon={Hash} label="Order Status"><Badge>{status}</Badge></InfoItem>
-                                <InfoItem icon={CreditCard} label="Payment Method">Card Payment</InfoItem>
+                                <InfoItem icon={Hash} label="Ordrestatus"><Badge>{{Received:'Modtaget','In Progress':'Tilberedes',Ready:'Klar',Completed:'Afsluttet',Delivered:'Leveret',Canceled:'Annulleret',Error:'Kontakt restauranten'}[status] || 'Modtaget'}</Badge></InfoItem>
+                                <InfoItem icon={CreditCard} label="Betalingsmetode">Kortbetaling</InfoItem>
                              </CardContent>
                         </Card>
                     </div>
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Order Summary</CardTitle>
+                            <CardTitle>Din kvittering</CardTitle>
                             <CardDescription>
-                                Order placed on {formattedCreatedAt}
+                                Bestilt den {formattedCreatedAt}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
                            <Table>
                                 <TableHeader>
                                     <TableRow>
-                                        <TableHead>Product</TableHead>
-                                        <TableHead>Quantity</TableHead>
-                                        <TableHead className="text-right">Total</TableHead>
+                                        <TableHead>Vare</TableHead>
+                                        <TableHead>Antal</TableHead>
+                                        <TableHead className="text-right">I alt</TableHead>
                                     </TableRow>
                                 </TableHeader>
                                 <TableBody>
@@ -224,7 +219,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                                                 {item.comboSelections?.map(group => <p key={group.groupId || group.groupName} className="text-xs text-muted-foreground">{group.groupName}: {group.products.map(product => product.name).join(', ')}</p>)}
                                             </TableCell>
                                             <TableCell>{item.quantity}</TableCell>
-                                            <TableCell className="text-right">kr. {toNumber(item.totalPrice).toFixed(2)}</TableCell>
+                                            <TableCell className="text-right">{formatPrice(toNumber(item.totalPrice))}</TableCell>
                                         </TableRow>
                                     ))}
                                 </TableBody>
@@ -232,54 +227,54 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                             <Separator className="my-4" />
                             <div className="space-y-2 text-sm">
                                 <div className="flex justify-between">
-                                    <span className="text-muted-foreground">Subtotal</span>
-                                    <span>kr. {subtotal.toFixed(2)}</span>
+                                    <span className="text-muted-foreground">Varesubtotal</span>
+                                    <span>{formatPrice(subtotal)}</span>
                                 </div>
                                 {itemDiscountTotal > 0 && (
                                     <div className="flex justify-between text-green-600">
-                                        <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-4 w-4"/>Product Discounts</span>
-                                        <span>- kr. {itemDiscountTotal.toFixed(2)}</span>
+                                        <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-4 w-4"/>Varerabatter</span>
+                                        <span>- {formatPrice(itemDiscountTotal)}</span>
                                     </div>
                                 )}
                                 {cartDiscountTotal > 0 && (
                                     <div className="flex justify-between text-green-600">
-                                        <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-4 w-4"/>{paymentDetails.cartDiscountName || 'Cart Discount'}</span>
-                                        <span>- kr. {cartDiscountTotal.toFixed(2)}</span>
+                                        <span className="text-muted-foreground flex items-center gap-1"><Tag className="h-4 w-4"/>{paymentDetails.cartDiscountName || 'Kurvrabat'}</span>
+                                        <span>- {formatPrice(cartDiscountTotal)}</span>
                                     </div>
                                 )}
                                 {deliveryType === 'Delivery' && deliveryFee > 0 && (
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Delivery Fee</span>
-                                        <span>kr. {deliveryFee.toFixed(2)}</span>
+                                        <span className="text-muted-foreground">Levering</span>
+                                        <span>{formatPrice(deliveryFee)}</span>
                                     </div>
                                 )}
                                  {deliveryType === 'Delivery' && deliveryFee === 0 && (itemDiscountTotal > 0 || cartDiscountTotal > 0) && (
                                     <div className="flex justify-between text-green-600">
-                                        <span className="text-muted-foreground">Delivery Fee</span>
-                                        <span>Free</span>
+                                        <span className="text-muted-foreground">Levering</span>
+                                        <span>Gratis</span>
                                     </div>
                                 )}
                                 {bagFee > 0 && (
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Bag Fee</span>
-                                        <span>kr. {bagFee.toFixed(2)}</span>
+                                        <span className="text-muted-foreground">Pose</span>
+                                        <span>{formatPrice(bagFee)}</span>
                                     </div>
                                 )}
                                 {adminFee > 0 && (
                                     <div className="flex justify-between">
-                                        <span className="text-muted-foreground">Admin Fee</span>
-                                        <span>kr. {adminFee.toFixed(2)}</span>
+                                        <span className="text-muted-foreground">Administrationsgebyr</span>
+                                        <span>{formatPrice(adminFee)}</span>
                                     </div>
                                 )}
                                  <Separator className="my-2" />
                                 <div className="flex justify-between font-bold text-base">
-                                    <span>Total</span>
-                                    <span>kr. {totalAmount.toFixed(2)}</span>
+                                    <span>I alt</span>
+                                    <span>{formatPrice(totalAmount)}</span>
                                 </div>
                                 {vatAmount > 0 && (
                                 <div className="flex justify-between text-xs text-muted-foreground pt-1">
-                                    <span>VAT Included</span>
-                                    <span>kr. {vatAmount.toFixed(2)}</span>
+                                    <span>Heraf moms</span>
+                                    <span>{formatPrice(vatAmount)}</span>
                                 </div>
                                 )}
                             </div>
@@ -288,10 +283,10 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
 
                     <div className="text-center space-x-4">
                          <Button asChild variant="outline">
-                            <Link href={`/feedback?orderId=${order.id}&customerId=${order.customerDetails.id}`}>Give Feedback</Link>
+                            <Link href={`/feedback?orderId=${order.id}&customerId=${order.customerDetails.id}`}>Giv feedback</Link>
                         </Button>
                         <Button asChild>
-                            <Link href={`/${brand.slug}/${location.slug}`}>Continue Shopping</Link>
+                            <Link href={`/${brand.slug}/${location.slug}`}>Tilbage til menuen</Link>
                         </Button>
                     </div>
                 </div>

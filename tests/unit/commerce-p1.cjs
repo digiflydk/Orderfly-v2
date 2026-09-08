@@ -190,12 +190,13 @@ test('real receipt component displays Pending/Failed truthfully and includes com
  const React=require('react'),{renderToStaticMarkup}=require('react-dom/server');
  const {ConfirmationClient}=loadComponent('src/app/[brandSlug]/[locationSlug]/checkout/confirmation/confirmation-client.tsx',{
   '@/context/cart-context':{useCart:()=>({completeCheckout:()=>{throw Error('SSR must not clear cart')}})},
+  '@/lib/storefront-format':loadTs('src/lib/storefront-format.ts'),
  });
  const f=receiptFixture();const order=await f.api.readGuestReceipt(f.proof);
  const render=paymentStatus=>renderToStaticMarkup(React.createElement(ConfirmationClient,{order:{...order,paymentStatus,productItems:[{...order.productItems[0],comboSelections:[{groupId:'g',groupName:'Pizza choice',products:[{id:'p2',name:'Pepperoni'}]}]}]},brand:{id:'b',slug:'brand'},location:{id:'l',slug:'location'},sessionId:f.proof.sessionId,receiptToken:f.proof.receiptToken}));
- assert.match(render('Pending'),/Awaiting payment confirmation/);assert.doesNotMatch(render('Pending'),/has been confirmed/);
- assert.match(render('Failed'),/Payment not completed/);assert.doesNotMatch(render('Failed'),/has been confirmed/);
- assert.match(render('Paid'),/has been confirmed/);assert.match(render('Paid'),/Pizza choice: Pepperoni/);
+ assert.match(render('Pending'),/Afventer bekræftelse af betaling/);assert.doesNotMatch(render('Pending'),/er bekræftet/);
+ assert.match(render('Failed'),/Betalingen blev ikke gennemført/);assert.doesNotMatch(render('Failed'),/er bekræftet/);
+ assert.match(render('Paid'),/er bekræftet/);assert.match(render('Paid'),/Pizza choice: Pepperoni/);
 });
 
 test('lookup endpoint enforces store scope and returns no cacheable receipt or error details',async()=>{

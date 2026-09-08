@@ -1,12 +1,12 @@
 import type { ComboMenu } from '@/types';
 import { restaurantClock } from './promotion-rules';
 
-type Schedule = Pick<ComboMenu, 'isActive' | 'brandId' | 'locationIds' | 'orderTypes' | 'activeDays' | 'activeTimeSlots'> & {startDate?: unknown; endDate?: unknown};
+type Schedule = Pick<ComboMenu, 'isActive' | 'brandId' | 'locationIds' | 'orderTypes' | 'activeDays' | 'activeTimeSlots'> & {startDate?: unknown; endDate?: unknown; isTestData?: boolean};
 export function comboEligible(combo: Schedule, scope: {brandId?: string; locationId: string; deliveryType?: 'pickup' | 'delivery'; now?: Date}) {
   const now = scope.now || new Date(), clock = restaurantClock(now);
   const instant = (value: unknown) => typeof (value as {toDate?: unknown})?.toDate === 'function'
     ? (value as {toDate: () => Date}).toDate() : new Date(value as string);
-  return combo.isActive && (!scope.brandId || combo.brandId === scope.brandId) &&
+  return combo.isActive && combo.isTestData !== true && (!scope.brandId || combo.brandId === scope.brandId) &&
     (!combo.locationIds?.length || combo.locationIds.includes(scope.locationId)) &&
     (!scope.deliveryType || combo.orderTypes?.includes(scope.deliveryType)) &&
     (!combo.startDate || instant(combo.startDate) <= now) && (!combo.endDate || instant(combo.endDate) >= now) &&

@@ -2,7 +2,7 @@
 'use client';
 import { money } from '@/lib/money';
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef, useId } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogClose } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -12,14 +12,20 @@ import { Label } from '@/components/ui/label';
 import { useCart } from '@/context/cart-context';
 import { useAnalytics } from '@/context/analytics-context';
 import { useToast } from '@/hooks/use-toast';
-import type { ComboMenu, Product, ComboSelection, ProductForMenu } from '@/types';
+import type { CartItem, ComboMenu, Product, ComboSelection, ProductForMenu } from '@/types';
 import { Minus, Plus, X } from 'lucide-react';
 import { Separator } from '../ui/separator';
 import Image from 'next/image';
 import { Badge } from '../ui/badge';
+import {formatPrice} from '@/lib/storefront-format';
+import {safeImage} from '@/lib/images';
 
 interface ComboBuilderDialogProps {
   combo: ComboMenu;
+  initialItem?: CartItem;
+  initialQuantity?: number;
+  preselectedProductId?: string;
+  onSaved?: () => void;
   isOpen: boolean;
   setIsOpen: (isOpen: boolean) => void;
   brandProducts: ProductForMenu[];
@@ -39,16 +45,20 @@ const getSelectionText = (group: ComboMenu['productGroups'][0]): string => {
     if (max > 1 && min <= 1) return `Vælg op til ${max}`;
     
     // For single select radio buttons, we don't need the helper text
-    if (max === 1) return '';
+    if (max === 1) return min > 0 ? 'Vælg 1' : 'Vælg op til 1';
 
-    return "Vælg option(s)";
+    return "Vælg tilvalg";
 }
 
-export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: ComboBuilderDialogProps) {
+export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, initialItem, initialQuantity, preselectedProductId, onSaved }: ComboBuilderDialogProps) {
   const { cartReady, addComboToCart, deliveryType, location } = useCart();
   const { trackEvent } = useAnalytics();
   const { toast } = useToast();
 
+  const initialized = useRef('');
+  const committed = useRef(false);
+  const dialogId = useId();
+  const [showErrors, setShowErrors] = useState(false);
   const [quantity, setQuantity] = useState(1);
   const [selection, setSelection] = useState<SelectionState>({});
 
@@ -58,19 +68,31 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
   }, [deliveryType, combo]);
 
   useEffect(() => {
-    if (isOpen) {
+    if (!isOpen) {initialized.current = ''; return;}
+    const key = `${combo.id}/${location?.id}/${deliveryType}`;
+    if (initialized.current && initialized.current !== key) {setIsOpen(false); return;}
+    if (isOpen && initialized.current !== key) {
+      initialized.current = key; committed.current = false; setShowErrors(false);
       const initialSelection: SelectionState = {};
       combo.productGroups.forEach(group => {
-        if (Number(group.maxSelection) === 1 && group.productIds.length > 0) {
+        if (Number(group.minSelection)>0 && Number(group.maxSelection)===1 && group.productIds.filter(id=>brandProducts.some(p=>p.id===id)).length===1) {
           initialSelection[group.id] = group.productIds.filter(id => brandProducts.some(p => p.id === id)).slice(0, 1);
         } else {
           initialSelection[group.id] = [];
         }
       });
+      if (initialItem?.itemType === 'combo') initialItem.comboSelections?.forEach(g => {
+        const group = combo.productGroups.find(candidate => g.groupId ? candidate.id === g.groupId : candidate.groupName === g.groupName);
+        if (group) initialSelection[group.id] = g.products.map(p => p.id);
+      });
+      if (preselectedProductId) {
+        const group = combo.productGroups.find(g => g.productIds.includes(preselectedProductId));
+        if (group) initialSelection[group.id] = [preselectedProductId];
+      }
       setSelection(initialSelection);
-      setQuantity(1);
+      setQuantity(initialQuantity || initialItem?.quantity || 1);
     }
-  }, [isOpen, combo]);
+  }, [isOpen, combo, location?.id, deliveryType, initialItem, initialQuantity, preselectedProductId, brandProducts, setIsOpen]);
 
   function handleSelectionChange(groupId: string, productId: string, multi: boolean, checked?: boolean) {
     const group = combo.productGroups.find(g => g.id === groupId);
@@ -91,8 +113,8 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
         if (max > 0 && newSelection.length > max) {
             toast({
                 variant: 'destructive',
-                title: 'Selection Limit Reached',
-                description: `You can only select up to ${max} items for this group.`,
+                title: 'Maksimum er nået',
+                description: `Du kan højst vælge ${max} varer i denne gruppe.`,
             });
             return prev;
         }
@@ -118,7 +140,17 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
   }, [selection, combo.productGroups, brandProducts]);
 
   const handleAddToCart = () => {
-    if (!cartReady || !isSelectionValid || comboPrice === undefined) return;
+    if (!cartReady || committed.current || comboPrice === undefined) return;
+    if (!isSelectionValid) {
+      setShowErrors(true);
+      const group = combo.productGroups.find(g => {
+        const ids = selection[g.id] || [];
+        return ids.length < Number(g.minSelection) || (Number(g.maxSelection)>0 && ids.length>Number(g.maxSelection)) || ids.some(id => !brandProducts.some(p=>p.id===id));
+      });
+      const el = group && document.getElementById(`${dialogId}-group-${group.id}`);
+      if (el) {if(el instanceof HTMLDetailsElement) el.open = true; el.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); el.focus();}
+      return;
+    }
     const comboSelections: ComboSelection[] = Object.entries(selection).map(([groupId, ids]) => {
       const group = combo.productGroups.find(g => g.id === groupId);
       return {
@@ -126,12 +158,14 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
         groupName: group?.groupName || '',
         products: ids.map(pid => {
           const product = brandProducts.find(p => p.id === pid);
-          return { id: pid, name: product?.productName || 'Unknown' };
+          return { id: pid, name: product?.productName || 'Vare' };
         })
       };
     });
-    addComboToCart(combo, quantity, comboSelections, comboPrice);
-    toast({title: 'Tilføjet til kurven', description: `${quantity} × ${combo.comboName}`, duration: 2200});
+    if (addComboToCart(combo, quantity, comboSelections, comboPrice, initialItem) === false) {toast({variant:'destructive',title:'Kurven blev ændret',description:'Luk tilvalg og åbn varen igen.'}); return;}
+    committed.current = true;
+    onSaved?.();
+    toast({title: initialItem ? 'Kurven er opdateret' : 'Tilføjet til kurven', description: `${quantity} × ${combo.comboName}`, duration: 2200});
     trackEvent('add_to_cart', {productId: combo.id, locationId: location?.id, itemsCount: quantity, cartValue: money(comboPrice * quantity), deliveryType});
     setIsOpen(false);
   };
@@ -143,30 +177,14 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
       <DialogContent data-commerce-panel="options" className="p-0 flex flex-col h-full sm:max-h-[90vh] max-w-lg bg-[#FFF8F0]">
         <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1">
-                <div className="relative aspect-video w-full shrink-0">
-                    <Image 
-                        src={combo.imageUrl || 'https://placehold.co/400x300.png'} 
-                        alt={combo.comboName}
-                        fill
-                        sizes="(max-width: 640px) 100vw, 512px"
-                        className="object-cover"
-                        data-ai-hint="delicious food"
-                    />
-                    <DialogClose asChild>
-                        <Button variant="ghost" size="icon" className="absolute top-2 right-2 bg-black/30 hover:bg-black/50 text-white rounded-full">
-                            <X className="h-4 w-4" />
-                        </Button>
-                    </DialogClose>
+                <div className="commerce-option-header">
+                  <div className="commerce-option-image"><Image src={safeImage(combo.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
+                  <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{combo.comboName}</DialogTitle><DialogDescription>{combo.description || 'Sammensæt din menu.'}</DialogDescription><p className="font-semibold">{formatPrice(comboPrice || 0)}</p></DialogHeader>
                 </div>
-                <div className="p-6 space-y-6">
-                    <DialogHeader className="text-left space-y-2">
-                        <DialogTitle className="text-2xl">{combo.comboName}</DialogTitle>
-                        {combo.description && <DialogDescription className="text-base">{combo.description}</DialogDescription>}
-                    </DialogHeader>
-                    
+                <div className="p-4 space-y-4">
                     <Separator />
 
-                    {combo.productGroups.map(group => {
+                    {[...combo.productGroups].sort((a,b)=>Number(Number(b.minSelection)>0)-Number(Number(a.minSelection)>0)).map(group => {
                     const productsInGroup = group.productIds
                         .map(pid => brandProducts.find(p => p.id === pid))
                         .filter(Boolean) as ProductForMenu[];
@@ -175,7 +193,8 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                     const currentSelection = selection[group.id] || [];
 
                     return (
-                        <div key={group.id}>
+                        <details key={group.id} id={`${dialogId}-group-${group.id}`} tabIndex={-1} open={Number(group.minSelection)>0 ? true : undefined} className="commerce-option-group" data-invalid={showErrors && currentSelection.length < Number(group.minSelection)}>
+                        <summary className="font-semibold">{group.groupName} · {Number(group.minSelection)>0 ? 'Påkrævet' : 'Valgfrit'}<span className="block text-sm font-normal text-muted-foreground">{currentSelection.map(id => brandProducts.find(p=>p.id===id)?.productName).filter(Boolean).join(', ') || getSelectionText(group)}</span></summary>
                         <div className="mb-2">
                             <h3 className="font-semibold text-lg">{group.groupName}</h3>
                             <p className="text-sm text-muted-foreground">{getSelectionText(group)}</p>
@@ -184,9 +203,9 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                         {isSingleSelect ? (
                             <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleSelectionChange(group.id, val, false)}>
                                 {productsInGroup.map(p => (
-                                <label htmlFor={`${group.id}-${p.id}`} key={p.id} data-option-row className="flex items-center gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
-                                    <RadioGroupItem value={p.id} id={`${group.id}-${p.id}`} />
-                                    <span className="flex-1 font-normal">{p.productName}</span>
+                                <label htmlFor={`${dialogId}-${group.id}-${p.id}`} key={p.id} data-option-row className="flex items-center gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
+                                    <RadioGroupItem value={p.id} id={`${dialogId}-${group.id}-${p.id}`} />
+                                    <Image src={safeImage(p.imageUrl)} alt="" width={40} height={40} className="rounded object-cover h-10 w-10"/><span className="flex-1 font-normal">{p.productName}</span>
                                 </label>
                                 ))}
                             </RadioGroup>
@@ -195,20 +214,20 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                             const isChecked = currentSelection.includes(p.id);
                             const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
                             return (
-                                <label htmlFor={`${group.id}-${p.id}`} key={p.id} data-option-row className="flex items-center gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
+                                <label htmlFor={`${dialogId}-${group.id}-${p.id}`} key={p.id} data-option-row className="flex items-center gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
                                 <Checkbox
-                                    id={`${group.id}-${p.id}`}
+                                    id={`${dialogId}-${group.id}-${p.id}`}
                                     onCheckedChange={(checked) => handleSelectionChange(group.id, p.id, true, !!checked)}
                                     checked={isChecked}
                                     disabled={!isChecked && maxReached}
                                 />
-                                <span className="flex-1 font-normal">{p.productName}</span>
+                                <Image src={safeImage(p.imageUrl)} alt="" width={40} height={40} className="rounded object-cover h-10 w-10"/><span className="flex-1 font-normal">{p.productName}</span>
                                 </label>
                             )
                             })
                         )}
                         </div>
-                        </div>
+                        </details>
                     );
                     })}
             </div>
@@ -217,7 +236,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                 <div className="flex items-center justify-center gap-3 p-3 bg-[#FFF8F0] border-t">
                     <Button
                         variant="outline"
-                        onClick={() => setQuantity(q => Math.max(1, q - 1))}
+                        aria-label="Reducer antal" onClick={() => setQuantity(q => Math.max(1, q - 1))}
                         className="w-11 h-11 rounded-lg bg-gray-200 text-gray-800 flex items-center justify-center transition-all hover:bg-gray-300"
                     >
                         <Minus className="h-6 w-6" />
@@ -225,7 +244,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                     <span className="text-2xl font-bold w-12 text-center">{quantity}</span>
                     <Button
                         variant="outline"
-                        onClick={() => setQuantity(q => q + 1)}
+                        aria-label="Øg antal" disabled={quantity>=100} onClick={() => setQuantity(q => Math.min(100,q + 1))}
                         className="w-11 h-11 rounded-lg bg-gray-200 text-gray-800 flex items-center justify-center transition-all hover:bg-gray-300"
                     >
                         <Plus className="h-6 w-6" />
@@ -235,11 +254,11 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts }: 
                     size="lg"
                     className="w-full h-[64.4px] bg-m3-orange hover:bg-m3-orange/90 text-m3-dark font-bold text-base px-6 rounded-none"
                     onClick={handleAddToCart}
-                    disabled={!cartReady || !isSelectionValid}
+                    disabled={!cartReady || comboPrice === undefined}
                 >
                     <div className="flex w-full justify-between items-center">
-                        <span>Add to Cart</span>
-                        <span>DKK {totalItemPrice.toFixed(2)}</span>
+                        <span>{!isSelectionValid ? 'Vælg de påkrævede tilvalg' : initialItem ? 'Gem ændringer' : 'Tilføj til kurv'}</span>
+                        <span>{formatPrice(totalItemPrice)}</span>
                     </div>
                 </Button>
             </div>

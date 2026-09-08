@@ -7,6 +7,7 @@ const os=require('node:os');
 const path=require('node:path');
 const http=require('node:http');
 const {chromium}=require('@playwright/test');
+const {loadTs}=require('../helpers/load-ts.cjs');
 const webpackModule=require('next/dist/compiled/webpack/webpack');
 webpackModule.init();
 let dir,server,browser,origin;
@@ -35,7 +36,7 @@ before(async()=>{
   const total=items.reduce((sum,i)=>sum+i.price*i.quantity,0);
   const bagFee=includeBagFee?brand.bagFee:0;
   const value={brand,location,cartReady:true,cartItems:items,subtotal:total,checkoutTotal:total+bagFee,cartTotal:total,itemCount:items.length,includeBagFee,toggleBagFee,
-   deliveryType:'pickup',selectedTime:'asap',itemDiscount:0,cartDiscount:null,voucherDiscount:null,deliveryFee:0,bagFee,adminFee:0,vatAmount:20,
+   deliveryType:'pickup',selectedTime:'asap',itemDiscount:0,cartDiscount:null,voucherDiscount:discount?.applicationType==='newsletter_signup'?{name:'Nyhedsbrev',amount:10}:null,deliveryFee:0,bagFee,adminFee:0,vatAmount:20,
    applyDiscount,removeDiscount,appliedDiscount:discount,setCartContext,setSelectedTime,saveCartForCheckout,addToCart};
   return React.createElement(context.Provider,{value},children);
  }
@@ -95,7 +96,7 @@ before(async()=>{
  // Specific aliases must precede the generic @ prefix.
  delete aliases['@'];aliases['@']=path.join(root,'src');
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
- const css=(await require('postcss')([require('tailwindcss')({content:[path.join(root,'src/**/*.{ts,tsx}')],theme:{extend:{}},plugins:[]})]).process('@tailwind base;@tailwind components;@tailwind utilities;',{from:undefined})).css+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8');
+ const css=(await require('postcss')([require('tailwindcss')({...loadTs('tailwind.config.ts',{'tailwindcss-animate':{default:require('tailwindcss-animate')}}).default,content:[path.join(root,'src/**/*.{ts,tsx}')]})]).process(fs.readFileSync(path.join(root,'src/app/globals.css'),'utf8'),{from:undefined})).css+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8');
  server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');res.setHeader('Cache-Control','no-store');
   if(url.pathname==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css);}
@@ -120,7 +121,7 @@ before(async()=>{
 });
 after(async()=>{await browser?.close();if(server)await new Promise(resolve=>server.close(resolve));if(dir)fs.rmSync(dir,{recursive:true,force:true});});
 async function setup(t,scenario){
- const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();page.setDefaultTimeout(5000);page.setDefaultNavigationTimeout(5000);const errors=[];
+ const context=await browser.newContext({viewport:{width:scenario.includes('mobile')?390:1280,height:900}});t.after(()=>context.close());const page=await context.newPage();page.setDefaultTimeout(5000);page.setDefaultNavigationTimeout(5000);const errors=[];
  page.on('pageerror',e=>errors.push(e.message));t.after(()=>assert.deepEqual(errors,[]));
  if(scenario==='storage')await page.addInitScript(()=>{window.storageUnavailable=true;Object.defineProperty(window,'sessionStorage',{get(){throw Error('storage denied');}});});
  if(scenario==='telemetry')await page.addInitScript(()=>{window.telemetryUnavailable=true;});
@@ -129,11 +130,11 @@ async function setup(t,scenario){
  await page.getByPlaceholder('John Doe',{exact:true}).fill('Test Customer');
  await page.getByPlaceholder('john@example.com',{exact:true}).fill('test@example.test');
  await page.getByPlaceholder('+123456789',{exact:true}).fill('12345678');
- await page.getByRole('checkbox',{name:/I accept the/}).first().check();
+ await page.getByRole('checkbox',{name:/Jeg accepterer|I accept the/}).first().check();
  return page;
 }
-const pay=page=>page.getByRole('button',{name:/Complete Order/}).first().click();
-for(const scenario of ['success','lost-response','pending','upsell-error','upsell-timeout','storage','telemetry','cookie'])test(`${scenario}: valid Complete Order reaches hosted payment`,async t=>{
+const pay=page=>page.getByRole('button',{name:/Gå til betaling/}).first().click();
+for(const scenario of ['success','lost-response','pending','upsell-error','upsell-timeout','storage','telemetry','cookie'])test(`${scenario}: valid Gå til betaling reaches hosted payment`,async t=>{
  const page=await setup(t,scenario);await pay(page);await page.waitForURL('**/stripe?*');assert.equal(requests.get(scenario).length,1);
 });
 test('two immediate submissions create only one payment request',async t=>{
@@ -142,12 +143,12 @@ test('two immediate submissions create only one payment request',async t=>{
 });
 test('invalid email is visibly rejected; correcting it allows payment',async t=>{
  const page=await setup(t,'invalid');await page.getByPlaceholder('john@example.com').fill('invalid');await pay(page);
- await page.getByText('Please check the highlighted fields before continuing to payment.').first().waitFor();assert.equal(requests.has('invalid'),false);
+ await page.getByText('Kontrollér de markerede felter, før du går til betaling.').first().waitFor();assert.equal(requests.has('invalid'),false);
  await page.getByPlaceholder('john@example.com').fill('valid@example.test');await pay(page);await page.waitForURL('**/stripe?*');
 });
 test('discount transport failure unlocks checkout',async t=>{
- const page=await setup(t,'discount');await page.getByPlaceholder('Enter discount code').fill('SAVE10');await page.getByRole('button',{name:'Apply',exact:true}).click();
- await page.getByText('Discount could not be checked. Please try again.').waitFor();await page.getByRole('button',{name:'OK',exact:true}).click();
+ const page=await setup(t,'discount');await page.getByText('Har du en rabatkode?',{exact:true}).click();await page.getByPlaceholder('Indtast rabatkode').fill('SAVE10');await page.getByRole('button',{name:'Anvend',exact:true}).click();
+ await page.getByText('Rabatten kunne ikke kontrolleres. Prøv igen.').waitFor();await page.getByRole('button',{name:'OK',exact:true}).click();
  await pay(page);await page.waitForURL('**/stripe?*');
 });
 test('confirmed server rejection shows a persistent error and supports retry',async t=>{
@@ -155,20 +156,13 @@ test('confirmed server rejection shows a persistent error and supports retry',as
  await pay(page);await page.waitForURL('**/stripe?*');assert.equal(requests.get('retry').length,2);
 });
 for(const scenario of ['uncertain','transport-failure'])test(`${scenario}: never silently starts another payment`,async t=>{
- const page=await setup(t,scenario);await pay(page);await page.getByText(/contact the restaurant/).first().waitFor();
- assert.equal(await page.getByRole('button',{name:/Complete Order/}).first().isDisabled(),true);
+ const page=await setup(t,scenario);await pay(page);await page.getByText(/contact the restaurant|Kontakt restauranten/).first().waitFor();
+ assert.equal(await page.getByRole('button',{name:/Gå til betaling/}).first().isDisabled(),true);
  await page.locator('form').evaluate(form=>form.requestSubmit());assert.equal((requests.get(scenario)||[]).length,1);
 });
-test('skipping an upsell continues through validated checkout',async t=>{
- const page=await setup(t,'upsell-skip');await pay(page);await page.getByRole('button',{name:'No thanks, continue to payment'}).click();
- await page.waitForURL('**/stripe?*');assert.equal(requests.get('upsell-skip').length,1);
-});
-test('accepting upsell closes immediately even if conversion tracking hangs, and charges the updated cart',async t=>{
- const page=await setup(t,'upsell-accept');await pay(page);await page.getByRole('button',{name:'Add to cart',exact:true}).click();
- await page.getByRole('dialog').waitFor({state:'hidden'});
- await pay(page);
- await page.waitForURL('**/stripe?*');assert.equal(requests.get('upsell-accept')[0][0].length,2);
- assert.equal(requests.get('upsell-accept')[0][0][1].name,'Drink');
+test('#71 configured upsell never inserts a payment dialog or changes the basket on submit',async t=>{
+ const page=await setup(t,'upsell-skip');await pay(page);await page.waitForURL('**/stripe?*');
+ assert.equal(requests.get('upsell-skip').length,1);assert.equal(requests.get('upsell-skip')[0][0].length,1);
 });
 
 // Presentation changes must preserve the actual payment and bag opt-out behavior.
@@ -177,41 +171,42 @@ for (const [surface,index] of [['desktop',0],['mobile',1]]) test(`presentation: 
  const page=await setup(t,scenario);
  await page.route('**/stripe?*',route=>route.abort('aborted'));
  const firstNavigation=page.waitForEvent('requestfailed',req=>req.url().includes('/stripe?'));
- await page.getByRole('button',{name:/Complete Order/}).nth(index).click();await firstNavigation;
+ await page.getByRole('button',{name:/Gå til betaling/}).first().click();await firstNavigation;
  assert.equal(requests.get(scenario).length,1);
  assert.equal(requests.get(scenario)[0][5].bagFee,4);
  assert.equal(await page.getByRole('link',{name:'Continue to payment',exact:true}).count(),0);
  assert.equal(await page.getByPlaceholder('John Doe',{exact:true}).isDisabled(),true);
- assert.equal(await page.getByRole('checkbox',{name:/I accept the/}).nth(index).isDisabled(),true);
- assert.equal(await page.getByRole('button',{name:'Change',exact:true}).isDisabled(),true);
- for(const row of await page.getByText('Bag',{exact:true}).all())assert.equal(await row.locator('..').getByRole('button').isDisabled(),true);
+ assert.equal(await page.getByRole('checkbox',{name:/Jeg accepterer|I accept the/}).first().isDisabled(),true);
+ assert.equal(await page.getByRole('button',{name:'Ændr tidspunkt',exact:true}).isDisabled(),true);
+ for(const row of await page.getByText('Pose',{exact:true}).filter({visible:true}).all())assert.equal(await row.locator('..').getByRole('button').isDisabled(),true);
  await page.unroute('**/stripe?*');
- await page.getByRole('button',{name:/Complete Order/}).nth(index).click();
+ await page.getByRole('button',{name:/Gå til betaling/}).first().click();
  await page.waitForURL('**/stripe?*');assert.equal(requests.get(scenario).length,1);
 });
 test('presentation: menu desktop, mobile drawer and floating amount exclude bag; checkout shows it and supports removal',async t=>{
  const page=await setup(t,'presentation-bag');
  await page.goto(origin+'/?case=presentation-bag&view=menu');
- await page.getByText('Your Cart',{exact:true}).waitFor();
- assert.match(await page.getByRole('button',{name:/Proceed to Checkout/}).textContent(),/kr\.100\.00/);
- assert.match(await page.getByText('Total',{exact:true}).locator('..').textContent(),/kr\.100\.00/);
- const floating=page.getByRole('button',{name:/View cart/});
- assert.match(await floating.textContent(),/kr\. 100\.00/);await floating.click();
+ await page.getByText('Din kurv',{exact:true}).waitFor();
+ assert.equal(await page.getByRole('button',{name:/Til kassen/}).isEnabled(),true);
+ assert.match(await page.getByText('Foreløbigt beløb',{exact:true}).locator('..').textContent(),/100,00 kr\./);
+ await page.setViewportSize({width:390,height:900});
+ const floating=page.getByRole('button',{name:/Se kurv/});
+ assert.match(await floating.textContent(),/100,00 kr\./);await floating.click();
  const drawer=page.getByRole('dialog');
- assert.match(await drawer.getByText('Total',{exact:true}).locator('..').textContent(),/kr\.100\.00/);
- assert.equal(await drawer.getByText('Bag',{exact:true}).count(),0);
+ assert.match(await drawer.getByText('Foreløbigt beløb',{exact:true}).locator('..').textContent(),/100,00 kr\./);
+ assert.equal(await drawer.getByText('Pose',{exact:true}).count(),0);
  await page.goto(origin+'/?case=presentation-bag');
- await page.getByText('Bag',{exact:true}).first().waitFor();
- assert.match(await page.getByRole('button',{name:/Complete Order/}).first().textContent(),/kr\. 104\.00/);
- await page.getByText('Bag',{exact:true}).first().locator('..').getByRole('button').click();
- await page.getByRole('button',{name:'Yes, remove',exact:true}).click();
- assert.equal(await page.getByText('Bag',{exact:true}).count(),0);
- assert.match(await page.getByRole('button',{name:/Complete Order/}).first().textContent(),/kr\. 100\.00/);
+ await page.getByText('Pose',{exact:true}).first().waitFor();
+ assert.match(await page.getByRole('button',{name:/Gå til betaling/}).first().textContent(),/104,00 kr\./);
+ await page.getByText('Pose',{exact:true}).first().locator('..').getByRole('button').click();
+ await page.getByRole('button',{name:'Ja, fjern',exact:true}).click();
+ assert.equal(await page.getByText('Pose',{exact:true}).count(),0);
+ assert.match(await page.getByRole('button',{name:/Gå til betaling/}).first().textContent(),/100,00 kr\./);
 });
 
-test('Back to Menu is available with a nonempty cart and preserves restaurant and fulfillment in the route',async t=>{
+test('Tilbage til menuen is available with a nonempty cart and preserves restaurant and fulfillment in the route',async t=>{
  const page=await setup(t,'back-to-menu');
- const back=page.getByRole('link',{name:'Back to Menu',exact:true});
+ const back=page.getByRole('link',{name:'Tilbage til menuen',exact:true});
  assert.equal(await back.getAttribute('href'),'/brand/location?deliveryMethod=pickup');
  await back.click();await page.waitForURL('**/brand/location?deliveryMethod=pickup');
  assert.equal(requests.has('back-to-menu'),false);
@@ -223,42 +218,32 @@ for(const surface of ['desktop','mobile'])for(const failure of ['error','timeout
  await page.goto(origin+'/?case='+scenario+'&view=menu');
  if(surface==='mobile') {
   await page.setViewportSize({width:390,height:844});
-  await page.getByRole('button',{name:/View cart/}).click();
-  await page.getByRole('dialog').getByRole('button',{name:/Proceed to Checkout/}).click();
- } else await page.getByRole('button',{name:/Proceed to Checkout/}).first().click();
+  await page.getByRole('button',{name:/Se kurv/}).click();
+  await page.getByRole('dialog').getByRole('button',{name:/Til kassen/}).click();
+ } else await page.getByRole('button',{name:/Til kassen/}).first().click();
  await page.waitForURL('**/brand/location/checkout');
  assert.equal(requests.has('menu-setup-'+surface+'-'+failure),false);
 });
 
-test('UI69 terms spacing and eligible newsletter highlight preserve explicit consent',async t=>{
- const page=await setup(t,'ui-newsletter');
- const card=page.locator('.commerce-newsletter');
- await page.getByText('Subscribe to newsletter',{exact:true}).waitFor();
- assert.equal(await card.getAttribute('data-newsletter-offer'),'false');
- const consent=card.getByRole('checkbox');assert.equal(await consent.isChecked(),false);
- await card.locator('label').click();assert.equal(await consent.isChecked(),true);
- await page.getByText('Signed up — saving 10%',{exact:true}).waitFor();
- assert.equal(await card.getAttribute('data-newsletter-offer'),'true');
- await card.locator('label').click();assert.equal(await consent.isChecked(),false);
- await page.getByText('Subscribe to newsletter',{exact:true}).waitFor();
- assert.equal(await card.getAttribute('data-newsletter-offer'),'false');
- await page.getByText(/Discount Applied:/).waitFor({state:'hidden'});
- const terms=page.locator('.commerce-terms').filter({visible:true}).first();
- assert.ok((await terms.boundingBox()).height>=48.3);
- const payButton=page.getByRole('button',{name:/Complete Order/}).filter({visible:true}).first();
- assert.ok(Math.abs((await payButton.boundingBox()).height-55.2)<1);
- assert.equal(await payButton.evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(255, 189, 2)');
- if(process.env.UI69_SCREENSHOTS)await page.screenshot({path:process.env.UI69_SCREENSHOTS+'/checkout.png',fullPage:true});
+test('#71 newsletter highlights the available benefit while explicit consent stays unchecked',async t=>{
+ const page=await setup(t,'ui-newsletter');const card=page.locator('.commerce-newsletter');
+ await card.getByText('Få 10% ved tilmelding',{exact:true}).waitFor();
+ const consent=card.getByRole('checkbox');assert.equal(await consent.isChecked(),false);assert.equal(await card.getAttribute('data-newsletter-offer'),'true');
+ await consent.check();await card.getByText('Nyhedsbrevsrabatten er valgt til denne ordre.').waitFor();
+ await consent.uncheck();assert.equal(await card.getByText('Nyhedsbrevsrabatten er valgt til denne ordre.').count(),0);
+ const terms=page.locator('.commerce-terms').filter({visible:true}).first(),box=await terms.boundingBox(),check=await terms.getByRole('checkbox').boundingBox();assert.ok(box.height>=48.3);assert.ok(check.y>box.y);
+ await consent.check();await pay(page);await page.waitForURL('**/stripe?*');const customer=requests.get('ui-newsletter')[0][1];assert.equal(customer.subscribeToNewsletter,true);assert.match(customer.newsletterConsentId,/^[a-f0-9-]{36}$/);assert.equal(customer.newsletterConsentVersion,'checkout-email-da-2026-09-08');
 });
-
-test('UI69 newsletter makes no saving promise while another discount remains applied',async t=>{
- const page=await setup(t,'ui-newsletter-conflict');
- const card=page.locator('.commerce-newsletter');
- await page.getByText('Discount Applied:').waitFor();
- await card.getByRole('checkbox').check();
- assert.equal(await card.getAttribute('data-newsletter-offer'),'false');
- assert.equal(await card.getByText(/saving|save .*order/i).count(),0);
- assert.match(await page.getByText(/Discount Applied:/).locator('..').textContent(),/SAVE20/);
+test('#71 newsletter opt-out before submit sends no grant and does not add a discount',async t=>{
+ const page=await setup(t,'ui-newsletter-unchecked');const card=page.locator('.commerce-newsletter');
+ await card.getByText('Få 10% ved tilmelding',{exact:true}).waitFor();await card.getByRole('checkbox').check();await card.getByRole('checkbox').uncheck();
+ await pay(page);await page.waitForURL('**/stripe?*');const customer=requests.get('ui-newsletter-unchecked')[0][1];assert.equal(customer.subscribeToNewsletter,false);assert.equal(customer.newsletterConsentId,undefined);
+});
+test('#71 newsletter makes no extra saving promise with another applied discount',async t=>{
+ const page=await setup(t,'ui-newsletter-conflict');const card=page.locator('.commerce-newsletter');
+ await page.getByText('Rabatkode:').waitFor();await card.getByRole('checkbox').check();
+ assert.equal(await card.getAttribute('data-newsletter-offer'),'false');assert.equal(await card.getByText('Nyhedsbrevsrabatten er valgt til denne ordre.').count(),0);assert.equal(await card.getByText('Få nyheder og tilbud').count(),1);
+ assert.match(await page.getByText(/Rabatkode:/).locator('..').textContent(),/SAVE20/);
 });
 
 test('native mobile checkout supports autofill and hides sticky bar only for a focused keyboard',async t=>{
@@ -288,4 +273,10 @@ test('native mobile checkout supports autofill and hides sticky bar only for a f
  await name.blur();await page.evaluate(()=>window.resizeTestViewport(430));
  assert.equal(await page.locator('form').getAttribute('data-keyboard-open'),'false','viewport change without editing is harmless');
  assert.equal(requests.has('native-mobile'),false);
+});
+
+for(const width of [390,1280])test(`#71 lab: click to payment with a hanging optional upsell lookup (${width})`,async t=>{
+ const page=await setup(t,'upsell-timeout');await page.setViewportSize({width,height:900});const started=Date.now();await page.getByRole('button',{name:/Gå til betaling|Complete Order/}).filter({visible:true}).first().click();await page.waitForURL('**/stripe?*');
+ const elapsed=Date.now()-started;console.log('LAB_OPTIONAL_UPSELL_PAYMENT_'+width+'_MS='+elapsed);
+ if(!process.env.CHECKOUT_BASELINE)assert.ok(elapsed<1500,'payment does not await the optional 2s timeout');
 });

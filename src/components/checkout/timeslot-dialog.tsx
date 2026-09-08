@@ -2,6 +2,7 @@
 
 'use client';
 
+import {localizeTime} from '@/lib/storefront-format';
 import { useState, useEffect, useMemo, useRef } from 'react';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { Button } from '@/components/ui/button';
@@ -85,10 +86,10 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
   const availableTimes = (timeSlots ? (deliveryType === 'delivery' ? timeSlots.delivery_times : timeSlots.pickup_times) : []).filter(time => validInstants.has(slotValue(time)));
 
   const asapText = useMemo(() => {
-      if (!timeSlots) return 'Loading...';
+      if (!timeSlots) return 'Indlæser…';
       const text = deliveryType === 'delivery' ? timeSlots.asap_delivery : timeSlots.asap_pickup;
       if (text) return text;
-      return 'No times available';
+      return 'Ingen ledige tider';
   }, [timeSlots, deliveryType]);
 
   const handleSave = () => {
@@ -110,7 +111,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
       <DialogContent className="max-w-lg p-0">
         <DialogHeader className="p-4 border-b">
-          <DialogTitle>Choose Time</DialogTitle>
+          <DialogTitle>Vælg tidspunkt</DialogTitle>
           <DialogDescription>Select your desired pickup or delivery time.</DialogDescription>
         </DialogHeader>
 
@@ -138,7 +139,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
                             const displayValue = formatTimeForDisplay(time, selectedDate);
                             return (
                                 <SelectItem key={slotValue(time)} value={slotValue(time)}>
-                                    {displayValue}
+                                    {localizeTime(displayValue)}
                                 </SelectItem>
                             )
                         })}
@@ -149,7 +150,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
 
         <DialogFooter className="p-4 border-t">
           <Button onClick={handleSave} disabled={!selectionValid}>
-            Save
+            Gem tidspunkt
           </Button>
         </DialogFooter>
       </DialogContent>

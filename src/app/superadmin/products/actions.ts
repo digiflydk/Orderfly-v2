@@ -28,6 +28,7 @@ const baseFields = {
   priceDelivery: z.coerce.number().min(0, 'Delivery price must be a non-negative number.').optional(),
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
+  isTestData: z.preprocess(asBool,z.boolean()).optional(),
   imageUrl: z.any().optional(),
 };
 
