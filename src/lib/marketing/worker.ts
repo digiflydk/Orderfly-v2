@@ -80,8 +80,12 @@ export async function runMarketingWorker(db: Firestore, now = Date.now(), makePr
         if (Date.now() > deadline)
             break;
         const state = snap.data(), config = marketingConfig(state.brandId);
-        if (!config)
+        if (!config) {
+            // A removed mapping must not remain at the front of the due queue and
+            // starve configured brands. Check it again later in case it is restored.
+            await snap.ref.update({ nextReconcileAt: now + 3600000, updatedAt: now });
             continue;
+        }
         try {
             const event = (await db.collection('marketingConsents').doc(state.latestEventId).get()).data() as ConsentEvent;
             if (!event || event.brandId !== state.brandId)
