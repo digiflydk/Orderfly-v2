@@ -54,3 +54,29 @@ CART_CHROMIUM_PATH=/path/to/chromium node --test tests/unit/brand-location-brows
 PM/PO requirements -> Work implementation -> targeted tests -> independent code review -> PO acceptance -> merge -> Firebase deployment -> read-only live verification -> Done.
 
 After deployment, verify the real Esmeralda brand/document relationship and that the brand selection and name render on the overview and edit page. Live writes need a controlled reversible QA test. Open a brand form before a subsequent deployment and verify draft recovery on a stale action, then explicitly save and reopen a synthetic record. Existing product/offer ownership must be considered before assigning an established location to a different real brand.
+
+## Additional product-page report in the same PR
+
+PO also reported the generic production **Server Components render** error on the product page and requested that the fix be included in PR #76.
+
+The product readers returned raw Firestore `createdAt`/`updatedAt` timestamps, and the list/new/edit pages passed related database records directly to client components. A reproducer using a real Firebase Admin `Timestamp` and the RSC renderer shipped with the installed Next.js fails with **Only plain objects ... can be passed to Client Components**. The fixed pages pass the same renderer with timestamps in products, brands, locations, categories, topping groups and allergens. The screenshot contains no usable digest or server log, so the live incident has not been correlated to a specific server exception; this is a reproduced render failure in the reported flow.
+
+- Reuse the existing timestamp conversion at product reads and all three product page boundaries. No timestamps are rewritten in Firestore.
+- Keep canonical product document IDs, including edit links when a stored `id` is obsolete.
+- Include products without `sortOrder`, which the product creation action does not set. Existing numbered ordering (including zero) is retained; unnumbered records follow in deterministic ID order.
+- Show **Pris mangler** for missing or non-numeric prices rather than crashing the whole list or treating the value as zero. Price validation and checkout calculations are unchanged.
+- Load and convert the duplication dialog's locations with the page data, eliminating the uncaught post-mount Server Action request. Legacy locations without `deliveryTypes` do not crash this read.
+
+Additional local verification:
+
+- 6 RSC/data cases passed, including the regression reproducer, all three actual page components, canonical IDs, unsorted products and not-found behavior.
+- 4 browser cases passed across the documented targeted runs: product overview/filtering at 390 and 1280 pixels, actual edit/new form navigation and related choices, and duplication dialog location availability. The harness uses Next's bundled React and actual components, with fixture transport and synthetic data.
+- The 10 existing brand/location server cases passed again, now also covering missing legacy delivery types.
+- Typecheck and diff check passed. There are 28 targeted cases covered across this PR's runs, including the previous 8 brand/location browser cases.
+
+```bash
+node --test tests/unit/product-page-rsc.cjs
+CART_CHROMIUM_PATH=/path/to/chromium node --test tests/unit/product-page-browser.cjs
+```
+
+After deployment, open the actual product overview and an existing product on desktop/mobile. Confirm names, prices, edit links and product choices. If the generic server error persists, capture its digest and corresponding server log to identify any additional live-data failure. No product mutation or production data import was performed in this fix.

@@ -54,13 +54,18 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { cn } from '@/lib/utils';
 import { Checkbox } from '@/components/ui/checkbox';
 import { ProductDuplicationDialog } from '@/components/superadmin/product-duplication-dialog';
-import { getAllLocations } from '@/app/superadmin/locations/actions';
 
 type ProductWithDetails = Product & { brandName: string, categoryName: string };
+
+function priceLabel(price: Product['price']) {
+    return typeof price === 'number' && Number.isFinite(price)
+        ? `kr.${price.toFixed(2)}` : 'Pris mangler';
+}
 
 interface ProductsClientPageProps {
     initialProducts: ProductWithDetails[];
     brands: Brand[];
+    locations: Location[];
 }
 
 function SortableProductRow({ product, selected, onSelectChange }: { product: ProductWithDetails, selected: boolean, onSelectChange: (checked: boolean) => void }) {
@@ -108,7 +113,7 @@ function SortableProductRow({ product, selected, onSelectChange }: { product: Pr
             <TableCell className="font-medium">{product.productName}</TableCell>
             <TableCell>{product.brandName}</TableCell>
             <TableCell>{product.categoryName}</TableCell>
-            <TableCell>kr.{product.price.toFixed(2)}</TableCell>
+            <TableCell>{priceLabel(product.price)}</TableCell>
             <TableCell>{product.sortOrder}</TableCell>
             <TableCell>
                 <Badge variant={product.isActive ? 'default' : 'secondary'}>
@@ -145,7 +150,7 @@ function SortableProductRow({ product, selected, onSelectChange }: { product: Pr
     );
 }
 
-export function ProductsClientPage({ initialProducts, brands }: ProductsClientPageProps) {
+export function ProductsClientPage({ initialProducts, brands, locations }: ProductsClientPageProps) {
   const { toast } = useToast();
   const router = useRouter();
 
@@ -157,12 +162,10 @@ export function ProductsClientPage({ initialProducts, brands }: ProductsClientPa
   const [orderedProducts, setOrderedProducts] = useState(initialProducts);
   const [selectedProductIds, setSelectedProductIds] = useState<string[]>([]);
   const [isDuplicationDialogOpen, setIsDuplicationDialogOpen] = useState(false);
-  const [allLocations, setAllLocations] = useState<Location[]>([]);
 
   useEffect(() => {
     setIsClient(true);
     setOrderedProducts(initialProducts);
-    getAllLocations().then(setAllLocations);
   }, [initialProducts]);
 
 
@@ -359,7 +362,7 @@ export function ProductsClientPage({ initialProducts, brands }: ProductsClientPa
                                         <TableCell className="font-medium">{product.productName}</TableCell>
                                         <TableCell>{product.brandName}</TableCell>
                                         <TableCell>{product.categoryName}</TableCell>
-                                        <TableCell>kr.{product.price.toFixed(2)}</TableCell>
+                                        <TableCell>{priceLabel(product.price)}</TableCell>
                                         <TableCell>{product.sortOrder}</TableCell>
                                         <TableCell><Badge variant={product.isActive ? 'default' : 'secondary'}>{product.isActive ? 'Active' : 'Inactive'}</Badge></TableCell>
                                         <TableCell className="text-right">
@@ -402,7 +405,7 @@ export function ProductsClientPage({ initialProducts, brands }: ProductsClientPa
             setIsOpen={setIsDuplicationDialogOpen}
             productIds={selectedProductIds}
             brands={brands}
-            locations={allLocations}
+            locations={locations}
             onSuccess={onDuplicationSuccess}
         />
     </>

@@ -196,8 +196,8 @@ export async function getAllLocations(brandId?: string): Promise<Location[]> {
     
     return locations.map(location => ({
         ...location,
-        supportsDelivery: location.deliveryTypes.includes('delivery'),
-        supportsPickup: location.deliveryTypes.includes('pickup'),
+        supportsDelivery: Array.isArray(location.deliveryTypes) && location.deliveryTypes.includes('delivery'),
+        supportsPickup: Array.isArray(location.deliveryTypes) && location.deliveryTypes.includes('pickup'),
     }));
 }
 

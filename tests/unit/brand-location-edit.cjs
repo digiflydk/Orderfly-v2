@@ -13,6 +13,9 @@ test('brand reads use canonical document IDs, retain nameless records and join l
  const loc=await f.locations.getLocationById('l');assert.equal(loc.id,'l');
  assert.equal(new Map(brands.map(b=>[b.id,b.name])).get(loc.brandId),'Esmeralda QA');
  assert.equal((await f.locations.getAllLocations())[0].id,'l');
+ delete f.records.get('locations/l').deliveryTypes;
+ const legacy=(await f.locations.getAllLocations())[0];
+ assert.equal(legacy.supportsDelivery,false);assert.equal(legacy.supportsPickup,false);
 });
 
 test('changing a missing location brand saves the selected canonical brand and preserves false switches and closed days',async()=>{
