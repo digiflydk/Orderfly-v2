@@ -21,3 +21,11 @@ export async function readActiveQuestions(type: FeedbackExperienceType, language
   return versions.filter(v => FeedbackQuestionsVersionSchema.safeParse(v).success && v.isActive && v.language === language && v.orderTypes?.includes(type))
     .sort((a, b) => a.id.localeCompare(b.id))[0] || null;
 }
+
+export async function readActiveQuestionsForBrand(brandId: string, type: FeedbackExperienceType, language = 'da') {
+  const selected = (await getAdminDb().collection('feedbackSettings').doc(brandId).get()).data()?.questionVersionId;
+  if (typeof selected !== 'string' || !/^[\w-]{1,160}$/.test(selected)) return readActiveQuestions(type, language);
+  const version = await readQuestionVersion(selected);
+  return version && FeedbackQuestionsVersionSchema.safeParse(version).success && version.isActive && version.language === language && version.orderTypes.includes(type)
+    ? version : null;
+}

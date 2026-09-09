@@ -8,7 +8,7 @@ export async function feedbackMailJobs(brandId: string) {
 }
 export async function retryFeedbackMailJob(id: string, providerNotAccepted: boolean) {
   const access = await requireFeedbackAccess('feedback:edit');
-  if (!/^[a-f0-9]{64}-(invitation|reminder|thankYou)$/.test(id) || providerNotAccepted !== true) throw new Error('Kontrollér først, at Omnisend ikke har accepteret beskeden.');
+  if (!/^[a-f0-9]{64}-(invitation|reminder|thankYou)$/.test(id) || providerNotAccepted !== true) throw new Error('Kontrollér først i mPanel, at beskeden ikke er accepteret.');
   const db = getAdminDb(), ref = db.collection('feedbackMailJobs').doc(id);
   await db.runTransaction(async tx => {
     const current = (await tx.get(ref)).data();

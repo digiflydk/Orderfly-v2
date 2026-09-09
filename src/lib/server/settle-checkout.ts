@@ -4,6 +4,7 @@ import { db } from '@/lib/firebase';
 import { doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { prepareCapacitySettlement } from '@/lib/discount-reservations';
 import { trackServerEvent } from '@/lib/analytics-server';
+import { createHash, randomUUID } from 'node:crypto';
 
 // Only call with a signed webhook or a session retrieved server-to-server from Stripe.
 export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session) {
@@ -20,6 +21,8 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     analytics = order.analytics;
     if (order.brandId !== metadata.brandId || order.locationId !== metadata.locationId || (order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== session.id)) throw new Error('Payment scope mismatch');
     if (order.paymentStatus === 'Paid') return false;
+    const confirmationRef = doc(db, 'orderNotificationJobs', createHash('sha256').update(JSON.stringify(['order-confirmation', order.brandId, metadata.orderId])).digest('hex'));
+    const confirmation = await transaction.get(confirmationRef);
     const customerRef = doc(db, 'customers', order.customerDetails.id);
     const customerSnap = await transaction.get(customerRef);
     if (customerSnap.exists() && customerSnap.data().brandId !== order.brandId) throw new Error('Customer scope mismatch');
@@ -47,6 +50,10 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
       'psp.checkoutSessionId': session.id,
       paymentStatus: 'Paid', paidAt: serverTimestamp(),
       'psp.paymentIntentId': piId || null, updatedAt: serverTimestamp(),
+    });
+    if (!confirmation.exists()) transaction.set(confirmationRef, {
+      orderId: metadata.orderId, brandId: order.brandId, locationId: order.locationId,
+      kind: 'orderConfirmation', state: 'pending', eventId: randomUUID(), nextAttemptAt: Date.now(), attempts: 0, createdAt: Date.now(), updatedAt: Date.now(),
     });
     return true;
   });

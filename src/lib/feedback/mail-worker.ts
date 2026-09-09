@@ -26,7 +26,7 @@ async function context(job: Job) {
   ]);
   const settings = feedbackAutomation(settingsDoc.data());
   const email = typeof customer.data()?.email === 'string' ? customer.data()!.email.trim().toLowerCase() : '';
-  if (!settings.emailEnabled || customer.data()?.brandId !== job.brandId || customer.data()?.marketingConsent !== true || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || brand.data()?.status !== 'active' || location.data()?.brandId !== job.brandId || location.data()?.isActive === false) return null;
+  if (!settings.emailEnabled || customer.data()?.brandId !== job.brandId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || brand.data()?.status !== 'active' || location.data()?.brandId !== job.brandId || location.data()?.isActive === false) return null;
   let answered = feedback.exists;
   let url: string;
   if (job.sourceType === 'commerce_order') {
@@ -95,7 +95,7 @@ export async function runFeedbackMailWorker(makeProvider = (config: NonNullable<
       });
       if (!ownsLease) continue;
       dispatched = true;
-      await provider.send(job.eventId, job.kind, current.email, { feedbackUrl: job.kind === 'thankYou' ? undefined : current.url, brandName: current.brandName, locationName: current.locationName, sourceType: job.sourceType, language: current.settings.language });
+      await provider.send(job.eventId, job.kind, current.email, { feedbackUrl: job.kind === 'thankYou' ? undefined : current.url, brandName: current.brandName, locationName: current.locationName, sourceType: job.sourceType, sourceId: job.sourceId, language: current.settings.language });
       await finish('accepted', null, false, job.kind === 'invitation' && current.settings.maxReminders > 0 ? current.settings.reminderAfterHours : undefined); counts.accepted++;
     } catch (error) {
       const known = error instanceof FeedbackMailError ? error : new FeedbackMailError(dispatched ? 'provider_result_unknown' : 'provider_preflight_failed', dispatched, !dispatched && transientReadError(error));

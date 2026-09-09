@@ -14,3 +14,18 @@ env:
     secret: FIREBASE_SERVICE_ACCOUNT_JSON
   - variable: ORDERFLY_ESMERALDA_INTEGRATION_SECRET
     secret: ORDERFLY_ESMERALDA_INTEGRATION_SECRET
+  # Temporary, explicit dummy-data access switch for the feedback module (#102).
+  # The secret value must be exactly "enabled-for-dummy-data" while testing and
+  # must be removed when the shared platform authentication is introduced.
+  - variable: ORDERFLY_FEEDBACK_TEST_ACCESS
+    secret: ORDERFLY_FEEDBACK_TEST_ACCESS
+  - variable: ORDERFLY_NOTIFICATION_SECRET
+    secret: ORDERFLY_NOTIFICATION_SECRET
+  - variable: ORDERFLY_FEEDBACK_TOKEN_SECRET
+    secret: ORDERFLY_FEEDBACK_TOKEN_SECRET
+  - variable: ORDERFLY_FEEDBACK_WORKER_SECRET
+    secret: ORDERFLY_FEEDBACK_WORKER_SECRET
+  - variable: ORDERFLY_NOTIFICATION_ENDPOINT
+    secret: ORDERFLY_NOTIFICATION_ENDPOINT
+  - variable: ORDERFLY_NOTIFICATION_ORGANIZATION_ID
+    secret: ORDERFLY_NOTIFICATION_ORGANIZATION_ID

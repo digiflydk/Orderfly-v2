@@ -39,8 +39,9 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
  let fail = true;
  const session={id:'s',payment_status:'paid',payment_intent:'pi',amount_total:10000,metadata:{orderId:'o',brandId:'b',locationId:'l'}};
  class Stripe { webhooks = {constructEventAsync: async()=>({type:'checkout.session.completed',data:{object:session}})}; }
- const mocks={
-  'server-only':{},
+    const mocks={
+     'server-only':{},
+     'node:crypto':require('node:crypto'),
   '@/lib/discount-reservations':{
    releaseDiscount:async()=>{},
    prepareCapacitySettlement:async(tx,order,paid)=>load('src/lib/discount-reservations.ts',{
@@ -73,14 +74,17 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
  for(let i=0;i<2;i++) assert.equal((await route.POST(new Request('https://test',{method:'POST',body:'event'}))).status,200);
  assert.equal(state['orders/o'].paymentStatus,'Paid');
  assert.equal(state['discounts/d'].usedCount,1);
- assert.equal(state['customers/c'].discountUsage.d,1);
- assert.equal(state['customers/c'].totalOrders,1);
+    assert.equal(state['customers/c'].discountUsage.d,1);
+    assert.equal(state['customers/c'].totalOrders,1);
+    const confirmationJobs=Object.entries(state).filter(([key])=>key.startsWith('orderNotificationJobs/'));
+    assert.equal(confirmationJobs.length,1);assert.equal(confirmationJobs[0][1].state,'pending');assert.equal(confirmationJobs[0][1].orderId,'o');
  for (const missing of ['customers/c', 'discounts/d']) {
   state['orders/o'].paymentStatus='Pending';
   delete state[missing];
   assert.equal((await route.POST(new Request('https://test',{method:'POST',body:'event'}))).status,200);
-  assert.equal(state['orders/o'].paymentStatus,'Paid');
-  assert.ok(state['orders/o'].fulfillmentWarnings.length > 0);
+    assert.equal(state['orders/o'].paymentStatus,'Paid');
+    assert.ok(state['orders/o'].fulfillmentWarnings.length > 0);
+    assert.equal(Object.keys(state).filter(key=>key.startsWith('orderNotificationJobs/')).length,1);
  }
 
 });

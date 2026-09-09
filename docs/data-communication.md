@@ -27,6 +27,8 @@ flowchart LR
 | Create/Update Category         | `src/app/superadmin/categories/actions.ts`         | `categories`               | `{ name, sortOrder, isActive }`                                 | Updates category documents                            |
 | Create/Update Combo Menu       | `src/app/superadmin/combos/actions.ts`             | `combos`                   | `{ brandId, items[], price }`                                   | Creates combo menu configurations                     |
 | Manage Discounts               | `src/app/superadmin/standard-discounts/actions.ts` | `standardDiscounts`        | `{ type, value, minOrder, active }`                             | Updates automatic discounts                           |
+| Assign Feedback Form           | `src/lib/feedback/settings.ts`                     | `feedbackSettings`         | `{ brandId, questionVersionId, mail/reminder settings }`       | Assigns one active form and automation to a brand     |
+| Settle Paid Order              | `src/lib/server/settle-checkout.ts`                | `orders`, `customers`, `orderNotificationJobs` | Scoped payment update and confirmation outbox | Commits payment state and one idempotent confirmation job |
 
 ---
 
@@ -49,6 +51,10 @@ flowchart LR
 | Feedback Questions | `feedbackQuestionsVersion` | Displays latest version per brand | `src/app/superadmin/feedback/page.tsx`  |
 | Locations          | `locations`                | Display + edit location data      | `src/app/superadmin/locations/page.tsx` |
 | Toppings           | `toppings`                 | Load toppings and groups          | `src/app/superadmin/toppings/page.tsx`  |
+
+## 4. Orderfly → mPanel Notifications
+
+The internal worker reads due `feedbackMailJobs` and `orderNotificationJobs`, revalidates their authoritative order/customer/brand/location state and posts a bounded template payload to the configured HTTPS notification endpoint. Authentication uses the server-only `ORDERFLY_NOTIFICATION_SECRET`. mPanel owns Mailtrap credentials, sender profiles, published templates, provider retries and final delivery status. No Mailtrap API token is stored in Firestore or sent to the browser.
 
 ---
 

@@ -53,7 +53,7 @@ before(async()=>{
    const pathname=url.searchParams.get('path');let data;
    if(pathname==='/login')data={};
    else if(pathname==='/report')data={report:await f.report.getFeedbackReport(Object.fromEntries(new URLSearchParams(url.searchParams.get('query')||'')))};
-   else if(pathname==='/settings')data={brands:[{id:'b',name:'Esmeralda QA',slug:'esmeralda',...await f.settings.readFeedbackSettings('b')}],locations:[{id:'l',name:'Amager',brandId:'b',slug:'amager'}],canEdit:true,jobs:await f.mailAdmin.feedbackMailJobs('b')};
+   else if(pathname==='/settings')data={brands:[{id:'b',name:'Esmeralda QA',slug:'esmeralda',...await f.settings.readFeedbackSettings('b')}],locations:[{id:'l',name:'Amager',brandId:'b',slug:'amager'}],questionVersions:[{id:'v1',name:'Besøg',language:'da',orderTypes:['pickup','booking']},{id:'en',name:'English',language:'en',orderTypes:['pickup']}],canEdit:true,jobs:await f.mailAdmin.feedbackMailJobs('b')};
    else if(pathname==='/detail')data={initialFeedback:{...await f.admin.getFeedbackById('f'),customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager'},canEdit:true};
    else if(pathname==='/reviews')data={locationName:'Amager',menuHref:'/menu',reviews:(await f.reviews.readPublicReviews('b','l'))?.reviews||[]};
    else if(pathname==='/public')data={context:{sourceType:'commerce_order',sourceId:'order',customerId:'c',locationId:'l',brandId:'b',brandName:'Esmeralda QA',experienceType:'pickup',displayReference:'QA order'},questionsVersion:await f.store.readQuestionVersion('v1')};
@@ -136,9 +136,10 @@ test('review, approve, render anonymously and withdraw an actual public review',
 
 test('mail settings persist zero delay and disabled options; uncertain jobs require explicit retry',async t=>{
  const page=await setup(t,'/settings',390);
+ await page.getByLabel('Aktivt feedbackskema for brandet',{exact:true}).selectOption('v1');
  await page.getByLabel('Ventetid i timer',{exact:true}).fill('0');await page.getByLabel('Påmindelser',{exact:true}).selectOption('1');await page.getByLabel('Timer før påmindelse',{exact:true}).fill('48');
  await page.getByRole('switch',{name:'Invitér automatisk efter gennemført oplevelse',exact:true}).check();await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();await page.getByText('Indstillingerne er gemt.',{exact:true}).waitFor();
- await page.reload();assert.equal(await page.getByLabel('Ventetid i timer',{exact:true}).inputValue(),'0');assert.equal(await page.getByLabel('Påmindelser',{exact:true}).inputValue(),'1');assert.equal(f.records.get('feedbackSettings/b').emailEnabled,false);assert.equal(f.records.get('feedbackSettings/b').autoReplyEnabled,false);
+ await page.reload();assert.equal(await page.getByLabel('Ventetid i timer',{exact:true}).inputValue(),'0');assert.equal(await page.getByLabel('Påmindelser',{exact:true}).inputValue(),'1');assert.equal(await page.getByLabel('Aktivt feedbackskema for brandet',{exact:true}).inputValue(),'v1');assert.equal(f.records.get('feedbackSettings/b').emailEnabled,false);assert.equal(f.records.get('feedbackSettings/b').autoReplyEnabled,false);
  const id='a'.repeat(64)+'-invitation';f.records.set('feedbackMailJobs/'+id,{brandId:'b',kind:'invitation',state:'uncertain',attempts:1,createdAt:Date.now(),updatedAt:Date.now(),invitationToken:'PRIVATE_TOKEN',email:'PRIVATE_EMAIL'});
  await page.reload();await page.getByText('Invitation · Kræver kontrol',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Bekræft ikke modtaget og genstart',exact:true}).isVisible(),false);
  await page.getByText('Genstart efter kontrol',{exact:true}).click();await page.getByRole('button',{name:'Bekræft ikke modtaget og genstart',exact:true}).click();await page.getByText('Invitation · I kø',{exact:true}).waitFor();assert.equal(f.records.get('feedbackMailJobs/'+id).lastRetriedBy,'qa-platform');assert.doesNotMatch(await page.locator('body').innerText(),/PRIVATE_TOKEN|PRIVATE_EMAIL/);

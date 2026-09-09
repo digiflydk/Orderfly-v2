@@ -1,25 +1,26 @@
-# Quality/feedback – PR #88 / issue #85
+# Quality/feedback – core flow follow-up #102
 
-Opdateret 9. september 2026. PR'en er ajourført med main inklusive produktrettelserne i #90. Den udvider den første kodeaudit med den aftalte kvalitetsrapport, offentlig visning, feedbackadgang og mailkø. Eksisterende feedback, importdata, produkter og spørgeskemaer migreres eller slettes ikke automatisk.
+Opdateret 9. september 2026. Denne opfølgning bygger på #88 og gør det prioriterede testflow sammenhængende: brandvalg af aktivt skema, invitation, svar, reminder, moderation/offentlig visning samt central transaktionel mail gennem mPanel/Mailtrap. Eksisterende feedback, produkter og spørgeskemaer migreres eller slettes ikke automatisk.
 
 ## Leveret i koden
 
 | Område | Adfærd |
 | --- | --- |
 | Spørgeskemaer | Samme kanoniske Admin SDK-samling til opret/list/redigér; dokument-ID er autoritativt; sikker timestamp-serialisering. Serverskema afviser tomme/ugyldige spørgsmål, dublerede/reserverede ID'er og ugyldige valgmuligheder/min/max. Oprettelsesdato bevares. |
-| Aktivering | Transaktion med fælles låsedokument afviser konfliktende aktive versioner for sprog + pickup/delivery/booking. Nye versioner starter som kladder. Eksisterende aktive konflikter vælges deterministisk, uden automatisk migration. |
+| Aktivering | Transaktion med fælles låsedokument afviser konfliktende aktive versioner for sprog + pickup/delivery/booking. Et aktivt, sprogkompatibelt skema kan derefter vælges eksplicit pr. brand i Feedbackindstillinger. Uden valg bruges den hidtidige deterministiske standard. |
 | Kundesvar | Autoritative spørgsmål, kilde/kunde/brand og oplevelsestype valideres på serveren. Numeriske svar kræver faktiske tal; ægte NPS=0 bevares. Påkrævede svar og valgmuligheder valideres. Formularindhold bevares ved fejl. |
 | Dubletter | Deterministisk feedback-ID pr. brand/kildetype/kilde; transaktion respekterer også gamle ordresvar. Invitationens forbrug og eventuel tak-mail gemmes i samme transaktion som svaret. |
 | Adgang | Serververificeret Firebase-session med revokationskontrol. Feedbackrettigheder og brandtilknytning kommer fra betroet serverkonfiguration, ikke den gamle `hasPermission`-placeholder eller åbne rolle-/brugereditorer. Se releasekrav. |
 | Moderation | Strengt feltskema; eksisterende post og brandadgang kræves. Private svar, offentlig projektion og moderationsaudit opdateres atomisk. Audit indeholder aktør, brand, feedback-ID, handling, feltnavne og tidspunkt; ingen notetekst. |
 | Kvalitetsrapport | `/superadmin/feedback/report`: periode, brand, lokation, onlineordre/restaurantbesøg, svarantal, rating, NPS, lave ratings, lokationssammenligning, udvikling pr. dag, CSV og udskrift. Kun aggregater sendes til rapportklienten. |
 | Offentlig visning | `/{brandSlug}/{locationSlug}/reviews`: kun godkendte projektioner fra den aktive lokation og det aktive brand. Brandets offentlig-visning-indstilling er fra som standard. Menulink vises først efter aktivering. |
-| Feedbackmail | Varig kø til manuel invitation, automatisk invitation, højst én påmindelse og tak efter svar. Omnisend-adapter bruger den eksisterende brandmapping. Ingen simuleret succes. Se driftskrav og tilstande nedenfor. |
+| Feedbackmail | Varig kø til manuel/automatisk invitation, højst én påmindelse og tak efter svar. Adapteren sender en afgrænset request til mPanels centrale notification-kø; Mailtrap-token og skabeloner ejes dér. Ingen simuleret succes. |
+| Ordrebekræftelse | Betalingssettlement opretter atomisk én varig bekræftelsesjob. Samme worker og mPanel-afsenderprofil bruges uden at gøre providerlevering til en del af den autoritative betaling. |
 | Andre læsere | Kundehistorikkens feedbacksektion bruger samme adgangskontrol og en lille DTO. Dashboardets feedbacktal kommer fra den beskyttede rapport; utilgængeligt tal vises som N/A. Det gamle debug-endpoint returnerer 404 uden databaselæsning. |
 
 ## Adgang og afgrænsning
 
-Login: `/feedback-admin/login`, med en eksisterende Firebase Auth-konto i **orderfly-39325**. Login udveksler et nyligt udstedt ID-token for en HttpOnly, SameSite=Lax-session på højst 8 timer (`Secure` i produktion). Hver beskyttet serverhandling verificerer sessionen igen. Kun konto-UID'er i `ORDERFLY_FEEDBACK_ACCESS` får adgang. Manglende, ugyldig eller dubleret konfiguration afviser adgang uden fallback.
+Den eksisterende Firebase-feedbacksession bevares som normal fail-closed adgang. Under den udtrykkeligt afgrænsede dummytest kan releaseansvarlig sætte `ORDERFLY_FEEDBACK_TEST_ACCESS` til den præcise værdi `enabled-for-dummy-data`. Så følger modulet den eksisterende Superadmin-grænse uden at vise den særskilte feedback-login, og UI viser en vedvarende advarsel. Det er ikke en erstatning for den planlagte fælles platform-login. Flaget skal fjernes, før miljøet indeholder rigtige kundedata.
 
 | Rolle | Adgang |
 | --- | --- |
@@ -47,7 +48,7 @@ Dette beskytter feedbackmodulets servergrænser. Det er **ikke en færdig adgang
 - Alle private besvarelser i det valgte udsnit tæller med, uanset offentlig godkendelse. Manglende dato udelades; ugyldig lokation fremgår særskilt og medtages i totalen.
 - Ved over 5.000 svar afvises rapporten med besked om et mindre udsnit; der vises ikke KPI'er fra et tavst afkortet datasæt. Flerbrandsforespørgsler læser højst 5.001 pr. tildelt brand før samlet kontrol.
 - CSV indeholder total og lokationsaggregater, periode og gyldige svarantal; ingen kundedata eller kommentarer. Celler beskyttes mod formelfortolkning.
-- Svarprocent vises ikke. En accepteret Omnisend-hændelse beviser ikke leveret mail, og gamle invitationer har ingen sammenlignelig historik. Det må ikke præsenteres som en målt leverings- eller svarprocent.
+- Svarprocent vises ikke. En accepteret besked i mPanels kø beviser ikke leveret mail, og gamle invitationer har ingen sammenlignelig historik. Det må ikke præsenteres som en målt leverings- eller svarprocent.
 
 ## Offentlige anmeldelser
 
@@ -61,11 +62,11 @@ Visningen er et kurateret udvalg, hvilket fremgår på siden. Højst 20 anmeldel
 
 ## Mailforløb
 
-1. En manual invitation kræver feedback-editoradgang til ordren. Automatisk ordrekø dannes ved opdatering til `Completed`/`Delivered`, når brugeren også har en gyldig feedbacksession. Andre ordreopdateringer bliver ikke gjort afhængige af mailkøen. Manglende feedbacksession giver ingen automatisk mailjob.
+1. En manuel invitation kræver feedback-editoradgang til ordren. Automatisk ordrekø dannes idempotent ved opdatering til `Completed`/`Delivered`; den er en systemsideeffekt og kræver ikke en særskilt feedbacksession. Andre ordreopdateringer bliver ikke gjort afhængige af mailkøen.
 2. Ordren skal være betalt og gennemført, uden registreret refundering. Kunde og lokation skal høre til brandet, og der skal være et aktivt spørgeskema på det valgte sprog.
 3. Nye ordreinvitationer har HMAC-signeret token, 30 dages udløb og en serverregistreret kilde. Gamle `orderId`/`customerId`-links bevares for kompatibilitet, men kræver nu også gennemført/betalt ordre ved visning og gemning. De gamle links er stadig ikke signerede; en overgang/dato for lukning kræver en særskilt aftale.
 4. Bookingintegrationens eksisterende maskinautentificerede invitation kan oprette et job, hvis automatik er aktiveret. Ventetid regnes fra `starts_at`. Integrationens tilbagekaldelse/udløb respekteres. Det er ikke selvstændigt bevis for fysisk fremmøde; aflyste bookinger skal tilbagekaldes af integrationen.
-5. Worker kontrollerer brand/lokation, kilde, svarstatus og både kundens lokale `marketingConsent === true` og eksisterende tilmeldt e-mailkanal i korrekt Omnisend-brand. Den opretter eller gentilmelder ikke kontakter. Der kontrolleres igen efter udbyderens preflight.
+5. Worker kontrollerer brand/lokation, kilde, svarstatus og en gyldig e-mail på kunden. Feedbackinvitationen behandles som kommunikation om den gennemførte oplevelse og er teknisk adskilt fra nyhedsbrev/retention; marketing-samtykke ændres ikke. Workeren sender kun en afgrænset, server-til-server besked til mPanels Orderfly-endpoint; mPanel ejer Mailtrap-token, afsenderprofil, skabelon og endelig leveringsstatus.
 6. Højst én invitation og én påmindelse registreres pr. kilde. Påmindelse oprettes atomisk med registrering af accepteret invitation og stoppes efter svar, afmelding, deaktivering eller ugyldig kilde. Valg af nul påmindelser stopper også en allerede planlagt påmindelse.
 7. Tak-mail registreres atomisk med et svar, når indstillingen er aktiv og der findes en gyldig invitation. Den sender ikke et nyt feedbacklink.
 
@@ -75,14 +76,14 @@ Indstillinger pr. brand: mail til/fra, automatisk invitation til/fra, ventetid 0
 
 `pending` → `preparing` (120 sekunders lease) → `dispatching` → `accepted` / `failed` / `uncertain`. Uegnede modtagere/kilder bliver `suppressed`.
 
-- `accepted` betyder kun, at Omnisend har accepteret hændelsen. Det er ikke dokumentation for e-maillevering; `autoResponseSent` sættes ikke på dette grundlag.
+- `accepted` betyder kun, at mPanel har accepteret beskeden i sin centrale kø. Det er ikke dokumentation for e-maillevering; den endelige Mailtrap-status kontrolleres i mPanel, og `autoResponseSent` sættes ikke på dette grundlag.
 - HTTP 429 genforsøges højst tre gange. Permanente afvisninger kræver kontrol. Timeout, netværksfejl, HTTP 5xx eller tabt worker under afsendelse bliver `uncertain` og sendes ikke automatisk igen.
-- Før afsendelse genforsøges midlertidige Firestore-læsefejl og Omnisend GET-timeout/429/5xx højst tre gange. GET-kaldets retry-status bevares; forkert brandmapping og permanente adgangsfejl afsluttes uden automatisk genforsøg. Denne regel ændrer ikke håndteringen efter en mulig afsendelse.
+- Før afsendelse genforsøges midlertidige Firestore-læsefejl højst tre gange. mPanel HTTP 429 kan genforsøges; permanente adgangs- og valideringsfejl afsluttes uden automatisk genforsøg. Denne regel ændrer ikke håndteringen efter en mulig afsendelse.
 - En udløbet `preparing`-lease kan overtages; en udløbet `dispatching`-lease må ikke føre til blind genafsendelse.
-- Omnisends realtids-events deduplikeres ikke alene på `eventID`. Derfor bruges varig kø/lease, og et usikkert resultat kræver menneskelig kontrol. Settings viser hændelses-ID til opslag samt højst 50 nylige jobs pr. brand, uden mailadresse eller invitationstoken.
+- Orderfly bruger varig kø, lease og deterministisk idempotensnøgle. Et usikkert resultat kræver menneskelig kontrol på tværs af Orderfly-jobbet og mPanels notification-log. Settings viser job-ID til opslag samt højst 50 nylige feedbackjobs pr. brand, uden mailadresse eller invitationstoken.
 - Manuel genstart kræver editoradgang og eksplicit bekræftelse af, at udbyderen ikke har modtaget hændelsen. Handlingens aktør/tid gemmes. Accepterede eller aktive jobs kan ikke genstartes på denne måde.
 
-Udbyderkontrakt: [Events API](https://api-docs.omnisend.com/reference/post_events), [REST events og eventID](https://api-docs.omnisend.com/docs/how-to-send-events-rest-api), [automations](https://api-docs.omnisend.com/docs/how-to-send-custom-events-to-trigger-custom-automations). Adapteren bruger API-version `2026-03-15`, `events.write` og events med `feedbackUrl` (undtagen tak), brandnavn, lokationsnavn, kildetype og sprog. Skabeloner skal vælge korrekt sprog ud fra egenskaben `language`.
+Udbyderkontrakten er mPanels beskyttede Orderfly-endpoint fra den koordinerede mPanel-opgave. Adapteren sender kun allow-listede skabelonnøgler, modtager, locale, relateret entitet, idempotensnøgle og afgrænsede variabler. Skabelonerne er `orderfly.order.confirmation`, `orderfly.feedback.invitation`, `orderfly.feedback.reminder` og `orderfly.feedback.thank_you`. Mailtrap-kald og API-token findes aldrig i Orderfly.
 
 ## Releasekonfiguration – skal udføres af releaseansvarlig
 
@@ -93,30 +94,32 @@ Ingen af nedenstående runtimeændringer er udført fra Work.
 | Data/Auth | Eksisterende **orderfly-39325**; må ikke flyttes til App Hosting-projektet |
 | Hosting | Eksisterende **orderfly-v21-10334086-b3076**; produktbilledlager fra #90 bevares uændret |
 | `ORDERFLY_FEEDBACK_ACCESS` | Betroede eksisterende Firebase UID'er, roller og brand-ID'er; konfigurér før feedbackruter tages i brug |
-| `ORDERFLY_FEEDBACK_EVENTS` | JSON-liste med `brandId`, `enabled`, `invitation`, `reminder`, `thankYou`; navnene skal matche opsatte Omnisend-automations |
-| `ORDERFLY_OMNISEND_BRANDS` | Eksisterende servermapping med korrekt `omnisendBrandId`, API-nøgle, `enabled: true`, `consentMode: "single_opt_in"`; tilstrækkelig læseadgang til brand/kontakt og `events.write` |
+| `ORDERFLY_FEEDBACK_TEST_ACCESS` | Kun dummytest: præcis `enabled-for-dummy-data`. Fjerner den særskilte feedback-login bag den eksisterende Superadmin-grænse. Fjernes før rigtige kundedata. |
+| `ORDERFLY_NOTIFICATION_ENDPOINT` | Det beskyttede HTTPS-endpoint i mPanel fra den koordinerede mPanel-opgave; ingen query/hash eller browseradgang |
+| `ORDERFLY_NOTIFICATION_ORGANIZATION_ID` | UUID for organisationen i mPanel, som ejer den separate Orderfly-afsenderprofil |
+| `ORDERFLY_NOTIFICATION_SECRET` | Separat serverhemmelighed på mindst 32 tegn til Orderfly→mPanel; aldrig Mailtrap-tokenet og aldrig i browser/Git |
 | `ORDERFLY_FEEDBACK_TOKEN_SECRET` | Tilfældig hemmelig værdi på mindst 32 tegn; rotation ugyldiggør gamle signerede ordrelinks |
 | `ORDERFLY_FEEDBACK_WORKER_SECRET` | Separat tilfældig hemmelig værdi på mindst 32 tegn til worker; aldrig i browser eller Git |
 | `ORDERFLY_FEEDBACK_ORIGIN` | Valgfri betroet HTTPS-origin uden sti; standard `https://orderfly.dk` |
-| Scheduler | POST `/api/internal/feedback/send`, `Authorization: Bearer <worker-secret>`; fx hvert 5. minut. Højst 10 jobs pr. kald/45 sekunders behandlingsbudget. Ingen automatisk historisk backfill. |
-| Skabeloner | Faktiske invitation-/påmindelse-/tak-automations, afsender, sprog og afmeldingsindhold i korrekt Omnisend-brand. Eventaccept alene dokumenterer ikke, at en automation er opsat. |
+| Scheduler | POST `/api/internal/feedback/send`, `Authorization: Bearer <worker-secret>`; fx hvert 5. minut. Samme kald behandler feedback- og ordrebekræftelsesjobs. Ingen automatisk historisk backfill. |
+| mPanel/Mailtrap | Fuldfør den koordinerede mPanel-opgave med separat Orderfly-afsenderprofil, Vault-token, fire skabeloner, beskyttet enqueue-endpoint og synlig leveringsstatus. En accepteret enqueue er ikke leveringsbevis. |
 | Firestore-indexer | Flet de nødvendige indexer fra `docs/feedback-firestore-indexes.json` ind i projektets eksisterende konfiguration. Erstat ikke de eksisterende indexer. |
 | Firestore-regler | Verificér at browserklienter ikke kan læse/skrive private feedbackdata, grants, settings, invitationer, mailjobs, audit eller offentlige projektioner direkte. Serverruter bruger Admin SDK. En bred eksisterende allow-regel kan ikke ophæves med en snæver deny-regel; gennemgå den samlede regelsamling. |
 
-Samlinger: `feedback`, `feedbackQuestionsVersion`, `feedbackConfiguration`, `feedbackSettings`, `feedbackInvitations`, `feedbackMailJobs`, `feedbackModerationAudit`, `publicFeedbackReviews`, samt eksisterende `integrationFeedbackInvitations`. Verificér også eksisterende single-field-indexer for de brugte filter-/sorteringsfelter.
+Samlinger: `feedback`, `feedbackQuestionsVersion`, `feedbackConfiguration`, `feedbackSettings`, `feedbackInvitations`, `feedbackMailJobs`, `orderNotificationJobs`, `feedbackModerationAudit`, `publicFeedbackReviews`, samt eksisterende `integrationFeedbackInvitations`. Verificér også eksisterende single-field-indexer for de brugte filter-/sorteringsfelter.
 
 Aktivér først mail for et brand, når konfiguration, relevante spørgeskemaer og skabeloner er godkendt. Offentlig visning og mail er separate indstillinger; rapport/moderation kræver ikke aktiveret mail.
 
 ## Målrettet validering
 
 - `npm run typecheck`: bestået.
-- `node --test tests/unit/feedback-readiness.cjs tests/unit/feedback-report-public.cjs tests/unit/feedback-mail.cjs`: **57/57**.
+- `node --test tests/unit/feedback-readiness.cjs tests/unit/feedback-report-public.cjs tests/unit/feedback-mail.cjs tests/unit/promotion-review.cjs`: **72/72**.
 - `CART_CHROMIUM_PATH=/path/to/chromium node --test tests/unit/feedback-browser.cjs`: **10/10**.
-- Eksisterende `tests/esmeralda-feedback-integration.spec.ts`, isoleret Playwright uden webserver, én worker: **8/8**.
+- Den eksisterende Esmeralda-feedbackintegration er dækket af sin særskilte integrationssuite og ændres ikke af denne PR.
 
 Browserne bruger de faktiske React-komponenter og serverhandlinger med syntetisk I/O og produktions-Tailwind; mobil 390 px og desktop 1280 px. Der testes opret/genåbn/redigér, bevaret kladde ved transportfejl, kundesvar, moderation og offentlig anonym visning/tilbagetrækning, rapportfiltre/CSV samt gemte mailindstillinger og eksplicit genstart. Serverfixtures tester adgang/brandgrænser, DST/NPS, publiceringsrollback, samtidige køkørsler, afmelding/svar-stop, tokenfejl, atomisk tak, timeout/429/5xx og workerautentificering.
 
-Fixtures erstatter Firebase/Omnisend I/O. De beviser ikke produktions-IAM, distribuerede Firestore-låse, faktiske mailskabeloner eller e-maillevering. Ingen produktionsdata, mails/SMS, secrets, IAM, merge, deployment, bred CI-matrix eller workflow dispatch er udført.
+Fixtures erstatter Firebase/mPanel/Mailtrap I/O. De beviser ikke produktions-IAM, distribuerede Firestore-låse, faktiske mailskabeloner eller e-maillevering. Ingen produktionsdata, mails/SMS, secrets, IAM, merge, deployment, bred CI-matrix eller workflow dispatch er udført.
 
 ## Resterende produktvalg og driftsaccept
 
@@ -124,6 +127,6 @@ Fixtures erstatter Firebase/Omnisend I/O. De beviser ikke produktions-IAM, distr
 - Legacy unsigned ordrelinks, platformens øvrige adgangskontrol og Firestore-regler er udtrykkelige afgrænsninger; de må ikke beskrives som løst af modulsessionen.
 - Indbakken læser alle svar inden for brugerens tilladte brands. Stor-skala inbox-pagination, opbevaringspolitik og automatisk opfølgning på lave ratings er ikke leveret her.
 - Der er ikke bygget leveringswebhook, historisk kø-backfill eller en troværdig leveringsbaseret svarprocent.
-- Før Done: uafhængigt review → PO-accept → releaseansvarlig merger/deployer → verificér login for rette UID, afvisning på tværs af brands, rapport fra kendte svar, individuel godkendelse/tilbagetrækning og deaktiveret offentlig side. Kontrolleret mailtest skal bruge særskilt godkendt testmodtager og verificere Omnisend-hændelse **og** faktisk mail.
+- Før Done: uafhængigt review → PO-accept → releaseansvarlig merger/deployer → verificér normal login for rette UID, dummyflagets tydelige advarsel, afvisning på tværs af brands, rapport fra kendte svar, individuel godkendelse/tilbagetrækning og deaktiveret offentlig side. Kontrolleret mailtest skal bruge særskilt godkendt testmodtager og verificere Orderfly-job, mPanel-job **og** faktisk Mailtrap-mail.
 
-Issue #85 forbliver åben indtil den aftalte liveverifikation. Work merger eller deployer ikke sin egen PR.
+Orderfly-issue #102 og den koordinerede mPanel-opgave forbliver åbne indtil den aftalte liveverifikation. Work merger eller deployer ikke sin egen PR.
