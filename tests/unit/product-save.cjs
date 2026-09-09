@@ -198,13 +198,29 @@ test('new product without an image never needs storage configuration or permissi
  const previous=process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
  delete process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
  try{
-  for(const imageUrl of [undefined,new File([],'',{type:'application/octet-stream'})]){
+  for(const imageUrl of [
+   undefined,
+   new File([],'',{type:'application/octet-stream'}),
+   // Next.js production Server Actions may preserve a name for an untouched
+   // file input while submitting no bytes.
+   new File([],'image.jpg',{type:'image/jpeg'}),
+  ]){
    const f=fixture();f.failure.upload=Object.assign(Error('Access denied'),{code:403});
    const result=await f.actions.createOrUpdateProduct(null,form({imageUrl}));assert.equal(result.ok,true,JSON.stringify(result));
    const saved=await f.actions.getProductById(result.id);assert.equal(saved.productName,'Kildevand 0,5 l');assert.equal(saved.price,20);assert.equal(saved.priceDelivery,20);assert.deepEqual(saved.locationIds,['l']);assert.equal(Object.hasOwn(saved,'imageUrl'),false);
    assert.equal(f.storageCalls.length,0);assert.equal(f.objects.size,0);assert.equal(f.records.get('products/hellerup').imageUrl,'https://existing.example/keep.jpg');
   }
  }finally{previous===undefined?delete process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=previous;}
+});
+test('edit with a named zero-byte image submission preserves the existing image',async()=>{
+ const f=fixture();f.failure.upload=Object.assign(Error('Access denied'),{code:403});
+ const result=await f.actions.createOrUpdateProduct(null,form({
+  id:'hellerup',originalBrandId:'b',productName:'Updated without a new image',
+  imageUrl:new File([],'image.jpg',{type:'image/jpeg'}),
+ }));
+ assert.equal(result.ok,true,JSON.stringify(result));assert.equal(f.storageCalls.length,0);
+ assert.equal(f.records.get('products/hellerup').imageUrl,'https://existing.example/keep.jpg');
+ assert.equal(f.records.get('products/hellerup').productName,'Updated without a new image');
 });
 test('403 then removing selected file reuses creation key without a duplicate; image can be added later',async()=>{
  const f=fixture();const data=form({imageUrl:new File([await image()],'water.jpg',{type:'image/jpeg'})});
