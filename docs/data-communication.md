@@ -54,7 +54,7 @@ flowchart LR
 
 ## 4. Orderfly → mPanel Notifications
 
-The internal worker reads due `feedbackMailJobs` and `orderNotificationJobs`, revalidates their authoritative order/customer/brand/location state and posts a bounded template payload to the configured HTTPS notification endpoint. Authentication uses the server-only `ORDERFLY_NOTIFICATION_SECRET`. mPanel owns Mailtrap credentials, sender profiles, published templates, provider retries and final delivery status. No Mailtrap API token is stored in Firestore or sent to the browser.
+The internal worker reads due `feedbackMailJobs` and `orderNotificationJobs`, revalidates their authoritative order/customer/brand/location state and posts a bounded template payload to `https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/orderfly-notification-enqueue` for the fixed Esmeralda organization `aaa94d25-3ca6-4ebf-a673-164608db6c55`. Authentication uses the server-only `ORDERFLY_NOTIFICATION_SECRET`, which is backed by the existing `ORDERFLY_ESMERALDA_INTEGRATION_SECRET` Secret Manager entry. mPanel owns Mailtrap credentials, the approved `info@esmeraldapizza.com` sender, published templates, provider retries and final delivery status. No Mailtrap API token is stored in Firestore or sent to the browser.
 
 ---
 
