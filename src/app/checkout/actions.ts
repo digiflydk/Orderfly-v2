@@ -12,7 +12,7 @@ import { isDefinitiveStripeRejection } from '@/lib/stripe-checkout-failure';
 import { validateCheckoutPrices } from '@/lib/checkout-price-validation';
 import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
 import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
-import { newsletterEligible, cartLineEligible, assignedCustomerMatches, restaurantClock } from '@/lib/promotion-rules';
+import { newsletterEligible, newsletterAllowsStacking, cartLineEligible, assignedCustomerMatches, restaurantClock } from '@/lib/promotion-rules';
 import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
 import { createHash, randomBytes } from 'node:crypto';
 import { headers } from 'next/headers';
@@ -253,7 +253,7 @@ function validateDiscountEligibility(discount: Discount, context: DiscountEligib
     return null;
 }
 
-export type NewsletterDiscountOffer = Pick<Discount, 'id' | 'description' | 'discountType' | 'discountValue' | 'minOrderValue'> & {
+export type NewsletterDiscountOffer = Pick<Discount, 'id' | 'description' | 'discountType' | 'discountValue' | 'minOrderValue' | 'allowStacking'> & {
     applicationType: 'newsletter_signup';
 };
 
@@ -296,6 +296,7 @@ export async function getNewsletterSignupDiscountAction(
             discountType: discount.discountType,
             discountValue: discount.discountValue,
             minOrderValue: discount.minOrderValue,
+            allowStacking: newsletterAllowsStacking(discount),
             applicationType: 'newsletter_signup',
         };
     }
@@ -437,17 +438,20 @@ export async function createStripeCheckoutSessionAction(
     if (appliedDiscountId) {
       selectedDiscount = await getDiscountById(appliedDiscountId);
       if (!selectedDiscount) throw new Error('The selected discount no longer exists.');
+      // Use validated charged merchandise, including options/combos, only when
+      // the persisted newsletter campaign explicitly enables item stacking.
+      const selectedSubtotal = newsletterAllowsStacking(selectedDiscount) ? chargedItemsSubtotal : eligibleSubtotal;
       const eligibilityError = validateDiscountEligibility(selectedDiscount, {
         brandId,
         locationId,
         deliveryType,
-        subtotal: eligibleSubtotal,
+        subtotal: selectedSubtotal,
         customerId: resolvedCustomer.customerRef.id,
         customer: existingCustomer,
         newsletterConsent: customerInfo.subscribeToNewsletter,
       });
       if (eligibilityError) throw new Error(eligibilityError);
-      selectedDiscountAmount = calculateDiscountAmount(selectedDiscount, eligibleSubtotal);
+      selectedDiscountAmount = calculateDiscountAmount(selectedDiscount, selectedSubtotal);
     }
 
     const manualDiscountWins = selectedDiscountAmount > (automaticCartDiscount?.amount || 0);

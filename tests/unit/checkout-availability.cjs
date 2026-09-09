@@ -118,6 +118,9 @@ test('newsletter offer checks actual customer and keeps canceled retry eligible'
   const api = load('src/app/checkout/actions.ts',mocks);
   const offer = () => api.getNewsletterSignupDiscountAction('b','l',100,'pickup','a@example.com');
   assert.equal((await offer()).id,'d'); // Returning customer may newly subscribe.
+  assert.equal((await offer()).allowStacking,false);
+  discount.allowStacking = true;
+  assert.equal((await offer()).allowStacking,true);
   discount.firstTimeCustomerOnly = true;
   assert.equal(await offer(),null);
   discount.firstTimeCustomerOnly = false;

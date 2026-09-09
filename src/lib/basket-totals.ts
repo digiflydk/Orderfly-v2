@@ -1,6 +1,7 @@
 import type { CartItem, Brand, Location, Discount, StandardDiscount } from '@/types';
 import { bestAutomaticDiscount } from './automatic-discounts';
 import { isLockedItem } from './cart-utils';
+import { newsletterAllowsStacking } from './promotion-rules';
 import { money, sumMoney, lineMoney, percentageMoney } from './money';
 export function basketTotals({cartItems, appliedDiscount, standardDiscounts, deliveryType, location, brand, includeBagFee}: {
   cartItems: CartItem[]; appliedDiscount: Discount | null; standardDiscounts: StandardDiscount[];
@@ -16,12 +17,14 @@ export function basketTotals({cartItems, appliedDiscount, standardDiscounts, del
       unlockedItems.map(item => ({ id: item.id, categoryId: item.categoryId, quantity: item.quantity, unitPrice: item.basePrice })));
 
     let calculatedVoucher: { name: string; amount: number } | null = null;
-    if (appliedDiscount && discountableSubtotal >= (appliedDiscount.minOrderValue || 0)) {
+    const voucherSubtotal = newsletterAllowsStacking(appliedDiscount)
+      ? sumMoney([currentSubtotal, -currentItemDiscount]) : discountableSubtotal;
+    if (appliedDiscount && voucherSubtotal >= (appliedDiscount.minOrderValue || 0)) {
         let voucherAmount = 0;
         if (appliedDiscount.discountType === 'percentage') {
-            voucherAmount = percentageMoney(discountableSubtotal, Math.min(100, appliedDiscount.discountValue));
+            voucherAmount = percentageMoney(voucherSubtotal, Math.min(100, appliedDiscount.discountValue));
         } else {
-            voucherAmount = money(Math.min(discountableSubtotal, appliedDiscount.discountValue));
+            voucherAmount = money(Math.min(voucherSubtotal, appliedDiscount.discountValue));
         }
         if (voucherAmount > 0) {
             calculatedVoucher = { name: appliedDiscount.code, amount: voucherAmount };
