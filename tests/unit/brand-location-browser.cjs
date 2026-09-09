@@ -18,7 +18,7 @@ before(async()=>{
  if(location.pathname.includes('/error'))page=<SuperadminError error={new Error('Server Action "abc" was not found on the server.')} reset={()=>{window.resetCount=(window.resetCount||0)+1;}}/>;
  else if(location.pathname.includes('/brands/'))page=<BrandFormPage brand={data.brand} users={[{id:'u',name:'QA Owner',email:'qa@example.test'}]} plans={[]} foodCategories={[]}/>;
  else page=<LocationFormPage location={data.location} brands={data.brands}/>;
- createRoot(document.getElementById('root')).render(page);
+ createRoot(document.getElementById('root')).render(<React.StrictMode>{page}</React.StrictMode>);
  });`);
  const transport=`async function save(kind,form){const response=await fetch('/save/'+kind,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify([...form])});const result=await response.json();if(result.failure)throw new Error(result.failure);if(result.redirect){window.location.assign('/done/'+kind);return;}return result;}`;
  const actions=file('brand-action',`${transport} export const createOrUpdateBrand=(_,form)=>save('brands',form);export const updateBrandAppearances=async()=>({error:false});`);

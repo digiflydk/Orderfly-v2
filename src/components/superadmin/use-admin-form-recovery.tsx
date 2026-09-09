@@ -15,10 +15,10 @@ export function useAdminFormRecovery<T extends FieldValues>(form: UseFormReturn<
   const [needsReload, setNeedsReload] = useState(false);
 
   useEffect(() => {
+    let removalTimer: number | undefined;
     try {
       const raw = sessionStorage.getItem(draftKey());
       if (!raw) return;
-      sessionStorage.removeItem(draftKey());
       const draft = JSON.parse(raw);
       if (draft.version !== 1 || typeof draft.savedAt !== 'number'
           || Date.now() - draft.savedAt > maxAge || draft.savedAt > Date.now()
@@ -27,9 +27,21 @@ export function useAdminFormRecovery<T extends FieldValues>(form: UseFormReturn<
       // The route's loaded document remains authoritative for identity.
       form.reset({ ...current, ...draft.values, id: current.id });
       setMessage('Dine ændringer er gendannet. Kontrollér oplysningerne og tryk Gem igen.');
+      // React Strict Mode replays mount effects in development. Delay removal so
+      // the replay can restore the same draft after the form's own reset effect.
+      removalTimer = window.setTimeout(() => {
+        try {
+          if (sessionStorage.getItem(draftKey()) === raw) sessionStorage.removeItem(draftKey());
+        } catch {
+          // Storage can become unavailable after the draft was read.
+        }
+      }, 0);
     } catch {
       // Storage can be disabled. The normal form must still work.
     }
+    return () => {
+      if (removalTimer !== undefined) window.clearTimeout(removalTimer);
+    };
   }, [form]);
 
   function handleSaveError(error: unknown) {
