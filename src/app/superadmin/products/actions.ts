@@ -5,7 +5,8 @@ import 'server-only';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
-import { redirect } from 'next/navigation';
+import { hasPermission } from '@/lib/permissions';
+import { uploadProductImage } from '@/lib/superadmin/product-image-storage';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Product, ProductForMenu } from '@/types';
 import * as admin from 'firebase-admin';
@@ -20,6 +21,7 @@ const asBool = (v: unknown) => {
 
 const baseFields = {
   id: z.string().optional().nullable(),
+  creationKey: z.string().uuid().optional(),
   brandId: z.string().min(1, 'A brand must be selected.'),
   locationIds: z.array(z.string()).optional().default([]),
   categoryId: z.string().min(1, 'A category must be selected.'),
@@ -58,32 +60,12 @@ export type FormState = ActionOk | ActionErr | null;
 export async function createOrUpdateProduct(prevState: FormState | null, formData: FormData): Promise<FormState> {
     const id = formData.get('id')?.toString();
     const schema = id ? updateSchema : createSchema;
-    const db = getAdminDb();
-    
-    const rawData: Record<string, unknown> = {};
-
-    for (const [key, value] of formData.entries()) {
-      if (key.endsWith('[]')) {
-        const arrayKey = key.slice(0, -2);
-
-        if (rawData[arrayKey] == null) {
-          rawData[arrayKey] = [];
-        } else if (!Array.isArray(rawData[arrayKey])) {
-          rawData[arrayKey] = [String(rawData[arrayKey])].filter(Boolean);
-        }
-
-        (rawData[arrayKey] as string[]).push(typeof value === 'string' ? value : String(value));
-      } else {
-        if (rawData[key] === undefined) {
-          rawData[key] = value;
-        } else if (Array.isArray(rawData[key])) {
-          (rawData[key] as string[]).push(typeof value === 'string' ? value : String(value));
-        } else {
-          rawData[key] = [String(rawData[key]), typeof value === 'string' ? value : String(value)];
-        }
-      }
+    const rawData: Record<string, unknown> = Object.fromEntries(formData);
+    // HTML forms use the same name for each checked box, including a single choice.
+    for (const key of ['locationIds', 'toppingGroupIds', 'allergenIds']) {
+      rawData[key] = [...new Set([...formData.getAll(key), ...formData.getAll(`${key}[]`)])];
     }
-    
+
     const parsed = schema.safeParse(rawData);
 
     if (!parsed.success) {
@@ -93,16 +75,16 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
         .join('; ');
       return {
         ok: false,
-        error: { message: `Validation failed: ${errorMessages}`, detail: JSON.stringify(flatErrors) },
+        error: { message: `Validation failed: ${errorMessages}` },
       };
     }
     
-    const { id: validatedId, ...productData } = parsed.data;
+    const { id: validatedId, creationKey, imageUrl: _imageUrl, ...productData } = parsed.data;
     
     // For updates, filter out undefined values to prevent overwriting existing data.
-    const toWrite: Partial<Product> = id
-      ? Object.fromEntries(Object.entries(productData).filter(([, v]) => v !== undefined))
-      : productData;
+    const toWrite: Partial<Product> = Object.fromEntries(
+      Object.entries(productData).filter(([, value]) => value !== undefined),
+    );
 
     // quick sanity before DB (helps catch type issues early)
     const sanity = {
@@ -121,45 +103,83 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
     }
   
     try {
-      const imageFileOrUrl = formData.get('imageUrl');
-
-      if (imageFileOrUrl instanceof File && imageFileOrUrl.size > 0) {
-        // Placeholder for Firebase Storage upload logic
-        console.warn('Image upload is not yet implemented. Saving placeholder URL.');
-        toWrite.imageUrl = `https://picsum.photos/seed/${imageFileOrUrl.name}/400/300`;
-      } else if (typeof imageFileOrUrl === 'string') {
-        toWrite.imageUrl = imageFileOrUrl;
-      } else if (validatedId) {
-        const existingProduct = await getProductById(validatedId);
-        toWrite.imageUrl = existingProduct?.imageUrl;
-      } else {
-        toWrite.imageUrl = undefined;
+      if (!hasPermission(id ? 'products:edit' : 'products:create')) {
+        return { ok: false, error: { message: 'You do not have permission to save products.' } };
       }
-
-      const now = new Date();
-
-      if (id) {
-        await db.collection('products').doc(id).update({
-          ...toWrite,
-          updatedAt: now,
-        });
-        revalidatePath('/superadmin/products');
-    revalidateTag('storefront');
-        return { ok: true, id };
-      } else {
-        const payload = {
-          ...toWrite,
-          isActive: (toWrite as any).isActive ?? false,
-          createdAt: now,
-          updatedAt: now,
-        };
-        const ref = await db.collection('products').add(payload);
-        await db.collection('products').doc(ref.id).update({ id: ref.id });
-        revalidatePath('/superadmin/products');
-    revalidateTag('storefront');
+      const db = getAdminDb();
+      const brand = await db.collection('brands').doc(productData.brandId).get();
+      if (!brand.exists) throw new Error('The selected brand no longer exists.');
+      const ref = id || creationKey
+        ? db.collection('products').doc(id || creationKey!)
+        : db.collection('products').doc();
+      const existing = await ref.get();
+      if (id && (!existing.exists || existing.data()?.brandId !== productData.brandId)) {
+        throw new Error('The product does not exist or belongs to another brand.');
+      }
+      // The same form retries the same creation key after a lost response.
+      if (!id && existing.exists) {
+        if (existing.data()?.creationKey !== creationKey || existing.data()?.brandId !== productData.brandId) {
+          throw new Error('Creation reference is already in use. Open a new product form.');
+        }
         return { ok: true, id: ref.id };
       }
-  
+      const brandLocations = await db.collection('locations').where('brandId', '==', productData.brandId).get();
+      const brandLocationIds = new Set(brandLocations.docs.map(doc => doc.id));
+      if (productData.locationIds.some(locationId => !brandLocationIds.has(locationId))) {
+        throw new Error('Every selected location must belong to the selected brand.');
+      }
+      const category = await db.collection('categories').doc(productData.categoryId).get();
+      const categoryLocations: string[] = category.data()?.locationIds || [];
+      if (!category.exists || !categoryLocations.some(locationId => brandLocationIds.has(locationId)) ||
+          productData.locationIds.some(locationId => !categoryLocations.includes(locationId))) {
+        throw new Error('The category must belong to the brand and be available at the selected locations.');
+      }
+      for (const groupId of productData.toppingGroupIds) {
+        const group = await db.collection('topping_groups').doc(groupId).get();
+        const groupLocations: string[] = group.data()?.locationIds || [];
+        if (!group.exists || !groupLocations.some(locationId => brandLocationIds.has(locationId))) {
+          throw new Error('Every topping group must belong to the selected brand.');
+        }
+      }
+      for (const allergenId of productData.allergenIds) {
+        if (!(await db.collection('allergens').doc(allergenId).get()).exists) {
+          throw new Error('A selected allergen no longer exists.');
+        }
+      }
+
+      const image = formData.get('imageUrl');
+      if (image instanceof File && (image.size > 0 || image.name)) {
+        toWrite.imageUrl = await uploadProductImage(image, productData.brandId, ref.id);
+      } else if (typeof image === 'string' && image && image !== existing.data()?.imageUrl) {
+        throw new Error('Upload an image file instead of supplying an external image URL.');
+      }
+      // With no replacement file, omit imageUrl entirely to preserve the stored image.
+      const now = new Date();
+      if (id) {
+        await ref.update({ ...toWrite, updatedAt: now });
+      } else {
+        const payload = {
+          ...toWrite, id: ref.id,
+          ...(creationKey ? { creationKey } : {}),
+          isActive: toWrite.isActive ?? false,
+          createdAt: now, updatedAt: now,
+        };
+        try {
+          await ref.create(payload);
+        } catch (error: any) {
+          // Concurrent retries may race, but must never create a second product.
+          const saved = creationKey ? await ref.get() : null;
+          if (saved?.data()?.creationKey !== creationKey || saved?.data()?.brandId !== productData.brandId) throw error;
+        }
+      }
+      // A cache failure must not turn a committed write into a misleading save error.
+      try {
+        revalidatePath('/superadmin/products');
+        revalidateTag('storefront');
+      } catch (error) {
+        console.error('[products.createOrUpdate] Cache refresh failed', error);
+      }
+      return { ok: true, id: ref.id };
     } catch (e: any) {
       console.error('[products.createOrUpdate] Firestore write failed', {
         message: e?.message,
@@ -169,7 +189,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       return {
         ok: false,
         error: {
-          message: 'Database write failed',
+          message: 'Product could not be saved',
           code: e?.code ?? 'unknown',
           detail: e?.message ?? 'No details from Firestore',
         },
