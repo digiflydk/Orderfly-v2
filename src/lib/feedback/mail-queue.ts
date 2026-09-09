@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { feedbackAutomation, feedbackMailConfig } from './mail-config';
 import { completedFeedbackOrder, feedbackSourceKey } from './order-invitations';
-import { readActiveQuestions } from './question-store';
+import { readActiveQuestionsForBrand } from './question-store';
 
 export type FeedbackMailKind = 'invitation' | 'reminder' | 'thankYou';
 export type FeedbackMailSource = { brandId: string; locationId: string; customerId: string; sourceId: string; sourceType: 'commerce_order' | 'booking'; invitationId: string; invitationToken?: string };
@@ -32,7 +32,7 @@ export async function queueOrderFeedback(orderId: string, automatic = false) {
   if (typeof customerId !== 'string' || !/^[\w-]{1,160}$/.test(customerId)) throw new Error('Ordren mangler en gyldig kunde.');
   const [customer, location, questions] = await Promise.all([
     db.collection('customers').doc(customerId).get(), db.collection('locations').doc(order.locationId).get(),
-    readActiveQuestions(order.deliveryType === 'Delivery' ? 'delivery' : 'pickup', settings.language),
+    readActiveQuestionsForBrand(order.brandId, order.deliveryType === 'Delivery' ? 'delivery' : 'pickup', settings.language),
   ]);
   if (customer.data()?.brandId !== order.brandId || location.data()?.brandId !== order.brandId || !questions) throw new Error('Kontrollér kunde, lokation og aktivt spørgeskema.');
   const id = feedbackSourceKey(order.brandId, 'commerce_order', orderId), ref = db.collection('feedbackInvitations').doc(id);
@@ -47,6 +47,7 @@ export async function queueOrderFeedback(orderId: string, automatic = false) {
 export async function queueBookingFeedback(source: FeedbackMailSource, startsAt: string | null) {
   const settings = feedbackAutomation((await getAdminDb().collection('feedbackSettings').doc(source.brandId).get()).data());
   if (!settings.emailEnabled || !settings.automaticRequests || !feedbackMailConfig(source.brandId)) return null;
+  if (!await readActiveQuestionsForBrand(source.brandId, 'booking', settings.language)) return null;
   const time = startsAt ? Date.parse(startsAt) : NaN;
   if (!Number.isFinite(time)) return null;
   return enqueueFeedbackMessage(source, 'invitation', Math.max(Date.now(), time + settings.delayHours * 3600000));

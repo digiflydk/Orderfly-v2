@@ -4,7 +4,7 @@ import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
-import { readActiveQuestions } from '@/lib/feedback/question-store';
+import { readActiveQuestions, readActiveQuestionsForBrand } from '@/lib/feedback/question-store';
 import { feedbackMetrics } from '@/lib/feedback/metrics';
 import { resolveOrderFeedbackInvitation, completedFeedbackOrder } from '@/lib/feedback/order-invitations';
 import { feedbackAutomation, feedbackMailConfig } from '@/lib/feedback/mail-config';
@@ -33,6 +33,14 @@ export async function getActiveFeedbackQuestionsForOrder(
   return getActiveFeedbackQuestionsForExperience(
     deliveryType.toLowerCase() as 'delivery' | 'pickup',
   );
+}
+
+export async function getActiveFeedbackQuestionsForBrand(
+  brandId: string,
+  experienceType: FeedbackExperienceType,
+  language = 'da',
+): Promise<ExperienceFeedbackQuestionsVersion | null> {
+  return readActiveQuestionsForBrand(brandId, experienceType, language);
 }
 
 const feedbackSubmissionSchema = z.object({
@@ -142,9 +150,14 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
     if (!source) return { message: 'Feedback source could not be verified.', error: true };
 
     const db = getAdminDb();
-    const questionsSnapshot = await db.collection('feedbackQuestionsVersion').doc(parsed.data.questionVersionId).get();
+    const [questionsSnapshot, brandSettingsSnapshot] = await Promise.all([
+      db.collection('feedbackQuestionsVersion').doc(parsed.data.questionVersionId).get(),
+      db.collection('feedbackSettings').doc(source.brandId).get(),
+    ]);
     if (!questionsSnapshot.exists) return { message: 'Feedback form is no longer available.', error: true };
     const questionsData = questionsSnapshot.data() ?? {};
+    const selectedVersionId = feedbackAutomation(brandSettingsSnapshot.data()).questionVersionId;
+    if (selectedVersionId && selectedVersionId !== parsed.data.questionVersionId) return { message: 'Feedback form is no longer assigned to this brand.', error: true };
     const allowedTypes = Array.isArray(questionsData.orderTypes) ? questionsData.orderTypes : [];
     if (
       questionsData.isActive !== true ||

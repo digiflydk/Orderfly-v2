@@ -5,7 +5,6 @@ import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
 import { doc, updateDoc, getDoc } from 'firebase/firestore';
 import type { OrderDetail, OrderStatus } from '@/types';
-import { requireFeedbackAccess, assertFeedbackBrand } from '@/lib/feedback/access';
 import { queueOrderFeedback } from '@/lib/feedback/mail-queue';
 
 export async function updateOrderStatus(orderId: string, status: OrderStatus) {
@@ -25,13 +24,10 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
         
         await updateDoc(orderRef, { status: status });
         if (status === 'Completed' || status === 'Delivered') {
-            // Legacy order editors do not grant authority to send customer messages.
-            try {
-                const access = await requireFeedbackAccess('feedback:edit');
-                const current = (await getDoc(orderRef)).data();
-                assertFeedbackBrand(access, current?.brandId);
-                await queueOrderFeedback(orderId, true);
-            } catch { /* The order update remains successful; no unauthenticated email is queued. */ }
+            // The status mutation is already authoritative. Messaging is an optional,
+            // idempotent system side effect and must never make that mutation fail.
+            try { await queueOrderFeedback(orderId, true); }
+            catch { /* Order completion remains successful; a manual invitation can be retried after configuration is corrected. */ }
         }
         
         revalidatePath('/superadmin/sales/orders');

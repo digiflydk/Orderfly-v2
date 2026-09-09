@@ -1,11 +1,16 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { getAdminApp } from '@/lib/firebase-admin';
+import { hasPermission } from '@/lib/permissions';
 import { z } from 'zod';
 
 export type FeedbackAccess = { uid: string; permissions: string[]; brandIds: string[] | null };
 export class FeedbackAccessError extends Error {
   constructor() { super('Log ind med en administrator, der har adgang til feedback.'); }
+}
+
+export function temporaryFeedbackTestAccessEnabled() {
+  return process.env.ORDERFLY_FEEDBACK_TEST_ACCESS === 'enabled-for-dummy-data';
 }
 const grant = z.object({
   uid: z.string().min(1).max(128),
@@ -28,6 +33,11 @@ export async function feedbackAccessForUid(uid: string): Promise<FeedbackAccess>
 }
 
 export async function requireFeedbackAccess(permission = 'feedback:view'): Promise<FeedbackAccess> {
+  if (temporaryFeedbackTestAccessEnabled() && hasPermission('users:view')) {
+    const access = { uid: 'temporary-feedback-test-access', permissions: ['feedback:view', 'feedback:edit', 'settings:view', 'settings:edit'], brandIds: null };
+    if (!access.permissions.includes(permission)) throw new FeedbackAccessError();
+    return access;
+  }
   const cookie = (await cookies()).get('__session')?.value;
   if (!cookie) throw new FeedbackAccessError();
   try {

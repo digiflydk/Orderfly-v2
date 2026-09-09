@@ -60,6 +60,21 @@ test('absent, revoked, unassigned and malformed access denies database reads',as
   process.env.ORDERFLY_FEEDBACK_ACCESS=config;const f=fixture();await assert.rejects(()=>f.admin.getFeedbackEntries());assert.equal(f.reads.length,0);
  }}finally{process.env.ORDERFLY_FEEDBACK_ACCESS=setting;}
 });
+test('explicit dummy-data switch removes the separate feedback session while retaining the superadmin gate',async()=>{
+ const previous=process.env.ORDERFLY_FEEDBACK_TEST_ACCESS;
+ try{
+  process.env.ORDERFLY_FEEDBACK_TEST_ACCESS='enabled-for-dummy-data';const f=fixture();f.auth.cookie=false;f.records.set('feedback/b',row());
+  assert.equal((await f.admin.getFeedbackEntries()).length,1);await f.settings.writeFeedbackSettings({brandId:'b',publicReviewsEnabled:true});assert.equal(f.records.get('feedbackSettings/b').updatedBy,'temporary-feedback-test-access');
+  f.failure.auth=true;await assert.rejects(()=>f.admin.getFeedbackEntries());
+ }finally{previous===undefined?delete process.env.ORDERFLY_FEEDBACK_TEST_ACCESS:process.env.ORDERFLY_FEEDBACK_TEST_ACCESS=previous;}
+});
+test('a brand can select one active compatible feedback form',async()=>{
+ const f=fixture();await f.settings.writeFeedbackSettings({brandId:'b',questionVersionId:'v1',language:'da'});
+ assert.equal((await f.settings.readFeedbackSettings('b')).questionVersionId,'v1');assert.equal((await f.store.readActiveQuestionsForBrand('b','pickup','da')).id,'v1');
+ assert.equal(await f.store.readActiveQuestionsForBrand('b','delivery','da'),null);
+ await assert.rejects(()=>f.settings.writeFeedbackSettings({brandId:'b',questionVersionId:'en',language:'da'}));
+ await assert.rejects(()=>f.settings.writeFeedbackSettings({brandId:'b',questionVersionId:'missing',language:'da'}));
+});
 test('approval publishes only the safe projection, with anonymous default and scope checks',async()=>{
  const f=fixture();f.records.set('feedback/f',row({maskCustomerName:false,internalNote:'PRIVATE_NOTE',orderId:'PRIVATE_ORDER',comment:'Mail private@example.test eller +45 12345678. https://example.test',npsScore:0}));
  const original=f.records.get('feedback/f').comment;

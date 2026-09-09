@@ -107,6 +107,9 @@ test.describe('Esmeralda booking feedback and history contracts', () => {
       readFile(resolve(process.cwd(), 'src/lib/integrations/esmeralda-feedback-integration.ts'), 'utf8'),
     ]);
     expect(appHosting).toContain('ORDERFLY_ESMERALDA_INTEGRATION_SECRET');
+    expect(appHosting).toContain('https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/orderfly-notification-enqueue');
+    expect(appHosting).toContain('aaa94d25-3ca6-4ebf-a673-164608db6c55');
+    expect(appHosting).toMatch(/variable: ORDERFLY_NOTIFICATION_SECRET[\s\S]*?secret: ORDERFLY_ESMERALDA_INTEGRATION_SECRET/);
     expect(integration).toContain("createHmac('sha256'");
     expect(integration).toContain('integrationFeedbackInvitations');
     expect(integration).toContain('db.runTransaction');

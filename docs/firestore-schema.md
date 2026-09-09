@@ -113,6 +113,14 @@ Aggregates data for each unique customer.
 | `marketingConsent`| boolean | | Customer has opted in to marketing/newsletters |
 | `discountUsage`| map | | Discount document ID to successful-use count; updated after paid checkout |
 
+## Collection: `feedbackSettings`
+
+One document per brand. `questionVersionId` optionally assigns an active feedback question version to that brand. The document also owns public-review activation, feedback-mail activation, automatic invitation delay, reminder settings, language and optional thank-you behavior. Server-side writes validate brand scope and question-version compatibility.
+
+## Collections: `feedbackMailJobs` and `orderNotificationJobs`
+
+Durable, idempotent notification outboxes. Jobs store source identifiers, state, attempts, timestamps and an opaque event ID. Recipient email and signed feedback URL are resolved from authoritative records immediately before dispatch and are not stored in admin projections. `accepted` means accepted by the central mPanel queue; Mailtrap delivery remains authoritative in mPanel.
+
 ---
 
 ## Collection: `discounts`

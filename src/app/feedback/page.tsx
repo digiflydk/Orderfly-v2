@@ -2,7 +2,7 @@ import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveSearchParams } from "@/lib/next/resolve-props";
 import { notFound, redirect } from 'next/navigation';
 import { getOrderDetails } from '@/app/superadmin/sales/orders/[orderId]/page';
-import { getActiveFeedbackQuestionsForExperience } from './actions';
+import { getActiveFeedbackQuestionsForBrand } from './actions';
 import { FeedbackFormClient } from './form-client';
 import { resolveBookingFeedbackInvitationToken } from '@/lib/integrations/esmeralda-feedback-integration';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -26,7 +26,7 @@ export default async function Page({ searchParams }: AsyncPageProps) {
     if (!brandSnapshot.exists) notFound();
     const brand = brandSnapshot.data() ?? {};
 
-    const questionsVersion = await getActiveFeedbackQuestionsForExperience('booking', language);
+    const questionsVersion = await getActiveFeedbackQuestionsForBrand(invitation.organization_id, 'booking', language);
     if (!questionsVersion) {
       return <div className="flex items-center justify-center min-h-screen"><p>No active feedback form available at the moment.</p></div>;
     }
@@ -65,8 +65,8 @@ export default async function Page({ searchParams }: AsyncPageProps) {
   if (!order || order.customerDetails.id !== customerId || !completedFeedbackOrder(order)) notFound();
   if (invitation && (invitation.brandId !== order.brandId || invitation.locationId !== order.locationId)) notFound();
 
-  const questionsVersion = await getActiveFeedbackQuestionsForExperience(
-    order.deliveryType.toLowerCase() as 'pickup' | 'delivery', language,
+  const questionsVersion = await getActiveFeedbackQuestionsForBrand(
+    order.brandId, order.deliveryType.toLowerCase() as 'pickup' | 'delivery', language,
   );
   if (!questionsVersion) {
     return <div className="flex items-center justify-center min-h-screen"><p>No active feedback form available at the moment.</p></div>;

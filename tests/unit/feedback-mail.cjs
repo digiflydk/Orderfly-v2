@@ -2,11 +2,12 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {fixture,responseForm}=require('../helpers/feedback-fixture.cjs');
 const {loadTs}=require('../helpers/load-ts.cjs');
-const envKeys=['ORDERFLY_FEEDBACK_EVENTS','ORDERFLY_OMNISEND_BRANDS','ORDERFLY_FEEDBACK_TOKEN_SECRET','ORDERFLY_FEEDBACK_WORKER_SECRET'];
+const envKeys=['ORDERFLY_NOTIFICATION_ENDPOINT','ORDERFLY_NOTIFICATION_ORGANIZATION_ID','ORDERFLY_NOTIFICATION_SECRET','ORDERFLY_FEEDBACK_TOKEN_SECRET','ORDERFLY_FEEDBACK_WORKER_SECRET'];
 function setup(t){
  const before=Object.fromEntries(envKeys.map(k=>[k,process.env[k]]));t.after(()=>{for(const[k,v]of Object.entries(before))v===undefined?delete process.env[k]:process.env[k]=v;});
- process.env.ORDERFLY_FEEDBACK_EVENTS=JSON.stringify([{brandId:'b',enabled:true,invitation:'qa_invitation',reminder:'qa_reminder',thankYou:'qa_thank_you'}]);
- process.env.ORDERFLY_OMNISEND_BRANDS=JSON.stringify([{brandId:'b',omnisendBrandId:'qa-provider',apiKey:'synthetic-key-only',enabled:true,consentMode:'single_opt_in'}]);
+ process.env.ORDERFLY_NOTIFICATION_ENDPOINT='https://notifications.example.test/functions/v1/orderfly-notification-enqueue';
+ process.env.ORDERFLY_NOTIFICATION_ORGANIZATION_ID='11111111-1111-4111-8111-111111111111';
+ process.env.ORDERFLY_NOTIFICATION_SECRET='synthetic-notification-secret-for-fixtures-only';
  process.env.ORDERFLY_FEEDBACK_TOKEN_SECRET='synthetic-token-key-for-fixtures-only';process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='synthetic-worker-key-for-fixtures-only';
  const f=fixture();f.records.get('customers/c').marketingConsent=true;
  f.records.set('feedbackSettings/b',{emailEnabled:true,automaticRequests:true,delayHours:2,maxReminders:1,reminderAfterHours:72,autoReplyEnabled:true,language:'da'});
@@ -28,7 +29,7 @@ test('disabled automation is inert; unconfigured or invalid source cannot queue'
  for(const update of [{status:'Canceled'},{paymentStatus:'Pending'},{refundedAmount:1},{refundedAmountOre:1},{locationId:'foreign'},{customerDetails:{id:'missing'}}]){
   const g=setup(t);Object.assign(g.records.get('orders/order'),update);await assert.rejects(()=>g.mailQueue.queueOrderFeedback('order'));assert.equal(g.writes.length,0);
  }
- delete process.env.ORDERFLY_FEEDBACK_EVENTS;await assert.rejects(()=>f.mailQueue.queueOrderFeedback('order'));
+ delete process.env.ORDERFLY_NOTIFICATION_ENDPOINT;await assert.rejects(()=>f.mailQueue.queueOrderFeedback('order'));
 });
 test('signed order invitations reject tampering, expiry and revocation',async t=>{
  const f=setup(t);await f.mailQueue.queueOrderFeedback('order');const data=f.records.get('feedbackInvitations/'+f.key);
@@ -46,8 +47,8 @@ test('workers dispatch one invitation and create at most one reminder atomically
  await f.mailWorker.runFeedbackMailWorker(f.provider,Date.now()+73*3600000);assert.equal(f.events.length,2);assert.equal(f.job('reminder').state,'accepted');
  await f.mailWorker.runFeedbackMailWorker(f.provider,Date.now()+74*3600000);assert.equal(f.events.length,2);
 });
-test('reply, cancellation, consent withdrawal, foreign customer and inactive location suppress pending mail',async t=>{
- for(const update of [f=>f.records.set('feedback/'+f.key,{brandId:'b'}),f=>f.records.get('orders/order').status='Canceled',f=>f.records.get('customers/c').marketingConsent=false,f=>f.records.get('customers/c').brandId='other',f=>f.records.get('locations/l').isActive=false]){
+test('reply, cancellation, missing recipient, foreign customer and inactive location suppress pending mail',async t=>{
+ for(const update of [f=>f.records.set('feedback/'+f.key,{brandId:'b'}),f=>f.records.get('orders/order').status='Canceled',f=>f.records.get('customers/c').email='',f=>f.records.get('customers/c').brandId='other',f=>f.records.get('locations/l').isActive=false]){
   const f=setup(t);await f.mailQueue.queueOrderFeedback('order');update(f);const result=await f.mailWorker.runFeedbackMailWorker(f.provider);assert.equal(result.suppressed,1);assert.equal(f.events.length,0);assert.equal(f.job('invitation').state,'suppressed');
  }
 });
@@ -96,35 +97,29 @@ test('booking automation waits until the visit and stops for revoked invitations
  const now=Date.now();const id=await f.mailQueue.queueBookingFeedback(source,new Date(now+3600000).toISOString());assert.ok(f.records.get('feedbackMailJobs/'+id).nextAttemptAt>=now+3*3600000);
  f.records.get('integrationFeedbackInvitations/i').status='revoked';await f.mailWorker.runFeedbackMailWorker(f.provider,now+4*3600000);assert.equal(f.records.get('feedbackMailJobs/'+id).state,'suppressed');assert.equal(f.events.length,0);
 });
-test('provider preflight verifies mapped brand and existing subscription using read-only requests',async t=>{
- const f=setup(t);const config=loadTs('src/lib/feedback/mail-config.ts',f.mocks).feedbackMailConfig('b');const requests=[];
- for(const status of ['subscribed','unsubscribed']){const provider=new f.mailProvider.FeedbackMailProvider(config,async(url,options)=>{requests.push(options.method);return Response.json(url.endsWith('brands/current')?{brandID:'qa-provider'}:{contacts:[{identifiers:[{type:'email',id:'private@example.test',channels:{email:{status}}}]}]});});assert.equal(await provider.eligible('private@example.test'),status==='subscribed');}
- assert.ok(requests.every(m=>m==='GET'));
- const wrong=new f.mailProvider.FeedbackMailProvider(config,async()=>Response.json({brandID:'other'}));await assert.rejects(()=>wrong.eligible('private@example.test'));
+test('provider enqueues only the scoped Orderfly template without exposing its secret in the payload',async t=>{
+ const f=setup(t);const config=loadTs('src/lib/feedback/mail-config.ts',f.mocks).feedbackMailConfig('b');let request;
+ const provider=new f.mailProvider.FeedbackMailProvider(config,async(url,options)=>{request={url,options};return new Response('',{status:202});});
+ assert.equal(await provider.eligible('private@example.test'),true);
+ await provider.send('event-1','invitation','private@example.test',{sourceType:'commerce_order',sourceId:'order',language:'da',feedbackUrl:'https://orderfly.dk/feedback?token=private'});
+ const body=JSON.parse(request.options.body);assert.equal(request.url,process.env.ORDERFLY_NOTIFICATION_ENDPOINT);assert.equal(request.options.method,'POST');assert.equal(request.options.headers['x-orderfly-notification-secret'],process.env.ORDERFLY_NOTIFICATION_SECRET);
+ assert.equal(body.sender_profile,'orderfly');assert.equal(body.template_key,'orderfly.feedback.invitation');assert.equal(body.idempotency_key,'event-1');assert.equal(body.related_entity.id,'order');assert.equal(body.recipient.email,'private@example.test');assert.doesNotMatch(request.options.body,/synthetic-notification-secret/);
 });
 test('worker endpoint denies missing/wrong credentials before work and hides internal failures',async t=>{
- setup(t);let calls=0;const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;throw Error('private');}}});
+ setup(t);let calls=0;const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;throw Error('private');}},'@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})}});
  for(const authorization of ['', 'Bearer wrong'])assert.equal((await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization}}))).status,401);
  assert.equal(calls,0);const response=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_FEEDBACK_WORKER_SECRET}}));assert.equal(response.status,503);assert.doesNotMatch(await response.text(),/private/);assert.equal(calls,1);
 });
 test('mail settings preserve false/zero and refuse invalid or unconfigured enablement',async t=>{
  const f=setup(t);await f.settings.writeFeedbackSettings({brandId:'b',emailEnabled:true,automaticRequests:false,delayHours:0,maxReminders:0,autoReplyEnabled:false,language:'en'});
  const settings=await f.settings.readFeedbackSettings('b');assert.equal(settings.delayHours,0);assert.equal(settings.maxReminders,0);assert.equal(settings.automaticRequests,false);assert.equal(settings.autoReplyEnabled,false);assert.equal(settings.language,'en');assert.equal(settings.emailConfigured,true);
- await assert.rejects(()=>f.settings.writeFeedbackSettings({brandId:'b',maxReminders:2}));delete process.env.ORDERFLY_FEEDBACK_EVENTS;await assert.rejects(()=>f.settings.writeFeedbackSettings({brandId:'b',emailEnabled:true}));await f.settings.writeFeedbackSettings({brandId:'b',emailEnabled:false});
+ await assert.rejects(()=>f.settings.writeFeedbackSettings({brandId:'b',maxReminders:2}));delete process.env.ORDERFLY_NOTIFICATION_ENDPOINT;await assert.rejects(()=>f.settings.writeFeedbackSettings({brandId:'b',emailEnabled:true}));await f.settings.writeFeedbackSettings({brandId:'b',emailEnabled:false});
 });
 
-test('transient provider GET failures retry safely and remain bounded before dispatch',async t=>{
- for(const stage of ['brand','contact'])for(const status of [0,429,503,403]){
-  const f=setup(t);await f.mailQueue.queueOrderFeedback('order');let attempts=0,sends=0;
-  const provider=config=>{const real=new f.mailProvider.FeedbackMailProvider(config,async url=>{
-   if(stage==='contact'&&url.endsWith('brands/current'))return Response.json({brandID:'qa-provider'});
-   attempts++;if(!status)throw Error('private timeout details');return new Response('private response',{status});
-  });return{eligible:real.eligible.bind(real),send:async()=>{sends++;}};};
-  await f.mailWorker.runFeedbackMailWorker(provider);
-  assert.equal(f.job('invitation').state,status===403?'failed':'pending');
-  for(let i=1;i<5;i++)await f.mailWorker.runFeedbackMailWorker(provider,Date.now()+i*120000);
-  assert.equal(attempts,status===403?1:3);assert.equal(sends,0);assert.equal(f.job('invitation').state,'failed');
-  assert.doesNotMatch(JSON.stringify(f.job('invitation')),/private timeout|private response/);
+test('notification configuration rejects unsafe endpoints and short or missing secrets',async t=>{
+ const f=setup(t),config=loadTs('src/lib/feedback/mail-config.ts',f.mocks);
+ for(const [key,value] of [['ORDERFLY_NOTIFICATION_ENDPOINT','http://unsafe.example.test'],['ORDERFLY_NOTIFICATION_ENDPOINT','https://user:pass@example.test/send'],['ORDERFLY_NOTIFICATION_SECRET','short'],['ORDERFLY_NOTIFICATION_ORGANIZATION_ID','not-a-uuid']]){
+  const previous=process.env[key];process.env[key]=value;assert.equal(config.feedbackMailConfig('b'),null);process.env[key]=previous;
  }
 });
 test('transient context read retries recover once; permanent read errors stay failed',async t=>{
@@ -137,9 +132,21 @@ test('transient context read retries recover once; permanent read errors stay fa
   await f.mailWorker.runFeedbackMailWorker(f.provider,Date.now()+240000);assert.equal(f.events.length,code===7?0:1);
  }
 });
-test('brand mismatch remains terminal before dispatch',async t=>{
- const f=setup(t);await f.mailQueue.queueOrderFeedback('order');let sends=0;
- const provider=config=>{const real=new f.mailProvider.FeedbackMailProvider(config,async()=>Response.json({brandID:'wrong'}));return{eligible:real.eligible.bind(real),send:async()=>{sends++;}};};
+test('provider authorization rejection is terminal and never blindly retried',async t=>{
+ const f=setup(t);await f.mailQueue.queueOrderFeedback('order');let requests=0;
+ const provider=config=>{const real=new f.mailProvider.FeedbackMailProvider(config,async()=>{requests++;return new Response('',{status:403});});return{eligible:real.eligible.bind(real),send:real.send.bind(real)};};
  await f.mailWorker.runFeedbackMailWorker(provider);await f.mailWorker.runFeedbackMailWorker(provider,Date.now()+120000);
- assert.equal(f.job('invitation').state,'failed');assert.equal(f.job('invitation').attempts,1);assert.equal(f.job('invitation').lastError,'brand_mapping_mismatch');assert.equal(sends,0);
+ assert.equal(f.job('invitation').state,'failed');assert.equal(f.job('invitation').attempts,1);assert.equal(f.job('invitation').lastError,'provider_rejected_403');assert.equal(requests,1);
+});
+
+test('order confirmation worker sends one scoped message and suppresses canceled orders',async t=>{
+ const f=setup(t);Object.assign(f.records.get('orders/order'),{customerContact:'private@example.test',customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',totalAmount:129,deliveryTime:'18:30'});
+ f.records.set('orderNotificationJobs/job',{orderId:'order',brandId:'b',locationId:'l',eventId:'confirmation-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+ const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{},NotificationPlatformClient:class{}}});
+ const client=()=>({send:async message=>sent.push(message)});
+ await Promise.all([worker.runOrderNotificationWorker(client),worker.runOrderNotificationWorker(client)]);
+ assert.equal(sent.length,1);assert.equal(sent[0].templateKey,'orderfly.order.confirmation');assert.equal(sent[0].recipientEmail,'private@example.test');assert.equal(sent[0].variables.totalAmount,129);assert.equal(f.records.get('orderNotificationJobs/job').state,'accepted');
+ f.records.set('orderNotificationJobs/canceled',{orderId:'order',brandId:'b',locationId:'l',eventId:'canceled-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});f.records.get('orders/order').status='Canceled';
+ const result=await worker.runOrderNotificationWorker(client);assert.equal(result.suppressed,1);assert.equal(sent.length,1);assert.equal(f.records.get('orderNotificationJobs/canceled').state,'suppressed');
+ assert.doesNotMatch(JSON.stringify(f.records.get('orderNotificationJobs/job')),/private@example/);
 });
