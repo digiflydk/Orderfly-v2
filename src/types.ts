@@ -747,6 +747,8 @@ export type Feedback = {
   maskCustomerName: boolean;
   answeredVia?: 'email' | 'webshop' | 'app';
   internalNote?: string;
+  publicComment?: string;
+  publication?: { approvedBy: string; approvedAt: Date } | null;
   autoResponseSent: boolean;
   responses: any;
 };

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from '@/components/superadmin/admin-link';
-import { format } from 'date-fns';
+import { feedbackDate } from '@/lib/feedback/display';
 import { ArrowLeft, CheckCircle, Home, MessageSquare, Star, Tag, Trash2, User, XCircle } from 'lucide-react';
 
 import type { Feedback } from '@/types';
@@ -40,39 +40,52 @@ function renderAnswer(response: any) {
   return <p>{String(response?.answer ?? '')}</p>;
 }
 
-export function FeedbackDetailClient({ initialFeedback }: { initialFeedback: FullFeedback }) {
+export function FeedbackDetailClient({ initialFeedback, canEdit = true }: { initialFeedback: FullFeedback; canEdit?: boolean }) {
   const { toast } = useToast();
   const router = useRouter();
   const [feedback, setFeedback] = useState(initialFeedback);
   const [isPending, startTransition] = useTransition();
+  const [error, setError] = useState('');
+  const [publicComment, setPublicComment] = useState(initialFeedback.publicComment ?? initialFeedback.comment ?? '');
   const sourceType = feedback.sourceType === 'booking' ? 'booking' : 'commerce_order';
   const sourceId = feedback.sourceId || feedback.orderId || feedback.id;
   const responses = (feedback as any).responses || {};
 
   const toggle = (field: 'showPublicly' | 'maskCustomerName', value: boolean) => {
+    if (!canEdit || isPending) return;
+    setError('');
     const previous = feedback[field];
     setFeedback((current) => ({ ...current, [field]: value }));
     startTransition(async () => {
-      const result = await updateFeedback(feedback.id, { [field]: value });
+      const result = await updateFeedback(feedback.id, { [field]: value, ...(field === 'showPublicly' && value ? { publicComment, maskCustomerName: feedback.maskCustomerName } : {}) }).catch(() => ({ error: true, message: 'Kunne ikke gemme. Prøv igen.' }));
       if (result.error) {
         setFeedback((current) => ({ ...current, [field]: previous }));
+        setError(result.message);
         toast({ variant: 'destructive', title: 'Error', description: result.message });
+      } else if ('feedback' in result && result.feedback) {
+        setFeedback(current => ({ ...current, ...result.feedback! }));
+        setPublicComment(result.feedback.publicComment ?? publicComment);
       }
     });
   };
 
   const saveNote = () => startTransition(async () => {
-    const result = await updateFeedback(feedback.id, { internalNote: feedback.internalNote });
+    if (!canEdit) return;
+    setError('');
+    const result = await updateFeedback(feedback.id, { internalNote: feedback.internalNote || '' }).catch(() => ({ error: true, message: 'Kunne ikke gemme. Prøv igen.' }));
+    if (result.error) setError(result.message);
     toast(result.error ? { variant: 'destructive', title: 'Error', description: result.message } : { title: 'Saved', description: 'Internal note saved.' });
   });
 
   const remove = () => startTransition(async () => {
-    const result = await deleteFeedback(feedback.id);
+    if (!canEdit) return;
+    const result = await deleteFeedback(feedback.id).catch(() => ({ error: true, message: 'Kunne ikke slette. Prøv igen.' }));
     if (result.error) toast({ variant: 'destructive', title: 'Error', description: result.message });
     else router.push('/superadmin/feedback');
   });
 
   return <div className="space-y-6">
+    {error && <p role="alert" className="rounded-md border border-destructive p-3 text-destructive">{error}</p>}
     <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
       <div>
         <Button variant="outline" size="sm" asChild className="mb-2"><Link href="/superadmin/feedback"><ArrowLeft className="mr-2 h-4 w-4" />Back to All Feedback</Link></Button>
@@ -82,18 +95,21 @@ export function FeedbackDetailClient({ initialFeedback }: { initialFeedback: Ful
           {sourceType === 'commerce_order' && feedback.orderId ? <Link href={`/superadmin/sales/orders/${feedback.orderId}`} className="font-mono text-sm text-primary hover:underline">{sourceId}</Link> : <span className="font-mono text-sm text-muted-foreground">{sourceId}</span>}
         </div>
       </div>
-      <AlertDialog><AlertDialogTrigger asChild><Button variant="destructive" disabled={isPending}><Trash2 className="mr-2 h-4 w-4" />Delete Feedback</Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete feedback?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={remove}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
+      <AlertDialog><AlertDialogTrigger asChild><Button variant="destructive" disabled={isPending || !canEdit}><Trash2 className="mr-2 h-4 w-4" />Delete Feedback</Button></AlertDialogTrigger><AlertDialogContent><AlertDialogHeader><AlertDialogTitle>Delete feedback?</AlertDialogTitle><AlertDialogDescription>This cannot be undone.</AlertDialogDescription></AlertDialogHeader><AlertDialogFooter><AlertDialogCancel>Cancel</AlertDialogCancel><AlertDialogAction onClick={remove}>Delete</AlertDialogAction></AlertDialogFooter></AlertDialogContent></AlertDialog>
     </div>
 
     <div className="grid gap-6 lg:grid-cols-3">
       <div className="space-y-6 lg:col-span-2">
         <Card><CardHeader><CardTitle>Customer Responses</CardTitle></CardHeader><CardContent className="space-y-6">{Object.keys(responses).length ? Object.entries(responses).map(([id, response]: [string, any]) => <div key={id}><h4 className="mb-2 font-semibold">{response.questionLabel || id}</h4>{renderAnswer(response)}<Separator className="mt-4" /></div>) : <p className="text-muted-foreground">No responses found.</p>}</CardContent></Card>
-        <Card><CardHeader><CardTitle>Moderation & Notes</CardTitle></CardHeader><CardContent className="space-y-3"><Label htmlFor="internalNote">Internal Note</Label><Textarea id="internalNote" value={feedback.internalNote || ''} onChange={(event) => setFeedback((current) => ({ ...current, internalNote: event.target.value }))} /><Button size="sm" onClick={saveNote} disabled={isPending}>Save Note</Button></CardContent></Card>
+        <Card><CardHeader><CardTitle>Moderation & Notes</CardTitle></CardHeader><CardContent className="space-y-3"><Label htmlFor="internalNote">Internal Note</Label><Textarea id="internalNote" value={feedback.internalNote || ''} onChange={(event) => setFeedback((current) => ({ ...current, internalNote: event.target.value }))} /><Button size="sm" onClick={saveNote} disabled={isPending || !canEdit}>Save Note</Button></CardContent></Card>
       </div>
 
       <div className="space-y-6">
-        <Card><CardHeader><CardTitle>Moderation</CardTitle></CardHeader><CardContent className="space-y-4"><div className="flex items-center justify-between"><Label htmlFor="showPublicly">Show Publicly</Label><Switch id="showPublicly" checked={feedback.showPublicly} onCheckedChange={(value) => toggle('showPublicly', value)} /></div><div className="flex items-center justify-between"><Label htmlFor="maskCustomerName">Mask Name</Label><Switch id="maskCustomerName" checked={feedback.maskCustomerName} onCheckedChange={(value) => toggle('maskCustomerName', value)} /></div></CardContent></Card>
-        <Card><CardHeader><CardTitle>Details</CardTitle></CardHeader><CardContent className="space-y-4 text-sm"><InfoItem icon={User} label="Customer">{feedback.maskCustomerName ? 'Anonymous' : feedback.customerName}</InfoItem><InfoItem icon={Home} label="Brand / Location">{feedback.brandName} / {feedback.locationName}</InfoItem><InfoItem icon={MessageSquare} label="Submitted At">{format(new Date(feedback.receivedAt), 'MMM d, yyyy HH:mm')}</InfoItem><InfoItem icon={Tag} label="Source">{sourceType === 'booking' ? 'Restaurant booking' : 'Online order'} · {sourceId}</InfoItem>{feedback.autoResponseSent ? <InfoItem icon={CheckCircle} label="Auto-response">Sent</InfoItem> : <InfoItem icon={XCircle} label="Auto-response">Not Sent</InfoItem>}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Offentlig anmeldelse</CardTitle></CardHeader><CardContent className="space-y-4">
+          <div className="space-y-2"><Label htmlFor="publicComment">Tekst til offentlig visning</Label><Textarea id="publicComment" maxLength={2000} disabled={isPending || !canEdit} value={publicComment} onChange={e => setPublicComment(e.target.value)} /><p className="text-sm text-muted-foreground">Kontrollér teksten før godkendelse. E-mailadresser, telefonnumre og links fjernes automatisk. Det oprindelige kundesvar bevares internt.</p></div>
+          {feedback.showPublicly && <Button variant="outline" disabled={isPending || !canEdit} onClick={() => toggle('showPublicly', true)}>Gem offentlig tekst</Button>}
+<div className="flex items-center justify-between"><Label htmlFor="showPublicly">Godkend til offentlig visning</Label><Switch disabled={isPending || !canEdit} id="showPublicly" checked={feedback.showPublicly} onCheckedChange={(value) => toggle('showPublicly', value)} /></div><div className="flex items-center justify-between"><Label htmlFor="maskCustomerName">Vis som anonym kunde</Label><Switch disabled={isPending || !canEdit} id="maskCustomerName" checked={feedback.maskCustomerName} onCheckedChange={(value) => toggle('maskCustomerName', value)} /></div></CardContent></Card>
+        <Card><CardHeader><CardTitle>Details</CardTitle></CardHeader><CardContent className="space-y-4 text-sm"><InfoItem icon={User} label="Customer">{feedback.maskCustomerName ? 'Anonymous' : feedback.customerName}</InfoItem><InfoItem icon={Home} label="Brand / Location">{feedback.brandName} / {feedback.locationName}</InfoItem><InfoItem icon={MessageSquare} label="Submitted At">{feedbackDate(feedback.receivedAt)}</InfoItem><InfoItem icon={Tag} label="Source">{sourceType === 'booking' ? 'Restaurant booking' : 'Online order'} · {sourceId}</InfoItem><InfoItem icon={MessageSquare} label="Feedbackmail"><Link href="/superadmin/feedback/settings" className="underline">Se afsendelsesstatus</Link></InfoItem></CardContent></Card>
       </div>
     </div>
   </div>;

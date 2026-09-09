@@ -9,6 +9,7 @@ import { useCart } from '@/context/cart-context';
 import { safeImage } from '@/lib/images';
 import { formatPrice } from '@/lib/storefront-format';
 import { locationHeaderDetails } from '@/lib/location-header';
+import { PublicReviewsLink } from '@/components/feedback/public-reviews-link';
 
 export function MenuHeader({ brand }: { brand: Brand }) {
   const { location: cartLocation } = useCart();
@@ -45,6 +46,7 @@ export function MenuHeader({ brand }: { brand: Brand }) {
       </>}
       <div className="mx-auto max-w-[1140px] px-4 py-6 sm:py-8">
         <h1 className="break-words text-2xl font-bold tracking-tight sm:text-4xl">{location.name}</h1>
+        <PublicReviewsLink brandId={brand.id} href={`${href}/reviews`} />
         {details.address && <a
           href={`https://www.google.com/maps/search/?api=1&query=${encodeURIComponent(details.address)}`}
           target="_blank" rel="noopener noreferrer"

@@ -71,7 +71,7 @@ export default async function SuperadminDashboardPage({ params, searchParams }: 
   ];
   
   const cardsL4 = [
-     { label: 'Total Feedbacks', value: fmt(kpis.totalFeedbacks), icon: MessageSquareQuote },
+     { label: 'Total Feedbacks', value: kpis.totalFeedbacks === null ? 'N/A' : fmt(kpis.totalFeedbacks), icon: MessageSquareQuote },
      { label: 'Total Cookies Consent', value: fmt(kpis.totalCookieConsents), icon: Cookie },
   ]
 

@@ -132,6 +132,7 @@ export function SuperAdminSidebarClient({
           icon: MessageSquare,
           children: [
             { href: '/superadmin/feedback', label: 'Inbox'},
+            { href: '/superadmin/feedback/report', label: 'Kvalitetsrapport'},
             { href: '/superadmin/feedback/questions', label: 'Questions'},
             { href: '/superadmin/feedback/settings', label: 'Settings'},
           ]

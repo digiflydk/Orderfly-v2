@@ -2,15 +2,9 @@
 
 import Link from '@/components/superadmin/admin-link';
 
-type Version = {
-  id: string;
-  name?: string | null;
-  label?: string | null;
-  description?: string | null;
-  createdAt?: number | null;
-  active?: boolean | null;
-  parentId?: string | null;
-};
+import type { FeedbackQuestionsVersion } from '@/types';
+import { feedbackDate } from '@/lib/feedback/display';
+type Version = FeedbackQuestionsVersion & { createdAt?: Date | string | number };
 
 export default function FeedbackQuestionsClientPage({
   initialVersions,
@@ -40,8 +34,8 @@ export default function FeedbackQuestionsClientPage({
             <thead className="bg-muted/50 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">ID</th>
-                <th className="px-4 py-3 font-medium">Parent</th>
-                <th className="px-4 py-3 font-medium">Name</th>
+                <th className="px-4 py-3 font-medium">Sprog</th>
+                <th className="px-4 py-3 font-medium">Oplevelse</th>
                 <th className="px-4 py-3 font-medium">Label</th>
                 <th className="px-4 py-3 font-medium">Created</th>
                 <th className="px-4 py-3 font-medium">Active</th>
@@ -52,21 +46,21 @@ export default function FeedbackQuestionsClientPage({
               {!initialVersions || initialVersions.length === 0 ? (
                 <tr>
                   <td className="px-4 py-6 text-muted-foreground" colSpan={7}>
-                    Ingen questions fundet.
+                    Ingen spørgsmålsversioner fundet.
                   </td>
                 </tr>
               ) : (
                 initialVersions.map((q) => (
                   <tr key={q.id} className="border-t">
                     <td className="px-4 py-3">{q.id}</td>
-                    <td className="px-4 py-3">{q.parentId ?? "-"}</td>
-                    <td className="px-4 py-3">{q.name ?? "-"}</td>
-                    <td className="px-4 py-3">{q.label ?? "-"}</td>
+                    <td className="px-4 py-3">{q.language || "-"}</td>
+                    <td className="px-4 py-3">{q.orderTypes?.join(', ') || '-'}</td>
+                    <td className="px-4 py-3">{q.versionLabel || "-"}</td>
                     <td className="px-4 py-3">
-                      {q.createdAt ? new Date(q.createdAt).toLocaleString("da-DK") : "-"}
+                      {feedbackDate(q.createdAt)}
                     </td>
                     <td className="px-4 py-3">
-                      {q.active === true ? "Yes" : q.active === false ? "No" : "-"}
+                      {q.isActive === true ? "Yes" : q.isActive === false ? "No" : "-"}
                     </td>
                     <td className="px-4 py-3">
                       <Link
