@@ -9,6 +9,7 @@ import { redirect } from 'next/navigation';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Product, ProductForMenu } from '@/types';
 import * as admin from 'firebase-admin';
+import { upsellClientData } from '@/lib/upsell-serialization';
 
 const asBool = (v: unknown) => {
   if (v === true || v === false) return v;
@@ -213,9 +214,11 @@ export async function updateProductSortOrder(orderedProducts: {id: string, sortO
 
 export async function getProducts(): Promise<Product[]> {
     const db = getAdminDb();
-    const q = db.collection('products').orderBy('sortOrder', 'asc');
-    const querySnapshot = await q.get();
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Product[];
+    // New/imported products may not have sortOrder yet; orderBy would omit them.
+    const querySnapshot = await db.collection('products').get();
+    const products = querySnapshot.docs.map(doc => upsellClientData({ ...doc.data(), id: doc.id })) as Product[];
+    const order = (product: Product) => Number.isFinite(product.sortOrder) ? product.sortOrder! : Number.MAX_SAFE_INTEGER;
+    return products.sort((a, b) => order(a) - order(b) || a.id.localeCompare(b.id));
 }
 
 export async function getProductById(productId: string): Promise<Product | null> {
@@ -223,7 +226,7 @@ export async function getProductById(productId: string): Promise<Product | null>
     const docRef = db.collection('products').doc(productId);
     const docSnap = await docRef.get();
     if (docSnap.exists) {
-        return { id: docSnap.id, ...docSnap.data() } as Product;
+        return upsellClientData({ ...docSnap.data(), id: docSnap.id }) as Product;
     }
     return null;
 }

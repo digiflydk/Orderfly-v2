@@ -9,6 +9,7 @@ import { getCategories } from '@/app/superadmin/categories/actions';
 import { getToppingGroups } from '@/app/superadmin/toppings/actions';
 import { getAllergens } from '@/app/superadmin/allergens/actions';
 import type { Product, Brand, Location, Category, ToppingGroup, Allergen } from '@/types';
+import { upsellClientData } from '@/lib/upsell-serialization';
 
 export default async function EditProductPage({ params }: { params: Promise<{ productId: string }> }) {
     const { productId } = await params;
@@ -39,12 +40,7 @@ export default async function EditProductPage({ params }: { params: Promise<{ pr
 
     return (
         <ProductFormPage 
-            product={product}
-            brands={brands}
-            locations={locations}
-            categories={categories}
-            toppingGroups={toppingGroups}
-            allergens={allergens}
+            {...upsellClientData({ product, brands, locations, categories, toppingGroups, allergens })}
         />
     );
 }

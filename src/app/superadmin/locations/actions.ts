@@ -9,6 +9,7 @@ import type { Location, Brand, TimeSlotResponse } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import * as admin from 'firebase-admin';
+import { hasPermission } from '@/lib/permissions';
 
 
 const openingHoursSchema = z.object({
@@ -59,12 +60,16 @@ export async function createOrUpdateLocation(
   prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
+  if (!hasPermission(formData.get('id') ? 'locations:edit' : 'locations:create')) {
+    return { message: 'Du har ikke adgang til at gemme denne lokation.', error: true };
+  }
+  const isChecked = (key: string) => ['true', 'on'].includes(String(formData.get(key)));
     
   const rawData: Record<string, any> = {
     openingHours: {},
     deliveryTypes: formData.getAll('deliveryTypes'),
-    isActive: formData.has('isActive'),
-    allowPreOrder: formData.has('allowPreOrder'),
+    isActive: isChecked('isActive'),
+    allowPreOrder: isChecked('allowPreOrder'),
   };
 
   const days = ['monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday', 'sunday'];
@@ -83,7 +88,7 @@ export async function createOrUpdateLocation(
   // Ensure all days have isOpen property, even if checkbox is not checked
   days.forEach(day => {
     if (!rawData.openingHours[day]) rawData.openingHours[day] = {};
-    rawData.openingHours[day].isOpen = formData.has(`openingHours.${day}.isOpen`);
+    rawData.openingHours[day].isOpen = isChecked(`openingHours.${day}.isOpen`);
   });
 
   // Manual slug generation if not provided
@@ -123,7 +128,17 @@ export async function createOrUpdateLocation(
         delete finalData.manual_override;
     }
 
-    await locationRef.set(finalData, { merge: true });
+    const error = await db.runTransaction(async transaction => {
+      const brandDoc = await transaction.get(db.collection('brands').doc(locationData.brandId));
+      if (!brandDoc.exists) return 'Det valgte brand findes ikke. Vælg et eksisterende brand.';
+      if (id) {
+        const locationDoc = await transaction.get(locationRef);
+        if (!locationDoc.exists) return 'Lokationen findes ikke længere. Genindlæs lokationsoversigten.';
+      }
+      transaction.set(locationRef, finalData, { merge: true });
+      return null;
+    });
+    if (error) return { message: error, error: true };
 
   } catch (e) {
     console.error(e);
@@ -177,12 +192,12 @@ export async function getAllLocations(brandId?: string): Promise<Location[]> {
     }
     q = q.orderBy('name');
     const querySnapshot = await q.get();
-    const locations = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Location[];
+    const locations = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Location[];
     
     return locations.map(location => ({
         ...location,
-        supportsDelivery: location.deliveryTypes.includes('delivery'),
-        supportsPickup: location.deliveryTypes.includes('pickup'),
+        supportsDelivery: Array.isArray(location.deliveryTypes) && location.deliveryTypes.includes('delivery'),
+        supportsPickup: Array.isArray(location.deliveryTypes) && location.deliveryTypes.includes('pickup'),
     }));
 }
 
@@ -193,7 +208,7 @@ export async function getLocationById(locationId: string): Promise<Location | nu
     const docSnap = await docRef.get();
     if (docSnap.exists) {
         const data = docSnap.data();
-        return { id: docSnap.id, ...data } as Location;
+        return { ...data, id: docSnap.id } as Location;
     }
     return null;
 }

@@ -31,6 +31,7 @@ import Link from '@/components/superadmin/admin-link';
 import { debounce } from 'lodash';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '../ui/tabs';
 import { BrandAppearancesForm } from './brand-appearances-form';
+import { useAdminFormRecovery } from './use-admin-form-recovery';
 
 const brandSchema = z.object({
   id: z.string().optional(),
@@ -174,6 +175,8 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
         });
     }
   }, [brand, users, form]);
+
+  const { handleSaveError, clearSaveError, recoveryNotice } = useAdminFormRecovery(form);
   
   const title = brand ? 'Edit Brand' : 'Create New Brand';
   const description = brand ? `Editing details for ${brand.name}.` : `Fill out the form to create a new brand.`;
@@ -193,17 +196,23 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
         }
     }
     startTransition(async () => {
-      const result = await createOrUpdateBrand(null, formData);
-      if (result?.error) {
-        toast({ variant: 'destructive', title: 'Error', description: result.message });
-      } else {
-        toast({ title: 'Success!', description: `Brand ${brand ? 'updated' : 'created'} successfully.` });
+      clearSaveError();
+      try {
+        const result = await createOrUpdateBrand(null, formData);
+        if (result?.error) {
+          toast({ variant: 'destructive', title: 'Error', description: result.message });
+        } else {
+          toast({ title: 'Success!', description: `Brand ${brand ? 'updated' : 'created'} successfully.` });
+        }
+      } catch (error) {
+        handleSaveError(error);
       }
     });
   };
 
   return (
     <div className="space-y-6">
+        {recoveryNotice}
         <div className="flex items-center justify-between">
             <div>
                 <h1 className="text-2xl font-bold tracking-tight">{title}</h1>

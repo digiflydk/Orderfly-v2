@@ -6,6 +6,7 @@ import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { getCategories } from '@/app/superadmin/categories/actions';
 import { getToppingGroups } from '@/app/superadmin/toppings/actions';
 import { getAllergens } from '@/app/superadmin/allergens/actions';
+import { upsellClientData } from '@/lib/upsell-serialization';
 
 export default async function NewProductPage() {
     const [
@@ -24,11 +25,7 @@ export default async function NewProductPage() {
     
     return (
         <ProductFormPage 
-            brands={brands}
-            locations={locations}
-            categories={categories}
-            toppingGroups={toppingGroups}
-            allergens={allergens}
+            {...upsellClientData({ brands, locations, categories, toppingGroups, allergens })}
         />
     );
 }

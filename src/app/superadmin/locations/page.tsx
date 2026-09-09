@@ -16,7 +16,7 @@ async function LocationsPageContent() {
 
     const locationsWithBrandNames = locations.map(location => ({
         ...location,
-        brandName: brandsMap.get(location.brandId) || 'Unknown Brand',
+        brandName: brandsMap.get(location.brandId) || 'Brand mangler',
     }));
 
     return (

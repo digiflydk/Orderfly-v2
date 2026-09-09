@@ -40,6 +40,7 @@ import {
 } from '../ui/card';
 import { Separator } from '../ui/separator';
 import { Switch } from '../ui/switch';
+import { useAdminFormRecovery } from './use-admin-form-recovery';
 
 const openingHoursSchema = z.object({
   isOpen: z.boolean().default(false),
@@ -264,6 +265,7 @@ export function LocationFormPage({
   });
 
   const control = form.control as any;
+  const { handleSaveError, clearSaveError, recoveryNotice } = useAdminFormRecovery(form);
   const openingHours =
     (form.watch('openingHours') as OpeningHoursValues) ??
     getDefaultOpeningHours();
@@ -347,25 +349,30 @@ export function LocationFormPage({
     });
 
     startTransition(async () => {
-      const result = await (
-        createOrUpdateLocation as any
-      )(null, formData);
+      clearSaveError();
+      try {
+        const result = await (
+          createOrUpdateLocation as any
+        )(null, formData);
 
-      if (result?.error) {
-        toast({
-          variant: 'destructive',
-          title: 'Error',
-          description:
-            result.message ??
-            'Failed to save location.',
-        });
-      } else {
-        toast({
-          title: 'Success!',
-          description: `Location ${
-            location ? 'updated' : 'created'
-          }.`,
-        });
+        if (result?.error) {
+          toast({
+            variant: 'destructive',
+            title: 'Error',
+            description:
+              result.message ??
+              'Failed to save location.',
+          });
+        } else {
+          toast({
+            title: 'Success!',
+            description: `Location ${
+              location ? 'updated' : 'created'
+            }.`,
+          });
+        }
+      } catch (error) {
+        handleSaveError(error);
       }
     });
   };
@@ -384,6 +391,7 @@ export function LocationFormPage({
         onSubmit={form.handleSubmit(onSubmit as any)}
         className="space-y-6"
       >
+        {recoveryNotice}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold tracking-tight">
@@ -440,7 +448,7 @@ export function LocationFormPage({
                       <Select
                         onValueChange={field.onChange}
                         value={field.value ?? ''}
-                        disabled={!!location}
+                        disabled={isPending || brands.length === 0}
                       >
                         <FormControl>
                           <SelectTrigger>
@@ -449,6 +457,9 @@ export function LocationFormPage({
                         </FormControl>
 
                         <SelectContent>
+                          {field.value && !brands.some(brand => brand.id === field.value) && (
+                            <SelectItem value={field.value} disabled>Brand mangler. Vælg et brand.</SelectItem>
+                          )}
                           {brands.map(brand => (
                             <SelectItem
                               key={brand.id}
@@ -461,8 +472,9 @@ export function LocationFormPage({
                       </Select>
 
                       <FormDescription>
-                        Assign this location to a brand.
-                        Cannot be changed later.
+                        {brands.length === 0
+                          ? 'Der er ingen brands at vælge. Opret et brand først.'
+                          : 'Vælg det brand, som lokationen skal tilhøre.'}
                       </FormDescription>
 
                       <FormMessage />

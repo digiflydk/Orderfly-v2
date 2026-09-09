@@ -9,6 +9,8 @@ import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import type { Brand, FoodCategory, Allergen, BrandAppearances } from '@/types';
+import { brandRecord } from '@/lib/brand-record';
+import { hasPermission } from '@/lib/permissions';
 
 const appearancesSchema = z.object({
   colors: z.object({
@@ -83,6 +85,10 @@ export async function createOrUpdateBrand(
   formData: FormData
 ): Promise<FormState> {
 
+  if (!hasPermission(formData.get('id') ? 'brands:edit' : 'brands:create')) {
+    return { message: 'Du har ikke adgang til at gemme dette brand.', error: true };
+  }
+
   const rawData: Record<string, any> = Object.fromEntries(formData.entries());
   rawData.foodCategories = formData.getAll('foodCategories');
   rawData.locationsCount = parseInt(rawData.locationsCount, 10);
@@ -134,11 +140,14 @@ export async function createOrUpdateBrand(
     if (id) {
       // For updates, we assume the owner doesn't change via this form.
       const brandDoc = await db.collection('brands').doc(id).get();
+      if (!brandDoc.exists) {
+        return { message: 'Brandet findes ikke længere. Genindlæs brandoversigten.', error: true };
+      }
       const existingBrand = brandDoc.data() as Brand;
       ownerId = existingBrand.ownerId;
       
       const brandRef = db.collection('brands').doc(id);
-      await brandRef.update({ ...brandData, companyRegNo, slug, ownerId });
+      await brandRef.update({ ...brandData, companyRegNo, slug });
 
     } else {
       // Create new user first
@@ -163,6 +172,7 @@ export async function createOrUpdateBrand(
   }
 
   revalidatePath('/superadmin/brands');
+  revalidatePath('/superadmin/locations', 'layout');
     revalidateTag('storefront');
   revalidatePath('/superadmin/users');
     revalidateTag('storefront');
@@ -197,7 +207,7 @@ export async function getBrandById(brandId: string): Promise<Brand | null> {
     const docSnap = await docRef.get();
     if (docSnap.exists) {
         const data = docSnap.data();
-        return { id: docSnap.id, ...data } as Brand;
+        return brandRecord(docSnap.id, data || {});
     }
     return null;
 }
@@ -213,14 +223,15 @@ export async function getBrandBySlug(brandSlug?: string): Promise<Brand | null> 
         return null;
     }
     const data = querySnapshot.docs[0].data();
-    return { id: querySnapshot.docs[0].id, ...data } as Brand;
+    return brandRecord(querySnapshot.docs[0].id, data);
 }
 
 export async function getBrands(): Promise<Brand[]> {
   const db = getAdminDb();
-  const q = db.collection('brands').orderBy('name');
-  const querySnapshot = await q.get();
-  return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Brand[];
+  // Firestore orderBy('name') omits records where name is missing entirely.
+  const querySnapshot = await db.collection('brands').get();
+  return querySnapshot.docs.map(doc => brandRecord(doc.id, doc.data()))
+    .sort((a, b) => a.name.localeCompare(b.name, 'da'));
 }
 
 export async function updateBrandAppearances(
