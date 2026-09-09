@@ -1,11 +1,12 @@
 # Orderfly deployment flow
 
-Last reviewed: 2026-08-23
+Last reviewed: 2026-09-09 (product-image project clarification #89)
 
 ## Firebase project roles
 
 - `orderfly-v21-10334086-b3076`: Firebase Studio and App Hosting project. This project hosts and deploys the application.
-- `orderfly-39325`: Production Firebase data project. Firestore, Authentication, Storage and server-side Firebase Admin access point here.
+- `orderfly-39325` (Orderfly - DB): Production Firestore, Authentication and server-side Firebase Admin credential.
+- `studio-2819118380-ae26c` (Orderfly v2): PO-confirmed product-image Storage project. The active bucket is `studio-2819118380-ae26c.firebasestorage.app`. Product-image upload uses the existing Admin credential with explicit bucket/project configuration; verify cross-project object-create access before release.
 
 The hosting project and data project are intentionally different. Do not change the `NEXT_PUBLIC_FIREBASE_*` values to the hosting project unless the data architecture is deliberately migrated.
 
@@ -83,12 +84,14 @@ Use an explicit project when running Firebase CLI operations. Never deploy from 
 
 ## Production runtime settings
 
-Production App Hosting runtime values must be set in the hosting environment, not in git:
+Production App Hosting runtime values must be available in the hosting environment. Sensitive values stay in managed secrets; the non-secret product-image bucket/project pair is explicitly configured in `apphosting.yaml`:
 
 - `SITE_URL=https://orderfly.dk`
 - `NEXT_PUBLIC_SITE_URL=https://orderfly.dk`
 - production `NEXT_PUBLIC_FIREBASE_*` values pointing at `orderfly-39325`
 - `FIREBASE_SERVICE_ACCOUNT_JSON` for the production Firebase data project
+- `FIREBASE_STORAGE_BUCKET=studio-2819118380-ae26c.firebasestorage.app` for product images
+- `FIREBASE_STORAGE_PROJECT_ID=studio-2819118380-ae26c` for product-image bucket validation
 
 `FIREBASE_SERVICE_ACCOUNT_JSON`, `OPENAI_API_KEY` and all other sensitive values must only be stored as managed secrets, never committed or copied into issue/PR comments or logs.
 
