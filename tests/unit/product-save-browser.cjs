@@ -152,3 +152,24 @@ test('permission-denied upload message keeps replacement image and edited brand 
  f.failure.upload=false;await page.getByRole('button',{name:'Save Changes',exact:true}).click();await page.waitForURL('**/superadmin/products');
  const saved=f.records.get('products/hellerup');assert.equal(saved.brandId,'c');assert.match(decodeURIComponent(saved.imageUrl),/brands\/c\/products\/hellerup\//);
 });
+
+test('brand reference rejection names the dependency and keeps the form and image for retry',async t=>{
+ const page=await setup(t);await page.goto(origin+'/superadmin/products/edit/hellerup');
+ f.records.set('comboMenus/meal',{brandId:'b',comboName:'QA Lunch Menu',isActive:false,productGroups:[{productIds:['hellerup']}]});
+ await page.getByRole('combobox',{name:'Brand',exact:true}).click();await page.getByRole('option',{name:'CPH QA',exact:true}).click();
+ await page.getByRole('combobox',{name:'Category',exact:true}).click();await page.getByRole('option',{name:'QA CPH Vand',exact:true}).click();await page.getByLabel('QA CPH',{exact:true}).check();
+ await page.getByLabel('Product Name',{exact:true}).fill('Moved product');
+ await page.locator('input[type="file"]').setInputFiles({name:'replacement.jpg',mimeType:'image/jpeg',buffer:await image()});
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();
+ await page.getByRole('alert').filter({hasText:'Combo menu "QA Lunch Menu" (meal)'}).waitFor();
+ assert.equal(f.writes.length,0);assert.equal(f.storageCalls.length,0);assert.equal(f.records.get('products/hellerup').brandId,'b');
+ assert.equal(await page.getByLabel('Product Name',{exact:true}).inputValue(),'Moved product');
+ assert.match(await page.getByRole('combobox',{name:'Brand',exact:true}).innerText(),/CPH QA/);
+ assert.equal(await page.getByLabel('QA CPH',{exact:true}).isChecked(),true);
+ assert.equal(await page.locator('input[name="price"]').inputValue(),'50');assert.equal(await page.locator('input[name="priceDelivery"]').inputValue(),'60');
+ assert.equal(await page.locator('input[type="file"]').evaluate(el=>el.files[0].name),'replacement.jpg');
+ f.records.delete('comboMenus/meal');
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();await page.waitForURL('**/superadmin/products');
+ const saved=f.records.get('products/hellerup');assert.equal(saved.brandId,'c');assert.equal(saved.productName,'Moved product');assert.match(decodeURIComponent(saved.imageUrl),/brands\/c\/products\/hellerup\//);
+ assert.equal(f.writes.length,1);assert.equal(f.objects.size,1);
+});

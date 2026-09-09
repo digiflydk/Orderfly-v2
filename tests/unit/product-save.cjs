@@ -132,3 +132,61 @@ test('explicit storage project still rejects a bucket from an unrelated project'
  try{await assert.rejects(async()=>f.upload(new File([await image()],'image.jpg',{type:'image/jpeg'}),'b','p'),error=>error.code==='image/wrong-project');assert.equal(f.storageCalls.length,0);}
  finally{delete process.env.FIREBASE_STORAGE_PROJECT_ID;delete process.env.FIREBASE_STORAGE_BUCKET;}
 });
+
+const moveForm=extra=>form({id:'hellerup',originalBrandId:'b',brandId:'c',categoryId:'foreign',locationIds:['foreign'],...extra});
+for(const [path,reference]of [
+ ['comboMenus/group',{comboName:'QA Meal',productGroups:[{productIds:['hellerup']}]}],
+ ['comboMenus/upgrade',{comboName:'QA Upgrade',upgradeProductIds:['hellerup']}],
+ ['standard_discounts/product',{discountName:'QA Product Offer',discountType:'product',referenceIds:['hellerup']}],
+ ['upsells/offer',{upsellName:'QA Suggested Product',offerType:'product',offerProductIds:['hellerup']}],
+ ['upsells/trigger',{upsellName:'QA Cart Trigger',triggerConditions:[{type:'product_in_cart',referenceId:'hellerup'}]}],
+])test(`brand move rejects source reference ${path}, even when inactive`,async()=>{
+ const f=fixture();f.records.set(path,{brandId:'b',isActive:false,...reference});
+ const before=structuredClone([...f.records]);
+ const result=await f.actions.createOrUpdateProduct(null,moveForm({imageUrl:new File([await image()],'replacement.jpg',{type:'image/jpeg'})}));
+ assert.equal(result.ok,false);assert.equal(result.error.code,'product/brand-in-use');
+ assert.ok(result.error.message.includes(reference.comboName||reference.discountName||reference.upsellName));
+ assert.ok(result.error.message.includes(`(${path.split('/')[1]})`));
+ assert.equal(f.storageCalls.length,0);assert.equal(f.writes.length,0);assert.deepEqual([...f.records],before);
+});
+test('blocked brand move lists all dependencies once and permits retry after reference removal',async()=>{
+ const f=fixture();
+ f.records.set('comboMenus/meal',{brandId:'b',comboName:'Lunch',productGroups:[{productIds:['hellerup']},{productIds:['hellerup']}],upgradeProductIds:['hellerup']});
+ f.records.set('standard_discounts/offer',{brandId:'b',discountName:'Lunch Offer',discountType:'product',referenceIds:['hellerup']});
+ f.records.set('upsells/extra',{brandId:'b',upsellName:'Extra',offerProductIds:['hellerup'],triggerConditions:[{type:'product_in_cart',referenceId:'hellerup'}]});
+ const result=await f.actions.createOrUpdateProduct(null,moveForm());
+ assert.equal(result.ok,false);
+ for(const text of ['Combo menu "Lunch" (meal)','Discount "Lunch Offer" (offer)','Upsell "Extra" (extra)'])assert.equal(result.error.message.split(text).length-1,1);
+ assert.equal(f.writes.length,0);
+ for(const path of ['comboMenus/meal','standard_discounts/offer','upsells/extra'])f.records.delete(path);
+ const retry=await f.actions.createOrUpdateProduct(null,moveForm());
+ assert.equal(retry.ok,true,JSON.stringify(retry));assert.equal(f.records.get('products/hellerup').brandId,'c');
+});
+test('brand move ignores other brands, unrelated products and non-product reference IDs',async()=>{
+ const f=fixture();
+ for(const [path,record]of [
+  ['comboMenus/other-brand',{brandId:'c',productGroups:[{productIds:['hellerup']}]}],
+  ['standard_discounts/other-brand',{brandId:'c',discountType:'product',referenceIds:['hellerup']}],
+  ['upsells/other-brand',{brandId:'c',offerProductIds:['hellerup']}],
+  ['comboMenus/unrelated',{brandId:'b',productGroups:[{productIds:['another-product']}]}],
+  ['standard_discounts/category',{brandId:'b',discountType:'category',referenceIds:['hellerup']}],
+  ['upsells/category',{brandId:'b',offerType:'category',offerCategoryIds:['hellerup'],triggerConditions:['category_in_cart','combo_in_cart','product_tag_in_cart'].map(type=>({type,referenceId:'hellerup'}))}],
+ ])f.records.set(path,record);
+ const before=structuredClone([...f.records].filter(([key])=>!key.startsWith('products/')));
+ const result=await f.actions.createOrUpdateProduct(null,moveForm());
+ assert.equal(result.ok,true,JSON.stringify(result));assert.deepEqual(f.writes,['products/hellerup']);
+ assert.deepEqual([...f.records].filter(([key])=>!key.startsWith('products/')),before);
+});
+test('same-brand edit remains possible while referenced and needs no dependency lookup',async()=>{
+ const f=fixture();f.records.set('comboMenus/meal',{brandId:'b',productGroups:[{productIds:['hellerup']}]});
+ f.failure.readCollection='comboMenus';
+ const result=await f.actions.createOrUpdateProduct(null,form({id:'hellerup',originalBrandId:'b',productName:'Renamed product'}));
+ assert.equal(result.ok,true,JSON.stringify(result));assert.equal(f.records.get('products/hellerup').brandId,'b');assert.equal(f.records.get('products/hellerup').productName,'Renamed product');
+});
+test('failed dependency lookup prevents brand move and image upload',async()=>{
+ for(const collection of ['comboMenus','standard_discounts','upsells']){
+  const f=fixture(),before=structuredClone([...f.records]);f.failure.readCollection=collection;
+  const result=await f.actions.createOrUpdateProduct(null,moveForm({imageUrl:new File([await image()],'replacement.jpg',{type:'image/jpeg'})}));
+  assert.equal(result.ok,false);assert.equal(f.storageCalls.length,0);assert.equal(f.writes.length,0);assert.deepEqual([...f.records],before);
+ }
+});

@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { hasPermission } from '@/lib/permissions';
 import { uploadProductImage } from '@/lib/superadmin/product-image-storage';
+import { getProductBrandReferences } from '@/lib/superadmin/product-brand-references';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Product, ProductForMenu } from '@/types';
 import * as admin from 'firebase-admin';
@@ -154,6 +155,15 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
         if ((originalBrandId !== undefined && originalBrandId !== currentBrandId) ||
             (currentBrandId !== productData.brandId && originalBrandId !== currentBrandId)) {
           throw new Error('The product brand has changed. Reload the product before saving.');
+        }
+        if (currentBrandId !== productData.brandId) {
+          const references = await getProductBrandReferences(db, currentBrandId, ref.id);
+          if (references.length > 0) {
+            return { ok: false, error: {
+              code: 'product/brand-in-use',
+              message: `Cannot change brand while this product is used by: ${references.join('; ')}. Remove or replace its references in the original brand first, then retry. Inactive records are included. Your entries are preserved.`,
+            } };
+          }
         }
       }
       // The same form retries the same creation key after a lost response.
