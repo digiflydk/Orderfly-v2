@@ -17,6 +17,10 @@ for(const count of [0,1,2])test(`zero/one/multiple selections (${count}) remain 
  assert.equal(result.ok,true,JSON.stringify(result));const saved=await f.actions.getProductById(result.id);
  for(const key of ['locationIds','toppingGroupIds','allergenIds']){assert.ok(Array.isArray(saved[key]));assert.equal(saved[key].length,count);}
 });
+test('all-location products require a category available at every brand location',async()=>{
+ const f=fixture();const result=await f.actions.createOrUpdateProduct(null,form({locationIds:[],categoryId:'amager-only'}));
+ assert.equal(result.ok,false);assert.match(result.error.detail,/category must belong/);assert.equal(f.writes.length,0);
+});
 test('bracket arrays, duplicates and editing without a new image preserve intended values',async()=>{
  const f=fixture(),data=form({id:'hellerup',locationIds:[],creationKey:undefined,'locationIds[]':['l2','l2'],'allergenIds[]':['a'],toppingGroupIds:['g2'],isActive:'false',imageUrl:new File([],'',{type:'application/octet-stream'})});
  const result=await f.actions.createOrUpdateProduct(null,data);assert.equal(result.ok,true,JSON.stringify(result));

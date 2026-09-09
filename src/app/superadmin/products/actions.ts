@@ -130,8 +130,11 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       }
       const category = await db.collection('categories').doc(productData.categoryId).get();
       const categoryLocations: string[] = category.data()?.locationIds || [];
-      if (!category.exists || !categoryLocations.some(locationId => brandLocationIds.has(locationId)) ||
-          productData.locationIds.some(locationId => !categoryLocations.includes(locationId))) {
+      const requiredLocationIds = productData.locationIds.length > 0
+        ? productData.locationIds
+        : [...brandLocationIds];
+      if (!category.exists || brandLocationIds.size === 0 ||
+          requiredLocationIds.some(locationId => !categoryLocations.includes(locationId))) {
         throw new Error('The category must belong to the brand and be available at the selected locations.');
       }
       for (const groupId of productData.toppingGroupIds) {

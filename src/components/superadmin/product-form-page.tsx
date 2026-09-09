@@ -454,9 +454,47 @@ export function ProductFormPage({
         shouldValidate: true,
       });
     }
+
+    const validLocationIds = new Set(
+      brandLocations
+        .map(location => location.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const currentLocationIds = uniq(
+      form.getValues('locationIds'),
+    );
+    const nextLocationIds = currentLocationIds.filter(
+      locationId => validLocationIds.has(locationId),
+    );
+    if (nextLocationIds.length !== currentLocationIds.length) {
+      form.setValue('locationIds', nextLocationIds, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+
+    const validToppingGroupIds = new Set(
+      brandToppingGroups
+        .map(group => group.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const currentToppingGroupIds = uniq(
+      form.getValues('toppingGroupIds'),
+    );
+    const nextToppingGroupIds = currentToppingGroupIds.filter(
+      groupId => validToppingGroupIds.has(groupId),
+    );
+    if (nextToppingGroupIds.length !== currentToppingGroupIds.length) {
+      form.setValue('toppingGroupIds', nextToppingGroupIds, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
   }, [
     selectedBrandId,
     brandCategories,
+    brandLocations,
+    brandToppingGroups,
     form,
   ]);
 

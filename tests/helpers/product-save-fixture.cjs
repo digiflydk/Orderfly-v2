@@ -5,7 +5,7 @@ function fixture(){
  const records=new Map([
   ['brands/b',{name:'Esmeralda QA'}],['brands/c',{name:'CPH QA'}],
   ['locations/l',{brandId:'b',name:'QA Amager'}],['locations/l2',{brandId:'b',name:'QA Hellerup'}],['locations/foreign',{brandId:'c'}],
-  ['categories/water',{categoryName:'QA Vand',locationIds:['l','l2']}],['categories/foreign',{locationIds:['foreign']}],
+  ['categories/water',{categoryName:'QA Vand',locationIds:['l','l2']}],['categories/amager-only',{categoryName:'QA Amager only',locationIds:['l']}],['categories/foreign',{locationIds:['foreign']}],
   ['topping_groups/g',{groupName:'QA Extras',locationIds:['l']}],['topping_groups/g2',{groupName:'QA Sauce',locationIds:['l','l2']}],['topping_groups/foreign',{locationIds:['foreign']}],
   ['allergens/a',{allergenName:'QA Milk'}],['allergens/a2',{allergenName:'QA Wheat'}],
   ['products/hellerup',{brandId:'b',categoryId:'water',productName:'Existing Hellerup',price:50,locationIds:['l2'],imageUrl:'https://existing.example/keep.jpg'}],

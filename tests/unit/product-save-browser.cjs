@@ -109,3 +109,11 @@ test('oversized file is rejected before submitting without clearing entries',asy
  await page.getByRole('button',{name:'Create Product',exact:true}).click();await page.getByRole('alert').filter({hasText:'at most 5 MB'}).waitFor();
  assert.equal(f.writes.length,0);assert.equal(await page.getByLabel('Product Name',{exact:true}).inputValue(),'Kildevand 0,5 l');
 });
+test('switching brands clears hidden brand-scoped selections',async t=>{
+ const page=await setup(t);
+ await page.getByLabel('QA Extras',{exact:true}).check();
+ await page.getByRole('combobox',{name:'Brand',exact:true}).click();await page.getByRole('option',{name:'CPH QA',exact:true}).click();
+ await page.getByRole('combobox',{name:'Brand',exact:true}).click();await page.getByRole('option',{name:'Esmeralda QA',exact:true}).click();
+ assert.equal(await page.getByLabel('QA Amager',{exact:true}).isChecked(),false);
+ assert.equal(await page.getByLabel('QA Extras',{exact:true}).isChecked(),false);
+});
