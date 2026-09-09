@@ -260,6 +260,7 @@ export function ProductFormPage({
       if (key === 'imageUrl') continue; // Keep the actual file from the native input.
       data.delete(key);
       if (Array.isArray(value)) value.forEach(item => data.append(key, String(item)));
+      else if (key === 'priceDelivery' && value === undefined) data.set(key, '');
       else if (value !== undefined && value !== null) data.set(key, String(value));
     }
     if (!isEditing) {
@@ -314,7 +315,7 @@ export function ProductFormPage({
             product.description ?? '',
           price: product.price ?? 0,
           priceDelivery:
-            product.priceDelivery ?? 0,
+            product.priceDelivery,
           isActive:
             product.isActive ?? false,
           isTestData: product.isTestData || false,
@@ -341,7 +342,7 @@ export function ProductFormPage({
           productName: '',
           description: '',
           price: 0,
-          priceDelivery: 0,
+          priceDelivery: undefined,
           isActive: true,
           isTestData: false,
           isFeatured: false,

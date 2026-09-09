@@ -8,7 +8,7 @@ function fixture(){
   ['categories/water',{categoryName:'QA Vand',locationIds:['l','l2']}],['categories/amager-only',{categoryName:'QA Amager only',locationIds:['l']}],['categories/foreign',{locationIds:['foreign']}],
   ['topping_groups/g',{groupName:'QA Extras',locationIds:['l']}],['topping_groups/g2',{groupName:'QA Sauce',locationIds:['l','l2']}],['topping_groups/foreign',{locationIds:['foreign']}],
   ['allergens/a',{allergenName:'QA Milk'}],['allergens/a2',{allergenName:'QA Wheat'}],
-  ['products/hellerup',{brandId:'b',categoryId:'water',productName:'Existing Hellerup',price:50,locationIds:['l2'],imageUrl:'https://existing.example/keep.jpg'}],
+  ['products/hellerup',{brandId:'b',categoryId:'water',productName:'Existing Hellerup',price:50,priceDelivery:60,locationIds:['l2'],imageUrl:'https://existing.example/keep.jpg'}],
  ]);
  const objects=new Map(), writes=[];
  const failure={upload:false,write:false,afterWrite:false,permission:false};
@@ -22,7 +22,9 @@ function fixture(){
     if(failure.write)throw Error('Synthetic database failure');
     if(create&&records.has(key))throw Error('Already exists');
     if(Object.values(data).some(v=>v===undefined))throw Error('Undefined Firestore field');
-    records.set(key,{...(create?{}:records.get(key)),...data});writes.push(key);
+    const next={...(create?{}:records.get(key))};
+    for(const[field,value]of Object.entries(data))value?.constructor?.name==='DeleteTransform'?delete next[field]:next[field]=value;
+    records.set(key,next);writes.push(key);
     if(failure.afterWrite)throw Error('Synthetic lost acknowledgement');
    }
    return{id,get:async()=>snap(key),create:data=>write(data,true),update:data=>write(data,false)};

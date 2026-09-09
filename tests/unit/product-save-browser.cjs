@@ -117,3 +117,8 @@ test('switching brands clears hidden brand-scoped selections',async t=>{
  assert.equal(await page.getByLabel('QA Amager',{exact:true}).isChecked(),false);
  assert.equal(await page.getByLabel('QA Extras',{exact:true}).isChecked(),false);
 });
+test('clearing an existing delivery price removes the override',async t=>{
+ const page=await setup(t);await page.goto(origin+'/superadmin/products/edit/hellerup');
+ await page.locator('input[name="priceDelivery"]').fill('');await page.getByRole('button',{name:'Save Changes',exact:true}).click();await page.waitForURL('**/superadmin/products');
+ assert.equal(Object.hasOwn(f.records.get('products/hellerup'),'priceDelivery'),false);
+});

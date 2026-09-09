@@ -5,6 +5,7 @@ import 'server-only';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
 import { hasPermission } from '@/lib/permissions';
 import { uploadProductImage } from '@/lib/superadmin/product-image-storage';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -19,6 +20,11 @@ const asBool = (v: unknown) => {
   return ['1', 'true', 'on', 'yes', 'checked'].includes(s);
 };
 
+const optionalNonNegativePrice = z.preprocess(
+  value => value === '' || value == null ? undefined : value,
+  z.coerce.number().min(0, 'Delivery price must be a non-negative number.').optional(),
+);
+
 const baseFields = {
   id: z.string().optional().nullable(),
   creationKey: z.string().uuid().optional(),
@@ -28,7 +34,7 @@ const baseFields = {
   productName: z.string().min(2, 'Product name must be at least 2 characters.'),
   description: z.string().optional(),
   price: z.coerce.number().min(0, 'Price must be a non-negative number.'),
-  priceDelivery: z.coerce.number().min(0, 'Delivery price must be a non-negative number.').optional(),
+  priceDelivery: optionalNonNegativePrice,
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
   isTestData: z.preprocess(asBool,z.boolean()).optional(),
@@ -56,6 +62,28 @@ type ActionOk = { ok: true; id: string };
 type ActionErr = { ok: false; error: { message: string, code?: string, detail?: string } };
 export type FormState = ActionOk | ActionErr | null;
 
+async function fingerprintCreationRequest(
+  productData: Record<string, unknown>,
+  image: FormDataEntryValue | null,
+): Promise<string> {
+  const normalized = {
+    ...productData,
+    locationIds: [...(productData.locationIds as string[])].sort(),
+    toppingGroupIds: [...(productData.toppingGroupIds as string[])].sort(),
+    allergenIds: [...(productData.allergenIds as string[])].sort(),
+    image: image instanceof File && (image.size > 0 || image.name)
+      ? {
+          type: image.type,
+          size: image.size,
+          digest: createHash('sha256')
+            .update(Buffer.from(await image.arrayBuffer()))
+            .digest('hex'),
+        }
+      : null,
+  };
+  return createHash('sha256').update(JSON.stringify(normalized)).digest('hex');
+}
+
 
 export async function createOrUpdateProduct(prevState: FormState | null, formData: FormData): Promise<FormState> {
     const id = formData.get('id')?.toString();
@@ -80,6 +108,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
     }
     
     const { id: validatedId, creationKey, imageUrl: _imageUrl, ...productData } = parsed.data;
+    const clearPriceDelivery = Boolean(id) && formData.has('priceDelivery') && formData.get('priceDelivery') === '';
     
     // For updates, filter out undefined values to prevent overwriting existing data.
     const toWrite: Partial<Product> = Object.fromEntries(
@@ -113,13 +142,19 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
         ? db.collection('products').doc(id || creationKey!)
         : db.collection('products').doc();
       const existing = await ref.get();
+      const image = formData.get('imageUrl');
+      const creationFingerprint = !id && creationKey
+        ? await fingerprintCreationRequest(productData, image)
+        : undefined;
       if (id && (!existing.exists || existing.data()?.brandId !== productData.brandId)) {
         throw new Error('The product does not exist or belongs to another brand.');
       }
       // The same form retries the same creation key after a lost response.
       if (!id && existing.exists) {
-        if (existing.data()?.creationKey !== creationKey || existing.data()?.brandId !== productData.brandId) {
-          throw new Error('Creation reference is already in use. Open a new product form.');
+        if (existing.data()?.creationKey !== creationKey ||
+            existing.data()?.brandId !== productData.brandId ||
+            existing.data()?.creationFingerprint !== creationFingerprint) {
+          throw new Error('Creation reference was already saved with different values. Open a new product form.');
         }
         return { ok: true, id: ref.id };
       }
@@ -150,7 +185,6 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
         }
       }
 
-      const image = formData.get('imageUrl');
       if (image instanceof File && (image.size > 0 || image.name)) {
         toWrite.imageUrl = await uploadProductImage(image, productData.brandId, ref.id);
       } else if (typeof image === 'string' && image && image !== existing.data()?.imageUrl) {
@@ -159,11 +193,16 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       // With no replacement file, omit imageUrl entirely to preserve the stored image.
       const now = new Date();
       if (id) {
-        await ref.update({ ...toWrite, updatedAt: now });
+        await ref.update({
+          ...toWrite,
+          ...(clearPriceDelivery ? { priceDelivery: admin.firestore.FieldValue.delete() } : {}),
+          updatedAt: now,
+        });
       } else {
         const payload = {
           ...toWrite, id: ref.id,
           ...(creationKey ? { creationKey } : {}),
+          ...(creationFingerprint ? { creationFingerprint } : {}),
           isActive: toWrite.isActive ?? false,
           createdAt: now, updatedAt: now,
         };
@@ -172,7 +211,9 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
         } catch (error: any) {
           // Concurrent retries may race, but must never create a second product.
           const saved = creationKey ? await ref.get() : null;
-          if (saved?.data()?.creationKey !== creationKey || saved?.data()?.brandId !== productData.brandId) throw error;
+          if (saved?.data()?.creationKey !== creationKey ||
+              saved?.data()?.brandId !== productData.brandId ||
+              saved?.data()?.creationFingerprint !== creationFingerprint) throw error;
         }
       }
       // A cache failure must not turn a committed write into a misleading save error.

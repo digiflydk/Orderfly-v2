@@ -1,5 +1,6 @@
 const {test}=require('node:test');
 const assert=require('node:assert/strict');
+const {randomUUID}=require('node:crypto');
 const {fixture,form,image}=require('../helpers/product-save-fixture.cjs');
 process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET='orderfly-test.invalid';
 for(const format of ['jpeg','png','avif'])test(`actual ${format} bytes persist with product values and one location`,async()=>{
@@ -26,6 +27,10 @@ test('bracket arrays, duplicates and editing without a new image preserve intend
  const result=await f.actions.createOrUpdateProduct(null,data);assert.equal(result.ok,true,JSON.stringify(result));
  const saved=await f.actions.getProductById('hellerup');assert.deepEqual(saved.locationIds,['l2']);assert.equal(saved.imageUrl,'https://existing.example/keep.jpg');assert.equal(saved.isActive,false);assert.equal(f.objects.size,0);
 });
+test('clearing an existing delivery price removes the override',async()=>{
+ const f=fixture();const result=await f.actions.createOrUpdateProduct(null,form({id:'hellerup',creationKey:undefined,locationIds:['l2'],priceDelivery:''}));
+ assert.equal(result.ok,true,JSON.stringify(result));assert.equal(Object.hasOwn(f.records.get('products/hellerup'),'priceDelivery'),false);
+});
 for(const overrides of [{brandId:''},{brandId:'missing'},{locationIds:['foreign']},{categoryId:'foreign'},{toppingGroupIds:['foreign']},{allergenIds:['missing']},{id:'hellerup',brandId:'c'},{price:'-1'},{imageUrl:'https://picsum.photos/fake.jpg'}])test(`reject invalid/scoped input ${JSON.stringify(overrides)}`,async()=>{
  const f=fixture();const result=await f.actions.createOrUpdateProduct(null,form(overrides));assert.equal(result.ok,false);assert.equal(f.writes.length,0);assert.equal(f.objects.size,0);
 });
@@ -34,6 +39,12 @@ test('upload failure preserves stored record; retry creates once even after lost
  f.failure.upload=true;const failed=await f.actions.createOrUpdateProduct(null,data);assert.equal(failed.ok,false);assert.match(failed.error.detail,/Image upload failed/);assert.equal(f.writes.length,0);
  f.failure.upload=false;f.failure.afterWrite=true;const saved=await f.actions.createOrUpdateProduct(null,data);assert.equal(saved.ok,true,JSON.stringify(saved));
  const retry=await f.actions.createOrUpdateProduct(null,data);assert.equal(retry.id,saved.id);assert.equal(f.writes.length,1);assert.equal(f.objects.size,1);
+});
+test('a creation key cannot silently accept a changed retry payload',async()=>{
+ const f=fixture(),key=randomUUID(),data=form({creationKey:key});f.failure.afterWrite=true;
+ const saved=await f.actions.createOrUpdateProduct(null,data);assert.equal(saved.ok,true,JSON.stringify(saved));
+ const changed=await f.actions.createOrUpdateProduct(null,form({creationKey:key,productName:'Changed after lost response'}));
+ assert.equal(changed.ok,false);assert.match(changed.error.detail,/different values/);assert.equal(f.writes.length,1);
 });
 test('permission, write and replacement-upload failures never change Hellerup',async()=>{
  for(const failure of ['permission','write','upload']){
