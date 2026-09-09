@@ -1,7 +1,11 @@
 env:
-  # Provision this bucket in the production DATA project before deploying (#89).
+  # Product images: PO-confirmed Orderfly v2 project, separate from hosting/Firestore (#89).
   - variable: FIREBASE_STORAGE_BUCKET
-    value: orderfly-39325.firebasestorage.app
+    value: studio-2819118380-ae26c.firebasestorage.app
+    availability:
+      - RUNTIME
+  - variable: FIREBASE_STORAGE_PROJECT_ID
+    value: studio-2819118380-ae26c
     availability:
       - RUNTIME
   - variable: GEMINI_API_KEY

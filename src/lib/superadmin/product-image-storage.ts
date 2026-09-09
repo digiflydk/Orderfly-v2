@@ -28,7 +28,7 @@ export async function uploadProductImage(file: File, brandId: string, productId:
   // Server-only configuration can be corrected at runtime; NEXT_PUBLIC values are build-time values.
   const bucketName = productImageBucketName(
     process.env.FIREBASE_STORAGE_BUCKET ?? process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
-    app.options.projectId,
+    process.env.FIREBASE_STORAGE_PROJECT_ID ?? app.options.projectId,
   );
   try {
     const bucket = getStorage(app).bucket(bucketName);

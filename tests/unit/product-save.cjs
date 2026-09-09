@@ -116,3 +116,19 @@ test('concurrent edit during upload cannot overwrite a later brand change',async
  const result=await f.actions.createOrUpdateProduct(null,form({id:'hellerup',originalBrandId:'b',imageUrl:new File([await image()],'image.jpg',{type:'image/jpeg'})}));
  assert.equal(result.ok,false);assert.equal(f.writes.length,0);assert.equal(f.records.get('products/hellerup').brandId,'c');assert.equal(f.records.get('products/hellerup').productName,'Saved by another admin');
 });
+
+test('explicit storage project supports the approved separation from the data credential',async()=>{
+ const f=fixture();
+ process.env.FIREBASE_STORAGE_PROJECT_ID='studio-2819118380-ae26c';
+ process.env.FIREBASE_STORAGE_BUCKET='studio-2819118380-ae26c.firebasestorage.app';
+ try{
+  const result=await f.actions.createOrUpdateProduct(null,form({imageUrl:new File([await image()],'image.jpg',{type:'image/jpeg'})}));
+  assert.equal(result.ok,true,JSON.stringify(result));assert.equal(f.storageCalls[0].bucket,'studio-2819118380-ae26c.firebasestorage.app');
+  assert.equal(f.records.get('products/'+result.id).brandId,'b');assert.equal(f.records.get('products/hellerup').price,50);
+ }finally{delete process.env.FIREBASE_STORAGE_PROJECT_ID;delete process.env.FIREBASE_STORAGE_BUCKET;}
+});
+test('explicit storage project still rejects a bucket from an unrelated project',async()=>{
+ const f=fixture();process.env.FIREBASE_STORAGE_PROJECT_ID='studio-2819118380-ae26c';process.env.FIREBASE_STORAGE_BUCKET='hosting-project.firebasestorage.app';
+ try{await assert.rejects(async()=>f.upload(new File([await image()],'image.jpg',{type:'image/jpeg'}),'b','p'),error=>error.code==='image/wrong-project');assert.equal(f.storageCalls.length,0);}
+ finally{delete process.env.FIREBASE_STORAGE_PROJECT_ID;delete process.env.FIREBASE_STORAGE_BUCKET;}
+});

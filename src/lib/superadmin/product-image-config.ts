@@ -19,7 +19,7 @@ export function productImageBucketName(configured: string | undefined, projectId
   const firebaseProject = name.match(/^(.+)\.(?:appspot\.com|firebasestorage\.app)$/)?.[1];
   if (projectId && firebaseProject && firebaseProject !== projectId) {
     throw new ProductImageStorageError('image/wrong-project',
-      'Image storage points to a different Firebase project than product data. Ask an administrator to correct the bucket setting.');
+      'Image storage does not match the configured storage project. Ask an administrator to correct the bucket setting.');
   }
   return name;
 }
