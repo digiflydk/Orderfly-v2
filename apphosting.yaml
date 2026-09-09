@@ -1,4 +1,9 @@
 env:
+  # Provision this bucket in the production DATA project before deploying (#89).
+  - variable: FIREBASE_STORAGE_BUCKET
+    value: orderfly-39325.firebasestorage.app
+    availability:
+      - RUNTIME
   - variable: GEMINI_API_KEY
     secret: GEMINI_API_KEY
   - variable: FB_SERVICE_ACCOUNT_JSON

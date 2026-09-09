@@ -59,3 +59,60 @@ test('image validation rejects mismatched, corrupt, unsupported and oversized co
   await assert.rejects(()=>f.upload(file,'b','p'));assert.equal(f.objects.size,0);
  }
 });
+
+test('successful upload does not depend on the Firebase metadata read endpoint',async()=>{
+ const f=fixture(),bytes=await image();const url=await f.upload(new File([bytes],'image.jpg',{type:'image/jpeg'}),'b','p');
+ assert.deepEqual(f.storageCalls,[{operation:'save',bucket:'orderfly-test.invalid'}]);
+ const parsed=new URL(url),object=f.objects.get(decodeURIComponent(parsed.pathname.split('/o/')[1]));
+ assert.equal(parsed.searchParams.get('token'),object.options.metadata.metadata.firebaseStorageDownloadTokens);
+ assert.deepEqual(object.bytes,bytes);
+});
+test('runtime bucket overrides build-time bucket and accepts Firebase gs syntax',async()=>{
+ const f=fixture();process.env.FIREBASE_STORAGE_BUCKET=' gs://orderfly-test.firebasestorage.app/ ';
+ try{await f.upload(new File([await image()],'image.jpg',{type:'image/jpeg'}),'b','p');assert.equal(f.storageCalls[0].bucket,'orderfly-test.firebasestorage.app');}
+ finally{delete process.env.FIREBASE_STORAGE_BUCKET;}
+});
+test('invalid, missing and different-project bucket fail before storage writes',async()=>{
+ const f=fixture(),file=new File([await image()],'image.jpg',{type:'image/jpeg'});
+ for(const [setting,code]of [['','image/storage-not-configured'],['https://example.com/bucket','image/invalid-bucket'],['hosting-project.appspot.com','image/wrong-project']]){
+  process.env.FIREBASE_STORAGE_BUCKET=setting;
+  try{await assert.rejects(()=>f.upload(file,'b','p'),error=>error.code===code);assert.equal(f.storageCalls.length,0);}
+  finally{delete process.env.FIREBASE_STORAGE_BUCKET;}
+ }
+});
+test('storage errors identify access, missing bucket and credentials without exposing SDK request data',async()=>{
+ for(const [code,expected]of [[403,'image/storage-permission-denied'],[404,'image/storage-not-found'],[401,'image/storage-credentials'],[503,'image/storage-unavailable']]){
+  const f=fixture(),logs=[],oldLog=console.error;
+  f.failure.upload=Object.assign(Error('Authorization: Bearer synthetic-secret'),{code,request:{headers:{Authorization:'synthetic-secret'}}});
+  console.error=(...args)=>logs.push(args);
+  try{
+   const result=await f.actions.createOrUpdateProduct(null,form({imageUrl:new File([await image()],'image.jpg',{type:'image/jpeg'})}));
+   assert.equal(result.ok,false);assert.equal(result.error.code,expected);assert.equal(f.writes.length,0);
+   assert.doesNotMatch(JSON.stringify([logs,result]),/synthetic-secret/);
+  }finally{console.error=oldLog;}
+ }
+});
+test('explicit existing-product brand change validates target and keeps ID, price and image',async()=>{
+ const f=fixture(),before={...f.records.get('products/hellerup')};
+ const result=await f.actions.createOrUpdateProduct(null,form({id:'hellerup',originalBrandId:'b',brandId:'c',categoryId:'foreign',locationIds:['foreign'],toppingGroupIds:['foreign'],price:before.price,priceDelivery:before.priceDelivery}));
+ assert.equal(result.ok,true,JSON.stringify(result));assert.equal(result.id,'hellerup');
+ const product=await f.actions.getProductById('hellerup');
+ assert.equal(product.brandId,'c');assert.equal(product.categoryId,'foreign');assert.deepEqual(product.locationIds,['foreign']);assert.deepEqual(product.toppingGroupIds,['foreign']);assert.equal(product.price,50);assert.equal(product.imageUrl,before.imageUrl);assert.equal(f.objects.size,0);
+});
+test('brand change rejects missing or stale source and references from former brand',async()=>{
+ const cases=[{originalBrandId:undefined},{originalBrandId:'c'},{locationIds:['l']},{categoryId:'water'},{toppingGroupIds:['g']}];
+ for(const extra of cases){
+  const f=fixture();const result=await f.actions.createOrUpdateProduct(null,form({id:'hellerup',originalBrandId:'b',brandId:'c',categoryId:'foreign',locationIds:['foreign'],...extra}));
+  assert.equal(result.ok,false,JSON.stringify(extra));assert.equal(f.writes.length,0);assert.equal(f.records.get('products/hellerup').brandId,'b');
+ }
+});
+test('stale editor cannot undo a previously saved brand move',async()=>{
+ const f=fixture();f.records.get('products/hellerup').brandId='c';
+ const result=await f.actions.createOrUpdateProduct(null,form({id:'hellerup',originalBrandId:'b'}));
+ assert.equal(result.ok,false);assert.match(result.error.detail,/brand has changed/);assert.equal(f.writes.length,0);
+});
+test('concurrent edit during upload cannot overwrite a later brand change',async()=>{
+ const f=fixture();f.failure.beforeUpdate=(records,key)=>records.set(key,{...records.get(key),brandId:'c',productName:'Saved by another admin'});
+ const result=await f.actions.createOrUpdateProduct(null,form({id:'hellerup',originalBrandId:'b',imageUrl:new File([await image()],'image.jpg',{type:'image/jpeg'})}));
+ assert.equal(result.ok,false);assert.equal(f.writes.length,0);assert.equal(f.records.get('products/hellerup').brandId,'c');assert.equal(f.records.get('products/hellerup').productName,'Saved by another admin');
+});

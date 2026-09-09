@@ -1,9 +1,10 @@
 import 'server-only';
 import { randomUUID } from 'node:crypto';
-import { getDownloadURL, getStorage } from 'firebase-admin/storage';
+import { getStorage } from 'firebase-admin/storage';
 import sharp from 'sharp';
 import { getAdminApp } from '@/lib/firebase-admin';
 import { productImageInputError } from '@/lib/product-image';
+import { productImageBucketName, productImageUploadError } from './product-image-config';
 
 /** Save the original bytes under an immutable, brand/product-scoped object name. */
 export async function uploadProductImage(file: File, brandId: string, productId: string): Promise<string> {
@@ -23,24 +24,32 @@ export async function uploadProductImage(file: File, brandId: string, productId:
   } catch {
     throw new Error('The image could not be read. Choose a valid JPEG, PNG or AVIF image.');
   }
-  const bucketName = process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
-  if (!bucketName) throw new Error('Product image storage is not configured. Contact the administrator.');
+  const app = getAdminApp();
+  // Server-only configuration can be corrected at runtime; NEXT_PUBLIC values are build-time values.
+  const bucketName = productImageBucketName(
+    process.env.FIREBASE_STORAGE_BUCKET ?? process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+    app.options.projectId,
+  );
   try {
-    const bucket = getStorage(getAdminApp()).bucket(bucketName);
+    const bucket = getStorage(app).bucket(bucketName);
     const object = bucket.file(`brands/${brandId}/products/${productId}/${randomUUID()}.${extension}`);
+    const downloadToken = randomUUID();
     await object.save(bytes, {
       resumable: false,
       metadata: {
         contentType: file.type,
         cacheControl: 'public,max-age=31536000,immutable',
-        metadata: { firebaseStorageDownloadTokens: randomUUID() },
+        metadata: { firebaseStorageDownloadTokens: downloadToken },
       },
       preconditionOpts: { ifGenerationMatch: 0 },
     });
-    // Firebase download URLs also work on buckets with uniform access (no makePublic ACL).
-    return await getDownloadURL(object);
+    // We just saved this token. getDownloadURL would issue a second, unnecessary
+    // request to the Firebase metadata API and could fail after a successful GCS upload.
+    return `https://firebasestorage.googleapis.com/v0/b/${bucketName}/o/${encodeURIComponent(object.name)}?alt=media&token=${downloadToken}`;
   } catch (error) {
-    console.error('[products.image] Upload failed', error);
-    throw new Error('Image upload failed. Your product has not been saved. Please try again.');
+    const uploadError = productImageUploadError(error);
+    // SDK errors can contain authenticated request headers. Log only safe diagnostics.
+    console.error('[products.image] Upload failed', { stage: 'save', bucket: bucketName, code: uploadError.code });
+    throw uploadError;
   }
 }

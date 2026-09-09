@@ -122,3 +122,33 @@ test('clearing an existing delivery price removes the override',async t=>{
  await page.locator('input[name="priceDelivery"]').fill('');await page.getByRole('button',{name:'Save Changes',exact:true}).click();await page.waitForURL('**/superadmin/products');
  assert.equal(Object.hasOwn(f.records.get('products/hellerup'),'priceDelivery'),false);
 });
+
+test('editing can move a product to another brand and reload its valid selections',async t=>{
+ const page=await setup(t);await page.goto(origin+'/superadmin/products/edit/hellerup');
+ await page.getByLabel('QA Sauce',{exact:true}).check();
+ await page.getByRole('combobox',{name:'Brand',exact:true}).click();await page.getByRole('option',{name:'CPH QA',exact:true}).click();
+ assert.equal(await page.getByLabel('QA Hellerup',{exact:true}).count(),0);
+ assert.equal(await page.getByLabel('QA Sauce',{exact:true}).count(),0);
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();
+ await page.getByRole('alert').filter({hasText:'categoryId'}).waitFor();assert.equal(f.writes.length,0);
+ await page.getByRole('combobox',{name:'Category',exact:true}).click();await page.getByRole('option',{name:'QA CPH Vand',exact:true}).click();
+ await page.getByLabel('QA CPH',{exact:true}).check();await page.getByLabel('QA CPH Extras',{exact:true}).check();
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();await page.waitForURL('**/superadmin/products');
+ const saved=f.records.get('products/hellerup');assert.equal(saved.brandId,'c');assert.equal(saved.price,50);assert.equal(saved.priceDelivery,60);assert.equal(saved.imageUrl,'https://existing.example/keep.jpg');assert.deepEqual(saved.locationIds,['foreign']);assert.deepEqual(saved.toppingGroupIds,['foreign']);
+ await page.goto(origin+'/superadmin/products/edit/hellerup');await page.reload();
+ assert.match(await page.getByRole('combobox',{name:'Brand',exact:true}).innerText(),/CPH QA/);
+ assert.equal(await page.getByLabel('QA CPH',{exact:true}).isChecked(),true);
+});
+test('permission-denied upload message keeps replacement image and edited brand for retry',async t=>{
+ const page=await setup(t);await page.goto(origin+'/superadmin/products/edit/hellerup');
+ await page.getByRole('combobox',{name:'Brand',exact:true}).click();await page.getByRole('option',{name:'CPH QA',exact:true}).click();
+ await page.getByRole('combobox',{name:'Category',exact:true}).click();await page.getByRole('option',{name:'QA CPH Vand',exact:true}).click();await page.getByLabel('QA CPH',{exact:true}).check();
+ await page.locator('input[type="file"]').setInputFiles({name:'replacement.jpg',mimeType:'image/jpeg',buffer:await image()});
+ f.failure.upload=Object.assign(Error('Access denied'),{code:403});
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();await page.getByRole('alert').filter({hasText:'storage access was denied (403)'}).waitFor();
+ assert.equal(f.records.get('products/hellerup').brandId,'b');assert.equal(f.writes.length,0);
+ assert.match(await page.getByRole('combobox',{name:'Brand',exact:true}).innerText(),/CPH QA/);
+ assert.equal(await page.locator('input[type="file"]').evaluate(el=>el.files[0].name),'replacement.jpg');
+ f.failure.upload=false;await page.getByRole('button',{name:'Save Changes',exact:true}).click();await page.waitForURL('**/superadmin/products');
+ const saved=f.records.get('products/hellerup');assert.equal(saved.brandId,'c');assert.match(decodeURIComponent(saved.imageUrl),/brands\/c\/products\/hellerup\//);
+});
