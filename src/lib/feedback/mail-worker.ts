@@ -8,6 +8,10 @@ import { resolveBookingFeedbackInvitationToken } from '@/lib/integrations/esmera
 import { pendingFeedbackMessage, type FeedbackMailKind, type FeedbackMailSource } from './mail-queue';
 const never = Number.MAX_SAFE_INTEGER, leaseMs = 120000;
 type Job = FeedbackMailSource & { kind: FeedbackMailKind; eventId: string; lease: string; attempts: number };
+function transientReadError(error: unknown) {
+  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
+  return [4, 8, 10, 13, 14, 'deadline-exceeded', 'resource-exhausted', 'aborted', 'internal', 'unavailable', 'ETIMEDOUT', 'ECONNRESET'].includes(code as string | number);
+}
 function feedbackOrigin() {
   const url = new URL(process.env.ORDERFLY_FEEDBACK_ORIGIN || 'https://orderfly.dk');
   if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new FeedbackMailError('invalid_feedback_origin');
@@ -94,7 +98,7 @@ export async function runFeedbackMailWorker(makeProvider = (config: NonNullable<
       await provider.send(job.eventId, job.kind, current.email, { feedbackUrl: job.kind === 'thankYou' ? undefined : current.url, brandName: current.brandName, locationName: current.locationName, sourceType: job.sourceType, language: current.settings.language });
       await finish('accepted', null, false, job.kind === 'invitation' && current.settings.maxReminders > 0 ? current.settings.reminderAfterHours : undefined); counts.accepted++;
     } catch (error) {
-      const known = error instanceof FeedbackMailError ? error : new FeedbackMailError(dispatched ? 'provider_result_unknown' : 'provider_preflight_failed', dispatched);
+      const known = error instanceof FeedbackMailError ? error : new FeedbackMailError(dispatched ? 'provider_result_unknown' : 'provider_preflight_failed', dispatched, !dispatched && transientReadError(error));
       const state = known.uncertain ? 'uncertain' : 'failed';
       await finish(state, known.code, known.retryable); counts[state]++;
     }

@@ -77,6 +77,7 @@ Indstillinger pr. brand: mail til/fra, automatisk invitation til/fra, ventetid 0
 
 - `accepted` betyder kun, at Omnisend har accepteret hændelsen. Det er ikke dokumentation for e-maillevering; `autoResponseSent` sættes ikke på dette grundlag.
 - HTTP 429 genforsøges højst tre gange. Permanente afvisninger kræver kontrol. Timeout, netværksfejl, HTTP 5xx eller tabt worker under afsendelse bliver `uncertain` og sendes ikke automatisk igen.
+- Før afsendelse genforsøges midlertidige Firestore-læsefejl og Omnisend GET-timeout/429/5xx højst tre gange. GET-kaldets retry-status bevares; forkert brandmapping og permanente adgangsfejl afsluttes uden automatisk genforsøg. Denne regel ændrer ikke håndteringen efter en mulig afsendelse.
 - En udløbet `preparing`-lease kan overtages; en udløbet `dispatching`-lease må ikke føre til blind genafsendelse.
 - Omnisends realtids-events deduplikeres ikke alene på `eventID`. Derfor bruges varig kø/lease, og et usikkert resultat kræver menneskelig kontrol. Settings viser hændelses-ID til opslag samt højst 50 nylige jobs pr. brand, uden mailadresse eller invitationstoken.
 - Manuel genstart kræver editoradgang og eksplicit bekræftelse af, at udbyderen ikke har modtaget hændelsen. Handlingens aktør/tid gemmes. Accepterede eller aktive jobs kan ikke genstartes på denne måde.

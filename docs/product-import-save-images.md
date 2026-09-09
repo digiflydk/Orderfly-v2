@@ -64,3 +64,31 @@ Firestore, Authentication and the existing Firebase Admin credential remain in t
 3. Complete independent review, PO acceptance, merge/deploy and controlled JPEG/PNG/AVIF save/reload verification in #87, including token-based customer image downloads. Also edit an existing synthetic product to another brand with a valid category/location, reload, and verify that prices/image are retained. Do not close #81/#89 or resume the import solely because a health check or fixture tests pass.
 
 The follow-up tests cover successful JPEG/PNG/AVIF persistence, an unavailable post-upload metadata endpoint, runtime bucket precedence/normalization, wrong-project rejection, safe authentication/access/missing-bucket diagnostics, successful brand moves, stale/concurrent edit rejection, target-reference validation and browser retry with both a replacement image and a changed brand. PR #90's review follow-up covers every source-brand reference type, inactive references, named dependency errors, lookup failures, unrelated/category references, same-brand edits and browser retry after a dependency is removed. Existing tests still cover singleton/multiple arrays, idempotent creates, price clearing and form preservation.
+
+## Optional images and continuing after a 403 (#94)
+
+The server permits image-free creation and editing. An untouched file input is ignored whenever it contains zero bytes, including the named zero-byte `File` value that production Server Actions can submit. This preserves an existing product image and also allows products without an image to be saved. A selected non-empty file is intentionally retained after an upload error, so clicking the ordinary save button retries that file. The form labels the image field as optional and provides **Remove selected file**. After a failed save with a selected file, **Create without image** clears the file and submits the normal product form. In edit mode this is **Save without replacing image**, which keeps the stored image. These actions preserve prices, brand, category, locations, toppings and allergens; they do not bypass validation. No non-empty upload error is silently ignored.
+
+Creating without an image does not initialize Storage, require bucket configuration or call the upload API. An image can be added later by editing the same product. The creation key is retained after a rejected upload, so continuing without the file does not create a duplicate. If an earlier request actually committed different values but its acknowledgement was lost, the existing creation-fingerprint conflict check still applies.
+
+The file control and discard buttons are disabled while saving. Discarding increments a preview generation counter so a late FileReader result cannot restore a discarded preview. Discarding a replacement restores the existing image preview; it does not delete the existing stored image.
+
+### Current 403 diagnosis and release handoff
+
+Read-only inspection on 9 September 2026 confirmed that **Orderfly v2** Storage is active at `studio-2819118380-ae26c.firebasestorage.app`. Google Cloud IAM displayed **Site Unavailable** in the Work browser, and the one reload attempt timed out. No IAM bindings or successful live upload were verified. The 403 report demonstrates an access rejection during save; it does not by itself identify a missing binding, deny policy or other access restriction.
+
+The upload uses the explicit Firebase Admin credential from `FB_SERVICE_ACCOUNT_JSON` / `FIREBASE_SERVICE_ACCOUNT_JSON`, not the signed-in console user and not automatically the App Hosting runtime identity. The structured `[products.image] Upload failed` log now includes `credentialProject` and the validated `serviceAccount` identifier alongside bucket/stage/code. It never emits the credential object, private key, access token or raw authenticated SDK request, and the account identifier is not returned to the product form. If the SDK exposes no valid account identifier, the log says `unavailable`; inspect only `client_email` in the existing runtime secret through the release team's secure process, never copy the JSON into a ticket.
+
+Release action:
+
+1. Identify the actual account from that log or the existing credential's `client_email`. Do not infer it from project names or the browser account.
+2. In the **Orderfly v2** bucket's permissions, verify `storage.objects.create` for that principal, including applicable conditions/deny policies. If an allow grant is missing, the bucket-scoped **Storage Object Creator** role (`roles/storage.objectCreator`) provides creation without broad Storage Admin access. Apply through the approved release/IAM process. Preserve existing bindings; do not alter public/test-mode Storage rules, move Firestore/Auth or substitute a different bucket.
+3. Verify an authorized synthetic JPEG/PNG/AVIF upload and reload in admin/customer view. If creation permission is present and 403 persists, inspect the cloud audit failure for the same principal/bucket before adding more permissions. Local fixture tests do not establish production access.
+
+Google references: [IAM roles and object-creation permission](https://docs.cloud.google.com/storage/docs/access-control/iam-roles), [Storage troubleshooting](https://docs.cloud.google.com/storage/docs/troubleshooting), [Firebase Admin uses the initialized app's credential](https://firebase.google.com/docs/storage/admin/start).
+
+Work has not changed IAM, credentials, Storage rules or production data. Optional-image creation is the code correction in this PR; successful production image upload remains a separate release acceptance requirement in #94/#87.
+
+Targeted checks add image-free creation with missing storage configuration/403, retry with the same creation key, later image attachment, private-credential log exclusion, mobile/desktop create without a file, explicit recovery after 403, preservation of an existing image and removal of an oversized selected file. Existing JPEG/PNG/AVIF persistence and brand/reference validation tests remain in place.
+
+Local result for #94: TypeScript typecheck passed; **43/43** product-save tests and **15/15** actual-component browser tests passed. The additional mobile/desktop cases verify the save behavior, not a full visual-design audit. No production writes or broad CI runs were used.

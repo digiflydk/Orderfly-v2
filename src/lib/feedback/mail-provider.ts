@@ -1,5 +1,5 @@
 import 'server-only';
-import { Omnisend } from '@/lib/marketing/provider';
+import { Omnisend, MarketingError } from '@/lib/marketing/provider';
 import { emailChannel } from '@/lib/marketing/consent';
 import type { feedbackMailConfig } from './mail-config';
 export class FeedbackMailError extends Error {
@@ -9,8 +9,13 @@ export class FeedbackMailProvider {
   constructor(private config: NonNullable<ReturnType<typeof feedbackMailConfig>>, private request: typeof fetch = fetch) {}
   async eligible(email: string) {
     const provider = new Omnisend(this.config.provider, this.request);
-    await provider.verifyBrand();
-    return emailChannel(await provider.contact(email), email)?.status === 'subscribed';
+    try {
+      await provider.verifyBrand();
+      return emailChannel(await provider.contact(email), email)?.status === 'subscribed';
+    } catch (error) {
+      if (error instanceof MarketingError) throw new FeedbackMailError(error.code, false, error.retryable);
+      throw error;
+    }
   }
   async send(eventId: string, kind: 'invitation' | 'reminder' | 'thankYou', email: string, properties: Record<string, unknown>) {
     let response: Response;

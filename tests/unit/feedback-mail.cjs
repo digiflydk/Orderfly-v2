@@ -112,3 +112,34 @@ test('mail settings preserve false/zero and refuse invalid or unconfigured enabl
  const settings=await f.settings.readFeedbackSettings('b');assert.equal(settings.delayHours,0);assert.equal(settings.maxReminders,0);assert.equal(settings.automaticRequests,false);assert.equal(settings.autoReplyEnabled,false);assert.equal(settings.language,'en');assert.equal(settings.emailConfigured,true);
  await assert.rejects(()=>f.settings.writeFeedbackSettings({brandId:'b',maxReminders:2}));delete process.env.ORDERFLY_FEEDBACK_EVENTS;await assert.rejects(()=>f.settings.writeFeedbackSettings({brandId:'b',emailEnabled:true}));await f.settings.writeFeedbackSettings({brandId:'b',emailEnabled:false});
 });
+
+test('transient provider GET failures retry safely and remain bounded before dispatch',async t=>{
+ for(const stage of ['brand','contact'])for(const status of [0,429,503,403]){
+  const f=setup(t);await f.mailQueue.queueOrderFeedback('order');let attempts=0,sends=0;
+  const provider=config=>{const real=new f.mailProvider.FeedbackMailProvider(config,async url=>{
+   if(stage==='contact'&&url.endsWith('brands/current'))return Response.json({brandID:'qa-provider'});
+   attempts++;if(!status)throw Error('private timeout details');return new Response('private response',{status});
+  });return{eligible:real.eligible.bind(real),send:async()=>{sends++;}};};
+  await f.mailWorker.runFeedbackMailWorker(provider);
+  assert.equal(f.job('invitation').state,status===403?'failed':'pending');
+  for(let i=1;i<5;i++)await f.mailWorker.runFeedbackMailWorker(provider,Date.now()+i*120000);
+  assert.equal(attempts,status===403?1:3);assert.equal(sends,0);assert.equal(f.job('invitation').state,'failed');
+  assert.doesNotMatch(JSON.stringify(f.job('invitation')),/private timeout|private response/);
+ }
+});
+test('transient context read retries recover once; permanent read errors stay failed',async t=>{
+ for(const code of [4,8,10,13,14,'unavailable',7]){
+  const f=setup(t);await f.mailQueue.queueOrderFeedback('order');const original=f.db.collection;let fail=true;
+  f.db.collection=(...args)=>{const collection=original(...args);if(args[0]!=='customers')return collection;const doc=collection.doc;collection.doc=(...ids)=>{const ref=doc(...ids);const get=ref.get;ref.get=async()=>{if(fail)throw Object.assign(Error('private database error'),{code});return get();};return ref;};return collection;};
+  await f.mailWorker.runFeedbackMailWorker(f.provider);assert.equal(f.job('invitation').state,code===7?'failed':'pending');assert.equal(f.events.length,0);
+  fail=false;await f.mailWorker.runFeedbackMailWorker(f.provider,Date.now()+120000);
+  assert.equal(f.job('invitation').state,code===7?'failed':'accepted');assert.equal(f.events.length,code===7?0:1);
+  await f.mailWorker.runFeedbackMailWorker(f.provider,Date.now()+240000);assert.equal(f.events.length,code===7?0:1);
+ }
+});
+test('brand mismatch remains terminal before dispatch',async t=>{
+ const f=setup(t);await f.mailQueue.queueOrderFeedback('order');let sends=0;
+ const provider=config=>{const real=new f.mailProvider.FeedbackMailProvider(config,async()=>Response.json({brandID:'wrong'}));return{eligible:real.eligible.bind(real),send:async()=>{sends++;}};};
+ await f.mailWorker.runFeedbackMailWorker(provider);await f.mailWorker.runFeedbackMailWorker(provider,Date.now()+120000);
+ assert.equal(f.job('invitation').state,'failed');assert.equal(f.job('invitation').attempts,1);assert.equal(f.job('invitation').lastError,'brand_mapping_mismatch');assert.equal(sends,0);
+});

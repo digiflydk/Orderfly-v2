@@ -73,7 +73,9 @@ async function fingerprintCreationRequest(
     locationIds: [...(productData.locationIds as string[])].sort(),
     toppingGroupIds: [...(productData.toppingGroupIds as string[])].sort(),
     allergenIds: [...(productData.allergenIds as string[])].sort(),
-    image: image instanceof File && (image.size > 0 || image.name)
+    // Production Server Actions can represent an untouched file input as a
+    // named, zero-byte File. Only bytes make this an actual upload.
+    image: image instanceof File && image.size > 0
       ? {
           type: image.type,
           size: image.size,
@@ -202,7 +204,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
         }
       }
 
-      if (image instanceof File && (image.size > 0 || image.name)) {
+      if (image instanceof File && image.size > 0) {
         toWrite.imageUrl = await uploadProductImage(image, productData.brandId, ref.id);
       } else if (typeof image === 'string' && image && image !== existing.data()?.imageUrl) {
         throw new Error('Upload an image file instead of supplying an external image URL.');
