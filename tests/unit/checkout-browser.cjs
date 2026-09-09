@@ -21,30 +21,41 @@ before(async()=>{
  const settings=fixture('scenario',`export const scenario=new URLSearchParams(window.location.search).get('case')||'success';`);
  const cart=fixture('cart',`
  import React from 'react';
+ import {basketTotals} from ${JSON.stringify(path.join(root,'src/lib/basket-totals.ts'))};
  const scenario=new URLSearchParams(window.location.search).get('case')||'success';
  const presentation=scenario.startsWith('presentation');
- export const brand={...${JSON.stringify(brand)},bagFee:presentation?4:0}, location=${JSON.stringify(location)};
+ const newsletter=scenario.startsWith('ui-newsletter');
+ export const brand={...${JSON.stringify(brand)},bagFee:presentation||newsletter?4:0}, location=${JSON.stringify(location)};
  const context=React.createContext(null);
  const item={id:'pizza',cartItemId:'pizza',productName:'Pizza',quantity:1,basePrice:100,price:100,toppings:[],itemType:'product',imageUrl:'/image.png'};
+ const reduced={...item,id:'offer',cartItemId:'offer',basePrice:75,price:45};
+ const initialItems=scenario.includes('stacking')?[{...item,basePrice:89,price:59,toppings:[{id:'chicken',name:'Kylling',price:15},{id:'base',name:'Napolitansk',price:10}]},{...item,id:'fries',cartItemId:'fries',basePrice:45,price:45},{...item,id:'soda',cartItemId:'soda',basePrice:35,price:33.25}]
+  :scenario.includes('all-discounted')?[{...reduced,toppings:[{id:'extra',name:'Tilvalg',price:35}]},{...reduced,id:'second',cartItemId:'second'}]
+  :scenario.includes('mixed')||scenario.includes('minimum')?[item,reduced]
+  :scenario.includes('rounding')?[{...item,basePrice:0.04,price:0.04}]:[item];
+ const standardDiscounts=scenario.includes('automatic')?[{id:'auto',isActive:true,discountName:'Automatisk rabat',discountType:'cart',discountMethod:'percentage',discountValue:scenario.includes('weaker')?5:20,minOrderValue:0}]:[];
  export function FixtureCart({children}) {
   const [includeBagFee,toggleBagFee]=React.useState(true);
-  const [items,setItems]=React.useState([item]),[discount,setDiscount]=React.useState(scenario==='ui-newsletter-conflict'?{id:'stronger',applicationType:'automatic',discountType:'percentage',discountValue:20,code:'SAVE20'}:null);
+  const [items,setItems]=React.useState(initialItems),[discount,setDiscount]=React.useState(scenario==='ui-newsletter-conflict'?{id:'stronger',applicationType:'code',discountType:'percentage',discountValue:20,code:'SAVE20'}:null);
+  React.useEffect(()=>{window.replaceFixtureItems=setItems;},[]);
   const addToCart=React.useCallback((product,q,t,basePrice,price)=>setItems(old=>[...old,{...item,...product,cartItemId:product.id,basePrice,price}]),[]);
   const applyDiscount=React.useCallback(d=>setDiscount(d),[]),removeDiscount=React.useCallback(()=>setDiscount(null),[]);
   const setCartContext=React.useCallback(()=>{},[]),setSelectedTime=React.useCallback(()=>{},[]);
   const saveCartForCheckout=React.useCallback(id=>{if(window.storageUnavailable)throw Error('storage denied');window.savedCheckout=id;},[]);
   const total=items.reduce((sum,i)=>sum+i.price*i.quantity,0);
   const bagFee=includeBagFee?brand.bagFee:0;
-  const value={brand,location,cartReady:true,cartItems:items,subtotal:total,checkoutTotal:total+bagFee,cartTotal:total,itemCount:items.length,includeBagFee,toggleBagFee,
+  const totals=basketTotals({cartItems:items,appliedDiscount:discount,standardDiscounts,deliveryType:'pickup',location,brand,includeBagFee});
+  const value={brand,location,cartReady:true,cartItems:items,subtotal:total,checkoutTotal:total+bagFee,cartTotal:total,itemCount:items.length,includeBagFee,toggleBagFee,standardDiscounts,
    deliveryType:'pickup',selectedTime:'asap',itemDiscount:0,cartDiscount:null,voucherDiscount:discount?.applicationType==='newsletter_signup'?{name:'Nyhedsbrev',amount:10}:null,deliveryFee:0,bagFee,adminFee:0,vatAmount:20,
-   applyDiscount,removeDiscount,appliedDiscount:discount,setCartContext,setSelectedTime,saveCartForCheckout,addToCart};
+   applyDiscount,removeDiscount,appliedDiscount:discount,setCartContext,setSelectedTime,saveCartForCheckout,addToCart,
+   ...(newsletter?{...totals,cartDiscount:totals.automaticCartDiscount}:{})};
   return React.createElement(context.Provider,{value},children);
  }
  export const useCart=()=>React.useContext(context);
  `);
  const actions=fixture('actions',`
  import {scenario} from ${JSON.stringify(settings)};
- export const getNewsletterSignupDiscountAction=async()=>scenario.startsWith('ui-newsletter')?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:0}:null;
+ export const getNewsletterSignupDiscountAction=async(brand,location,subtotal,method,email)=>scenario.startsWith('ui-newsletter')&&email!=='existing@example.test'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:scenario.includes('minimum')?150:0,allowStacking:scenario.includes('stacking-on')}:null;
  export async function validateDiscountAction(){throw Error('discount network failed');}
  export async function createStripeCheckoutSessionAction(...args){
   window.checkoutArguments=args;
@@ -229,21 +240,94 @@ test('#71 newsletter highlights the available benefit while explicit consent sta
  const page=await setup(t,'ui-newsletter');const card=page.locator('.commerce-newsletter');
  await card.getByText('Få 10% ved tilmelding',{exact:true}).waitFor();
  const consent=card.getByRole('checkbox');assert.equal(await consent.isChecked(),false);assert.equal(await card.getAttribute('data-newsletter-offer'),'true');
- await consent.check();await card.getByText('Nyhedsbrevsrabatten er valgt til denne ordre.').waitFor();
- await consent.uncheck();assert.equal(await card.getByText('Nyhedsbrevsrabatten er valgt til denne ordre.').count(),0);
+ await page.getByRole('button',{name:/Gå til betaling.*104,00/}).first().waitFor();
+ await consent.check();await card.getByText(/Nyhedsbrevsrabat: 10,00.*trukket fra/).waitFor();
+ await page.getByRole('button',{name:/Gå til betaling.*94,00/}).first().waitFor();
+ await consent.uncheck();assert.equal(await card.getByText(/trukket fra denne ordre/).count(),0);
+ await page.getByRole('button',{name:/Gå til betaling.*104,00/}).first().waitFor();
  const terms=page.locator('.commerce-terms').filter({visible:true}).first(),box=await terms.boundingBox(),check=await terms.getByRole('checkbox').boundingBox();assert.ok(box.height>=48.3);assert.ok(check.y>box.y);
- await consent.check();await pay(page);await page.waitForURL('**/stripe?*');const customer=requests.get('ui-newsletter')[0][1];assert.equal(customer.subscribeToNewsletter,true);assert.match(customer.newsletterConsentId,/^[a-f0-9-]{36}$/);assert.equal(customer.newsletterConsentVersion,'checkout-email-da-2026-09-08');
+ await consent.check();await pay(page);await page.waitForURL('**/stripe?*');const args=requests.get('ui-newsletter')[0],customer=args[1];assert.equal(customer.subscribeToNewsletter,true);assert.match(customer.newsletterConsentId,/^[a-f0-9-]{36}$/);assert.equal(customer.newsletterConsentVersion,'checkout-email-da-2026-09-08');
+ assert.equal(args[5].discountTotal,10);assert.equal(args[5].bagFee,4);assert.equal(args[6],'n');
 });
 test('#71 newsletter opt-out before submit sends no grant and does not add a discount',async t=>{
  const page=await setup(t,'ui-newsletter-unchecked');const card=page.locator('.commerce-newsletter');
  await card.getByText('Få 10% ved tilmelding',{exact:true}).waitFor();await card.getByRole('checkbox').check();await card.getByRole('checkbox').uncheck();
- await pay(page);await page.waitForURL('**/stripe?*');const customer=requests.get('ui-newsletter-unchecked')[0][1];assert.equal(customer.subscribeToNewsletter,false);assert.equal(customer.newsletterConsentId,undefined);
+ await pay(page);await page.waitForURL('**/stripe?*');const args=requests.get('ui-newsletter-unchecked')[0],customer=args[1];assert.equal(customer.subscribeToNewsletter,false);assert.equal(customer.newsletterConsentId,undefined);assert.equal(args[6],null);assert.equal(args[5].discountTotal,0);
 });
 test('#71 newsletter makes no extra saving promise with another applied discount',async t=>{
  const page=await setup(t,'ui-newsletter-conflict');const card=page.locator('.commerce-newsletter');
  await page.getByText('Rabatkode:').waitFor();await card.getByRole('checkbox').check();
- assert.equal(await card.getAttribute('data-newsletter-offer'),'false');assert.equal(await card.getByText('Nyhedsbrevsrabatten er valgt til denne ordre.').count(),0);assert.equal(await card.getByText('Få nyheder og tilbud').count(),1);
+ assert.equal(await card.getAttribute('data-newsletter-offer'),'false');assert.equal(await card.getByText(/trukket fra denne ordre/).count(),0);assert.equal(await card.getByText('Få nyheder og tilbud').count(),1);
  assert.match(await page.getByText(/Rabatkode:/).locator('..').textContent(),/SAVE20/);
+});
+
+for(const surface of ['desktop','mobile']) test(`newsletter feedback: screenshot's discounted basket stays 129 kr on ${surface} without a false promise`,async t=>{
+ const scenario='ui-newsletter-all-discounted-'+surface,page=await setup(t,scenario),card=page.locator('.commerce-newsletter');
+ await card.getByText(/Nyhedsbrevsrabatten giver 10% på varer uden anden rabat/).waitFor();
+ assert.equal(await card.getByRole('checkbox').isChecked(),false);
+ await card.getByRole('status').getByText(/ingen ekstra rabat/).waitFor();
+ await card.getByRole('checkbox').check();
+ await page.getByRole('button',{name:/Gå til betaling.*129,00/}).first().waitFor();
+ assert.equal(await card.getByText(/trukket fra denne ordre/).count(),0);
+ await pay(page);await page.waitForURL('**/stripe?*');const args=requests.get(scenario)[0];
+ assert.equal(args[5].subtotal,185);assert.equal(args[5].discountTotal,60);assert.equal(args[5].bagFee,4);assert.equal(args[6],null);assert.equal(args[1].subscribeToNewsletter,true);
+});
+
+for(const scenario of ['ui-newsletter-mixed','ui-newsletter-automatic-weaker']) test(`newsletter feedback: ${scenario} lowers the total and payment payload`,async t=>{
+ const page=await setup(t,scenario),card=page.locator('.commerce-newsletter');
+ await card.getByText('Få 10% ved tilmelding',{exact:true}).waitFor();
+ await card.getByRole('checkbox').check();await card.getByText(/Nyhedsbrevsrabat: 10,00.*trukket fra/).waitFor();
+ await page.getByRole('button',{name:scenario.includes('mixed')?/Gå til betaling.*139,00/:/Gå til betaling.*94,00/}).first().waitFor();
+ await pay(page);await page.waitForURL('**/stripe?*');const args=requests.get(scenario)[0];
+ assert.equal(args[5].cartDiscountTotal,10);assert.equal(args[5].discountTotal,scenario.includes('mixed')?40:10);assert.equal(args[6],'n');
+});
+
+for(const scenario of ['ui-newsletter-minimum','ui-newsletter-automatic-stronger','ui-newsletter-rounding']) test(`newsletter feedback: ${scenario} never submits an unusable newsletter discount`,async t=>{
+ const page=await setup(t,scenario),card=page.locator('.commerce-newsletter');
+ await card.getByText(/Nyhedsbrevsrabatten giver 10%/).waitFor();
+ if(scenario.includes('minimum'))await card.getByRole('status').getByText(/Du mangler 50,00/).waitFor();
+ await card.getByRole('checkbox').check();
+ assert.equal(await card.getAttribute('data-newsletter-offer'),'false');assert.equal(await card.getByText(/trukket fra denne ordre/).count(),0);
+ await pay(page);await page.waitForURL('**/stripe?*');const args=requests.get(scenario)[0];
+ assert.equal(args[6],null);assert.equal(args[5].discountTotal,scenario.includes('minimum')?30:scenario.includes('automatic')?20:0);
+});
+
+test('newsletter feedback: changing email revokes the saving and restores it only for an eligible email',async t=>{
+ const page=await setup(t,'ui-newsletter-email'),card=page.locator('.commerce-newsletter');
+ await card.getByText('Få 10% ved tilmelding',{exact:true}).waitFor();await card.getByRole('checkbox').check();
+ await page.getByRole('button',{name:/Gå til betaling.*94,00/}).first().waitFor();
+ await page.getByPlaceholder('john@example.com').fill('existing@example.test');
+ await page.getByRole('button',{name:/Gå til betaling.*104,00/}).first().waitFor();
+ assert.equal(await card.getByText(/trukket fra denne ordre/).count(),0);
+ await page.getByPlaceholder('john@example.com').fill('new@example.test');
+ await page.getByRole('button',{name:/Gå til betaling.*94,00/}).first().waitFor();
+});
+
+for(const enabled of [false,true])test(`newsletter stacking ${enabled?'on':'off'}: actual screenshot prices, checkbox and payment agree`,async t=>{
+ const scenario='ui-newsletter-stacking-'+(enabled?'on':'off')+'-mobile';
+ const page=await setup(t,scenario),card=page.locator('.commerce-newsletter');
+ await card.getByText('Få 10% ved tilmelding',{exact:true}).waitFor();
+ await card.getByText(enabled?/på alle varer efter varerabatter/:/på varer uden anden rabat/).waitFor();
+ await page.getByRole('button',{name:/Gå til betaling.*166,25/}).first().waitFor();
+ await card.getByRole('checkbox').check();
+ await card.getByText(enabled?/Nyhedsbrevsrabat: 16,23/:/Nyhedsbrevsrabat: 4,50/).waitFor();
+ await page.getByRole('button',{name:enabled?/Gå til betaling.*150,02/:/Gå til betaling.*161,75/}).first().waitFor();
+ await card.getByRole('checkbox').uncheck();
+ await page.getByRole('button',{name:/Gå til betaling.*166,25/}).first().waitFor();
+ await card.getByRole('checkbox').check();await pay(page);await page.waitForURL('**/stripe?*');
+ const args=requests.get(scenario)[0];assert.equal(args[5].subtotal,194);
+ assert.equal(args[5].cartDiscountTotal,enabled?16.23:4.5);assert.equal(args[5].discountTotal,enabled?47.98:36.25);assert.equal(args[6],'n');
+});
+
+test('newsletter feedback: cart eligibility changes even when original subtotal stays unchanged',async t=>{
+ const page=await setup(t,'ui-newsletter-cart'),card=page.locator('.commerce-newsletter');
+ await card.getByText('Få 10% ved tilmelding',{exact:true}).waitFor();await card.getByRole('checkbox').check();
+ await page.getByRole('button',{name:/Gå til betaling.*94,00/}).first().waitFor();
+ await page.evaluate(()=>window.replaceFixtureItems(items=>items.map(item=>({...item,price:80}))));
+ await card.getByRole('status').getByText(/ingen ekstra rabat/).waitFor();
+ await page.getByRole('button',{name:/Gå til betaling.*84,00/}).first().waitFor();
+ await pay(page);await page.waitForURL('**/stripe?*');const args=requests.get('ui-newsletter-cart')[0];
+ assert.equal(args[6],null);assert.equal(args[5].discountTotal,20);
 });
 
 test('native mobile checkout supports autofill and hides sticky bar only for a focused keyboard',async t=>{

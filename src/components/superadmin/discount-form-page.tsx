@@ -297,6 +297,29 @@ export function DiscountFormPage({
                   )}
                 />
 
+                {applicationType === 'newsletter_signup' && (
+                  <FormField
+                    control={control as any}
+                    name="allowStacking"
+                    render={({ field }) => (
+                      <FormItem className="flex items-start justify-between gap-4 rounded-lg border p-4">
+                        <div className="space-y-1">
+                          <FormLabel>Tillad rabatstabling på nyhedsbrevsrabatten</FormLabel>
+                          <FormDescription>
+                            Giv rabat på alle varer efter varerabatter, inklusive tilvalg og menuer.
+                            Pose, levering og gebyrer er ikke med. Når valget er slået fra,
+                            gælder rabatten kun varer uden anden rabat.
+                            <span className="block mt-1">Andre kurvrabatter kombineres ikke. Den bedste kurvrabat bruges.</span>
+                          </FormDescription>
+                        </div>
+                        <FormControl>
+                          <Switch name="allowStacking" checked={!!field.value} onCheckedChange={field.onChange} />
+                        </FormControl>
+                      </FormItem>
+                    )}
+                  />
+                )}
+
                 <FormField
                   control={control as any}
                   name="brandId"
@@ -572,25 +595,6 @@ export function DiscountFormPage({
                       <FormControl>
                         <Switch
                           name="isActive"
-                          checked={field.value}
-                          onCheckedChange={field.onChange}
-                        />
-                      </FormControl>
-                    </FormItem>
-                  )}
-                />
-
-                <FormField
-                  control={control as any}
-                  name="allowStacking"
-                  render={({ field }) => (
-                    <FormItem className="flex flex-row items-center justify-between rounded-lg border p-4">
-                      <div className="space-y-0.5">
-                        <FormLabel>Allow Stacking</FormLabel>
-                      </div>
-                      <FormControl>
-                        <Switch
-                          name="allowStacking"
                           checked={field.value}
                           onCheckedChange={field.onChange}
                         />

@@ -8,6 +8,12 @@ export function newsletterEligible(consent: boolean, pendingId: string | undefin
   return usage === 0 && (!consent || pendingId === discountId);
 }
 
+// Only the newsletter campaign may opt into already discounted merchandise.
+// Other cart offers continue to compete for the best price, without stacking.
+export function newsletterAllowsStacking(discount: { applicationType?: string; allowStacking?: boolean } | null | undefined) {
+  return discount?.applicationType === 'newsletter_signup' && discount.allowStacking === true;
+}
+
 export function cartLineEligible(isCombo: boolean, catalogPrice: number, chargedUnitPrice: number, hasItemOffer: boolean) {
   return !isCombo && !hasItemOffer && chargedUnitPrice >= catalogPrice;
 }

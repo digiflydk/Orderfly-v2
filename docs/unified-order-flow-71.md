@@ -66,6 +66,26 @@ popularity, shipping or discount claims are introduced.
 
 ## Newsletter data contract
 
+Follow-up: [newsletter stacking and compact options](newsletter-stacking-options.md)
+documents the optional calculation on merchandise after item discounts. The
+following examples describe the default with stacking disabled.
+
+The checkout card introduces the configured percentage/amount and exclusions
+before the checkbox is selected, once the email is eligible. Its preview now
+uses `basketTotals`, including minimums, integer-øre rounding and competition
+with automatic offers. A newsletter discount is selected only if it produces
+a positive winning amount. An existing manual code is preserved. A minimum
+reached only by including already discounted products cannot attach an unusable
+newsletter ID to the payment request. Email edits, opt-out and cart eligibility
+changes revoke the selected incentive; signup itself stays optional.
+
+The card shows the actual deducted DKK amount only when the basket applies it.
+With no extra saving it explains why, before and after selection. The reported
+basket has a 185 kr. original subtotal, 60 kr. of item offers and a 4 kr. bag:
+its total remains 129 kr., since both products already have item discounts.
+An ordinary 100 kr. item with a 4 kr. bag instead changes from 104 to 94 kr.
+after selecting a valid 10% offer. Consent never authorizes discount stacking.
+
 On a valid submitted checkout with the checkbox selected, the server first
 creates/finds the native customer and then atomically records:
 

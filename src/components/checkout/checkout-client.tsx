@@ -8,6 +8,9 @@ import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillmen
 import { checkoutItems } from '@/lib/checkout-items';
 import { requestHostedCheckout } from '@/lib/checkout-request';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
+import { basketTotals } from '@/lib/basket-totals';
+import { lineMoney, sumMoney } from '@/lib/money';
+import { newsletterAllowsStacking } from '@/lib/promotion-rules';
 
 import * as React from 'react';
 import { useCart } from "@/context/cart-context";
@@ -47,7 +50,8 @@ import type {
   Location,
   Upsell,
   ProductForMenu,
-  CustomerInfo
+  CustomerInfo,
+  Discount
 } from '@/types';
 import { TimeSlotDialog } from "./timeslot-dialog";
 import { Alert, AlertTitle, AlertDescription } from "../ui/alert";
@@ -319,6 +323,8 @@ function CheckoutForm({ location }: { location: Location }) {
     applyDiscount,
     removeDiscount,
     appliedDiscount,
+    standardDiscounts,
+    includeBagFee,
     deliveryType,
     deliveryFee,
     freeDeliveryDiscountApplied,
@@ -389,11 +395,33 @@ function CheckoutForm({ location }: { location: Location }) {
   const newsletterSelected = form.watch('subscribeToNewsletter');
   const newsletterEmail = form.watch('email');
   useEffect(()=>{consentAttempt.current=null;},[newsletterSelected,newsletterEmail]);
-  const newsletterBase = cartItems.filter(item=>!isLockedItem(item)).reduce((n,item)=>n+(item.basePrice+item.toppings.reduce((sum,t)=>sum+t.price,0))*item.quantity,0);
-  const newsletterPotential = newsletterOffer ? Math.min(newsletterBase,newsletterOffer.discountType==='percentage'?newsletterBase*newsletterOffer.discountValue/100:newsletterOffer.discountValue) : 0;
-  const newsletterBenefitAvailable = !!newsletterOffer && newsletterPotential>0 && newsletterPotential>(cartDiscount?.amount || 0) && (!appliedDiscount || appliedDiscount.applicationType==='newsletter_signup');
-  const newsletterSavingApplied = !!newsletterOffer && newsletterSelected && !!voucherDiscount?.amount &&
-    appliedDiscount?.applicationType === 'newsletter_signup' && appliedDiscount.id === newsletterOffer.id;
+  const newsletterStacking = newsletterAllowsStacking(newsletterOffer);
+  const newsletterBase = newsletterStacking ? sumMoney([subtotal, -itemDiscount])
+    : sumMoney(cartItems.filter(item => !isLockedItem(item))
+      .map(item => lineMoney(item.basePrice, item.quantity, item.toppings.map(t => t.price))));
+  const newsletterBaseLabel = newsletterStacking ? 'varer efter varerabatter' : 'varer uden anden rabat';
+  const newsletterDiscount = useMemo<Discount | null>(() => {
+    if (!newsletterOffer || !brand || !location || !deliveryType) return null;
+    return {
+      ...newsletterOffer, brandId: brand.id, locationIds: [location.id], code: 'Nyhedsbrev',
+      isActive: true, orderTypes: [deliveryType], activeDays: [], activeTimeSlots: [],
+      usageLimit: 0, usedCount: 0, perCustomerLimit: 1, firstTimeCustomerOnly: false,
+      allowStacking: newsletterOffer.allowStacking === true, createdAt: new Date(), updatedAt: new Date(),
+    };
+  }, [newsletterOffer, brand, location, deliveryType]);
+  // Preview with the same minimum, rounding and best-price rules as the basket.
+  // Selecting a discount ID alone does not mean it saves the customer money.
+  const newsletterPreview = useMemo(() => newsletterDiscount ? basketTotals({
+    cartItems, appliedDiscount: newsletterDiscount, standardDiscounts,
+    deliveryType, location, brand, includeBagFee,
+  }).voucherDiscount : null, [newsletterDiscount, cartItems, standardDiscounts, deliveryType, location, brand, includeBagFee]);
+  const newsletterBenefitAvailable = !!newsletterPreview &&
+    (!appliedDiscount || appliedDiscount.applicationType === 'newsletter_signup');
+  const newsletterSavingApplied = newsletterBenefitAvailable && newsletterSelected && !!voucherDiscount?.amount &&
+    appliedDiscount?.applicationType === 'newsletter_signup' && appliedDiscount.id === newsletterOffer?.id;
+  const newsletterMinimumNotMet = !!newsletterOffer && newsletterBase < (newsletterOffer.minOrderValue || 0);
+  const newsletterOfferLabel = newsletterOffer && (newsletterOffer.discountType === 'percentage'
+    ? `${newsletterOffer.discountValue}%` : formatPrice(newsletterOffer.discountValue));
 
   useEffect(() => {
     let cancelled = false;
@@ -424,30 +452,13 @@ function CheckoutForm({ location }: { location: Location }) {
   useEffect(() => {
     if (
       newsletterSelected &&
-      newsletterOffer &&
-      (!appliedDiscount || appliedDiscount.applicationType === 'newsletter_signup')
+      newsletterDiscount && newsletterBenefitAvailable
     ) {
-      applyDiscount({
-        ...newsletterOffer,
-        brandId: brand!.id,
-        locationIds: [location!.id],
-        code: 'Nyhedsbrev',
-        isActive: true,
-        orderTypes: [deliveryType!],
-        activeDays: [],
-        activeTimeSlots: [],
-        usageLimit: 0,
-        usedCount: 0,
-        perCustomerLimit: 1,
-        firstTimeCustomerOnly: false,
-        allowStacking: false,
-        createdAt: new Date(),
-        updatedAt: new Date(),
-      });
-    } else if ((!newsletterSelected || !newsletterOffer) && appliedDiscount?.applicationType === 'newsletter_signup') {
+      applyDiscount(newsletterDiscount);
+    } else if (appliedDiscount?.applicationType === 'newsletter_signup') {
       removeDiscount();
     }
-  }, [newsletterSelected, newsletterOffer, appliedDiscount?.applicationType, applyDiscount, removeDiscount, brand, location, deliveryType]);
+  }, [newsletterSelected, newsletterDiscount, newsletterBenefitAvailable, appliedDiscount?.applicationType, applyDiscount, removeDiscount]);
 
   const handleApplyDiscount = useCallback(async () => {
     if (!discountCode || !brand || !location || !deliveryType || requestInFlight.current || paymentUncertain || paymentUrl) return;
@@ -538,8 +549,9 @@ function CheckoutForm({ location }: { location: Location }) {
 
       try { trackEvent('click_purchase', { cartValue: checkoutTotal }); } catch { /* Optional telemetry. */ }
 
-      const totalDiscount =
-        (itemDiscount || 0) + (cartDiscount?.amount || 0) + (voucherDiscount?.amount || 0);
+      const totalDiscount = sumMoney([
+        itemDiscount || 0, cartDiscount?.amount || 0, voucherDiscount?.amount || 0,
+      ]);
 
       const effectiveCartLevelDiscount = voucherDiscount ?? cartDiscount;
       const paymentDetails: Omit<PaymentDetails, 'paymentRefId'> = {
@@ -889,11 +901,24 @@ function CheckoutForm({ location }: { location: Location }) {
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
-                          <FormLabel className="text-base font-semibold leading-relaxed">{newsletterBenefitAvailable && newsletterOffer ? `Få ${newsletterOffer.discountType==='percentage'?`${newsletterOffer.discountValue}%`:formatPrice(newsletterOffer.discountValue)} ved tilmelding` : 'Få nyheder og tilbud'}</FormLabel>
+                          <FormLabel className="text-base font-semibold leading-relaxed">{newsletterBenefitAvailable ? `Få ${newsletterOfferLabel} ved tilmelding` : 'Få nyheder og tilbud'}</FormLabel>
                           <FormDescription>
                             {newsletterConsentText(brand?.name || 'restauranten')}
-                            {newsletterSavingApplied && <span className="block mt-2 font-semibold text-green-700">Nyhedsbrevsrabatten er valgt til denne ordre.</span>}
-                            {newsletterOffer && !newsletterBenefitAvailable && <span className="block mt-2">Dine nuværende rabatter eller menupriser bevares. Nyhedsbrevsrabatten lægges ikke oveni.</span>}
+                            {newsletterOffer && <span className="block mt-2">
+                              {newsletterStacking
+                                ? `Nyhedsbrevsrabatten giver ${newsletterOfferLabel} på alle varer efter varerabatter, inklusive tilvalg og menuer. Pose, levering og gebyrer er ikke med.`
+                                : `Nyhedsbrevsrabatten giver ${newsletterOfferLabel} på varer uden anden rabat. Gælder ikke menuer eller gebyrer.`}
+                              {!!newsletterOffer.minOrderValue && ` Kræver mindst ${formatPrice(newsletterOffer.minOrderValue)} i ${newsletterBaseLabel}.`}
+                            </span>}
+                            <span role="status" aria-live="polite" className="block mt-2">
+                              {newsletterSavingApplied
+                                ? <span className="font-semibold text-green-700">Nyhedsbrevsrabat: {formatPrice(voucherDiscount!.amount)} trukket fra denne ordre.</span>
+                                : newsletterBenefitAvailable
+                                  ? `Vælg tilmelding for at få ${formatPrice(newsletterPreview!.amount)} i nyhedsbrevsrabat på denne ordre.`
+                                  : newsletterOffer && (newsletterMinimumNotMet
+                                    ? `Du mangler ${formatPrice(sumMoney([newsletterOffer.minOrderValue || 0, -newsletterBase]))} i ${newsletterBaseLabel} for at bruge nyhedsbrevsrabatten.`
+                                    : 'Dine nuværende rabatter eller menupriser bevares. Tilmelding giver ingen ekstra rabat på denne ordre.')}
+                            </span>
                           </FormDescription>
                         </div>
                       </FormItem>

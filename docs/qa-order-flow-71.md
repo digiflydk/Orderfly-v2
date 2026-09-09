@@ -40,6 +40,26 @@ instruction to start all tests or Actions. A failed fixture selector was fixed
 to include option price in its accessible name, and responsive-only selectors
 were scoped to the visible panel. Business assertions were retained.
 
+## Newsletter feedback regression, 8 September 2026
+
+Follow-up to the customer's three screenshots, based on PR head `5c4fd52`.
+The newsletter browser scenarios now use production `basketTotals` rather than
+a fixed mock discount and unchanged mock total. Twelve selected Chromium cases
+cover the 129 kr. discounted basket on desktop/mobile, a usable offer before
+selection, actual DKK deduction/CTA/payment payload, opt-out, email changes,
+unchanged-subtotal cart changes, manual codes, weaker/stronger automatic offers,
+unmet eligible minimum and a saving rounded to zero. Four server cases compare
+basket, persisted order and simulated Stripe amounts and verify minimum rejection.
+The existing seven availability/email eligibility cases remain selected.
+
+```sh
+CART_CHROMIUM_PATH=/path/to/chromium node --test --test-name-pattern='newsletter' tests/unit/checkout-browser.cjs
+node --test tests/unit/newsletter-discount.cjs tests/unit/checkout-availability.cjs
+```
+
+Typecheck and the focused checks passed. These are local synthetic results,
+not a real Stripe payment, iOS Safari check or deployment verification.
+
 ## Controlled before/after measurement
 
 Identical synthetic checkout and local Chromium, 900 px viewport height, real

@@ -102,7 +102,8 @@ for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulf
  await page.getByRole('button',{name:'Tilføj Fixture Pizza'}).click();
  await page.getByRole('alert').getByRole('button',{name:'Prøv igen'}).click();
  await page.getByRole('dialog').waitFor();
- await page.getByRole('dialog').locator('summary').filter({hasText:'Ekstra'}).click();
+ assert.equal(await page.getByRole('dialog').locator('details, summary, [role="separator"]').count(),0);
+ assert.equal(await page.getByRole('dialog').getByRole('heading',{name:'Ekstra',exact:true}).count(),1);
  assert.equal(await page.getByRole('checkbox',{name:/Ost/}).isChecked(),true);
  const panel=page.locator('[data-commerce-panel="options"]');
  await panel.evaluate(async node=>{await Promise.all(node.getAnimations().map(a=>a.finished.catch(()=>{})));});
@@ -139,11 +140,11 @@ test('P2 topping cap covers defaults, checkboxes, radios and a valid 50-option c
  await page.waitForFunction(()=>document.querySelectorAll('[role="checkbox"][data-state="checked"]').length===50);
  assert.equal(await page.getByRole('checkbox',{name:'Default 50'}).isDisabled(),true,'51st default is capped and disabled');
  assert.equal(await page.getByRole('radio',{name:'Radio 1'}).isDisabled(),true,'an empty radio group cannot exceed the global cap');
- await page.getByRole('dialog').locator('details').evaluateAll(nodes=>nodes.forEach(node=>node.open=true));
+ assert.equal(await page.getByRole('dialog').locator('details, summary').count(),0);
  await page.getByRole('checkbox',{name:'Default 0'}).click();
  await page.getByRole('checkbox',{name:'Default 50'}).click();
- assert.equal(await page.getByRole('checkbox',{name:'Default 2'}).isDisabled(),false,'selected options remain removable at the cap');
- await page.getByRole('checkbox',{name:'Default 1'}).click();
+ assert.equal(await page.getByRole('checkbox',{name:/^Default 2 \+/}).isDisabled(),false,'selected options remain removable at the cap');
+ await page.getByRole('checkbox',{name:/^Default 1 \+/}).click();
  await page.getByRole('radio',{name:'Radio 1'}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Add to cart|Tilføj til kurv/i}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
@@ -237,6 +238,9 @@ test('#71 recommended product requires options and cannot add twice',async t=>{
  const dialog=page.getByRole('dialog').last();
  await dialog.getByRole('button',{name:/Vælg de påkrævede tilvalg/}).click();
  assert.equal(JSON.parse(await page.locator('#cart-state').textContent()).count,1);
+ const required=dialog.getByRole('region',{name:'Bund',exact:true});
+ assert.equal(await required.evaluate(node=>node===document.activeElement),true);
+ assert.equal(await required.getByRole('heading',{name:'Bund',exact:true}).count(),1);
  await dialog.getByRole('radio',{name:/Tynd bund/}).click();
  await dialog.getByRole('button',{name:/Tilføj til kurv/}).evaluate(node=>{node.click();node.click();});
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===2);
@@ -248,6 +252,8 @@ test('#71 editing one combo part preserves the other selected parts',async t=>{
  const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup');
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
  await page.getByRole('button',{name:'Tilføj Pizza og drik',exact:true}).click();
+ assert.equal(await page.getByRole('dialog').locator('details, summary, [role="separator"]').count(),0);
+ assert.equal(await page.getByRole('dialog').getByRole('heading',{name:'Drik',exact:true}).count(),1);
  await page.getByRole('dialog').getByRole('radio',{name:'Fixture Soda',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Tilføj til kurv/}).click();
  await page.getByRole('button',{name:/Se kurv/}).click();

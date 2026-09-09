@@ -14,7 +14,6 @@ import { useAnalytics } from '@/context/analytics-context';
 import { useToast } from '@/hooks/use-toast';
 import type { CartItem, ComboMenu, Product, ComboSelection, ProductForMenu } from '@/types';
 import { Minus, Plus, X } from 'lucide-react';
-import { Separator } from '../ui/separator';
 import Image from 'next/image';
 import { Badge } from '../ui/badge';
 import {formatPrice} from '@/lib/storefront-format';
@@ -148,7 +147,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
         return ids.length < Number(g.minSelection) || (Number(g.maxSelection)>0 && ids.length>Number(g.maxSelection)) || ids.some(id => !brandProducts.some(p=>p.id===id));
       });
       const el = group && document.getElementById(`${dialogId}-group-${group.id}`);
-      if (el) {if(el instanceof HTMLDetailsElement) el.open = true; el.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); el.focus();}
+      if (el) {el.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); el.focus();}
       return;
     }
     const comboSelections: ComboSelection[] = Object.entries(selection).map(([groupId, ids]) => {
@@ -182,8 +181,6 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                   <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{combo.comboName}</DialogTitle><DialogDescription>{combo.description || 'Sammensæt din menu.'}</DialogDescription><p className="font-semibold">{formatPrice(comboPrice || 0)}</p></DialogHeader>
                 </div>
                 <div className="p-4 space-y-4">
-                    <Separator />
-
                     {[...combo.productGroups].sort((a,b)=>Number(Number(b.minSelection)>0)-Number(Number(a.minSelection)>0)).map(group => {
                     const productsInGroup = group.productIds
                         .map(pid => brandProducts.find(p => p.id === pid))
@@ -193,11 +190,10 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                     const currentSelection = selection[group.id] || [];
 
                     return (
-                        <details key={group.id} id={`${dialogId}-group-${group.id}`} tabIndex={-1} open={Number(group.minSelection)>0 ? true : undefined} className="commerce-option-group" data-invalid={showErrors && currentSelection.length < Number(group.minSelection)}>
-                        <summary className="font-semibold">{group.groupName} · {Number(group.minSelection)>0 ? 'Påkrævet' : 'Valgfrit'}<span className="block text-sm font-normal text-muted-foreground">{currentSelection.map(id => brandProducts.find(p=>p.id===id)?.productName).filter(Boolean).join(', ') || getSelectionText(group)}</span></summary>
+                        <section key={group.id} id={`${dialogId}-group-${group.id}`} aria-labelledby={`${dialogId}-heading-${group.id}`} tabIndex={-1} className="commerce-option-group" data-invalid={showErrors && currentSelection.length < Number(group.minSelection)}>
                         <div className="mb-2">
-                            <h3 className="font-semibold text-lg">{group.groupName}</h3>
-                            <p className="text-sm text-muted-foreground">{getSelectionText(group)}</p>
+                            <h3 id={`${dialogId}-heading-${group.id}`} className="font-semibold text-lg">{group.groupName}</h3>
+                            <p className="text-sm text-muted-foreground">{Number(group.minSelection)>0 ? 'Påkrævet' : 'Valgfrit'} · {getSelectionText(group)}</p>
                         </div>
                         <div className="space-y-2">
                         {isSingleSelect ? (
@@ -227,7 +223,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                             })
                         )}
                         </div>
-                        </details>
+                        </section>
                     );
                     })}
             </div>

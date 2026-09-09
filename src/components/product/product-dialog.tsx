@@ -21,7 +21,6 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '../ui/checkbox';
 import { Label } from '../ui/label';
 import { ScrollArea } from '../ui/scroll-area';
-import { Separator } from '../ui/separator';
 import { Badge } from '../ui/badge';
 import { CategoryIcon as DynamicIcon } from '../catalog/category-icon';
 import { publicRead } from '@/lib/public-read';
@@ -194,7 +193,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
         return n < Number(g.minSelection) || (Number(g.maxSelection) > 0 && n > Number(g.maxSelection));
       });
       const element = group && document.getElementById(`${dialogId}-group-${group.id}`);
-      if (element) {if (element instanceof HTMLDetailsElement) element.open = true; element.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); element.focus();}
+      if (element) {element.scrollIntoView({block:'center',behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'auto':'smooth'}); element.focus();}
       return;
     }
     const finalToppings = Object.values(selectedToppings);
@@ -230,7 +229,6 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 <div className="p-4 space-y-4">
                     {hasOptions && (
                         <>
-                            <Separator />
                             {allergenError && <p role="status" className="text-sm">Allergenoplysninger kunne ikke indlæses. Kontakt restauranten ved allergi.</p>}
                         {allergens.length > 0 && (
                                 <div>
@@ -246,18 +244,15 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                 </div>
                             )}
 
-                            {relevantToppingGroups.length > 0 && <Separator />}
-
                             {relevantToppingGroups.map(group => {
                                 const isSingleSelect = Number(group.maxSelection) === 1;
                                 const currentSelection = Object.keys(selectedToppings).filter(tid => group.toppings.some(t => t.id === tid));
 
                                 return (
-                                    <details key={group.id} id={`${dialogId}-group-${group.id}`} tabIndex={-1} className="commerce-option-group" open={Number(group.minSelection) > 0 ? true : undefined} data-invalid={showErrors && currentSelection.length < Number(group.minSelection)}>
-                                      <summary className="font-semibold">{group.groupName} · {Number(group.minSelection) > 0 ? 'Påkrævet' : 'Valgfrit'}<span className="block text-sm font-normal text-muted-foreground">{currentSelection.map(id => selectedToppings[id]?.name).filter(Boolean).join(', ') || getSelectionText(group)}</span></summary>
+                                    <section key={group.id} id={`${dialogId}-group-${group.id}`} aria-labelledby={`${dialogId}-heading-${group.id}`} tabIndex={-1} className="commerce-option-group" data-invalid={showErrors && currentSelection.length < Number(group.minSelection)}>
                                         <div className="mb-2">
-                                        <h3 className="font-semibold text-lg">{group.groupName}</h3>
-                                        <p className="text-sm text-muted-foreground">{getSelectionText(group)}</p>
+                                        <h3 id={`${dialogId}-heading-${group.id}`} className="font-semibold text-lg">{group.groupName}</h3>
+                                        <p className="text-sm text-muted-foreground">{Number(group.minSelection) > 0 ? 'Påkrævet' : 'Valgfrit'} · {getSelectionText(group)}</p>
                                         </div>
                                         <div className="space-y-2">
                                             {isSingleSelect ? (
@@ -301,7 +296,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                             })
                                             )}
                                         </div>
-                                    </details>
+                                    </section>
                                 );
                             })}
                         </>
