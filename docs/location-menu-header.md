@@ -6,6 +6,8 @@ Alle oplysninger kommer fra den eksisterende lokation i kurvkonteksten. En lokat
 
 Kun logolinjen er sticky og har en samlet højde på 64 px, så menuens eksisterende sticky kategorier fortsat passer. Lokationsfeltet scroller væk. Checkout beholder den kompakte logolinje med lokationsnavn og uden et navigerbart logo. Der tilføjes ikke login/profilfunktioner.
 
+Leveringspris og en positiv minimumsbestilling vises kun, når lokationen faktisk tilbyder levering. Pickup-only lokationer viser derfor ikke leveringsspecifikke oplysninger, selv hvis en ældre minimumsværdi stadig findes på lokationen.
+
 Validering: `npm run typecheck` og `node --test tests/unit/location-header-browser.cjs`. Testen bruger den faktiske komponent og genereret Tailwind CSS med syntetiske lokationsdata og billeder. Den dækker mobil/desktop, layout og sticky-adfærd, adresse/åbningstider/priser, fallback, forkert brand og checkout. Chromium kan vælges via CART_CHROMIUM_PATH. Visuel kontrol foretages på testens screenshots. Next billedoptimering og produktionsdata er ikke del af fixturetesten.
 
 Ingen ændringer af produktionsdata. PR fra featurebranch -> tests -> uafhængigt review -> PO-accept -> merge/deployment i releaseprocessen -> liveverifikation. Work merger eller deployer ikke selv.

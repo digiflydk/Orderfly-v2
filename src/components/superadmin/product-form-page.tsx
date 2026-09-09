@@ -4,12 +4,12 @@ import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import {
-  useActionState,
+  useRef,
   useEffect,
   useMemo,
   useState,
 } from 'react';
-import { useFormStatus } from 'react-dom';
+import { PRODUCT_IMAGE_ACCEPT, productImageInputError } from '@/lib/product-image';
 import Link from '@/components/superadmin/admin-link';
 import Image from 'next/image';
 import { useRouter } from 'next/navigation';
@@ -202,11 +202,11 @@ interface ProductFormPageProps {
 }
 
 function SubmitButton({
-  isEditing,
+  isEditing, pending,
 }: {
   isEditing: boolean;
+  pending: boolean;
 }) {
-  const { pending } = useFormStatus();
 
   return (
     <Button type="submit" disabled={pending}>
@@ -246,10 +246,47 @@ export function ProductFormPage({
   const { toast } = useToast();
   const router = useRouter();
 
-  const [state, formAction] = useActionState<
-    FormState | null,
-    FormData
-  >(createOrUpdateProduct, null);
+  const [state, setState] = useState<FormState>(null);
+  const [pending, setPending] = useState(false);
+  const submitting = useRef(false);
+  const creationKey = useRef<string | null>(null);
+
+  async function submitProduct(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (submitting.current) return;
+    const data = new FormData(event.currentTarget);
+    // Serialize controlled values, including disabled brand selects and unchecked flags.
+    for (const [key, value] of Object.entries(form.getValues())) {
+      if (key === 'imageUrl') continue; // Keep the actual file from the native input.
+      data.delete(key);
+      if (Array.isArray(value)) value.forEach(item => data.append(key, String(item)));
+      else if (key === 'priceDelivery' && value === undefined) data.set(key, '');
+      else if (value !== undefined && value !== null) data.set(key, String(value));
+    }
+    if (!isEditing) {
+      creationKey.current ??= crypto.randomUUID();
+      data.set('creationKey', creationKey.current);
+    }
+    const image = data.get('imageUrl');
+    const imageError = image instanceof File ? productImageInputError(image) : null;
+    if (imageError) {
+      setState({ ok: false, error: { message: imageError } });
+      return;
+    }
+    submitting.current = true;
+    setPending(true);
+    setState(null);
+    try {
+      const result = await createOrUpdateProduct(null, data);
+      setState(result);
+      if (!result?.ok) submitting.current = false;
+    } catch {
+      submitting.current = false;
+      setState({ ok: false, error: { message: 'Could not contact the server. Your entries are preserved. Please try again.' } });
+    } finally {
+      setPending(false);
+    }
+  }
 
   const [imagePreview, setImagePreview] =
     useState<string | null>(
@@ -278,7 +315,7 @@ export function ProductFormPage({
             product.description ?? '',
           price: product.price ?? 0,
           priceDelivery:
-            product.priceDelivery ?? 0,
+            product.priceDelivery,
           isActive:
             product.isActive ?? false,
           isTestData: product.isTestData || false,
@@ -305,7 +342,7 @@ export function ProductFormPage({
           productName: '',
           description: '',
           price: 0,
-          priceDelivery: 0,
+          priceDelivery: undefined,
           isActive: true,
           isTestData: false,
           isFeatured: false,
@@ -418,9 +455,47 @@ export function ProductFormPage({
         shouldValidate: true,
       });
     }
+
+    const validLocationIds = new Set(
+      brandLocations
+        .map(location => location.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const currentLocationIds = uniq(
+      form.getValues('locationIds'),
+    );
+    const nextLocationIds = currentLocationIds.filter(
+      locationId => validLocationIds.has(locationId),
+    );
+    if (nextLocationIds.length !== currentLocationIds.length) {
+      form.setValue('locationIds', nextLocationIds, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
+
+    const validToppingGroupIds = new Set(
+      brandToppingGroups
+        .map(group => group.id)
+        .filter((id): id is string => Boolean(id)),
+    );
+    const currentToppingGroupIds = uniq(
+      form.getValues('toppingGroupIds'),
+    );
+    const nextToppingGroupIds = currentToppingGroupIds.filter(
+      groupId => validToppingGroupIds.has(groupId),
+    );
+    if (nextToppingGroupIds.length !== currentToppingGroupIds.length) {
+      form.setValue('toppingGroupIds', nextToppingGroupIds, {
+        shouldDirty: true,
+        shouldValidate: true,
+      });
+    }
   }, [
     selectedBrandId,
     brandCategories,
+    brandLocations,
+    brandToppingGroups,
     form,
   ]);
 
@@ -517,7 +592,7 @@ export function ProductFormPage({
     <div className="space-y-6">
       <Form {...form}>
         <form
-          action={formAction}
+          onSubmit={submitProduct}
           className="space-y-6"
         >
           <div className="flex items-center justify-between">
@@ -544,11 +619,17 @@ export function ProductFormPage({
 
               <SubmitButton
                 isEditing={isEditing}
+                pending={pending || state?.ok === true}
               />
             </div>
           </div>
 
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          {state && !state.ok && (
+            <div role="alert" className="rounded-md border border-destructive p-4 text-destructive">
+              {state.error.detail || state.error.message}
+            </div>
+          )}
+          <fieldset disabled={pending} className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-3">
             <div className="space-y-6 lg:col-span-2">
               <Card>
                 <CardHeader>
@@ -618,17 +699,9 @@ export function ProductFormPage({
                           </SelectContent>
                         </Select>
 
+                        <input type="hidden" name="brandId" value={field.value ?? ''} />
                         {isEditing && (
                           <>
-                            <input
-                              type="hidden"
-                              name="brandId"
-                              value={
-                                field.value ??
-                                ''
-                              }
-                            />
-
                             <FormDescription>
                               Product&apos;s
                               brand cannot be
@@ -866,7 +939,7 @@ export function ProductFormPage({
                       <Input
                         name="imageUrl"
                         type="file"
-                        accept="image/*"
+                        accept={PRODUCT_IMAGE_ACCEPT}
                         onChange={event => {
                           const file =
                             event.target
@@ -902,6 +975,8 @@ export function ProductFormPage({
                         }}
                       />
                     </FormControl>
+
+                    <FormDescription>JPEG, PNG or AVIF. Maximum 5 MB.</FormDescription>
 
                     {imagePreview && (
                       <div className="relative mt-2 h-32 w-32">
@@ -1378,7 +1453,7 @@ export function ProductFormPage({
                 </CardContent>
               </Card>
             </div>
-          </div>
+          </fieldset>
         </form>
       </Form>
     </div>

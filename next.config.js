@@ -21,7 +21,7 @@ const nextConfig = {
     ];
   },
   experimental: {
-    serverActions: {},
+    serverActions: { bodySizeLimit: '6mb' },
   },
   images: {
     domains: [

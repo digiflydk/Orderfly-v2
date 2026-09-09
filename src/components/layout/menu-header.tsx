@@ -50,9 +50,9 @@ export function MenuHeader({ brand }: { brand: Brand }) {
           className="mt-2 inline-block break-words text-base text-white/90 underline decoration-dotted underline-offset-4 hover:text-white sm:text-xl"
         >{details.address}</a>}
         {now && details.opening && <p className="mt-2 text-sm text-white/90 sm:text-base">Åbningstid i dag: {details.opening}</p>}
-        {(details.delivery || Number.isFinite(location.minOrder)) && <div className="mt-4 flex flex-wrap gap-2 text-sm sm:text-base">
+        {details.delivery && (Number.isFinite(location.deliveryFee) || (Number.isFinite(location.minOrder) && location.minOrder > 0)) && <div className="mt-4 flex flex-wrap gap-2 text-sm sm:text-base">
           {details.delivery && Number.isFinite(location.deliveryFee) && <p className="rounded-lg border border-white/70 px-3 py-2">Levering fra: {formatPrice(location.deliveryFee)}</p>}
-          {Number.isFinite(location.minOrder) && <p className="rounded-lg border border-white/70 px-3 py-2">Minimumsbestilling: {formatPrice(location.minOrder)}</p>}
+          {Number.isFinite(location.minOrder) && location.minOrder > 0 && <p className="rounded-lg border border-white/70 px-3 py-2">Minimumsbestilling: {formatPrice(location.minOrder)}</p>}
         </div>}
       </div>
     </section>}

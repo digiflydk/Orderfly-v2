@@ -35,7 +35,7 @@ before(async()=>{
   const brand={id:'b',name:'Esmeralda Pizza',slug:'esmeralda',logoUrl:'/logo.svg'};
   const location={id:'l',brandId:'b',name:'Esmeralda Pizza Amager',slug:'amager',street:'Albaniensgade 6',zipCode:'2300',city:'København S',imageUrl:'/photo.svg',openingHours:{wednesday:{isOpen:true,open:'11:00',close:'22:00'}},deliveryTypes:['delivery','pickup'],deliveryFee:49,minOrder:100};
   const mode=url.searchParams.get('mode');
-  if(mode==='fallback'){delete location.imageUrl;delete location.street;location.address='Lang adresse 128, 2300 København S';location.deliveryTypes=['pickup'];delete location.minOrder;location.openingHours.wednesday.isOpen=false;}
+  if(mode==='fallback'){delete location.imageUrl;delete location.street;location.address='Lang adresse 128, 2300 København S';location.deliveryTypes=['pickup'];location.openingHours.wednesday.isOpen=false;}
   if(mode==='other-brand')location.brandId='other';
   if(mode==='missing'){delete location.openingHours;delete location.deliveryFee;delete location.minOrder;}
   res.setHeader('content-type','text/html');res.end('<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body><div id="root"></div><script>window.fixture='+JSON.stringify({brand,location})+'</script><script src="/bundle.js"></script></body></html>');
