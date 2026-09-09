@@ -105,6 +105,7 @@ export default function FeedbackQuestionVersionForm({
 }: FeedbackQuestionVersionFormProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
+  const [saveError, setSaveError] = useState<string | null>(null);
   const [draft, setDraft] = useState<VersionDraft>(() => draftFrom(version));
 
   useEffect(() => setDraft(draftFrom(version)), [version]);
@@ -163,13 +164,17 @@ export default function FeedbackQuestionVersionForm({
     draft.orderTypes.forEach((type) => formData.append('orderTypes', type));
     formData.append('questions', JSON.stringify(draft.questions));
 
+    setSaveError(null);
     startTransition(async () => {
+      try {
       const result = await createOrUpdateQuestionVersion(formData);
       if (result.ok) {
         window.location.href = `/superadmin/feedback/questions/edit/${result.id}`;
         return;
       }
+      setSaveError(result.error);
       toast({ title: 'Kunne ikke gemme', description: result.error, variant: 'destructive' });
+      } catch { setSaveError('Kunne ikke kontakte serveren. Dine ændringer er bevaret.'); }
     });
   };
 
@@ -186,7 +191,8 @@ export default function FeedbackQuestionVersionForm({
         </div>
       </div>
 
-      <div className="grid gap-6 lg:grid-cols-3">
+      {saveError && <p role="alert" className="text-destructive">{saveError}</p>}
+      <fieldset disabled={isPending} className="grid min-w-0 gap-6 lg:grid-cols-3">
         <Card className="h-fit lg:col-span-1">
           <CardHeader><CardTitle>Version Details</CardTitle></CardHeader>
           <CardContent className="space-y-5">
@@ -232,8 +238,8 @@ export default function FeedbackQuestionVersionForm({
                   </Button>
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
-                  <div className="space-y-2"><Label>Label</Label><Input value={question.label} onChange={(event) => updateQuestion(questionIndex, { label: event.target.value })} /></div>
-                  <div className="space-y-2"><Label>Type</Label><Select value={question.type} onValueChange={(type) => updateQuestion(questionIndex, { type: type as QuestionType })}><SelectTrigger><SelectValue /></SelectTrigger><SelectContent>{QUESTION_TYPES.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select></div>
+                  <div className="space-y-2"><Label>Label</Label><Input aria-label="Question label" value={question.label} onChange={(event) => updateQuestion(questionIndex, { label: event.target.value })} /></div>
+                  <div className="space-y-2"><Label>Type</Label><Select value={question.type} onValueChange={(type) => updateQuestion(questionIndex, { type: type as QuestionType })}><SelectTrigger aria-label="Question type"><SelectValue /></SelectTrigger><SelectContent>{QUESTION_TYPES.map((type) => <SelectItem key={type} value={type}>{type}</SelectItem>)}</SelectContent></Select></div>
                 </div>
                 <label className="mt-4 flex items-center gap-3"><Checkbox checked={question.isRequired} onCheckedChange={(checked) => updateQuestion(questionIndex, { isRequired: checked === true })} /><span>Required</span></label>
 
@@ -266,7 +272,7 @@ export default function FeedbackQuestionVersionForm({
             </Button>
           </CardContent>
         </Card>
-      </div>
+      </fieldset>
     </div>
   );
 }

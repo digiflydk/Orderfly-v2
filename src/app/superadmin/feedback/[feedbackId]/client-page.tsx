@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from 'react';
 import Link from '@/components/superadmin/admin-link';
-import { format } from 'date-fns';
+import { feedbackDate } from '@/lib/feedback/display';
 import { ArrowLeft, CheckCircle, Home, MessageSquare, Star, Tag, Trash2, User, XCircle } from 'lucide-react';
 
 import type { Feedback } from '@/types';
@@ -53,7 +53,7 @@ export function FeedbackDetailClient({ initialFeedback }: { initialFeedback: Ful
     const previous = feedback[field];
     setFeedback((current) => ({ ...current, [field]: value }));
     startTransition(async () => {
-      const result = await updateFeedback(feedback.id, { [field]: value });
+      const result = await updateFeedback(feedback.id, { [field]: value }).catch(() => ({ error: true, message: 'Kunne ikke gemme. Prøv igen.' }));
       if (result.error) {
         setFeedback((current) => ({ ...current, [field]: previous }));
         toast({ variant: 'destructive', title: 'Error', description: result.message });
@@ -62,12 +62,12 @@ export function FeedbackDetailClient({ initialFeedback }: { initialFeedback: Ful
   };
 
   const saveNote = () => startTransition(async () => {
-    const result = await updateFeedback(feedback.id, { internalNote: feedback.internalNote });
+    const result = await updateFeedback(feedback.id, { internalNote: feedback.internalNote || '' }).catch(() => ({ error: true, message: 'Kunne ikke gemme. Prøv igen.' }));
     toast(result.error ? { variant: 'destructive', title: 'Error', description: result.message } : { title: 'Saved', description: 'Internal note saved.' });
   });
 
   const remove = () => startTransition(async () => {
-    const result = await deleteFeedback(feedback.id);
+    const result = await deleteFeedback(feedback.id).catch(() => ({ error: true, message: 'Kunne ikke slette. Prøv igen.' }));
     if (result.error) toast({ variant: 'destructive', title: 'Error', description: result.message });
     else router.push('/superadmin/feedback');
   });
@@ -92,8 +92,8 @@ export function FeedbackDetailClient({ initialFeedback }: { initialFeedback: Ful
       </div>
 
       <div className="space-y-6">
-        <Card><CardHeader><CardTitle>Moderation</CardTitle></CardHeader><CardContent className="space-y-4"><div className="flex items-center justify-between"><Label htmlFor="showPublicly">Show Publicly</Label><Switch id="showPublicly" checked={feedback.showPublicly} onCheckedChange={(value) => toggle('showPublicly', value)} /></div><div className="flex items-center justify-between"><Label htmlFor="maskCustomerName">Mask Name</Label><Switch id="maskCustomerName" checked={feedback.maskCustomerName} onCheckedChange={(value) => toggle('maskCustomerName', value)} /></div></CardContent></Card>
-        <Card><CardHeader><CardTitle>Details</CardTitle></CardHeader><CardContent className="space-y-4 text-sm"><InfoItem icon={User} label="Customer">{feedback.maskCustomerName ? 'Anonymous' : feedback.customerName}</InfoItem><InfoItem icon={Home} label="Brand / Location">{feedback.brandName} / {feedback.locationName}</InfoItem><InfoItem icon={MessageSquare} label="Submitted At">{format(new Date(feedback.receivedAt), 'MMM d, yyyy HH:mm')}</InfoItem><InfoItem icon={Tag} label="Source">{sourceType === 'booking' ? 'Restaurant booking' : 'Online order'} · {sourceId}</InfoItem>{feedback.autoResponseSent ? <InfoItem icon={CheckCircle} label="Auto-response">Sent</InfoItem> : <InfoItem icon={XCircle} label="Auto-response">Not Sent</InfoItem>}</CardContent></Card>
+        <Card><CardHeader><CardTitle>Moderation</CardTitle></CardHeader><CardContent className="space-y-4"><div className="flex items-center justify-between"><Label htmlFor="showPublicly">Show Publicly</Label><Switch disabled={isPending} id="showPublicly" checked={feedback.showPublicly} onCheckedChange={(value) => toggle('showPublicly', value)} /></div><div className="flex items-center justify-between"><Label htmlFor="maskCustomerName">Mask Name</Label><Switch disabled={isPending} id="maskCustomerName" checked={feedback.maskCustomerName} onCheckedChange={(value) => toggle('maskCustomerName', value)} /></div></CardContent></Card>
+        <Card><CardHeader><CardTitle>Details</CardTitle></CardHeader><CardContent className="space-y-4 text-sm"><InfoItem icon={User} label="Customer">{feedback.maskCustomerName ? 'Anonymous' : feedback.customerName}</InfoItem><InfoItem icon={Home} label="Brand / Location">{feedback.brandName} / {feedback.locationName}</InfoItem><InfoItem icon={MessageSquare} label="Submitted At">{feedbackDate(feedback.receivedAt)}</InfoItem><InfoItem icon={Tag} label="Source">{sourceType === 'booking' ? 'Restaurant booking' : 'Online order'} · {sourceId}</InfoItem>{feedback.autoResponseSent ? <InfoItem icon={CheckCircle} label="Auto-response">Sent</InfoItem> : <InfoItem icon={XCircle} label="Auto-response">Not Sent</InfoItem>}</CardContent></Card>
       </div>
     </div>
   </div>;

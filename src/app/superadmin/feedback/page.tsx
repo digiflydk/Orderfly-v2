@@ -1,3 +1,4 @@
+import { upsellClientData } from '@/lib/upsell-serialization';
 
 import { getFeedbackEntries } from "./actions";
 import { getBrands } from '@/app/superadmin/brands/actions';
@@ -39,9 +40,9 @@ async function FeedbackPageContent() {
                 </p>
             </div>
             <FeedbackClientPage 
-                initialFeedback={feedbackWithDetails}
-                brands={brands}
-                locations={locations}
+                initialFeedback={upsellClientData(feedbackWithDetails)}
+                brands={upsellClientData(brands)}
+                locations={upsellClientData(locations)}
             />
         </div>
     );

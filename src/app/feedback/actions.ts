@@ -3,6 +3,8 @@
 import { revalidatePath } from 'next/cache';
 import { redirect } from 'next/navigation';
 import { z } from 'zod';
+import { createHash } from 'node:crypto';
+import { readActiveQuestions } from '@/lib/feedback/question-store';
 
 import { admin, getAdminDb } from '@/lib/firebase-admin';
 import { getOrderById } from '@/app/checkout/order-actions';
@@ -16,15 +18,9 @@ import { resolveBookingFeedbackInvitationToken } from '@/lib/integrations/esmera
 
 export async function getActiveFeedbackQuestionsForExperience(
   experienceType: FeedbackExperienceType,
+  language = 'da',
 ): Promise<ExperienceFeedbackQuestionsVersion | null> {
-  const db = getAdminDb();
-  const snapshot = await db.collection('feedbackQuestionsVersion')
-    .where('isActive', '==', true)
-    .where('orderTypes', 'array-contains', experienceType)
-    .get();
-  if (snapshot.empty) return null;
-  const doc = snapshot.docs[0];
-  return { id: doc.id, ...doc.data() } as ExperienceFeedbackQuestionsVersion;
+  return readActiveQuestions(experienceType, language);
 }
 
 export async function getActiveFeedbackQuestionsForOrder(
@@ -157,7 +153,8 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
     const validatedResponses = responseValidation.responses;
     const { rating, npsScore, comment, tags } = extractCoreResponses(validatedResponses);
 
-    const feedbackRef = db.collection('feedback').doc();
+    const feedbackId = createHash('sha256').update(JSON.stringify([source.brandId, source.sourceType, source.sourceId])).digest('hex');
+    const feedbackRef = db.collection('feedback').doc(feedbackId);
     const feedbackData: Record<string, unknown> = {
       id: feedbackRef.id,
       sourceType: source.sourceType,
@@ -197,10 +194,16 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
         });
       });
     } else {
-      await feedbackRef.create(feedbackData);
+      await db.runTransaction(async transaction => {
+        const existing = await transaction.get(feedbackRef);
+        // Include legacy random-ID feedback when checking whether the order was answered.
+        const legacy = await transaction.get(db.collection('feedback').where('orderId', '==', source.sourceId));
+        if (existing.exists || legacy.docs.some(doc => doc.data().brandId === source.brandId && doc.data().customerId === source.customerId)) return;
+        transaction.create(feedbackRef, feedbackData);
+      });
     }
 
-    revalidatePath('/superadmin/feedback');
+    try { revalidatePath('/superadmin/feedback'); } catch (error) { console.error('Feedback cache refresh failed', error); }
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
     console.error('Error submitting feedback:', e);

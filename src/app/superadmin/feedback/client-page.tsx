@@ -2,7 +2,7 @@
 
 import { useMemo, useState } from 'react';
 import Link from '@/components/superadmin/admin-link';
-import { format } from 'date-fns';
+import { feedbackDate } from '@/lib/feedback/display';
 import { Eye, MoreHorizontal, Star, Trash2, X } from 'lucide-react';
 
 import type { Brand, Feedback, Location } from '@/types';
@@ -49,6 +49,8 @@ export function FeedbackClientPage({ initialFeedback, brands, locations }: Feedb
   const [feedbackList, setFeedbackList] = useState(initialFeedback);
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({ brandId: 'all', locationId: 'all', rating: 'all', source: 'all', showPublicly: 'all' });
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
   const [feedbackToDelete, setFeedbackToDelete] = useState<string | null>(null);
 
   const filteredFeedback = useMemo(() => feedbackList.filter((feedback) => {
@@ -64,17 +66,24 @@ export function FeedbackClientPage({ initialFeedback, brands, locations }: Feedb
   }), [feedbackList, filters, searchQuery]);
 
   const toggle = async (id: string, value: boolean) => {
+    if (busy) return;
+    setBusy(true); setError(null);
     setFeedbackList((current) => current.map((feedback) => feedback.id === id ? { ...feedback, showPublicly: value } : feedback));
-    const result = await updateFeedback(id, { showPublicly: value });
+    const result = await updateFeedback(id, { showPublicly: value }).catch(() => ({ error: true, message: 'Kunne ikke gemme. Prøv igen.' }));
+    setBusy(false);
     if (result.error) {
       setFeedbackList((current) => current.map((feedback) => feedback.id === id ? { ...feedback, showPublicly: !value } : feedback));
+      setError(result.message);
       toast({ variant: 'destructive', title: 'Error', description: result.message });
     }
   };
 
   const remove = async () => {
-    if (!feedbackToDelete) return;
-    const result = await deleteFeedback(feedbackToDelete);
+    if (!feedbackToDelete || busy) return;
+    setBusy(true); setError(null);
+    const result = await deleteFeedback(feedbackToDelete).catch(() => ({ error: true, message: 'Kunne ikke slette. Prøv igen.' }));
+    setBusy(false);
+    if (result.error) setError(result.message);
     if (result.error) toast({ variant: 'destructive', title: 'Error', description: result.message });
     else setFeedbackList((current) => current.filter((feedback) => feedback.id !== feedbackToDelete));
     setFeedbackToDelete(null);
@@ -82,11 +91,12 @@ export function FeedbackClientPage({ initialFeedback, brands, locations }: Feedb
 
   return (
     <div className="space-y-4">
+      {error && <p role="alert" className="text-destructive">{error}</p>}
       <Card><CardContent className="grid gap-3 p-4 md:grid-cols-2 lg:grid-cols-6">
         <Input className="lg:col-span-2" placeholder="Search customer, order, booking or comment..." value={searchQuery} onChange={(event) => setSearchQuery(event.target.value)} />
         <Select value={filters.source} onValueChange={(source) => setFilters({ ...filters, source })}><SelectTrigger><SelectValue placeholder="Source" /></SelectTrigger><SelectContent><SelectItem value="all">All Sources</SelectItem><SelectItem value="commerce_order">Online orders</SelectItem><SelectItem value="booking">Bookings</SelectItem></SelectContent></Select>
-        <Select value={filters.brandId} onValueChange={(brandId) => setFilters({ ...filters, brandId })}><SelectTrigger><SelectValue placeholder="Brand" /></SelectTrigger><SelectContent><SelectItem value="all">All Brands</SelectItem>{brands.map((brand) => <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>)}</SelectContent></Select>
-        <Select value={filters.locationId} onValueChange={(locationId) => setFilters({ ...filters, locationId })}><SelectTrigger><SelectValue placeholder="Location" /></SelectTrigger><SelectContent><SelectItem value="all">All Locations</SelectItem>{locations.map((location) => <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>)}</SelectContent></Select>
+        <Select value={filters.brandId} onValueChange={(brandId) => setFilters({ ...filters, brandId, locationId: 'all' })}><SelectTrigger><SelectValue placeholder="Brand" /></SelectTrigger><SelectContent><SelectItem value="all">All Brands</SelectItem>{brands.map((brand) => <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>)}</SelectContent></Select>
+        <Select value={filters.locationId} onValueChange={(locationId) => setFilters({ ...filters, locationId })}><SelectTrigger><SelectValue placeholder="Location" /></SelectTrigger><SelectContent><SelectItem value="all">All Locations</SelectItem>{locations.filter(location => filters.brandId === 'all' || location.brandId === filters.brandId).map((location) => <SelectItem key={location.id} value={location.id}>{location.name}</SelectItem>)}</SelectContent></Select>
         <Button variant="ghost" onClick={() => { setSearchQuery(''); setFilters({ brandId: 'all', locationId: 'all', rating: 'all', source: 'all', showPublicly: 'all' }); }}><X className="mr-2 h-4 w-4" />Clear</Button>
       </CardContent></Card>
 
@@ -101,8 +111,8 @@ export function FeedbackClientPage({ initialFeedback, brands, locations }: Feedb
               <TableCell><RatingStars rating={feedback.rating} /></TableCell>
               <TableCell>{feedback.maskCustomerName ? 'Anonymous' : feedback.customerName}</TableCell>
               <TableCell>{feedback.locationName}</TableCell>
-              <TableCell>{format(new Date(feedback.receivedAt), 'MMM d, yyyy')}</TableCell>
-              <TableCell><Switch checked={feedback.showPublicly} onCheckedChange={(value) => toggle(feedback.id, value)} /></TableCell>
+              <TableCell>{feedbackDate(feedback.receivedAt)}</TableCell>
+              <TableCell><Switch disabled={busy} aria-label="Show publicly" checked={feedback.showPublicly} onCheckedChange={(value) => toggle(feedback.id, value)} /></TableCell>
               <TableCell className="text-right"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem asChild><Link href={`/superadmin/feedback/${feedback.id}`}><Eye className="mr-2 h-4 w-4" />View</Link></DropdownMenuItem><DropdownMenuItem className="text-destructive" onSelect={(event) => { event.preventDefault(); setFeedbackToDelete(feedback.id); }}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu></TableCell>
             </TableRow>;
           })}

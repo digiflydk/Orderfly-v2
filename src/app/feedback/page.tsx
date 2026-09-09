@@ -12,6 +12,7 @@ export const revalidate = 0;
 
 export default async function Page({ searchParams }: AsyncPageProps) {
   const query = await resolveSearchParams(searchParams);
+  const language = typeof query.lang === 'string' && /^[a-z]{2}(?:-[A-Z]{2})?$/.test(query.lang) ? query.lang : 'da';
   const token = typeof query.token === 'string' ? query.token : undefined;
 
   if (token) {
@@ -24,7 +25,7 @@ export default async function Page({ searchParams }: AsyncPageProps) {
     if (!brandSnapshot.exists) notFound();
     const brand = brandSnapshot.data() ?? {};
 
-    const questionsVersion = await getActiveFeedbackQuestionsForExperience('booking');
+    const questionsVersion = await getActiveFeedbackQuestionsForExperience('booking', language);
     if (!questionsVersion) {
       return <div className="flex items-center justify-center min-h-screen"><p>No active feedback form available at the moment.</p></div>;
     }
@@ -59,7 +60,7 @@ export default async function Page({ searchParams }: AsyncPageProps) {
   if (!order || order.customerDetails.id !== customerId) notFound();
 
   const questionsVersion = await getActiveFeedbackQuestionsForExperience(
-    order.deliveryType.toLowerCase() as 'pickup' | 'delivery',
+    order.deliveryType.toLowerCase() as 'pickup' | 'delivery', language,
   );
   if (!questionsVersion) {
     return <div className="flex items-center justify-center min-h-screen"><p>No active feedback form available at the moment.</p></div>;

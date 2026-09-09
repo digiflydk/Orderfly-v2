@@ -10,7 +10,6 @@ import Link from '@/components/superadmin/admin-link';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { sendFeedbackRequestEmail } from '@/app/superadmin/feedback/actions';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getOrderById } from '@/app/checkout/order-actions';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -68,10 +67,6 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 		notFound();
 	}
 
-	const sendFeedbackEmailWithId = async (formData: FormData) => {
-		'use server';
-		await sendFeedbackRequestEmail(order.id);
-	};
 
 	return (
 		<div className="space-y-6">
@@ -91,9 +86,10 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 					</p>
 				</div>
 				<div className="flex items-center gap-2">
-					<form action={sendFeedbackEmailWithId}>
-						<Button variant="outline" type="submit"><MessageSquare className="mr-2" />Send Feedback Request</Button>
-					</form>
+                    <div>
+                      <Button variant="outline" type="button" disabled><MessageSquare className="mr-2" />Send Feedback Request</Button>
+                      <p className="text-xs text-muted-foreground">Feedbackmail er endnu ikke tilsluttet.</p>
+                    </div>
 					<Button variant="outline"><Download className="mr-2" />Export</Button>
 					<Button asChild><Link href="#" target="_blank"><LinkIcon className="mr-2" />View in Stripe</Link></Button>
 				</div>

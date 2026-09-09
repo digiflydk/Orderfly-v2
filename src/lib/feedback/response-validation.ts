@@ -32,6 +32,7 @@ function optionLabels(options: unknown): Set<string> {
 }
 
 function integerOrNull(value: unknown): number | null {
+  if (typeof value !== 'number' && (typeof value !== 'string' || !value.trim())) return null;
   const number = Number(value);
   return Number.isInteger(number) ? number : null;
 }
@@ -40,7 +41,7 @@ export function validateFeedbackResponses(
   questions: unknown,
   responses: Record<string, unknown>,
 ): FeedbackResponseValidationResult {
-  if (!Array.isArray(questions)) return { ok: false, error: 'Feedback form questions are invalid.' };
+  if (!Array.isArray(questions) || !questions.length) return { ok: false, error: 'Feedback form questions are invalid.' };
 
   const knownIds = new Set<string>();
   const validated: Record<string, ValidatedFeedbackResponse> = {};
@@ -50,7 +51,7 @@ export function validateFeedbackResponses(
     const questionId = typeof question.questionId === 'string' ? question.questionId.trim() : '';
     const label = typeof question.label === 'string' ? question.label.trim() : '';
     const type = typeof question.type === 'string' ? question.type : '';
-    if (!questionId || !label || !QUESTION_TYPES.has(type)) {
+    if (!questionId || ['__proto__', 'constructor', 'prototype'].includes(questionId) || !label || !QUESTION_TYPES.has(type)) {
       return { ok: false, error: 'Feedback form contains an invalid question.' };
     }
     if (knownIds.has(questionId)) return { ok: false, error: 'Feedback form contains duplicate question ids.' };
@@ -92,12 +93,13 @@ export function validateFeedbackResponses(
     }
 
     if (!Array.isArray(answer)) return { ok: false, error: `Invalid option response for: ${label}` };
+    if (answer.some(value => typeof value !== 'string')) return { ok: false, error: `Invalid option response for: ${label}` };
     if (answer.length > 50) return { ok: false, error: `Too many selected options for: ${label}` };
     const values = [...new Set(answer.map((value) => typeof value === 'string' ? value.trim() : '').filter(Boolean))];
     if (values.some((value) => value.length > 200)) return { ok: false, error: `Feedback option is too long: ${label}` };
 
     const allowed = optionLabels(question.options);
-    if (allowed.size && values.some((value) => !allowed.has(value))) {
+    if (!allowed.size || values.some((value) => !allowed.has(value))) {
       return { ok: false, error: `Unknown feedback option for: ${label}` };
     }
 

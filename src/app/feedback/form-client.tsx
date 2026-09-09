@@ -1,7 +1,7 @@
 'use client';
 
 import { useForm } from 'react-hook-form';
-import { useTransition } from 'react';
+import { useTransition, useState } from 'react';
 import type { ExperienceFeedbackQuestionsVersion, FeedbackSourceContext } from '@/lib/feedback/source-types';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +28,7 @@ type FormValues = {
 
 export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormClientProps) {
   const { toast } = useToast();
+  const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const form = useForm<FormValues>({ defaultValues: { responses: {} } });
   const { handleSubmit, watch, setValue } = form;
@@ -43,10 +44,18 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
     if (context.invitationToken) formData.append('invitationToken', context.invitationToken);
     formData.append('responses', JSON.stringify(data.responses));
 
+    setError(null);
     startTransition(async () => {
+      try {
       const result = await submitFeedbackAction(null, formData);
       if (result?.error) {
+        setError(result.message);
         toast({ variant: 'destructive', title: 'Error', description: result.message });
+      }
+      } catch (error) {
+        // Next redirects are handled by the router; transport errors retain the answers.
+        if (error && typeof error === 'object' && 'digest' in error && String(error.digest).startsWith('NEXT_REDIRECT')) throw error;
+        setError('Kunne ikke sende feedback. Dine svar er bevaret. Prøv igen.');
       }
     });
   };
@@ -68,6 +77,7 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
                 key={i}
                 type="button"
                 aria-label={`${i + 1} stars`}
+                aria-pressed={response?.answer === i + 1}
                 onClick={() => handleValueChange(qid, question.label, 'stars', i + 1)}
               >
                 <Star className={cn('h-10 w-10 text-muted-foreground/30 transition-colors', (response?.answer > i) && 'text-yellow-400 fill-yellow-400')} />
@@ -84,6 +94,7 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
                 type="button"
                 variant={response?.answer === i ? 'default' : 'outline'}
                 size="icon"
+                aria-pressed={response?.answer === i}
                 onClick={() => handleValueChange(qid, question.label, 'nps', i)}
               >
                 {i}
@@ -165,6 +176,8 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+            {error && <p role="alert" className="text-destructive">{error}</p>}
+            <fieldset disabled={isPending} className="min-w-0 space-y-8">
             {questionsVersion.questions.map((question) => (
               <div key={question.questionId}>
                 <Label className="text-lg font-semibold">{question.label}</Label>
@@ -172,6 +185,7 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
                 <div className="pt-4">{renderQuestion(question)}</div>
               </div>
             ))}
+            </fieldset>
             <Button type="submit" className="w-full" disabled={isPending}>
               {isPending ? <Loader2 className="animate-spin" /> : 'Send feedback'}
             </Button>
