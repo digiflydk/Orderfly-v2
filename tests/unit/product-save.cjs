@@ -88,7 +88,10 @@ test('storage errors identify access, missing bucket and credentials without exp
   try{
    const result=await f.actions.createOrUpdateProduct(null,form({imageUrl:new File([await image()],'image.jpg',{type:'image/jpeg'})}));
    assert.equal(result.ok,false);assert.equal(result.error.code,expected);assert.equal(f.writes.length,0);
-   assert.doesNotMatch(JSON.stringify([logs,result]),/synthetic-secret/);
+   assert.doesNotMatch(JSON.stringify([logs,result]),/synthetic-secret|synthetic-private-key/);
+   const diagnostic=logs.find(entry=>entry[0]==='[products.image] Upload failed')[1];
+   assert.equal(diagnostic.credentialProject,'orderfly-test');assert.equal(diagnostic.serviceAccount,'qa-uploader@orderfly-test.iam.gserviceaccount.com');
+   assert.doesNotMatch(JSON.stringify(result),/qa-uploader/);
   }finally{console.error=oldLog;}
  }
 });
@@ -189,4 +192,25 @@ test('failed dependency lookup prevents brand move and image upload',async()=>{
   const result=await f.actions.createOrUpdateProduct(null,moveForm({imageUrl:new File([await image()],'replacement.jpg',{type:'image/jpeg'})}));
   assert.equal(result.ok,false);assert.equal(f.storageCalls.length,0);assert.equal(f.writes.length,0);assert.deepEqual([...f.records],before);
  }
+});
+
+test('new product without an image never needs storage configuration or permission',async()=>{
+ const previous=process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+ delete process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET;
+ try{
+  for(const imageUrl of [undefined,new File([],'',{type:'application/octet-stream'})]){
+   const f=fixture();f.failure.upload=Object.assign(Error('Access denied'),{code:403});
+   const result=await f.actions.createOrUpdateProduct(null,form({imageUrl}));assert.equal(result.ok,true,JSON.stringify(result));
+   const saved=await f.actions.getProductById(result.id);assert.equal(saved.productName,'Kildevand 0,5 l');assert.equal(saved.price,20);assert.equal(saved.priceDelivery,20);assert.deepEqual(saved.locationIds,['l']);assert.equal(Object.hasOwn(saved,'imageUrl'),false);
+   assert.equal(f.storageCalls.length,0);assert.equal(f.objects.size,0);assert.equal(f.records.get('products/hellerup').imageUrl,'https://existing.example/keep.jpg');
+  }
+ }finally{previous===undefined?delete process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET:process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET=previous;}
+});
+test('403 then removing selected file reuses creation key without a duplicate; image can be added later',async()=>{
+ const f=fixture();const data=form({imageUrl:new File([await image()],'water.jpg',{type:'image/jpeg'})});
+ f.failure.upload=Object.assign(Error('Access denied'),{code:403});const failed=await f.actions.createOrUpdateProduct(null,data);assert.equal(failed.ok,false);assert.equal(f.writes.length,0);
+ data.delete('imageUrl');const result=await f.actions.createOrUpdateProduct(null,data);assert.equal(result.ok,true);assert.equal(f.writes.length,1);assert.equal(f.storageCalls.length,1);
+ assert.equal((await f.actions.createOrUpdateProduct(null,data)).id,result.id);assert.equal(f.writes.length,1);
+ f.failure.upload=false;const edit=form({id:result.id,originalBrandId:'b',imageUrl:new File([await image()],'water.jpg',{type:'image/jpeg'})});assert.equal((await f.actions.createOrUpdateProduct(null,edit)).ok,true);
+ assert.equal(f.objects.size,1);assert.equal([...f.records.keys()].filter(k=>k.startsWith('products/')).length,2);assert.match(f.records.get('products/'+result.id).imageUrl,/firebasestorage/);
 });

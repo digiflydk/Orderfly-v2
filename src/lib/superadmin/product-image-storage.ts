@@ -49,7 +49,13 @@ export async function uploadProductImage(file: File, brandId: string, productId:
   } catch (error) {
     const uploadError = productImageUploadError(error);
     // SDK errors can contain authenticated request headers. Log only safe diagnostics.
-    console.error('[products.image] Upload failed', { stage: 'save', bucket: bucketName, code: uploadError.code });
+    const email = (app.options.credential as { clientEmail?: unknown } | undefined)?.clientEmail;
+    console.error('[products.image] Upload failed', {
+      stage: 'save', bucket: bucketName, code: uploadError.code,
+      credentialProject: app.options.projectId,
+      // Emit only the account identifier, never the credential or SDK request.
+      serviceAccount: typeof email === 'string' && /^[a-z0-9._-]+@[a-z0-9.-]+\.gserviceaccount\.com$/.test(email) ? email : 'unavailable',
+    });
     throw uploadError;
   }
 }

@@ -250,6 +250,17 @@ export function ProductFormPage({
   const [pending, setPending] = useState(false);
   const submitting = useRef(false);
   const creationKey = useRef<string | null>(null);
+  const imageInput = useRef<HTMLInputElement>(null);
+  const imageReadVersion = useRef(0);
+  const [selectedImageName, setSelectedImageName] = useState<string | null>(null);
+
+  function clearSelectedImage() {
+    imageReadVersion.current++;
+    if (imageInput.current) imageInput.current.value = '';
+    setSelectedImageName(null);
+    setImagePreview(typeof product?.imageUrl === 'string' ? product.imageUrl : null);
+    setState(null);
+  }
 
   async function submitProduct(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -628,6 +639,18 @@ export function ProductFormPage({
           {state && !state.ok && (
             <div role="alert" className="rounded-md border border-destructive p-4 text-destructive">
               {state.error.detail || state.error.message}
+              {selectedImageName && (
+                <div className="mt-3 space-y-2 text-foreground">
+                  <p className="text-sm">Images are optional. You can save without uploading the selected file.</p>
+                  <Button type="button" variant="outline" disabled={pending} onClick={event => {
+                    const element = event.currentTarget.form;
+                    clearSelectedImage();
+                    element?.requestSubmit();
+                  }}>
+                    {isEditing ? 'Save without replacing image' : 'Create without image'}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
           <fieldset disabled={pending} className="grid min-w-0 grid-cols-1 gap-6 lg:grid-cols-3">
@@ -930,18 +953,22 @@ export function ProductFormPage({
 
                   <FormItem>
                     <FormLabel>
-                      Product Image
+                      Product Image (optional)
                     </FormLabel>
 
                     <FormControl>
                       <Input
+                        ref={imageInput}
                         name="imageUrl"
                         type="file"
                         accept={PRODUCT_IMAGE_ACCEPT}
+                        disabled={pending || state?.ok === true}
                         onChange={event => {
+                          const readVersion = ++imageReadVersion.current;
                           const file =
                             event.target
                               .files?.[0];
+                          setSelectedImageName(file?.name || null);
 
                           if (file) {
                             const reader =
@@ -949,6 +976,7 @@ export function ProductFormPage({
 
                             reader.onloadend =
                               () => {
+                                if (readVersion !== imageReadVersion.current) return;
                                 setImagePreview(
                                   typeof reader.result ===
                                     'string'
@@ -974,7 +1002,16 @@ export function ProductFormPage({
                       />
                     </FormControl>
 
-                    <FormDescription>JPEG, PNG or AVIF. Maximum 5 MB.</FormDescription>
+                    <FormDescription>
+                      Optional. You can create the product now and add an image later. JPEG, PNG or AVIF. Maximum 5 MB.
+                      {isEditing && product?.imageUrl && ' Without a new file, the existing image is kept.'}
+                    </FormDescription>
+
+                    {selectedImageName && (
+                      <Button type="button" variant="outline" className="mt-2" disabled={pending || state?.ok === true} onClick={clearSelectedImage}>
+                        Remove selected file
+                      </Button>
+                    )}
 
                     {imagePreview && (
                       <div className="relative mt-2 h-32 w-32">
