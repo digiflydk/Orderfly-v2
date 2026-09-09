@@ -173,3 +173,33 @@ test('brand reference rejection names the dependency and keeps the form and imag
  const saved=f.records.get('products/hellerup');assert.equal(saved.brandId,'c');assert.equal(saved.productName,'Moved product');assert.match(decodeURIComponent(saved.imageUrl),/brands\/c\/products\/hellerup\//);
  assert.equal(f.writes.length,1);assert.equal(f.objects.size,1);
 });
+
+for(const width of [390,1280])test(`create without choosing an image while storage is denied (${width})`,async t=>{
+ const page=await setup(t);await page.setViewportSize({width,height:900});f.failure.upload=Object.assign(Error('Access denied'),{code:403});
+ await page.getByText('Product Image (optional)',{exact:true}).waitFor();assert.equal(await page.locator('input[type="file"]').getAttribute('required'),null);
+ await page.getByRole('button',{name:'Create Product',exact:true}).click();await page.waitForURL('**/superadmin/products');
+ assert.ok(lastId);assert.equal(f.storageCalls.length,0);const saved=f.records.get('products/'+lastId);assert.equal(Object.hasOwn(saved,'imageUrl'),false);assert.equal(saved.price,20);assert.equal(saved.priceDelivery,20);assert.deepEqual(saved.locationIds,['l']);
+ await page.goto(origin+'/superadmin/products/edit/'+lastId);await page.reload();assert.equal(await page.getByLabel('Product Name',{exact:true}).inputValue(),'Kildevand 0,5 l');assert.equal(await page.getByAltText('Image Preview').count(),0);
+});
+test('explicit create without image recovers from 403, preserves associations and allows a later image',async t=>{
+ const page=await setup(t);await page.getByLabel('QA Extras',{exact:true}).check();await page.getByLabel('QA Milk',{exact:true}).check();
+ await page.locator('input[type="file"]').setInputFiles({name:'water.jpg',mimeType:'image/jpeg',buffer:await image()});
+ f.failure.upload=Object.assign(Error('Access denied'),{code:403});await page.getByRole('button',{name:'Create Product',exact:true}).click();await page.getByRole('alert').filter({hasText:'storage access was denied (403)'}).waitFor();
+ assert.equal(f.writes.length,0);await page.getByRole('button',{name:'Create without image',exact:true}).click();await page.waitForURL('**/superadmin/products');
+ assert.equal(f.storageCalls.length,1);assert.equal(f.writes.length,1);const id=lastId,saved=f.records.get('products/'+id);assert.equal(saved.imageUrl,undefined);assert.deepEqual(saved.toppingGroupIds,['g']);assert.deepEqual(saved.allergenIds,['a']);assert.equal(saved.priceDelivery,20);
+ await page.goto(origin+'/superadmin/products/edit/'+id);f.failure.upload=false;await page.locator('input[type="file"]').setInputFiles({name:'later.jpg',mimeType:'image/jpeg',buffer:await image()});await page.getByRole('button',{name:'Save Changes',exact:true}).click();await page.waitForURL('**/superadmin/products');
+ assert.equal(lastId,id);assert.equal(f.objects.size,1);await page.goto(origin+'/superadmin/products/edit/'+id);await page.reload();await page.waitForFunction(()=>document.querySelector('img[alt="Image Preview"]')?.naturalWidth>0);
+});
+test('discarding a failed replacement keeps existing image and saves the other edits',async t=>{
+ const page=await setup(t);await page.goto(origin+'/superadmin/products/edit/hellerup');await page.getByLabel('Product Name',{exact:true}).fill('Updated without replacement');
+ await page.locator('input[type="file"]').setInputFiles({name:'replacement.jpg',mimeType:'image/jpeg',buffer:await image()});f.failure.upload=Object.assign(Error('Access denied'),{code:403});
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();await page.getByRole('alert').filter({hasText:'storage access was denied (403)'}).waitFor();
+ await page.getByRole('button',{name:'Save without replacing image',exact:true}).click();await page.waitForURL('**/superadmin/products');
+ assert.equal(f.storageCalls.length,1);assert.equal(f.records.get('products/hellerup').imageUrl,'https://existing.example/keep.jpg');assert.equal(f.records.get('products/hellerup').productName,'Updated without replacement');
+});
+test('remove selected file clears rejected file and preview without losing product details',async t=>{
+ const page=await setup(t);await page.locator('input[type="file"]').setInputFiles({name:'large.jpg',mimeType:'image/jpeg',buffer:Buffer.alloc(5*1024*1024+1)});
+ await page.getByRole('button',{name:'Create Product',exact:true}).click();await page.getByRole('alert').filter({hasText:'at most 5 MB'}).waitFor();
+ await page.getByRole('button',{name:'Remove selected file',exact:true}).click();assert.equal(await page.locator('input[type="file"]').evaluate(el=>el.files.length),0);assert.equal(await page.getByRole('alert').count(),0);assert.equal(await page.getByAltText('Image Preview').count(),0);assert.equal(await page.getByLabel('Product Name',{exact:true}).inputValue(),'Kildevand 0,5 l');
+ await page.getByRole('button',{name:'Create Product',exact:true}).click();await page.waitForURL('**/superadmin/products');assert.equal(f.storageCalls.length,0);
+});
