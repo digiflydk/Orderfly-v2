@@ -1,71 +1,128 @@
-# Quality/feedback: gennemgang og driftsklarhed (#85)
+# Quality/feedback – PR #88 / issue #85
 
-Gennemgået 9. september 2026 fra main `0102a02`. Omfang: aktive Next-ruter under `src/app/feedback`, `src/app/superadmin/feedback`, spørgsmålsbyggeren, ordreknappen, bookinginvitationen, svarvalidering og integrationens kundehistorik. Ældre kopier under `src/feedback` er ikke aktive App Router-ruter.
+Opdateret 9. september 2026. PR'en er ajourført med main inklusive produktrettelserne i #90. Den udvider den første kodeaudit med den aftalte kvalitetsrapport, offentlig visning, feedbackadgang og mailkø. Eksisterende feedback, importdata, produkter og spørgeskemaer migreres eller slettes ikke automatisk.
 
-## Konklusion
+## Leveret i koden
 
-Modulet er **ikke klar til fuld drift**. PR'en retter reproducerede kodefejl i administration og besvarelse, men den færdiggør ikke afsendelse, den eksisterende identitets-/rettighedsmodel eller en kvalitetsrapport. Ingen mails/SMS, produktionsdata, merge eller deployment er udført under gennemgangen.
+| Område | Adfærd |
+| --- | --- |
+| Spørgeskemaer | Samme kanoniske Admin SDK-samling til opret/list/redigér; dokument-ID er autoritativt; sikker timestamp-serialisering. Serverskema afviser tomme/ugyldige spørgsmål, dublerede/reserverede ID'er og ugyldige valgmuligheder/min/max. Oprettelsesdato bevares. |
+| Aktivering | Transaktion med fælles låsedokument afviser konfliktende aktive versioner for sprog + pickup/delivery/booking. Nye versioner starter som kladder. Eksisterende aktive konflikter vælges deterministisk, uden automatisk migration. |
+| Kundesvar | Autoritative spørgsmål, kilde/kunde/brand og oplevelsestype valideres på serveren. Numeriske svar kræver faktiske tal; ægte NPS=0 bevares. Påkrævede svar og valgmuligheder valideres. Formularindhold bevares ved fejl. |
+| Dubletter | Deterministisk feedback-ID pr. brand/kildetype/kilde; transaktion respekterer også gamle ordresvar. Invitationens forbrug og eventuel tak-mail gemmes i samme transaktion som svaret. |
+| Adgang | Serververificeret Firebase-session med revokationskontrol. Feedbackrettigheder og brandtilknytning kommer fra betroet serverkonfiguration, ikke den gamle `hasPermission`-placeholder eller åbne rolle-/brugereditorer. Se releasekrav. |
+| Moderation | Strengt feltskema; eksisterende post og brandadgang kræves. Private svar, offentlig projektion og moderationsaudit opdateres atomisk. Audit indeholder aktør, brand, feedback-ID, handling, feltnavne og tidspunkt; ingen notetekst. |
+| Kvalitetsrapport | `/superadmin/feedback/report`: periode, brand, lokation, onlineordre/restaurantbesøg, svarantal, rating, NPS, lave ratings, lokationssammenligning, udvikling pr. dag, CSV og udskrift. Kun aggregater sendes til rapportklienten. |
+| Offentlig visning | `/{brandSlug}/{locationSlug}/reviews`: kun godkendte projektioner fra den aktive lokation og det aktive brand. Brandets offentlig-visning-indstilling er fra som standard. Menulink vises først efter aktivering. |
+| Feedbackmail | Varig kø til manuel invitation, automatisk invitation, højst én påmindelse og tak efter svar. Omnisend-adapter bruger den eksisterende brandmapping. Ingen simuleret succes. Se driftskrav og tilstande nedenfor. |
+| Andre læsere | Kundehistorikkens feedbacksektion bruger samme adgangskontrol og en lille DTO. Dashboardets feedbacktal kommer fra den beskyttede rapport; utilgængeligt tal vises som N/A. Det gamle debug-endpoint returnerer 404 uden databaselæsning. |
 
-## Bekræftede fund og rettelser
+## Adgang og afgrænsning
 
-| Fund | Konsekvens | Rettelse i PR |
-| --- | --- | --- |
-| Spørgsmålslisten læste `collectionGroup('questions')`; oprettelse skrev `feedbackQuestionsVersion` | Oprettede versioner manglede i listen eller gav forkerte redigeringslinks | Én fælles Admin-læser for liste, redigering og offentligt formularvalg |
-| Feltnavne name/label/active matchede ikke versionLabel/isActive | Tomme kolonner og ukendt status | Tabellen viser den faktiske version, sprog og oplevelsestyper |
-| Klient-Firestore på serversider og rå timestamps | Server-/serialiseringsfejl | Admin SDK og rekursiv konvertering ved server/klient-grænsen |
-| Indlejret id kunne overskrive dokumentets id | Forkert feedback/version blev åbnet | Dokument-ID er autoritativt |
-| Manglende/ugyldig receivedAt | Indbakke og detaljeside kunne crashe | Sikker datoformatering; dataløse poster udelades ikke længere af orderBy |
-| Tomme spørgsmål, dublerede ID'er og ugyldige valgmuligheder kunne gemmes | Kunden fik en ubrugelig formular | Serverskema med begrænsninger for spørgsmål, muligheder, ID'er og min/max |
-| createdAt blev overskrevet ved redigering | Mistet oprettelsesdato | Bevares ved update; manglende version kan ikke genoprettes ved en fejl |
-| Flere aktive versioner for samme sprog/oplevelse | Vilkårligt formularvalg | Aktivering kontrolleres transactionelt med en fælles låsepost; konflikt afvises |
-| Aktiv formular blev valgt uden sproghensyn | Kunden kunne få forkert sprog | Standard da, valgfri `?lang=en` mv.; eksisterende konflikter vælges deterministisk |
-| null/false/tomme værdier kunne blive NPS=0 | Forurenede svar | Afvisning af ikke-numeriske værdier; ægte 0 bevares |
-| Gentagen ordrebesvarelse oprettede nye poster | Dubletter og skæve ratings | Deterministisk kilde-ID og transaction; eksisterende legacy-svar respekteres |
-| Bookingbesvarelse | Risiko for regression ved ændring af fælles motor | Invitation forbruges fortsat transactionelt; test for retry og ugyldig token |
-| Moderation accepterede vilkårligt payload og brugte set/merge | Kunde/brand/rating kunne ændres; tomme feedbackposter kunne oprettes | Strengt whitelist-skema og update på eksisterende dokument |
-| Netværksfejl i formularer/moderation var ikke håndteret | Fejl uden forklaring; UI viste forkert public-status | Bevar svar/kladde, vis fejl og rul optimistisk status tilbage |
-| Debug-API returnerede rå data uden autentificering | Unødvendig offentlig dataadgang | Endpoint returnerer 404 uden databaselæsning |
-| E-mailfunktion loggede kunde/link og returnerede simuleret succes | Administrator troede, at mail var sendt | Returnerer tydelig ikke-konfigureret status; ordreknappen er deaktiveret med forklaring |
-| Feedback Settings var en formular med mockdata uden gemmefunktion | Falsk indtryk af gemt tidsplan/skabelon | Erstattet med ærlig status og link til spørgsmålsadministration |
+Login: `/feedback-admin/login`, med en eksisterende Firebase Auth-konto i **orderfly-39325**. Login udveksler et nyligt udstedt ID-token for en HttpOnly, SameSite=Lax-session på højst 8 timer (`Secure` i produktion). Hver beskyttet serverhandling verificerer sessionen igen. Kun konto-UID'er i `ORDERFLY_FEEDBACK_ACCESS` får adgang. Manglende, ugyldig eller dubleret konfiguration afviser adgang uden fallback.
 
-## Mangler før fuld drift, prioriteret
+| Rolle | Adgang |
+| --- | --- |
+| `platform_admin` | Alle feedbackbrands, moderation/indstillinger samt globale spørgeskemaer |
+| `brand_editor` | Læse rapport/feedback og moderere/ændre feedbackindstillinger for de angivne brands |
+| `brand_viewer` | Kun læse feedback/rapport for de angivne brands |
 
-### 1. Reel adgangskontrol (blokerer drift)
+Eksempel på **syntaks**, ikke produktionskonti:
 
-`src/lib/permissions.ts` returnerer fortsat true. De eksisterende `hasPermission`-kontroller er ikke autentificering. Superadmin læser feedback på tværs af brands, og opdatering/sletning kender ikke den indloggede administrators tilladte brands. PR'en validerer payload og referencer, men indfører ikke en ny loginmodel. Der skal etableres serververificeret session, roller og brandadgang, før modulet kan erklæres beskyttet. Firebase-regler for feedback, invitationer og konfigurationsdokumenter skal verificeres separat.
-
-Legacy-ordrelinks bruger orderId + customerId. De to ID'er er ikke en signeret invitation eller bevis for en gennemført kundeoplevelse. Den eksisterende kontrakt bevarer disse links. Ordrefeedback bør flyttes til tidsbegrænsede invitationer, tilsvarende booking, med en aftalt overgang for gamle links og krav til gennemført/annulleret/refunderet ordre.
-
-### 2. Rigtig afsendelse og automation (blokerer automatisk feedback)
-
-Der findes ingen implementeret ordre-feedbackmailer, afsendelseskø, scheduler, reminder-stop efter svar eller autosvar i dette modul. Bookingintegrationen udsteder et link; den sender ikke i sig selv en invitation til kunden. Esmeraldas Omnisend-integration skal kobles til en konkret feedbackhændelse med afsender, skabelon, forsinkelse, remindergrænse, idempotens, retries og registreret leveringsstatus. Status må kun være sendt, når udbyderen har accepteret beskeden. Der er ikke foretaget nogen afsendelse i denne PR.
-
-Settings kan først gemme meningsfulde driftsindstillinger, når den tilhørende afsendelsesfunktion bruger dem. En settings-database alene ville fortsat være en funktion uden virkning.
-
-### 3. Skabelonpolitik og versionering
-
-Spørgsmålsversioner er i dag globale på tværs af brands og er målrettet sprog + pickup/delivery/booking. Der er intet brandId på skabelonen. Beslut om platformen skal dele skabeloner eller tilbyde brand-/lokationsspecifikke versioner. Eksisterende aktive dubletter ændres ikke automatisk; gennemgå dem ved release. Aktivering af en ny konfliktende version afvises med besked om først at deaktivere den gamle. Nye versioner er kladder som standard.
-
-Svar gemmer autoritative spørgsmålstekster og typer, så gamle besvarelser bevarer deres betydning. En fuld publicér/arkiv-model og idempotent oprettelse af admin-kladder ved tabt gemmesvar er endnu ikke implementeret.
-
-### 4. Kvalitetsrapportering og offentlig visning
-
-Der er en indbakke og en detaljeside, men ingen dedikeret kvalitetsrapport med perioder, svarprocent, udvikling, lokationssammenligning eller opfølgning på dårlige oplevelser. Når flere stjernespørgsmål besvares, gemmer den nuværende udtrækning den sidste rating som hovedrating. Definér samlet rating versus delratings og en NPS-beregning, før tallene bruges som KPI'er. Visning uden ratings må ikke fortolkes som en reel nulvurdering.
-
-`showPublicly` gemmes som moderationsflag, men der blev ikke fundet en aktiv kundekomponent/API, som viser disse godkendte anmeldelser. `maskCustomerName` er derfor ikke dokumentation for færdig offentlig anonymisering. Offentlig visning skal særskilt begrænses til godkendte, relevante oplysninger og udelade interne noter/kundekontaktdata.
-
-Indbakken indlæser fortsat hele datasættet og tilhørende kunder. Pagination, serverfiltre og rolle-/brandafgrænset indlæsning mangler til større datamængder. Der er ikke indført en opbevarings-/slettepolitik eller auditlog for moderation.
-
-## Test og release
-
-```sh
-npm run typecheck
-node --test tests/unit/feedback-readiness.cjs
-CART_CHROMIUM_PATH=/path/to/chromium node --test tests/unit/feedback-browser.cjs
+```json
+[
+  {"uid":"EXISTING_FIREBASE_ADMIN_UID","role":"platform_admin"},
+  {"uid":"EXISTING_FIREBASE_EDITOR_UID","role":"brand_editor","brandIds":["ESMERALDA_BRAND_ID"]}
+]
 ```
 
-Desuden er den eksisterende `tests/esmeralda-feedback-integration.spec.ts` kørt alene med én worker uden webserver/deployment. Ingen bred CI-matrix eller workflow dispatch.
+Dette beskytter feedbackmodulets servergrænser. Det er **ikke en færdig adgangsmodel for resten af Superadmin**. Legacy bruger-/rolle-/kunde-/ordreruter uden reel adgangskontrol skal gennemgås i et separat platformarbejde. Feedbackroller må ikke lagres i de åbne legacy-role-dokumenter. Adgang til andre kundeoplysninger ligger uden for denne ændring.
 
-Tests anvender den faktiske spørgsmåls-/feedbackkode og reelle React-komponenter med en syntetisk Firestore/Storage-fri fixture. Browser dækker opret/list/genåbn/redigér, bevaret kladde og kundesvar ved transportfejl, besvarelse på 390/1280 px samt indbakke med manglende dato og rollback af moderation. Transaktionstesten erstatter Firebase I/O, så produktions-IAM, distribuerede Firestore-låse og rigtig maillevering kræver særskilt verifikation.
+## Rapportdefinitioner
 
-Proces: kodeaudit -> målrettede rettelser/tests -> uafhængigt review -> PO-accept -> merge/deployment hos releaseansvarlig -> kontrolleret liveverifikation. Issue #85 er ikke Done, før de relevante driftskrav er afklaret og verificeret. Ingen eksisterende feedback slettes eller migreres automatisk af denne PR.
+- Periode følger `receivedAt` i `Europe/Copenhagen`, inklusive hele slutdatoen og korrekt sommer-/vintertid. Standard: seneste 30 kalenderdage; højst 366 dage.
+- Rating: gennemsnit af gyldige stjernesvar (1–5) i hver besvarelse, derefter gennemsnit af de enkelte besvarelser. Hver besvarelse vægter lige. Gamle numeriske ratings bruges som fallback; manglende/0 tæller ikke som en rating.
+- NPS: `100 × (antal 9–10 − antal 0–6) / antal gyldige NPS-svar`. 7–8 er passive og indgår i nævneren. Ved flere NPS-spørgsmål bruges det første gyldige svar. Manglende/ugyldige svar tæller ikke som nul.
+- Lave ratings: besvarelser med samlet rating højst 2. Det er en rapportindikator, ikke et automatisk opfølgningssystem.
+- Alle private besvarelser i det valgte udsnit tæller med, uanset offentlig godkendelse. Manglende dato udelades; ugyldig lokation fremgår særskilt og medtages i totalen.
+- Ved over 5.000 svar afvises rapporten med besked om et mindre udsnit; der vises ikke KPI'er fra et tavst afkortet datasæt. Flerbrandsforespørgsler læser højst 5.001 pr. tildelt brand før samlet kontrol.
+- CSV indeholder total og lokationsaggregater, periode og gyldige svarantal; ingen kundedata eller kommentarer. Celler beskyttes mod formelfortolkning.
+- Svarprocent vises ikke. En accepteret Omnisend-hændelse beviser ikke leveret mail, og gamle invitationer har ingen sammenlignelig historik. Det må ikke præsenteres som en målt leverings- eller svarprocent.
+
+## Offentlige anmeldelser
+
+Publicering kræver både eksplicit godkendelse af den enkelte anmeldelse og `feedbackSettings/{brandId}.publicReviewsEnabled = true`. Gamle `showPublicly`-flag publiceres ikke automatisk: der kræves godkendelsesmetadata og en ny projektion.
+
+`publicFeedbackReviews/{feedbackId}` indeholder kun brand/lokation, visningsnavn, offentlig tekst, rating, modtagelsesdato og godkendelsesdato. Den offentlige DTO udelader også de interne referencefelter. Offentlige læsninger går ikke til `customers` eller private `feedback`-dokumenter.
+
+Nye godkendelser er anonyme som standard. En editor kan eksplicit vælge fornavn; kun kundens første navn fra samme brand bruges. Der findes et særskilt felt til offentlig tekst. E-mails, URL'er og talmønstre fjernes automatisk, men editor skal stadig kontrollere fri tekst for personoplysninger. Original kommentar og interne noter forbliver private.
+
+Visningen er et kurateret udvalg, hvilket fremgår på siden. Højst 20 anmeldelser pr. side med stabil dokument-ID-baseret pagination. Det er ikke en påstand om kronologisk sortering. Skjul/slet fjerner projektionen atomisk. Deaktivering af brand/lokation/offentlig visning skjuler siden ved næste forespørgsel; ingen offentlig cache skal bevare tidligere indhold.
+
+## Mailforløb
+
+1. En manual invitation kræver feedback-editoradgang til ordren. Automatisk ordrekø dannes ved opdatering til `Completed`/`Delivered`, når brugeren også har en gyldig feedbacksession. Andre ordreopdateringer bliver ikke gjort afhængige af mailkøen. Manglende feedbacksession giver ingen automatisk mailjob.
+2. Ordren skal være betalt og gennemført, uden registreret refundering. Kunde og lokation skal høre til brandet, og der skal være et aktivt spørgeskema på det valgte sprog.
+3. Nye ordreinvitationer har HMAC-signeret token, 30 dages udløb og en serverregistreret kilde. Gamle `orderId`/`customerId`-links bevares for kompatibilitet, men kræver nu også gennemført/betalt ordre ved visning og gemning. De gamle links er stadig ikke signerede; en overgang/dato for lukning kræver en særskilt aftale.
+4. Bookingintegrationens eksisterende maskinautentificerede invitation kan oprette et job, hvis automatik er aktiveret. Ventetid regnes fra `starts_at`. Integrationens tilbagekaldelse/udløb respekteres. Det er ikke selvstændigt bevis for fysisk fremmøde; aflyste bookinger skal tilbagekaldes af integrationen.
+5. Worker kontrollerer brand/lokation, kilde, svarstatus og både kundens lokale `marketingConsent === true` og eksisterende tilmeldt e-mailkanal i korrekt Omnisend-brand. Den opretter eller gentilmelder ikke kontakter. Der kontrolleres igen efter udbyderens preflight.
+6. Højst én invitation og én påmindelse registreres pr. kilde. Påmindelse oprettes atomisk med registrering af accepteret invitation og stoppes efter svar, afmelding, deaktivering eller ugyldig kilde. Valg af nul påmindelser stopper også en allerede planlagt påmindelse.
+7. Tak-mail registreres atomisk med et svar, når indstillingen er aktiv og der findes en gyldig invitation. Den sender ikke et nyt feedbacklink.
+
+Indstillinger pr. brand: mail til/fra, automatisk invitation til/fra, ventetid 0–168 timer, sprog da/en, 0 eller 1 påmindelse, påmindelse efter 24–336 timer samt tak til/fra. Alt er fra som standard. Ændring af ventetid flytter ikke allerede planlagte jobs. Slås automatik fra, stoppes nye automatiske jobs; brug mail til/fra for at stoppe al endnu ikke afsendt mail.
+
+### Tilstande og genforsøg
+
+`pending` → `preparing` (120 sekunders lease) → `dispatching` → `accepted` / `failed` / `uncertain`. Uegnede modtagere/kilder bliver `suppressed`.
+
+- `accepted` betyder kun, at Omnisend har accepteret hændelsen. Det er ikke dokumentation for e-maillevering; `autoResponseSent` sættes ikke på dette grundlag.
+- HTTP 429 genforsøges højst tre gange. Permanente afvisninger kræver kontrol. Timeout, netværksfejl, HTTP 5xx eller tabt worker under afsendelse bliver `uncertain` og sendes ikke automatisk igen.
+- En udløbet `preparing`-lease kan overtages; en udløbet `dispatching`-lease må ikke føre til blind genafsendelse.
+- Omnisends realtids-events deduplikeres ikke alene på `eventID`. Derfor bruges varig kø/lease, og et usikkert resultat kræver menneskelig kontrol. Settings viser hændelses-ID til opslag samt højst 50 nylige jobs pr. brand, uden mailadresse eller invitationstoken.
+- Manuel genstart kræver editoradgang og eksplicit bekræftelse af, at udbyderen ikke har modtaget hændelsen. Handlingens aktør/tid gemmes. Accepterede eller aktive jobs kan ikke genstartes på denne måde.
+
+Udbyderkontrakt: [Events API](https://api-docs.omnisend.com/reference/post_events), [REST events og eventID](https://api-docs.omnisend.com/docs/how-to-send-events-rest-api), [automations](https://api-docs.omnisend.com/docs/how-to-send-custom-events-to-trigger-custom-automations). Adapteren bruger API-version `2026-03-15`, `events.write` og events med `feedbackUrl` (undtagen tak), brandnavn, lokationsnavn, kildetype og sprog. Skabeloner skal vælge korrekt sprog ud fra egenskaben `language`.
+
+## Releasekonfiguration – skal udføres af releaseansvarlig
+
+Ingen af nedenstående runtimeændringer er udført fra Work.
+
+| Konfiguration | Krav |
+| --- | --- |
+| Data/Auth | Eksisterende **orderfly-39325**; må ikke flyttes til App Hosting-projektet |
+| Hosting | Eksisterende **orderfly-v21-10334086-b3076**; produktbilledlager fra #90 bevares uændret |
+| `ORDERFLY_FEEDBACK_ACCESS` | Betroede eksisterende Firebase UID'er, roller og brand-ID'er; konfigurér før feedbackruter tages i brug |
+| `ORDERFLY_FEEDBACK_EVENTS` | JSON-liste med `brandId`, `enabled`, `invitation`, `reminder`, `thankYou`; navnene skal matche opsatte Omnisend-automations |
+| `ORDERFLY_OMNISEND_BRANDS` | Eksisterende servermapping med korrekt `omnisendBrandId`, API-nøgle, `enabled: true`, `consentMode: "single_opt_in"`; tilstrækkelig læseadgang til brand/kontakt og `events.write` |
+| `ORDERFLY_FEEDBACK_TOKEN_SECRET` | Tilfældig hemmelig værdi på mindst 32 tegn; rotation ugyldiggør gamle signerede ordrelinks |
+| `ORDERFLY_FEEDBACK_WORKER_SECRET` | Separat tilfældig hemmelig værdi på mindst 32 tegn til worker; aldrig i browser eller Git |
+| `ORDERFLY_FEEDBACK_ORIGIN` | Valgfri betroet HTTPS-origin uden sti; standard `https://orderfly.dk` |
+| Scheduler | POST `/api/internal/feedback/send`, `Authorization: Bearer <worker-secret>`; fx hvert 5. minut. Højst 10 jobs pr. kald/45 sekunders behandlingsbudget. Ingen automatisk historisk backfill. |
+| Skabeloner | Faktiske invitation-/påmindelse-/tak-automations, afsender, sprog og afmeldingsindhold i korrekt Omnisend-brand. Eventaccept alene dokumenterer ikke, at en automation er opsat. |
+| Firestore-indexer | Flet de nødvendige indexer fra `docs/feedback-firestore-indexes.json` ind i projektets eksisterende konfiguration. Erstat ikke de eksisterende indexer. |
+| Firestore-regler | Verificér at browserklienter ikke kan læse/skrive private feedbackdata, grants, settings, invitationer, mailjobs, audit eller offentlige projektioner direkte. Serverruter bruger Admin SDK. En bred eksisterende allow-regel kan ikke ophæves med en snæver deny-regel; gennemgå den samlede regelsamling. |
+
+Samlinger: `feedback`, `feedbackQuestionsVersion`, `feedbackConfiguration`, `feedbackSettings`, `feedbackInvitations`, `feedbackMailJobs`, `feedbackModerationAudit`, `publicFeedbackReviews`, samt eksisterende `integrationFeedbackInvitations`. Verificér også eksisterende single-field-indexer for de brugte filter-/sorteringsfelter.
+
+Aktivér først mail for et brand, når konfiguration, relevante spørgeskemaer og skabeloner er godkendt. Offentlig visning og mail er separate indstillinger; rapport/moderation kræver ikke aktiveret mail.
+
+## Målrettet validering
+
+- `npm run typecheck`: bestået.
+- `node --test tests/unit/feedback-readiness.cjs tests/unit/feedback-report-public.cjs tests/unit/feedback-mail.cjs`: **57/57**.
+- `CART_CHROMIUM_PATH=/path/to/chromium node --test tests/unit/feedback-browser.cjs`: **10/10**.
+- Eksisterende `tests/esmeralda-feedback-integration.spec.ts`, isoleret Playwright uden webserver, én worker: **8/8**.
+
+Browserne bruger de faktiske React-komponenter og serverhandlinger med syntetisk I/O og produktions-Tailwind; mobil 390 px og desktop 1280 px. Der testes opret/genåbn/redigér, bevaret kladde ved transportfejl, kundesvar, moderation og offentlig anonym visning/tilbagetrækning, rapportfiltre/CSV samt gemte mailindstillinger og eksplicit genstart. Serverfixtures tester adgang/brandgrænser, DST/NPS, publiceringsrollback, samtidige køkørsler, afmelding/svar-stop, tokenfejl, atomisk tak, timeout/429/5xx og workerautentificering.
+
+Fixtures erstatter Firebase/Omnisend I/O. De beviser ikke produktions-IAM, distribuerede Firestore-låse, faktiske mailskabeloner eller e-maillevering. Ingen produktionsdata, mails/SMS, secrets, IAM, merge, deployment, bred CI-matrix eller workflow dispatch er udført.
+
+## Resterende produktvalg og driftsaccept
+
+- Spørgeskemaer er fortsat globale pr. sprog/oplevelse. Brand-/lokationsspecifikke skabeloner, fuld publicér/arkiv-model og historiske aktive konflikter kræver særskilt beslutning.
+- Legacy unsigned ordrelinks, platformens øvrige adgangskontrol og Firestore-regler er udtrykkelige afgrænsninger; de må ikke beskrives som løst af modulsessionen.
+- Indbakken læser alle svar inden for brugerens tilladte brands. Stor-skala inbox-pagination, opbevaringspolitik og automatisk opfølgning på lave ratings er ikke leveret her.
+- Der er ikke bygget leveringswebhook, historisk kø-backfill eller en troværdig leveringsbaseret svarprocent.
+- Før Done: uafhængigt review → PO-accept → releaseansvarlig merger/deployer → verificér login for rette UID, afvisning på tværs af brands, rapport fra kendte svar, individuel godkendelse/tilbagetrækning og deaktiveret offentlig side. Kontrolleret mailtest skal bruge særskilt godkendt testmodtager og verificere Omnisend-hændelse **og** faktisk mail.
+
+Issue #85 forbliver åben indtil den aftalte liveverifikation. Work merger eller deployer ikke sin egen PR.

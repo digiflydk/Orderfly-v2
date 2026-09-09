@@ -2,6 +2,7 @@
 'use server';
 
 // src/lib/superadmin/getSalesSummary.ts
+import { getFeedbackReport } from '@/lib/feedback/report';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
 import type { OrderSummary, Customer } from '@/types';
@@ -34,12 +35,12 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
         }
     }
     
-    const [ordersSnapshot, brandsSnap, locationsSnap, customersSnap, feedbackSnap, cookieSnap] = await Promise.all([
+    const [ordersSnapshot, brandsSnap, locationsSnap, customersSnap, feedbackReport, cookieSnap] = await Promise.all([
         getDocs(q),
         getDocs(collection(db, 'brands')),
         getDocs(collection(db, 'locations')),
         getDocs(collection(db, 'customers')),
-        getDocs(collection(db, 'feedback')),
+        getFeedbackReport({ from: filters.dateFrom, to: filters.dateTo, ...(filters.brandId && filters.brandId !== 'all' ? { brandId: filters.brandId } : {}) }).catch(() => null),
         getDocs(collection(db, 'anonymous_cookie_consents')),
     ]);
     
@@ -90,7 +91,7 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
     const returningCustomers = allCustomers.filter(c => c.totalOrders > 1 && c.lastOrderDate && c.lastOrderDate >= sixtyDaysAgo).length;
     const totalRetentionRate = totalUniqueCustomers > 0 ? (returningCustomers / totalUniqueCustomers) * 100 : 0;
     
-    const totalFeedbacks = feedbackSnap.size;
+    const totalFeedbacks = feedbackReport ? (filters.locationIds?.length ? feedbackReport.locationSummary.filter(l => filters.locationIds!.includes(l.id)).reduce((sum, l) => sum + l.responses, 0) : feedbackReport.summary.responses) : null;
     const totalCookieConsents = cookieSnap.size;
 
 

@@ -8,6 +8,7 @@ import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { hasPermission } from '@/lib/permissions';
 import { uploadProductImage } from '@/lib/superadmin/product-image-storage';
+import { getProductBrandReferences } from '@/lib/superadmin/product-brand-references';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Product, ProductForMenu } from '@/types';
 import * as admin from 'firebase-admin';
@@ -28,6 +29,7 @@ const optionalNonNegativePrice = z.preprocess(
 const baseFields = {
   id: z.string().optional().nullable(),
   creationKey: z.string().uuid().optional(),
+  originalBrandId: z.string().min(1).optional(),
   brandId: z.string().min(1, 'A brand must be selected.'),
   locationIds: z.array(z.string()).optional().default([]),
   categoryId: z.string().min(1, 'A category must be selected.'),
@@ -107,7 +109,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       };
     }
     
-    const { id: validatedId, creationKey, imageUrl: _imageUrl, ...productData } = parsed.data;
+    const { id: validatedId, creationKey, originalBrandId, imageUrl: _imageUrl, ...productData } = parsed.data;
     const clearPriceDelivery = Boolean(id) && formData.has('priceDelivery') && formData.get('priceDelivery') === '';
     
     // For updates, filter out undefined values to prevent overwriting existing data.
@@ -146,8 +148,23 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       const creationFingerprint = !id && creationKey
         ? await fingerprintCreationRequest(productData, image)
         : undefined;
-      if (id && (!existing.exists || existing.data()?.brandId !== productData.brandId)) {
-        throw new Error('The product does not exist or belongs to another brand.');
+      if (id && !existing.exists) throw new Error('The product no longer exists.');
+      if (id) {
+        const currentBrandId = existing.data()?.brandId;
+        // Compare the submitted source with the stored brand, separately from permission checks.
+        if ((originalBrandId !== undefined && originalBrandId !== currentBrandId) ||
+            (currentBrandId !== productData.brandId && originalBrandId !== currentBrandId)) {
+          throw new Error('The product brand has changed. Reload the product before saving.');
+        }
+        if (currentBrandId !== productData.brandId) {
+          const references = await getProductBrandReferences(db, currentBrandId, ref.id);
+          if (references.length > 0) {
+            return { ok: false, error: {
+              code: 'product/brand-in-use',
+              message: `Cannot change brand while this product is used by: ${references.join('; ')}. Remove or replace its references in the original brand first, then retry. Inactive records are included. Your entries are preserved.`,
+            } };
+          }
+        }
       }
       // The same form retries the same creation key after a lost response.
       if (!id && existing.exists) {
@@ -197,7 +214,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
           ...toWrite,
           ...(clearPriceDelivery ? { priceDelivery: admin.firestore.FieldValue.delete() } : {}),
           updatedAt: now,
-        });
+        }, { lastUpdateTime: existing.updateTime! });
       } else {
         const payload = {
           ...toWrite, id: ref.id,
@@ -225,7 +242,10 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       }
       return { ok: true, id: ref.id };
     } catch (e: any) {
-      console.error('[products.createOrUpdate] Firestore write failed', {
+      if (id && (e?.code === 9 || e?.code === 'failed-precondition')) {
+        return { ok: false, error: { code: 'product/stale-edit', message: 'The product changed while saving. Reload it before trying again. Your entries are preserved.' } };
+      }
+      console.error('[products.createOrUpdate] Save failed', {
         message: e?.message,
         code: e?.code,
         stack: e?.stack,

@@ -4,6 +4,7 @@ import { isValidMachineSecret } from '@/lib/integrations/esmeralda-customer-cont
 import { esmeraldaBookingFeedbackInvitationSchema } from '@/lib/integrations/esmeralda-feedback-contract';
 import { createBookingFeedbackInvitation } from '@/lib/integrations/esmeralda-feedback-integration';
 import { IntegrationBoundaryError } from '@/lib/integrations/esmeralda-consumer-customer';
+import { queueBookingFeedback } from '@/lib/feedback/mail-queue';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -35,6 +36,7 @@ export async function POST(request: Request) {
 
   try {
     const { invitation, token } = await createBookingFeedbackInvitation(parsed.data);
+    const mailJob = invitation.status === 'active' ? await queueBookingFeedback({ brandId: invitation.organization_id, locationId: invitation.location_id, customerId: invitation.customer_id, sourceId: invitation.booking_id, sourceType: 'booking', invitationId: invitation.invitation_id, invitationToken: token }, invitation.starts_at).catch(() => null) : null;
     const origin = new URL(request.url).origin;
     const feedbackPath = `/feedback?token=${encodeURIComponent(token)}`;
     return NextResponse.json(
@@ -45,6 +47,7 @@ export async function POST(request: Request) {
         expires_at: invitation.expires_at,
         feedback_path: feedbackPath,
         feedback_url: `${origin}${feedbackPath}`,
+        email_queue: mailJob ? 'queued' : 'not_queued',
       },
       { status: 200 },
     );

@@ -6,6 +6,7 @@ import { getActiveFeedbackQuestionsForExperience } from './actions';
 import { FeedbackFormClient } from './form-client';
 import { resolveBookingFeedbackInvitationToken } from '@/lib/integrations/esmeralda-feedback-integration';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { resolveOrderFeedbackInvitation, completedFeedbackOrder } from '@/lib/feedback/order-invitations';
 import type { FeedbackSourceContext } from '@/lib/feedback/source-types';
 
 export const revalidate = 0;
@@ -52,12 +53,17 @@ export default async function Page({ searchParams }: AsyncPageProps) {
     );
   }
 
-  const orderId = typeof query.orderId === 'string' ? query.orderId : undefined;
-  const customerId = typeof query.customerId === 'string' ? query.customerId : undefined;
+  const orderToken = typeof query.orderToken === 'string' ? query.orderToken : undefined;
+  const invitation = orderToken ? await resolveOrderFeedbackInvitation(orderToken) : null;
+  if (orderToken && !invitation) notFound();
+  if (invitation?.status === 'submitted') redirect('/feedback/thank-you');
+  const orderId = invitation?.sourceId || (typeof query.orderId === 'string' ? query.orderId : undefined);
+  const customerId = invitation?.customerId || (typeof query.customerId === 'string' ? query.customerId : undefined);
   if (!orderId || !customerId) notFound();
 
   const order = await getOrderDetails(orderId);
-  if (!order || order.customerDetails.id !== customerId) notFound();
+  if (!order || order.customerDetails.id !== customerId || !completedFeedbackOrder(order)) notFound();
+  if (invitation && (invitation.brandId !== order.brandId || invitation.locationId !== order.locationId)) notFound();
 
   const questionsVersion = await getActiveFeedbackQuestionsForExperience(
     order.deliveryType.toLowerCase() as 'pickup' | 'delivery', language,
@@ -75,6 +81,7 @@ export default async function Page({ searchParams }: AsyncPageProps) {
     brandName: order.brandName,
     brandLogoUrl: order.brandLogoUrl,
     displayReference: order.id,
+    ...(orderToken ? { invitationToken: orderToken } : {}),
     experienceType: order.deliveryType.toLowerCase() as 'pickup' | 'delivery',
   };
 

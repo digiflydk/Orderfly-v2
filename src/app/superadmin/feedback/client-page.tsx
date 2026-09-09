@@ -29,8 +29,9 @@ type FeedbackWithDetails = Feedback & {
 
 interface FeedbackClientPageProps {
   initialFeedback: FeedbackWithDetails[];
-  brands: Brand[];
-  locations: Location[];
+  brands: Pick<Brand, 'id' | 'name'>[];
+  locations: Pick<Location, 'id' | 'name' | 'brandId'>[];
+  canEdit?: boolean;
 }
 
 const RatingStars = ({ rating }: { rating: number }) => (
@@ -44,7 +45,7 @@ const RatingStars = ({ rating }: { rating: number }) => (
 const sourceOf = (feedback: FeedbackWithDetails) =>
   feedback.sourceType === 'booking' ? 'booking' : 'commerce_order';
 
-export function FeedbackClientPage({ initialFeedback, brands, locations }: FeedbackClientPageProps) {
+export function FeedbackClientPage({ initialFeedback, brands, locations, canEdit = true }: FeedbackClientPageProps) {
   const { toast } = useToast();
   const [feedbackList, setFeedbackList] = useState(initialFeedback);
   const [searchQuery, setSearchQuery] = useState('');
@@ -66,7 +67,7 @@ export function FeedbackClientPage({ initialFeedback, brands, locations }: Feedb
   }), [feedbackList, filters, searchQuery]);
 
   const toggle = async (id: string, value: boolean) => {
-    if (busy) return;
+    if (busy || !canEdit) return;
     setBusy(true); setError(null);
     setFeedbackList((current) => current.map((feedback) => feedback.id === id ? { ...feedback, showPublicly: value } : feedback));
     const result = await updateFeedback(id, { showPublicly: value }).catch(() => ({ error: true, message: 'Kunne ikke gemme. Prøv igen.' }));
@@ -75,6 +76,8 @@ export function FeedbackClientPage({ initialFeedback, brands, locations }: Feedb
       setFeedbackList((current) => current.map((feedback) => feedback.id === id ? { ...feedback, showPublicly: !value } : feedback));
       setError(result.message);
       toast({ variant: 'destructive', title: 'Error', description: result.message });
+    } else if ('feedback' in result && result.feedback) {
+      setFeedbackList(current => current.map(f => f.id === id ? { ...f, ...result.feedback! } : f));
     }
   };
 
@@ -112,7 +115,7 @@ export function FeedbackClientPage({ initialFeedback, brands, locations }: Feedb
               <TableCell>{feedback.maskCustomerName ? 'Anonymous' : feedback.customerName}</TableCell>
               <TableCell>{feedback.locationName}</TableCell>
               <TableCell>{feedbackDate(feedback.receivedAt)}</TableCell>
-              <TableCell><Switch disabled={busy} aria-label="Show publicly" checked={feedback.showPublicly} onCheckedChange={(value) => toggle(feedback.id, value)} /></TableCell>
+              <TableCell><Switch disabled={busy || !canEdit} aria-label="Show publicly" checked={feedback.showPublicly} onCheckedChange={(value) => toggle(feedback.id, value)} /></TableCell>
               <TableCell className="text-right"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem asChild><Link href={`/superadmin/feedback/${feedback.id}`}><Eye className="mr-2 h-4 w-4" />View</Link></DropdownMenuItem><DropdownMenuItem className="text-destructive" onSelect={(event) => { event.preventDefault(); setFeedbackToDelete(feedback.id); }}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu></TableCell>
             </TableRow>;
           })}

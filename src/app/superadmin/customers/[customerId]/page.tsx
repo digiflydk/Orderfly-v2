@@ -55,7 +55,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
         notFound();
     }
     
-    const { customer, allOrders, deliveryOrdersCount, pickupOrdersCount, retentionRate, loyaltyScore, loyaltyClassification, averageFeedbackRating, orderIdsWithFeedback, feedbackEntries } = details;
+    const { customer, allOrders, deliveryOrdersCount, pickupOrdersCount, retentionRate, loyaltyScore, loyaltyClassification, averageFeedbackRating, orderIdsWithFeedback, feedbackEntries, feedbackAccess } = details;
 
     const fullAddress = customer.street ? `${customer.street}, ${customer.zipCode} ${customer.city}, ${customer.country}` : 'No address on file';
 
@@ -162,8 +162,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                                         {feedbackEntries.map(feedback => (
                                             <TableRow key={feedback.id}>
                                                 <TableCell className="font-mono text-xs">{feedback.id.substring(0, 6).toUpperCase()}</TableCell>
-                                                <TableCell>{format(new Date(feedback.receivedAt), 'MMM d, yyyy')}</TableCell>
-                                                <TableCell><RatingStars rating={feedback.rating} /></TableCell>
+                                                <TableCell>{feedback.receivedAt ? format(new Date(feedback.receivedAt), 'MMM d, yyyy') : 'Dato mangler'}</TableCell>
+                                                <TableCell>{feedback.rating === null ? 'N/A' : <RatingStars rating={feedback.rating} />}</TableCell>
                                                 <TableCell className="text-sm text-muted-foreground truncate max-w-xs">{feedback.comment || '-'}</TableCell>
                                                 <TableCell className="text-right">
                                                     <Button variant="ghost" size="sm" asChild>
@@ -174,7 +174,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                                         ))}
                                         {feedbackEntries.length === 0 && (
                                             <TableRow>
-                                                <TableCell colSpan={5} className="text-center text-muted-foreground h-24">No feedback submitted.</TableCell>
+                                                <TableCell colSpan={5} className="text-center text-muted-foreground h-24">{feedbackAccess ? 'No feedback submitted.' : 'Log ind med feedbackadgang for at se historikken.'}</TableCell>
                                             </TableRow>
                                         )}
                                     </TableBody>

@@ -7,7 +7,7 @@ export const runtime = "nodejs";
 
 import { notFound } from 'next/navigation';
 import { readQuestionVersion } from '@/lib/feedback/question-store';
-import { requireSuperadmin } from '@/lib/auth/superadmin';
+import { requireQuestionAccess } from '@/lib/feedback/access';
 import type { FeedbackQuestionsVersion } from '@/types';
 import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form';
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
@@ -31,7 +31,7 @@ export default async function EditFeedbackQuestionVersionPage(props: any){
   const params = await Promise.resolve((props as any)?.params ?? {});
   const searchParams = await Promise.resolve((props as any)?.searchParams ?? {});
 
-  await requireSuperadmin();
+  await requireQuestionAccess();
   const normalizedId = normalizeId(params.versionId);
   const [version, settings] = await Promise.all([
     readQuestionVersion(normalizedId),

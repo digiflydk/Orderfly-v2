@@ -3,7 +3,9 @@ import 'server-only';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
-import { hasPermission } from '@/lib/permissions';
+import { requireFeedbackAccess, requireQuestionAccess, assertFeedbackBrand } from '@/lib/feedback/access';
+import { moderateFeedback, type FeedbackModeration } from '@/lib/feedback/moderation';
+import { queueOrderFeedback } from '@/lib/feedback/mail-queue';
 import { upsellClientData } from '@/lib/upsell-serialization';
 import { FeedbackQuestionsVersionSchema } from '@/lib/schemas/feedback';
 import { readQuestionVersions, readActiveQuestions } from '@/lib/feedback/question-store';
@@ -11,13 +13,10 @@ import type { Feedback, FeedbackQuestionsVersion } from '@/types';
 import type { FeedbackExperienceType } from '@/lib/feedback/source-types';
 
 type ActionResult = { ok: true; id: string } | { ok: false; error: string };
-function permit(permission: string) {
-  if (!hasPermission(permission)) throw new Error('Access denied.');
-}
 
 export async function createOrUpdateQuestionVersion(formData: FormData): Promise<ActionResult> {
   try {
-    permit('settings:edit');
+    await requireQuestionAccess(true);
     const parsed = FeedbackQuestionsVersionSchema.safeParse({
       id: formData.get('id') || undefined,
       versionLabel: formData.get('versionLabel'),
@@ -58,33 +57,28 @@ export async function createOrUpdateQuestionVersion(formData: FormData): Promise
 }
 
 export async function getFeedbackEntries(): Promise<Feedback[]> {
-  permit('orders:view');
-  const snapshot = await getAdminDb().collection('feedback').get();
-  const entries = snapshot.docs.map(doc => upsellClientData({ ...doc.data(), id: doc.id }) as Feedback);
+  const access = await requireFeedbackAccess();
+  const collection = getAdminDb().collection('feedback');
+  const docs = access.brandIds === null ? (await collection.get()).docs
+    : (await Promise.all(access.brandIds.map(id => collection.where('brandId', '==', id).get()))).flatMap(s => s.docs);
+  const entries = docs.map(doc => upsellClientData({ ...doc.data(), id: doc.id }) as Feedback);
   const date = (value: unknown) => { const time = new Date(value as string).getTime(); return Number.isFinite(time) ? time : 0; };
   return entries.sort((a, b) => date(b.receivedAt) - date(a.receivedAt));
 }
 
 export async function getFeedbackById(id: string): Promise<Feedback | null> {
-  permit('orders:view');
+  const access = await requireFeedbackAccess();
+  if (!/^[\w-]{1,160}$/.test(id)) return null;
   const doc = await getAdminDb().collection('feedback').doc(id).get();
+  if (doc.exists) assertFeedbackBrand(access, doc.data()?.brandId);
   return doc.exists ? upsellClientData({ ...doc.data(), id: doc.id }) as Feedback : null;
 }
 
-const moderationSchema = z.object({
-  showPublicly: z.boolean().optional(),
-  maskCustomerName: z.boolean().optional(),
-  internalNote: z.string().max(10000).optional(),
-}).strict().refine(value => Object.values(value).some(v => v !== undefined), 'No changes provided.');
-
-export async function updateFeedback(feedbackId: string, data: Partial<Pick<Feedback, 'showPublicly' | 'maskCustomerName' | 'internalNote'>>) {
+export async function updateFeedback(feedbackId: string, data: FeedbackModeration) {
   try {
-    permit('orders:edit');
-    const parsed = moderationSchema.parse(data);
-    await getAdminDb().collection('feedback').doc(feedbackId).update(parsed);
-    revalidatePath('/superadmin/feedback');
-    revalidatePath(`/superadmin/feedback/${feedbackId}`);
-    return { message: 'Feedback updated successfully.', error: false };
+    await moderateFeedback(feedbackId, data);
+    try { revalidatePath('/superadmin/feedback'); revalidatePath(`/superadmin/feedback/${feedbackId}`); } catch {}
+    return { message: 'Feedback updated successfully.', error: false, feedback: await getFeedbackById(feedbackId).catch(() => null) };
   } catch {
     return { message: 'Could not update feedback. Check your changes and try again.', error: true };
   }
@@ -92,18 +86,24 @@ export async function updateFeedback(feedbackId: string, data: Partial<Pick<Feed
 
 export async function deleteFeedback(id: string) {
   try {
-    permit('orders:edit');
-    await getAdminDb().collection('feedback').doc(id).delete();
-    revalidatePath('/superadmin/feedback');
+    await moderateFeedback(id, {}, true);
+    try { revalidatePath('/superadmin/feedback'); } catch {}
     return { message: 'Feedback deleted successfully.', error: false };
   } catch {
     return { message: 'Could not delete feedback. Please try again.', error: true };
   }
 }
 
-export async function sendFeedbackRequestEmail(_orderId: string) {
-  // Never claim a simulated email was sent or log a customer's private feedback link.
-  return { error: 'Feedback emails are not configured. No email was sent.' };
+export async function sendFeedbackRequestEmail(orderId: string) {
+  try {
+    const access = await requireFeedbackAccess('feedback:edit');
+    if (!/^[\w-]{1,160}$/.test(orderId)) throw new Error('Ugyldig ordre.');
+    const order = (await getAdminDb().collection('orders').doc(orderId).get()).data();
+    assertFeedbackBrand(access, order?.brandId);
+    const jobId = await queueOrderFeedback(orderId);
+    if (!jobId) return { error: 'Feedbackmail er deaktiveret for dette brand.' };
+    return { ok: true, message: 'Feedbackanmodningen er registreret i afsendelseskøen. Se status under Feedbackindstillinger.' };
+  } catch { return { error: 'Kunne ikke lægge feedbackmail i kø. Kontrollér login, mailopsætning og at ordren er gennemført og betalt.' }; }
 }
 
 export async function getActiveFeedbackQuestionsForExperience(type: FeedbackExperienceType, language = 'da') {
@@ -113,6 +113,6 @@ export async function getActiveFeedbackQuestionsForOrder(deliveryType: 'Delivery
   return await readActiveQuestions(deliveryType.toLowerCase() as 'pickup' | 'delivery') as FeedbackQuestionsVersion | null;
 }
 export async function getFeedbackQuestionVersions(): Promise<FeedbackQuestionsVersion[]> {
-  permit('settings:view');
+  await requireQuestionAccess();
   return await readQuestionVersions() as FeedbackQuestionsVersion[];
 }

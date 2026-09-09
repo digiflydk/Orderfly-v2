@@ -8,6 +8,7 @@ import type { Customer, OrderDetail, Feedback } from '@/types';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { customerMetrics,asDate,qualifyingOrders } from '@/lib/loyalty/model';
+import { customerFeedbackHistory } from '@/lib/feedback/customer-history';
 import { getLoyaltySettings } from '../loyalty/actions';
 
 
@@ -161,7 +162,8 @@ export async function getCustomerDetails(customerId: string): Promise<{
     loyaltyClassification: string;
     averageFeedbackRating: number;
     orderIdsWithFeedback: string[];
-    feedbackEntries: Feedback[];
+    feedbackEntries: NonNullable<Awaited<ReturnType<typeof customerFeedbackHistory>>>;
+    feedbackAccess: boolean;
 } | null> {
     const decodedCustomerId = decodeURIComponent(customerId);
     const customerRef = doc(db, 'customers', decodedCustomerId);
@@ -213,21 +215,11 @@ export async function getCustomerDetails(customerId: string): Promise<{
     const loyaltySettings = await getLoyaltySettings();
     const metrics = customerMetrics(sourceOrders.filter(o=>o.brandId===customer.brandId), loyaltySettings);
     const retentionRate = metrics.totalOrders > 1 ? 100 : 0;
-    // Fetch feedback data
-    const feedbackQuery = query(collection(db, 'feedback'), where('customerId', '==', decodedCustomerId), where('brandId', '==', customer.brandId));
-    const feedbackSnapshot = await getDocs(feedbackQuery);
-    const feedbackEntries = feedbackSnapshot.docs.map(doc => {
-      const data = doc.data();
-      return {
-          ...data,
-          id: doc.id,
-          receivedAt: (data.receivedAt as Timestamp).toDate(),
-      } as Feedback;
-    });
-
-    const totalRating = feedbackEntries.reduce((sum, f) => sum + f.rating, 0);
-    const averageFeedbackRating = feedbackEntries.length > 0 ? totalRating / feedbackEntries.length : 0;
-    const orderIdsWithFeedback = feedbackEntries.map(f => f.orderId);
+    const history = await customerFeedbackHistory(customer.brandId, decodedCustomerId);
+    const feedbackEntries = history || [];
+    const ratings = feedbackEntries.flatMap(f => f.rating === null ? [] : [f.rating]);
+    const averageFeedbackRating = ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0;
+    const orderIdsWithFeedback = feedbackEntries.flatMap(f => f.orderId ? [f.orderId] : []);
 
     return {
         customer: {...customer,...metrics},
@@ -240,5 +232,6 @@ export async function getCustomerDetails(customerId: string): Promise<{
         averageFeedbackRating,
         orderIdsWithFeedback,
         feedbackEntries,
+        feedbackAccess: history !== null,
     };
 }

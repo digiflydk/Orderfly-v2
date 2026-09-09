@@ -1,0 +1,10 @@
+{
+  "indexes": [
+    { "collectionGroup": "feedback", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "brandId", "order": "ASCENDING" }, { "fieldPath": "receivedAt", "order": "ASCENDING" } ] },
+    { "collectionGroup": "feedback", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "brandId", "order": "ASCENDING" }, { "fieldPath": "customerId", "order": "ASCENDING" } ] },
+    { "collectionGroup": "feedback", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "brandId", "order": "ASCENDING" }, { "fieldPath": "orderId", "order": "ASCENDING" } ] },
+    { "collectionGroup": "publicFeedbackReviews", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "brandId", "order": "ASCENDING" }, { "fieldPath": "locationId", "order": "ASCENDING" } ] },
+    { "collectionGroup": "feedbackMailJobs", "queryScope": "COLLECTION", "fields": [ { "fieldPath": "brandId", "order": "ASCENDING" }, { "fieldPath": "createdAt", "order": "DESCENDING" } ] }
+  ],
+  "fieldOverrides": []
+}

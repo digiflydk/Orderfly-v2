@@ -1,13 +1,12 @@
-import Link from '@/components/superadmin/admin-link';
-
-export default function FeedbackSettingsPage() {
-  return <div className="max-w-2xl space-y-6">
-    <h1 className="text-2xl font-bold">Feedbackindstillinger</h1>
-    <div role="status" className="rounded-lg border bg-muted p-5 space-y-3">
-      <h2 className="font-semibold">Automatisk afsendelse er endnu ikke klar</h2>
-      <p>Feedbackmails, påmindelser og automatiske svar er ikke tilsluttet. Der bliver ikke sendt beskeder fra denne side.</p>
-      <p>Afsender, mailskabeloner og tidsplan skal færdiggøres og testes, før automatisk feedback kan aktiveres.</p>
-    </div>
-    <Link href="/superadmin/feedback/questions" className="inline-block underline">Administrér feedbackspørgsmål</Link>
-  </div>;
+import { requireFeedbackAccess } from '@/lib/feedback/access';
+import { feedbackScopeOptions } from '@/lib/feedback/admin-data';
+import { readFeedbackSettings } from '@/lib/feedback/settings';
+import { FeedbackSettingsView } from './settings-view';
+import { feedbackMailJobs } from '@/lib/feedback/mail-admin';
+export default async function FeedbackSettingsPage() {
+  const access = await requireFeedbackAccess();
+  const options = await feedbackScopeOptions(access);
+  const settings = await Promise.all(options.brands.map(async brand => ({ ...brand, ...await readFeedbackSettings(brand.id) })));
+  const jobs = (await Promise.all(options.brands.map(brand => feedbackMailJobs(brand.id)))).flat();
+  return <FeedbackSettingsView brands={settings} locations={options.locations} jobs={jobs} canEdit={access.permissions.includes('feedback:edit')} />;
 }

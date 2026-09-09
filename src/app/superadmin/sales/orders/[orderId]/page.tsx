@@ -1,3 +1,4 @@
+import { FeedbackRequestButton } from '@/components/superadmin/feedback-request-button';
 
 
 import { notFound } from 'next/navigation';
@@ -86,10 +87,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 					</p>
 				</div>
 				<div className="flex items-center gap-2">
-                    <div>
-                      <Button variant="outline" type="button" disabled><MessageSquare className="mr-2" />Send Feedback Request</Button>
-                      <p className="text-xs text-muted-foreground">Feedbackmail er endnu ikke tilsluttet.</p>
-                    </div>
+                    <FeedbackRequestButton orderId={order.id} />
 					<Button variant="outline"><Download className="mr-2" />Export</Button>
 					<Button asChild><Link href="#" target="_blank"><LinkIcon className="mr-2" />View in Stripe</Link></Button>
 				</div>

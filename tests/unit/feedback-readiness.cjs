@@ -45,14 +45,14 @@ test('wrong customer, inactive version, language mismatch and invalid answers wr
  const f=fixture();f.records.get('feedbackQuestionsVersion/v1').isActive=false;assert.equal((await f.public.submitFeedbackAction(null,responseForm())).error,true);assert.equal(f.writes.length,0);
 });
 test('moderation cannot create records or change tenant/rating; note and booleans can update',async()=>{
- const f=fixture();f.records.set('feedback/f',{brandId:'b',rating:4});
+ const f=fixture();f.records.set('feedback/f',{brandId:'b',locationId:'l',customerId:'c',rating:4});
  for(const data of [{brandId:'evil'},{rating:1},{showPublicly:'true'},{}])assert.equal((await f.admin.updateFeedback('f',data)).error,true);
  assert.equal((await f.admin.updateFeedback('missing',{internalNote:'note'})).error,true);
  assert.equal((await f.admin.updateFeedback('f',{internalNote:'note',showPublicly:true})).error,false);assert.equal(f.records.get('feedback/f').rating,4);
  f.failure.auth=true;assert.equal((await f.admin.updateFeedback('f',{showPublicly:false})).error,true);
 });
 test('feedback canonical id and nested timestamps serialize; date fallback; mail is never falsely reported sent',async()=>{
- const f=fixture();f.records.set('feedback/f',{id:'old',receivedAt:undefined,nested:{time:f.records.get('feedbackQuestionsVersion/v1').createdAt}});
+ const f=fixture();f.records.set('feedback/f',{id:'old',brandId:'b',receivedAt:undefined,nested:{time:f.records.get('feedbackQuestionsVersion/v1').createdAt}});
  const saved=await f.admin.getFeedbackById('f');assert.equal(saved.id,'f');assert.ok(saved.nested.time instanceof Date);
  assert.equal((await f.admin.getFeedbackEntries()).length,1);assert.ok((await f.admin.sendFeedbackRequestEmail('order')).error);
  assert.equal(loadTs('src/lib/feedback/display.ts').feedbackDate('invalid'),'Dato mangler');

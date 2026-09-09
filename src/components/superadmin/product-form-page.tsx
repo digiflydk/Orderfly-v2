@@ -255,7 +255,7 @@ export function ProductFormPage({
     event.preventDefault();
     if (submitting.current) return;
     const data = new FormData(event.currentTarget);
-    // Serialize controlled values, including disabled brand selects and unchecked flags.
+    // Serialize controlled values, including the brand and unchecked flags.
     for (const [key, value] of Object.entries(form.getValues())) {
       if (key === 'imageUrl') continue; // Keep the actual file from the native input.
       data.delete(key);
@@ -263,6 +263,7 @@ export function ProductFormPage({
       else if (key === 'priceDelivery' && value === undefined) data.set(key, '');
       else if (value !== undefined && value !== null) data.set(key, String(value));
     }
+    if (isEditing) data.set('originalBrandId', product!.brandId);
     if (!isEditing) {
       creationKey.current ??= crypto.randomUUID();
       data.set('creationKey', creationKey.current);
@@ -671,7 +672,7 @@ export function ProductFormPage({
                           value={
                             field.value ?? ''
                           }
-                          disabled={isEditing}
+                          disabled={pending}
                         >
                           <FormControl>
                             <SelectTrigger>
@@ -701,14 +702,11 @@ export function ProductFormPage({
 
                         <input type="hidden" name="brandId" value={field.value ?? ''} />
                         {isEditing && (
-                          <>
-                            <FormDescription>
-                              Product&apos;s
-                              brand cannot be
-                              changed after
-                              creation.
-                            </FormDescription>
-                          </>
+                          <FormDescription>
+                            Changing brand moves this product. Choose a category and locations
+                            for the new brand. Incompatible selections are cleared; prices and
+                            the existing image are kept.
+                          </FormDescription>
                         )}
 
                         <FormMessage />

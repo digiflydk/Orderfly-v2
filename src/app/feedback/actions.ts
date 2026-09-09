@@ -5,6 +5,10 @@ import { redirect } from 'next/navigation';
 import { z } from 'zod';
 import { createHash } from 'node:crypto';
 import { readActiveQuestions } from '@/lib/feedback/question-store';
+import { feedbackMetrics } from '@/lib/feedback/metrics';
+import { resolveOrderFeedbackInvitation, completedFeedbackOrder } from '@/lib/feedback/order-invitations';
+import { feedbackAutomation, feedbackMailConfig } from '@/lib/feedback/mail-config';
+import { pendingFeedbackMessage } from '@/lib/feedback/mail-queue';
 
 import { admin, getAdminDb } from '@/lib/firebase-admin';
 import { getOrderById } from '@/app/checkout/order-actions';
@@ -49,6 +53,7 @@ type AuthoritativeSource = {
   brandId: string;
   experienceType: FeedbackExperienceType;
   invitationId?: string;
+  invitationCollection?: 'feedbackInvitations' | 'integrationFeedbackInvitations';
 };
 
 async function resolveAuthoritativeSource(
@@ -56,7 +61,9 @@ async function resolveAuthoritativeSource(
 ): Promise<AuthoritativeSource | null> {
   if (parsed.sourceType === 'commerce_order') {
     const order = await getOrderById(parsed.sourceId);
-    if (!order || order.customerDetails.id !== parsed.customerId) return null;
+    if (!order || order.customerDetails.id !== parsed.customerId || !completedFeedbackOrder(order)) return null;
+    const invitation = parsed.invitationToken ? await resolveOrderFeedbackInvitation(parsed.invitationToken) : null;
+    if (parsed.invitationToken && (!invitation || invitation.sourceId !== order.id || invitation.brandId !== order.brandId || invitation.locationId !== order.locationId || invitation.customerId !== parsed.customerId)) return null;
     return {
       sourceType: 'commerce_order',
       sourceId: order.id,
@@ -64,6 +71,7 @@ async function resolveAuthoritativeSource(
       locationId: order.locationId,
       brandId: order.brandId,
       experienceType: order.deliveryType.toLowerCase() as 'pickup' | 'delivery',
+      ...(invitation ? { invitationId: invitation.id, invitationCollection: 'feedbackInvitations' as const } : {}),
     };
   }
 
@@ -85,18 +93,18 @@ async function resolveAuthoritativeSource(
     brandId: invitation.organization_id,
     experienceType: 'booking',
     invitationId: invitation.invitation_id,
+    invitationCollection: 'integrationFeedbackInvitations',
   };
 }
 
 function extractCoreResponses(responses: Record<string, { type: string; answer: unknown }>) {
-  let rating = 0;
-  let npsScore: number | undefined;
+  const metrics = feedbackMetrics({ responses });
+  const rating = metrics.rating ?? 0;
+  const npsScore = metrics.nps ?? undefined;
   let comment: string | undefined;
   const tags: string[] = [];
 
   Object.values(responses).forEach((response) => {
-    if (response.type === 'stars' && typeof response.answer === 'number') rating = response.answer;
-    if (response.type === 'nps' && typeof response.answer === 'number') npsScore = response.answer;
     if (response.type === 'text' && typeof response.answer === 'string') comment = response.answer;
     if ((response.type === 'multiple_options' || response.type === 'tags') && Array.isArray(response.answer)) {
       for (const tag of response.answer) if (typeof tag === 'string') tags.push(tag);
@@ -169,7 +177,7 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
       rating,
       tags,
       showPublicly: false,
-      maskCustomerName: false,
+      maskCustomerName: true,
       autoResponseSent: false,
       answeredVia: 'webshop',
     };
@@ -177,37 +185,39 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
     if (typeof npsScore === 'number') feedbackData.npsScore = npsScore;
     if (comment) feedbackData.comment = comment;
 
-    if (source.sourceType === 'booking' && source.invitationId) {
-      const invitationRef = db.collection('integrationFeedbackInvitations').doc(source.invitationId);
-      await db.runTransaction(async (transaction) => {
-        const invitationSnapshot = await transaction.get(invitationRef);
-        if (!invitationSnapshot.exists) throw new Error('Feedback invitation no longer exists.');
-        const invitation = invitationSnapshot.data() ?? {};
-        if (invitation.status === 'submitted' && typeof invitation.feedbackId === 'string') return;
-        if (invitation.status !== 'active') throw new Error('Feedback invitation is not active.');
-        transaction.create(feedbackRef, feedbackData);
-        transaction.update(invitationRef, {
-          status: 'submitted',
-          feedbackId: feedbackRef.id,
-          submittedAt: admin.firestore.FieldValue.serverTimestamp(),
-          updatedAt: admin.firestore.FieldValue.serverTimestamp(),
-        });
-      });
-    } else {
-      await db.runTransaction(async transaction => {
-        const existing = await transaction.get(feedbackRef);
-        // Include legacy random-ID feedback when checking whether the order was answered.
-        const legacy = await transaction.get(db.collection('feedback').where('orderId', '==', source.sourceId));
-        if (existing.exists || legacy.docs.some(doc => doc.data().brandId === source.brandId && doc.data().customerId === source.customerId)) return;
-        transaction.create(feedbackRef, feedbackData);
-      });
-    }
+    const invitationRef = source.invitationId && source.invitationCollection ? db.collection(source.invitationCollection).doc(source.invitationId) : null;
+    const thanksRef = db.collection('feedbackMailJobs').doc(feedbackId + '-thankYou');
+    await db.runTransaction(async transaction => {
+      const existing = await transaction.get(feedbackRef);
+      const legacy = source.sourceType === 'commerce_order'
+        ? await transaction.get(db.collection('feedback').where('orderId', '==', source.sourceId)) : null;
+      const invitationSnapshot = invitationRef ? await transaction.get(invitationRef) : null;
+      const invitation = invitationSnapshot?.data();
+      if (invitationRef) {
+        if (!invitationSnapshot?.exists) throw new Error('Feedback invitation no longer exists.');
+        if (invitation?.status === 'submitted') return;
+        if (invitation?.status !== 'active') throw new Error('Feedback invitation is not active.');
+      }
+      if (source.sourceType === 'commerce_order') {
+        const current = (await transaction.get(db.collection('orders').doc(source.sourceId))).data();
+        if (!current || !completedFeedbackOrder(current) || current.brandId !== source.brandId || current.locationId !== source.locationId || current.customerDetails?.id !== source.customerId) throw new Error('Order is no longer eligible for feedback.');
+      }
+      const settings = invitationRef && feedbackMailConfig(source.brandId)
+        ? feedbackAutomation((await transaction.get(db.collection('feedbackSettings').doc(source.brandId))).data()) : null;
+      const thanks = settings?.emailEnabled && settings.autoReplyEnabled ? await transaction.get(thanksRef) : null;
+      const legacyId = legacy?.docs.find(doc => doc.data().brandId === source.brandId && doc.data().customerId === source.customerId)?.id;
+      const savedId = existing.exists ? existing.id : legacyId || feedbackId;
+      if (!existing.exists && !legacyId) transaction.create(feedbackRef, feedbackData);
+      if (invitationRef) transaction.update(invitationRef, { status: 'submitted', feedbackId: savedId, submittedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+      if (thanks && !thanks.exists && source.invitationId) {
+        transaction.create(thanksRef, pendingFeedbackMessage({ ...source, invitationId: source.invitationId, ...(source.sourceType === 'booking' && parsed.data.invitationToken ? { invitationToken: parsed.data.invitationToken } : {}) }, 'thankYou', Date.now()));
+      }
+    });
 
     try { revalidatePath('/superadmin/feedback'); } catch (error) { console.error('Feedback cache refresh failed', error); }
   } catch (e) {
-    const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-    console.error('Error submitting feedback:', e);
-    return { message: `Failed to submit feedback: ${errorMessage}`, error: true };
+    console.error('Feedback submission failed');
+    return { message: 'Feedback kunne ikke gemmes. Dine svar er bevaret. Prøv igen.', error: true };
   }
 
   redirect('/feedback/thank-you');
