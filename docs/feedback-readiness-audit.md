@@ -95,14 +95,14 @@ Ingen af nedenstående runtimeændringer er udført fra Work.
 | Hosting | Eksisterende **orderfly-v21-10334086-b3076**; produktbilledlager fra #90 bevares uændret |
 | `ORDERFLY_FEEDBACK_ACCESS` | Betroede eksisterende Firebase UID'er, roller og brand-ID'er; konfigurér før feedbackruter tages i brug |
 | `ORDERFLY_FEEDBACK_TEST_ACCESS` | Kun dummytest: præcis `enabled-for-dummy-data`. Fjerner den særskilte feedback-login bag den eksisterende Superadmin-grænse. Fjernes før rigtige kundedata. |
-| `ORDERFLY_NOTIFICATION_ENDPOINT` | Det beskyttede HTTPS-endpoint i mPanel fra den koordinerede mPanel-opgave; ingen query/hash eller browseradgang |
-| `ORDERFLY_NOTIFICATION_ORGANIZATION_ID` | UUID for organisationen i mPanel, som ejer den separate Orderfly-afsenderprofil |
-| `ORDERFLY_NOTIFICATION_SECRET` | Separat serverhemmelighed på mindst 32 tegn til Orderfly→mPanel; aldrig Mailtrap-tokenet og aldrig i browser/Git |
+| `ORDERFLY_NOTIFICATION_ENDPOINT` | Fast server-runtimeværdi: `https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/orderfly-notification-enqueue`; ingen query/hash eller browseradgang |
+| `ORDERFLY_NOTIFICATION_ORGANIZATION_ID` | Fast server-runtimeværdi: `aaa94d25-3ca6-4ebf-a673-164608db6c55` for Esmeralda Pizza & Restaurant |
+| `ORDERFLY_NOTIFICATION_SECRET` | Refererer i `apphosting.yaml` til den eksisterende Secret Manager-secret `ORDERFLY_ESMERALDA_INTEGRATION_SECRET`; værdien kopieres ikke og eksponeres aldrig i browser/Git |
 | `ORDERFLY_FEEDBACK_TOKEN_SECRET` | Tilfældig hemmelig værdi på mindst 32 tegn; rotation ugyldiggør gamle signerede ordrelinks |
 | `ORDERFLY_FEEDBACK_WORKER_SECRET` | Separat tilfældig hemmelig værdi på mindst 32 tegn til worker; aldrig i browser eller Git |
 | `ORDERFLY_FEEDBACK_ORIGIN` | Valgfri betroet HTTPS-origin uden sti; standard `https://orderfly.dk` |
 | Scheduler | POST `/api/internal/feedback/send`, `Authorization: Bearer <worker-secret>`; fx hvert 5. minut. Samme kald behandler feedback- og ordrebekræftelsesjobs. Ingen automatisk historisk backfill. |
-| mPanel/Mailtrap | Fuldfør den koordinerede mPanel-opgave med separat Orderfly-afsenderprofil, Vault-token, fire skabeloner, beskyttet enqueue-endpoint og synlig leveringsstatus. En accepteret enqueue er ikke leveringsbevis. |
+| mPanel/Mailtrap | mPanel #263 genbruger Esmeraldas aktive `info@esmeraldapizza.com`-afsender og eksisterende Vault-token, fire skabeloner, beskyttet enqueue-endpoint og synlig leveringsstatus. En accepteret enqueue er ikke leveringsbevis. |
 | Firestore-indexer | Flet de nødvendige indexer fra `docs/feedback-firestore-indexes.json` ind i projektets eksisterende konfiguration. Erstat ikke de eksisterende indexer. |
 | Firestore-regler | Verificér at browserklienter ikke kan læse/skrive private feedbackdata, grants, settings, invitationer, mailjobs, audit eller offentlige projektioner direkte. Serverruter bruger Admin SDK. En bred eksisterende allow-regel kan ikke ophæves med en snæver deny-regel; gennemgå den samlede regelsamling. |
 
