@@ -1,4 +1,4 @@
-export const M3PIZZA_MENU_PATH = '/cphpizza/m3-pizza-hellerup';
+export const M3PIZZA_MENU_PATH = '/esmeralda/esmeralda-pizza-amager';
 
 export type M3PizzaDeliveryMethod = 'delivery' | 'pickup';
 

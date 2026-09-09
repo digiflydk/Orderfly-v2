@@ -1,3 +1,1 @@
-import { redirect } from "next/navigation";
-export const runtime = "nodejs";
-export default function Root() { redirect("/m3pizza"); }
+export { default } from './brand-site/m3pizza/page';

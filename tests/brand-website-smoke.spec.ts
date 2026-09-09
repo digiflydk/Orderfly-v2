@@ -6,9 +6,11 @@ const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000';
 
 test.describe('Brand Website Smoke Tests', () => {
   test('Test 1: Template 1 Header Loads on Desktop', async ({ page }) => {
-    await page.goto(`${BASE_URL}/m3pizza`);
+    await page.goto(BASE_URL);
 
-    const header = page.getByTestId('template1-page');
+    await expect(page).toHaveURL(new RegExp(`${BASE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`));
+
+    const header = page.locator('[data-commerce-root]');
     const button = page.getByRole('button', { name: 'BESTIL NU' })
 
     await expect(header).toBeVisible();
@@ -83,7 +85,7 @@ test.describe('Brand Website Smoke Tests', () => {
     await page.getByTestId('template1-sticky-cta').getByRole('button', { name: 'BESTIL HER' }).click();
     await page.getByRole('button', { name: /Leverer til mig/ }).click();
 
-    await expect(page).toHaveURL(/\/cphpizza\/m3-pizza-hellerup\?deliveryMethod=delivery$/);
+    await expect(page).toHaveURL(/\/esmeralda\/esmeralda-pizza-amager\?deliveryMethod=delivery$/);
     await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
     await expect(page.getByText('Menu (mock)')).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
@@ -98,7 +100,7 @@ test.describe('Brand Website Smoke Tests', () => {
     await page.getByTestId('template1-sticky-cta').getByRole('button', { name: 'BESTIL HER' }).click();
     await page.getByRole('button', { name: /Jeg tager med/ }).click();
 
-    await expect(page).toHaveURL(/\/cphpizza\/m3-pizza-hellerup\?deliveryMethod=pickup$/);
+    await expect(page).toHaveURL(/\/esmeralda\/esmeralda-pizza-amager\?deliveryMethod=pickup$/);
     await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
     await expect.poll(() => page.evaluate(() => localStorage.getItem('deliveryMethod'))).toBe('pickup');
@@ -120,7 +122,7 @@ test.describe('Brand Website Smoke Tests', () => {
     await page.getByTestId('template1-sticky-cta').getByRole('button', { name: 'BESTIL HER' }).click();
     await page.getByRole('button', { name: /Jeg tager med/ }).click();
 
-    await expect(page).toHaveURL(/\/cphpizza\/m3-pizza-hellerup\?deliveryMethod=pickup$/);
+    await expect(page).toHaveURL(/\/esmeralda\/esmeralda-pizza-amager\?deliveryMethod=pickup$/);
     await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
   });
@@ -135,7 +137,7 @@ test.describe('Brand Website Smoke Tests', () => {
       await page.goto(`/m3pizza/order?deliveryMethod=${requestedMethod}`);
 
       await expect(page).toHaveURL(
-        new RegExp(`/cphpizza/m3-pizza-hellerup\\?deliveryMethod=${expectedMethod}$`),
+        new RegExp(`/esmeralda/esmeralda-pizza-amager\\?deliveryMethod=${expectedMethod}$`),
       );
       await expect.poll(() => page.evaluate(() => localStorage.getItem('deliveryMethod'))).toBe(expectedMethod);
     });
@@ -155,7 +157,7 @@ test.describe('Brand Website Smoke Tests', () => {
     await page.goto('/m3pizza/order?deliveryMethod=delivery');
 
     await expect(page).toHaveURL(
-      /\/cphpizza\/m3-pizza-hellerup\?deliveryMethod=delivery$/,
+      /\/esmeralda\/esmeralda-pizza-amager\?deliveryMethod=delivery$/,
     );
     await expect(page.getByRole('heading', { name: 'M3 (Preview)' })).toHaveCount(0);
     await expect(page.getByRole('button', { name: 'Pick-up' })).toBeVisible();
