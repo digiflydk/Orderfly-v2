@@ -38,6 +38,8 @@ before(async()=>{
   if(mode==='fallback'){delete location.imageUrl;delete location.street;location.address='Lang adresse 128, 2300 København S';location.deliveryTypes=['pickup'];location.openingHours.wednesday.isOpen=false;}
   if(mode==='other-brand')location.brandId='other';
   if(mode==='missing'){delete location.openingHours;delete location.deliveryFee;delete location.minOrder;}
+  if(mode==='external-image')location.imageUrl='https://cdn.example.test/location.jpg';
+  if(mode==='long-name')location.name='Esmeralda Pizza Amager med et meget langt lokationsnavn som ikke må bryde headeren';
   res.setHeader('content-type','text/html');res.end('<!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body><div id="root"></div><script>window.fixture='+JSON.stringify({brand,location})+'</script><script src="/bundle.js"></script></body></html>');
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;
@@ -68,6 +70,10 @@ test('missing photo, address fallback and pickup-only location show only real in
  await page.getByText('Åbningstid i dag: Lukket').waitFor();await page.getByRole('link',{name:'Lang adresse 128, 2300 København S'}).waitFor();
  assert.equal(await page.locator('section img').count(),0);assert.equal(await page.getByText(/Levering fra|Minimumsbestilling/).count(),0);
 });
+test('an external location image is rendered without Next Image host restrictions',async t=>{
+ const page=await pageFor(t,390,'/esmeralda/amager?mode=external-image');
+ assert.equal(await page.locator('section img').getAttribute('src'),'https://cdn.example.test/location.jpg');
+});
 test('unknown hours/prices are omitted and a stale cart cannot show another brand location',async t=>{
  const page=await pageFor(t,390,'/esmeralda/amager?mode=missing');
  assert.equal(await page.getByText(/Åbningstid|Levering fra|Minimumsbestilling/).count(),0);
@@ -78,4 +84,11 @@ test('checkout keeps a compact header without a menu link or location banner',as
  const page=await pageFor(t,390,'/esmeralda/amager/checkout');await page.getByText('Esmeralda Pizza Amager').waitFor();
  assert.equal(await page.getByRole('banner').getByRole('link').count(),0);assert.equal(await page.getByRole('region',{name:'Lokationsoplysninger'}).count(),0);
  assert.equal((await page.getByRole('banner').boundingBox()).height,64);
+});
+test('checkout truncates long location names within the fixed mobile header',async t=>{
+ const page=await pageFor(t,390,'/esmeralda/amager/checkout?mode=long-name');
+ const header=page.getByRole('banner'),name=header.getByText(/meget langt lokationsnavn/);
+ await name.waitFor();assert.equal((await header.boundingBox()).height,64);
+ assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+ assert.equal(await name.evaluate(element=>element.scrollWidth>element.clientWidth),true);
 });

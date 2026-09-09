@@ -34,12 +34,13 @@ export function MenuHeader({ brand }: { brand: Brand }) {
         {checkout
           ? <div className="relative flex h-10 w-36 shrink-0 items-center">{logo}</div>
           : <Link href={href} aria-label={brand.name} className="relative flex h-10 w-36 shrink-0 items-center">{logo}</Link>}
-        {checkout && <p className="text-right text-sm font-semibold">{location?.name || brand.name}</p>}
+        {checkout && <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold">{location?.name || brand.name}</p>}
       </div>
     </header>
     {!checkout && location && details && <section aria-label="Lokationsoplysninger" className="relative isolate overflow-hidden bg-[#262421] text-white">
       {location.imageUrl && <>
-        <Image src={safeImage(location.imageUrl)} alt="" fill sizes="100vw" className="-z-20 object-cover" />
+        {/* Location URLs are user-configured and are not limited to Next Image's host allowlist. */}
+        <img src={safeImage(location.imageUrl)} alt="" className="absolute inset-0 -z-20 h-full w-full object-cover" />
         <div className="absolute inset-0 -z-10 bg-black/65" />
       </>}
       <div className="mx-auto max-w-[1140px] px-4 py-6 sm:py-8">
