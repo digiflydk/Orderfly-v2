@@ -20,12 +20,18 @@ env:
   - variable: ORDERFLY_FEEDBACK_TEST_ACCESS
     secret: ORDERFLY_FEEDBACK_TEST_ACCESS
   - variable: ORDERFLY_NOTIFICATION_SECRET
-    secret: ORDERFLY_NOTIFICATION_SECRET
+    # Reuse the existing server-to-server secret shared with Esmeralda/mPanel.
+    # The secret value remains in Secret Manager and is never committed.
+    secret: ORDERFLY_ESMERALDA_INTEGRATION_SECRET
   - variable: ORDERFLY_FEEDBACK_TOKEN_SECRET
     secret: ORDERFLY_FEEDBACK_TOKEN_SECRET
   - variable: ORDERFLY_FEEDBACK_WORKER_SECRET
     secret: ORDERFLY_FEEDBACK_WORKER_SECRET
   - variable: ORDERFLY_NOTIFICATION_ENDPOINT
-    secret: ORDERFLY_NOTIFICATION_ENDPOINT
+    value: https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/orderfly-notification-enqueue
+    availability:
+      - RUNTIME
   - variable: ORDERFLY_NOTIFICATION_ORGANIZATION_ID
-    secret: ORDERFLY_NOTIFICATION_ORGANIZATION_ID
+    value: aaa94d25-3ca6-4ebf-a673-164608db6c55
+    availability:
+      - RUNTIME
