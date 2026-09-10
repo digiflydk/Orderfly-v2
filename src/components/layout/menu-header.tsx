@@ -46,10 +46,8 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
     </header>
     {!checkout && location && details && <section aria-label="Lokationsoplysninger" className="relative isolate overflow-hidden bg-[#262421] text-white">
       {location.imageUrl && <>
-        {/* Local media can be resized; preserve support for arbitrary external image hosts. */}
-        {location.imageUrl.startsWith('/') && !location.imageUrl.startsWith('//')
-          ? <Image src={safeImage(location.imageUrl)} alt="" fill sizes="100vw" priority fetchPriority="high" className="-z-20 object-cover" />
-          : <img src={safeImage(location.imageUrl)} alt="" loading="eager" fetchPriority="high" className="absolute inset-0 -z-20 h-full w-full object-cover" />}
+        {/* Location URLs are user-configured and are not limited to Next Image's host allowlist. */}
+        <img src={safeImage(location.imageUrl)} alt="" loading="eager" fetchPriority="high" className="absolute inset-0 -z-20 h-full w-full object-cover" />
         <div className="absolute inset-0 -z-10 bg-black/65" />
       </>}
       <div className="mx-auto max-w-[1140px] px-4 py-6 sm:py-8">
