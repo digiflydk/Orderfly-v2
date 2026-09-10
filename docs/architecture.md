@@ -89,4 +89,6 @@ A completed paid order can create an idempotent feedback invitation. Its signed 
 
 Paid checkout settlement creates one `orderNotificationJobs` confirmation job in the same Firestore transaction as payment/customer/discount settlement. The feedback worker endpoint processes both confirmation and feedback outboxes. It sends a narrowly scoped request to the central mPanel notification queue with the `orderfly` sender profile and an allow-listed template key. Provider acceptance means queued by mPanel, not delivered by Mailtrap. Timeouts after dispatch remain uncertain and are never resent blindly.
 
+The private worker endpoint accepts either its dedicated worker secret or the existing shared mPanel integration secret. This lets mPanel's already scheduled notification worker provide the heartbeat without adding another scheduler. Both values remain server-only, and invalid or short values are rejected before any Firestore work.
+
 The mPanel endpoint, organization ID and machine secret are runtime configuration. Secrets, recipients and signed feedback links are never returned in admin job listings or logged. The coordinated mPanel implementation is tracked in `digiflydk/esmeralda-restaurant-operations#262`.
