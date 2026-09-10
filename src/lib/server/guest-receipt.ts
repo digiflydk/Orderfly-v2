@@ -34,7 +34,7 @@ export async function readGuestReceipt(proof: ReceiptProof): Promise<GuestReceip
 
   // A delayed webhook must not produce either a false receipt or a second order.
   // A failed read stays Pending and can be retried; it is not payment failure.
-  if (order.paymentStatus === 'Pending') {
+  if (order.paymentStatus === 'Pending' || order.paymentStatus === 'Paid') {
     try {
       const key = await getActiveStripeSecretKey();
       if (key) {
@@ -46,7 +46,7 @@ export async function readGuestReceipt(proof: ReceiptProof): Promise<GuestReceip
           await settlePaidCheckoutSession(session);
           order = await getOrderById(order.id);
           if (!order) return null;
-        } else if (session.status === 'expired') {
+        } else if (order.paymentStatus === 'Pending' && session.status === 'expired') {
           // Display-only terminal status. Reservation release remains in the
           // signed expiration/cancellation workflow, never inferred from a timeout.
           order = { ...order, paymentStatus: 'Failed' };
