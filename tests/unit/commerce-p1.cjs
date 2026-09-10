@@ -129,7 +129,7 @@ test('legacy receipt still requires its exact random Stripe session and matching
 test('delayed webhook reconciliation reports paid only after shared settlement; timeout remains Pending',async()=>{
  const paid=receiptFixture({paymentStatus:'Pending'});
  assert.equal((await paid.api.readGuestReceipt(paid.proof)).paymentStatus,'Paid');assert.equal(paid.settlements(),1);
- await paid.api.readGuestReceipt(paid.proof);assert.equal(paid.settlements(),1);
+ await paid.api.readGuestReceipt(paid.proof);assert.equal(paid.settlements(),2); // Paid receipt can repair a missing job through idempotent settlement.
  for(const options of [{stripeStatus:'unpaid'},{fail:true}]) {
   const pending=receiptFixture({paymentStatus:'Pending',...options});
   assert.equal((await pending.api.readGuestReceipt(pending.proof)).paymentStatus,'Pending');assert.equal(pending.settlements(),0);
@@ -211,4 +211,11 @@ test('a slot expiring during reservation releases only that order hold and never
   assert.ok(f.events.includes('reserve'));assert.ok(f.events.includes('release'));assert.ok(!f.events.includes('stripe'));
   assert.equal(f.records.get('orders/ORD-TEST').discountReservation,'released');
  }finally{global.Date=RealDate;}
+});
+
+test('Paid receipt retries verified settlement but preserves Paid on Stripe timeout/expired response',async()=>{
+ const paid=receiptFixture();await paid.api.readGuestReceipt(paid.proof);assert.equal(paid.settlements(),1);
+ for(const options of [{fail:true},{stripeStatus:'expired'},{stripeStatus:'unpaid'}]){
+  const f=receiptFixture(options);assert.equal((await f.api.readGuestReceipt(f.proof)).paymentStatus,'Paid');assert.equal(f.settlements(),0);
+ }
 });

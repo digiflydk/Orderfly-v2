@@ -106,7 +106,7 @@ jobs:
             expect(overflow).toBeFalsy();
           });
           EOF
-          cat > /tmp/playwright.work-live.config.ts <<'EOF'
+          cat > playwright.work-live.config.ts <<'EOF'
           import { defineConfig, devices } from '@playwright/test';
           export default defineConfig({
             testDir: process.cwd() + '/tests',
@@ -121,7 +121,7 @@ jobs:
         if: steps.context.outputs.managed == 'true'
         env:
           ORDERFLY_LIVE_URL: ${{ env.LIVE_URL }}
-        run: npx playwright test --config=/tmp/playwright.work-live.config.ts
+        run: npx playwright test --config=playwright.work-live.config.ts
 
       - name: Upload live Playwright diagnostics
         if: always() && steps.context.outputs.managed == 'true'
