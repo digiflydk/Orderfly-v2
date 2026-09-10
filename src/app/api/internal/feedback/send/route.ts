@@ -7,7 +7,7 @@ export async function POST(request: Request) {
   const secrets = [process.env.ORDERFLY_FEEDBACK_WORKER_SECRET, process.env.ORDERFLY_NOTIFICATION_SECRET]
     .filter((secret): secret is string => typeof secret === 'string' && secret.length >= 32);
   const value = request.headers.get('authorization') || '';
-  if (value.length > 512 || !secrets.some(secret => {
+  if (value.length > 519 || !secrets.some(secret => {
     const expected = Buffer.from('Bearer ' + secret), actual = Buffer.from(value);
     return expected.length === actual.length && timingSafeEqual(expected, actual);
   })) return Response.json({ error: 'Unauthorized' }, { status: 401 });

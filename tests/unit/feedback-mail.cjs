@@ -111,6 +111,16 @@ test('worker endpoint denies missing/wrong credentials before work and hides int
  assert.equal(calls,0);const response=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_FEEDBACK_WORKER_SECRET}}));assert.equal(response.status,503);assert.doesNotMatch(await response.text(),/private/);assert.equal(calls,1);
  process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='short';const integrationResponse=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_NOTIFICATION_SECRET}}));assert.equal(integrationResponse.status,503);assert.doesNotMatch(await integrationResponse.text(),/private/);assert.equal(calls,2);
 });
+test('worker accepts the maximum shared secret length and rejects oversized headers before work',async t=>{
+ setup(t);let calls=0;process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='short';
+ const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;return {}; }},'@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})}});
+ process.env.ORDERFLY_NOTIFICATION_SECRET='s'.repeat(512);
+ assert.equal((await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_NOTIFICATION_SECRET}}))).status,200);
+ assert.equal(calls,1);
+ process.env.ORDERFLY_NOTIFICATION_SECRET='s'.repeat(513);
+ assert.equal((await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_NOTIFICATION_SECRET}}))).status,401);
+ assert.equal(calls,1);
+});
 test('mail settings preserve false/zero and refuse invalid or unconfigured enablement',async t=>{
  const f=setup(t);await f.settings.writeFeedbackSettings({brandId:'b',emailEnabled:true,automaticRequests:false,delayHours:0,maxReminders:0,autoReplyEnabled:false,language:'en'});
  const settings=await f.settings.readFeedbackSettings('b');assert.equal(settings.delayHours,0);assert.equal(settings.maxReminders,0);assert.equal(settings.automaticRequests,false);assert.equal(settings.autoReplyEnabled,false);assert.equal(settings.language,'en');assert.equal(settings.emailConfigured,true);
