@@ -109,6 +109,7 @@ test('worker endpoint denies missing/wrong credentials before work and hides int
  setup(t);let calls=0;const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;throw Error('private');}},'@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})}});
  for(const authorization of ['', 'Bearer wrong'])assert.equal((await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization}}))).status,401);
  assert.equal(calls,0);const response=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_FEEDBACK_WORKER_SECRET}}));assert.equal(response.status,503);assert.doesNotMatch(await response.text(),/private/);assert.equal(calls,1);
+ process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='short';const integrationResponse=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_NOTIFICATION_SECRET}}));assert.equal(integrationResponse.status,503);assert.doesNotMatch(await integrationResponse.text(),/private/);assert.equal(calls,2);
 });
 test('mail settings preserve false/zero and refuse invalid or unconfigured enablement',async t=>{
  const f=setup(t);await f.settings.writeFeedbackSettings({brandId:'b',emailEnabled:true,automaticRequests:false,delayHours:0,maxReminders:0,autoReplyEnabled:false,language:'en'});
