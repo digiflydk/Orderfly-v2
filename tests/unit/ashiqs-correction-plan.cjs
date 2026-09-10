@@ -4,7 +4,7 @@ const plan=require('../../scripts/data/ashiqs-product-options.json');
 test('Ashiqs plan consolidates exactly 37 dishes and preserves every variant price',()=>{
  const bases=plan.products.filter(p=>p.patch.productName);
  assert.equal(bases.length,37);
- assert.equal(plan.products.filter(p=>p.patch.isActive===false).length,43);
+ assert.equal(plan.products.filter(p=>p.delete===true).length,43);
  assert.equal(new Set(plan.products.map(p=>p.id)).size,80);
  for(const base of bases){
   const group=plan.groups.find(g=>g.id===base.patch.toppingGroupIds[0]);

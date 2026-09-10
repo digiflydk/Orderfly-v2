@@ -5,6 +5,8 @@ import 'server-only';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { z } from 'zod';
+import { toppingConditionsSchema, validateToppingConditions } from '@/lib/topping-condition-validation';
+import type { Topping, ToppingGroup } from '@/types';
 import { createHash } from 'node:crypto';
 import { hasPermission } from '@/lib/permissions';
 import { uploadProductImage } from '@/lib/superadmin/product-image-storage';
@@ -39,6 +41,10 @@ const baseFields = {
   priceDelivery: optionalNonNegativePrice,
   allergenIds: z.array(z.string()).optional().default([]),
   toppingGroupIds: z.array(z.string()).optional().default([]),
+  toppingGroupConditions: z.preprocess(value => {
+    if (typeof value !== 'string') return value;
+    try { return JSON.parse(value); } catch { return null; }
+  }, toppingConditionsSchema.optional()),
   isTestData: z.preprocess(asBool,z.boolean()).optional(),
   imageUrl: z.any().optional(),
 };
@@ -191,13 +197,22 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
           requiredLocationIds.some(locationId => !categoryLocations.includes(locationId))) {
         throw new Error('The category must belong to the brand and be available at the selected locations.');
       }
+      const conditionGroups: ToppingGroup[] = [];
       for (const groupId of productData.toppingGroupIds) {
         const group = await db.collection('topping_groups').doc(groupId).get();
         const groupLocations: string[] = group.data()?.locationIds || [];
+        if (group.exists) conditionGroups.push({ ...group.data(), id: group.id } as ToppingGroup);
         if (!group.exists || !groupLocations.some(locationId => brandLocationIds.has(locationId))) {
           throw new Error('Every topping group must belong to the selected brand.');
         }
       }
+      const conditions = toppingConditionsSchema.parse(productData.toppingGroupConditions ?? existing.data()?.toppingGroupConditions ?? {});
+      const triggerIds = [...new Set(Object.values(conditions).flat())];
+      const triggerDocs = triggerIds.length ? await db.getAll(...triggerIds.map(trigger => db.collection('toppings').doc(trigger))) : [];
+      const conditionToppings = triggerDocs.filter(doc => doc.exists && (!doc.data()?.brandId || doc.data()?.brandId === productData.brandId))
+        .map(doc => ({ ...doc.data(), id: doc.id } as Topping));
+      const conditionError = validateToppingConditions(conditions, productData.toppingGroupIds, conditionGroups, conditionToppings, requiredLocationIds);
+      if (conditionError) throw new Error(conditionError);
       for (const allergenId of productData.allergenIds) {
         if (!(await db.collection('allergens').doc(allergenId).get()).exists) {
           throw new Error('A selected allergen no longer exists.');

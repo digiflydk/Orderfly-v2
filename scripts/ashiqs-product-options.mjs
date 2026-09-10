@@ -23,6 +23,17 @@ const result = await db.runTransaction(async tx => {
   const [receipt, location, ...snapshots] = await tx.getAll(marker, db.collection('locations').doc(plan.locationId), ...entries.map(e => e.ref));
   if (receipt.exists) return {status: 'already-applied', receipt: marker.id};
   if (!location.exists || location.data().brandId !== plan.brandId) throw Error('Location ownership changed');
+  // Read references in the transaction so concurrent catalog edits retry preflight.
+  const deletedIds = new Set(plan.products.filter(p => p.delete).map(p => p.id));
+  for (const collection of ['comboMenus', 'standard_discounts', 'upsells']) {
+    const references = await tx.get(db.collection(collection).where('brandId', '==', plan.brandId));
+    const containsDeleted = value => typeof value === 'string' ? deletedIds.has(value)
+      : Array.isArray(value) ? value.some(containsDeleted)
+      : value && typeof value === 'object' ? Object.values(value).some(containsDeleted) : false;
+    for (const doc of references.docs) {
+      if (containsDeleted(doc.data())) throw Error(`Duplicate still referenced by ${collection}/${doc.id}; review before deleting`);
+    }
+  }
   const backup = [];
   entries.forEach((entry, index) => {
     const snapshot = snapshots[index];
@@ -40,10 +51,10 @@ const result = await db.runTransaction(async tx => {
   });
   if (apply) {
     entries.forEach(entry => entry.product
-      ? tx.update(entry.ref, {...entry.product.patch, updatedAt: FieldValue.serverTimestamp()})
+      ? entry.product.delete ? tx.delete(entry.ref) : tx.update(entry.ref, {...entry.product.patch, updatedAt: FieldValue.serverTimestamp()})
       : tx.create(entry.ref, entry.data));
     tx.create(marker, {brandId:plan.brandId, locationId:plan.locationId, release, backup, createdAt:FieldValue.serverTimestamp()});
   }
-  return {status:apply?'applied':'preflight-passed', mergedProducts:37, deactivatedDuplicates:43, groups:7, options:16};
+  return {status:apply?'applied':'preflight-passed', mergedProducts:37, deletedDuplicates:43, groups:7, options:16};
 });
 console.log(JSON.stringify(result));

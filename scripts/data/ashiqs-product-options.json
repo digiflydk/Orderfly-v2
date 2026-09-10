@@ -319,9 +319,8 @@
         "sortOrder": 10,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "bd63be84-6cda-451b-b98b-c9f6d3d880d4",
@@ -381,9 +380,8 @@
         "sortOrder": 12,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "c784bdda-6e92-44da-aedf-6cb0524b4618",
@@ -443,9 +441,8 @@
         "sortOrder": 14,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "08e150ee-2b48-49a7-8031-31f8356ee382",
@@ -505,9 +502,8 @@
         "sortOrder": 16,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "dccd3dae-0480-47fc-a51c-cffaa0e0c308",
@@ -567,9 +563,8 @@
         "sortOrder": 18,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "fa5a80a0-4d84-445d-8e73-0f56e8e73a67",
@@ -629,9 +624,8 @@
         "sortOrder": 20,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "b59c228e-760a-4853-8f68-20278bef27bc",
@@ -691,9 +685,8 @@
         "sortOrder": 22,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "eb0ea918-74c6-4da7-8316-d918b1fa4117",
@@ -753,9 +746,8 @@
         "sortOrder": 24,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "367b5d47-12c8-4900-9f79-5e15f5b98cce",
@@ -815,9 +807,8 @@
         "sortOrder": 26,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "0295cb2e-6ab0-49b1-8753-5654b7830c39",
@@ -877,9 +868,8 @@
         "sortOrder": 28,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "015887d4-9c83-4d0e-adcc-2ad9e70077d9",
@@ -939,9 +929,8 @@
         "sortOrder": 30,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "878c900d-382c-4272-aaa6-ecb643771874",
@@ -1001,9 +990,8 @@
         "sortOrder": 32,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "f68fc531-d908-45c9-b249-331fb73ede72",
@@ -1063,9 +1051,8 @@
         "sortOrder": 34,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "67c5cd09-d672-4f12-a6da-9bdc725c2c24",
@@ -1125,9 +1112,8 @@
         "sortOrder": 36,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "30d9bee6-d7d9-4f28-b55d-045ac13fc67a",
@@ -1187,9 +1173,8 @@
         "sortOrder": 38,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "246edd65-bcc2-448c-af0d-cc12834014e1",
@@ -1249,9 +1234,8 @@
         "sortOrder": 40,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "cd11c2cc-78ec-4c4f-bfc6-917d1d5e73c2",
@@ -1311,9 +1295,8 @@
         "sortOrder": 42,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "af8ad791-a8f3-4f68-ac12-056e5bf6e567",
@@ -1373,9 +1356,8 @@
         "sortOrder": 44,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "e744b67f-9999-4b7a-a3c5-458627913c45",
@@ -1435,9 +1417,8 @@
         "sortOrder": 46,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "79da283b-e1cf-45d0-b2bc-4c2a0979040f",
@@ -1497,9 +1478,8 @@
         "sortOrder": 48,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "647faaff-32c5-4108-a023-8205680aa659",
@@ -1559,9 +1539,8 @@
         "sortOrder": 50,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "58ba86ca-67a0-46c4-a6ab-555d06e617cd",
@@ -1621,9 +1600,8 @@
         "sortOrder": 52,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "1ad5eeb8-8695-46ec-ae8a-4f3c6ba6abde",
@@ -1683,9 +1661,8 @@
         "sortOrder": 54,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "579a677b-40f8-4527-bfb8-19e3e63bbd10",
@@ -1745,9 +1722,8 @@
         "sortOrder": 56,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "8fd8bf8b-58e0-4f14-862f-a10ca0e3b6aa",
@@ -1807,9 +1783,8 @@
         "sortOrder": 58,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "5f0e9d4a-3a27-4aa2-a3f2-a4f55a713617",
@@ -1853,9 +1828,8 @@
         "sortOrder": 60,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "b7cc2e57-395e-4119-9312-f88dedf16bf9",
@@ -1906,9 +1880,8 @@
         "sortOrder": 62,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "a4246250-6f18-48a6-8224-cb18012122aa",
@@ -1959,9 +1932,8 @@
         "sortOrder": 64,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "847defdd-46f7-40a0-8d5c-78ff008a8d6e",
@@ -2012,9 +1984,8 @@
         "sortOrder": 66,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "ae899c7e-c0db-44fa-bfa3-a0f5e500511d",
@@ -2065,9 +2036,8 @@
         "sortOrder": 68,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "86b46963-4d85-49ef-80a7-5329762a245a",
@@ -2118,9 +2088,8 @@
         "sortOrder": 70,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "b379634b-ef7a-4379-ae8c-ff801b17fa73",
@@ -2171,9 +2140,8 @@
         "sortOrder": 72,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "587312b0-c3c9-4e53-91af-6786b0462568",
@@ -2224,9 +2192,8 @@
         "sortOrder": 74,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "084aa82b-b3ab-4807-b326-6730ae562872",
@@ -2277,9 +2244,8 @@
         "sortOrder": 76,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "699875f4-8149-42d5-b148-a42b74701869",
@@ -2335,9 +2301,8 @@
         "sortOrder": 78,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "d413d2e0-e561-482c-a70a-5223f58a6a40",
@@ -2358,9 +2323,8 @@
         "sortOrder": 79,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "e63ef300-875b-477d-a410-7737aac29072",
@@ -2382,9 +2346,8 @@
         "sortOrder": 80,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "e212e5ee-678a-4434-b9ff-df2fe3e21c70",
@@ -2440,9 +2403,8 @@
         "sortOrder": 82,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "83c71b6b-212a-4810-984f-a3a64e09c2d4",
@@ -2463,9 +2425,8 @@
         "sortOrder": 83,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "7bb1b9d1-66de-4816-8d85-a88832dfed1c",
@@ -2487,9 +2448,8 @@
         "sortOrder": 84,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "a1e4d70e-d6e1-4dfd-a556-1efb536211ec",
@@ -2545,9 +2505,8 @@
         "sortOrder": 86,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "0174af33-423f-41b9-aab7-ee91f93712eb",
@@ -2568,9 +2527,8 @@
         "sortOrder": 87,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     },
     {
       "id": "fe794a4e-cf2e-4ba6-b0d4-6cb214562a7f",
@@ -2592,9 +2550,8 @@
         "sortOrder": 88,
         "isActive": true
       },
-      "patch": {
-        "isActive": false
-      }
+      "patch": {},
+      "delete": true
     }
   ]
 }

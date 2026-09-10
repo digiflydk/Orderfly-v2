@@ -2,7 +2,7 @@
 
 The import incorrectly created size and meal choices as separate products.
 The correction retains 25 pizza, 9 burger and 3 pita/durum product IDs and
-deactivates their 43 sibling variants. Existing order references remain valid.
+deletes their 43 sibling variants after backing up the affected documents. Historical orders remain unchanged.
 Drinks and other categories are outside this correction.
 
 Required single-choice groups hold the original price differences. Pizza
@@ -35,7 +35,7 @@ node scripts/ashiqs-product-options.mjs --apply --verified-release=FULL_DEPLOYED
 The first command is a read-only preflight. Apply checks brand/location ownership,
 all captured product fields and collisions, and performs one atomic transaction.
 It creates seven groups and sixteen options, updates the 37 retained products,
-and deactivates 43 duplicate listings. Any concurrent catalog edit aborts the
+and deletes 43 duplicate listings. Any concurrent catalog edit aborts the
 whole transaction for review. A migration receipt and complete original product
 records are saved in `catalog_migrations/ashiqs-product-options-v1`; a repeat run
 is a no-op. No credentials or security configuration are changed.
@@ -56,3 +56,12 @@ may now be referenced by orders. Do not automatically roll back subsequent edits
 tests/unit/ashiqs-correction-plan.cjs tests/unit/cart-restore.cjs
 tests/unit/commerce-p1.cjs`; and targeted Playwright coverage in
 `tests/unit/commerce-p2-browser.cjs` (`--test-name-pattern='conditional product options'`).
+
+
+## Administration for all brands
+
+Create/edit product now loads active topping choices and exposes **Betingede tilvalg** below the attached groups. Choose **Vis ved bestemte valg** on each target group and check one or more choices. Any checked choice activates the group; the same choice can activate several groups. Rules belong to the product, with no brand-specific UI or identifiers. Existing group minimum/maximum rules apply only while visible. Configure these limits in the existing topping group editor.
+
+Triggers must be active, in an attached always-visible group, and available at every product location. Server validation rejects empty rules, unattached groups, foreign/unavailable triggers, self references and conditional chains/cycles. Removing a referenced group requires explicitly fixing its rule; failed saves preserve entries. Legacy callers omitting the field preserve existing rules and validate them against the submitted groups.
+
+The updated migration **deletes the 43 duplicate product documents**. It backs up all 80 affected documents in the transaction receipt and blocks on combo, discount or upsell references to duplicate IDs. Historical orders are left intact; saved baskets referring to deleted variants are subject to existing cart restoration validation. No production migration has been run. Apply only after independent review, PO acceptance, merge, deployment and verification of this release.
