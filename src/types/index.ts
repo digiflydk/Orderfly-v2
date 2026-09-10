@@ -251,6 +251,8 @@ export type Product = {
   isActive: boolean;
   allergenIds?: string[];
   toppingGroupIds?: string[];
+  /** Group ID -> any selected option ID from an unconditional group on this product. */
+  toppingGroupConditions?: Record<string, string[]>;
   isFeatured?: boolean;
   isNew?: boolean;
   isPopular?: boolean;
@@ -263,7 +265,7 @@ export type Product = {
 export type ProductForMenu = Pick<Product, 
     'id' | 'productName' | 'description' | 'price' | 'priceDelivery' | 
     'imageUrl' | 'isFeatured' | 'isNew' | 'isPopular' | 'allergenIds' | 
-    'toppingGroupIds' | 'categoryId' | 'brandId' | 'sortOrder'
+    'toppingGroupIds' | 'toppingGroupConditions' | 'categoryId' | 'brandId' | 'sortOrder'
 >;
 
 

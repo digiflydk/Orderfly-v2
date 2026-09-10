@@ -1,6 +1,8 @@
 'use client';
 
 import { z } from 'zod';
+import { ToppingConditionEditor } from './topping-condition-editor';
+import { toppingConditionsSchema, validateToppingConditions } from '@/lib/topping-condition-validation';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import {
@@ -53,6 +55,7 @@ import type {
   Location,
   Product,
   ToppingGroup,
+  Topping,
 } from '@/types';
 import {
   createOrUpdateProduct,
@@ -140,6 +143,7 @@ const baseFields = {
     .optional()
     .default([]),
 
+  toppingGroupConditions: toppingConditionsSchema,
   isTestData: z.preprocess(asBool,z.boolean()).optional(),
   imageUrl: z.any().optional(),
 };
@@ -198,6 +202,7 @@ interface ProductFormPageProps {
   locations: Location[];
   categories: Category[];
   toppingGroups: ToppingGroup[];
+  toppings?: Topping[];
   allergens: Allergen[];
 }
 
@@ -241,6 +246,7 @@ export function ProductFormPage({
   locations,
   categories,
   toppingGroups,
+  toppings = [],
   allergens,
 }: ProductFormPageProps) {
   const { toast } = useToast();
@@ -265,12 +271,17 @@ export function ProductFormPage({
   async function submitProduct(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (submitting.current) return;
+    const values = form.getValues();
+    const conditionError = validateToppingConditions(values.toppingGroupConditions, values.toppingGroupIds,
+      brandToppingGroups, toppings, values.locationIds.length ? values.locationIds : brandLocations.map(l => l.id));
+    if (conditionError) { setState({ ok: false, error: { message: conditionError } }); return; }
     const data = new FormData(event.currentTarget);
     // Serialize controlled values, including the brand and unchecked flags.
     for (const [key, value] of Object.entries(form.getValues())) {
       if (key === 'imageUrl') continue; // Keep the actual file from the native input.
       data.delete(key);
-      if (Array.isArray(value)) value.forEach(item => data.append(key, String(item)));
+      if (key === 'toppingGroupConditions') data.set(key, JSON.stringify(value));
+      else if (Array.isArray(value)) value.forEach(item => data.append(key, String(item)));
       else if (key === 'priceDelivery' && value === undefined) data.set(key, '');
       else if (value !== undefined && value !== null) data.set(key, String(value));
     }
@@ -345,6 +356,7 @@ export function ProductFormPage({
           toppingGroupIds: uniq(
             product.toppingGroupIds,
           ),
+          toppingGroupConditions: product.toppingGroupConditions || {},
           imageUrl: product.imageUrl,
         }
       : {
@@ -363,6 +375,7 @@ export function ProductFormPage({
           locationIds: [],
           allergenIds: [],
           toppingGroupIds: [],
+          toppingGroupConditions: {},
           imageUrl: undefined,
         },
   });
@@ -1248,6 +1261,16 @@ export function ProductFormPage({
                         </FormItem>
                       );
                     }}
+                  />
+
+                  <ToppingConditionEditor
+                    groups={brandToppingGroups.filter(group => form.watch('toppingGroupIds').includes(group.id))}
+                    toppings={toppings.filter(topping => {
+                      const ids = form.watch('locationIds');
+                      return (ids.length ? ids : brandLocations.map(l => l.id)).every(id => topping.locationIds.includes(id));
+                    })}
+                    value={form.watch('toppingGroupConditions')}
+                    onChange={value => form.setValue('toppingGroupConditions', value, { shouldDirty: true })}
                   />
 
                   <FormField

@@ -2,7 +2,7 @@
 const {test,before,after}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
-const {chromium}=require('@playwright/test');
+const {chromium,expect}=require('@playwright/test');
 const {loadTs}=require('../helpers/load-ts.cjs');
 const webpackModule=require('next/dist/compiled/webpack/webpack');webpackModule.init();
 const root=process.cwd();let dir,server,browser,origin,restoreReads=0,optionReads=0,optionFailures=0;
@@ -26,9 +26,10 @@ before(async()=>{
  const original=history.replaceState.bind(history);history.replaceState=(...args)=>{original(...args);window.dispatchEvent(new Event('fixture-navigation'));};
  export function useSearchParams(){const [search,setSearch]=useState(location.search);useEffect(()=>{const update=()=>setSearch(location.search);window.addEventListener('fixture-navigation',update);window.addEventListener('popstate',update);return()=>{window.removeEventListener('fixture-navigation',update);window.removeEventListener('popstate',update);};},[]);return new URLSearchParams(search);}
  export const usePathname=()=>location.pathname;export const useParams=()=>({brandSlug:'fixture',locationSlug:'restaurant'});export const useRouter=()=>({push:href=>location.assign(href)});`);
- const entry=fixture('entry',`import React,{useEffect} from 'react';import{createRoot}from'react-dom/client';
+ const entry=fixture('entry',`import React,{useEffect,useState} from 'react';import{createRoot}from'react-dom/client';
  import LandingClient from ${JSON.stringify(path.join(root,'src/app/brand-site/m3pizza/landing-client.tsx'))};
  import {MenuClient} from ${JSON.stringify(path.join(root,'src/app/[brandSlug]/[locationSlug]/menu-client.tsx'))};
+ import {ToppingConditionEditor} from ${JSON.stringify(path.join(root,'src/components/superadmin/topping-condition-editor.tsx'))};
  import {ProductDialog} from ${JSON.stringify(path.join(root,'src/components/product/product-dialog.tsx'))};
  import {CartProvider,useCart} from ${JSON.stringify(path.join(root,'src/context/cart-context.tsx'))};
  import {AnalyticsProvider} from ${JSON.stringify(path.join(root,'src/context/analytics-context.tsx'))};
@@ -38,9 +39,14 @@ before(async()=>{
  const capGroups=${JSON.stringify(capGroups)},capToppings=${JSON.stringify(capToppings)};
  const capProduct={...products[0],id:'cap-product',productName:'Cap Product',toppingGroupIds:capGroups.map(group=>group.id)};
  function Debug(){const cart=useCart();return <pre id="cart-state" style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify({ready:cart.cartReady,count:cart.itemCount,mode:cart.deliveryType,total:cart.checkoutTotal,toppingIds:cart.cartItems[0]?.toppings.map(topping=>topping.id)||[]})}</pre>;}
+ const conditionalGroups=['size','regular','family','drink'].map(id=>({id,locationIds:['l'],groupName:id,minSelection:id==='size'||id==='drink'?1:0,maxSelection:1}));
+ const conditionalToppings=[['alm','size',0],['fam','size',60],['menu','size',30],['cheese','regular',10],['family-cheese','family',20],['cola','drink',0]].map(([id,groupId,price])=>({id,groupId,price,toppingName:id,isActive:true,locationIds:['l'],isDefault:id==='alm'||id==='cola'}));
+ const conditionalProduct={...products[0],toppingGroupIds:conditionalGroups.map(g=>g.id),toppingGroupConditions:{regular:['alm'],family:['fam'],drink:['menu']}};
+ function EditorFixture(){const [rules,setRules]=useState({});return <><ToppingConditionEditor groups={conditionalGroups} toppings={conditionalToppings} value={rules} onChange={setRules}/><pre id="rules">{JSON.stringify(rules)}</pre></>;}
+ function ConditionalFixture(){const cart=useCart();useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);return <><ProductDialog product={conditionalProduct} isOpen={true} setIsOpen={()=>{}} allToppingGroups={conditionalGroups} allToppings={conditionalToppings}/><Debug/></>;}
  function ToppingCapFixture(){const cart=useCart();useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);return <><ProductDialog product={capProduct} isOpen={true} setIsOpen={()=>{}} allToppingGroups={capGroups} allToppings={capToppings}/><Debug/></>;}
  const mode=new URLSearchParams(window.location.search).get('deliveryMethod')==='delivery'?'delivery':'pickup';
- createRoot(document.getElementById('root')).render(window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}><CartProvider>{window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
+ createRoot(document.getElementById('root')).render(window.location.pathname==='/condition-editor'?<EditorFixture/>:window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}><CartProvider>{window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const aliases={
   '@/app/cart-actions':fixture('cart-action',`export async function restoreCartAction(data){return fetch('/restore',{method:'POST',body:JSON.stringify(data)}).then(r=>r.json());}`),
@@ -272,4 +278,41 @@ test('#71 delivery minimum is actionable before checkout and selection is visibl
  const dialog=page.getByRole('dialog');assert.equal(await dialog.getByRole('button',{name:'Til kassen',exact:true}).isDisabled(),true);
  assert.match(await dialog.getByRole('status').textContent(),/70,00.*100,00/);
  await dialog.getByRole('button',{name:'Find flere varer',exact:true}).click();await dialog.waitFor({state:'hidden'});
+});
+
+for(const width of [390,1280])test(`conditional product options switch safely at ${width}px`,async t=>{
+ const page=await setup(t,width,'/conditional');
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ const dialog=page.getByRole('dialog');
+ await dialog.getByRole('region',{name:'regular',exact:true}).waitFor();
+ assert.equal(await dialog.getByRole('region',{name:'family',exact:true}).count(),0);
+ assert.equal(await dialog.getByRole('region',{name:'drink',exact:true}).count(),0);
+ await dialog.getByRole('radio',{name:/^cheese /}).click();
+ await dialog.getByRole('radio',{name:/^fam /}).click();
+ await dialog.getByRole('region',{name:'family',exact:true}).waitFor();
+ assert.equal(await dialog.getByRole('region',{name:'regular',exact:true}).count(),0);
+ await dialog.getByRole('radio',{name:/^family-cheese /}).click();
+ await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText(/155,00/);
+ await dialog.getByRole('radio',{name:/^menu /}).click();
+ await dialog.getByRole('region',{name:'drink',exact:true}).waitFor();
+ await expect(dialog.getByRole('radio',{name:/^cola /})).toBeChecked();
+ await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText(/105,00/);
+ await dialog.getByRole('radio',{name:/^alm /}).click();
+ assert.equal(await dialog.getByRole('region',{name:'drink',exact:true}).count(),0);
+ await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText(/75,00/);
+ await dialog.getByRole('button',{name:/Tilføj til kurv/}).click();
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
+ assert.deepEqual(JSON.parse(await page.locator('#cart-state').textContent()).toppingIds,['alm']);
+});
+
+for(const width of [390,1280])test(`admin conditional groups share triggers and can be cleared at ${width}px`,async t=>{
+ const page=await setup(t,width,'/condition-editor');
+ await page.getByLabel('Synlighed for drink',{exact:true}).selectOption('conditional');
+ await page.getByText('Vælg mindst ét aktiverende tilvalg.',{exact:true}).waitFor();
+ await page.getByLabel('size · menu',{exact:true}).check();
+ await page.getByLabel('Synlighed for family',{exact:true}).selectOption('conditional');
+ await page.getByLabel('size · menu',{exact:true}).nth(0).check();
+ assert.deepEqual(JSON.parse(await page.locator('#rules').textContent()),{drink:['menu'],family:['menu']});
+ await page.getByLabel('Synlighed for drink',{exact:true}).selectOption('always');
+ assert.deepEqual(JSON.parse(await page.locator('#rules').textContent()),{family:['menu']});
 });

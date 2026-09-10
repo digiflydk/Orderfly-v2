@@ -1,0 +1,2557 @@
+{
+  "brandId": "NkTYjQxTPCRtXFAZRKPO",
+  "locationId": "rGfKFpjCqoxMeHLIxcdJ",
+  "groups": [
+    {
+      "id": "ashiqs-choice-pizza-60",
+      "groupName": "Størrelse",
+      "minSelection": 1,
+      "maxSelection": 1,
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pizza-66",
+      "groupName": "Størrelse",
+      "minSelection": 1,
+      "maxSelection": 1,
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pizza-70",
+      "groupName": "Størrelse",
+      "minSelection": 1,
+      "maxSelection": 1,
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-burger-30",
+      "groupName": "Burger / Menu",
+      "minSelection": 1,
+      "maxSelection": 1,
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-burger-31",
+      "groupName": "Burger / Menu",
+      "minSelection": 1,
+      "maxSelection": 1,
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-burger-40",
+      "groupName": "Burger / Menu",
+      "minSelection": 1,
+      "maxSelection": 1,
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pita-durum",
+      "groupName": "Pita / Durum / Menu",
+      "minSelection": 1,
+      "maxSelection": 1,
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    }
+  ],
+  "toppings": [
+    {
+      "id": "ashiqs-choice-pizza-60-0",
+      "toppingName": "Alm.",
+      "price": 0,
+      "isActive": true,
+      "isDefault": true,
+      "sortOrder": 0,
+      "groupId": "ashiqs-choice-pizza-60",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pizza-60-1",
+      "toppingName": "Fam.",
+      "price": 60,
+      "isActive": true,
+      "isDefault": false,
+      "sortOrder": 1,
+      "groupId": "ashiqs-choice-pizza-60",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pizza-66-0",
+      "toppingName": "Alm.",
+      "price": 0,
+      "isActive": true,
+      "isDefault": true,
+      "sortOrder": 0,
+      "groupId": "ashiqs-choice-pizza-66",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pizza-66-1",
+      "toppingName": "Fam.",
+      "price": 66,
+      "isActive": true,
+      "isDefault": false,
+      "sortOrder": 1,
+      "groupId": "ashiqs-choice-pizza-66",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pizza-70-0",
+      "toppingName": "Alm.",
+      "price": 0,
+      "isActive": true,
+      "isDefault": true,
+      "sortOrder": 0,
+      "groupId": "ashiqs-choice-pizza-70",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pizza-70-1",
+      "toppingName": "Fam.",
+      "price": 70,
+      "isActive": true,
+      "isDefault": false,
+      "sortOrder": 1,
+      "groupId": "ashiqs-choice-pizza-70",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-burger-30-0",
+      "toppingName": "Burger",
+      "price": 0,
+      "isActive": true,
+      "isDefault": true,
+      "sortOrder": 0,
+      "groupId": "ashiqs-choice-burger-30",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-burger-30-1",
+      "toppingName": "Menu",
+      "price": 30,
+      "isActive": true,
+      "isDefault": false,
+      "sortOrder": 1,
+      "groupId": "ashiqs-choice-burger-30",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-burger-31-0",
+      "toppingName": "Burger",
+      "price": 0,
+      "isActive": true,
+      "isDefault": true,
+      "sortOrder": 0,
+      "groupId": "ashiqs-choice-burger-31",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-burger-31-1",
+      "toppingName": "Menu",
+      "price": 31,
+      "isActive": true,
+      "isDefault": false,
+      "sortOrder": 1,
+      "groupId": "ashiqs-choice-burger-31",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-burger-40-0",
+      "toppingName": "Burger",
+      "price": 0,
+      "isActive": true,
+      "isDefault": true,
+      "sortOrder": 0,
+      "groupId": "ashiqs-choice-burger-40",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-burger-40-1",
+      "toppingName": "Menu",
+      "price": 40,
+      "isActive": true,
+      "isDefault": false,
+      "sortOrder": 1,
+      "groupId": "ashiqs-choice-burger-40",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pita-durum-0",
+      "toppingName": "Pita",
+      "price": 0,
+      "isActive": true,
+      "isDefault": true,
+      "sortOrder": 0,
+      "groupId": "ashiqs-choice-pita-durum",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pita-durum-1",
+      "toppingName": "Pita Menu",
+      "price": 34,
+      "isActive": true,
+      "isDefault": false,
+      "sortOrder": 1,
+      "groupId": "ashiqs-choice-pita-durum",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pita-durum-2",
+      "toppingName": "Durum",
+      "price": 10,
+      "isActive": true,
+      "isDefault": false,
+      "sortOrder": 2,
+      "groupId": "ashiqs-choice-pita-durum",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    },
+    {
+      "id": "ashiqs-choice-pita-durum-3",
+      "toppingName": "Durum Menu",
+      "price": 54,
+      "isActive": true,
+      "isDefault": false,
+      "sortOrder": 3,
+      "groupId": "ashiqs-choice-pita-durum",
+      "locationIds": [
+        "rGfKFpjCqoxMeHLIxcdJ"
+      ]
+    }
+  ],
+  "products": [
+    {
+      "id": "e2cb2f4b-2c56-4c9e-a798-e08d94e711ad",
+      "sourceId": "1",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "1. MARGHERITA (Alm.)",
+        "description": "Pizzasauce, ost.",
+        "price": 65,
+        "priceDelivery": 65,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "Ko04wFlxei7gokxhKjXO"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 9,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "1. MARGHERITA",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-60",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "Ko04wFlxei7gokxhKjXO",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-60-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-60-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "315ab733-ce96-417b-abd3-222b5c9823cc",
+      "sourceId": "1",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "1. MARGHERITA (Fam.)",
+        "description": "Pizzasauce, ost.",
+        "price": 125,
+        "priceDelivery": 125,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "Ko04wFlxei7gokxhKjXO"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 10,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "bd63be84-6cda-451b-b98b-c9f6d3d880d4",
+      "sourceId": "142",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "2. Margherita upgraded (Alm.)",
+        "description": "Pizzasauce, ost.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "SgcFKxvLxNa9CLMihOSm"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 11,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "2. Margherita upgraded",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-60",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "SgcFKxvLxNa9CLMihOSm",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-60-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-60-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "e8cd40dc-b771-41d8-8ce3-dd6829f929d0",
+      "sourceId": "142",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "2. Margherita upgraded (Fam.)",
+        "description": "Pizzasauce, ost.",
+        "price": 139,
+        "priceDelivery": 139,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "SgcFKxvLxNa9CLMihOSm"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 12,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "c784bdda-6e92-44da-aedf-6cb0524b4618",
+      "sourceId": "143",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "3. Pepperoni Love (Alm.)",
+        "description": "Pizzasauce, ost, pepperoni.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "CYjUuV4oSsJqx748U8Aa"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 13,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "3. Pepperoni Love",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "CYjUuV4oSsJqx748U8Aa",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "c6af0625-8d36-49c8-9940-35b9bf93b3fa",
+      "sourceId": "143",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "3. Pepperoni Love (Fam.)",
+        "description": "Pizzasauce, ost, pepperoni.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "CYjUuV4oSsJqx748U8Aa"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 14,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "08e150ee-2b48-49a7-8031-31f8356ee382",
+      "sourceId": "2",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "4. HAWAII (Alm.)",
+        "description": "Pizzasauce, ost, skinke.\r\nVælg mellem ananas eller champignon",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "qJUJvyaPdZydg4kJRyj6"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 15,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "4. HAWAII",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "qJUJvyaPdZydg4kJRyj6",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "6ea7d92f-fa31-4c39-a69d-69b328f489de",
+      "sourceId": "2",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "4. HAWAII (Fam.)",
+        "description": "Pizzasauce, ost, skinke.\r\nVælg mellem ananas eller champignon",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "qJUJvyaPdZydg4kJRyj6"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 16,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "dccd3dae-0480-47fc-a51c-cffaa0e0c308",
+      "sourceId": "3",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "5. MILANO (Alm.)",
+        "description": "Pizzasauce, ost, kylling, løg, champignon.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "eCfPv4i4wyIfX0M6Aa5J"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 17,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "5. MILANO",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "eCfPv4i4wyIfX0M6Aa5J",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "63475c26-e4e6-4c0d-814d-1b48ac9ecb6f",
+      "sourceId": "3",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "5. MILANO (Fam.)",
+        "description": "Pizzasauce, ost, kylling, løg, champignon.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "eCfPv4i4wyIfX0M6Aa5J"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 18,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "fa5a80a0-4d84-445d-8e73-0f56e8e73a67",
+      "sourceId": "144",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "6. CHICKEN LOVE (Alm.)",
+        "description": "Pizzasauce, ost, kylling, baby spinat, cherrytomater, grøn pesto.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "yPkS5JGQmnIIV7UqNgd7"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 19,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "6. CHICKEN LOVE",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "yPkS5JGQmnIIV7UqNgd7",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ddd24931-d781-41e5-a3b2-b55e217f6d91",
+      "sourceId": "144",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "6. CHICKEN LOVE (Fam.)",
+        "description": "Pizzasauce, ost, kylling, baby spinat, cherrytomater, grøn pesto.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "yPkS5JGQmnIIV7UqNgd7"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 20,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "b59c228e-760a-4853-8f68-20278bef27bc",
+      "sourceId": "4",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "7. VEGETARIANA (Alm.)",
+        "description": "Pizzasauce, ost, champignon, ananas, løg, paprika, oliven, majs, ærter, spinat.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "A3OLnQAdXODnYu4l3xJ2"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 21,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "7. VEGETARIANA",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "A3OLnQAdXODnYu4l3xJ2",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "01918ca1-9d75-4ad5-94f6-79164a36b93b",
+      "sourceId": "4",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "7. VEGETARIANA (Fam.)",
+        "description": "Pizzasauce, ost, champignon, ananas, løg, paprika, oliven, majs, ærter, spinat.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "A3OLnQAdXODnYu4l3xJ2"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 22,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "eb0ea918-74c6-4da7-8316-d918b1fa4117",
+      "sourceId": "5",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "8. ROMA (Alm.)",
+        "description": "Pizzasauce, ost, løg, bacon, æg.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "tKI0eXjSsjytfQ8KLlbm"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 23,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "8. ROMA",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "tKI0eXjSsjytfQ8KLlbm",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "56a11148-b054-43cd-b785-9fce53093e84",
+      "sourceId": "5",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "8. ROMA (Fam.)",
+        "description": "Pizzasauce, ost, løg, bacon, æg.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "tKI0eXjSsjytfQ8KLlbm"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 24,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "367b5d47-12c8-4900-9f79-5e15f5b98cce",
+      "sourceId": "6",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "9. PALERMO (Alm.)",
+        "description": "Pizzasauce, ost, skinke, bacon, pepperoni.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "UVQsPqtIc16l07cpOSKT"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 25,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "9. PALERMO",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "UVQsPqtIc16l07cpOSKT",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "71c73621-cdef-4ebf-bd0b-810ed760f38e",
+      "sourceId": "6",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "9. PALERMO (Fam.)",
+        "description": "Pizzasauce, ost, skinke, bacon, pepperoni.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "UVQsPqtIc16l07cpOSKT"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 26,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "0295cb2e-6ab0-49b1-8753-5654b7830c39",
+      "sourceId": "7",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "10. ROCK (Alm.)",
+        "description": "Pizzasauce, ost, shawarma, paprika, løg, champignon.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "H08MiHtYc1SBGbDqxHHm"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 27,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "10. ROCK",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "H08MiHtYc1SBGbDqxHHm",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "1e15a210-ad1f-46bf-bed6-28154b55f426",
+      "sourceId": "7",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "10. ROCK (Fam.)",
+        "description": "Pizzasauce, ost, shawarma, paprika, løg, champignon.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "H08MiHtYc1SBGbDqxHHm"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 28,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "015887d4-9c83-4d0e-adcc-2ad9e70077d9",
+      "sourceId": "8",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "11. DUDDI'S (Alm.)",
+        "description": "Pizzasauce, ost, pepperoni, paprika, løg, kødboller.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "7d6dQyhF0GGrJiX5Tdp8"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 29,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "11. DUDDI'S",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "7d6dQyhF0GGrJiX5Tdp8",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "33fd0677-237f-4170-9af6-ca5bb029bedd",
+      "sourceId": "8",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "11. DUDDI'S (Fam.)",
+        "description": "Pizzasauce, ost, pepperoni, paprika, løg, kødboller.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "7d6dQyhF0GGrJiX5Tdp8"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 30,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "878c900d-382c-4272-aaa6-ecb643771874",
+      "sourceId": "9",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "12. IMAANOS (Alm.)",
+        "description": "Pizzasauce, ost, oksekød, pepperoni, champignon, løg.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "SUNKJdP8a1lMJv4IhvWx"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 31,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "12. IMAANOS",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "SUNKJdP8a1lMJv4IhvWx",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "52b561db-d0de-42c9-8ff0-8b889b73ee20",
+      "sourceId": "9",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "12. IMAANOS (Fam.)",
+        "description": "Pizzasauce, ost, oksekød, pepperoni, champignon, løg.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "SUNKJdP8a1lMJv4IhvWx"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 32,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "f68fc531-d908-45c9-b249-331fb73ede72",
+      "sourceId": "10",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "13. ITALIANO (Alm.)",
+        "description": "Pizzasauce, ost, kødsauce, løg, paprika, chilli på pizza.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "HpJiJ7l8R0uDZw4jI2Tm"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 33,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "13. ITALIANO",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "HpJiJ7l8R0uDZw4jI2Tm",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "7a650a60-e774-4f53-8440-3c9c56106be3",
+      "sourceId": "10",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "13. ITALIANO (Fam.)",
+        "description": "Pizzasauce, ost, kødsauce, løg, paprika, chilli på pizza.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "HpJiJ7l8R0uDZw4jI2Tm"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 34,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "67c5cd09-d672-4f12-a6da-9bdc725c2c24",
+      "sourceId": "12",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "14a. Shawarma CHACHA'S PIZZA (Alm.)",
+        "description": "Pizzasauce, ost.\r\nshawarma, salat og dressing.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "durEKUOx7T6v2DUrPGSZ"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 35,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "14a. Shawarma CHACHA'S PIZZA",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "durEKUOx7T6v2DUrPGSZ",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "f6656b6f-b0b5-4340-a757-6f68f6808135",
+      "sourceId": "12",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "14a. Shawarma CHACHA'S PIZZA (Fam.)",
+        "description": "Pizzasauce, ost.\r\nshawarma, salat og dressing.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "durEKUOx7T6v2DUrPGSZ"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 36,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "30d9bee6-d7d9-4f28-b55d-045ac13fc67a",
+      "sourceId": "11",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "14b. Kylling CHACHA'S PIZZA (Alm.)",
+        "description": "Pizzasauce, ost.\r\nKylling, salat og dressing",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "ueKT3MxPXNwzISopebXZ"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 37,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "14b. Kylling CHACHA'S PIZZA",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "ueKT3MxPXNwzISopebXZ",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "f27d20ce-34bb-4473-bdbd-7ae940809a12",
+      "sourceId": "11",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "14b. Kylling CHACHA'S PIZZA (Fam.)",
+        "description": "Pizzasauce, ost.\r\nKylling, salat og dressing",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "ueKT3MxPXNwzISopebXZ"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 38,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "246edd65-bcc2-448c-af0d-cc12834014e1",
+      "sourceId": "13",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "15. KASHI'S SPECIAL (Alm.)",
+        "description": "Pizzasauce, ost, kødstrimler, champignon, løg, bearnaise sauce.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "JUOfdOXs8febdb0G8BZ3"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 39,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "15. KASHI'S SPECIAL",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "JUOfdOXs8febdb0G8BZ3",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "08edcf61-03c4-4d6a-801d-37285df67a9a",
+      "sourceId": "13",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "15. KASHI'S SPECIAL (Fam.)",
+        "description": "Pizzasauce, ost, kødstrimler, champignon, løg, bearnaise sauce.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "JUOfdOXs8febdb0G8BZ3"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 40,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "cd11c2cc-78ec-4c4f-bfc6-917d1d5e73c2",
+      "sourceId": "14",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "16. MARINE (Alm.)",
+        "description": "Pizzasauce, ost, tun, rejer.",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "sUnvsUcno4gTyLuXVPhO"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 41,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "16. MARINE",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-66",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "sUnvsUcno4gTyLuXVPhO",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-66-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-66-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "2a64135c-9b5f-49cf-bc2b-d9d173fccce7",
+      "sourceId": "14",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "16. MARINE (Fam.)",
+        "description": "Pizzasauce, ost, tun, rejer.",
+        "price": 145,
+        "priceDelivery": 145,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "sUnvsUcno4gTyLuXVPhO"
+        ],
+        "categoryId": "NG7zKp46o5V9HuvZHdbC",
+        "sortOrder": 42,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "af8ad791-a8f3-4f68-ac12-056e5bf6e567",
+      "sourceId": "15",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "17. MEXICO (Alm.)",
+        "description": "Pizzasauce, ost, paprika, majs, jalapenos, chilli på pizza, hvidløg på pizza.",
+        "price": 75,
+        "priceDelivery": 75,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "C8kQwd3SprSj5RyMDDlr"
+        ],
+        "categoryId": "ignDWB9wILYkQQF28Xjz",
+        "sortOrder": 43,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "17. MEXICO",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-60",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "C8kQwd3SprSj5RyMDDlr",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-60-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-60-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "5c99119b-d926-4c36-84c9-0f08cb5c1a08",
+      "sourceId": "15",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "17. MEXICO (Fam.)",
+        "description": "Pizzasauce, ost, paprika, majs, jalapenos, chilli på pizza, hvidløg på pizza.",
+        "price": 135,
+        "priceDelivery": 135,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "C8kQwd3SprSj5RyMDDlr"
+        ],
+        "categoryId": "ignDWB9wILYkQQF28Xjz",
+        "sortOrder": 44,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "e744b67f-9999-4b7a-a3c5-458627913c45",
+      "sourceId": "17",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "18. PEDRO (Alm.)",
+        "description": "Pizzasauce, ost, shawarma, fetaost, løg, jalapenos, oliven, chilli på pizza, hvidløg på pizza.",
+        "price": 75,
+        "priceDelivery": 75,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "iiMNodfd8CJs1GAnkxGu"
+        ],
+        "categoryId": "ignDWB9wILYkQQF28Xjz",
+        "sortOrder": 45,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "18. PEDRO",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-60",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "iiMNodfd8CJs1GAnkxGu",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-60-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-60-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "7fc51ec4-2764-43a7-bdd2-3506a3797278",
+      "sourceId": "17",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "18. PEDRO (Fam.)",
+        "description": "Pizzasauce, ost, shawarma, fetaost, løg, jalapenos, oliven, chilli på pizza, hvidløg på pizza.",
+        "price": 135,
+        "priceDelivery": 135,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "iiMNodfd8CJs1GAnkxGu"
+        ],
+        "categoryId": "ignDWB9wILYkQQF28Xjz",
+        "sortOrder": 46,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "79da283b-e1cf-45d0-b2bc-4c2a0979040f",
+      "sourceId": "16",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "19. BANDIDOS (Alm.)",
+        "description": "Pizzasauce, ost, kylling, løg, jalapenos, majs.",
+        "price": 75,
+        "priceDelivery": 75,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "pcWCA6bVoBFGzlNQwSzM"
+        ],
+        "categoryId": "ignDWB9wILYkQQF28Xjz",
+        "sortOrder": 47,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "19. BANDIDOS",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-60",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "pcWCA6bVoBFGzlNQwSzM",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-60-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-60-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "9fa97fb4-3e8d-4fd2-8c14-6ff8f992f966",
+      "sourceId": "16",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "19. BANDIDOS (Fam.)",
+        "description": "Pizzasauce, ost, kylling, løg, jalapenos, majs.",
+        "price": 135,
+        "priceDelivery": 135,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "pcWCA6bVoBFGzlNQwSzM"
+        ],
+        "categoryId": "ignDWB9wILYkQQF28Xjz",
+        "sortOrder": 48,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "647faaff-32c5-4108-a023-8205680aa659",
+      "sourceId": "19",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "20. KASHMIRI PIZZA (Alm.)",
+        "description": "Pizzasauce, ost, oksekød, løg, paprika, majs, ærter, koriander, chilli på pizza.",
+        "price": 89,
+        "priceDelivery": 89,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "FVZc2gVX67EiyEkKW2Ln"
+        ],
+        "categoryId": "FxW2ZwJA2pyZd0H5ZAQc",
+        "sortOrder": 49,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "20. KASHMIRI PIZZA",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-70",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "FVZc2gVX67EiyEkKW2Ln",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-70-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-70-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "8a14059f-10a6-44aa-84ec-7f59af58e337",
+      "sourceId": "19",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "20. KASHMIRI PIZZA (Fam.)",
+        "description": "Pizzasauce, ost, oksekød, løg, paprika, majs, ærter, koriander, chilli på pizza.",
+        "price": 159,
+        "priceDelivery": 159,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "FVZc2gVX67EiyEkKW2Ln"
+        ],
+        "categoryId": "FxW2ZwJA2pyZd0H5ZAQc",
+        "sortOrder": 50,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "58ba86ca-67a0-46c4-a6ab-555d06e617cd",
+      "sourceId": "20",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "21. DESI MIX (Alm.)",
+        "description": "Pizzasauce, ost, oksekød, kylling, løg, paprika, koriander, chilli på pizza.",
+        "price": 89,
+        "priceDelivery": 89,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "lgBzjC4fANIEoJ6qDh9o"
+        ],
+        "categoryId": "FxW2ZwJA2pyZd0H5ZAQc",
+        "sortOrder": 51,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "21. DESI MIX",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-70",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "lgBzjC4fANIEoJ6qDh9o",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-70-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-70-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "79594df8-2533-4230-91d1-aab3818ef094",
+      "sourceId": "20",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "21. DESI MIX (Fam.)",
+        "description": "Pizzasauce, ost, oksekød, kylling, løg, paprika, koriander, chilli på pizza.",
+        "price": 159,
+        "priceDelivery": 159,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "lgBzjC4fANIEoJ6qDh9o"
+        ],
+        "categoryId": "FxW2ZwJA2pyZd0H5ZAQc",
+        "sortOrder": 52,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "1ad5eeb8-8695-46ec-ae8a-4f3c6ba6abde",
+      "sourceId": "21",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "22. MIR SPECIAL (Alm.)",
+        "description": "Pizzasauce, ost, lammekød, paprika, løg, koriander, chilli på pizza.",
+        "price": 89,
+        "priceDelivery": 89,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "CUIBdx50d9QBsNidiYE4"
+        ],
+        "categoryId": "FxW2ZwJA2pyZd0H5ZAQc",
+        "sortOrder": 53,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "22. MIR SPECIAL",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-70",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "CUIBdx50d9QBsNidiYE4",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-70-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-70-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "da55e875-821e-4ce6-aad9-6acadbd40c0f",
+      "sourceId": "21",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "22. MIR SPECIAL (Fam.)",
+        "description": "Pizzasauce, ost, lammekød, paprika, løg, koriander, chilli på pizza.",
+        "price": 159,
+        "priceDelivery": 159,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "CUIBdx50d9QBsNidiYE4"
+        ],
+        "categoryId": "FxW2ZwJA2pyZd0H5ZAQc",
+        "sortOrder": 54,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "579a677b-40f8-4527-bfb8-19e3e63bbd10",
+      "sourceId": "22",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "23. CHICKEN TIKKA PIZZA (Alm.)",
+        "description": "Pizzasauce, ost, tandoori kylling, løg, paprika, chilli på pizza.",
+        "price": 89,
+        "priceDelivery": 89,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "WvepaX0XE162ytfdV9Qn"
+        ],
+        "categoryId": "FxW2ZwJA2pyZd0H5ZAQc",
+        "sortOrder": 55,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "23. CHICKEN TIKKA PIZZA",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-70",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "WvepaX0XE162ytfdV9Qn",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-70-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-70-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "3d9cf773-68f3-4c2b-86ec-8d17650a715e",
+      "sourceId": "22",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "23. CHICKEN TIKKA PIZZA (Fam.)",
+        "description": "Pizzasauce, ost, tandoori kylling, løg, paprika, chilli på pizza.",
+        "price": 159,
+        "priceDelivery": 159,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "WvepaX0XE162ytfdV9Qn"
+        ],
+        "categoryId": "FxW2ZwJA2pyZd0H5ZAQc",
+        "sortOrder": 56,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "8fd8bf8b-58e0-4f14-862f-a10ca0e3b6aa",
+      "sourceId": "23",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "24. ASHIQS SPECIAL PIZZA (Alm.)",
+        "description": "Pizzasauce, ost, fish tikka masala, løg, paprika, chilli på pizza.",
+        "price": 89,
+        "priceDelivery": 89,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "TyDWYMaD7JUf02wEt2EU"
+        ],
+        "categoryId": "FxW2ZwJA2pyZd0H5ZAQc",
+        "sortOrder": 57,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "24. ASHIQS SPECIAL PIZZA",
+        "toppingGroupIds": [
+          "ashiqs-choice-pizza-70",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "TyDWYMaD7JUf02wEt2EU",
+          "1xQN2LyiukPU40y8eZpN"
+        ],
+        "toppingGroupConditions": {
+          "K1hTRsjMVyRvdxSNNiAz": [
+            "ashiqs-choice-pizza-70-0"
+          ],
+          "1xQN2LyiukPU40y8eZpN": [
+            "ashiqs-choice-pizza-70-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "d326e9b9-cf99-40b8-bebd-2859cb401641",
+      "sourceId": "23",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "24. ASHIQS SPECIAL PIZZA (Fam.)",
+        "description": "Pizzasauce, ost, fish tikka masala, løg, paprika, chilli på pizza.",
+        "price": 159,
+        "priceDelivery": 159,
+        "toppingGroupIds": [
+          "1xQN2LyiukPU40y8eZpN",
+          "TyDWYMaD7JUf02wEt2EU"
+        ],
+        "categoryId": "FxW2ZwJA2pyZd0H5ZAQc",
+        "sortOrder": 58,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "5f0e9d4a-3a27-4aa2-a3f2-a4f55a713617",
+      "sourceId": "24",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "30. KLASSISK BURGER (Burger)",
+        "description": "",
+        "price": 59,
+        "priceDelivery": 59,
+        "toppingGroupIds": [],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 59,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "30. KLASSISK BURGER",
+        "toppingGroupIds": [
+          "ashiqs-choice-burger-30"
+        ],
+        "toppingGroupConditions": {}
+      }
+    },
+    {
+      "id": "7b117c54-f760-4375-b360-ef870ffb61df",
+      "sourceId": "24",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "30. KLASSISK BURGER (Menu)",
+        "description": "",
+        "price": 89,
+        "priceDelivery": 89,
+        "toppingGroupIds": [],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 60,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "b7cc2e57-395e-4119-9312-f88dedf16bf9",
+      "sourceId": "25",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "31. CHEESE BURGER (Burger)",
+        "description": "",
+        "price": 65,
+        "priceDelivery": 65,
+        "toppingGroupIds": [],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 61,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "31. CHEESE BURGER",
+        "toppingGroupIds": [
+          "ashiqs-choice-burger-30",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "toppingGroupConditions": {
+          "RxPwLenhsr0Sp1tR8XC6": [
+            "ashiqs-choice-burger-30-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "28927d3e-106b-45b8-b009-4973fabdc077",
+      "sourceId": "25",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "31. CHEESE BURGER (Menu)",
+        "description": "",
+        "price": 95,
+        "priceDelivery": 95,
+        "toppingGroupIds": [
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 62,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "a4246250-6f18-48a6-8224-cb18012122aa",
+      "sourceId": "26",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "32. DOBBELT BURGER (Burger)",
+        "description": "",
+        "price": 85,
+        "priceDelivery": 85,
+        "toppingGroupIds": [],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 63,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "32. DOBBELT BURGER",
+        "toppingGroupIds": [
+          "ashiqs-choice-burger-30",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "toppingGroupConditions": {
+          "RxPwLenhsr0Sp1tR8XC6": [
+            "ashiqs-choice-burger-30-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "61a77594-48f7-4477-bf17-08b19eb62359",
+      "sourceId": "26",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "32. DOBBELT BURGER (Menu)",
+        "description": "",
+        "price": 115,
+        "priceDelivery": 115,
+        "toppingGroupIds": [
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 64,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "847defdd-46f7-40a0-8d5c-78ff008a8d6e",
+      "sourceId": "27",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "33. DOBBELT CHEESE BURGER (Burger)",
+        "description": "",
+        "price": 89,
+        "priceDelivery": 89,
+        "toppingGroupIds": [],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 65,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "33. DOBBELT CHEESE BURGER",
+        "toppingGroupIds": [
+          "ashiqs-choice-burger-31",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "toppingGroupConditions": {
+          "RxPwLenhsr0Sp1tR8XC6": [
+            "ashiqs-choice-burger-31-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "e4da55c8-9b94-403e-9854-4d284634fc2e",
+      "sourceId": "27",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "33. DOBBELT CHEESE BURGER (Menu)",
+        "description": "",
+        "price": 120,
+        "priceDelivery": 120,
+        "toppingGroupIds": [
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 66,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "ae899c7e-c0db-44fa-bfa3-a0f5e500511d",
+      "sourceId": "28",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "34. BACON BURGER (Burger)",
+        "description": "",
+        "price": 65,
+        "priceDelivery": 65,
+        "toppingGroupIds": [],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 67,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "34. BACON BURGER",
+        "toppingGroupIds": [
+          "ashiqs-choice-burger-30",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "toppingGroupConditions": {
+          "RxPwLenhsr0Sp1tR8XC6": [
+            "ashiqs-choice-burger-30-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "6de5eafe-af3b-4529-95e3-c73b0ac98152",
+      "sourceId": "28",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "34. BACON BURGER (Menu)",
+        "description": "",
+        "price": 95,
+        "priceDelivery": 95,
+        "toppingGroupIds": [
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 68,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "86b46963-4d85-49ef-80a7-5329762a245a",
+      "sourceId": "29",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "35. BACON CHEESE BURGER (Burger)",
+        "description": "",
+        "price": 69,
+        "priceDelivery": 69,
+        "toppingGroupIds": [],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 69,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "35. BACON CHEESE BURGER",
+        "toppingGroupIds": [
+          "ashiqs-choice-burger-30",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "toppingGroupConditions": {
+          "RxPwLenhsr0Sp1tR8XC6": [
+            "ashiqs-choice-burger-30-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "908adc6d-0b5e-4435-93d7-242ee46186b0",
+      "sourceId": "29",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "35. BACON CHEESE BURGER (Menu)",
+        "description": "",
+        "price": 99,
+        "priceDelivery": 99,
+        "toppingGroupIds": [
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 70,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "b379634b-ef7a-4379-ae8c-ff801b17fa73",
+      "sourceId": "30",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "36. CHICKEN BURGER (Burger)",
+        "description": "",
+        "price": 49,
+        "priceDelivery": 49,
+        "toppingGroupIds": [],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 71,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "36. CHICKEN BURGER",
+        "toppingGroupIds": [
+          "ashiqs-choice-burger-40",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "toppingGroupConditions": {
+          "RxPwLenhsr0Sp1tR8XC6": [
+            "ashiqs-choice-burger-40-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "bc03bbf5-a790-44b5-b767-60f766e7a72d",
+      "sourceId": "30",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "36. CHICKEN BURGER (Menu)",
+        "description": "",
+        "price": 89,
+        "priceDelivery": 89,
+        "toppingGroupIds": [
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 72,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "587312b0-c3c9-4e53-91af-6786b0462568",
+      "sourceId": "31",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "37. FISKE BURGER (Burger)",
+        "description": "",
+        "price": 49,
+        "priceDelivery": 49,
+        "toppingGroupIds": [],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 73,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "37. FISKE BURGER",
+        "toppingGroupIds": [
+          "ashiqs-choice-burger-40",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "toppingGroupConditions": {
+          "RxPwLenhsr0Sp1tR8XC6": [
+            "ashiqs-choice-burger-40-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "270ac253-8279-45b2-bc0a-a8dde9bafb92",
+      "sourceId": "31",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "37. FISKE BURGER (Menu)",
+        "description": "",
+        "price": 89,
+        "priceDelivery": 89,
+        "toppingGroupIds": [
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 74,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "084aa82b-b3ab-4807-b326-6730ae562872",
+      "sourceId": "32",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "38. ASHIQ'S SPECIAL BURGER (Burger)",
+        "description": "Med stegte løg, paprika, chili og hvidløgsdressing.",
+        "price": 69,
+        "priceDelivery": 69,
+        "toppingGroupIds": [],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 75,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "38. ASHIQ'S SPECIAL BURGER",
+        "toppingGroupIds": [
+          "ashiqs-choice-burger-30",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "toppingGroupConditions": {
+          "RxPwLenhsr0Sp1tR8XC6": [
+            "ashiqs-choice-burger-30-1"
+          ]
+        }
+      }
+    },
+    {
+      "id": "ad9a58e5-2c5b-4629-936f-1dc821c44f6c",
+      "sourceId": "32",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "38. ASHIQ'S SPECIAL BURGER (Menu)",
+        "description": "Med stegte løg, paprika, chili og hvidløgsdressing.",
+        "price": 99,
+        "priceDelivery": 99,
+        "toppingGroupIds": [
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "vvUdLWJC8lsWJEnuEu0W",
+        "sortOrder": 76,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "699875f4-8149-42d5-b148-a42b74701869",
+      "sourceId": "33",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "40. SHAWARMA (Pita)",
+        "description": "",
+        "price": 45,
+        "priceDelivery": 45,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 77,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "40. SHAWARMA",
+        "toppingGroupIds": [
+          "ashiqs-choice-pita-durum",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "toppingGroupConditions": {
+          "RxPwLenhsr0Sp1tR8XC6": [
+            "ashiqs-choice-pita-durum-1",
+            "ashiqs-choice-pita-durum-3"
+          ]
+        }
+      }
+    },
+    {
+      "id": "513a0e4a-f8d7-45bb-9d6e-bb2270686e7e",
+      "sourceId": "33",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "40. SHAWARMA (Pita Menu)",
+        "description": "",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 78,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "d413d2e0-e561-482c-a70a-5223f58a6a40",
+      "sourceId": "33",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "40. SHAWARMA (Durum)",
+        "description": "",
+        "price": 55,
+        "priceDelivery": 55,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 79,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "e63ef300-875b-477d-a410-7737aac29072",
+      "sourceId": "33",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "40. SHAWARMA (Durum Menu)",
+        "description": "",
+        "price": 99,
+        "priceDelivery": 99,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 80,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "e212e5ee-678a-4434-b9ff-df2fe3e21c70",
+      "sourceId": "34",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "41. KYLLING KEBAB (Pita)",
+        "description": "",
+        "price": 45,
+        "priceDelivery": 45,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 81,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "41. KYLLING KEBAB",
+        "toppingGroupIds": [
+          "ashiqs-choice-pita-durum",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "toppingGroupConditions": {
+          "RxPwLenhsr0Sp1tR8XC6": [
+            "ashiqs-choice-pita-durum-1",
+            "ashiqs-choice-pita-durum-3"
+          ]
+        }
+      }
+    },
+    {
+      "id": "0d00c0c6-bf8f-42d6-ba9f-d56d510776f3",
+      "sourceId": "34",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "41. KYLLING KEBAB (Pita Menu)",
+        "description": "",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 82,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "83c71b6b-212a-4810-984f-a3a64e09c2d4",
+      "sourceId": "34",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "41. KYLLING KEBAB (Durum)",
+        "description": "",
+        "price": 55,
+        "priceDelivery": 55,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 83,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "7bb1b9d1-66de-4816-8d85-a88832dfed1c",
+      "sourceId": "34",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "41. KYLLING KEBAB (Durum Menu)",
+        "description": "",
+        "price": 99,
+        "priceDelivery": 99,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 84,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "a1e4d70e-d6e1-4dfd-a556-1efb536211ec",
+      "sourceId": "35",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "42. FALAFEL (Pita)",
+        "description": "",
+        "price": 45,
+        "priceDelivery": 45,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 85,
+        "isActive": true
+      },
+      "patch": {
+        "productName": "42. FALAFEL",
+        "toppingGroupIds": [
+          "ashiqs-choice-pita-durum",
+          "K1hTRsjMVyRvdxSNNiAz",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "toppingGroupConditions": {
+          "RxPwLenhsr0Sp1tR8XC6": [
+            "ashiqs-choice-pita-durum-1",
+            "ashiqs-choice-pita-durum-3"
+          ]
+        }
+      }
+    },
+    {
+      "id": "45a746e9-7de8-4cb8-ac8d-3d7f113c7ae5",
+      "sourceId": "35",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "42. FALAFEL (Pita Menu)",
+        "description": "",
+        "price": 79,
+        "priceDelivery": 79,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 86,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "0174af33-423f-41b9-aab7-ee91f93712eb",
+      "sourceId": "35",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "42. FALAFEL (Durum)",
+        "description": "",
+        "price": 55,
+        "priceDelivery": 55,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 87,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    },
+    {
+      "id": "fe794a4e-cf2e-4ba6-b0d4-6cb214562a7f",
+      "sourceId": "35",
+      "before": {
+        "brandId": "NkTYjQxTPCRtXFAZRKPO",
+        "locationIds": [
+          "rGfKFpjCqoxMeHLIxcdJ"
+        ],
+        "productName": "42. FALAFEL (Durum Menu)",
+        "description": "",
+        "price": 99,
+        "priceDelivery": 99,
+        "toppingGroupIds": [
+          "K1hTRsjMVyRvdxSNNiAz",
+          "RxPwLenhsr0Sp1tR8XC6"
+        ],
+        "categoryId": "4JyqUzmXNzUwCGDCPD0i",
+        "sortOrder": 88,
+        "isActive": true
+      },
+      "patch": {},
+      "delete": true
+    }
+  ]
+}
