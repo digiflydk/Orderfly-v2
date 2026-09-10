@@ -24,6 +24,8 @@ const nextConfig = {
     serverActions: { bodySizeLimit: '6mb' },
   },
   images: {
+    // App Hosting disables optimization unless this is explicitly false.
+    unoptimized: false,
     domains: [
       'firebasestorage.googleapis.com',
       'placehold.co',

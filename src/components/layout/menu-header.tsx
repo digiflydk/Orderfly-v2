@@ -4,20 +4,26 @@ import Link from 'next/link';
 import Image from 'next/image';
 import { usePathname } from 'next/navigation';
 import { useEffect, useState } from 'react';
-import type { Brand } from '@/types';
+import type { Brand, Location } from '@/types';
 import { useCart } from '@/context/cart-context';
 import { safeImage } from '@/lib/images';
 import { formatPrice } from '@/lib/storefront-format';
 import { locationHeaderDetails } from '@/lib/location-header';
 import { PublicReviewsLink } from '@/components/feedback/public-reviews-link';
 
-export function MenuHeader({ brand }: { brand: Brand }) {
+export function MenuHeader({ brand, initialLocation, initialNow }: {
+  brand: Brand;
+  initialLocation?: Location;
+  initialNow?: number;
+}) {
   const { location: cartLocation } = useCart();
-  const location = cartLocation?.brandId === brand.id ? cartLocation : null;
+  // The route owns the location; a restored cart may still belong to another branch.
+  const candidate = initialLocation ?? cartLocation;
+  const location = candidate?.brandId === brand.id ? candidate : null;
   const pathname = usePathname();
   const checkout = pathname?.includes('/checkout');
   const href = location ? `/${brand.slug}/${location.slug}` : `/${brand.slug}`;
-  const [now, setNow] = useState<Date | null>(null);
+  const [now, setNow] = useState<Date | null>(() => initialNow === undefined ? null : new Date(initialNow));
   useEffect(() => {
     const update = () => setNow(new Date());
     update();
@@ -26,7 +32,7 @@ export function MenuHeader({ brand }: { brand: Brand }) {
   }, []);
   const details = location ? locationHeaderDetails(location, now || new Date(0)) : null;
   const logo = brand.logoUrl
-    ? <Image src={safeImage(brand.logoUrl)} alt={brand.name} fill sizes="144px" className="object-contain object-left" />
+    ? <Image src={safeImage(brand.logoUrl)} alt={brand.name} fill sizes="144px" priority className="object-contain object-left" />
     : <span className="text-xl font-bold">{brand.name}</span>;
 
   return <>
@@ -40,8 +46,10 @@ export function MenuHeader({ brand }: { brand: Brand }) {
     </header>
     {!checkout && location && details && <section aria-label="Lokationsoplysninger" className="relative isolate overflow-hidden bg-[#262421] text-white">
       {location.imageUrl && <>
-        {/* Location URLs are user-configured and are not limited to Next Image's host allowlist. */}
-        <img src={safeImage(location.imageUrl)} alt="" className="absolute inset-0 -z-20 h-full w-full object-cover" />
+        {/* Local media can be resized; preserve support for arbitrary external image hosts. */}
+        {location.imageUrl.startsWith('/') && !location.imageUrl.startsWith('//')
+          ? <Image src={safeImage(location.imageUrl)} alt="" fill sizes="100vw" priority fetchPriority="high" className="-z-20 object-cover" />
+          : <img src={safeImage(location.imageUrl)} alt="" loading="eager" fetchPriority="high" className="absolute inset-0 -z-20 h-full w-full object-cover" />}
         <div className="absolute inset-0 -z-10 bg-black/65" />
       </>}
       <div className="mx-auto max-w-[1140px] px-4 py-6 sm:py-8">
