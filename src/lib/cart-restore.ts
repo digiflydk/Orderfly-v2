@@ -1,3 +1,4 @@
+import { activeToppingGroupIds } from './topping-conditions';
 import { money, sumMoney } from './money';
 import type { CartItem, ComboMenu, Product, StandardDiscount, Topping, ToppingGroup, Upsell } from '@/types';
 import type { CartChoice } from './cart-snapshot';
@@ -36,7 +37,9 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
         selectedIds.add(matches[0].id);
         toppings.push({ id: matches[0].id, name: matches[0].toppingName, price: money(matches[0].price) });
       }
-      for (const group of groups) {
+      const activeGroups = activeToppingGroupIds(product, groups, allowed, selectedIds);
+      if (allowed.some(t => selectedIds.has(t.id) && !activeGroups.has(t.groupId))) valid = false;
+      for (const group of groups.filter(g => activeGroups.has(g.id))) {
         const options = allowed.filter(t => t.groupId === group.id);
         const count = options.filter(t => selectedIds.has(t.id)).length;
         if (count < group.minSelection || (group.maxSelection > 0 && count > group.maxSelection)) valid = false;

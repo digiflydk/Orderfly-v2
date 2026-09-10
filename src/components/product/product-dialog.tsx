@@ -1,6 +1,7 @@
 
 'use client';
 import { lineMoney, money, sumMoney } from '@/lib/money';
+import { activeToppingGroupIds, reconcileToppingIds } from '@/lib/topping-conditions';
 import { MAX_TOPPINGS_PER_ITEM } from '@/lib/commerce-limits';
 
 import { useState, useMemo, useEffect, useRef, useId } from 'react';
@@ -71,7 +72,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   const { toast } = useToast();
   const { trackEvent } = useAnalytics();
 
-  const relevantToppingGroups = useMemo(() => {
+  const configuredToppingGroups = useMemo(() => {
     if (!product.toppingGroupIds || !allToppingGroups || !allToppings) return [];
 
     const productToppingGroupIds = new Set(product.toppingGroupIds);
@@ -89,6 +90,17 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
         .sort((a,b) => Number(Number(b.minSelection) > 0) - Number(Number(a.minSelection) > 0));
   }, [product.toppingGroupIds, allToppingGroups, allToppings]);
 
+  const relevantToppingGroups = useMemo(() => {
+    const active = activeToppingGroupIds(product, configuredToppingGroups, allToppings, Object.keys(selectedToppings));
+    return configuredToppingGroups.filter(g => active.has(g.id));
+  }, [product, configuredToppingGroups, allToppings, selectedToppings]);
+
+  const reconcileSelection = (selected: Record<string, CartItemTopping>) => {
+    const options = configuredToppingGroups.flatMap(g => g.toppings);
+    const ids = reconcileToppingIds(product, configuredToppingGroups, options, Object.keys(selected), MAX_TOPPINGS_PER_ITEM);
+    return Object.fromEntries(options.filter(t => ids.has(t.id)).map(t => [t.id, {id:t.id, name:t.toppingName, price:money(t.price)}]));
+  };
+
   const finalPrice = product.price;
 
   useEffect(() => {
@@ -100,7 +112,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
       setQuantity(initialItem?.quantity || 1);
 
       const defaultToppings: Record<string, CartItemTopping> = {};
-      relevantToppingGroups.forEach(group => {
+      configuredToppingGroups.forEach(group => {
           group.toppings.forEach(topping => {
               if (topping.isDefault && Object.keys(defaultToppings).length < MAX_TOPPINGS_PER_ITEM) {
                   defaultToppings[topping.id] = { id: topping.id, name: topping.toppingName, price: money(topping.price) };
@@ -108,10 +120,10 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
           });
       });
       const selected = initialItem ? Object.fromEntries(initialItem.toppings.flatMap(t => {
-        const match = relevantToppingGroups.flatMap(g => g.toppings).find(candidate => t.id ? candidate.id === t.id : candidate.toppingName === t.name);
+        const match = configuredToppingGroups.flatMap(g => g.toppings).find(candidate => t.id ? candidate.id === t.id : candidate.toppingName === t.name);
         return match ? [[match.id,{id:match.id,name:match.toppingName,price:money(match.price)}]] : [];
       })) : defaultToppings;
-      setSelectedToppings(selected);
+      setSelectedToppings(reconcileSelection(selected));
 
       async function fetchAllergens() {
         if(product.allergenIds && product.allergenIds.length > 0) {
@@ -164,7 +176,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 delete newSelected[topping.id];
             }
         }
-        return newSelected;
+        return reconcileSelection(newSelected);
     });
   };
 

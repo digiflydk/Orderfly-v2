@@ -38,9 +38,13 @@ before(async()=>{
  const capGroups=${JSON.stringify(capGroups)},capToppings=${JSON.stringify(capToppings)};
  const capProduct={...products[0],id:'cap-product',productName:'Cap Product',toppingGroupIds:capGroups.map(group=>group.id)};
  function Debug(){const cart=useCart();return <pre id="cart-state" style={{whiteSpace:'pre-wrap',overflowWrap:'anywhere'}}>{JSON.stringify({ready:cart.cartReady,count:cart.itemCount,mode:cart.deliveryType,total:cart.checkoutTotal,toppingIds:cart.cartItems[0]?.toppings.map(topping=>topping.id)||[]})}</pre>;}
+ const conditionalGroups=['size','regular','family','drink'].map(id=>({id,locationIds:['l'],groupName:id,minSelection:id==='size'||id==='drink'?1:0,maxSelection:1}));
+ const conditionalToppings=[['alm','size',0],['fam','size',60],['menu','size',30],['cheese','regular',10],['family-cheese','family',20],['cola','drink',0]].map(([id,groupId,price])=>({id,groupId,price,toppingName:id,isActive:true,locationIds:['l'],isDefault:id==='alm'||id==='cola'}));
+ const conditionalProduct={...products[0],toppingGroupIds:conditionalGroups.map(g=>g.id),toppingGroupConditions:{regular:['alm'],family:['fam'],drink:['menu']}};
+ function ConditionalFixture(){const cart=useCart();useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);return <><ProductDialog product={conditionalProduct} isOpen={true} setIsOpen={()=>{}} allToppingGroups={conditionalGroups} allToppings={conditionalToppings}/><Debug/></>;}
  function ToppingCapFixture(){const cart=useCart();useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);return <><ProductDialog product={capProduct} isOpen={true} setIsOpen={()=>{}} allToppingGroups={capGroups} allToppings={capToppings}/><Debug/></>;}
  const mode=new URLSearchParams(window.location.search).get('deliveryMethod')==='delivery'?'delivery':'pickup';
- createRoot(document.getElementById('root')).render(window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}><CartProvider>{window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
+ createRoot(document.getElementById('root')).render(window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}><CartProvider>{window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const aliases={
   '@/app/cart-actions':fixture('cart-action',`export async function restoreCartAction(data){return fetch('/restore',{method:'POST',body:JSON.stringify(data)}).then(r=>r.json());}`),
@@ -272,4 +276,29 @@ test('#71 delivery minimum is actionable before checkout and selection is visibl
  const dialog=page.getByRole('dialog');assert.equal(await dialog.getByRole('button',{name:'Til kassen',exact:true}).isDisabled(),true);
  assert.match(await dialog.getByRole('status').textContent(),/70,00.*100,00/);
  await dialog.getByRole('button',{name:'Find flere varer',exact:true}).click();await dialog.waitFor({state:'hidden'});
+});
+
+for(const width of [390,1280])test(`conditional product options switch safely at ${width}px`,async t=>{
+ const page=await setup(t,width,'/conditional');
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready);
+ const dialog=page.getByRole('dialog');
+ await dialog.getByRole('region',{name:'regular',exact:true}).waitFor();
+ assert.equal(await dialog.getByRole('region',{name:'family',exact:true}).count(),0);
+ assert.equal(await dialog.getByRole('region',{name:'drink',exact:true}).count(),0);
+ await dialog.getByRole('radio',{name:/^cheese /}).click();
+ await dialog.getByRole('radio',{name:/^fam /}).click();
+ await dialog.getByRole('region',{name:'family',exact:true}).waitFor();
+ assert.equal(await dialog.getByRole('region',{name:'regular',exact:true}).count(),0);
+ await dialog.getByRole('radio',{name:/^family-cheese /}).click();
+ assert.match(await dialog.getByRole('button',{name:/Tilføj til kurv/}).textContent(),/155,00/);
+ await dialog.getByRole('radio',{name:/^menu /}).click();
+ await dialog.getByRole('region',{name:'drink',exact:true}).waitFor();
+ assert.equal(await dialog.getByRole('radio',{name:/^cola /}).isChecked(),true);
+ assert.match(await dialog.getByRole('button',{name:/Tilføj til kurv/}).textContent(),/105,00/);
+ await dialog.getByRole('radio',{name:/^alm /}).click();
+ assert.equal(await dialog.getByRole('region',{name:'drink',exact:true}).count(),0);
+ assert.match(await dialog.getByRole('button',{name:/Tilføj til kurv/}).textContent(),/75,00/);
+ await dialog.getByRole('button',{name:/Tilføj til kurv/}).click();
+ await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
+ assert.deepEqual(JSON.parse(await page.locator('#cart-state').textContent()).toppingIds,['alm']);
 });

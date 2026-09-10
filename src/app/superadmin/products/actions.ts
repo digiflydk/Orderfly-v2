@@ -351,6 +351,7 @@ export async function getProductsByIds(productIds: string[], brandId?: string, l
         isPopular: p.isPopular,
         allergenIds: p.allergenIds,
         toppingGroupIds: p.toppingGroupIds,
+        toppingGroupConditions: p.toppingGroupConditions,
         categoryId: p.categoryId,
         brandId: p.brandId,
         sortOrder: p.sortOrder,
