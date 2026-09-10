@@ -101,7 +101,7 @@ Ingen af nedenstående runtimeændringer er udført fra Work.
 | `ORDERFLY_FEEDBACK_TOKEN_SECRET` | Tilfældig hemmelig værdi på mindst 32 tegn; rotation ugyldiggør gamle signerede ordrelinks |
 | `ORDERFLY_FEEDBACK_WORKER_SECRET` | Separat tilfældig hemmelig værdi på mindst 32 tegn til worker; aldrig i browser eller Git |
 | `ORDERFLY_FEEDBACK_ORIGIN` | Valgfri betroet HTTPS-origin uden sti; standard `https://orderfly.dk` |
-| Scheduler | POST `/api/internal/feedback/send`, `Authorization: Bearer <worker-secret>`; fx hvert 5. minut. Samme kald behandler feedback- og ordrebekræftelsesjobs. Ingen automatisk historisk backfill. |
+| Worker heartbeat | POST `/api/internal/feedback/send`, `Authorization: Bearer <worker-secret>`. Den eksisterende mPanel notification-worker må alternativt bruge den fælles `ORDERFLY_NOTIFICATION_SECRET`, så dens eksisterende Supabase Cron kan behandle feedback- og ordrebekræftelsesjobs uden en ekstra scheduler. Ingen automatisk historisk backfill. |
 | mPanel/Mailtrap | mPanel #263 genbruger Esmeraldas aktive `info@esmeraldapizza.com`-afsender og eksisterende Vault-token, fire skabeloner, beskyttet enqueue-endpoint og synlig leveringsstatus. En accepteret enqueue er ikke leveringsbevis. |
 | Firestore-indexer | Flet de nødvendige indexer fra `docs/feedback-firestore-indexes.json` ind i projektets eksisterende konfiguration. Erstat ikke de eksisterende indexer. |
 | Firestore-regler | Verificér at browserklienter ikke kan læse/skrive private feedbackdata, grants, settings, invitationer, mailjobs, audit eller offentlige projektioner direkte. Serverruter bruger Admin SDK. En bred eksisterende allow-regel kan ikke ophæves med en snæver deny-regel; gennemgå den samlede regelsamling. |
