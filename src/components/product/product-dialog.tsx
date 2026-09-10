@@ -238,7 +238,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                   <div className="commerce-option-image"><Image src={safeImage(product.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
                   <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{product.productName}</DialogTitle><DialogDescription>{product.description || 'Vælg dine tilvalg her.'}</DialogDescription><p className="font-semibold">{formatPrice(finalPrice)}</p></DialogHeader>
                 </div>
-                <div className="p-4 space-y-4">
+                <div className="p-4 space-y-3">
                     {hasOptions && (
                         <>
                             {allergenError && <p role="status" className="text-sm">Allergenoplysninger kunne ikke indlæses. Kontakt restauranten ved allergi.</p>}
@@ -262,15 +262,15 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
 
                                 return (
                                     <section key={group.id} id={`${dialogId}-group-${group.id}`} aria-labelledby={`${dialogId}-heading-${group.id}`} tabIndex={-1} className="commerce-option-group" data-invalid={showErrors && currentSelection.length < Number(group.minSelection)}>
-                                        <div className="mb-2">
+                                        <div className="mb-1">
                                         <h3 id={`${dialogId}-heading-${group.id}`} className="font-semibold text-lg">{group.groupName}</h3>
                                         <p className="text-sm text-muted-foreground">{Number(group.minSelection) > 0 ? 'Påkrævet' : 'Valgfrit'} · {getSelectionText(group)}</p>
                                         </div>
-                                        <div className="space-y-2">
+                                        <div className="space-y-0">
                                             {isSingleSelect ? (
-                                                <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleToppingChange(group.toppings.find(t => t.id === val)!, true, true)}>
+                                                <RadioGroup className="gap-0" value={currentSelection[0]} onValueChange={(val) => handleToppingChange(group.toppings.find(t => t.id === val)!, true, true)}>
                                                     {group.toppings.map(topping => (
-                                                    <label htmlFor={`${dialogId}-${topping.id}`} key={`${dialogId}-${topping.id}`} data-option-row className="flex items-center justify-between gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
+                                                    <label htmlFor={`${dialogId}-${topping.id}`} key={`${dialogId}-${topping.id}`} data-option-row className="flex items-center justify-between gap-3 min-h-11 px-2 py-1 rounded-md hover:bg-accent cursor-pointer">
                                                         <span className="flex items-center space-x-3">
                                                     <RadioGroupItem
                                                         value={topping.id}
@@ -288,7 +288,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                                                 const isChecked = currentSelection.includes(topping.id);
                                                 const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
                                                 return (
-                                                    <label htmlFor={`${dialogId}-${topping.id}`} key={`${dialogId}-${topping.id}`} data-option-row className="flex items-center justify-between gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
+                                                    <label htmlFor={`${dialogId}-${topping.id}`} key={`${dialogId}-${topping.id}`} data-option-row className="flex items-center justify-between gap-3 min-h-11 px-2 py-1 rounded-md hover:bg-accent cursor-pointer">
                                                         <span className="flex items-center space-x-3">
                                                             <Checkbox
                                                                 id={`${dialogId}-${topping.id}`}
