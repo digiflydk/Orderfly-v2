@@ -37,7 +37,9 @@ export function BrandLayoutClient({
   const segments = pathname?.split('/').filter(Boolean) || [];
   const isOrderPage = segments.length >= 2 && !['about','contact','privacy','terms','order'].includes(segments[1]);
   const showGlobalHeader = !isOrderPage;
-  const showMenuHeader = isOrderPage;
+  // Location routes render their header with server-fetched location data.
+  const showMenuHeader = isOrderPage && segments[1] === 'checkout';
+  const Content = isOrderPage && !showMenuHeader ? 'div' : 'main';
   const showFooter = true;
 
   return (
@@ -46,9 +48,9 @@ export function BrandLayoutClient({
       >
         {showGlobalHeader && <Header brand={brand} settings={settings || null} />}
         {showMenuHeader && <MenuHeader brand={brand} />}
-        <main className="flex-1 w-full">
+        <Content className="flex-1 w-full">
             {children}
-        </main>
+        </Content>
         {showFooter && (
           <Footer
             brand={brand}

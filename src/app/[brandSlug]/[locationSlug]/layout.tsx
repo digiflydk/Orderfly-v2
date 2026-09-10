@@ -1,22 +1,18 @@
-"use client";
+import type { ReactNode } from 'react';
+import { notFound } from 'next/navigation';
+import { getBrandAndLocation } from '@/lib/data/brand-location';
+import { MenuHeader } from '@/components/layout/menu-header';
 
-import type { ReactNode } from "react";
-
-type LocationLayoutInnerProps = {
+export default async function LocationLayout({ children, params }: {
   children: ReactNode;
-  params: {
-    brandSlug: string;
-    locationSlug: string;
-  };
-};
+  params: Promise<{ brandSlug: string; locationSlug: string }>;
+}) {
+  const { brandSlug, locationSlug } = await params;
+  const { brand, location, brandMatchesLocation } = await getBrandAndLocation(brandSlug, locationSlug);
+  if (!brand || !location || !brandMatchesLocation) notFound();
 
-// Important: props is typed as ANY so it does not have to satisfy LayoutProps
-export default function LocationLayout(props: any) {
-  const { children, params } = props as LocationLayoutInnerProps;
-
-  const { brandSlug, locationSlug } = params;
-
-  // behold evt. din eksisterende layout-struktur her
-  // fx providers, wrappers osv.
-  return <>{children}</>;
+  return <>
+    <MenuHeader brand={brand} initialLocation={location} initialNow={Date.now()} />
+    <main>{children}</main>
+  </>;
 }
