@@ -14,7 +14,7 @@ const product={id:'p',brandId:'b',locationIds:['l'],isActive:true,productName:'F
 const products=[product,{...product,id:'drink',productName:'Fixture Soda',description:'Kold drik',price:25,priceDelivery:30,toppingGroupIds:[]},{...product,id:'water',productName:'Fixture Water',price:25,priceDelivery:30,toppingGroupIds:[]}];
 const combo={id:'combo',brandId:'b',locationIds:['l'],isActive:true,imageUrl:'/image.png',comboName:'Pizza og drik',description:'Pizza og valgfri drik',pickupPrice:90,deliveryPrice:100,upgradeProductIds:['p'],orderTypes:['pickup','delivery'],activeDays:[],activeTimeSlots:[],productGroups:[{id:'pizza-group',groupName:'Pizza',productIds:['p'],minSelection:1,maxSelection:1},{id:'drink-group',groupName:'Drik',productIds:['drink','water'],minSelection:1,maxSelection:1}]};
 const groups=[{id:'g',locationIds:['l'],groupName:'Ekstra',minSelection:0,maxSelection:2},{id:'required',locationIds:['l'],groupName:'Bund',minSelection:1,maxSelection:1}];
-const toppings=[{id:'t',groupId:'g',locationIds:['l'],isActive:true,isDefault:true,toppingName:'Ost',price:5},{id:'base',groupId:'required',locationIds:['l'],isActive:true,isDefault:false,toppingName:'Tynd bund',price:0}];
+const toppings=[{id:'t',groupId:'g',locationIds:['l'],isActive:true,isDefault:true,toppingName:'Ost',price:5},{id:'bacon',groupId:'g',locationIds:['l'],isActive:true,isDefault:false,toppingName:'Bacon',price:10},{id:'dressing',groupId:'g',locationIds:['l'],isActive:true,isDefault:false,toppingName:'Dressing',price:5},{id:'base',groupId:'required',locationIds:['l'],isActive:true,isDefault:false,toppingName:'Tynd bund',price:0}];
 const capGroups=Array.from({length:51},(_,i)=>({id:`cap-g-${i}`,locationIds:['l'],groupName:`Cap group ${i}`,minSelection:0,maxSelection:2}));
 capGroups.push({id:'cap-radio',locationIds:['l'],groupName:'Cap radio',minSelection:0,maxSelection:1});
 const capToppings=capGroups.slice(0,51).map((group,i)=>({id:`cap-t-${i}`,groupId:group.id,locationIds:['l'],isActive:true,isDefault:true,toppingName:`Default ${i}`,price:1}));
@@ -118,6 +118,11 @@ for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulf
  await row.getByText(/kr\./).click();assert.equal(await page.getByRole('checkbox',{name:/Ost/}).isChecked(),false,'price area toggles exactly once');
  await row.getByText('Ost',{exact:true}).click();assert.equal(await page.getByRole('checkbox',{name:/Ost/}).isChecked(),true,'label toggles exactly once');
  const cta=page.getByRole('dialog').getByRole('button',{name:/Add to cart|Tilføj til kurv/i});
+ const optionRows=page.getByRole('dialog').locator('[data-option-row]');
+ assert.equal(await optionRows.count(),3);
+ const rowBoxes=await optionRows.evaluateAll(nodes=>nodes.map(node=>{const box=node.getBoundingClientRect();return {top:box.top,bottom:box.bottom,height:box.height};}));
+ assert.ok(rowBoxes.every(box=>box.height>=43&&box.height<=45),'option rows keep a compact 44px touch target');
+ assert.ok(rowBoxes.slice(1).every((box,index)=>box.top-rowBoxes[index].bottom<=1),'option rows do not add vertical gaps');
  assert.ok(Math.abs((await cta.boundingBox()).height-64.4)<1);
  assert.equal(await cta.evaluate(node=>getComputedStyle(node).backgroundColor),'rgb(255, 189, 2)');
  if(process.env.UI69_SCREENSHOTS)await page.screenshot({path:process.env.UI69_SCREENSHOTS+'/options-'+width+'.png'});
@@ -260,6 +265,10 @@ test('#71 editing one combo part preserves the other selected parts',async t=>{
  await page.getByRole('button',{name:'Tilføj Pizza og drik',exact:true}).click();
  assert.equal(await page.getByRole('dialog').locator('details, summary, [role="separator"]').count(),0);
  assert.equal(await page.getByRole('dialog').getByRole('heading',{name:'Drik',exact:true}).count(),1);
+ const comboRows=page.getByRole('dialog').getByRole('region',{name:'Drik',exact:true}).locator('[data-option-row]');
+ const comboBoxes=await comboRows.evaluateAll(nodes=>nodes.map(node=>{const box=node.getBoundingClientRect();return {top:box.top,bottom:box.bottom,height:box.height};}));
+ assert.ok(comboBoxes.every(box=>box.height>=43&&box.height<=45),'combo option rows keep a compact 44px touch target');
+ assert.ok(comboBoxes.slice(1).every((box,index)=>box.top-comboBoxes[index].bottom<=1),'combo option rows do not add vertical gaps');
  await page.getByRole('dialog').getByRole('radio',{name:'Fixture Soda',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:/Tilføj til kurv/}).click();
  await page.getByRole('button',{name:/Se kurv/}).click();

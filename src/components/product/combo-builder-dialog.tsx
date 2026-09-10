@@ -180,7 +180,7 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                   <div className="commerce-option-image"><Image src={safeImage(combo.imageUrl)} alt="" fill sizes="88px" className="rounded-lg object-cover" /></div>
                   <DialogHeader className="text-left pr-6"><DialogTitle className="text-xl">{combo.comboName}</DialogTitle><DialogDescription>{combo.description || 'Sammensæt din menu.'}</DialogDescription><p className="font-semibold">{formatPrice(comboPrice || 0)}</p></DialogHeader>
                 </div>
-                <div className="p-4 space-y-4">
+                <div className="p-4 space-y-3">
                     {[...combo.productGroups].sort((a,b)=>Number(Number(b.minSelection)>0)-Number(Number(a.minSelection)>0)).map(group => {
                     const productsInGroup = group.productIds
                         .map(pid => brandProducts.find(p => p.id === pid))
@@ -191,17 +191,17 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
 
                     return (
                         <section key={group.id} id={`${dialogId}-group-${group.id}`} aria-labelledby={`${dialogId}-heading-${group.id}`} tabIndex={-1} className="commerce-option-group" data-invalid={showErrors && currentSelection.length < Number(group.minSelection)}>
-                        <div className="mb-2">
+                        <div className="mb-1">
                             <h3 id={`${dialogId}-heading-${group.id}`} className="font-semibold text-lg">{group.groupName}</h3>
                             <p className="text-sm text-muted-foreground">{Number(group.minSelection)>0 ? 'Påkrævet' : 'Valgfrit'} · {getSelectionText(group)}</p>
                         </div>
-                        <div className="space-y-2">
+                        <div className="space-y-0">
                         {isSingleSelect ? (
-                            <RadioGroup value={currentSelection[0]} onValueChange={(val) => handleSelectionChange(group.id, val, false)}>
+                            <RadioGroup className="gap-0" value={currentSelection[0]} onValueChange={(val) => handleSelectionChange(group.id, val, false)}>
                                 {productsInGroup.map(p => (
-                                <label htmlFor={`${dialogId}-${group.id}-${p.id}`} key={p.id} data-option-row className="flex items-center gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
+                                <label htmlFor={`${dialogId}-${group.id}-${p.id}`} key={p.id} data-option-row className="flex items-center gap-3 min-h-11 px-2 py-1 rounded-md hover:bg-accent cursor-pointer">
                                     <RadioGroupItem value={p.id} id={`${dialogId}-${group.id}-${p.id}`} />
-                                    <Image src={safeImage(p.imageUrl)} alt="" width={40} height={40} className="rounded object-cover h-10 w-10"/><span className="flex-1 font-normal">{p.productName}</span>
+                                    <Image src={safeImage(p.imageUrl)} alt="" width={36} height={36} className="rounded object-cover h-9 w-9"/><span className="flex-1 font-normal">{p.productName}</span>
                                 </label>
                                 ))}
                             </RadioGroup>
@@ -210,14 +210,14 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
                             const isChecked = currentSelection.includes(p.id);
                             const maxReached = Number(group.maxSelection) > 0 && currentSelection.length >= Number(group.maxSelection);
                             return (
-                                <label htmlFor={`${dialogId}-${group.id}-${p.id}`} key={p.id} data-option-row className="flex items-center gap-3 min-h-12 p-3 rounded-md hover:bg-accent cursor-pointer">
+                                <label htmlFor={`${dialogId}-${group.id}-${p.id}`} key={p.id} data-option-row className="flex items-center gap-3 min-h-11 px-2 py-1 rounded-md hover:bg-accent cursor-pointer">
                                 <Checkbox
                                     id={`${dialogId}-${group.id}-${p.id}`}
                                     onCheckedChange={(checked) => handleSelectionChange(group.id, p.id, true, !!checked)}
                                     checked={isChecked}
                                     disabled={!isChecked && maxReached}
                                 />
-                                <Image src={safeImage(p.imageUrl)} alt="" width={40} height={40} className="rounded object-cover h-10 w-10"/><span className="flex-1 font-normal">{p.productName}</span>
+                                <Image src={safeImage(p.imageUrl)} alt="" width={36} height={36} className="rounded object-cover h-9 w-9"/><span className="flex-1 font-normal">{p.productName}</span>
                                 </label>
                             )
                             })
