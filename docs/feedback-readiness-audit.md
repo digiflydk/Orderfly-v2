@@ -130,3 +130,13 @@ Fixtures erstatter Firebase/mPanel/Mailtrap I/O. De beviser ikke produktions-IAM
 - Før Done: uafhængigt review → PO-accept → releaseansvarlig merger/deployer → verificér normal login for rette UID, dummyflagets tydelige advarsel, afvisning på tværs af brands, rapport fra kendte svar, individuel godkendelse/tilbagetrækning og deaktiveret offentlig side. Kontrolleret mailtest skal bruge særskilt godkendt testmodtager og verificere Orderfly-job, mPanel-job **og** faktisk Mailtrap-mail.
 
 Orderfly-issue #102 og den koordinerede mPanel-opgave forbliver åbne indtil den aftalte liveverifikation. Work merger eller deployer ikke sin egen PR.
+
+## mPanel read-only order mail diagnostics (#109)
+
+POST `/api/integrations/esmeralda/notifications/status` accepts the existing `x-esmeralda-integration-secret` and strict `{organization_id, brand_id, order_id}` input. The server fixes the currently supported Esmeralda binding to organization `aaa94d25-3ca6-4ebf-a673-164608db6c55` and brand `oeypKaMyYcQjIwaa1PtV`, checked against mPanel's active mapping during implementation. Adding another brand needs an explicit server-side binding. Runtime organization must match, and Admin SDK must address data project `orderfly-39325`.
+
+Both Firestore reads filter brand and exact document ID with a limit of one. The confirmation job uses the same deterministic SHA256 key as settlement. A job whose order/location do not match is refused. Responses expose only payment/eligibility, notification readiness, state, attempts, allowlisted error codes and timestamps. Missing job is distinct from failed or uncertain; accepted is only mPanel acceptance, never inbox delivery. No recipient, credential, provider payload, or raw exception is returned. Responses are no-store.
+
+This endpoint never sends, retries or mutates an order. It adds no scheduler, secret or database index migration. mPanel #267 adds the operator UI and a separate central delivery lookup. Deploy this endpoint before that UI; older servers show endpoint unavailable. Rollback reverts the endpoint release without data cleanup.
+
+Verification: `npm run typecheck`; `node --test tests/unit/order-mail-diagnostics.cjs tests/unit/feedback-mail.cjs`. Diagnostics tests execute production route/helpers with isolated I/O fixtures, covering auth, unknown input, scope injection, wrong data project, absent jobs, uncertain/accepted state, eligibility, safe projection and no-store failures. Companion mPanel tests exercise desktop/mobile interaction. Production verification is a read-only lookup of ORD-416719, not another purchase or resend.
