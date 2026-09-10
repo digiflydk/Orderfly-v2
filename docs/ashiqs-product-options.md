@@ -16,6 +16,9 @@ regular extras use separate existing price lists; the drink group is required
 only for menu selections. Changing the controlling choice clears hidden
 selections and applies defaults to newly active groups. Restore and checkout
 enforce the same rules and reject hidden, missing or unrelated options.
+Explicitly deselected defaults stay deselected while a group remains visible,
+including when reopening a saved cart item. Defaults are reapplied only after
+that group becomes inactive and is subsequently activated again.
 
 ## Release and apply
 

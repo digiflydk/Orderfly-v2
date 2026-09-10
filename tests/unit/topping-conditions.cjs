@@ -28,6 +28,15 @@ test('switching size removes the old extras; switching away from menu removes it
  assert.deepEqual([...reconcileToppingIds(product,groups,toppings,['menu'],50)],['menu','cola']);
  assert.deepEqual([...reconcileToppingIds(product,groups,toppings,['alm','cola'],50)],['alm']);
 });
+test('defaults do not override explicit removal or saved empty choices',()=>{
+ const optionalGroups=[{id:'extra',locationIds:['l'],minSelection:0,maxSelection:2}];
+ const optionalToppings=[{id:'cheese',groupId:'extra',isActive:true,isDefault:true,locationIds:['l']}];
+ const optionalProduct={toppingGroupIds:['extra']};
+ assert.deepEqual([...reconcileToppingIds(optionalProduct,optionalGroups,optionalToppings,[],50,['cheese'])],[]);
+ assert.deepEqual([...reconcileToppingIds(optionalProduct,optionalGroups,optionalToppings,[],50,[])],[]);
+ assert.deepEqual([...reconcileToppingIds(product,groups,toppings,['menu'],50,['alm'])],['menu','cola']);
+ assert.deepEqual([...reconcileToppingIds(product,groups,toppings,['menu'],50,['menu','cola'])],['menu']);
+});
 test('unrelated and unavailable triggers cannot activate conditional groups',()=>{
  for(const bad of [{...product,toppingGroupConditions:{family:['foreign']}},{...product,toppingGroupIds:['family'],toppingGroupConditions:{family:['fam']}}]) {
   assert.equal(restoreCartItems([choice(['fam','family-cheese'])],{...catalog,products:[bad]},scope).removed,1);

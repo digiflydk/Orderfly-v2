@@ -2,7 +2,7 @@
 const {test,before,after}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
-const {chromium}=require('@playwright/test');
+const {chromium,expect}=require('@playwright/test');
 const {loadTs}=require('../helpers/load-ts.cjs');
 const webpackModule=require('next/dist/compiled/webpack/webpack');webpackModule.init();
 const root=process.cwd();let dir,server,browser,origin,restoreReads=0,optionReads=0,optionFailures=0;
@@ -292,14 +292,14 @@ for(const width of [390,1280])test(`conditional product options switch safely at
  await dialog.getByRole('region',{name:'family',exact:true}).waitFor();
  assert.equal(await dialog.getByRole('region',{name:'regular',exact:true}).count(),0);
  await dialog.getByRole('radio',{name:/^family-cheese /}).click();
- assert.match(await dialog.getByRole('button',{name:/Tilføj til kurv/}).textContent(),/155,00/);
+ await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText(/155,00/);
  await dialog.getByRole('radio',{name:/^menu /}).click();
  await dialog.getByRole('region',{name:'drink',exact:true}).waitFor();
- assert.equal(await dialog.getByRole('radio',{name:/^cola /}).isChecked(),true);
- assert.match(await dialog.getByRole('button',{name:/Tilføj til kurv/}).textContent(),/105,00/);
+ await expect(dialog.getByRole('radio',{name:/^cola /})).toBeChecked();
+ await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText(/105,00/);
  await dialog.getByRole('radio',{name:/^alm /}).click();
  assert.equal(await dialog.getByRole('region',{name:'drink',exact:true}).count(),0);
- assert.match(await dialog.getByRole('button',{name:/Tilføj til kurv/}).textContent(),/75,00/);
+ await expect(dialog.getByRole('button',{name:/Tilføj til kurv/})).toHaveText(/75,00/);
  await dialog.getByRole('button',{name:/Tilføj til kurv/}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).count===1);
  assert.deepEqual(JSON.parse(await page.locator('#cart-state').textContent()).toppingIds,['alm']);

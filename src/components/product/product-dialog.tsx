@@ -95,9 +95,9 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
     return configuredToppingGroups.filter(g => active.has(g.id));
   }, [product, configuredToppingGroups, allToppings, selectedToppings]);
 
-  const reconcileSelection = (selected: Record<string, CartItemTopping>) => {
+  const reconcileSelection = (selected: Record<string, CartItemTopping>, previous?: Record<string, CartItemTopping>) => {
     const options = configuredToppingGroups.flatMap(g => g.toppings);
-    const ids = reconcileToppingIds(product, configuredToppingGroups, options, Object.keys(selected), MAX_TOPPINGS_PER_ITEM);
+    const ids = reconcileToppingIds(product, configuredToppingGroups, options, Object.keys(selected), MAX_TOPPINGS_PER_ITEM, previous === undefined ? undefined : Object.keys(previous));
     return Object.fromEntries(options.filter(t => ids.has(t.id)).map(t => [t.id, {id:t.id, name:t.toppingName, price:money(t.price)}]));
   };
 
@@ -123,7 +123,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
         const match = configuredToppingGroups.flatMap(g => g.toppings).find(candidate => t.id ? candidate.id === t.id : candidate.toppingName === t.name);
         return match ? [[match.id,{id:match.id,name:match.toppingName,price:money(match.price)}]] : [];
       })) : defaultToppings;
-      setSelectedToppings(reconcileSelection(selected));
+      setSelectedToppings(reconcileSelection(selected, initialItem ? selected : undefined));
 
       async function fetchAllergens() {
         if(product.allergenIds && product.allergenIds.length > 0) {
@@ -176,7 +176,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 delete newSelected[topping.id];
             }
         }
-        return reconcileSelection(newSelected);
+        return reconcileSelection(newSelected, prev);
     });
   };
 
