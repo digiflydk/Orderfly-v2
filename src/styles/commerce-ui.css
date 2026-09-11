@@ -159,6 +159,7 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-commerce-root]
     color: #fff;
     border-color: #595959;
   }
+  body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-commerce-retry],
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-ui-button]:is([data-ui-variant="default"], [data-ui-variant="brand"]),
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-ui-button][aria-pressed="true"],
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) button[aria-current="true"] {
