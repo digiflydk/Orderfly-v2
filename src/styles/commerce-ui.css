@@ -187,7 +187,7 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"]) [data-commerce-root]
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) .commerce-newsletter[data-newsletter-offer="true"] { background: #2a1000; border-color: #e9aa3f; box-shadow: none; }
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) .commerce-newsletter p { color: #ccc; }
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) :is(.commerce-newsletter, [data-option-row]) :is([role="checkbox"], [role="radio"]) { border-color: #e9aa3f; }
-  body:has([data-commerce-root][data-brand-slug="esmeralda"]) :is(.text-green-600, .text-green-700) { color: #86efac; }
+  body:has([data-commerce-root][data-brand-slug="esmeralda"]) .commerce-newsletter .text-green-700 { color: #86efac; }
   body:has([data-commerce-root][data-brand-slug="esmeralda"]) footer { background-color: #2a1000; }
 
 body:has([data-commerce-root][data-brand-slug="esmeralda"]) .commerce-option-quantity button {
@@ -195,3 +195,9 @@ body:has([data-commerce-root][data-brand-slug="esmeralda"]) .commerce-option-qua
   color: #fff;
 }
 body:has([data-commerce-root][data-brand-slug="esmeralda"]) .commerce-option-quantity button:not(:disabled):hover { background-color: #3d3d3d; }
+
+body:has([data-commerce-root][data-brand-slug="esmeralda"]) .commerce-promotion-card {
+  background-color: #2a1000;
+  color: #fff;
+  border-color: #e9aa3f;
+}
