@@ -54,6 +54,16 @@ export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, in
   const { trackEvent } = useAnalytics();
   const { toast } = useToast();
 
+  const trackedView = useRef('');
+  useEffect(() => {
+    if (!isOpen) { trackedView.current = ''; return; }
+    if (!location) return;
+    const key = `${combo.id}/${location.id}`;
+    if (trackedView.current !== key && trackEvent('view_product', {productId: combo.id, locationId: location.id})) {
+      trackedView.current = key;
+    }
+  }, [isOpen, combo.id, location?.id, trackEvent]);
+
   const initialized = useRef('');
   const committed = useRef(false);
   const dialogId = useId();

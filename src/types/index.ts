@@ -934,6 +934,7 @@ export type AnalyticsDaily = {
 export type FunnelOutput = {
   totals: {
     sessions: number;
+    measuredPurchasingSessions?: number;
     view_menu: number;
     view_product: number;
     add_to_cart: number;

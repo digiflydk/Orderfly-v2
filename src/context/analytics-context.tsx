@@ -31,7 +31,19 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [brand, setBrand] = useState<Brand | null>(brandProp || null);
   const [attribution, setAttribution] = useState<AnalyticsAttribution | null>(null);
+  const [statisticsConsent, setStatisticsConsent] = useState(false);
   const searchParams = useSearchParams();
+
+  useEffect(() => {
+    const update = () => setStatisticsConsent(statisticsAllowed());
+    update();
+    window.addEventListener('orderfly:consent', update);
+    window.addEventListener('storage', update);
+    return () => {
+      window.removeEventListener('orderfly:consent', update);
+      window.removeEventListener('storage', update);
+    };
+  }, []);
   const pathname = usePathname();
 
   useEffect(() => {
@@ -72,7 +84,7 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
   const trackEvent = useCallback((eventName: AnalyticsEventName, props: Record<string, any> = {}) => {
     try {
       const effectiveBrand = brandProp || brand;
-      if (!sessionId || !effectiveBrand) return false;
+      if (!sessionId || !effectiveBrand || !statisticsConsent) return false;
 
       const eventData: Record<string, any> = {
         brandId: effectiveBrand.id,
@@ -87,7 +99,7 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
 
       return trackClientEvent(eventName, {...eventData, pageType: commercePage(window.location.pathname)});
     } catch { return false; /* Malformed attribution or telemetry failures must never block checkout. */ }
-  }, [sessionId, brand, brandProp, attribution]);
+  }, [sessionId, brand, brandProp, attribution, statisticsConsent]);
 
   return (
     <AnalyticsContext.Provider value={{ trackEvent, sessionId, attribution }}>

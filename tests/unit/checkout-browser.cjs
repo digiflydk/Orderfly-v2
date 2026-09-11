@@ -96,7 +96,7 @@ before(async()=>{
   '@/app/superadmin/settings/actions':fixture('settings','export const getActiveStripeKey=async()=>"pk_test_fixture";'),
   '@stripe/stripe-js':fixture('stripe-js','export const loadStripe=()=>Promise.resolve(null);'),
   '@stripe/react-stripe-js':fixture('stripe-elements','export const Elements=({children})=>children;'),
-  '@/lib/analytics':fixture('telemetry',`export const statisticsAllowed=()=>false;export const trackClientEvent=()=>{if(window.telemetryUnavailable)throw Error('analytics denied');};`),
+  '@/lib/analytics':fixture('telemetry',`import {statisticsAllowed,trackClientEvent as track} from ${JSON.stringify(path.join(root,'src/lib/analytics.ts'))};export {statisticsAllowed};export const trackClientEvent=(...args)=>{if(window.telemetryUnavailable)throw Error('analytics denied');return track(...args);};`),
   '@/hooks/use-toast':fixture('toast','const toast=()=>{};export const useToast=()=>({toast});'),
   '@/app/superadmin/locations/client-actions':fixture('times',`export const calculateTimeSlots=()=>({asap_pickup:'Today - 18:20',asap_delivery:'Today - 18:40',pickup_times:['Today - 18:20'],delivery_times:['Today - 18:40']});`),
   [path.join(root,'src/components/checkout/timeslot-dialog')]:fixture('time-dialog','export const TimeSlotDialog=()=>null;'),
@@ -106,7 +106,7 @@ before(async()=>{
  };
  // Specific aliases must precede the generic @ prefix.
  delete aliases['@'];aliases['@']=path.join(root,'src');
- await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
+ await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',plugins:[new webpackModule.webpack.DefinePlugin({'process.env.NEXT_PUBLIC_RELEASE_SHA':JSON.stringify('local')})],devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
  const css=(await require('postcss')([require('tailwindcss')({...loadTs('tailwind.config.ts',{'tailwindcss-animate':{default:require('tailwindcss-animate')}}).default,content:[path.join(root,'src/**/*.{ts,tsx}')]})]).process(fs.readFileSync(path.join(root,'src/app/globals.css'),'utf8'),{from:undefined})).css+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8');
  server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');res.setHeader('Cache-Control','no-store');
@@ -363,4 +363,17 @@ for(const width of [390,1280])test(`#71 lab: click to payment with a hanging opt
  const page=await setup(t,'upsell-timeout');await page.setViewportSize({width,height:900});const started=Date.now();await page.getByRole('button',{name:/Gå til betaling|Complete Order/}).filter({visible:true}).first().click();await page.waitForURL('**/stripe?*');
  const elapsed=Date.now()-started;console.log('LAB_OPTIONAL_UPSELL_PAYMENT_'+width+'_MS='+elapsed);
  if(!process.env.CHECKOUT_BASELINE)assert.ok(elapsed<1500,'payment does not await the optional 2s timeout');
+});
+
+test('#123 late checkout consent and payment click retain location context',async t=>{
+ const page=await setup(t,'funnel-consent');const events=[];
+ await page.route('**/api/analytics/collect',async route=>{events.push(route.request().postDataJSON());await route.fulfill({status:204});});
+ await page.evaluate(()=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics:true}));window.dispatchEvent(new Event('orderfly:consent'));});
+ const {expect}=require('@playwright/test');
+ await expect.poll(()=>events.filter(e=>e.name==='start_checkout').length).toBe(1);
+ await page.getByPlaceholder('John Doe',{exact:true}).fill('Another Test Customer');
+ assert.equal(events.filter(e=>e.name==='start_checkout').length,1);
+ await pay(page);await page.waitForURL('**/stripe?*');
+ await expect.poll(()=>events.filter(e=>e.name==='click_purchase').length).toBe(1);
+ for(const e of events.filter(e=>['start_checkout','click_purchase'].includes(e.name))){assert.equal(e.params.locationId,'l');assert.equal(e.params.brandId,'b');assert.ok(e.params.sessionId);}
 });

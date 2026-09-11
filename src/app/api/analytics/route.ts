@@ -1,3 +1,4 @@
+import { analyticsOriginAllowed } from '@/lib/analytics-origin';
 
 
 import { NextResponse } from 'next/server';
@@ -12,8 +13,7 @@ export async function POST(req: NextRequest) {
     if (Number(req.headers.get('content-length') || 0) > 8192) {
       return NextResponse.json({ error: 'Event is too large.' }, { status: 413 });
     }
-    const origin = req.headers.get('origin');
-    if (origin && origin !== req.nextUrl.origin) {
+    if (!analyticsOriginAllowed(req)) {
       return NextResponse.json({ error: 'Invalid origin.' }, { status: 403 });
     }
     const raw = await req.json() as Record<string, unknown>;

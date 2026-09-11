@@ -139,16 +139,21 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
       }
       fetchAllergens();
 
-      trackEvent('view_product', {
-          productId: product.id,
-          productName: product.productName,
-          price: finalPrice,
-          locationId: location.id,
-          locationSlug: location.slug,
-      });
 
     }
   }, [isOpen, product, relevantToppingGroups, trackEvent, location, finalPrice, deliveryType, initialItem, setIsOpen]);
+
+  // A visible product can become measurable after hydration or cookie consent.
+  // Keep tracking separate from dialog initialization to preserve user choices.
+  const trackedView = useRef('');
+  useEffect(() => {
+    if (!isOpen) { trackedView.current = ''; return; }
+    if (!location) return;
+    const key = `${product.id}/${location.id}`;
+    if (trackedView.current !== key && trackEvent('view_product', {productId: product.id, locationId: location.id})) {
+      trackedView.current = key;
+    }
+  }, [isOpen, product.id, location?.id, trackEvent]);
 
   const basePrice = useMemo(() => {
     return (product as any).basePrice ?? (deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price);

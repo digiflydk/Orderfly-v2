@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useEffect, useState, useTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import type { Brand, Location, FunnelFilters, FunnelOutput, FunnelCounting, FunnelDeviceFilter } from '@/types';
 import type { SACommonFilters } from '@/types/superadmin';
@@ -86,8 +86,9 @@ const mapCommonToFunnel = (
 export function AnalyticsDashboardClient({ initialData, brands, locations, searchParams }: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const [data, setData] = useState<FunnelOutput>(initialData);
+  const data = initialData;
   const [currentFilters, setCurrentFilters] = useState<FunnelFilters>(searchParams);
+  useEffect(() => setCurrentFilters(searchParams), [searchParams]);
   const [pending, start] = useTransition();
   const [status, setStatus] = useState<string | null>(null);
 
@@ -127,7 +128,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
   const { totals } = data;
   const isUniqueCount = currentFilters.counting === 'unique';
 
-  const totalCR = totals.sessions > 0 ? ((totals.payment_succeeded / totals.sessions) * 100).toFixed(2) + '%' : '0.00%';
+  const totalCR = totals.sessions > 0 ? (((totals.measuredPurchasingSessions || 0) / totals.sessions) * 100).toFixed(2) + '%' : 'Ikke målbart';
   const tooltipText = isUniqueCount ? "Antal unikke sessions der nåede dette trin." : "Samlet antal hændelser for dette trin.";
 
   const currentSAFilters = mapFunnelToCommon(currentFilters);
@@ -167,7 +168,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
                 </div>
                 <div className="w-full sm:w-[220px]">
                     <Label htmlFor="source-filter" className="text-xs text-muted-foreground">Kilde (utm_source)</Label>
-                    <Input id="source-filter" defaultValue={currentFilters.utmSource || ''} placeholder="fx google eller meta" onBlur={event => handleFilterChange({...currentFilters, utmSource: event.currentTarget.value.trim() || undefined})} />
+                    <Input id="source-filter" value={currentFilters.utmSource || ''} onChange={event => setCurrentFilters({...currentFilters, utmSource: event.target.value})} placeholder="fx google eller meta" onBlur={event => handleFilterChange({...currentFilters, utmSource: event.currentTarget.value.trim() || undefined})} />
                 </div>
              </div>
         </CardContent>
@@ -201,8 +202,8 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <KpiCard title="Start Checkout" value={totals.start_checkout} rate={totals.add_to_cart > 0 ? (totals.start_checkout / totals.add_to_cart) * 100 : 0} tooltipText={tooltipText} />
             <KpiCard title="Click Purchase" value={totals.click_purchase} rate={totals.start_checkout > 0 ? (totals.click_purchase / totals.start_checkout) * 100 : 0} tooltipText={tooltipText} />
-            <KpiCard title="Purchase" value={totals.payment_succeeded} rate={totals.click_purchase > 0 ? (totals.payment_succeeded / totals.click_purchase) * 100 : 0} tooltipText={tooltipText} />
-            <KpiCard title="Total CR" value={totalCR} tooltipText="Total konverteringsrate fra Session til Purchase." />
+            <KpiCard title="Purchase" value={totals.payment_succeeded} tooltipText="Betalte ordrer fra serveren. Indeholder også køb uden analytics-samtykke." />
+            <KpiCard title="Målt konvertering" value={totalCR} tooltipText="Andel målte sessions med en betalt ordre i perioden. Køb uden en matchende målt session indgår kun i salgstallet." />
        </div>
        <div className="grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
         <Card>
@@ -216,7 +217,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
               const previous = index ? rows[index - 1][1] : value;
               const rate = previous ? value / previous * 100 : 0;
               return <div key={label}>
-                <div className="mb-1 flex justify-between gap-3 text-sm"><span>{label}</span><span className="font-medium tabular-nums">{value.toLocaleString('da-DK')}{index ? ` · ${rate.toFixed(1)}%` : ''}</span></div>
+                <div className="mb-1 flex justify-between gap-3 text-sm"><span>{label}</span><span className="font-medium tabular-nums">{value.toLocaleString('da-DK')}{index && index < rows.length - 1 ? ` · ${rate.toFixed(1)}%` : ''}</span></div>
                 <div className="h-8 overflow-hidden rounded bg-muted"><div className="flex h-full min-w-1 items-center bg-primary px-2 text-xs font-semibold text-primary-foreground" style={{width:`${Math.max(2, value / max * 100)}%`}} /></div>
               </div>;
             })}
@@ -227,7 +228,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
           <CardContent className="space-y-4">
             <div><p className="text-sm text-muted-foreground">Omsætning</p><p className="text-3xl font-bold tabular-nums">{formatPrice(totals.revenue_paid)}</p></div>
             <div><p className="text-sm text-muted-foreground">Gennemsnitsordre</p><p className="text-2xl font-semibold tabular-nums">{formatPrice(totals.payment_succeeded ? totals.revenue_paid / totals.payment_succeeded : 0)}</p></div>
-            <p className="text-xs text-muted-foreground">Kun serververificerede betalte ordrer tæller som salg. Klik på “Bestil” tæller aldrig som omsætning.</p>
+            <p className="text-xs text-muted-foreground">Alle serververificerede betalte ordrer tæller som salg. Besøg og trin før køb kræver analytics-samtykke. Målt konvertering omfatter kun sessions, der kan matches til et køb.</p>
           </CardContent>
         </Card>
        </div>

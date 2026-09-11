@@ -509,14 +509,15 @@ function CheckoutForm({ location }: { location: Location }) {
         try {
           const hasTracked = sessionStorage.getItem('customer_info_started');
           if (!hasTracked) {
-            trackEvent('customer_info_started');
-            sessionStorage.setItem('customer_info_started', 'true');
+            if (trackEvent('customer_info_started', {locationId: location?.id})) {
+              sessionStorage.setItem('customer_info_started', 'true');
+            }
           }
         } catch { /* Browser storage and analytics are optional. */ }
       }
     });
     return () => subscription.unsubscribe();
-  }, [form, trackEvent]);
+  }, [form, trackEvent, location?.id]);
 
   const asapText = useMemo(() => {
     if (!timeSlots) return "Loading...";
@@ -547,7 +548,7 @@ function CheckoutForm({ location }: { location: Location }) {
         return;
       }
 
-      try { trackEvent('click_purchase', { cartValue: checkoutTotal }); } catch { /* Optional telemetry. */ }
+      try { trackEvent('click_purchase', { locationId: location.id, cartValue: checkoutTotal, itemsCount: itemCount, deliveryType }); } catch { /* Optional telemetry. */ }
 
       const totalDiscount = sumMoney([
         itemDiscount || 0, cartDiscount?.amount || 0, voucherDiscount?.amount || 0,

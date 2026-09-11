@@ -22,13 +22,14 @@ capToppings.push({id:'cap-r-1',groupId:'cap-radio',locationIds:['l'],isActive:tr
 function fixture(name,code){const file=path.join(dir,name+'.js');fs.writeFileSync(file,code);return file;}
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'commerce-p2-browser-'));
- const navigation=fixture('navigation',`import {useState,useEffect} from 'react';
+ const navigation=fixture('navigation',`import {useState,useEffect,useMemo} from 'react';
  const original=history.replaceState.bind(history);history.replaceState=(...args)=>{original(...args);window.dispatchEvent(new Event('fixture-navigation'));};
- export function useSearchParams(){const [search,setSearch]=useState(location.search);useEffect(()=>{const update=()=>setSearch(location.search);window.addEventListener('fixture-navigation',update);window.addEventListener('popstate',update);return()=>{window.removeEventListener('fixture-navigation',update);window.removeEventListener('popstate',update);};},[]);return new URLSearchParams(search);}
+ export function useSearchParams(){const [search,setSearch]=useState(location.search);useEffect(()=>{const update=()=>setSearch(location.search);window.addEventListener('fixture-navigation',update);window.addEventListener('popstate',update);return()=>{window.removeEventListener('fixture-navigation',update);window.removeEventListener('popstate',update);};},[]);return useMemo(()=>new URLSearchParams(search),[search]);}
  export const usePathname=()=>location.pathname;export const useParams=()=>({brandSlug:'fixture',locationSlug:'restaurant'});export const useRouter=()=>({push:href=>location.assign(href)});`);
  const entry=fixture('entry',`import React,{useEffect,useState} from 'react';import{createRoot}from'react-dom/client';
  import LandingClient from ${JSON.stringify(path.join(root,'src/app/brand-site/m3pizza/landing-client.tsx'))};
  import {MenuClient} from ${JSON.stringify(path.join(root,'src/app/[brandSlug]/[locationSlug]/menu-client.tsx'))};
+ import {AnalyticsDashboardClient} from ${JSON.stringify(path.join(root,'src/components/superadmin/analytics-dashboard-client.tsx'))};
  import {ToppingConditionEditor} from ${JSON.stringify(path.join(root,'src/components/superadmin/topping-condition-editor.tsx'))};
  import {ProductDialog} from ${JSON.stringify(path.join(root,'src/components/product/product-dialog.tsx'))};
  import {CartProvider,useCart} from ${JSON.stringify(path.join(root,'src/context/cart-context.tsx'))};
@@ -45,10 +46,14 @@ before(async()=>{
  function EditorFixture(){const [rules,setRules]=useState({});return <><ToppingConditionEditor groups={conditionalGroups} toppings={conditionalToppings} value={rules} onChange={setRules}/><pre id="rules">{JSON.stringify(rules)}</pre></>;}
  function ConditionalFixture(){const cart=useCart();useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);return <><ProductDialog product={conditionalProduct} isOpen={true} setIsOpen={()=>{}} allToppingGroups={conditionalGroups} allToppings={conditionalToppings}/><Debug/></>;}
  function ToppingCapFixture(){const cart=useCart();useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);return <><ProductDialog product={capProduct} isOpen={true} setIsOpen={()=>{}} allToppingGroups={capGroups} allToppings={capToppings}/><Debug/></>;}
+ function ConsentFixture(){const [events,setEvents]=useState([]);useEffect(()=>{const original=window.fetch;window.fetch=(url,options)=>{if(url==='/api/analytics/collect')setEvents(previous=>[...previous,JSON.parse(options.body)]);return original(url,options);};return()=>{window.fetch=original;};},[]);const consent=statistics=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics}));window.dispatchEvent(new Event('orderfly:consent'));};return <aside><button onClick={()=>consent(true)}>Allow analytics</button><button onClick={()=>consent(false)}>Reject analytics</button><pre id="funnel-events">{JSON.stringify(events)}</pre></aside>;}
+ function DashboardFixture(){const [count,setCount]=useState(1);const data={totals:{sessions:2,measuredPurchasingSessions:1,view_menu:2,view_product:1,add_to_cart:1,start_checkout:1,click_purchase:1,payment_succeeded:count,revenue_paid:count*100},daily:[],byLocation:[],attribution:[],dataQualityWarnings:[]};return <><button onClick={()=>setCount(7)}>Receive refreshed report</button><AnalyticsDashboardClient initialData={data} locations={[]} searchParams={{dateFrom:'2026-09-01',dateTo:'2026-09-11',counting:'events'}}/></>;}
  const mode=new URLSearchParams(window.location.search).get('deliveryMethod')==='delivery'?'delivery':'pickup';
- createRoot(document.getElementById('root')).render(window.location.pathname==='/condition-editor'?<EditorFixture/>:window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}><CartProvider>{window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
+ createRoot(document.getElementById('root')).render(window.location.pathname==='/dashboard-fixture'?<DashboardFixture/>:window.location.pathname==='/condition-editor'?<EditorFixture/>:window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}><ConsentFixture/><CartProvider>{window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const aliases={
+  '@/app/superadmin/analytics/cust-funnel/actions':fixture('funnel-actions','export const runAggregationForDates=async()=>({success:true});'),
+  '@/components/superadmin/FiltersBar':fixture('filter-bar','export const FiltersBar=()=>null;'),
   '@/app/cart-actions':fixture('cart-action',`export async function restoreCartAction(data){return fetch('/restore',{method:'POST',body:JSON.stringify(data)}).then(r=>r.json());}`),
   '@/app/superadmin/brands/actions':fixture('brand-action','export const getBrandBySlug=async()=>null;'),
   '@/app/superadmin/upsells/actions':fixture('upsells','export const getActiveUpsellForCart=async()=>null;export const incrementUpsellConversion=async()=>{};'),
@@ -58,7 +63,7 @@ before(async()=>{
   'next/link':fixture('link',`import React from'react';export default function Link(props){return <a {...props}/>;}`),
   '@':path.join(root,'src'),
  };
- await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js',publicPath:'/'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/commerce-p2-browser-.*\.js$/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
+ await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',plugins:[new webpackModule.webpack.DefinePlugin({'process.env.NEXT_PUBLIC_RELEASE_SHA':JSON.stringify('local')})],devtool:false,entry,output:{path:dir,filename:'bundle.js',publicPath:'/'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/commerce-p2-browser-.*\.js$/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
  const postcss=require('postcss'),tailwind=require('tailwindcss');
  const css=(await postcss([tailwind({...loadTs('tailwind.config.ts',{'tailwindcss-animate':{default:require('tailwindcss-animate')}}).default,content:[path.join(root,'src/**/*.{ts,tsx}')]})]).process(fs.readFileSync(path.join(root,'src/app/globals.css'),'utf8'),{from:undefined})).css;
  server=http.createServer(async(req,res)=>{
@@ -82,6 +87,7 @@ before(async()=>{
   res.setHeader('Content-Type','text/html; charset=utf-8');res.end('<!doctype html><html><head><meta charset="utf-8"><link rel="stylesheet" href="/style.css"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>');
  });
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));origin='http://127.0.0.1:'+server.address().port;
+ if(process.env.COMMERCE_FIXTURE_ONLY){console.log('FIXTURE_URL='+origin);await new Promise(()=>{});}
  browser=await chromium.launch({headless:true,executablePath:process.env.CART_CHROMIUM_PATH,args:['--no-sandbox','--disable-dev-shm-usage']});
 });
 after(async()=>{await browser?.close();await new Promise(resolve=>server?.close(resolve));if(dir)fs.rmSync(dir,{recursive:true,force:true});});
@@ -324,4 +330,42 @@ for(const width of [390,1280])test(`admin conditional groups share triggers and 
  assert.deepEqual(JSON.parse(await page.locator('#rules').textContent()),{drink:['menu'],family:['menu']});
  await page.getByLabel('Synlighed for drink',{exact:true}).selectOption('always');
  assert.deepEqual(JSON.parse(await page.locator('#rules').textContent()),{family:['menu']});
+});
+
+// #123: exercise actual consent/provider/menu/dialog components with isolated collection.
+for(const width of [1280,390])test(`#123 late consent restores current views without replaying actions (${width})`,async t=>{
+ const page=await setup(t,width,'/fixture/restaurant?deliveryMethod=pickup');
+ const events=()=>page.locator('#funnel-events').evaluate(node=>JSON.parse(node.textContent));
+ await expect(page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true})).toBeEnabled();
+ await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+ await page.getByRole('button',{name:'Se Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog').waitFor();
+ assert.deepEqual(await events(),[]);
+ // The fixture grants consent through the same event/storage contract as CookieConsent.
+ await page.evaluate(()=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics:true}));window.dispatchEvent(new Event('orderfly:consent'));});
+ await expect.poll(async()=> (await events()).map(e=>e.name).sort()).toEqual(['view_menu','view_product']);
+ await page.getByRole('checkbox',{name:/Bacon/}).check();
+ assert.equal((await events()).filter(e=>e.name==='view_product').length,1,'option changes do not duplicate views');
+ await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='add_to_cart').length).toBe(1);
+ await page.getByRole('button',{name:'Se Fixture Pizza',exact:true}).click();
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='view_product').length).toBe(2);
+ await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'Se Pizza og drik',exact:true}).click();
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='view_product'&&e.params.productId==='combo').length).toBe(1);
+ await page.keyboard.press('Escape');
+ for(const {params} of await events()){assert.equal(params.brandId,'b');assert.equal(params.locationId,'l');assert.ok(params.sessionId);}
+ await page.getByRole('button',{name:'Reject analytics',exact:true}).click();
+ const before=(await events()).length;
+ await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+ assert.equal((await events()).length,before);
+});
+
+test('#123 report renders refreshed server data instead of initial state',async t=>{
+ const page=await setup(t,1280,'/dashboard-fixture');
+ await expect(page.getByText('100,00 kr.',{exact:true})).toHaveCount(2);
+ await page.getByRole('button',{name:'Receive refreshed report',exact:true}).click();
+ await expect(page.getByText('700,00 kr.',{exact:true})).toBeVisible();
+ await expect(page.getByText('50.00%',{exact:true})).toBeVisible();
 });
