@@ -59,7 +59,7 @@ export async function runMarketingOrderWorker(db: Firestore, now = Date.now(), m
     if (Date.now() + 15000 >= deadline) break;
     const job = await lease(db, snap.ref, now);
     if (!job) continue;
-    let dispatchStarted = false;
+    let dispatchStarted = false, providerAccepted = false;
     try {
       const [orderSnap, customerSnap] = await Promise.all([
         db.collection('orders').doc(job.orderId).get(), db.collection('customers').doc(job.customerId).get(),
@@ -108,10 +108,15 @@ export async function runMarketingOrderWorker(db: Firestore, now = Date.now(), m
       }
       dispatchStarted = true;
       await provider.paidOrder(dispatch.payload);
+      providerAccepted = true;
       await finish(db, snap.ref, job.lease, 'accepted', Date.now()); counts.accepted++;
     } catch (error) {
       const failure = failureOf(error);
-      const state = dispatchStarted && failure.uncertain ? 'uncertain' : 'failed';
+      // Once accepted, a failed database acknowledgement must never enable a
+      // second send. Unknown post-dispatch errors are also ambiguous; only an
+      // explicit provider rejection can be safely considered for retry.
+      const knownRejection = /^provider_http_4\d\d$/.test(failure.code) && failure.code !== 'provider_http_408' && !failure.uncertain;
+      const state = dispatchStarted && (providerAccepted || !knownRejection) ? 'uncertain' : 'failed';
       await finish(db, snap.ref, job.lease, state, Date.now(), failure.code, failure.retryable);
       counts[state]++;
     }

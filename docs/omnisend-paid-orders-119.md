@@ -83,3 +83,9 @@ and `npm run typecheck`. Coverage executes the actual consent-store key lookup,
 Admin capacity settlement and paid-order worker, including concurrent retries,
 client-transaction denial, reservation counters, consent changes during provider
 I/O, failed contact recovery, bounded deadlines and the default-off release gate.
+
+After the provider accepts an event, any database acknowledgement failure becomes
+terminal `uncertain`; a retry must never resend an already accepted event. Unknown
+post-dispatch errors also remain uncertain. Only explicit known provider rejection
+can permit retry. Fully discounted items preserve zero net price and their full
+unit discount in the provider payload.

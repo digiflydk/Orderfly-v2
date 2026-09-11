@@ -127,3 +127,30 @@ test('#119 release gate defaults closed and blocks worker and retry before any d
   }
  } finally {process.env.ORDERFLY_OMNISEND_PAID_ORDERS_ENABLED='true';}
 });
+
+test('#119 acknowledged provider send survives completion failure without permitting replay',async()=>{
+ const db=fixture(),run=db.runTransaction;let failOnce=true,calls=0;
+ db.runTransaction=fn=>run(tx=>fn({...tx,update:(ref,data)=>{
+  if(data.state==='accepted'&&failOnce){failOnce=false;throw Error('transient database failure');}
+  tx.update(ref,data);
+ }}));
+ await runMarketingOrderWorker(db,2,()=>({verifyBrand:async()=>{},paidOrder:async()=>{calls++;}}));
+ assert.equal(calls,1);assert.equal(db.rows.get('marketingOrderOutbox/job').state,'uncertain');
+ assert.equal(await retryMarketingOrderJob(db,'b','job'),false);
+ await runMarketingOrderWorker(db,Date.now()+1000000,()=>{throw Error('must not replay');});
+ assert.equal(calls,1);
+});
+
+test('#119 unknown post-dispatch failures cannot become retryable jobs',async()=>{
+ const db=fixture();await runMarketingOrderWorker(db,2,()=>({verifyBrand:async()=>{},paidOrder:async()=>{throw Error('unknown transport failure');}}));
+ assert.equal(db.rows.get('marketingOrderOutbox/job').state,'uncertain');
+ assert.equal(await retryMarketingOrderJob(db,'b','job'),false);
+});
+
+test('#119 fully discounted line retains zero net price and full unit discount',()=>{
+ const o=order();o.productItems=[{id:'free',name:'Free Pizza',quantity:1,totalPrice:0},{id:'paid',name:'Pizza',quantity:1,totalPrice:50}];
+ Object.assign(o.invoice,{lines:[{description:'Free Pizza',quantity:1,unitAmount:100,totalAmount:100},{description:'Pizza',quantity:1,unitAmount:50,totalAmount:50}],subtotal:150,itemDiscount:100,orderDiscount:0,totalAmount:50,vatAmount:10});
+ const payload=buildPaidOrderEvent(o,o.invoice,{eventId:'event-1',eventTime},'buyer@example.test');
+ assert.equal(payload.properties.totalPrice,50);assert.equal(payload.properties.totalDiscount,100);
+ assert.deepEqual(payload.properties.lineItems.map(i=>[i.productPrice,i.productDiscount]),[[0,100],[50,0]]);
+});

@@ -35,12 +35,15 @@ export function buildPaidOrderEvent(order: OrderDetail, invoice: OrderInvoice, j
   const lineItems = invoice.lines.map((line, index) => {
     const item = order.productItems[index];
     if (!Number.isInteger(line.quantity) || line.quantity < 1 || !Number.isFinite(line.unitAmount) || !Number.isFinite(line.totalAmount)) throw new Error('invalid_order_event');
+    const netUnit = item && Number.isFinite(item.totalPrice) && Number.isInteger(item.quantity) && item.quantity > 0
+      ? item.totalPrice / item.quantity : line.unitAmount;
+    if (!Number.isFinite(netUnit) || netUnit < 0) throw new Error('invalid_order_event');
     return {
       productID: bounded(item?.id, 128) || `${order.id}-${index + 1}`,
       productTitle: bounded(line.description, 255),
       productQuantity: line.quantity,
-      productPrice: amount(item?.totalPrice && item.quantity ? item.totalPrice / item.quantity : line.unitAmount),
-      productDiscount: amount(Math.max(0, line.unitAmount - (item?.totalPrice && item.quantity ? item.totalPrice / item.quantity : line.unitAmount))),
+      productPrice: amount(netUnit),
+      productDiscount: amount(Math.max(0, line.unitAmount - netUnit)),
     };
   });
   const amounts = [invoice.subtotal, invoice.itemDiscount, invoice.orderDiscount, invoice.deliveryFee, invoice.totalAmount, invoice.vatAmount];
