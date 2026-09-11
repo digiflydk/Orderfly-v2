@@ -21,7 +21,7 @@ export default async function CheckoutPage({
   }
 
   return (
-    <div className="bg-[#FFF8F0] container mx-auto py-8 flex-1 max-w-[1140px] px-4">
+    <div className="bg-[var(--storefront-menu-background,#FFF8F0)] container mx-auto py-8 flex-1 max-w-[1140px] px-4">
       <CheckoutClient brand={brand} location={location} />
     </div>
   );
