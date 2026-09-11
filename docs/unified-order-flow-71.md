@@ -93,6 +93,7 @@ creates/finds the native customer and then atomically records:
 | --- | --- |
 | `marketingConsents/{eventId}` | Immutable brand/location/customer/email grant, channel, source, server milliseconds, wording and version |
 | `marketingOutbox/{eventId}` | Durable pending job, contact key, state, attempts, lease and next attempt |
+| `marketingOrderOutbox/{jobId}` | Consent-gated paid-order job with scoped references, opaque event ID and delivery state; no email or payload copy |
 | `marketingContacts/{contactKey}` | Latest grant, current sync/suppression state and reconciliation schedule |
 | `customers/{customerId}` | Existing `marketingConsent` updated with the same transaction |
 
@@ -149,28 +150,33 @@ The code does not add mandatory secret bindings to App Hosting YAML that could
 break a build before operators have provisioned them.
 
 **Required before activation for real customer contacts:** deny all direct
-client reads/writes to `marketingConsents`, `marketingContacts` and
-`marketingOutbox` in the **data** project `orderfly-39325`. They are accessed only
+client reads/writes to `marketingConsents`, `marketingContacts`,
+`marketingOutbox` and `marketingOrderOutbox` in the **data** project
+`orderfly-39325`. They are accessed only
 through Admin SDK and guarded server routes. A specific `allow ...: if false`
 does not override an existing permissive wildcard: Firestore grants are ORed.
-Exclude all three collections from every broader granting match, and prove
+Exclude all four collections from every broader granting match, and prove
 anonymous and ordinary-client reads/writes fail. This narrow prerequisite does
 not claim to solve the separate #57 database-security scope. A QA deployment may
 proceed with provider sending disabled and synthetic data only; do not activate
 real customer collection or sending until this check is complete.
 
-Create/verify the `marketingOutbox` composite index `brandId ASC, createdAt DESC`
-for the admin view. Worker queries require single-field ascending indexes on
-`marketingOutbox.nextAttemptAt` and `marketingContacts.nextReconcileAt`.
+Create/verify composite indexes `marketingOutbox: brandId ASC, createdAt DESC`
+and `marketingOrderOutbox: brandId ASC, createdAt DESC` for the admin view.
+Worker queries require single-field ascending indexes on
+`marketingOutbox.nextAttemptAt`, `marketingOrderOutbox.nextAttemptAt` and
+`marketingContacts.nextReconcileAt`.
 
 Schedule authenticated `POST /api/internal/marketing/sync` periodically, e.g.
 every minute, with `Authorization: Bearer <worker secret>`. The worker handles up
 to ten due jobs and ten reconciliation records per invocation, uses a 120-second
 lease and stops starting work after a 45-second budget. Provider requests have
-five-second timeouts. Transient/429 failures use exponential backoff, starting at
+five-second timeouts. Contact sync and known provider rejections such as 429 use exponential backoff, starting at
 one minute and capped at six hours, with eight automatic attempts. Permanent
 configuration/4xx errors await intervention. Status contains safe error codes,
-not raw provider responses or contact data.
+not raw provider responses or contact data. A paid-order request whose outcome
+is unknown after dispatch is marked `uncertain` and never retried blindly,
+because Omnisend does not deduplicate real-time automation events.
 
 `/superadmin/marketing` and `/api/superadmin/marketing` require an already-established
 Firebase `__session`, revocation-checked server-side, and an allowlisted UID.
@@ -186,6 +192,15 @@ records provider status/time. An old job cannot overwrite a newer decision.
 Only a new explicit current-version decision newer than a dated opt-out can
 renew it under the configured single opt-in policy; an unknown opt-out time
 fails closed. Payload timestamps never advance on retry.
+
+Verified Stripe settlement creates a deterministic `marketingOrderOutbox` job
+in the same transaction only when the authoritative brand-scoped customer still
+has newsletter consent and the normalized customer/order email agrees. The
+worker rechecks paid/canceled state, tenant scope, current consent and the synced
+Omnisend contact before sending the native `paid for order` v2 event. It builds
+financial fields from the immutable invoice, sends no delivery address, phone,
+analytics identifiers or referrer data, and does not change the authoritative
+cross-brand funnel when a customer has not consented.
 
 `sendWelcomeMessage` is always false. No welcome campaign is enabled or emitted
 by this adapter. Consent ID/version/source properties are available for a

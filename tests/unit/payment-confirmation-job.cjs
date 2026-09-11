@@ -3,12 +3,13 @@ const assert=require('node:assert/strict');
 const {createHash}=require('node:crypto');
 const {loadTs}=require('../helpers/load-ts.cjs');
 const jobKey='orderNotificationJobs/'+createHash('sha256').update(JSON.stringify(['order-confirmation','b','ORD-TEST'])).digest('hex');
-function fixture({paid=false,missingInvoice=false,job,fail=false}={}) {
+const marketingJobKey='marketingOrderOutbox/'+createHash('sha256').update(JSON.stringify(['omnisend-paid-order','b','ORD-TEST'])).digest('hex');
+function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsent=false}={}) {
  let records={
   'orders/ORD-TEST':{brandId:'b',locationId:'l',paymentStatus:paid?'Paid':'Pending',status:'Received',psp:{checkoutSessionId:'cs_test_fixture_123456'},customerDetails:{id:'c',address:'For Pickup'},customerName:'Test Kunde',customerContact:'kunde@example.test',deliveryType:'Pickup',productItems:[{name:'Pizza',quantity:1,totalPrice:100,listTotalPrice:120}],paymentDetails:{subtotal:120,itemDiscountTotal:20,cartDiscountTotal:0,deliveryFee:0,bagFee:0,adminFee:0,vatAmount:20},totalAmount:100,appliedDiscountId:'d'},
   'brands/b':{name:'Fixture Brand',companyName:'Fixture Brand ApS',companyRegNo:'12345678',street:'Testvej 1',zipCode:'1000',city:'København K',country:'DK',currency:'DKK',vatPercentage:25},
   'locations/l':{brandId:'b',name:'Fixture Location',address:'Testvej 1, 1000 København K, DK'},
-  'customers/c':{brandId:'b',totalOrders:paid?1:0,totalSpend:paid?100:0},
+  'customers/c':{brandId:'b',email:'kunde@example.test',marketingConsent,totalOrders:paid?1:0,totalSpend:paid?100:0},
   'discounts/d':{brandId:'b',usedCount:paid?1:0},
  };
  if(paid&&!missingInvoice){
@@ -53,6 +54,12 @@ test('confirmation endpoint atomically settles payment and creates job; webhook/
  assert.equal(f.records()['customers/c'].totalOrders,1);assert.equal(f.records()['customers/c'].totalSpend,100);
  assert.equal(f.records()['discounts/d'].usedCount,1);assert.deepEqual(f.counters(),{capacity:1,analytics:1});
  assert.equal(Object.keys(f.records()).filter(k=>k.startsWith('orderNotificationJobs/')).length,1);
+});
+test('verified settlement atomically creates one consent-gated Omnisend order job',async()=>{
+ const f=fixture({marketingConsent:true});await Promise.all([f.settle(),f.settle(),f.settle()]);
+ const job=f.records()[marketingJobKey];assert.equal(job.state,'pending');assert.equal(job.kind,'paidOrder');assert.equal(job.customerId,'c');assert.match(job.eventTime,/Z$/);
+ assert.equal(Object.keys(f.records()).filter(k=>k.startsWith('marketingOrderOutbox/')).length,1);
+ const noConsent=fixture();await noConsent.settle();assert.equal(noConsent.records()[marketingJobKey],undefined);
 });
 test('legacy Paid missing job is repaired once without financial/accounting replay',async()=>{
  const f=fixture({paid:true,missingInvoice:true});const original=structuredClone(f.records());

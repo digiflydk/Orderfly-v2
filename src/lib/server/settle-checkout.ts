@@ -24,10 +24,18 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     analytics = order.analytics;
     if (order.brandId !== metadata.brandId || order.locationId !== metadata.locationId || (order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== session.id)) throw new Error('Payment scope mismatch');
     const confirmationRef = doc(db, 'orderNotificationJobs', createHash('sha256').update(JSON.stringify(['order-confirmation', order.brandId, metadata.orderId])).digest('hex'));
-    const confirmation = await transaction.get(confirmationRef);
+    const marketingOrderRef = doc(db, 'marketingOrderOutbox', createHash('sha256').update(JSON.stringify(['omnisend-paid-order', order.brandId, metadata.orderId])).digest('hex'));
+    const customerRef = doc(db, 'customers', order.customerDetails.id);
+    const [confirmation, marketingOrder, customerSnap] = await Promise.all([
+      transaction.get(confirmationRef), transaction.get(marketingOrderRef), transaction.get(customerRef),
+    ]);
     if (confirmation.exists()) {
       const job = confirmation.data();
       if (job.orderId !== metadata.orderId || job.brandId !== order.brandId || job.locationId !== order.locationId || job.kind !== 'orderConfirmation') throw new Error('Confirmation scope mismatch');
+    }
+    if (marketingOrder.exists()) {
+      const job = marketingOrder.data();
+      if (job.orderId !== metadata.orderId || job.brandId !== order.brandId || job.locationId !== order.locationId || job.customerId !== order.customerDetails.id || job.kind !== 'paidOrder') throw new Error('Marketing order scope mismatch');
     }
     const ensureConfirmation = () => {
       if (!confirmation.exists() && order.status !== 'Canceled') transaction.set(confirmationRef, {
@@ -35,11 +43,20 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
         kind: 'orderConfirmation', state: 'pending', eventId: randomUUID(), nextAttemptAt: Date.now(), attempts: 0, createdAt: Date.now(), updatedAt: Date.now(),
       });
     };
+    const ensureMarketingOrder = (eventTime: string) => {
+      const customer = customerSnap.data();
+      const customerEmail = typeof customer?.email === 'string' ? customer.email.trim().toLowerCase() : '';
+      if (!marketingOrder.exists() && order.status !== 'Canceled' && customerSnap.exists() && customer?.brandId === order.brandId && customer?.marketingConsent === true && customerEmail && customerEmail === String(order.customerContact || '').trim().toLowerCase()) transaction.set(marketingOrderRef, {
+        orderId: metadata.orderId, brandId: order.brandId, locationId: order.locationId, customerId: order.customerDetails.id,
+        kind: 'paidOrder', state: 'pending', eventId: randomUUID(), eventTime, nextAttemptAt: Date.now(), attempts: 0, createdAt: Date.now(), updatedAt: Date.now(),
+      });
+    };
     // A legacy path could mark Paid without the outbox job. Repair only this
     // verified session's missing job, without replaying financial accounting.
     if (order.paymentStatus === 'Paid' && order.invoice) {
       if (order.psp?.checkoutSessionId !== session.id) throw new Error('Payment scope mismatch');
       ensureConfirmation();
+      ensureMarketingOrder(order.invoice.issuedAt);
       return false;
     }
     const year = Number(issuedAt.slice(0, 4));
@@ -60,10 +77,9 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
       transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true });
       transaction.update(orderRef, { invoice, updatedAt: serverTimestamp() });
       ensureConfirmation();
+      ensureMarketingOrder(invoice.issuedAt);
       return false;
     }
-    const customerRef = doc(db, 'customers', order.customerDetails.id);
-    const customerSnap = await transaction.get(customerRef);
     if (customerSnap.exists() && customerSnap.data().brandId !== order.brandId) throw new Error('Customer scope mismatch');
     const discountId = order.appliedDiscountId;
     const discountRef = discountId ? doc(db, 'discounts', discountId) : null;
@@ -93,6 +109,7 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     });
     transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true });
     ensureConfirmation();
+    ensureMarketingOrder(invoice.issuedAt);
     return true;
   });
   if (fulfilled) {

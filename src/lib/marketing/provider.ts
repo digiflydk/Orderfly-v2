@@ -2,11 +2,11 @@ import 'server-only';
 import { consentPayload, emailChannel, canRenewConsent, type ConsentEvent, type ProviderContact } from './consent';
 import type { MarketingConfig } from './config';
 export class MarketingError extends Error {
-    constructor(public code: string, public retryable = true) { super(code); }
+    constructor(public code: string, public retryable = true, public uncertain = false) { super(code); }
 }
 export class Omnisend {
     constructor(private config: MarketingConfig, private request: typeof fetch = fetch) { }
-    private async api(path: string, body?: unknown) {
+    private async api(path: string, body?: unknown, expectJson = true) {
         let response: Response;
         try {
             response = await this.request(`https://api.omnisend.com/api/${path}`, {
@@ -16,15 +16,17 @@ export class Omnisend {
             });
         }
         catch {
-            throw new MarketingError('provider_unavailable');
+            throw new MarketingError('provider_unavailable', true, true);
         }
         if (!response.ok)
-            throw new MarketingError(`provider_http_${response.status}`, response.status === 429 || response.status >= 500);
+            throw new MarketingError(`provider_http_${response.status}`, response.status === 429 || response.status >= 500, response.status >= 500);
+        if (!expectJson)
+            return null;
         try {
             return await response.json();
         }
         catch {
-            throw new MarketingError('provider_invalid_response');
+            throw new MarketingError('provider_invalid_response', true, true);
         }
     }
     async verifyBrand() {
@@ -56,5 +58,8 @@ export class Omnisend {
         if (after?.status !== 'subscribed')
             throw new MarketingError('provider_consent_unconfirmed');
         return 'synced';
+    }
+    async paidOrder(event: unknown): Promise<void> {
+        await this.api('events', event, false);
     }
 }
