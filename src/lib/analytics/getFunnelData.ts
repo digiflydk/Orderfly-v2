@@ -25,6 +25,9 @@ export async function getFunnelData(filters: FunnelFilters, _user?: unknown): Pr
     getPurchasesInRange({ startDate: dateFrom, endDate: dateTo, brandId: filters.brandId, locationId: filters.locationId, device: filters.device, utmSource: filters.utmSource }),
   ]);
   const events = snapshot.docs.map(doc => doc.data() as AnalyticsEvent).filter(event => {
+    // Performance and payment-server diagnostics are not measured visits.
+    if (['web_vital', 'payment_succeeded', 'payment_session_created'].includes(event.name)) return false;
+    if (!event.brandId || !event.locationId || !event.sessionId) return false;
     if (filters.device && filters.device !== 'all' && event.deviceType !== filters.device) return false;
     if (filters.utmSource && String((event as unknown as Record<string, unknown>).source || '').toLowerCase() !== filters.utmSource.toLowerCase()) return false;
     return true;
@@ -35,7 +38,7 @@ export async function getFunnelData(filters: FunnelFilters, _user?: unknown): Pr
     ? new Set(purchases.flatMap(row => [...row.sessionIds])).size
     : purchases.reduce((sum, row) => sum + row.count, 0);
   const totals: FunnelOutput['totals'] = {
-    sessions: sessions.size, view_menu: 0, view_product: 0, add_to_cart: 0, start_checkout: 0, click_purchase: 0,
+    sessions: sessions.size, measuredPurchasingSessions: new Set(purchases.flatMap(row => [...row.sessionIds]).filter(id => sessions.has(id))).size, view_menu: 0, view_product: 0, add_to_cart: 0, start_checkout: 0, click_purchase: 0,
     payment_succeeded: paidCount,
     payment_session_created: 0, upsell_offer_shown: 0, upsell_accepted: 0, upsell_rejected: 0,
     revenue_paid: purchases.reduce((sum, row) => sum + row.revenue, 0),
@@ -61,7 +64,7 @@ export async function getFunnelData(filters: FunnelFilters, _user?: unknown): Pr
   }
   for (const row of purchases) {
     const key = row.date, day = dates.get(key) || { sessions: new Set<string>(), purchases: 0, revenue: 0 };
-    row.sessionIds.forEach(id => day.sessions.add(id)); day.purchases += row.count; day.revenue += row.revenue; dates.set(key, day);
+    day.purchases += row.count; day.revenue += row.revenue; dates.set(key, day);
   }
   const daily = [...dates.entries()].sort(([a], [b]) => a.localeCompare(b)).map(([date, row]) => ({ date, sessions: row.sessions.size, purchases: row.purchases, revenue: row.revenue }));
 
@@ -71,7 +74,7 @@ export async function getFunnelData(filters: FunnelFilters, _user?: unknown): Pr
   const byLocation = locationIds.map(locationId => {
     const locationSessions = new Set(events.filter(event => event.locationId === locationId).map(event => event.sessionId).filter(Boolean));
     const rows = purchases.filter(row => row.locationId === locationId), purchaseCount = unique ? new Set(rows.flatMap(row => [...row.sessionIds])).size : rows.reduce((sum, row) => sum + row.count, 0), revenue = rows.reduce((sum, row) => sum + row.revenue, 0);
-    return { locationId, locationName: locationNames.get(locationId) || locationId, sessions: locationSessions.size, purchases: purchaseCount, convSessionsToPurchase: locationSessions.size ? purchaseCount / locationSessions.size * 100 : 0, aov: purchaseCount ? revenue / purchaseCount : 0, revenue };
+    return { locationId, locationName: locationNames.get(locationId) || locationId, sessions: locationSessions.size, purchases: purchaseCount, convSessionsToPurchase: locationSessions.size ? new Set(rows.flatMap(row => [...row.sessionIds]).filter(id => locationSessions.has(id))).size / locationSessions.size * 100 : 0, aov: purchaseCount ? revenue / purchaseCount : 0, revenue };
   });
   const channels = new Map<string, FunnelOutput['attribution'][number] & { sessionIds: Set<string> }>();
   for (const row of purchases) {
@@ -84,6 +87,6 @@ export async function getFunnelData(filters: FunnelFilters, _user?: unknown): Pr
   const attribution = [...channels.values()].map(({ sessionIds: _sessionIds, ...row }) => row).sort((a, b) => b.revenue - a.revenue);
   const sequence = [totals.view_menu, totals.view_product, totals.add_to_cart, totals.start_checkout, totals.click_purchase, totals.payment_succeeded];
   const dataQualityWarnings = sequence.some((value, index) => index > 0 && value > sequence[index - 1])
-    ? ['Et senere funnel-trin har flere registreringer end det foregående. Kontroller samtykke, tag-konfiguration og den valgte periode.'] : [];
+    ? ['Trinene har forskellig dækning. Alle betalte ordrer vises, men besøg kræver analytics-samtykke. Hurtig tilføjelse kan springe produktvisningen over. Kontroller tracking, hvis trin mangler helt.'] : [];
   return { totals, daily, byLocation, attribution, dataQualityWarnings };
 }

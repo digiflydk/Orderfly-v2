@@ -150,6 +150,7 @@ export function ProductCard({ product, activeDiscounts, upsellId }: ProductCardP
               if(upsellId && upsellAdded.current)return;
               if (product.toppingGroupIds?.length) {void handleCardClick(); return;}
               if (addToCart(product,1,[],basePrice,finalPrice) === false) {toast({title:'Varen kunne ikke tilføjes',description:'Prøv igen, når kurven er klar.'}); return;}
+              trackEvent('add_to_cart', {productId: product.id, locationId: location?.id, itemsCount: 1, cartValue: finalPrice, deliveryType});
               onAdded(); toast({title:'Tilføjet til kurven',description:product.productName,duration:2200});
             }} size="icon" className="h-11 w-11 bg-primary hover:bg-primary/90 text-primary-foreground rounded-md shrink-0">
                 {isPending ? <Loader2 className="h-5 w-5 animate-spin" /> : <Plus className="h-5 w-5"/>}

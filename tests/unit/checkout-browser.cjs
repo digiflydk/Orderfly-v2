@@ -364,3 +364,16 @@ for(const width of [390,1280])test(`#71 lab: click to payment with a hanging opt
  const elapsed=Date.now()-started;console.log('LAB_OPTIONAL_UPSELL_PAYMENT_'+width+'_MS='+elapsed);
  if(!process.env.CHECKOUT_BASELINE)assert.ok(elapsed<1500,'payment does not await the optional 2s timeout');
 });
+
+test('#123 late checkout consent and payment click retain location context',async t=>{
+ const page=await setup(t,'funnel-consent');const events=[];
+ await page.route('**/api/analytics/collect',async route=>{events.push(route.request().postDataJSON());await route.fulfill({status:204});});
+ await page.evaluate(()=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics:true}));window.dispatchEvent(new Event('orderfly:consent'));});
+ const {expect}=require('@playwright/test');
+ await expect.poll(()=>events.filter(e=>e.name==='start_checkout').length).toBe(1);
+ await page.getByPlaceholder('John Doe',{exact:true}).fill('Another Test Customer');
+ assert.equal(events.filter(e=>e.name==='start_checkout').length,1);
+ await pay(page);await page.waitForURL('**/stripe?*');
+ await expect.poll(()=>events.filter(e=>e.name==='click_purchase').length).toBe(1);
+ for(const e of events.filter(e=>['start_checkout','click_purchase'].includes(e.name))){assert.equal(e.params.locationId,'l');assert.equal(e.params.brandId,'b');assert.ok(e.params.sessionId);}
+});

@@ -1,10 +1,10 @@
+import { analyticsOriginAllowed } from '@/lib/analytics-origin';
 import { metricPayload } from '@/lib/commerce-metrics';
 import { recordCommerceMetric } from '@/lib/server/record-commerce-metric';
 export const runtime = 'nodejs';
 export async function POST(request: Request) {
   if (Number(request.headers.get('content-length') || 0) > 8192) return new Response(null, {status: 413});
-  const origin = request.headers.get('origin');
-  if (origin && origin !== new URL(request.url).origin) return new Response(null, {status: 403});
+  if (!analyticsOriginAllowed(request)) return new Response(null, {status: 403});
   try {
     const raw = await request.text();
     if (raw.length > 8192) return new Response(null, {status: 413});

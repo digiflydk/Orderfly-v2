@@ -1,0 +1,25 @@
+name: Funnel regression
+on:
+  pull_request:
+    paths:
+      - 'src/**'
+      - 'tests/unit/funnel-tracking.cjs'
+      - 'tests/unit/commerce-p2-browser.cjs'
+      - 'tests/unit/checkout-browser.cjs'
+      - '.github/workflows/funnel-regression.yml'
+permissions:
+  contents: read
+jobs:
+  funnel:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - run: node --test tests/unit/funnel-tracking.cjs tests/unit/invoice-attribution.cjs
+      - run: node --test tests/unit/commerce-p2-browser.cjs tests/unit/checkout-browser.cjs
