@@ -96,7 +96,7 @@ before(async()=>{
   '@/app/superadmin/settings/actions':fixture('settings','export const getActiveStripeKey=async()=>"pk_test_fixture";'),
   '@stripe/stripe-js':fixture('stripe-js','export const loadStripe=()=>Promise.resolve(null);'),
   '@stripe/react-stripe-js':fixture('stripe-elements','export const Elements=({children})=>children;'),
-  '@/lib/analytics':fixture('telemetry',`export const statisticsAllowed=()=>false;export const trackClientEvent=()=>{if(window.telemetryUnavailable)throw Error('analytics denied');};`),
+  '@/lib/analytics':fixture('telemetry',`import {statisticsAllowed,trackClientEvent as track} from ${JSON.stringify(path.join(root,'src/lib/analytics.ts'))};export {statisticsAllowed};export const trackClientEvent=(...args)=>{if(window.telemetryUnavailable)throw Error('analytics denied');return track(...args);};`),
   '@/hooks/use-toast':fixture('toast','const toast=()=>{};export const useToast=()=>({toast});'),
   '@/app/superadmin/locations/client-actions':fixture('times',`export const calculateTimeSlots=()=>({asap_pickup:'Today - 18:20',asap_delivery:'Today - 18:40',pickup_times:['Today - 18:20'],delivery_times:['Today - 18:40']});`),
   [path.join(root,'src/components/checkout/timeslot-dialog')]:fixture('time-dialog','export const TimeSlotDialog=()=>null;'),
@@ -106,7 +106,7 @@ before(async()=>{
  };
  // Specific aliases must precede the generic @ prefix.
  delete aliases['@'];aliases['@']=path.join(root,'src');
- await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
+ await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',plugins:[new webpackModule.webpack.DefinePlugin({'process.env.NEXT_PUBLIC_RELEASE_SHA':JSON.stringify('local')})],devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
  const css=(await require('postcss')([require('tailwindcss')({...loadTs('tailwind.config.ts',{'tailwindcss-animate':{default:require('tailwindcss-animate')}}).default,content:[path.join(root,'src/**/*.{ts,tsx}')]})]).process(fs.readFileSync(path.join(root,'src/app/globals.css'),'utf8'),{from:undefined})).css+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8');
  server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');res.setHeader('Cache-Control','no-store');

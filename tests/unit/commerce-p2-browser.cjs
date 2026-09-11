@@ -63,7 +63,7 @@ before(async()=>{
   'next/link':fixture('link',`import React from'react';export default function Link(props){return <a {...props}/>;}`),
   '@':path.join(root,'src'),
  };
- await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js',publicPath:'/'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/commerce-p2-browser-.*\.js$/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
+ await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',plugins:[new webpackModule.webpack.DefinePlugin({'process.env.NEXT_PUBLIC_RELEASE_SHA':JSON.stringify('local')})],devtool:false,entry,output:{path:dir,filename:'bundle.js',publicPath:'/'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/commerce-p2-browser-.*\.js$/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
  const postcss=require('postcss'),tailwind=require('tailwindcss');
  const css=(await postcss([tailwind({...loadTs('tailwind.config.ts',{'tailwindcss-animate':{default:require('tailwindcss-animate')}}).default,content:[path.join(root,'src/**/*.{ts,tsx}')]})]).process(fs.readFileSync(path.join(root,'src/app/globals.css'),'utf8'),{from:undefined})).css;
  server=http.createServer(async(req,res)=>{
