@@ -314,7 +314,7 @@ function OrderSummaryContent() {
 
 function CheckoutForm({ location }: { location: Location }) {
   const keyboardOpen = useCheckoutKeyboard();
-  const { trackEvent, sessionId: analyticsSessionId } = useAnalytics();
+  const { trackEvent, sessionId: analyticsSessionId, attribution: analyticsAttribution } = useAnalytics();
   const {
     cartItems,
     subtotal,
@@ -586,7 +586,7 @@ function CheckoutForm({ location }: { location: Location }) {
         ...formValues,
         subscribeToNewsletter: !!formValues.subscribeToNewsletter,
         ...(formValues.subscribeToNewsletter && consentAttempt.current ? {newsletterConsentId:consentAttempt.current.id,newsletterConsentVersion:NEWSLETTER_CONSENT_VERSION}:{}),
-        ...(statisticsAllowed() && analyticsSessionId ? {analyticsSessionId, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const} : {})
+        ...(statisticsAllowed() && analyticsSessionId ? {analyticsSessionId, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const, ...(analyticsAttribution ? { analyticsAttribution } : {})} : {})
       };
 
       const result = await requestHostedCheckout(

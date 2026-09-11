@@ -13,6 +13,7 @@ export type GuestReceipt = Pick<OrderDetail,
   createdAt: string;
   customerDetails: Pick<OrderDetail['customerDetails'], 'id' | 'address'>;
   paymentDetails: Omit<OrderDetail['paymentDetails'], 'paymentRefId'>;
+  invoice?: OrderDetail['invoice'];
 };
 
 // The existing random Stripe session ID is a guest capability, not a user ID.
@@ -80,5 +81,6 @@ export async function readGuestReceipt(proof: ReceiptProof): Promise<GuestReceip
       cartDiscountTotal: payment.cartDiscountTotal, cartDiscountName: payment.cartDiscountName,
       tips: payment.tips,
     },
+    ...(order.invoice ? { invoice: order.invoice } : {}),
   };
 }

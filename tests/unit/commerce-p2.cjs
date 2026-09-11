@@ -166,7 +166,7 @@ test('legacy analytics route sanitizes public events before the server write',as
   '@/lib/server/record-commerce-metric':{recordCommerceMetric:async(name,event)=>{seen={name,event};}},
  });
  const response=await POST(new Request('https://test/api/analytics',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'add_to_cart',sessionId:'session',eventId:'event',productId:'p',source:'commerce-v1',verifiedPayment:true,orderId:'FORGED'})}));
- assert.equal(response.status,200);assert.deepEqual(seen,{name:'add_to_cart',event:{name:'add_to_cart',sessionId:'session',eventId:'event',productId:'p'}});
+ assert.equal(response.status,200);assert.deepEqual(seen,{name:'add_to_cart',event:{name:'add_to_cart',sessionId:'session',eventId:'event',productId:'p',source:'commerce-v1'}});
  const forged=await POST(new Request('https://test/api/analytics',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({name:'payment_succeeded',sessionId:'session',eventId:'event',source:'commerce-v1',verifiedPayment:true,orderId:'FORGED'})}));
  assert.equal(forged.status,400);
 });

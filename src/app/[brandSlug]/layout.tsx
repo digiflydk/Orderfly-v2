@@ -8,6 +8,7 @@ import { resolveParams } from '@/lib/next/resolve-props';
 import { BrandLayoutClient } from './layout-client';
 import { getStorefrontSettings as getGeneralSettings } from '@/services/settings';
 import { isAdminReady } from '@/lib/runtime';
+import { BrandTracking } from '@/components/brand-tracking';
 
 export default async function BrandLayout({
   children,
@@ -35,8 +36,9 @@ export default async function BrandLayout({
 
   return (
     <AnalyticsProvider brand={brand}>
+      <BrandTracking brand={brand} />
       <CartProvider>
-        <div data-commerce-root
+        <div data-commerce-root data-brand-slug={brand.slug}
           style={
             {
               '--primary': brand.appearances?.colors.primary,

@@ -151,7 +151,7 @@ test('provider authorization rejection is terminal and never blindly retried',as
 });
 
 test('order confirmation worker sends one scoped message and suppresses canceled orders',async t=>{
- const f=setup(t);Object.assign(f.records.get('orders/order'),{customerContact:'private@example.test',customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',totalAmount:129,deliveryTime:'18:30'});
+ const f=setup(t);Object.assign(f.records.get('orders/order'),{customerContact:'private@example.test',customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',totalAmount:129,deliveryTime:'18:30',invoice:{number:'INV-2026-000001',issuedAt:'2026-09-11T12:00:00.000Z',supplyDate:'2026-09-11T18:30:00.000Z',currency:'DKK',seller:{legalName:'Esmeralda Pizza ApS',tradingName:'Esmeralda Pizza',registrationNumber:'12345678',address:'Testvej 1, 2300 København S'},fulfillmentLocation:{name:'Amager',address:'Testvej 1, 2300 København S'},customer:{name:'QA Guest',email:'private@example.test'},lines:[{description:'Pizza',quantity:1,unitAmount:129,totalAmount:129}],subtotal:129,itemDiscount:0,orderDiscount:0,deliveryFee:0,bagFee:0,adminFee:0,taxableAmount:103.2,vatRate:25,vatAmount:25.8,totalAmount:129,paymentMethod:'Stripe'}});
  f.records.set('orderNotificationJobs/job',{orderId:'order',brandId:'b',locationId:'l',eventId:'confirmation-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
  const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{},NotificationPlatformClient:class{}}});
  const client=()=>({send:async message=>sent.push(message)});

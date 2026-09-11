@@ -4,14 +4,16 @@
 import { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import Cookies from 'js-cookie';
 import { useSearchParams, usePathname } from 'next/navigation';
-import type { AnalyticsEventName, Brand } from '@/types';
+import type { AnalyticsAttribution, AnalyticsEventName, Brand } from '@/types';
 import { commercePage } from '@/lib/commerce-metrics';
-import { trackClientEvent } from '@/lib/analytics';
+import { statisticsAllowed, trackClientEvent } from '@/lib/analytics';
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
+import { campaignAttribution, normalizeAttribution } from '@/lib/analytics-attribution';
 
 interface AnalyticsContextType {
   trackEvent: (eventName: AnalyticsEventName, props?: Record<string, any>) => boolean;
   sessionId: string | null;
+  attribution: AnalyticsAttribution | null;
 }
 
 const AnalyticsContext = createContext<AnalyticsContextType | undefined>(undefined);
@@ -28,6 +30,7 @@ interface AnalyticsProviderProps {
 export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProviderProps) {
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [brand, setBrand] = useState<Brand | null>(brandProp || null);
+  const [attribution, setAttribution] = useState<AnalyticsAttribution | null>(null);
   const searchParams = useSearchParams();
   const pathname = usePathname();
 
@@ -41,21 +44,17 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
       }
       setSessionId(sid);
 
-      if (!Cookies.get(ATTRIBUTION_COOKIE)) {
-        const attributionData = {
-          utm_source: searchParams.get('utm_source'),
-          utm_medium: searchParams.get('utm_medium'),
-          utm_campaign: searchParams.get('utm_campaign'),
-          utm_term: searchParams.get('utm_term'),
-          utm_content: searchParams.get('utm_content'),
-          referrer: document.referrer,
-          landingPage: pathname,
-        };
-        const filteredData = Object.fromEntries(Object.entries(attributionData).filter(([_, v]) => v != null));
-        if (Object.keys(filteredData).length > 0) {
-          Cookies.set(ATTRIBUTION_COOKIE, JSON.stringify(filteredData), { expires: 30, path: '/', sameSite: 'Lax' });
-        }
-      }
+      const currentTouch = campaignAttribution(searchParams, pathname, document.referrer);
+      let stored: AnalyticsAttribution | undefined;
+      try { stored = normalizeAttribution(JSON.parse(Cookies.get(ATTRIBUTION_COOKIE) || '{}')); } catch { /* Ignore corrupt attribution. */ }
+      const resolved = currentTouch || stored;
+      setAttribution(resolved || null);
+      if (resolved && statisticsAllowed()) Cookies.set(ATTRIBUTION_COOKIE, JSON.stringify(resolved), { expires: 30, path: '/', sameSite: 'Lax' });
+
+      const persistAfterConsent = () => {
+        if (resolved && statisticsAllowed()) Cookies.set(ATTRIBUTION_COOKIE, JSON.stringify(resolved), { expires: 30, path: '/', sameSite: 'Lax' });
+      };
+      window.addEventListener('orderfly:consent', persistAfterConsent);
 
       if (!brandProp) {
         const parts = pathname.split('/').filter(Boolean);
@@ -65,6 +64,7 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
         }
       }
 
+      return () => window.removeEventListener('orderfly:consent', persistAfterConsent);
     } catch { /* Analytics must not break the storefront when cookies are unavailable. */ }
   }, [searchParams, pathname, brandProp]);
 
@@ -80,15 +80,16 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
         sessionId,
         deviceType: window.innerWidth < 768 ? 'mobile' : 'desktop',
         urlPath: window.location.pathname,
+        ...(statisticsAllowed() && attribution ? attribution : {}),
         ...props, // Pass all props directly
       };
 
       return trackClientEvent(eventName, {...eventData, pageType: commercePage(window.location.pathname)});
     } catch { return false; /* Malformed attribution or telemetry failures must never block checkout. */ }
-  }, [sessionId, brand, brandProp]);
+  }, [sessionId, brand, brandProp, attribution]);
 
   return (
-    <AnalyticsContext.Provider value={{ trackEvent, sessionId }}>
+    <AnalyticsContext.Provider value={{ trackEvent, sessionId, attribution }}>
       {children}
     </AnalyticsContext.Provider>
   );

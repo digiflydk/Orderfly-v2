@@ -23,5 +23,7 @@ export async function getFunnelDataForBrand(brandId: string, filters: FunnelFilt
     },
     daily: [],
     byLocation: [],
+    attribution: [],
+    dataQualityWarnings: [],
   };
 }

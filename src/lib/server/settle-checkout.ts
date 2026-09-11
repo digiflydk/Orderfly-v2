@@ -5,6 +5,8 @@ import { doc, runTransaction, serverTimestamp } from 'firebase/firestore';
 import { prepareCapacitySettlement } from '@/lib/discount-reservations';
 import { trackServerEvent } from '@/lib/analytics-server';
 import { createHash, randomUUID } from 'node:crypto';
+import type { Brand, Location, OrderDetail } from '@/types';
+import { buildOrderInvoice, invoiceCounterId } from '@/lib/order-invoice';
 
 // Only call with a signed webhook or a session retrieved server-to-server from Stripe.
 export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session) {
@@ -13,7 +15,8 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
   const orderRef = doc(db, 'orders', metadata.orderId);
   if (session.payment_status !== 'paid') return false;
   const piId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
-  let analytics: {sessionId?: string; deviceType?: string} | undefined;
+  let analytics: OrderDetail['analytics'];
+  const issuedAt = new Date().toISOString();
   const fulfilled = await runTransaction(db, async transaction => {
     const orderSnap = await transaction.get(orderRef);
     if (!orderSnap.exists()) throw new Error('Order not found');
@@ -34,8 +37,28 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     };
     // A legacy path could mark Paid without the outbox job. Repair only this
     // verified session's missing job, without replaying financial accounting.
+    if (order.paymentStatus === 'Paid' && order.invoice) {
+      if (order.psp?.checkoutSessionId !== session.id) throw new Error('Payment scope mismatch');
+      ensureConfirmation();
+      return false;
+    }
+    const year = Number(issuedAt.slice(0, 4));
+    const counterRef = doc(db, 'invoiceCounters', invoiceCounterId(order.brandId, year));
+    const brandRef = doc(db, 'brands', order.brandId);
+    const locationRef = doc(db, 'locations', order.locationId);
+    const [counterSnap, brandSnap, locationSnap] = await Promise.all([
+      transaction.get(counterRef), transaction.get(brandRef), transaction.get(locationRef),
+    ]);
+    if (!brandSnap.exists() || !locationSnap.exists()) throw new Error('Invoice seller configuration missing');
+    const brand = { ...brandSnap.data(), id: order.brandId } as Brand;
+    const location = { ...locationSnap.data(), id: order.locationId } as Location;
+    if (location.brandId !== order.brandId) throw new Error('Invoice location scope mismatch');
+    const sequence = Number(counterSnap.data()?.lastNumber || 0) + 1;
+    const invoice = buildOrderInvoice({ order: { ...order, id: orderSnap.id } as OrderDetail, brand, location, sequence, issuedAt, paymentReference: piId || undefined });
     if (order.paymentStatus === 'Paid') {
       if (order.psp?.checkoutSessionId !== session.id) throw new Error('Payment scope mismatch');
+      transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true });
+      transaction.update(orderRef, { invoice, updatedAt: serverTimestamp() });
       ensureConfirmation();
       return false;
     }
@@ -66,7 +89,9 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
       'psp.checkoutSessionId': session.id,
       paymentStatus: 'Paid', paidAt: serverTimestamp(),
       'psp.paymentIntentId': piId || null, updatedAt: serverTimestamp(),
+      invoice,
     });
+    transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true });
     ensureConfirmation();
     return true;
   });
@@ -74,7 +99,7 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     // Analytics are optional after an authoritative, idempotent settlement.
     try { await trackServerEvent('payment_succeeded', {
       brandId: metadata.brandId, locationId: metadata.locationId,
-      ...(analytics?.sessionId ? {sessionId: analytics.sessionId, deviceType: analytics.deviceType} : {}),
+      ...(analytics?.sessionId ? {sessionId: analytics.sessionId, deviceType: analytics.deviceType, ...(analytics.attribution || {})} : {}),
       orderId: metadata.orderId, cartValue: (session.amount_total || 0) / 100,
     }); } catch { /* Never report a successful payment as failed due to telemetry. */ }
   }

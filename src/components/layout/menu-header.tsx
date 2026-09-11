@@ -36,7 +36,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
     : <span className="text-xl font-bold">{brand.name}</span>;
 
   return <>
-    <header className="sticky top-0 z-40 h-16 w-full border-b bg-[#FFF8F0]">
+    <header data-storefront-header data-brand-slug={brand.slug} className="sticky top-0 z-40 h-16 w-full border-b bg-[#FFF8F0]">
       <div className="mx-auto flex h-full max-w-[1140px] items-center justify-between gap-4 px-4">
         {checkout
           ? <div className="relative flex h-10 w-36 shrink-0 items-center">{logo}</div>
@@ -44,7 +44,7 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
         {checkout && <p className="min-w-0 flex-1 truncate text-right text-sm font-semibold">{location?.name || brand.name}</p>}
       </div>
     </header>
-    {!checkout && location && details && <section aria-label="Lokationsoplysninger" className="relative isolate overflow-hidden bg-[#262421] text-white">
+    {!checkout && location && details && <section data-storefront-location data-brand-slug={brand.slug} aria-label="Lokationsoplysninger" className="relative isolate overflow-hidden bg-[#262421] text-white">
       {location.imageUrl && <>
         {/* Location URLs are user-configured and are not limited to Next Image's host allowlist. */}
         <img src={safeImage(location.imageUrl)} alt="" loading="eager" fetchPriority="high" className="absolute inset-0 -z-20 h-full w-full object-cover" />

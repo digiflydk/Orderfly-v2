@@ -9,6 +9,11 @@ export function metricPayload(name: unknown, input: Record<string, unknown> = {}
   for (const key of ['brandId','locationId','sessionId','eventId','productId','upsellId','metricId']) {
     if (typeof input[key] === 'string' && id.test(input[key] as string)) data[key] = input[key] as string;
   }
+  const attribution = /^[\p{L}\p{N} _.,:+\-/]{1,256}$/u;
+  for (const key of ['source','medium','campaign','campaignId','term','content','gclid','gbraid','wbraid','fbclid','referrerHost']) {
+    if (typeof input[key] === 'string' && attribution.test(input[key] as string)) data[key] = input[key] as string;
+  }
+  if (typeof input.landingPath === 'string' && /^\/[^?#]{0,499}$/.test(input.landingPath)) data.landingPath = input.landingPath;
   for (const key of ['cartValue','itemsCount','value']) if (typeof input[key] === 'number' && Number.isFinite(input[key]) && input[key] >= 0 && input[key] <= 1e9) data[key] = input[key];
   if (trusted && typeof input.orderId === 'string' && id.test(input.orderId)) data.orderId = input.orderId;
   if (input.deviceType === 'mobile' || input.deviceType === 'desktop') data.deviceType = input.deviceType;
