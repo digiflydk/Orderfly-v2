@@ -38,8 +38,8 @@ async function complete(db: Firestore, ref: DocumentReference, token: string, st
         }
     });
 }
-export async function runMarketingWorker(db: Firestore, now = Date.now(), makeProvider = (config: NonNullable<ReturnType<typeof marketingConfig>>) => new Omnisend(config)) {
-    const deadline = Date.now() + 45000;
+export async function runMarketingWorker(db: Firestore, now = Date.now(), makeProvider = (config: NonNullable<ReturnType<typeof marketingConfig>>) => new Omnisend(config), requestDeadline = Date.now() + 60000) {
+    const deadline = Math.min(Date.now() + 45000, requestDeadline - 20000);
     const jobs = await db.collection('marketingOutbox').where('nextAttemptAt', '<=', now).orderBy('nextAttemptAt').limit(10).get();
     const counts = { processed: 0, synced: 0, failed: 0, suppressed: 0, reconciled: 0 };
     for (const snap of jobs.docs) {

@@ -121,6 +121,16 @@ One document per brand. `questionVersionId` optionally assigns an active feedbac
 
 Durable, idempotent notification outboxes. Jobs store source identifiers, state, attempts, timestamps and an opaque event ID. Recipient email and signed feedback URL are resolved from authoritative records immediately before dispatch and are not stored in admin projections. `accepted` means accepted by the central mPanel queue; Mailtrap delivery remains authoritative in mPanel.
 
+## Collection: `marketingOrderOutbox`
+
+Consent-gated Omnisend paid-order delivery queue. Each deterministic job stores
+only brand, location, order and customer identifiers, the event time, an opaque
+event ID, state, attempts and lease timestamps. The worker resolves the current
+customer and immutable invoice, rechecks paid/canceled state and current synced
+email consent, and then sends Omnisend's native `paid for order` event. Unknown
+post-dispatch outcomes enter terminal `uncertain` state to prevent duplicate
+real-time automation. Clients must have no direct read or write access.
+
 ---
 
 ## Collection: `discounts`

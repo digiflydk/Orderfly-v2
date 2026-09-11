@@ -23,7 +23,7 @@ Tracking is activated only after statistics consent. The browser emits one stand
 
 The server stores bounded UTM fields, Google/Meta click IDs, landing path and referrer hostname on the pending order and carries them into the verified payment metric. It never stores the referrer query string. The analytics report uses only verified paid orders for purchase and revenue, supports brand/location/device/source filters, shows daily and location results, and breaks revenue down by source, medium and campaign. Non-monotonic instrumentation is shown as a data-quality warning instead of changing the measured counts.
 
-Omnisend newsletter contact consent and delivery remain server-side through the existing per-brand mapping. Purchase revenue is available to a configured Omnisend tag from the consented GTM `purchase` event. A native Omnisend server-side `paid for order` outbox is not part of this release; it must not be represented as active until its own idempotent delivery and consent policy are implemented.
+Omnisend newsletter contact consent and delivery remain server-side through the existing per-brand mapping. A separate consent-gated outbox now sends Omnisend's native server-side `paid for order` v2 event after verified settlement and after the contact has been confirmed subscribed. Financial values come from the immutable invoice. The job contains references rather than contact data, revalidates brand/order/customer scope immediately before sending, and never blindly retries an unknown post-dispatch outcome. This Omnisend subset supplements rather than replaces Orderfly's authoritative paid-order funnel.
 
 ## Required configuration
 
@@ -47,11 +47,13 @@ No browser-only analytics stack can promise literal 100% measurement because con
 
 ## Deployment sequence
 
-1. Deploy Opsfly migration `20260911123000_orderfly_invoice_confirmation.sql` and the reviewed `orderfly-notification-enqueue`, `notification-admin` and `notification-worker` function tree.
+1. Deploy Opsfly migration `20260911123000_orderfly_invoice_confirmation.sql` and the reviewed `orderfly-notification-enqueue`, `notification-admin` `notification-worker` and `production-admin` function tree.
 2. Verify that the previous Orderfly confirmation payload still queues and renders without an empty invoice section.
 3. Deploy the Orderfly companion release.
-4. Complete one controlled paid test order and verify the stored invoice, receipt, Mailtrap acceptance, rendered HTML/text invoice and server-side paid-order funnel row share the same order ID and total.
+4. Complete one controlled paid test order with a synthetic, consented Omnisend contact and verify the stored invoice, receipt, Mailtrap acceptance, rendered HTML/text invoice, server-side paid-order funnel row and Omnisend event share the same order ID, currency and total.
+5. Verify that a non-consented paid test order remains in the Orderfly funnel but creates no Omnisend paid-order job or event.
 
 Release corrections: campaign attribution survives untagged navigation in a brand-scoped cookie, and instrumentation origin no longer overwrites campaign source. Zero VAT uses a nullish fallback consistently. Brand tags execute in their own removable document; leaving the brand or withdrawing consent destroys that runtime, including globals and automatic listeners. Only matching brand events enter that document. Direct GA4/Ads and Meta purchases explicitly target the configured destination; GTM receives the ecommerce dataLayer event in that document. GTM containers should consume the supplied commerce events rather than depend on selectors in the storefront document.
+
 
 The brand tracking document receives only sanitized campaign parameters and allowlisted click IDs; receipt tokens, session IDs and arbitrary URL query values never enter analytics configuration.
