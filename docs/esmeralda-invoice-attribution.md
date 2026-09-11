@@ -7,7 +7,7 @@ This release coordinates two repositories:
 - Orderfly creates an immutable invoice snapshot only after Stripe has verified payment, exposes the safe snapshot on the receipt page, captures consented campaign attribution and reports the real checkout funnel.
 - Opsfly renders and sends the matching invoice email through the existing notification bridge. Release Opsfly's additive, legacy-compatible migration and functions first; deploy Orderfly second. This avoids rejecting either the old confirmation payload or the new closed invoice contract during rollout.
 
-Dynamic storefront theming from administration remains out of scope. The Esmeralda storefront currently uses a brand-scoped presentation layer based on the public Esmeralda palette: orange `#f5aa24`, dark brown `#2a1000`, cream surfaces, uppercase display headings and compact rounded actions. Other brands are not changed.
+Dynamic storefront theming from administration remains out of scope. The Esmeralda storefront currently uses a brand-scoped presentation layer based on the public Esmeralda palette: orange `#f5aa24`, dark brown `#2a1000`, black surfaces, uppercase display headings and compact rounded actions. Other brands are not changed.
 
 ## Invoice contract
 
@@ -57,3 +57,21 @@ Release corrections: campaign attribution survives untagged navigation in a bran
 
 
 The brand tracking document receives only sanitized campaign parameters and allowlisted click IDs; receipt tokens, session IDs and arbitrary URL query values never enter analytics configuration.
+
+## Storefront colour correction (2026-09-11)
+
+The exact `esmeralda` slug uses the measured esmeraldapizza.dk palette: black
+`#000000` page/header, white text, `#cccccc` secondary text, gold `#e9aa3f`
+actions with `#2a1000` text, and the brown footer. The website's header accent
+is `#f5aa24`. Dark elevated panels and visible neutral borders support forms.
+
+The preset is scoped to the public brand root and its body-mounted portals.
+Nested commerce roots repeat the tokens so generic yellow/cream defaults and
+stored inline brand settings cannot override this fixed preset. Menu, sticky
+categories, options, cart, checkout and cookie/delivery dialogs share the palette.
+Other brands and Superadmin retain their current appearance. Dynamic admin
+presets remain future scope. The 76px header has a matching category offset.
+
+Verify at mobile and desktop widths: readable product prices/descriptions,
+gold action text, selected/unselected controls, options and cart portals, focus,
+checkout inputs and switching to another brand/Superadmin without theme leakage.

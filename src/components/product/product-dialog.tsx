@@ -327,7 +327,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
                 </div>
             </ScrollArea>
              <div className="w-full mt-auto sticky bottom-0">
-                <div className="flex items-center justify-center gap-3 p-3 bg-[#FFF8F0] border-t">
+                <div className="commerce-option-quantity flex items-center justify-center gap-3 p-3 bg-[#FFF8F0] border-t">
                     <Button
                         variant="outline"
                         aria-label="Reducer antal" onClick={() => setQuantity(q => Math.max(1, q - 1))}

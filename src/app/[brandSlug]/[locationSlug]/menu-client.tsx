@@ -143,14 +143,14 @@ export function MenuClient({
   );
 
   return (
-    <StorefrontCatalog products={initialProducts} combos={activeCombos}><div data-commerce-root className="bg-[#FFF8F0]">
+    <StorefrontCatalog products={initialProducts} combos={activeCombos}><div data-commerce-root className="bg-[var(--storefront-menu-background,#FFF8F0)]">
       <div className="container mx-auto max-w-[1140px] px-4">
         <div className="py-4">
           <TimeSelector timeSlots={timeSlots} />
           {mode === 'delivery' && location.minOrder > 0 && <p className="mt-2 text-sm text-muted-foreground">Minimumsbestilling til levering: {formatPrice(location.minOrder)} før rabatter.</p>}
         </div>
 
-        <div className="sticky top-16 z-30 bg-[#FFF8F0]/90 backdrop-blur-sm -mx-4 px-4 py-2 border-t border-b">
+        <div data-storefront-categories className="sticky top-16 z-30 bg-[var(--storefront-nav-background,#fff8f0e6)] backdrop-blur-sm -mx-4 px-4 py-2 border-t border-b">
           <CategoryNav categories={visibleCategories} hasCombos={visibleCombos.length > 0}
             hasPromotionalDiscounts={hasPromotionalDiscounts} brand={brand} activeCategory={activeCategory}
             search={search} onSearchChange={changeSearch} />
