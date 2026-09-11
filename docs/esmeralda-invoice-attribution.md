@@ -53,3 +53,5 @@ No browser-only analytics stack can promise literal 100% measurement because con
 4. Complete one controlled paid test order and verify the stored invoice, receipt, Mailtrap acceptance, rendered HTML/text invoice and server-side paid-order funnel row share the same order ID and total.
 
 Release corrections: campaign attribution survives untagged navigation in a brand-scoped cookie, and instrumentation origin no longer overwrites campaign source. Zero VAT uses a nullish fallback consistently. Brand tags execute in their own removable document; leaving the brand or withdrawing consent destroys that runtime, including globals and automatic listeners. Only matching brand events enter that document. Direct GA4/Ads and Meta purchases explicitly target the configured destination; GTM receives the ecommerce dataLayer event in that document. GTM containers should consume the supplied commerce events rather than depend on selectors in the storefront document.
+
+The brand tracking document receives only sanitized campaign parameters and allowlisted click IDs; receipt tokens, session IDs and arbitrary URL query values never enter analytics configuration.
