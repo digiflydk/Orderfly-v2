@@ -3,12 +3,18 @@ const assert=require('node:assert/strict');
 const {createHash}=require('node:crypto');
 const {loadTs}=require('../helpers/load-ts.cjs');
 const jobKey='orderNotificationJobs/'+createHash('sha256').update(JSON.stringify(['order-confirmation','b','ORD-TEST'])).digest('hex');
-function fixture({paid=false,job,fail=false}={}) {
+function fixture({paid=false,missingInvoice=false,job,fail=false}={}) {
  let records={
-  'orders/ORD-TEST':{brandId:'b',locationId:'l',paymentStatus:paid?'Paid':'Pending',status:'Received',psp:{checkoutSessionId:'cs_test_fixture_123456'},customerDetails:{id:'c'},totalAmount:100,appliedDiscountId:'d'},
+  'orders/ORD-TEST':{brandId:'b',locationId:'l',paymentStatus:paid?'Paid':'Pending',status:'Received',psp:{checkoutSessionId:'cs_test_fixture_123456'},customerDetails:{id:'c',address:'For Pickup'},customerName:'Test Kunde',customerContact:'kunde@example.test',deliveryType:'Pickup',productItems:[{name:'Pizza',quantity:1,totalPrice:100,listTotalPrice:120}],paymentDetails:{subtotal:120,itemDiscountTotal:20,cartDiscountTotal:0,deliveryFee:0,bagFee:0,adminFee:0,vatAmount:20},totalAmount:100,appliedDiscountId:'d'},
+  'brands/b':{name:'Fixture Brand',companyName:'Fixture Brand ApS',companyRegNo:'12345678',street:'Testvej 1',zipCode:'1000',city:'København K',country:'DK',currency:'DKK',vatPercentage:25},
+  'locations/l':{brandId:'b',name:'Fixture Location',address:'Testvej 1, 1000 København K, DK'},
   'customers/c':{brandId:'b',totalOrders:paid?1:0,totalSpend:paid?100:0},
   'discounts/d':{brandId:'b',usedCount:paid?1:0},
  };
+ if(paid&&!missingInvoice){
+  records['orders/ORD-TEST'].invoice={number:'INV-2026-000001'};
+  records['invoiceCounters/b-2026']={brandId:'b',year:2026,lastNumber:1};
+ }
  if(job)records[jobKey]={orderId:'ORD-TEST',brandId:'b',locationId:'l',kind:'orderConfirmation',eventId:'keep',attempts:2,...job};
  let capacity=0,analytics=0,queue=Promise.resolve();
  const session={id:'cs_test_fixture_123456',payment_status:'paid',status:'complete',payment_intent:'pi',amount_total:10000,metadata:{orderId:'ORD-TEST',brandId:'b',locationId:'l'}};
@@ -49,10 +55,13 @@ test('confirmation endpoint atomically settles payment and creates job; webhook/
  assert.equal(Object.keys(f.records()).filter(k=>k.startsWith('orderNotificationJobs/')).length,1);
 });
 test('legacy Paid missing job is repaired once without financial/accounting replay',async()=>{
- const f=fixture({paid:true});const original=structuredClone(f.records());
+ const f=fixture({paid:true,missingInvoice:true});const original=structuredClone(f.records());
  await Promise.all([f.post(),f.settle(),f.settle()]);
  assert.equal(f.records()[jobKey].state,'pending');assert.ok(f.records()[jobKey].eventId);
- for(const [key,value]of Object.entries(original))assert.deepEqual(f.records()[key],value);
+ assert.deepEqual(f.records()['customers/c'],original['customers/c']);
+ assert.deepEqual(f.records()['discounts/d'],original['discounts/d']);
+ assert.equal(f.records()['orders/ORD-TEST'].invoice,undefined);
+ assert.equal(f.records()['invoiceCounters/b-2026'],undefined);
  assert.deepEqual(f.counters(),{capacity:0,analytics:0});
 });
 test('existing pending, accepted, uncertain, failed and suppressed jobs retain event and retry state',async()=>{

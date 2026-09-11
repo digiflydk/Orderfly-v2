@@ -303,7 +303,7 @@ function OrderSummaryContent() {
 
         {vatAmount > 0 && (
           <div className="flex justify-between text-xs text-muted-foreground pt-1">
-            <span>VAT Included ({brand?.vatPercentage || 25}%)</span>
+            <span>VAT Included ({brand?.vatPercentage ?? 25}%)</span>
             <span>{formatPrice(vatAmount)}</span>
           </div>
         )}
@@ -314,7 +314,7 @@ function OrderSummaryContent() {
 
 function CheckoutForm({ location }: { location: Location }) {
   const keyboardOpen = useCheckoutKeyboard();
-  const { trackEvent, sessionId: analyticsSessionId } = useAnalytics();
+  const { trackEvent, sessionId: analyticsSessionId, attribution: analyticsAttribution } = useAnalytics();
   const {
     cartItems,
     subtotal,
@@ -586,7 +586,7 @@ function CheckoutForm({ location }: { location: Location }) {
         ...formValues,
         subscribeToNewsletter: !!formValues.subscribeToNewsletter,
         ...(formValues.subscribeToNewsletter && consentAttempt.current ? {newsletterConsentId:consentAttempt.current.id,newsletterConsentVersion:NEWSLETTER_CONSENT_VERSION}:{}),
-        ...(statisticsAllowed() && analyticsSessionId ? {analyticsSessionId, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const} : {})
+        ...(statisticsAllowed() && analyticsSessionId ? {analyticsSessionId, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const, ...(analyticsAttribution ? { analyticsAttribution } : {})} : {})
       };
 
       const result = await requestHostedCheckout(

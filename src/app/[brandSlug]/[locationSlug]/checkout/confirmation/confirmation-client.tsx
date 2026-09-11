@@ -16,6 +16,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge } from '@/components/ui/badge';
 
 import type { GuestReceipt } from '@/lib/server/guest-receipt';
+import { pushPaidPurchase } from '@/lib/analytics';
 
 function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) {
     return (
@@ -90,6 +91,12 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     useEffect(() => {
         if (order?.paymentStatus === 'Paid' && brand && location) {
             completeCheckout(order.id, brand.id, location.id);
+            pushPaidPurchase({
+                orderId: order.id, value: order.totalAmount, brandId: brand.id, locationId: location.id, currency: order.invoice?.currency || brand.currency || 'DKK',
+                ...(!brand.gtmContainerId && brand.googleAdsConversionId && brand.googleAdsPurchaseLabel
+                    ? { googleAdsSendTo: `${brand.googleAdsConversionId}/${brand.googleAdsPurchaseLabel}` } : {}),
+                items: order.productItems.map(item => ({ id: item.id, quantity: item.quantity, unitPrice: item.unitPrice })),
+            });
         }
     }, [order, brand, location, completeCheckout]);
 
@@ -196,9 +203,9 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Din kvittering</CardTitle>
+                            <CardTitle>Din faktura</CardTitle>
                             <CardDescription>
-                                Bestilt den {formattedCreatedAt}
+                                {order.invoice ? `Faktura ${order.invoice.number} · ` : ''}Bestilt den {formattedCreatedAt}
                             </CardDescription>
                         </CardHeader>
                         <CardContent>
@@ -277,6 +284,11 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                                     <span>{formatPrice(vatAmount)}</span>
                                 </div>
                                 )}
+                                {order.invoice && <div className="mt-5 border-t pt-4 text-xs text-muted-foreground">
+                                    <p className="font-medium text-foreground">{order.invoice.seller.legalName} · CVR {order.invoice.seller.registrationNumber}</p>
+                                    <p>{order.invoice.seller.address}</p>
+                                    <p>Fakturadato: {new Intl.DateTimeFormat('da-DK', { dateStyle: 'long', timeZone: 'Europe/Copenhagen' }).format(new Date(order.invoice.issuedAt))}</p>
+                                </div>}
                             </div>
                         </CardContent>
                     </Card>

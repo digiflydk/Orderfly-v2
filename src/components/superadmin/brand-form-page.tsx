@@ -72,8 +72,11 @@ const brandSchema = z.object({
   vatPercentage: z.coerce.number().min(0).max(100).optional(),
   
   // Analytics overrides
-  ga4MeasurementId: z.string().optional(),
-  gtmContainerId: z.string().optional(),
+  ga4MeasurementId: z.string().regex(/^G-[A-Z0-9]+$/).optional().or(z.literal('')),
+  gtmContainerId: z.string().regex(/^GTM-[A-Z0-9]+$/).optional().or(z.literal('')),
+  googleAdsConversionId: z.string().regex(/^AW-\d+$/).optional().or(z.literal('')),
+  googleAdsPurchaseLabel: z.string().max(100).optional().or(z.literal('')),
+  metaPixelId: z.string().regex(/^\d{5,30}$/).optional().or(z.literal('')),
 
   // Appearances is handled by its own form
   appearances: z.any().optional(),
@@ -615,6 +618,28 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
                                 <FormItem>
                                     <FormLabel>GTM Container ID</FormLabel>
                                     <FormControl><Input placeholder="GTM-XXXXXXX" {...field} value={field.value ?? ''} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}/>
+                            <FormField control={form.control} name="googleAdsConversionId" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Google Ads Conversion ID</FormLabel>
+                                    <FormControl><Input placeholder="AW-123456789" {...field} value={field.value ?? ''} /></FormControl>
+                                    <FormDescription>Kan konfigureres direkte eller via brandets GTM-container.</FormDescription>
+                                    <FormMessage />
+                                </FormItem>
+                            )}/>
+                            <FormField control={form.control} name="googleAdsPurchaseLabel" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Google Ads Purchase Label</FormLabel>
+                                    <FormControl><Input placeholder="AbCdEfGhIj" {...field} value={field.value ?? ''} /></FormControl>
+                                    <FormMessage />
+                                </FormItem>
+                            )}/>
+                            <FormField control={form.control} name="metaPixelId" render={({ field }) => (
+                                <FormItem>
+                                    <FormLabel>Meta Pixel ID</FormLabel>
+                                    <FormControl><Input inputMode="numeric" placeholder="123456789012345" {...field} value={field.value ?? ''} /></FormControl>
                                     <FormMessage />
                                 </FormItem>
                             )}/>

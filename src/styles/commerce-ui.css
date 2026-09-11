@@ -6,6 +6,43 @@ body:has([data-commerce-root]),
   --primary: 44.6 100% 50.4% !important;
   --primary-foreground: 0 0% 0% !important;
 }
+
+/* Current Esmeralda storefront parity. This is intentionally brand-scoped;
+   admin-managed theme presets are a separate future feature. */
+[data-brand-slug^="esmeralda"] {
+  --commerce-yellow: #f5aa24;
+  --commerce-yellow-hover: #e9aa3f;
+  --background: 30 100% 97%;
+  --foreground: 23 100% 8%;
+  --border: 36 39% 82%;
+  color: #2a1000;
+  font-family: "Brandon Text Office Regular", Arial, sans-serif !important;
+}
+[data-storefront-header][data-brand-slug^="esmeralda"] {
+  height: 76px;
+  background: #fff8f0;
+  border-color: #eadcc8;
+}
+[data-storefront-header][data-brand-slug^="esmeralda"] > div { max-width: 1180px; }
+[data-storefront-location][data-brand-slug^="esmeralda"] { background: #2a1000; }
+[data-storefront-location][data-brand-slug^="esmeralda"] h1,
+[data-brand-slug^="esmeralda"] h2 {
+  font-family: "Bourton Base", Impact, Arial Black, sans-serif;
+  text-transform: uppercase;
+  letter-spacing: .025em;
+}
+[data-brand-slug^="esmeralda"] article { border-color: #eadcc8; }
+[data-brand-slug^="esmeralda"] article img { border-radius: 10px; }
+[data-brand-slug^="esmeralda"] [data-ui-button]:is([data-ui-variant="default"], [data-ui-variant="brand"]) {
+  border-radius: 10px;
+  background: #f5aa24;
+  color: #0b0b0b;
+  font-weight: 700;
+}
+[data-brand-slug^="esmeralda"] [data-ui-button]:is([data-ui-variant="outline"], [data-ui-variant="secondary"]) {
+  border-color: #d9c7aa;
+  border-radius: 10px;
+}
 body:has([data-commerce-root]) [data-ui-button] { color: #151515; }
 body:has([data-commerce-root]) [data-ui-button]:is([data-ui-variant="default"], [data-ui-variant="brand"]),
 body:has([data-commerce-root]) button[aria-pressed="true"],

@@ -1,7 +1,7 @@
 
 'use client';
 
-import { useMemo, useState, useTransition } from 'react';
+import { useState, useTransition } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import type { Brand, Location, FunnelFilters, FunnelOutput, FunnelCounting, FunnelDeviceFilter } from '@/types';
 import type { SACommonFilters } from '@/types/superadmin';
@@ -11,13 +11,13 @@ import { BarChart3, CheckCircle2 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '../ui/table';
-import { ChartContainer } from '../ui/chart';
 import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
 import { Tooltip as TooltipUI, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Alert, AlertDescription, AlertTitle } from '../ui/alert';
 import { FiltersBar } from './FiltersBar';
 import { Label } from '../ui/label';
+import { Input } from '../ui/input';
+import { formatPrice } from '@/lib/storefront-format';
 
 type Props = {
   initialData: FunnelOutput;
@@ -110,6 +110,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
     if (next.counting && next.counting !== 'events') {
       params.set('counting', next.counting);
     }
+    if (next.utmSource) params.set('utmSource', next.utmSource);
     
     router.push(`${pathname}?${params.toString()}`);
   };
@@ -157,6 +158,17 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
                         </SelectContent>
                     </Select>
                 </div>
+                <div className="w-full sm:w-auto">
+                    <Label htmlFor="device-select" className="text-xs text-muted-foreground">Enhed</Label>
+                    <Select value={currentFilters.device || 'all'} onValueChange={(v) => handleFilterChange({...currentFilters, device: v as FunnelDeviceFilter})}>
+                        <SelectTrigger className="w-full sm:w-[180px]" id="device-select"><SelectValue /></SelectTrigger>
+                        <SelectContent><SelectItem value="all">Alle enheder</SelectItem><SelectItem value="mobile">Mobil</SelectItem><SelectItem value="desktop">Desktop</SelectItem></SelectContent>
+                    </Select>
+                </div>
+                <div className="w-full sm:w-[220px]">
+                    <Label htmlFor="source-filter" className="text-xs text-muted-foreground">Kilde (utm_source)</Label>
+                    <Input id="source-filter" defaultValue={currentFilters.utmSource || ''} placeholder="fx google eller meta" onBlur={event => handleFilterChange({...currentFilters, utmSource: event.currentTarget.value.trim() || undefined})} />
+                </div>
              </div>
         </CardContent>
         {brands && (
@@ -178,6 +190,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
             </CardFooter>
         )}
       </Card>
+      {data.dataQualityWarnings.map(warning => <Alert key={warning} variant="destructive"><AlertTitle>Datakvalitet</AlertTitle><AlertDescription>{warning}</AlertDescription></Alert>)}
       
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <KpiCard title="Sessions" value={totals.sessions} tooltipText={tooltipText} />
@@ -191,6 +204,45 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
             <KpiCard title="Purchase" value={totals.payment_succeeded} rate={totals.click_purchase > 0 ? (totals.payment_succeeded / totals.click_purchase) * 100 : 0} tooltipText={tooltipText} />
             <KpiCard title="Total CR" value={totalCR} tooltipText="Total konverteringsrate fra Session til Purchase." />
        </div>
+       <div className="grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
+        <Card>
+          <CardHeader><CardTitle>Salgstragt</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            {([
+              ['Menuvisning', totals.view_menu], ['Produktvisning', totals.view_product], ['Tilføjet til kurv', totals.add_to_cart],
+              ['Checkout startet', totals.start_checkout], ['Klik på betaling', totals.click_purchase], ['Betalt ordre', totals.payment_succeeded],
+            ] as Array<[string, number]>).map(([label, value], index, rows) => {
+              const max = Math.max(1, rows[0][1]);
+              const previous = index ? rows[index - 1][1] : value;
+              const rate = previous ? value / previous * 100 : 0;
+              return <div key={label}>
+                <div className="mb-1 flex justify-between gap-3 text-sm"><span>{label}</span><span className="font-medium tabular-nums">{value.toLocaleString('da-DK')}{index ? ` · ${rate.toFixed(1)}%` : ''}</span></div>
+                <div className="h-8 overflow-hidden rounded bg-muted"><div className="flex h-full min-w-1 items-center bg-primary px-2 text-xs font-semibold text-primary-foreground" style={{width:`${Math.max(2, value / max * 100)}%`}} /></div>
+              </div>;
+            })}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle>Verificeret salg</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div><p className="text-sm text-muted-foreground">Omsætning</p><p className="text-3xl font-bold tabular-nums">{formatPrice(totals.revenue_paid)}</p></div>
+            <div><p className="text-sm text-muted-foreground">Gennemsnitsordre</p><p className="text-2xl font-semibold tabular-nums">{formatPrice(totals.payment_succeeded ? totals.revenue_paid / totals.payment_succeeded : 0)}</p></div>
+            <p className="text-xs text-muted-foreground">Kun serververificerede betalte ordrer tæller som salg. Klik på “Bestil” tæller aldrig som omsætning.</p>
+          </CardContent>
+        </Card>
+       </div>
+       <Card>
+        <CardHeader><CardTitle>Kampagner og kanaler</CardTitle></CardHeader>
+        <CardContent>
+          <Table><TableHeader><TableRow><TableHead>Kilde / medie</TableHead><TableHead>Kampagne</TableHead><TableHead className="text-right">Køb</TableHead><TableHead className="text-right">Omsætning</TableHead></TableRow></TableHeader>
+          <TableBody>{data.attribution.length ? data.attribution.map(row => <TableRow key={`${row.source}/${row.medium}/${row.campaign}`}><TableCell>{row.source} / {row.medium}</TableCell><TableCell>{row.campaign}</TableCell><TableCell className="text-right tabular-nums">{row.purchases}</TableCell><TableCell className="text-right tabular-nums">{formatPrice(row.revenue)}</TableCell></TableRow>) : <TableRow><TableCell colSpan={4} className="text-center text-muted-foreground">Ingen betalte ordrer i perioden.</TableCell></TableRow>}</TableBody></Table>
+        </CardContent>
+       </Card>
+       <Card>
+        <CardHeader><CardTitle>Resultat pr. lokation</CardTitle></CardHeader>
+        <CardContent><Table><TableHeader><TableRow><TableHead>Lokation</TableHead><TableHead className="text-right">Sessions</TableHead><TableHead className="text-right">Køb</TableHead><TableHead className="text-right">Konvertering</TableHead><TableHead className="text-right">Omsætning</TableHead></TableRow></TableHeader>
+        <TableBody>{data.byLocation.map(row => <TableRow key={row.locationId}><TableCell>{row.locationName}</TableCell><TableCell className="text-right">{row.sessions}</TableCell><TableCell className="text-right">{row.purchases}</TableCell><TableCell className="text-right">{row.convSessionsToPurchase.toFixed(1)}%</TableCell><TableCell className="text-right">{formatPrice(row.revenue || 0)}</TableCell></TableRow>)}</TableBody></Table></CardContent>
+       </Card>
     </div>
   );
 }

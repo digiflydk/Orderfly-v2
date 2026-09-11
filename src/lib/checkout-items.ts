@@ -42,7 +42,9 @@ export function validateCheckoutItems(items: MinimalCartItem[], catalog: Restore
       throw new Error('Option prices have changed. Please refresh your basket.');
     }
     subtotal = sumMoney([subtotal, lineMoney(line.basePrice, item.quantity, toppingPrices)]);
-    return { ...item, unitPrice: money(item.unitPrice), totalPrice: lineMoney(item.unitPrice, item.quantity, toppingPrices), id: line.id, itemType: line.itemType, name: line.productName,
+    return { ...item, unitPrice: money(item.unitPrice), totalPrice: lineMoney(item.unitPrice, item.quantity, toppingPrices),
+      listUnitPrice: money(line.basePrice), listTotalPrice: lineMoney(line.basePrice, item.quantity, toppingPrices),
+      id: line.id, itemType: line.itemType, name: line.productName,
       toppings: line.toppings.map(topping => topping.name), toppingIds: line.toppings.map(topping => topping.id!),
       ...(line.comboSelections ? { comboSelections: line.comboSelections } : {}),
     };

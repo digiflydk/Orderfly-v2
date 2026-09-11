@@ -52,6 +52,9 @@ export type Brand = {
   // Analytics overrides
   ga4MeasurementId?: string;
   gtmContainerId?: string;
+  googleAdsConversionId?: string;
+  googleAdsPurchaseLabel?: string;
+  metaPixelId?: string;
 };
 
 /**
@@ -102,6 +105,7 @@ export interface CustomerInfo {
     analyticsSessionId?: string;
     analyticsDevice?: 'mobile' | 'desktop';
     analyticsConsent?: boolean;
+    analyticsAttribution?: AnalyticsAttribution;
     name: string;
     email: string;
     phone: string;
@@ -110,6 +114,21 @@ export interface CustomerInfo {
     city?: string;
     subscribeToNewsletter: boolean;
 }
+
+export type AnalyticsAttribution = {
+  source?: string;
+  medium?: string;
+  campaign?: string;
+  campaignId?: string;
+  term?: string;
+  content?: string;
+  gclid?: string;
+  gbraid?: string;
+  wbraid?: string;
+  fbclid?: string;
+  landingPath?: string;
+  referrerHost?: string;
+};
 
 /**
  * @description End-customer who places orders.
@@ -386,7 +405,14 @@ export type OrderDetail = OrderSummary & {
     deliveryInstructions?: string;
   };
   deliveryTime?: string;
+  fulfillmentAt?: Date | string | { toDate(): Date };
   paidAt?: Date;
+  analytics?: {
+      sessionId?: string;
+      deviceType?: 'mobile' | 'desktop';
+      attribution?: AnalyticsAttribution;
+  };
+  invoice?: OrderInvoice;
   psp?: {
       provider: 'stripe';
       checkoutSessionId?: string;
@@ -394,6 +420,50 @@ export type OrderDetail = OrderSummary & {
       descriptorPrefix?: string;
       descriptorSuffix?: string;
   }
+};
+
+export type OrderInvoiceLine = {
+  description: string;
+  quantity: number;
+  unitAmount: number;
+  totalAmount: number;
+};
+
+/** Immutable fiscal snapshot created exactly once when Stripe confirms payment. */
+export type OrderInvoice = {
+  number: string;
+  issuedAt: string;
+  supplyDate: string;
+  currency: string;
+  seller: {
+    legalName: string;
+    tradingName: string;
+    registrationNumber: string;
+    address: string;
+    email?: string;
+  };
+  fulfillmentLocation: {
+    name: string;
+    address: string;
+  };
+  customer: {
+    name: string;
+    email: string;
+    address?: string;
+  };
+  lines: OrderInvoiceLine[];
+  subtotal: number;
+  itemDiscount: number;
+  orderDiscount: number;
+  deliveryFee: number;
+  bagFee: number;
+  adminFee: number;
+  taxableAmount: number;
+  vatRate: number;
+  vatAmount: number;
+  totalAmount: number;
+  paymentMethod: 'Stripe';
+  paymentReference?: string;
 };
 
 
@@ -564,6 +634,8 @@ export type MinimalCartItem = {
     quantity: number;
     unitPrice: number;
     totalPrice: number;
+    listUnitPrice?: number;
+    listTotalPrice?: number;
     toppings?: string[];
 }
 
@@ -954,7 +1026,7 @@ export type FunnelOutput = {
     delivery_fees_total: number;
     discounts_total: number;
   };
-  daily: AnalyticsDaily[];
+  daily: Array<{ date: string; sessions: number; purchases: number; revenue: number }>;
   byLocation: Array<{
     locationId: string;
     locationName: string;
@@ -964,6 +1036,14 @@ export type FunnelOutput = {
     aov?: number;
     revenue?: number;
   }>;
+  attribution: Array<{
+    source: string;
+    medium: string;
+    campaign: string;
+    purchases: number;
+    revenue: number;
+  }>;
+  dataQualityWarnings: string[];
 };
 
 

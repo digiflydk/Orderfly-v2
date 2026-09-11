@@ -178,6 +178,7 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
     });
 
     } catch { /* The user's explicit choice remains in memory. */ }
+    window.dispatchEvent(new CustomEvent('orderfly:consent', { detail: consentData }));
     const anonymousId = getOrCreateAnonId();
 
     const dataToSend: Omit<AnonymousCookieConsent, 'id' | 'first_seen' | 'last_seen' | 'linked_to_customer'> = {

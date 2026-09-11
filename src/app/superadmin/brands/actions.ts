@@ -68,8 +68,11 @@ const brandSchema = z.object({
   vatPercentage: z.coerce.number().min(0).max(100).optional(),
 
    // Analytics overrides
-  ga4MeasurementId: z.string().optional(),
-  gtmContainerId: z.string().optional(),
+  ga4MeasurementId: z.string().regex(/^G-[A-Z0-9]+$/).optional().or(z.literal('')),
+  gtmContainerId: z.string().regex(/^GTM-[A-Z0-9]+$/).optional().or(z.literal('')),
+  googleAdsConversionId: z.string().regex(/^AW-\d+$/).optional().or(z.literal('')),
+  googleAdsPurchaseLabel: z.string().max(100).optional().or(z.literal('')),
+  metaPixelId: z.string().regex(/^\d{5,30}$/).optional().or(z.literal('')),
 
   // Appearances is handled by its own form
   appearances: z.any().optional(),

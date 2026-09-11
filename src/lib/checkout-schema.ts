@@ -3,8 +3,16 @@ import { MAX_TOPPINGS_PER_ITEM } from './commerce-limits';
 const amount = z.number().finite().nonnegative();
 const id = z.string().min(1).max(160).regex(/^[^/\\?#]+$/);
 const optionalText = z.string().max(250).nullish().transform(value => value ?? undefined);
+const attributionText = z.string().max(256).regex(/^[\p{L}\p{N} _.,:+\-/]+$/u).optional();
+const analyticsAttribution = z.object({
+  source: attributionText, medium: attributionText, campaign: attributionText, campaignId: attributionText,
+  term: attributionText, content: attributionText, gclid: attributionText, gbraid: attributionText,
+  wbraid: attributionText, fbclid: attributionText,
+  landingPath: z.string().max(500).regex(/^\/[^?#]*$/).optional(),
+  referrerHost: z.string().max(253).regex(/^[a-z0-9.-]+$/).optional(),
+}).strict().optional();
 const customer = z.object({
-  analyticsSessionId: z.string().uuid().optional(), analyticsDevice: z.enum(['mobile','desktop']).optional(), analyticsConsent: z.boolean().optional(),
+  analyticsSessionId: z.string().uuid().optional(), analyticsDevice: z.enum(['mobile','desktop']).optional(), analyticsConsent: z.boolean().optional(), analyticsAttribution,
   name: z.string().trim().min(2).max(200), email: z.string().trim().email().max(254),
   phone: z.string().trim().min(5).max(50), street: optionalText, zipCode: optionalText, city: optionalText,
   newsletterConsentId: z.string().uuid().optional(),

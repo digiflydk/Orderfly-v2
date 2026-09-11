@@ -485,7 +485,7 @@ export async function createStripeCheckoutSessionAction(
       deliveryFee: effectiveDeliveryFee,
       bagFee: effectiveBagFee,
       adminFee: effectiveAdminFee,
-      vatAmount: money(totalAmount * ((brand.vatPercentage || 25) / (100 + (brand.vatPercentage || 25)))),
+      vatAmount: money(totalAmount * ((brand.vatPercentage ?? 25) / (100 + (brand.vatPercentage ?? 25)))),
     };
 
     stage = 'customer';
@@ -517,7 +517,10 @@ export async function createStripeCheckoutSessionAction(
         appliedDiscountId: appliedDiscountIdForOrder,
         cancelTokenHash: createHash('sha256').update(cancelToken).digest('hex'),
         receiptTokenHash: createHash('sha256').update(receiptToken).digest('hex'),
-        ...(customerInfo.analyticsConsent && customerInfo.analyticsSessionId ? {analytics: {sessionId: customerInfo.analyticsSessionId, deviceType: customerInfo.analyticsDevice || 'desktop'}} : {}),
+        ...(customerInfo.analyticsConsent && customerInfo.analyticsSessionId ? {analytics: {
+          sessionId: customerInfo.analyticsSessionId, deviceType: customerInfo.analyticsDevice || 'desktop',
+          ...(customerInfo.analyticsAttribution ? { attribution: customerInfo.analyticsAttribution } : {}),
+        }} : {}),
         customerName: customerInfo.name,
         customerContact: customerInfo.email,
         deliveryType: deliveryType === 'delivery' ? 'Delivery' : 'Pickup',

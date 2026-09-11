@@ -3,12 +3,14 @@ const assert=require('node:assert/strict');
 const {checkout}=require('../helpers/checkout-fixture.cjs');
 const held = records => [...records].filter(([key])=>key.startsWith('checkout_')).map(([,value])=>value.held);
 for(const fault of ['consent-read','consent-invalid','consent-link'])test(`optional ${fault} does not block customer/order/Stripe`,async()=>{
- const {result,writes}=await checkout({fault,kind:'newsletter'});
+ const {result,writes,events}=await checkout({fault,kind:'newsletter'});
  assert.equal(result.success,true,result.error);
  assert.ok(writes.some(w=>w.ref.collection==='orders'));
  const customer=writes.find(w=>w.ref.collection==='customers').data;
  assert.equal(customer.cookie_consent,undefined);
- assert.equal(customer.marketingConsent,true);
+ assert.equal(customer.marketingConsent,false);
+ assert.equal(customer.pendingNewsletterDiscountId,'d');
+ assert.ok(events.includes('newsletter-consent'));
 });
 test('core customer failure is still rejected before any payment',async()=>{
  const {result,events}=await checkout({fault:'customer'});
