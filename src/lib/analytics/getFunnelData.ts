@@ -24,14 +24,14 @@ export async function getFunnelData(filters: FunnelFilters, _user?: unknown): Pr
     query.get(),
     getPurchasesInRange({ startDate: dateFrom, endDate: dateTo, brandId: filters.brandId, locationId: filters.locationId, device: filters.device, utmSource: filters.utmSource }),
   ]);
-  const events = snapshot.docs.map(doc => doc.data() as AnalyticsEvent).filter(event => {
-    // Performance and payment-server diagnostics are not measured visits.
-    if (['web_vital', 'payment_succeeded', 'payment_session_created'].includes(event.name)) return false;
-    if (!event.brandId || !event.locationId || !event.sessionId) return false;
+  const allEvents = snapshot.docs.map(doc => doc.data() as AnalyticsEvent).filter(event => {
     if (filters.device && filters.device !== 'all' && event.deviceType !== filters.device) return false;
     if (filters.utmSource && String((event as unknown as Record<string, unknown>).source || '').toLowerCase() !== filters.utmSource.toLowerCase()) return false;
     return true;
   });
+  // Retain server metrics for aggregation, but never count them as browser visits.
+  const events = allEvents.filter(event => event.brandId && event.locationId && event.sessionId &&
+    !['web_vital', 'payment_succeeded', 'payment_session_created'].includes(event.name));
   const sessions = new Set(events.map(event => event.sessionId).filter(Boolean));
   const unique = filters.counting === 'unique';
   const paidCount = unique
@@ -50,8 +50,8 @@ export async function getFunnelData(filters: FunnelFilters, _user?: unknown): Pr
     : events.filter(event => event.name === step).length;
   for (const name of ['payment_session_created', 'upsell_offer_shown', 'upsell_accepted', 'upsell_rejected'] as const) {
     totals[name] = unique
-      ? new Set(events.filter(event => event.name === name).map(event => event.sessionId).filter(Boolean)).size
-      : events.filter(event => event.name === name).length;
+      ? new Set(allEvents.filter(event => event.name === name).map(event => event.sessionId).filter(Boolean)).size
+      : allEvents.filter(event => event.name === name).length;
   }
 
   const dates = new Map<string, { sessions: Set<string>; purchases: number; revenue: number }>();

@@ -42,6 +42,7 @@ test('collected events reach filtered funnel; sales remain authoritative and con
  }
  const now=new Date();
  db.rows.set('analytics_events/server',{name:'payment_succeeded',brandId:'b',locationId:'l',sessionId:'server-only',ts:now});
+ db.rows.set('analytics_events/payment-created',{name:'payment_session_created',brandId:'b',locationId:'l',sessionId:'server-only',source:'google',deviceType:'mobile',ts:now});
  db.rows.set('analytics_events/vital',{name:'web_vital',brandId:'b',locationId:'l',sessionId:'vitals-only',ts:now});
  db.rows.set('analytics_events/other',{name:'view_menu',brandId:'other',locationId:'other',sessionId:'other',ts:now});
  db.rows.set('locations/l',{name:'Fixture'});
@@ -52,6 +53,7 @@ test('collected events reach filtered funnel; sales remain authoritative and con
  const filters={dateFrom:now.toISOString(),dateTo:now.toISOString(),brandId:'b',locationId:'l',counting:'events',device:'mobile',utmSource:'google'};
  const result=await getFunnelData(filters);
  assert.equal(result.totals.sessions,1);
+ assert.equal(result.totals.payment_session_created,1,'server metric remains visible without creating a browser session');
  for(const step of ['view_menu','view_product','add_to_cart','start_checkout','click_purchase'])assert.equal(result.totals[step],1);
  assert.equal(result.totals.payment_succeeded,3);assert.equal(result.totals.revenue_paid,225);
  assert.equal(result.totals.measuredPurchasingSessions,1);assert.equal(result.byLocation[0].convSessionsToPurchase,100);
