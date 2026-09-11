@@ -37,7 +37,7 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     };
     // A legacy path could mark Paid without the outbox job. Repair only this
     // verified session's missing job, without replaying financial accounting.
-    if (order.paymentStatus === 'Paid' && order.invoice) {
+    if (order.paymentStatus === 'Paid') {
       if (order.psp?.checkoutSessionId !== session.id) throw new Error('Payment scope mismatch');
       ensureConfirmation();
       return false;
@@ -55,13 +55,6 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     if (location.brandId !== order.brandId) throw new Error('Invoice location scope mismatch');
     const sequence = Number(counterSnap.data()?.lastNumber || 0) + 1;
     const invoice = buildOrderInvoice({ order: { ...order, id: orderSnap.id } as OrderDetail, brand, location, sequence, issuedAt, paymentReference: piId || undefined });
-    if (order.paymentStatus === 'Paid') {
-      if (order.psp?.checkoutSessionId !== session.id) throw new Error('Payment scope mismatch');
-      transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true });
-      transaction.update(orderRef, { invoice, updatedAt: serverTimestamp() });
-      ensureConfirmation();
-      return false;
-    }
     const customerRef = doc(db, 'customers', order.customerDetails.id);
     const customerSnap = await transaction.get(customerRef);
     if (customerSnap.exists() && customerSnap.data().brandId !== order.brandId) throw new Error('Customer scope mismatch');

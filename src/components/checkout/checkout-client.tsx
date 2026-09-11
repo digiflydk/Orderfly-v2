@@ -303,7 +303,7 @@ function OrderSummaryContent() {
 
         {vatAmount > 0 && (
           <div className="flex justify-between text-xs text-muted-foreground pt-1">
-            <span>VAT Included ({brand?.vatPercentage || 25}%)</span>
+            <span>VAT Included ({brand?.vatPercentage ?? 25}%)</span>
             <span>{formatPrice(vatAmount)}</span>
           </div>
         )}

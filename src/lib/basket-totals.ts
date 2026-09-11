@@ -64,7 +64,7 @@ export function basketTotals({cartItems, appliedDiscount, standardDiscounts, del
     }
 
     const calculatedCheckoutTotal = sumMoney([calculatedCartTotal, isFreeDelivery ? 0 : currentDeliveryFee, currentBagFee, currentAdminFee]);
-    const vatRate = brand?.vatPercentage || 25;
+    const vatRate = brand?.vatPercentage ?? 25;
 
     const allDiscountNames = [
         ...(currentItemDiscount > 0 ? ['Item Offers'] : []),

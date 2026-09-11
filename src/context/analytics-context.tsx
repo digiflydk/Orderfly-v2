@@ -8,7 +8,7 @@ import type { AnalyticsAttribution, AnalyticsEventName, Brand } from '@/types';
 import { commercePage } from '@/lib/commerce-metrics';
 import { statisticsAllowed, trackClientEvent } from '@/lib/analytics';
 import { getBrandBySlug } from '@/app/superadmin/brands/actions';
-import { campaignAttribution, normalizeAttribution } from '@/lib/analytics-attribution';
+import { campaignAttribution, normalizeAttribution, resolveAttribution } from '@/lib/analytics-attribution';
 
 interface AnalyticsContextType {
   trackEvent: (eventName: AnalyticsEventName, props?: Record<string, any>) => boolean;
@@ -44,15 +44,16 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
       }
       setSessionId(sid);
 
+      const attributionCookie = `${ATTRIBUTION_COOKIE}_${brandProp?.id || pathname.split("/")[1] || "platform"}`;
       const currentTouch = campaignAttribution(searchParams, pathname, document.referrer);
       let stored: AnalyticsAttribution | undefined;
-      try { stored = normalizeAttribution(JSON.parse(Cookies.get(ATTRIBUTION_COOKIE) || '{}')); } catch { /* Ignore corrupt attribution. */ }
-      const resolved = currentTouch || stored;
+      try { stored = normalizeAttribution(JSON.parse(Cookies.get(attributionCookie) || '{}')); } catch { /* Ignore corrupt attribution. */ }
+      const resolved = resolveAttribution(currentTouch, stored);
       setAttribution(resolved || null);
-      if (resolved && statisticsAllowed()) Cookies.set(ATTRIBUTION_COOKIE, JSON.stringify(resolved), { expires: 30, path: '/', sameSite: 'Lax' });
+      if (resolved && statisticsAllowed()) Cookies.set(attributionCookie, JSON.stringify(resolved), { expires: 30, path: '/', sameSite: 'Lax' });
 
       const persistAfterConsent = () => {
-        if (resolved && statisticsAllowed()) Cookies.set(ATTRIBUTION_COOKIE, JSON.stringify(resolved), { expires: 30, path: '/', sameSite: 'Lax' });
+        if (resolved && statisticsAllowed()) Cookies.set(attributionCookie, JSON.stringify(resolved), { expires: 30, path: '/', sameSite: 'Lax' });
       };
       window.addEventListener('orderfly:consent', persistAfterConsent);
 

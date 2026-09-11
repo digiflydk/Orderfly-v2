@@ -11,7 +11,7 @@ Dynamic storefront theming from administration remains out of scope. The Esmeral
 
 ## Invoice contract
 
-Payment settlement allocates `INV-YYYY-NNNNNN` from a transactional, brand/year counter. The same transaction stores the full invoice snapshot and creates the confirmation outbox job. Repeated webhooks or receipt polling cannot allocate a second number or resend accounting effects. Older paid orders without an invoice are repaired exactly once from their stored order, seller and location data.
+Payment settlement allocates `INV-YYYY-NNNNNN` from a transactional, brand/year counter. The same transaction stores the full invoice snapshot and creates the confirmation outbox job. Repeated webhooks or receipt polling cannot allocate a second number or resend accounting effects. Already-paid legacy orders retain their original confirmation payload; receipt polling never allocates a retrospective invoice. A newly settled legacy checkout with missing original line prices uses its stored net line amounts and does not invent original prices or apply the item discount twice.
 
 The snapshot contains issue and scheduled supply time, seller legal/trading name, address and CVR, customer identity and delivery address where supplied, fulfillment location, quantity and gross line amounts, item/order discounts, delivery/bag/admin fees, taxable amount, VAT rate and amount, currency, paid total and payment reference. The email renderer escapes every value and includes both HTML and text alternatives.
 
@@ -51,3 +51,5 @@ No browser-only analytics stack can promise literal 100% measurement because con
 2. Verify that the previous Orderfly confirmation payload still queues and renders without an empty invoice section.
 3. Deploy the Orderfly companion release.
 4. Complete one controlled paid test order and verify the stored invoice, receipt, Mailtrap acceptance, rendered HTML/text invoice and server-side paid-order funnel row share the same order ID and total.
+
+Release corrections: campaign attribution survives untagged navigation in a brand-scoped cookie, and instrumentation origin no longer overwrites campaign source. Zero VAT uses a nullish fallback consistently. Brand tags execute in their own removable document; leaving the brand or withdrawing consent destroys that runtime, including globals and automatic listeners. Only matching brand events enter that document. Direct GA4/Ads and Meta purchases explicitly target the configured destination; GTM receives the ecommerce dataLayer event in that document. GTM containers should consume the supplied commerce events rather than depend on selectors in the storefront document.

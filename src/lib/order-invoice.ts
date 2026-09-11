@@ -30,9 +30,14 @@ export function buildOrderInvoice(input: {
 }): OrderInvoice {
   const { order, brand, location, sequence, issuedAt } = input;
   const vatRate = Number.isFinite(brand.vatPercentage) ? Math.max(0, brand.vatPercentage || 0) : 25;
-  const vatAmount = money(order.paymentDetails.vatAmount ?? order.totalAmount * vatRate / (100 + vatRate));
+  const vatAmount = money(order.totalAmount * vatRate / (100 + vatRate));
   const customerAddress = order.deliveryType === 'Delivery' && order.customerDetails.address !== 'For Pickup'
     ? order.customerDetails.address : undefined;
+  const legacyNetLines = order.productItems.some(item => item.listTotalPrice === undefined);
+  const lines = order.productItems.map(item => {
+    const totalAmount = money(legacyNetLines ? item.totalPrice : item.listTotalPrice!);
+    return { description: item.name, quantity: item.quantity, unitAmount: Number((totalAmount / item.quantity).toFixed(6)), totalAmount };
+  });
   return {
     number: invoiceNumber(Number(issuedAt.slice(0, 4)), sequence),
     issuedAt,
@@ -50,12 +55,9 @@ export function buildOrderInvoice(input: {
       address: location.address || address(location.street, `${location.zipCode || ''} ${location.city || ''}`.trim(), location.country),
     },
     customer: { name: order.customerName, email: order.customerContact, ...(customerAddress ? { address: customerAddress } : {}) },
-    lines: order.productItems.map(item => {
-      const totalAmount = money(item.listTotalPrice ?? item.totalPrice);
-      return { description: item.name, quantity: item.quantity, unitAmount: money(totalAmount / item.quantity), totalAmount };
-    }),
-    subtotal: money(order.paymentDetails.subtotal),
-    itemDiscount: money(order.paymentDetails.itemDiscountTotal || 0),
+    lines,
+    subtotal: legacyNetLines ? money(lines.reduce((sum, line) => sum + line.totalAmount, 0)) : money(order.paymentDetails.subtotal),
+    itemDiscount: legacyNetLines ? 0 : money(order.paymentDetails.itemDiscountTotal || 0),
     orderDiscount: money(order.paymentDetails.cartDiscountTotal || 0),
     deliveryFee: money(order.paymentDetails.deliveryFee || 0),
     bagFee: money(order.paymentDetails.bagFee || 0),

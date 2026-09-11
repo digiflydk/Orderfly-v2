@@ -49,7 +49,7 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
       if (!ownsLease) continue;
       dispatched = true;
       const invoice = order.invoice;
-      if (!invoice?.number || !Array.isArray(invoice.lines)) {
+      if (invoice && (!invoice.number || !Array.isArray(invoice.lines))) {
         await finish('failed', 'invoice_snapshot_missing'); counts.failed++; continue;
       }
       await makeClient().send({
@@ -58,11 +58,13 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
         relatedEntity: { type: 'commerce_order', id: orderDoc.id },
         variables: {
           orderId: orderDoc.id, customerName: String(order.customerName || ''), brandName: String(order.brandName || ''), locationName: String(order.locationName || ''),
-          deliveryType: String(order.deliveryType || ''), deliveryTime: String(order.deliveryTime || ''), totalAmount: Number(order.totalAmount || 0), currency: String(invoice.currency || 'DKK'),
+          deliveryType: String(order.deliveryType || ''), deliveryTime: String(order.deliveryTime || ''), totalAmount: Number(order.totalAmount || 0), currency: String(invoice?.currency || 'DKK'),
+          ...(invoice ? {
           invoiceNumber: String(invoice.number), invoiceIssuedAt: String(invoice.issuedAt), supplyDate: String(invoice.supplyDate),
           sellerLegalName: String(invoice.seller?.legalName || ''), sellerTradingName: String(invoice.seller?.tradingName || ''), sellerRegistrationNumber: String(invoice.seller?.registrationNumber || ''), sellerAddress: String(invoice.seller?.address || ''), sellerEmail: String(invoice.seller?.email || ''),
           fulfillmentAddress: String(invoice.fulfillmentLocation?.address || ''), customerAddress: String(invoice.customer?.address || ''),
           invoiceLinesJson: JSON.stringify(invoice.lines), subtotal: Number(invoice.subtotal || 0), itemDiscount: Number(invoice.itemDiscount || 0), orderDiscount: Number(invoice.orderDiscount || 0), deliveryFee: Number(invoice.deliveryFee || 0), bagFee: Number(invoice.bagFee || 0), adminFee: Number(invoice.adminFee || 0), taxableAmount: Number(invoice.taxableAmount || 0), vatRate: Number(invoice.vatRate || 0), vatAmount: Number(invoice.vatAmount || 0), paymentMethod: String(invoice.paymentMethod || 'Stripe'),
+          } : {}),
         },
       });
       await finish('accepted'); counts.accepted++;

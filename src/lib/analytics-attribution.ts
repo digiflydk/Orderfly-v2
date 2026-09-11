@@ -54,3 +54,8 @@ export function campaignAttribution(search: URLSearchParams, pathname: string, r
     landingPath: pathname, referrer,
   });
 }
+
+export function resolveAttribution(current: AnalyticsAttribution | undefined, stored: AnalyticsAttribution | undefined) {
+  const tagged = current && ['source','medium','campaign','campaignId','term','content','gclid','gbraid','wbraid','fbclid'].some(key => Boolean(current[key as keyof AnalyticsAttribution]));
+  return tagged ? current : stored || current;
+}

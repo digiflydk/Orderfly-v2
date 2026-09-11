@@ -60,8 +60,8 @@ test('legacy Paid missing job is repaired once without financial/accounting repl
  assert.equal(f.records()[jobKey].state,'pending');assert.ok(f.records()[jobKey].eventId);
  assert.deepEqual(f.records()['customers/c'],original['customers/c']);
  assert.deepEqual(f.records()['discounts/d'],original['discounts/d']);
- assert.match(f.records()['orders/ORD-TEST'].invoice.number,/^INV-\d{4}-000001$/);
- assert.equal(f.records()['invoiceCounters/b-2026'].lastNumber,1);
+ assert.equal(f.records()['orders/ORD-TEST'].invoice,undefined);
+ assert.equal(f.records()['invoiceCounters/b-2026'],undefined);
  assert.deepEqual(f.counters(),{capacity:0,analytics:0});
 });
 test('existing pending, accepted, uncertain, failed and suppressed jobs retain event and retry state',async()=>{
