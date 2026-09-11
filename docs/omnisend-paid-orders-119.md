@@ -20,6 +20,31 @@ after dispatch has an unknown outcome and becomes terminal `uncertain`; Omnisend
 documents that real-time automation events are not deduplicated, so operators
 must investigate rather than resend blindly.
 
+## Safe deployment and activation
+
+The committed App Hosting configuration sets `ORDERFLY_OMNISEND_PAID_ORDERS_ENABLED`
+to `"false"`. This separate switch leaves existing newsletter contact sync intact.
+While disabled, payment settlement does not read or create marketing order jobs,
+the order worker performs no outbox query or provider request, and admin order
+listing/retry is disabled. Invoice and transactional confirmation still run.
+Deploying this dormant feature is safe before its infrastructure prerequisites;
+**live activation remains blocked until every prerequisite below is verified**.
+Set the runtime value to `"true"` only in a subsequent reviewed deployment after
+recording the rules/index and mapped-key evidence. Disabling it again pauses
+creation and dispatch without deleting or replaying any jobs.
+
+Payment settlement uses Firebase Admin SDK references and transactions, including
+the existing bounded discount-reservation counters. Therefore deny-all client
+rules on the private outbox cannot break verified payment settlement. Brand,
+location, customer, session and existing-job scope checks remain enforced.
+
+Contact lookup uses the canonical `contactKey` from the consent store. Pending or
+retryable failed contact sync defers order dispatch. After provider brand
+verification, a transaction rereads order, customer, contact and job before the
+dispatch transition, so intervening consent withdrawal or cancellation suppresses
+sending. Both workers share a 100-second request deadline, with provider time
+reserved before starting further jobs.
+
 ## Release prerequisites
 
 1. Merge and deploy Orderfly PR #118 first; this PR depends on its immutable
@@ -49,3 +74,12 @@ Cancel or revoke consent before a pending job runs and confirm it is suppressed.
 
 Rollback is operational: disable the affected brand mapping or stop the worker
 schedule. Preserve jobs for audit; do not delete or replay `uncertain` jobs.
+
+
+## Regression verification
+
+Run `node --test tests/unit/omnisend-paid-order.cjs tests/unit/payment-confirmation-job.cjs`
+and `npm run typecheck`. Coverage executes the actual consent-store key lookup,
+Admin capacity settlement and paid-order worker, including concurrent retries,
+client-transaction denial, reservation counters, consent changes during provider
+I/O, failed contact recovery, bounded deadlines and the default-off release gate.

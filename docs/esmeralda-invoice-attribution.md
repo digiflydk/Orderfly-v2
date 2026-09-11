@@ -11,7 +11,7 @@ Dynamic storefront theming from administration remains out of scope. The Esmeral
 
 ## Invoice contract
 
-Payment settlement allocates `INV-YYYY-NNNNNN` from a transactional, brand/year counter. The same transaction stores the full invoice snapshot and creates the confirmation outbox job. Repeated webhooks or receipt polling cannot allocate a second number or resend accounting effects. Older paid orders without an invoice are repaired exactly once from their stored order, seller and location data.
+Payment settlement allocates `INV-YYYY-NNNNNN` from a transactional, brand/year counter. The same transaction stores the full invoice snapshot and creates the confirmation outbox job. Repeated webhooks or receipt polling cannot allocate a second number or resend accounting effects. Already-paid legacy orders retain their original confirmation payload; receipt polling never allocates a retrospective invoice. A newly settled legacy checkout with missing original line prices uses its stored net line amounts and does not invent original prices or apply the item discount twice.
 
 The snapshot contains issue and scheduled supply time, seller legal/trading name, address and CVR, customer identity and delivery address where supplied, fulfillment location, quantity and gross line amounts, item/order discounts, delivery/bag/admin fees, taxable amount, VAT rate and amount, currency, paid total and payment reference. The email renderer escapes every value and includes both HTML and text alternatives.
 
@@ -47,8 +47,13 @@ No browser-only analytics stack can promise literal 100% measurement because con
 
 ## Deployment sequence
 
-1. Deploy Opsfly migration `20260911123000_orderfly_invoice_confirmation.sql` and the reviewed `orderfly-notification-enqueue`, `notification-admin` and `notification-worker` function tree.
+1. Deploy Opsfly migration `20260911123000_orderfly_invoice_confirmation.sql` and the reviewed `orderfly-notification-enqueue`, `notification-admin` `notification-worker` and `production-admin` function tree.
 2. Verify that the previous Orderfly confirmation payload still queues and renders without an empty invoice section.
 3. Deploy the Orderfly companion release.
 4. Complete one controlled paid test order with a synthetic, consented Omnisend contact and verify the stored invoice, receipt, Mailtrap acceptance, rendered HTML/text invoice, server-side paid-order funnel row and Omnisend event share the same order ID, currency and total.
 5. Verify that a non-consented paid test order remains in the Orderfly funnel but creates no Omnisend paid-order job or event.
+
+Release corrections: campaign attribution survives untagged navigation in a brand-scoped cookie, and instrumentation origin no longer overwrites campaign source. Zero VAT uses a nullish fallback consistently. Brand tags execute in their own removable document; leaving the brand or withdrawing consent destroys that runtime, including globals and automatic listeners. Only matching brand events enter that document. Direct GA4/Ads and Meta purchases explicitly target the configured destination; GTM receives the ecommerce dataLayer event in that document. GTM containers should consume the supplied commerce events rather than depend on selectors in the storefront document.
+
+
+The brand tracking document receives only sanitized campaign parameters and allowlisted click IDs; receipt tokens, session IDs and arbitrary URL query values never enter analytics configuration.

@@ -1,6 +1,6 @@
 import { getAdminDb } from '@/lib/firebase-admin';
 import { marketingAdminAuthorized } from '@/lib/marketing/auth';
-import { marketingConfig } from '@/lib/marketing/config';
+import { marketingConfig, paidOrderMarketingEnabled } from '@/lib/marketing/config';
 import { retryMarketingJob } from '@/lib/marketing/worker';
 import { retryMarketingOrderJob } from '@/lib/marketing/order-worker';
 import { getOrigin } from '@/lib/url';
@@ -15,13 +15,13 @@ export async function GET(request: Request) {
     const db = getAdminDb();
     const [contacts, orders] = await Promise.all([
         db.collection('marketingOutbox').where('brandId', '==', brandId).orderBy('createdAt', 'desc').limit(50).get(),
-        db.collection('marketingOrderOutbox').where('brandId', '==', brandId).orderBy('createdAt', 'desc').limit(50).get(),
+        paidOrderMarketingEnabled() ? db.collection('marketingOrderOutbox').where('brandId', '==', brandId).orderBy('createdAt', 'desc').limit(50).get() : { docs: [] },
     ]);
     const jobs = [
         ...contacts.docs.map(doc => ({ doc, kind: 'contact' as const })),
         ...orders.docs.map(doc => ({ doc, kind: 'paid_order' as const })),
     ].sort((a, b) => Number(b.doc.data().createdAt || 0) - Number(a.doc.data().createdAt || 0)).slice(0, 50);
-    return Response.json({ configured: !!marketingConfig(brandId), jobs: jobs.map(({ doc, kind }) => {
+    return Response.json({ configured: !!marketingConfig(brandId), paidOrdersEnabled: paidOrderMarketingEnabled(), jobs: jobs.map(({ doc, kind }) => {
             const d = doc.data();
             return { id: doc.id, kind, state: d.state, attempts: d.attempts, updatedAt: d.updatedAt, lastError: d.lastError || null };
         }) }, { headers: { 'Cache-Control': 'no-store' } });

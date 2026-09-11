@@ -485,7 +485,7 @@ export async function createStripeCheckoutSessionAction(
       deliveryFee: effectiveDeliveryFee,
       bagFee: effectiveBagFee,
       adminFee: effectiveAdminFee,
-      vatAmount: money(totalAmount * ((brand.vatPercentage || 25) / (100 + (brand.vatPercentage || 25)))),
+      vatAmount: money(totalAmount * ((brand.vatPercentage ?? 25) / (100 + (brand.vatPercentage ?? 25)))),
     };
 
     stage = 'customer';

@@ -2,6 +2,7 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const {createHash}=require('node:crypto');
 const {loadTs}=require('../helpers/load-ts.cjs');
+process.env.ORDERFLY_OMNISEND_PAID_ORDERS_ENABLED='true';
 const jobKey='orderNotificationJobs/'+createHash('sha256').update(JSON.stringify(['order-confirmation','b','ORD-TEST'])).digest('hex');
 const marketingJobKey='marketingOrderOutbox/'+createHash('sha256').update(JSON.stringify(['omnisend-paid-order','b','ORD-TEST'])).digest('hex');
 function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsent=false}={}) {
@@ -26,7 +27,7 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
   'stripe':{default:class{checkout={sessions:{retrieve:async()=>structuredClone(session)}}}},
   'next/server':{NextResponse:{json:(body,init)=>Response.json(body,init)}},
   '@/lib/analytics-server':{trackServerEvent:async()=>{analytics++;}},
-  '@/lib/discount-reservations':{prepareCapacitySettlement:async()=>()=>{capacity++;}},
+  '@/lib/server/discount-capacity':{prepareAdminCapacitySettlement:async(...args)=>{const commit=await loadTs('src/lib/server/discount-capacity.ts',{'server-only':{}}).prepareAdminCapacitySettlement(...args);return()=>{commit();capacity++;};}},
   'firebase/firestore':{
    doc:(_,collection,id)=>collection+'/'+id,serverTimestamp:()=> 'now',getDoc:async ref=>snapshot(structuredClone(records[ref])),
    runTransaction:(_,fn)=>{
@@ -40,6 +41,18 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
    },
   },
  };
+ const adminRef=path=>({path,id:path.split('/').at(-1)});
+ const client=mocks['firebase/firestore'];
+ const transact=client.runTransaction;
+ // Client permissions deny the private outbox. Settlement must use Admin SDK.
+ client.runTransaction=()=>{throw Error('permission-denied: client transaction');};
+ mocks['@/lib/firebase-admin']={getAdminFieldValue:()=>({serverTimestamp:()=> 'now'}),getAdminDb:()=>({
+  collection:collection=>({doc:id=>adminRef(collection+'/'+id)}),
+  runTransaction:fn=>transact(null,async tx=>fn({
+   get:async ref=>{assert.ok(ref.path,'Admin settlement requires server document references');const snap=await tx.get(ref.path);return{exists:snap.exists(),data:snap.data,id:ref.id,ref};},
+   set:(ref,data,opts)=>tx.set(ref.path,data,opts),update:(ref,data)=>tx.update(ref.path,data),
+  })),
+ })};
  const settlement=loadTs('src/lib/server/settle-checkout.ts',mocks);
  mocks['@/lib/server/settle-checkout']=settlement;
  const route=loadTs('src/app/api/payments/confirm-from-session/route.ts',mocks);
@@ -67,8 +80,8 @@ test('legacy Paid missing job is repaired once without financial/accounting repl
  assert.equal(f.records()[jobKey].state,'pending');assert.ok(f.records()[jobKey].eventId);
  assert.deepEqual(f.records()['customers/c'],original['customers/c']);
  assert.deepEqual(f.records()['discounts/d'],original['discounts/d']);
- assert.match(f.records()['orders/ORD-TEST'].invoice.number,/^INV-\d{4}-000001$/);
- assert.equal(f.records()['invoiceCounters/b-2026'].lastNumber,1);
+ assert.equal(f.records()['orders/ORD-TEST'].invoice,undefined);
+ assert.equal(f.records()['invoiceCounters/b-2026'],undefined);
  assert.deepEqual(f.counters(),{capacity:0,analytics:0});
 });
 test('existing pending, accepted, uncertain, failed and suppressed jobs retain event and retry state',async()=>{
@@ -119,4 +132,31 @@ test('signed asynchronous success invokes the same settlement; invalid signature
  const request=()=>new Request('https://fixture.test',{method:'POST',body:'event'});
  assert.equal((await api.POST(request())).status,200);assert.equal(calls,1);
  invalid=true;assert.equal((await api.POST(request())).status,400);assert.equal(calls,1);
+});
+
+
+test('Admin settlement consumes the same bounded reservation counters exactly once',async()=>{
+ const f=fixture(),r=f.records(),key=parts=>createHash('sha256').update(JSON.stringify(parts)).digest('hex');
+ const customer='checkout_customer_capacity/'+key(['b','c']);
+ const discount='checkout_discount_capacity/'+key(['b','d']);
+ const pair='checkout_customer_discount_capacity/'+key(['b','c','d']);
+ Object.assign(r['orders/ORD-TEST'],{discountReservation:'held',firstTimeReservation:true});
+ r[customer]={paid:3,held:2,firstTimeHeld:true};r[discount]={paid:8,held:4};r[pair]={paid:1,held:1};
+ await Promise.all([f.settle(),f.settle(),f.post()]);
+ assert.deepEqual(f.records()[customer],{paid:4,held:1,firstTimeHeld:false});
+ assert.deepEqual(f.records()[discount],{paid:9,held:3});
+ assert.deepEqual(f.records()[pair],{paid:2,held:0});
+});
+
+test('release gate disabled keeps settlement working without private outbox reads or writes',async()=>{
+ process.env.ORDERFLY_OMNISEND_PAID_ORDERS_ENABLED='false';
+ try {
+  const f=fixture({marketingConsent:true});
+  // Any read of this unrelated/corrupt record would reject payment settlement.
+  f.records()[marketingJobKey]={brandId:'other'};
+  assert.equal(await f.settle(),true);
+  assert.deepEqual(f.records()[marketingJobKey],{brandId:'other'});
+  assert.equal(f.records()['orders/ORD-TEST'].paymentStatus,'Paid');
+  assert.equal(f.records()[jobKey].state,'pending');
+ } finally {process.env.ORDERFLY_OMNISEND_PAID_ORDERS_ENABLED='true';}
 });

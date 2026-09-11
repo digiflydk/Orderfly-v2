@@ -9,8 +9,9 @@ export async function POST(request: Request) {
         return Response.json({ error: 'Unauthorized' }, { status: 401 });
     try {
         const db = getAdminDb();
-        const contacts = await runMarketingWorker(db);
-        const orders = await runMarketingOrderWorker(db);
+        const deadline = Date.now() + 100000;
+        const contacts = await runMarketingWorker(db, Date.now(), undefined, deadline);
+        const orders = await runMarketingOrderWorker(db, Date.now(), undefined, deadline);
         return Response.json({ contacts, orders }, { headers: { 'Cache-Control': 'no-store' } });
     }
     catch {

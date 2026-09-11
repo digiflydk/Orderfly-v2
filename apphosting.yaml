@@ -1,4 +1,9 @@
 env:
+  # Activate only after the paid-order release prerequisites in docs are verified.
+  - variable: ORDERFLY_OMNISEND_PAID_ORDERS_ENABLED
+    value: "false"
+    availability:
+      - RUNTIME
   # Product images: PO-confirmed Orderfly v2 project, separate from hosting/Firestore (#89).
   - variable: FIREBASE_STORAGE_BUCKET
     value: studio-2819118380-ae26c.firebasestorage.app

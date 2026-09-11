@@ -1,8 +1,9 @@
 import 'server-only';
-import { createHash, randomUUID } from 'node:crypto';
+import { randomUUID } from 'node:crypto';
 import type { DocumentReference, Firestore } from 'firebase-admin/firestore';
 import type { Customer, OrderDetail } from '@/types';
-import { marketingConfig } from './config';
+import { marketingConfig, paidOrderMarketingEnabled } from './config';
+import { contactKey } from './store';
 import { buildPaidOrderEvent, normalizedEmail, type PaidOrderJob } from './order-event';
 import { MarketingError, Omnisend } from './provider';
 
@@ -50,10 +51,12 @@ async function defer(db: Firestore, ref: DocumentReference, token: string, now: 
   });
 }
 
-export async function runMarketingOrderWorker(db: Firestore, now = Date.now(), makeProvider = (config: NonNullable<ReturnType<typeof marketingConfig>>) => new Omnisend(config)) {
-  const jobs = await db.collection('marketingOrderOutbox').where('nextAttemptAt', '<=', now).orderBy('nextAttemptAt').limit(10).get();
+export async function runMarketingOrderWorker(db: Firestore, now = Date.now(), makeProvider = (config: NonNullable<ReturnType<typeof marketingConfig>>) => new Omnisend(config), deadline = Date.now() + 45000) {
   const counts = { processed: 0, accepted: 0, failed: 0, uncertain: 0, suppressed: 0, deferred: 0 };
+  if (!paidOrderMarketingEnabled()) return counts;
+  const jobs = await db.collection('marketingOrderOutbox').where('nextAttemptAt', '<=', now).orderBy('nextAttemptAt').limit(10).get();
   for (const snap of jobs.docs) {
+    if (Date.now() + 15000 >= deadline) break;
     const job = await lease(db, snap.ref, now);
     if (!job) continue;
     let dispatchStarted = false;
@@ -65,9 +68,10 @@ export async function runMarketingOrderWorker(db: Firestore, now = Date.now(), m
       if (!order || !customer || order.brandId !== job.brandId || order.locationId !== job.locationId || customer.brandId !== job.brandId || order.customerDetails?.id !== job.customerId || order.paymentStatus !== 'Paid' || order.status === 'Canceled' || !order.invoice || customer.marketingConsent !== true || normalizedEmail(customer.email) !== normalizedEmail(order.customerContact)) {
         await finish(db, snap.ref, job.lease, 'suppressed', Date.now(), 'order_or_consent_ineligible'); counts.suppressed++; counts.processed++; continue;
       }
-      const contactKey = createHash('sha256').update(JSON.stringify([job.brandId, normalizedEmail(customer.email)])).digest('hex');
-      const contact = (await db.collection('marketingContacts').doc(contactKey).get()).data();
-      if (!contact || contact.brandId !== job.brandId || contact.customerId !== job.customerId || contact.state === 'pending') {
+      const key = contactKey(job.brandId, customer.email);
+      const contactRef = db.collection('marketingContacts').doc(key);
+      const contact = (await contactRef.get()).data();
+      if (!contact || contact.brandId !== job.brandId || contact.customerId !== job.customerId || ['pending', 'failed'].includes(contact.state)) {
         await defer(db, snap.ref, job.lease, Date.now()); counts.deferred++; counts.processed++; continue;
       }
       if (contact.state !== 'synced' || contact.providerStatus === 'unsubscribed') {
@@ -77,13 +81,33 @@ export async function runMarketingOrderWorker(db: Firestore, now = Date.now(), m
       if (!config) throw new MarketingError('configuration_required', false);
       const provider = makeProvider(config);
       await provider.verifyBrand();
-      await db.runTransaction(async tx => {
-        const current = await tx.get(snap.ref);
+      if (Date.now() + 10000 >= deadline) {
+        await defer(db, snap.ref, job.lease, Date.now()); counts.deferred++; counts.processed++; continue;
+      }
+      // Revalidate after provider I/O, atomically with the dispatch transition.
+      const dispatch = await db.runTransaction(async tx => {
+        const [current, freshOrderSnap, freshCustomerSnap, freshContactSnap] = await Promise.all([
+          tx.get(snap.ref), tx.get(orderSnap.ref), tx.get(customerSnap.ref), tx.get(contactRef),
+        ]);
         if (current.data()?.lease !== job.lease) throw new MarketingError('lease_lost', false);
+        const freshOrder = freshOrderSnap.data() as OrderDetail | undefined;
+        const freshCustomer = freshCustomerSnap.data() as Customer | undefined;
+        const freshContact = freshContactSnap.data();
+        if (!freshOrder || !freshCustomer || freshOrder.brandId !== job.brandId || freshOrder.locationId !== job.locationId || freshCustomer.brandId !== job.brandId || freshOrder.customerDetails?.id !== job.customerId || freshOrder.paymentStatus !== 'Paid' || freshOrder.status === 'Canceled' || !freshOrder.invoice || freshCustomer.marketingConsent !== true || normalizedEmail(freshCustomer.email) !== normalizedEmail(freshOrder.customerContact) || contactKey(job.brandId, freshCustomer.email) !== key) return { state: 'suppressed' } as const;
+        if (!freshContact || freshContact.brandId !== job.brandId || freshContact.customerId !== job.customerId || ['pending','failed'].includes(freshContact.state)) return { state: 'deferred' } as const;
+        if (freshContact.state !== 'synced' || freshContact.providerStatus === 'unsubscribed') return { state: 'suppressed' } as const;
+        const payload = buildPaidOrderEvent({ ...freshOrder, id: freshOrderSnap.id }, freshOrder.invoice, job, freshCustomer.email);
         tx.update(snap.ref, { state: 'dispatching', updatedAt: Date.now() });
+        return { state: 'ready', payload } as const;
       });
+      if (dispatch.state === 'suppressed') {
+        await finish(db, snap.ref, job.lease, 'suppressed', Date.now(), 'order_or_consent_ineligible'); counts.suppressed++; counts.processed++; continue;
+      }
+      if (dispatch.state === 'deferred') {
+        await defer(db, snap.ref, job.lease, Date.now()); counts.deferred++; counts.processed++; continue;
+      }
       dispatchStarted = true;
-      await provider.paidOrder(buildPaidOrderEvent({ ...order, id: orderSnap.id }, order.invoice, job, customer.email));
+      await provider.paidOrder(dispatch.payload);
       await finish(db, snap.ref, job.lease, 'accepted', Date.now()); counts.accepted++;
     } catch (error) {
       const failure = failureOf(error);
@@ -97,6 +121,7 @@ export async function runMarketingOrderWorker(db: Firestore, now = Date.now(), m
 }
 
 export async function retryMarketingOrderJob(db: Firestore, brandId: string, id: string) {
+  if (!paidOrderMarketingEnabled()) return false;
   const ref = db.collection('marketingOrderOutbox').doc(id);
   return db.runTransaction(async tx => {
     const snap = await tx.get(ref), job = snap.data();
