@@ -29,3 +29,5 @@ Rollback disables the feature flag, restoring legacy administration and closing 
 ## Review hardening
 
 The HTTP route stops and cancels requests beyond 20 KB while reading, before decoding JSON. Regression coverage includes request-ID reuse with changed content and runs in Orderfly CI alongside the brand reference tests. The companion tests now execute the shared language and theme scripts, cover English at 390/768/1440 px, and reject stale catalogue replies after logout. Local fixture results remain separate from independent review and runtime verification.
+
+Independent review correction: new-brand cutover selects an existing native user ID, never an email lookup. The server validates that document within the reference transaction. Mixed-case or duplicate emails cannot make the selected owner ambiguous. Existing brand ownership remains fixed on edit.

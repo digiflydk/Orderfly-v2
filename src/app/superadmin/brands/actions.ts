@@ -31,6 +31,7 @@ const brandSchema = z.object({
   id: z.string().optional(),
   
   // Step 1: User Info
+  ownerId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).optional(),
   ownerName: z.string().min(2, 'Owner name is required.'),
   ownerEmail: z.string().email('A valid email for the owner is required.'),
 
@@ -110,7 +111,7 @@ export async function createOrUpdateBrand(
     };
   }
 
-  const { id, ownerName, ownerEmail, companyRegNo, slug, ...brandData } = validatedFields.data;
+  const { id, ownerId: requestedOwnerId, ownerName, ownerEmail, companyRegNo, slug, ...brandData } = validatedFields.data;
   
   try {
     const db = getAdminDb();
@@ -150,11 +151,7 @@ export async function createOrUpdateBrand(
         const existing = id ? await tx.get(brandRef) : null;
         if (id && !existing?.exists) throw new Error('Brandet findes ikke længere.');
         let selectedOwnerId = existing?.data()?.ownerId;
-        if (!id) {
-          const owners = await tx.get(db.collection('users').where('email', '==', String(ownerEmail || '').trim().toLowerCase()).limit(2));
-          if (owners.size !== 1) throw new Error('Opret ejeren i mPanel først, og brug ejerens e-mail her.');
-          selectedOwnerId = owners.docs[0].id;
-        }
+        if (!id) selectedOwnerId = requestedOwnerId;
         if (!selectedOwnerId || !(await tx.get(db.collection('users').doc(selectedOwnerId))).exists) throw new Error('Ejeren findes ikke i mPanel.');
         if (brandData.subscriptionPlanId && !(await tx.get(db.collection('subscription_plans').doc(brandData.subscriptionPlanId))).exists) throw new Error('Abonnementsplanen findes ikke længere.');
         tx.set(brandRef, {...brandData, companyRegNo, slug, id:brandRef.id, ownerId:selectedOwnerId}, {merge:true});
