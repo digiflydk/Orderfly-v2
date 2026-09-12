@@ -83,6 +83,9 @@ export const BRAND_TRACKING_DOCUMENT = `<!doctype html><html><head><meta charset
   if(!config||config.origin!==location.origin||typeof config.brandId!=='string'||(!config.consent?.statistics&&!config.consent?.marketing))return;
   // Meta reads document.location; keep its URL aligned with sanitized storefront context.
   try{const page=new URL(config.pageLocation||'/',location.origin);if(page.origin!==location.origin)return;history.replaceState(null,'',page.href);}catch{return;}
+  // This isolated document represents the storefront, including its host-only referrer.
+  let referrer='';try{const ref=new URL(config.pageReferrer);if(ref.protocol==='https:'||ref.protocol==='http:')referrer=ref.origin+'/';}catch{}
+  Object.defineProperty(document,'referrer',{value:referrer});
   removeEventListener('message',initialize);
   window.dataLayer=[];
   function gtag(){window.dataLayer.push(arguments);}
