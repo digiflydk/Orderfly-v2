@@ -95,3 +95,17 @@ test('organization links cannot move under Opsfly memberships; stale embedded id
  f.records.get('platformCompanies/'+f.company.id).id='foreign';
  assert.equal((await f.preview({companyId:'foreign'})).allowed,false);assert.equal((await f.preview()).allowed,true);
 });
+
+test('preview denies native brands or users deleted outside the platform catalogue',async()=>{
+ let f=await accessFixture();f.records.delete('brands/brand');assert.equal((await f.preview()).reason,'product_unlinked');
+ f=await accessFixture();f.records.delete('users/user');assert.equal((await f.preview()).reason,'membership_inactive');
+});
+test('same native ID in Opsfly never blocks deletion of an unrelated Orderfly user',async()=>{
+ const f=await accessFixture();f.records.set('users/'+f.actorId,{name:'Unrelated',email:'other@example.test',roleIds:[]});
+ await f.save('memberships',{name:'Opsfly identity',companyId:f.company.id,product:'opsfly',principalId:f.actorId,principalOrganizationId:f.organizationId,roleIds:[f.role.id],isActive:true});
+ const user=(await f.call({action:'list'})).users.find(u=>u.id===f.actorId);
+ await f.call({action:'delete',kind:'users',id:user.id,revision:user.revision,requestId:crypto.randomUUID()});
+ assert.equal(f.records.has('users/'+f.actorId),false);
+ const linked=(await f.call({action:'list'})).users.find(u=>u.id==='user');
+ await assert.rejects(f.call({action:'delete',kind:'users',id:linked.id,revision:linked.revision,requestId:crypto.randomUUID()}),/record_in_use/);
+});

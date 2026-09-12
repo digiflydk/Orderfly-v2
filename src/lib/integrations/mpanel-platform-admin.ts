@@ -50,7 +50,16 @@ export async function executePlatformAdmin(input:z.infer<typeof envelopeSchema>,
         if(snap.docs.length>500)throw new PlatformAdminError('catalog_too_large',409);
         catalog[kind]=snap.docs.map((d:any)=>record(kind as keyof typeof collections,d));
       }
-      return evaluateAccess(catalog,command);
+      const result=evaluateAccess(catalog,command);
+      if(!result.allowed||command.product!=='orderfly')return result;
+      // Legacy brand deletion is outside this catalogue. Check native references in
+      // the same read transaction so stale saved links never produce an allow result.
+      const company=catalog.companies.find((c:any)=>c.id===command.companyId);
+      for(const brandId of company.orderflyBrandIds) {
+        if(!(await tx.get(db.collection('brands').doc(brandId))).exists)return {...result,allowed:false,reason:'product_unlinked'};
+      }
+      if(!(await tx.get(db.collection('users').doc(command.principalId))).exists)return {...result,allowed:false,reason:'membership_inactive'};
+      return result;
     });
   }
   if(command.action==='list') {
@@ -118,8 +127,13 @@ export async function executePlatformAdmin(input:z.infer<typeof envelopeSchema>,
         command.kind==='accessRoles'?[db.collection(accessCollections.memberships).where('roleIds','array-contains',command.id)]:
         command.kind==='memberships'?[]:command.kind==='roles'?[db.collection('users').where('roleIds','array-contains',command.id)]:
         command.kind==='plans'?[db.collection('brands').where('subscriptionPlanId','==',command.id),db.collection('subscriptions').where('planId','==',command.id)]:
-        [db.collection('brands').where('ownerId','==',command.id),db.collection(accessCollections.memberships).where('principalId','==',command.id)];
+        [db.collection('brands').where('ownerId','==',command.id)];
       for(const query of checks) if(!(await tx.get(query.limit(1))).empty) throw new PlatformAdminError('record_in_use',409);
+      if(command.kind==='users') {
+        const members=await tx.get(db.collection(accessCollections.memberships).where('principalId','==',command.id).limit(501));
+        if(members.docs.length>500)throw new PlatformAdminError('catalog_too_large',409);
+        if(members.docs.some((m:any)=>m.data().product==='orderfly'))throw new PlatformAdminError('record_in_use',409);
+      }
     }
     if(command.action==='delete') tx.delete(ref);
     else tx.set(ref,{...data,id:ref.id},{merge:true});
