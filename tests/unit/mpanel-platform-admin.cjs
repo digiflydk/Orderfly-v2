@@ -109,3 +109,30 @@ test('same native ID in Opsfly never blocks deletion of an unrelated Orderfly us
  const linked=(await f.call({action:'list'})).users.find(u=>u.id==='user');
  await assert.rejects(f.call({action:'delete',kind:'users',id:linked.id,revision:linked.revision,requestId:crypto.randomUUID()}),/record_in_use/);
 });
+
+test('all seven catalogues reject record 501 without locking out edits, deletes or successful retries',async()=>{
+ const definitions={
+  users:['users',{name:'Capacity user',email:'capacity@example.test',roleIds:[]}],
+  roles:['roles',{name:'Capacity role',description:'',permissions:[]}],
+  plans:['subscription_plans',{name:'Capacity plan',priceMonthly:0,priceYearly:0,serviceFee:0,isActive:false,isMostPopular:false}],
+  companies:['platformCompanies',{name:'Capacity company',orderflyBrandIds:[],opsflyOrganizationId:null,planId:null,status:'suspended',expiresAt:null}],
+  accessPlans:['platformAccessPlans',{name:'Capacity plan',modules:[],isActive:false}],
+  accessRoles:['platformAccessRoles',{name:'Capacity role',permissions:[],isActive:false}],
+ };
+ for(const kind of [...Object.keys(definitions),'memberships']){
+  const f=await accessFixture();
+  const [collection,data]=kind==='memberships'?['platformMemberships',{name:'Capacity member',companyId:f.company.id,product:'orderfly',principalId:'user',principalOrganizationId:null,roleIds:[],isActive:false}]:definitions[kind];
+  for(const key of [...f.records.keys()])if(key.startsWith(collection+'/'))f.records.delete(key);
+  for(let i=0;i<499;i++)f.records.set(collection+'/capacity'+i,{...data,...(kind==='memberships'?{principalId:'synthetic'+i}:{})});
+  const command={action:'save',kind,requestId:crypto.randomUUID(),data};
+  const saved=await f.call(command),writes=f.writes();
+  assert.deepEqual(await f.call(command),saved,kind+' successful retry at capacity');
+  await assert.rejects(f.call({...command,requestId:crypto.randomUUID()}),/catalog_too_large/,kind);
+  assert.equal(f.writes(),writes,kind+' rejected create must not audit or mutate');
+  let rows=(await f.call({action:'list'}))[kind];assert.equal(rows.length,500);
+  await f.edit(kind,rows.find(r=>r.id===saved.id),{name:'Edited at capacity'});
+  rows=(await f.call({action:'list'}))[kind];const updated=rows.find(r=>r.id===saved.id);
+  await f.call({action:'delete',kind,id:updated.id,revision:updated.revision,requestId:crypto.randomUUID()});
+  assert.equal((await f.call({action:'list'}))[kind].length,499,kind+' delete remains available');
+ }
+});

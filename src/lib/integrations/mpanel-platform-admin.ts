@@ -90,6 +90,10 @@ export async function executePlatformAdmin(input:z.infer<typeof envelopeSchema>,
     const current=await tx.get(ref);
     if(command.id && (!current.exists||revision(current)!==command.revision)) throw new PlatformAdminError('record_changed',409);
     if(!command.id&&current.exists) throw new PlatformAdminError('record_changed',409);
+    if(command.action==='save'&&!command.id) {
+      const capacity=await tx.get(db.collection(collections[command.kind]).limit(500));
+      if(capacity.docs.length>=500)throw new PlatformAdminError('catalog_too_large',409);
+    }
     if(command.action==='save'&&command.kind==='users') {
       for(const roleId of (data as z.infer<typeof schemas.users>).roleIds) {
         if(!(await tx.get(db.collection('roles').doc(roleId))).exists) throw new PlatformAdminError('role_missing',409);
