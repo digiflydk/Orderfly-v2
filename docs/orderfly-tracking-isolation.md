@@ -114,3 +114,10 @@ separate gates. Issue #125 stays open until these have completed.
 - Controlled test campaign: orderfly_qa_125 / qa / tracking_release. No paid order
   was submitted. Ads, external event receipt and paid-order acceptance remain open
   in #125. Do not equate runtime-ready or mock test passes with vendor receipt.
+
+
+## Vendor delivery investigation
+
+PR #129 is deployed as Firebase build-2026-09-12-003 (63e7fe4). Live consented menu/product/cart/checkout testing still produced no visible GA4 realtime or Meta Test Events receipt. GTM-PK4J8ZFD remains configured in the brand. Consent withdrawal removes the runtime; the reversible test cart was cleared.
+
+The new CI vendor fixture loads real public vendor JavaScript but intercepts every collection request before it leaves the browser. It compares the current srcdoc document with an HTTP document to isolate runtime compatibility. Existing inert-script tests prove queuing, not vendor delivery. This investigation does not constitute live acceptance.
