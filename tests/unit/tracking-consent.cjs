@@ -6,7 +6,7 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 test('HTTP frame is inert until a consented same-origin parent initializes it once',()=>{
  const {BRAND_TRACKING_DOCUMENT}=loadTs('src/lib/brand-tracking-frame.ts');
  const listeners=new Set(),elements=[],parent={postMessage(){}};
- const context={parent,location:{origin:'https://orderfly.dk'},Date,encodeURIComponent,
+ const context={parent,location:{origin:'https://orderfly.dk'},URL,history:{replaceState(){}},Date,encodeURIComponent,
   document:{createElement:()=>({}),head:{appendChild:x=>elements.push(x)}},
   addEventListener:(type,fn)=>listeners.add(fn),removeEventListener:(type,fn)=>listeners.delete(fn)};
  context.window=context;vm.createContext(context);
@@ -33,7 +33,7 @@ function runtime(consent, gtm=false){
   if(!frame)return null;
   const parent={postMessage:x=>messages.push(x)};
   parentListener({source:frame.contentWindow,origin:'https://orderfly.dk',data:{type:'orderfly:frame-loaded'}});
-  const context={parent,location:{origin:'https://orderfly.dk'},removeEventListener(){},document:{createElement:()=>({}),head:{appendChild:x=>elements.push(x)}},addEventListener:(type,fn)=>listeners[type]=fn,Date,encodeURIComponent};
+  const context={parent,location:{origin:'https://orderfly.dk'},URL,history:{replaceState(){}},removeEventListener(){},document:{createElement:()=>({}),head:{appendChild:x=>elements.push(x)}},addEventListener:(type,fn)=>listeners[type]=fn,Date,encodeURIComponent};
   context.window=context;vm.createContext(context);
   vm.runInContext(BRAND_TRACKING_DOCUMENT.match(/<script>([\s\S]*)<\/script>/)[1],context);
   listeners.message({source:parent,origin:'https://orderfly.dk',data:{type:'orderfly:brand-init',config}});

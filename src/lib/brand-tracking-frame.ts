@@ -81,6 +81,8 @@ export const BRAND_TRACKING_DOCUMENT = `<!doctype html><html><head><meta charset
   if(source!==parent||origin!==location.origin||data?.type!=='orderfly:brand-init')return;
   const config=data.config;
   if(!config||config.origin!==location.origin||typeof config.brandId!=='string'||(!config.consent?.statistics&&!config.consent?.marketing))return;
+  // Meta reads document.location; keep its URL aligned with sanitized storefront context.
+  try{const page=new URL(config.pageLocation||'/',location.origin);if(page.origin!==location.origin)return;history.replaceState(null,'',page.href);}catch{return;}
   removeEventListener('message',initialize);
   window.dataLayer=[];
   function gtag(){window.dataLayer.push(arguments);}
@@ -100,6 +102,7 @@ export const BRAND_TRACKING_DOCUMENT = `<!doctype html><html><head><meta charset
     if(!mapped)return;
     const ecommerce=event.ecommerce||{currency:event.currency||'DKK',...(typeof event.cartValue==='number'?{value:event.cartValue}:{}),...(event.items?{items:event.items}:event.productId?{items:[{item_id:event.productId,quantity:event.itemsCount||1,...(typeof event.cartValue==='number'?{price:event.cartValue/(event.itemsCount||1)}:{})}]}:{})};
     const pageLocation=typeof event.pagePath==='string'&&/^\\/[^?#]*$/.test(event.pagePath)?config.origin+event.pagePath:config.pageLocation;
+    history.replaceState(null,'',pageLocation);
     const parameters={...ecommerce,brand_id:config.brandId,location_id:event.locationId||ecommerce.location_id,...config.campaign,page_location:pageLocation,page_referrer:config.pageReferrer};
     if(config.consent.statistics&&event.destinations?.statistics!==false){
       if(config.gtm){dataLayer.push({ecommerce:null});dataLayer.push({event:mapped[0],ecommerce,brand_id:config.brandId,location_id:parameters.location_id,page_location:pageLocation,page_referrer:config.pageReferrer});}
