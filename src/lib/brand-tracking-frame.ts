@@ -92,6 +92,7 @@ export const BRAND_TRACKING_DOCUMENT = `<!doctype html><html><head><meta charset
   // Basic consent: no runtime exists until a relevant purpose is granted.
   gtag('consent','default',{analytics_storage:config.consent.statistics?'granted':'denied',ad_storage:config.consent.marketing?'granted':'denied',ad_user_data:config.consent.marketing?'granted':'denied',ad_personalization:config.consent.marketing?'granted':'denied'});
   gtag('set','ads_data_redaction',!config.consent.marketing);
+  gtag('set',{page_location:config.pageLocation,page_referrer:config.pageReferrer});
   if(config.gtm){dataLayer.push({event:'orderfly_tracking_ready',brandId:config.brandId,page_location:config.pageLocation,page_referrer:config.pageReferrer,...config.attribution});dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});script('https://www.googletagmanager.com/gtm.js?id='+encodeURIComponent(config.gtm));}
   // GTM owns GA4. Ads and Meta each have one explicit, consent-gated owner here.
   if((!config.gtm&&config.ga)||config.ads){script('https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(config.ads||config.ga));gtag('js',new Date());if(!config.gtm&&config.ga)gtag('config',config.ga,{send_page_view:true,page_location:config.pageLocation,page_referrer:config.pageReferrer,...config.campaign});if(config.ads)gtag('config',config.ads,{send_page_view:false,page_location:config.pageLocation});}

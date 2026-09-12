@@ -17,15 +17,15 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
   for(const mode of ['http','gtm-http']){
    const context=await browser.newContext();const page=await context.newPage();const requests=[],errors=[],libraries=[];
 
-   page.on('response',async r=>{if(new URL(r.url()).pathname.endsWith('/fbevents.js')){const body=await r.text();const pos=body.indexOf('fbevents.plugins.botblocking');console.log('META_BLOCK_IMPLEMENTATION',body.slice(Math.max(0,pos-500),pos+8500));}});
+
    page.on('pageerror',e=>errors.push(e.message));
    page.on('console',msg=>{if(msg.type()==='warning'||msg.type()==='error')errors.push(msg.text())});
    page.on('requestfailed',r=>errors.push(new URL(r.url()).hostname+': '+r.failure()?.errorText));
    await context.route('**/*',async route=>{
     const req=route.request(),url=new URL(req.url());
-    if(url.origin===origin)return route.fulfill({contentType:url.pathname==='/bundle.js'?'application/javascript':'text/html',body:url.pathname==='/bundle.js'?bundle:url.pathname==='/tracking/frame'?(mode==='meta-grant'?frameHtml.replace("fbq('set','autoConfig',false,config.meta);","fbq('consent','grant');fbq('set','autoConfig',false,config.meta);"):mode==='meta-auto'?frameHtml.replace("fbq('set','autoConfig',false,config.meta);",''):frameHtml):'<!doctype html><script src="/bundle.js"></script>'});
+    if(url.origin===origin)return route.fulfill({contentType:url.pathname==='/bundle.js'?'application/javascript':'text/html',body:url.pathname==='/bundle.js'?bundle:url.pathname==='/tracking/frame'?frameHtml:'<!doctype html><script src="/bundle.js"></script>'});
     // Allow only library/config JavaScript. Never allow a collect/pixel request out.
-    if(req.resourceType()==='script'&&((url.hostname==='www.googletagmanager.com'&&/^\/(gtag\/js|gtag\/destination|gtm\.js)$/.test(url.pathname))||(url.hostname==='connect.facebook.net'&&(/\.js$/.test(url.pathname)||/^\/signals\/config\/\d+$/.test(url.pathname))))){libraries.push(url.hostname+url.pathname);return route.continue();}
+    if(req.resourceType()==='script'&&((url.hostname==='www.googletagmanager.com'&&/^\/(gtag\/js|gtag\/destination|gtm\.js)$/.test(url.pathname))||(url.hostname==='connect.facebook.net'&&(/\.js$/.test(url.pathname)||/^\/signals\/config\/(?:\d+|global_config)$/.test(url.pathname))))){libraries.push(url.hostname+url.pathname);return route.continue();}
     requests.push({host:url.hostname,path:url.pathname,event:url.searchParams.get('en')||url.searchParams.get('ev'),body:req.postData(),location:url.searchParams.get('dl'),referrer:url.searchParams.get('rl')||url.searchParams.get('dr'),referrerHost:url.searchParams.get('cd[referrer_host]')});
     return route.fulfill({status:200,body:''});
    });
@@ -36,14 +36,16 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
    await page.waitForTimeout(10000);
    const target=page.frames().find(f=>f!==page.mainFrame());
    const metaState=await target.evaluate(()=>({callMethod:typeof window.fbq?.callMethod,queue:window.fbq?.queue?.length,state:window.fbq?.getState?.()}));
-   results[mode]={metaState,google:requests.filter(x=>/google-analytics\.com$/.test(x.host)),meta:requests.filter(x=>/facebook\.com$/.test(x.host)),errors,libraries,other:requests.filter(x=>!/google-analytics|facebook/.test(x.host))};
+   results[mode]={metaState,google:requests.filter(x=>/google-analytics\.com$/.test(x.host)),meta:requests.filter(x=>/facebook\.com$/.test(x.host)),errors,libraries,other:requests.filter(x=>!/google-analytics\.com$|facebook\.com$/.test(x.host))};
    await context.close();
   }
   console.log(JSON.stringify(results));
   for(const mode of ['http','gtm-http']){
+   assert.ok(results[mode].google.every(x=>x.referrer==='https://campaign.example/'),'Google must retain the external referring origin including initial page_view');
    assert.ok(results[mode].google.some(x=>x.event==='add_to_cart'||x.body?.includes('en=add_to_cart')),mode+' must generate Google add_to_cart');
    assert.doesNotMatch(JSON.stringify([...results[mode].google,...results[mode].meta]),/private_fixture_token|receipt_token|private_referrer|tracking\/frame/,'vendor URL must use sanitized storefront context');
    assert.ok(results[mode].meta.every(x=>x.referrer==='https://orderfly.dk/'),'Meta must see the real embedding origin for traffic permissions');
+   assert.ok(results[mode].meta.some(x=>x.referrerHost==='campaign.example'||x.body?.includes('campaign.example')),'Meta must carry the sanitized external referrer hostname');
    assert.ok(results[mode].meta.some(x=>x.event==='AddToCart'||x.body?.includes('ev=AddToCart')),mode+' must generate Meta AddToCart');
   }
  }finally{await browser.close();}
