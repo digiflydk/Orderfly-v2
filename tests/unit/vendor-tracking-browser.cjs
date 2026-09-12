@@ -6,7 +6,7 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 
 // Real vendor libraries, but ALL collection requests terminate in this fixture.
 // Public IDs select the deployed library configuration; no test events reach vendors.
-test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {timeout:120000}, async()=>{
+test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {timeout:180000}, async()=>{
  const compile=path=>ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const bundle='const attributionExports={};(function(exports){'+compile('src/lib/analytics-attribution.ts')+'})(attributionExports);const require=()=>attributionExports;const exports={};'+compile('src/lib/brand-tracking-frame.ts')+';window.mount=exports.mountBrandTracking;';
  const origin='https://orderfly.dk';
@@ -14,15 +14,15 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
  const browser=await chromium.launch({args:['--no-sandbox']});
  try{
   const results={};
-  for(const mode of ['http','gtm-http']){
+  for(const mode of ['http','gtm-http','meta-grant','meta-auto']){
    const context=await browser.newContext();const page=await context.newPage();const requests=[],errors=[],libraries=[];
-   page.on('response',async r=>{if(new URL(r.url()).pathname.startsWith('/signals/config/'))console.log('META_CONFIGURATION', (await r.text()).slice(-18000));});
+   page.on('response',async r=>{if(new URL(r.url()).pathname.startsWith('/signals/config/'))console.log('META_CONFIGURATION', [...(await r.text()).matchAll(/(?:instance\.(?:optIn|pluginConfig\.set)|fbq\.loadPlugin)\([^;]+;/g)].map(x=>x[0].slice(0,700)));});
    page.on('pageerror',e=>errors.push(e.message));
    page.on('console',msg=>{if(msg.type()==='warning'||msg.type()==='error')errors.push(msg.text())});
    page.on('requestfailed',r=>errors.push(new URL(r.url()).hostname+': '+r.failure()?.errorText));
    await context.route('**/*',async route=>{
     const req=route.request(),url=new URL(req.url());
-    if(url.origin===origin)return route.fulfill({contentType:url.pathname==='/bundle.js'?'application/javascript':'text/html',body:url.pathname==='/bundle.js'?bundle:url.pathname==='/tracking/frame'?frameHtml:'<!doctype html><script src="/bundle.js"></script>'});
+    if(url.origin===origin)return route.fulfill({contentType:url.pathname==='/bundle.js'?'application/javascript':'text/html',body:url.pathname==='/bundle.js'?bundle:url.pathname==='/tracking/frame'?(mode==='meta-grant'?frameHtml.replace("fbq('set','autoConfig',false,config.meta);","fbq('consent','grant');fbq('set','autoConfig',false,config.meta);"):mode==='meta-auto'?frameHtml.replace("fbq('set','autoConfig',false,config.meta);",''):frameHtml):'<!doctype html><script src="/bundle.js"></script>'});
     // Allow only library/config JavaScript. Never allow a collect/pixel request out.
     if(req.resourceType()==='script'&&((url.hostname==='www.googletagmanager.com'&&/^\/(gtag\/js|gtag\/destination|gtm\.js)$/.test(url.pathname))||(url.hostname==='connect.facebook.net'&&(/\.js$/.test(url.pathname)||/^\/signals\/config\/\d+$/.test(url.pathname))))){libraries.push(url.hostname+url.pathname);return route.continue();}
     requests.push({host:url.hostname,path:url.pathname,event:url.searchParams.get('en')||url.searchParams.get('ev'),body:req.postData(),location:url.searchParams.get('dl'),referrer:url.searchParams.get('rl')});
