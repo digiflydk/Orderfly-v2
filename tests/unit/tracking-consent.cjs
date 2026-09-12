@@ -26,6 +26,10 @@ for(const [statistics,marketing] of [[false,false],[true,false],[false,true],[tr
  for(const event of ['view_menu','view_product','add_to_cart','start_checkout'])r.send({event,brandId:'b',productId:'p',itemsCount:2,cartValue:50,eventId:'e'});
  r.send({event:'purchase',brandId:'b',ecommerce:{transaction_id:'order-1',value:100,currency:'DKK',items:[{item_id:'p',price:50,quantity:2}]}});
  assert.equal(r.elements.some(x=>x.src?.includes('facebook')),marketing);
+ if(marketing){
+  assert.equal(r.context._fbq,r.context.fbq,'Meta loader must find the same bootstrap through both public aliases');
+  assert.equal(r.context.fbq.push,r.context.fbq,'Meta loader requires the documented push alias');
+ }
  assert.deepEqual(r.google().filter(x=>x[2].send_to==='G-TEST').map(x=>x[1]),statistics?['view_item_list','view_item','add_to_cart','begin_checkout','purchase']:[]);
  assert.equal(r.google().filter(x=>x[1]==='conversion').length,marketing?1:0);
  assert.deepEqual(r.meta().filter(x=>x[0]==='trackSingle').map(x=>x[2]),marketing?['PageView','ViewContent','AddToCart','InitiateCheckout','Purchase']:[]);

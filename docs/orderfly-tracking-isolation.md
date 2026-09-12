@@ -89,22 +89,28 @@ separate gates. Issue #125 stays open until these have completed.
 
 ## External setup checkpoint (2026-09-12)
 
-- Existing GA account Orderfly: 361886243. Existing Firebase properties are not
-  repurposed. New property created: Esmeralda – Orderfly, Denmark/DKK. Web stream
-  Esmeralda – Orderfly web: 15763775538, measurement ID G-551JD0H72K.
-  Enhanced measurement was explicitly disabled before stream creation; only
-  standard pageviews remain. IDs have not been installed in the live brand.
+- User explicitly approved GTM/processor and Meta Business Tools terms. Both
+  account/dataset creation steps completed.
+- GA account Orderfly 361886243; separate property 553852737; stream
+  15763775538; measurement ID G-551JD0H72K. Denmark/DKK, enhanced measurement
+  disabled. Event dimensions brand_id and location_id created.
+- GTM account 6376469965, container 263933032 / GTM-PK4J8ZFD. Published version 2
+  has one Google tag, one GA4 ecommerce event tag, one allowlisted event trigger
+  and four data layer variables for brand/location and sanitized page/referrer.
+- New Meta dataset Esmeralda – Orderfly: 1830622624963740, owned by Esmeralda
+  Amager 1120201685035593. Allow list orderfly.dk (including subdomains).
+  Automatic extra page/product collection disabled; automatic advanced matching
+  and automatic event setup off. No ad account assigned yet. Existing Dully
+  1520307403428848 and website 773544982454626 datasets were not repurposed.
 - Google Ads session exposes only closed account 871-063-4119 under
-  okh2071@gmail.com. Access to the active Esmeralda Ads account is required
-  before a dedicated Orderfly conversion action can be configured.
-- GTM account/container form: Orderfly / Esmeralda – Orderfly, Denmark, Web,
-  optional anonymous Google data sharing unchecked. Creation is blocked at the
-  Google Tag Manager terms and GDPR processor terms by automatic approval review.
-  Explicit user authorization to accept these terms is required before proceeding.
-- Meta business portfolio Esmeralda Amager: 1120201685035593; ad account
-  Esmeralda Pizza & Restaurant: 1601965697497336.
-- Existing Meta Dully dataset: 1520307403428848; active website dataset:
-  773544982454626. Neither is changed. New Esmeralda – Orderfly dataset form is
-  prepared; submission includes Meta Business Tools Terms and remains pending.
-- No new IDs have been installed in the live brand. Do not interpret prepared
-  forms as created resources, or local test passes as verified external delivery.
+  okh2071@gmail.com. Active Esmeralda account access is still needed.
+- PR #127 merged as 0812e627a16fb1cc79a9614bc53725bb540f4e12 and deployed as
+  build-2026-09-12-001. GA4/GTM/Meta IDs were saved in the Esmeralda brand.
+- Controlled live visit found a Meta bootstrap incompatibility: the loader
+  reported conflicting pixel versions before receipt was confirmed. Restore
+  the standard _fbq and push aliases so the vendor loader recognizes the queued
+  bootstrap. Existing tests used inert downloaded scripts and could not establish
+  real vendor compatibility. External receipt verification remains a separate gate.
+- Controlled test campaign: orderfly_qa_125 / qa / tracking_release. No paid order
+  was submitted. Ads, external event receipt and paid-order acceptance remain open
+  in #125. Do not equate runtime-ready or mock test passes with vendor receipt.
