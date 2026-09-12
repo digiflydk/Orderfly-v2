@@ -18,6 +18,7 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
    const context=await browser.newContext();const page=await context.newPage();const requests=[],errors=[],libraries=[];
 
 
+   page.on('response',async r=>{if(mode==='http'&&new URL(r.url()).pathname.endsWith('/fbevents.js'))console.log('META_SDK_SOURCE',JSON.stringify(await r.text()));});
    page.on('pageerror',e=>errors.push(e.message));
    page.on('console',msg=>{if(msg.type()==='warning'||msg.type()==='error')errors.push(msg.text())});
    page.on('requestfailed',r=>errors.push(new URL(r.url()).hostname+': '+r.failure()?.errorText));
