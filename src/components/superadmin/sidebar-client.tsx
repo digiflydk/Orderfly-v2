@@ -74,8 +74,10 @@ function isActive(pathname: string, href?: string) {
 
 export function SuperAdminSidebarClient({
   brandingSettings,
+  centralAdmin = false,
 }: {
   brandingSettings?: PlatformBrandingSettings
+  centralAdmin?: boolean
 }) {
   const pathname = usePathname()
   const [user, setUser] = React.useState<SuperadminUser | null>(null);
@@ -88,7 +90,7 @@ export function SuperAdminSidebarClient({
     brandingSettings?.platformLogoUrl ||
     'https://i.postimg.cc/HxTMqLGV/Orderfly-Logo-white-F.png'
 
-  const groups: Group[] = [
+  const allGroups: Group[] = [
     { key: 'core', title: 'Core', items: [{ href: '/superadmin', label: 'Dashboard', icon: Home }] },
     {
       key: 'commerce',
@@ -203,6 +205,8 @@ export function SuperAdminSidebarClient({
       ],
     },
   ]
+
+  const groups: Group[] = centralAdmin ? allGroups.filter(g => g.key !== 'people').map(g => g.key === 'billing' ? {...g, items:g.items.filter(i => i.href !== '/superadmin/subscriptions')} : g).concat([{key:'platform', title:'Platform', items:[{label:'Brugere, roller og abonnementer · mPanel',href:'https://www.esmeraldapizza.dk/mpanel#platform',icon:Users}]}]) : allGroups;
 
   const [open, setOpen] = React.useState<Record<string, boolean>>(() => {
     const state: Record<string, boolean> = {

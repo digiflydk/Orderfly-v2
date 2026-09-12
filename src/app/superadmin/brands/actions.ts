@@ -1,6 +1,7 @@
 
 
 'use server';
+import { mpanelAdminEnabled } from '@/lib/mpanel-admin-cutover';
 
 import 'server-only';
 
@@ -140,7 +141,26 @@ export async function createOrUpdateBrand(
 
     let ownerId: string;
 
-    if (id) {
+    if (mpanelAdminEnabled()) {
+      // Serialize reference changes with central catalog deletions.
+      const brandRef = id ? db.collection('brands').doc(id) : db.collection('brands').doc();
+      await db.runTransaction(async tx => {
+        const lock = db.collection('platformAdminControl').doc('catalog');
+        await tx.get(lock);
+        const existing = id ? await tx.get(brandRef) : null;
+        if (id && !existing?.exists) throw new Error('Brandet findes ikke længere.');
+        let selectedOwnerId = existing?.data()?.ownerId;
+        if (!id) {
+          const owners = await tx.get(db.collection('users').where('email', '==', String(ownerEmail || '').trim().toLowerCase()).limit(2));
+          if (owners.size !== 1) throw new Error('Opret ejeren i mPanel først, og brug ejerens e-mail her.');
+          selectedOwnerId = owners.docs[0].id;
+        }
+        if (!selectedOwnerId || !(await tx.get(db.collection('users').doc(selectedOwnerId))).exists) throw new Error('Ejeren findes ikke i mPanel.');
+        if (brandData.subscriptionPlanId && !(await tx.get(db.collection('subscription_plans').doc(brandData.subscriptionPlanId))).exists) throw new Error('Abonnementsplanen findes ikke længere.');
+        tx.set(brandRef, {...brandData, companyRegNo, slug, id:brandRef.id, ownerId:selectedOwnerId}, {merge:true});
+        tx.set(lock, {lastBrandId:brandRef.id});
+      });
+    } else if (id) {
       // For updates, we assume the owner doesn't change via this form.
       const brandDoc = await db.collection('brands').doc(id).get();
       if (!brandDoc.exists) {

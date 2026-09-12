@@ -12,13 +12,13 @@ function fixture(seed,allowed=true) {
  const writes=[],invalidations=[];
  const snap=key=>({id:key.split('/').pop(),exists:records.has(key),data:()=>structuredClone(records.get(key))});
  const ref=key=>({key,id:key.split('/').pop(),get:async()=>snap(key),set:async(data)=>{records.set(key,{...records.get(key),...structuredClone(data)});writes.push(key);},update:async(data)=>{if(!records.has(key))throw Error('not found');records.set(key,{...records.get(key),...structuredClone(data)});writes.push(key);}});
- function collection(name,filters=[],orderedBy) {
-  return {doc:(id='new')=>ref(name+'/'+id),where:(field,op,value)=>collection(name,[...filters,[field,value]],orderedBy),
-   orderBy:field=>collection(name,filters,field),get:async()=>{
+ function collection(name,filters=[],orderedBy,cap=Infinity) {
+  return {doc:(id='new')=>ref(name+'/'+id),where:(field,op,value)=>collection(name,[...filters,[field,value]],orderedBy,cap),
+   orderBy:field=>collection(name,filters,field,cap),limit:n=>collection(name,filters,orderedBy,n),get:async()=>{
     const docs=[...records.keys()].filter(key=>key.startsWith(name+'/')&&key.split('/').length===2)
      .filter(key=>filters.every(([field,value])=>records.get(key)[field]===value))
-     .filter(key=>!orderedBy||records.get(key)[orderedBy]!==undefined).map(snap);
-    return {docs,empty:docs.length===0};
+     .filter(key=>!orderedBy||records.get(key)[orderedBy]!==undefined).slice(0,cap).map(snap);
+    return {docs,size:docs.length,empty:docs.length===0};
    }};
  }
  const db={collection,runTransaction:async fn=>{

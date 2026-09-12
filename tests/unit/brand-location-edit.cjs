@@ -68,3 +68,19 @@ test('both missing-action messages trigger reload recovery; ordinary failures do
  assert.equal(isMissingServerAction(Error('Network unavailable')),false);
  assert.equal(isMissingServerAction(Error('Validation failed')),false);
 });
+
+
+test('central cutover requires existing owners and plans and serializes brand references',async()=>{
+ const old=process.env.MPANEL_PLATFORM_ADMIN_ENABLED;process.env.MPANEL_PLATFORM_ADMIN_ENABLED='true';
+ try {
+  const seed=[['users/u',{name:'QA Owner',email:'qa@example.test'}],['subscription_plans/p',{name:'Basic'}]];
+  const f=fixture(seed);
+  await redirected(f.brands.createOrUpdateBrand(null,formData({...brand,id:undefined,subscriptionPlanId:'p',ownerName:'QA Owner',ownerEmail:'qa@example.test'})));
+  assert.equal(f.records.get('brands/new').ownerId,'u');assert.equal(f.records.get('brands/new').subscriptionPlanId,'p');
+  assert.ok(f.writes.includes('platformAdminControl/catalog'));assert.ok(!f.writes.some(p=>p.startsWith('users/')));
+  for(const records of [[],[['users/u',{email:'qa@example.test'}]]]){
+   const rejected=fixture(records);const result=await rejected.brands.createOrUpdateBrand(null,formData({...brand,id:undefined,subscriptionPlanId:'p',ownerName:'QA Owner',ownerEmail:'qa@example.test'}));
+   assert.equal(result.error,true);assert.equal(rejected.writes.length,0);
+  }
+ } finally {if(old===undefined)delete process.env.MPANEL_PLATFORM_ADMIN_ENABLED;else process.env.MPANEL_PLATFORM_ADMIN_ENABLED=old;}
+});

@@ -1,6 +1,7 @@
 
 
 'use server';
+import { assertLegacyAdminWrite } from '@/lib/mpanel-admin-cutover';
 
 import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -28,6 +29,7 @@ export async function createOrUpdateRole(
   prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
+  assertLegacyAdminWrite();
   const rawData: Record<string, any> = Object.fromEntries(formData.entries());
   rawData.permissions = formData.getAll('permissions');
   const db = getAdminDb();
@@ -62,6 +64,7 @@ export async function createOrUpdateRole(
 }
 
 export async function deleteRole(roleId: string) {
+    assertLegacyAdminWrite();
     // Note: In a real app, you'd check if this role is assigned to any users before deleting.
     try {
         const db = getAdminDb();
