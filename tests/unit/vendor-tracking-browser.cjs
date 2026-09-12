@@ -18,7 +18,7 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
    const context=await browser.newContext();const page=await context.newPage();const requests=[],errors=[],libraries=[];
 
 
-   page.on('response',async r=>{if(mode==='http'&&new URL(r.url()).pathname.endsWith('/fbevents.js'))console.log('META_SDK_SOURCE',JSON.stringify(await r.text()));});
+   page.on('response',async r=>{if(mode==='http'&&new URL(r.url()).pathname.includes('/signals/config/'))console.log('META_CONFIG_SOURCE',JSON.stringify(await r.text()));});
    page.on('pageerror',e=>errors.push(e.message));
    page.on('console',msg=>{if(msg.type()==='warning'||msg.type()==='error')errors.push(msg.text())});
    page.on('requestfailed',r=>errors.push(new URL(r.url()).hostname+': '+r.failure()?.errorText));
@@ -36,7 +36,7 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
    await page.evaluate(mode=>{const event={event:'add_to_cart',brandId:'fixture',eventId:'fixture-cart',cartValue:20,currency:'DKK',items:[{item_id:'fixture-product',price:20,quantity:1}]};window.orderflyBrandTracker.emit(event);},mode);
    await page.waitForTimeout(10000);
    const target=page.frames().find(f=>f!==page.mainFrame());
-   const metaState=await target.evaluate(()=>({callMethod:typeof window.fbq?.callMethod,queue:window.fbq?.queue?.length,state:window.fbq?.getState?.()}));
+   const metaState=await target.evaluate(()=>({callMethod:typeof window.fbq?.callMethod,queue:window.fbq?.queue?.length,state:window.fbq?.getState?.(),diagnostic:window.fbq?.instance?{locks:window.fbq.instance.locks,asyncSettled:window.fbq.instance.asyncParamPromisesAllSettled,eventQueue:window.fbq.instance.eventQueue?.map(x=>x.eventName),asyncFetchers:[...window.fbq.instance.asyncParamFetchers.keys()],configs:window.fbq.instance.configsLoaded}:null}));
    results[mode]={metaState,google:requests.filter(x=>/google-analytics\.com$/.test(x.host)),meta:requests.filter(x=>/facebook\.com$/.test(x.host)),errors,libraries,other:requests.filter(x=>!/google-analytics\.com$|facebook\.com$/.test(x.host))};
    await context.close();
   }
