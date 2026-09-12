@@ -6,7 +6,7 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 
 // Real vendor libraries, but ALL collection requests terminate in this fixture.
 // Public IDs select the deployed library configuration; no test events reach vendors.
-test('real vendor delivery: srcdoc versus HTTP document', {timeout:150000}, async()=>{
+test('real vendor delivery: srcdoc versus HTTP document', {timeout:180000}, async()=>{
  const compile=path=>ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const bundle='const attributionExports={};(function(exports){'+compile('src/lib/analytics-attribution.ts')+'})(attributionExports);const require=()=>attributionExports;const exports={};'+compile('src/lib/brand-tracking-frame.ts')+';window.mount=exports.mountBrandTracking;';
  const server=http.createServer((req,res)=>{res.setHeader('content-type',req.url==='/bundle.js'?'application/javascript':'text/html');res.end(req.url==='/bundle.js'?bundle:'<!doctype html><script src="/bundle.js"></script>');});
@@ -16,7 +16,7 @@ test('real vendor delivery: srcdoc versus HTTP document', {timeout:150000}, asyn
  const browser=await chromium.launch({args:['--no-sandbox']});
  try{
   const results={};
-  for(const mode of ['srcdoc','http','gtm-http']){
+  for(const mode of ['http','gtm-http','top']){
    const context=await browser.newContext();const page=await context.newPage();const requests=[],errors=[],libraries=[];
    page.on('pageerror',e=>errors.push(e.message));
    page.on('console',msg=>{if(msg.type()==='warning'||msg.type()==='error')errors.push(msg.text())});
@@ -31,13 +31,18 @@ test('real vendor delivery: srcdoc versus HTTP document', {timeout:150000}, asyn
    });
    await page.goto(origin+'/esmeralda');
    await page.evaluate(mode=>{window.stop=window.mount({id:'fixture',ga4MeasurementId:'G-551JD0H72K',gtmContainerId:mode==='gtm-http'?'GTM-PK4J8ZFD':undefined,metaPixelId:'1830622624963740'},{statistics:true,marketing:true});},mode);
+   if(mode==='top'){
+    await page.evaluate(html=>{window.stop();const script=document.createElement('script');script.textContent=html.match(/<script>([\s\S]*)<\/script>/)[1];document.head.appendChild(script);window.postMessage({type:'orderfly:brand-init',config:{origin:location.origin,brandId:'fixture',consent:{statistics:true,marketing:true},ga:'G-551JD0H72K',meta:'1830622624963740',pageLocation:location.href,pageReferrer:'',campaign:{}}},location.origin);},frameHtml);
+   }
    if(mode==='srcdoc'){
     await page.evaluate(html=>{const f=document.querySelector('iframe');f.removeAttribute('src');f.srcdoc=html;},frameHtml);
    }
    await page.waitForTimeout(15000);
-   await page.evaluate(()=>window.orderflyBrandTracker.emit({event:'add_to_cart',brandId:'fixture',eventId:'fixture-cart',cartValue:20,currency:'DKK',items:[{item_id:'fixture-product',price:20,quantity:1}]}));
+   await page.evaluate(mode=>{const event={event:'add_to_cart',brandId:'fixture',eventId:'fixture-cart',cartValue:20,currency:'DKK',items:[{item_id:'fixture-product',price:20,quantity:1}]};if(mode==='top')window.postMessage({type:'orderfly:brand-event',event},location.origin);else window.orderflyBrandTracker.emit(event);},mode);
    await page.waitForTimeout(10000);
-   results[mode]={google:requests.filter(x=>/google-analytics\.com$/.test(x.host)),meta:requests.filter(x=>/facebook\.com$/.test(x.host)&&x.path==='/tr/'),errors,libraries,other:requests.filter(x=>!/google-analytics|facebook/.test(x.host))};
+   const target=mode==='top'?page.mainFrame():page.frames().find(f=>f!==page.mainFrame());
+   const metaState=await target.evaluate(()=>({callMethod:typeof window.fbq?.callMethod,queue:window.fbq?.queue?.length,state:window.fbq?.getState?.()}));
+   results[mode]={metaState,google:requests.filter(x=>/google-analytics\.com$/.test(x.host)),meta:requests.filter(x=>/facebook\.com$/.test(x.host)&&x.path==='/tr/'),errors,libraries,other:requests.filter(x=>!/google-analytics|facebook/.test(x.host))};
    await context.close();
   }
   console.log(JSON.stringify(results));
