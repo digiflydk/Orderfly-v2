@@ -82,7 +82,7 @@ export async function getRoles(): Promise<Role[]> {
     const db = getAdminDb();
     const q = db.collection('roles').orderBy('name');
     const querySnapshot = await q.get();
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Role[];
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Role[];
 }
 
 export async function getRoleById(roleId: string): Promise<Role | null> {
@@ -90,7 +90,7 @@ export async function getRoleById(roleId: string): Promise<Role | null> {
     const docRef = db.collection('roles').doc(roleId);
     const docSnap = await docRef.get();
     if (docSnap.exists) {
-        return { id: docSnap.id, ...docSnap.data() } as Role;
+        return { ...docSnap.data(), id: docSnap.id } as Role;
     }
     return null;
 }

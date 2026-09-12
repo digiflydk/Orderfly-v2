@@ -80,14 +80,14 @@ export async function deleteRole(roleId: string) {
 export async function getRoles(): Promise<Role[]> {
     const q = query(collection(db, 'roles'), orderBy('name'));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Role[];
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Role[];
 }
 
 export async function getRoleById(roleId: string): Promise<Role | null> {
     const docRef = doc(db, 'roles', roleId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as Role;
+        return { ...docSnap.data(), id: docSnap.id } as Role;
     }
     return null;
 }
