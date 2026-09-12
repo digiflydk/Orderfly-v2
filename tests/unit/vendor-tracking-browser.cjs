@@ -18,7 +18,6 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
    const context=await browser.newContext();const page=await context.newPage();const requests=[],errors=[],libraries=[];
 
 
-   page.on('response',async r=>{if(mode==='http'&&new URL(r.url()).pathname.includes('/signals/config/'))console.log('META_CONFIG_SOURCE',JSON.stringify(await r.text()));});
    page.on('pageerror',e=>errors.push(e.message));
    page.on('console',msg=>{if(msg.type()==='warning'||msg.type()==='error')errors.push(msg.text())});
    page.on('requestfailed',r=>errors.push(new URL(r.url()).hostname+': '+r.failure()?.errorText));
@@ -33,21 +32,51 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
    await page.goto(origin+'/esmeralda?utm_source=vendor_fixture&fbclid=fixture_click&receipt_token=private_fixture_token',{referer:'https://campaign.example/private_referrer_path?token=private_referrer_token'});
    await page.evaluate(mode=>{window.stop=window.mount({id:'fixture',ga4MeasurementId:'G-551JD0H72K',gtmContainerId:mode==='gtm-http'?'GTM-PK4J8ZFD':undefined,metaPixelId:'1830622624963740'},{statistics:true,marketing:true});},mode);
    await page.waitForTimeout(15000);
-   await page.evaluate(mode=>{const event={event:'add_to_cart',brandId:'fixture',eventId:'fixture-cart',cartValue:20,currency:'DKK',items:[{item_id:'fixture-product',price:20,quantity:1}]};window.orderflyBrandTracker.emit(event);},mode);
-   await page.waitForTimeout(10000);
    const target=page.frames().find(f=>f!==page.mainFrame());
-   const metaState=await target.evaluate(()=>({callMethod:typeof window.fbq?.callMethod,queue:window.fbq?.queue?.length,state:window.fbq?.getState?.(),diagnostic:window.fbq?.instance?{locks:window.fbq.instance.locks,asyncSettled:window.fbq.instance.asyncParamPromisesAllSettled,eventQueue:window.fbq.instance.eventQueue?.map(x=>x.eventName),asyncFetchers:[...window.fbq.instance.asyncParamFetchers.keys()],configs:window.fbq.instance.configsLoaded}:null}));
-   results[mode]={metaState,google:requests.filter(x=>/google-analytics\.com$/.test(x.host)),meta:requests.filter(x=>/facebook\.com$/.test(x.host)),errors,libraries,other:requests.filter(x=>!/google-analytics\.com$|facebook\.com$/.test(x.host))};
+   await target.evaluate(()=>{
+    window.metaPrepared=[];
+    window.fbq.getFbeventsModules('SignalsFBEventsSendEventEvent').listen(event=>{
+     const payload=window.fbq.getFbeventsModules('signalsFBEventsFillParamList')(event).toPayload().toQueryString();
+     window.metaPrepared.push(payload);
+     return false; // Observe only; preserve every vendor suppression decision.
+    });
+   });
+   await page.evaluate(mode=>{const event={event:'add_to_cart',pagePath:'/esmeralda/checkout',brandId:'fixture',eventId:'fixture-cart',cartValue:20,currency:'DKK',items:[{item_id:'fixture-product',price:20,quantity:1}]};window.orderflyBrandTracker.emit(event);},mode);
+   await page.waitForTimeout(10000);
+   const metaState=await target.evaluate(()=>{
+    const fbq=window.fbq,instance=fbq.instance,pixel='1830622624963740';
+    const engine=new (fbq.getFbeventsModules('SignalsFBEventsBotDetectionEngine'))();
+    engine.loadRulesFromConfig(instance.pluginConfig.get(pixel,'botblocking').rules);
+    return {queue:fbq.queue.length,prepared:window.metaPrepared,
+     botBlocked:instance.optIns.isOptedIn(pixel,'BotBlocking')&&engine.shouldBlockUserAgent(navigator.userAgent)&&fbq.getFbeventsModules('SignalsFBEventsGuardrail').eval('bot_blocking_client_side_block_enabled',pixel)};
+   });
+   results[mode]={metaState,google:requests.filter(x=>/google-analytics\.com$/.test(x.host)),meta:requests.filter(x=>/facebook\.com$/.test(x.host)),errors,libraries};
    await context.close();
   }
   console.log(JSON.stringify(results));
   for(const mode of ['http','gtm-http']){
+   assert.ok(results[mode].google.some(x=>x.event==='page_view'||x.body?.includes('en=page_view')),mode+' must generate initial Google page_view');
    assert.ok(results[mode].google.every(x=>x.referrer==='https://campaign.example/'),'Google must retain the external referring origin including initial page_view');
    assert.ok(results[mode].google.some(x=>x.event==='add_to_cart'||x.body?.includes('en=add_to_cart')),mode+' must generate Google add_to_cart');
+   assert.ok([...results[mode].google,...results[mode].meta].filter(x=>x.event==='add_to_cart'||x.event==='AddToCart').every(x=>x.location?.includes('utm_source=vendor_fixture')),mode+' commerce URL must retain campaign parameters');
    assert.doesNotMatch(JSON.stringify([...results[mode].google,...results[mode].meta]),/private_fixture_token|receipt_token|private_referrer|tracking\/frame/,'vendor URL must use sanitized storefront context');
-   assert.ok(results[mode].meta.every(x=>x.referrer==='https://orderfly.dk/'),'Meta must see the real embedding origin for traffic permissions');
-   assert.ok(results[mode].meta.some(x=>x.referrerHost==='campaign.example'||x.body?.includes('campaign.example')),'Meta must carry the sanitized external referrer hostname');
-   assert.ok(results[mode].meta.some(x=>x.event==='AddToCart'||x.body?.includes('ev=AddToCart')),mode+' must generate Meta AddToCart');
+   const prepared=results[mode].metaState.prepared.map(x=>new URLSearchParams(x));
+   assert.equal(results[mode].metaState.queue,0,'Meta must process the runtime queue');
+   const cart=prepared.find(x=>x.get('ev')==='AddToCart');
+   assert.ok(cart,mode+' must reach the real Meta SDK send stage with AddToCart');
+   assert.equal(cart.get('rl'),'https://orderfly.dk/');
+   assert.equal(cart.get('cd[referrer_host]'),'campaign.example');
+   assert.equal(new URL(cart.get('dl')).pathname,'/esmeralda/checkout');
+   assert.equal(new URL(cart.get('dl')).searchParams.get('utm_source'),'vendor_fixture');
+   assert.doesNotMatch(JSON.stringify(results[mode].metaState.prepared),/private_fixture_token|receipt_token|private_referrer|tracking\/frame/);
+   if(results[mode].metaState.botBlocked){
+    // Meta's current public configuration explicitly suppresses HeadlessChrome.
+    // Verify that exact reason; never spoof the browser or disable vendor protection.
+    assert.equal(cart.get('bfs[b]'),'1','SDK must mark the event as bot traffic');
+    assert.equal(results[mode].meta.length,0,'bot-blocked events must not leave the SDK');
+   }else{
+    assert.ok(results[mode].meta.some(x=>x.event==='AddToCart'||x.body?.includes('ev=AddToCart')),mode+' must generate Meta AddToCart when vendor permits this browser');
+   }
   }
  }finally{await browser.close();}
 });

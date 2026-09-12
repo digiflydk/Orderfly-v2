@@ -58,6 +58,17 @@ for(const [statistics,marketing] of [[false,false],[true,false],[false,true],[tr
  if(!marketing)assert.doesNotMatch(r.html,/click123/);
  assert.doesNotMatch(r.html,/receipt_token|secret/);
 });
+test('commerce paths retain sanitized campaign parameters for both consent purposes',()=>{
+ for(const marketing of [false,true]){
+  const r=runtime({statistics:true,marketing});
+  r.send({event:'add_to_cart',brandId:'b',pagePath:'/esmeralda/checkout',cartValue:20});
+  const url=new URL(r.google()[0][2].page_location);
+  assert.equal(url.pathname,'/esmeralda/checkout');
+  assert.equal(url.searchParams.get('utm_source'),'google');
+  assert.equal(url.searchParams.get('gclid'),marketing?'click123':null);
+  assert.equal(url.searchParams.has('receipt_token'),false);
+ }
+});
 test('GTM has exclusive GA events; Ads and Meta have one direct owner; foreign brands are rejected',()=>{
  const r=runtime({statistics:true,marketing:true},true);
  r.send({event:'purchase',brandId:'wrong',ecommerce:{transaction_id:'wrong'}});

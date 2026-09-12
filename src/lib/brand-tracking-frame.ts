@@ -104,7 +104,9 @@ export const BRAND_TRACKING_DOCUMENT = `<!doctype html><html><head><meta charset
     const mapped=mapping[event.event];
     if(!mapped)return;
     const ecommerce=event.ecommerce||{currency:event.currency||'DKK',...(typeof event.cartValue==='number'?{value:event.cartValue}:{}),...(event.items?{items:event.items}:event.productId?{items:[{item_id:event.productId,quantity:event.itemsCount||1,...(typeof event.cartValue==='number'?{price:event.cartValue/(event.itemsCount||1)}:{})}]}:{})};
-    const pageLocation=typeof event.pagePath==='string'&&/^\\/[^?#]*$/.test(event.pagePath)?config.origin+event.pagePath:config.pageLocation;
+    const eventPage=new URL(config.pageLocation);
+    if(typeof event.pagePath==='string'&&/^\\/[^?#]*$/.test(event.pagePath))eventPage.pathname=event.pagePath;
+    const pageLocation=eventPage.href;
     history.replaceState(null,'',pageLocation);
     const parameters={...ecommerce,brand_id:config.brandId,location_id:event.locationId||ecommerce.location_id,...config.campaign,page_location:pageLocation,page_referrer:config.pageReferrer};
     if(config.consent.statistics&&event.destinations?.statistics!==false){
