@@ -2,11 +2,12 @@ const {test}=require('node:test');
 const assert=require('node:assert/strict');
 const fs=require('node:fs'),http=require('node:http'),ts=require('typescript');
 const {chromium}=require('@playwright/test');
+const {loadTs}=require('../helpers/load-ts.cjs');
 
 test('brand tracking sends explicit destinations and destroys the previous runtime',async()=>{
  const attributionCode=ts.transpileModule(fs.readFileSync('src/lib/analytics-attribution.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const code=ts.transpileModule(fs.readFileSync('src/lib/brand-tracking-frame.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
- const server=http.createServer((req,res)=>{if(req.url==='/bundle.js'){res.setHeader('content-type','application/javascript');return res.end('const attributionExports={};(function(exports){'+attributionCode+'})(attributionExports);const require=()=>attributionExports;const exports={};'+code+';window.mount=exports.mountBrandTracking;');}res.setHeader('content-type','text/html');res.end('<!doctype html><html><body><script src="/bundle.js"></script></body></html>')});
+ const server=http.createServer((req,res)=>{if(req.url==='/tracking/frame'){res.setHeader('content-type','text/html');return res.end(loadTs('src/lib/brand-tracking-frame.ts').BRAND_TRACKING_DOCUMENT);}if(req.url==='/bundle.js'){res.setHeader('content-type','application/javascript');return res.end('const attributionExports={};(function(exports){'+attributionCode+'})(attributionExports);const require=()=>attributionExports;const exports={};'+code+';window.mount=exports.mountBrandTracking;');}res.setHeader('content-type','text/html');res.end('<!doctype html><html><body><script src="/bundle.js"></script></body></html>')});
  await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
  const browser=await chromium.launch({executablePath:process.env.CART_CHROMIUM_PATH,args:['--no-sandbox']});
  try{

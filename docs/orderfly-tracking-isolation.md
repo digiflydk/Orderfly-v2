@@ -114,3 +114,20 @@ separate gates. Issue #125 stays open until these have completed.
 - Controlled test campaign: orderfly_qa_125 / qa / tracking_release. No paid order
   was submitted. Ads, external event receipt and paid-order acceptance remain open
   in #125. Do not equate runtime-ready or mock test passes with vendor receipt.
+
+
+## Vendor delivery investigation
+
+PR #129 is deployed as Firebase build-2026-09-12-003 (63e7fe4). Live consented menu/product/cart/checkout testing still produced no visible GA4 realtime or Meta Test Events receipt. GTM-PK4J8ZFD remains configured in the brand. Consent withdrawal removes the runtime; the reversible test cart was cleared.
+
+The new CI vendor fixture loads real public vendor JavaScript but intercepts every collection request before it leaves the browser. It compares the current srcdoc document with an HTTP document to isolate runtime compatibility. Existing inert-script tests prove queuing, not vendor delivery. This investigation does not constitute live acceptance.
+
+CI reproduction: srcdoc generated zero Google requests; the same vendor runtime in an HTTP document generated page_view and add_to_cart. Replace srcdoc with /tracking/frame, an inert same-origin HTML response initialized once through a validated parent/origin message. Configuration stays out of URL/query parameters. Ready/event queuing and frame removal on revocation/brand switch remain intact. Meta's fixture now uses the allowlisted virtual orderfly.dk origin while intercepting all collection, rather than localhost.
+
+Review follow-up: set the frame's same-origin history URL from sanitized storefront context before vendor initialization and before subsequent events. Meta reads the document location rather than Google's explicit page_location. Real-vendor assertions check for receipt-token and internal-frame URL leakage as well as actual add-to-cart requests.
+
+Meta iframe constraint: replacing document.referrer with an external campaign origin triggers Meta's traffic-permission rejection despite orderfly.dk being allowlisted. Preserve the real embedding origin via referrerPolicy=origin; do not override document.referrer. Send the original sanitized external hostname in the explicit referrer_host event field. Google retains the standard external page_referrer; Meta's native iframe referrer identifies Orderfly. UTM/fbclid stay in the sanitized storefront URL.
+
+Vendor diagnosis: Meta 2.9.398's shared global_config is embedded in fbevents.js; no separate global_config download was needed. Both configurations complete, with no pending locks or async event queue. The actual pixel configuration includes HeadlessChrome in BotBlocking and the global client-side blocking guardrail has passRate=1. The CI test observes the real SDK send stage and asserts sanitized commerce payloads plus the bot flag and actual suppression message from the SDK send handler. Unexpected runtime/vendor errors fail the fixture. If the vendor permits the browser, actual outgoing AddToCart remains required. No browser identity or vendor protection is modified. CI bot suppression does not establish live customer delivery; ordinary-browser receipt is a separate acceptance gate.
+
+Review coverage: commerce pagePath changes retain the sanitized landing query, including UTM and consent-eligible click IDs. The vendor fixture uses a production-shaped pagePath and explicitly requires the initial Google page_view as well as add_to_cart.

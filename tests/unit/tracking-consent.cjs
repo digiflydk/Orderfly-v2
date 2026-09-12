@@ -3,21 +3,41 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const {loadTs}=require('../helpers/load-ts.cjs');
 
+test('HTTP frame is inert until a consented same-origin parent initializes it once',()=>{
+ const {BRAND_TRACKING_DOCUMENT}=loadTs('src/lib/brand-tracking-frame.ts');
+ const listeners=new Set(),elements=[],parent={postMessage(){}};
+ const context={parent,location:{origin:'https://orderfly.dk'},URL,history:{replaceState(){}},Date,encodeURIComponent,
+  document:{createElement:()=>({}),head:{appendChild:x=>elements.push(x)}},
+  addEventListener:(type,fn)=>listeners.add(fn),removeEventListener:(type,fn)=>listeners.delete(fn)};
+ context.window=context;vm.createContext(context);
+ vm.runInContext(BRAND_TRACKING_DOCUMENT.match(/<script>([\s\S]*)<\/script>/)[1],context);
+ const config={origin:'https://orderfly.dk',brandId:'b',consent:{statistics:true,marketing:false},ga:'G-TEST'};
+ const send=(source,origin,cfg)=>{for(const fn of [...listeners])fn({source,origin,data:{type:'orderfly:brand-init',config:cfg}})};
+ assert.equal(elements.length,0);
+ send({},config.origin,config);send(parent,'https://other.example',config);
+ send(parent,config.origin,{...config,consent:{statistics:false,marketing:false}});
+ assert.equal(elements.length,0);
+ send(parent,config.origin,config);assert.equal(elements.length,1);
+ send(parent,config.origin,config);assert.equal(elements.length,1,'duplicate init must not reload tags');
+});
+
 // Execute the real generated runtime with inert script elements: no browser or network.
 function runtime(consent, gtm=false){
  const previous={window:global.window,document:global.document};
- const messages=[],elements=[],listeners={};let frame;
- global.window={location:new URL('https://orderfly.dk/esmeralda/amager?utm_source=google&gclid=click123&receipt_token=secret'),addEventListener(){},removeEventListener(){},dispatchEvent(){}};
- global.document={cookie:'',referrer:'',createElement:()=>frame={setAttribute(){},contentWindow:{postMessage(){}},remove(){}},body:{appendChild(){}}};
+ const messages=[],elements=[],listeners={};let frame, parentListener, config;
+ global.window={location:new URL('https://orderfly.dk/esmeralda/amager?utm_source=google&gclid=click123&receipt_token=secret'),addEventListener(type,fn){parentListener=fn},removeEventListener(){},dispatchEvent(){}};
+ global.document={cookie:'',referrer:'',createElement:()=>frame={setAttribute(){},contentWindow:{postMessage(data){config=data.config}},remove(){}},body:{appendChild(){}}};
  try{
-  const {mountBrandTracking}=loadTs('src/lib/brand-tracking-frame.ts');
+  const {mountBrandTracking,BRAND_TRACKING_DOCUMENT}=loadTs('src/lib/brand-tracking-frame.ts');
   mountBrandTracking({id:'b',ga4MeasurementId:'G-TEST',gtmContainerId:gtm?'GTM-TEST':undefined,googleAdsConversionId:'AW-TEST',googleAdsPurchaseLabel:'paid',metaPixelId:'123'},consent);
   if(!frame)return null;
   const parent={postMessage:x=>messages.push(x)};
-  const context={parent,document:{createElement:()=>({}),head:{appendChild:x=>elements.push(x)}},addEventListener:(type,fn)=>listeners[type]=fn,Date,encodeURIComponent};
+  parentListener({source:frame.contentWindow,origin:'https://orderfly.dk',data:{type:'orderfly:frame-loaded'}});
+  const context={parent,location:{origin:'https://orderfly.dk'},URL,history:{replaceState(){}},removeEventListener(){},document:{createElement:()=>({}),head:{appendChild:x=>elements.push(x)}},addEventListener:(type,fn)=>listeners[type]=fn,Date,encodeURIComponent};
   context.window=context;vm.createContext(context);
-  vm.runInContext(frame.srcdoc.match(/<script>([\s\S]*)<\/script>/)[1],context);
-  return {context,elements,send:event=>listeners.message({source:parent,origin:'https://orderfly.dk',data:{type:'orderfly:brand-event',event}}),google:()=>Array.from(context.dataLayer).filter(x=>x[0]==='event').map(x=>[...x]),meta:()=>context.fbq?Array.from(context.fbq.queue,x=>[...x]):[],html:frame.srcdoc};
+  vm.runInContext(BRAND_TRACKING_DOCUMENT.match(/<script>([\s\S]*)<\/script>/)[1],context);
+  listeners.message({source:parent,origin:'https://orderfly.dk',data:{type:'orderfly:brand-init',config}});
+  return {context,elements,send:event=>listeners.message({source:parent,origin:'https://orderfly.dk',data:{type:'orderfly:brand-event',event}}),google:()=>Array.from(context.dataLayer).filter(x=>x[0]==='event').map(x=>[...x]),meta:()=>context.fbq?Array.from(context.fbq.queue,x=>[...x]):[],html:JSON.stringify(config)};
  }finally{global.window=previous.window;global.document=previous.document;}
 }
 for(const [statistics,marketing] of [[false,false],[true,false],[false,true],[true,true]])test(`runtime consent statistics=${statistics}, marketing=${marketing}`,()=>{
@@ -37,6 +57,17 @@ for(const [statistics,marketing] of [[false,false],[true,false],[false,true],[tr
  assert.equal(r.context.dataLayer[0][2].ad_user_data,marketing?'granted':'denied');
  if(!marketing)assert.doesNotMatch(r.html,/click123/);
  assert.doesNotMatch(r.html,/receipt_token|secret/);
+});
+test('commerce paths retain sanitized campaign parameters for both consent purposes',()=>{
+ for(const marketing of [false,true]){
+  const r=runtime({statistics:true,marketing});
+  r.send({event:'add_to_cart',brandId:'b',pagePath:'/esmeralda/checkout',cartValue:20});
+  const url=new URL(r.google()[0][2].page_location);
+  assert.equal(url.pathname,'/esmeralda/checkout');
+  assert.equal(url.searchParams.get('utm_source'),'google');
+  assert.equal(url.searchParams.get('gclid'),marketing?'click123':null);
+  assert.equal(url.searchParams.has('receipt_token'),false);
+ }
 });
 test('GTM has exclusive GA events; Ads and Meta have one direct owner; foreign brands are rejected',()=>{
  const r=runtime({statistics:true,marketing:true},true);
