@@ -6,18 +6,20 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 // Execute the real generated runtime with inert script elements: no browser or network.
 function runtime(consent, gtm=false){
  const previous={window:global.window,document:global.document};
- const messages=[],elements=[],listeners={};let frame;
- global.window={location:new URL('https://orderfly.dk/esmeralda/amager?utm_source=google&gclid=click123&receipt_token=secret'),addEventListener(){},removeEventListener(){},dispatchEvent(){}};
- global.document={cookie:'',referrer:'',createElement:()=>frame={setAttribute(){},contentWindow:{postMessage(){}},remove(){}},body:{appendChild(){}}};
+ const messages=[],elements=[],listeners={};let frame, parentListener, config;
+ global.window={location:new URL('https://orderfly.dk/esmeralda/amager?utm_source=google&gclid=click123&receipt_token=secret'),addEventListener(type,fn){parentListener=fn},removeEventListener(){},dispatchEvent(){}};
+ global.document={cookie:'',referrer:'',createElement:()=>frame={setAttribute(){},contentWindow:{postMessage(data){config=data.config}},remove(){}},body:{appendChild(){}}};
  try{
-  const {mountBrandTracking}=loadTs('src/lib/brand-tracking-frame.ts');
+  const {mountBrandTracking,BRAND_TRACKING_DOCUMENT}=loadTs('src/lib/brand-tracking-frame.ts');
   mountBrandTracking({id:'b',ga4MeasurementId:'G-TEST',gtmContainerId:gtm?'GTM-TEST':undefined,googleAdsConversionId:'AW-TEST',googleAdsPurchaseLabel:'paid',metaPixelId:'123'},consent);
   if(!frame)return null;
   const parent={postMessage:x=>messages.push(x)};
-  const context={parent,document:{createElement:()=>({}),head:{appendChild:x=>elements.push(x)}},addEventListener:(type,fn)=>listeners[type]=fn,Date,encodeURIComponent};
+  parentListener({source:frame.contentWindow,origin:'https://orderfly.dk',data:{type:'orderfly:frame-loaded'}});
+  const context={parent,location:{origin:'https://orderfly.dk'},removeEventListener(){},document:{createElement:()=>({}),head:{appendChild:x=>elements.push(x)}},addEventListener:(type,fn)=>listeners[type]=fn,Date,encodeURIComponent};
   context.window=context;vm.createContext(context);
-  vm.runInContext(frame.srcdoc.match(/<script>([\s\S]*)<\/script>/)[1],context);
-  return {context,elements,send:event=>listeners.message({source:parent,origin:'https://orderfly.dk',data:{type:'orderfly:brand-event',event}}),google:()=>Array.from(context.dataLayer).filter(x=>x[0]==='event').map(x=>[...x]),meta:()=>context.fbq?Array.from(context.fbq.queue,x=>[...x]):[],html:frame.srcdoc};
+  vm.runInContext(BRAND_TRACKING_DOCUMENT.match(/<script>([\s\S]*)<\/script>/)[1],context);
+  listeners.message({source:parent,origin:'https://orderfly.dk',data:{type:'orderfly:brand-init',config}});
+  return {context,elements,send:event=>listeners.message({source:parent,origin:'https://orderfly.dk',data:{type:'orderfly:brand-event',event}}),google:()=>Array.from(context.dataLayer).filter(x=>x[0]==='event').map(x=>[...x]),meta:()=>context.fbq?Array.from(context.fbq.queue,x=>[...x]):[],html:JSON.stringify(config)};
  }finally{global.window=previous.window;global.document=previous.document;}
 }
 for(const [statistics,marketing] of [[false,false],[true,false],[false,true],[true,true]])test(`runtime consent statistics=${statistics}, marketing=${marketing}`,()=>{

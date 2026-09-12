@@ -40,8 +40,48 @@ export function mountBrandTracking(brand: Brand, consent = { statistics: false, 
     attribution,
     campaign: { campaign_source: attribution?.source, campaign_medium: attribution?.medium, campaign_name: attribution?.campaign, campaign_id: attribution?.campaignId, campaign_term: attribution?.term, campaign_content: attribution?.content },
   }).replace(/</g, '\\u003c');
-  frame.srcdoc = `<!doctype html><html><head><meta charset="utf-8"></head><body><script>
-  const config=${config};
+  frame.src = '/tracking/frame';
+  let ready = false, stopped = false;
+  const pending: BrandTrackingEvent[] = [];
+  const send = (event: BrandTrackingEvent) => frame.contentWindow?.postMessage({ type: 'orderfly:brand-event', event }, window.location.origin);
+  const handleReady = (event: MessageEvent) => {
+    if (stopped || event.source !== frame.contentWindow || event.origin !== window.location.origin) return;
+    if (event.data?.type === 'orderfly:frame-loaded') {
+      frame.contentWindow?.postMessage({ type: 'orderfly:brand-init', config: JSON.parse(config) }, window.location.origin);
+      return;
+    }
+    if (event.data?.type !== 'orderfly:brand-ready' || event.data.brandId !== brand.id) return;
+    ready = true;
+    tracker.ready = true;
+    pending.splice(0).forEach(send);
+    const waiting = window.orderflyPendingTracking || [];
+    window.orderflyPendingTracking = [];
+    waiting.filter(value => value.brandId === brand.id).forEach(send);
+    window.dispatchEvent(new Event('orderfly:tracking-ready'));
+  };
+  const tracker = { brandId: brand.id, ready: false, statistics: consent.statistics && !!(brand.gtmContainerId || brand.ga4MeasurementId), marketing: consent.marketing && !!(brand.metaPixelId || brand.googleAdsConversionId && brand.googleAdsPurchaseLabel), emit(event: BrandTrackingEvent) {
+    if (stopped || event.brandId !== brand.id) return;
+    if (ready) send(event); else if (pending.length < 50) pending.push(event);
+  } };
+  window.addEventListener('message', handleReady);
+  window.orderflyBrandTracker = tracker;
+  document.body.appendChild(frame);
+  return () => {
+    stopped = true;
+    window.removeEventListener('message', handleReady);
+    if (window.orderflyBrandTracker === tracker) delete window.orderflyBrandTracker;
+    pending.length = 0;
+    frame.remove();
+  };
+}
+
+// Served as a real same-origin document: vendor libraries reject about:srcdoc.
+export const BRAND_TRACKING_DOCUMENT = `<!doctype html><html><head><meta charset="utf-8"></head><body><script>
+  addEventListener('message',function initialize({source,origin,data}){
+  if(source!==parent||origin!==location.origin||data?.type!=='orderfly:brand-init')return;
+  const config=data.config;
+  if(!config||config.origin!==location.origin||typeof config.brandId!=='string'||(!config.consent?.statistics&&!config.consent?.marketing))return;
+  removeEventListener('message',initialize);
   window.dataLayer=[];
   function gtag(){window.dataLayer.push(arguments);}
   function script(src){const tag=document.createElement('script');tag.async=true;tag.src=src;document.head.appendChild(tag);}
@@ -71,32 +111,6 @@ export function mountBrandTracking(brand: Brand, consent = { statistics: false, 
     }
   });
   parent.postMessage({type:'orderfly:brand-ready',brandId:config.brandId},config.origin);
+  });
+  parent.postMessage({type:'orderfly:frame-loaded'},location.origin);
   </script></body></html>`;
-  let ready = false, stopped = false;
-  const pending: BrandTrackingEvent[] = [];
-  const send = (event: BrandTrackingEvent) => frame.contentWindow?.postMessage({ type: 'orderfly:brand-event', event }, window.location.origin);
-  const handleReady = (event: MessageEvent) => {
-    if (event.source !== frame.contentWindow || event.origin !== window.location.origin || event.data?.type !== 'orderfly:brand-ready' || event.data.brandId !== brand.id) return;
-    ready = true;
-    tracker.ready = true;
-    pending.splice(0).forEach(send);
-    const waiting = window.orderflyPendingTracking || [];
-    window.orderflyPendingTracking = [];
-    waiting.filter(value => value.brandId === brand.id).forEach(send);
-    window.dispatchEvent(new Event('orderfly:tracking-ready'));
-  };
-  const tracker = { brandId: brand.id, ready: false, statistics: consent.statistics && !!(brand.gtmContainerId || brand.ga4MeasurementId), marketing: consent.marketing && !!(brand.metaPixelId || brand.googleAdsConversionId && brand.googleAdsPurchaseLabel), emit(event: BrandTrackingEvent) {
-    if (stopped || event.brandId !== brand.id) return;
-    if (ready) send(event); else if (pending.length < 50) pending.push(event);
-  } };
-  window.addEventListener('message', handleReady);
-  window.orderflyBrandTracker = tracker;
-  document.body.appendChild(frame);
-  return () => {
-    stopped = true;
-    window.removeEventListener('message', handleReady);
-    if (window.orderflyBrandTracker === tracker) delete window.orderflyBrandTracker;
-    pending.length = 0;
-    frame.remove();
-  };
-}
