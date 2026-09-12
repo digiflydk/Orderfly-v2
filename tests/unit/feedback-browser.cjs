@@ -53,12 +53,12 @@ before(async()=>{
    const pathname=url.searchParams.get('path');let data;
    if(pathname==='/login')data={};
    else if(pathname==='/report')data={report:await f.report.getFeedbackReport(Object.fromEntries(new URLSearchParams(url.searchParams.get('query')||'')))};
-   else if(pathname==='/settings')data={brands:[{id:'b',name:'Esmeralda QA',slug:'esmeralda',...await f.settings.readFeedbackSettings('b')}],locations:[{id:'l',name:'Amager',brandId:'b',slug:'amager'}],questionVersions:[{id:'v1',name:'Besøg',language:'da',orderTypes:['pickup','booking']},{id:'en',name:'English',language:'en',orderTypes:['pickup']}],canEdit:true,jobs:await f.mailAdmin.feedbackMailJobs('b')};
+   else if(pathname==='/settings')data={brands:[{id:'b',name:'Esmeralda QA',slug:'esmeralda',...await f.settings.readFeedbackSettings('b')}],locations:[{id:'l',name:'Amager',brandId:'b',slug:'amager'}],questionVersions:[{id:'v1',name:'Besøg',language:'da',orderTypes:['pickup','booking'],scope:'default'},{id:'en',name:'English',language:'en',orderTypes:['pickup'],scope:'default'}],canEdit:true,jobs:await f.mailAdmin.feedbackMailJobs('b')};
    else if(pathname==='/detail')data={initialFeedback:{...await f.admin.getFeedbackById('f'),customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager'},canEdit:true};
    else if(pathname==='/reviews')data={locationName:'Amager',menuHref:'/menu',reviews:(await f.reviews.readPublicReviews('b','l'))?.reviews||[]};
    else if(pathname==='/public')data={context:{sourceType:'commerce_order',sourceId:'order',customerId:'c',locationId:'l',brandId:'b',brandName:'Esmeralda QA',experienceType:'pickup',displayReference:'QA order'},questionsVersion:await f.store.readQuestionVersion('v1')};
    else if(pathname==='/inbox')data={initialFeedback:(await f.admin.getFeedbackEntries()).map(row=>({...row,customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',questionVersionLabel:'Besøg'})),brands:[{id:'b',name:'Esmeralda QA'}],locations:[{id:'l',name:'Amager',brandId:'b'}]};
-   else if(pathname.endsWith('/new')||pathname.includes('/edit/'))data={mode:pathname.endsWith('/new')?'create':'edit',version:pathname.endsWith('/new')?undefined:await f.store.readQuestionVersion(pathname.split('/').pop()),supportedLanguages:[{code:'da',name:'Dansk'},{code:'en',name:'English'}]};
+   else if(pathname.endsWith('/new')||pathname.includes('/edit/'))data={mode:pathname.endsWith('/new')?'create':'edit',version:pathname.endsWith('/new')?undefined:await f.store.readQuestionVersion(pathname.split('/').pop()),brands:[{id:'b',name:'Esmeralda QA'},{id:'other',name:'Other Brand'}],supportedLanguages:[{code:'da',name:'Dansk'},{code:'en',name:'English'}]};
    else data=await f.admin.getFeedbackQuestionVersions();
    res.setHeader('content-type','application/json');return res.end(JSON.stringify(data));
   }
@@ -87,6 +87,17 @@ test('create version, reopen, edit, list canonical name and retain draft on tran
  await page.getByRole('button',{name:'Save',exact:true}).click();await page.waitForURL('**/edit/*');await page.getByLabel('Question label',{exact:true}).waitFor();assert.equal(await page.getByLabel('Question label',{exact:true}).inputValue(),'Hvordan var maden?');
  await page.getByLabel('Version Label',{exact:true}).fill('QA updated');await page.getByRole('button',{name:'Save',exact:true}).click();await page.waitForFunction(()=>!document.querySelector('[role="alert"]'));await page.getByLabel('Version Label',{exact:true}).waitFor();
  await page.goto(origin+'/superadmin/feedback/questions');await page.getByText('QA updated',{exact:true}).waitFor();await page.getByText('Besøg',{exact:true}).waitFor();assert.equal(await page.getByText('stale-id',{exact:true}).count(),0);
+});
+test('questions can be scoped and filtered by brand',async t=>{
+ const page=await setup(t,'/superadmin/feedback/questions/new',1280);
+ await page.getByLabel('Version Label',{exact:true}).fill('Brand QA');
+ await page.getByLabel('Gælder for',{exact:true}).click();await page.getByRole('option',{name:'Et bestemt brand',exact:true}).click();
+ await page.getByLabel('Brand',{exact:true}).click();await page.getByRole('option',{name:'Esmeralda QA',exact:true}).click();
+ await page.getByRole('button',{name:'Add Question',exact:true}).click();await page.getByLabel('Question label',{exact:true}).fill('Hvordan var brandet?');
+ await page.getByRole('button',{name:'Save',exact:true}).click();await page.waitForURL('**/edit/*');
+ await page.goto(origin+'/superadmin/feedback/questions');await page.getByLabel('Vis spørgsmål for',{exact:true}).selectOption('b');
+ await page.getByText('Brand QA',{exact:true}).waitFor();assert.equal(await page.getByText('Besøg',{exact:true}).count(),0);
+ await page.getByLabel('Vis spørgsmål for',{exact:true}).selectOption('default');await page.getByText('Besøg',{exact:true}).waitFor();assert.equal(await page.getByText('Brand QA',{exact:true}).count(),0);
 });
 for(const width of [390,1280])test(`required answer, retry after transport error and successful feedback (${width})`,async t=>{
  const page=await setup(t,'/public',width);await page.getByRole('button',{name:'Send feedback',exact:true}).click();await page.getByRole('alert').filter({hasText:'Required feedback question is missing'}).waitFor();

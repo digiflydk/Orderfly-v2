@@ -20,12 +20,20 @@ export const FeedbackQuestionsVersionSchema = z.object({
   id: z.string().optional(),
   versionLabel: z.string().trim().min(1).max(200),
   isActive: z.boolean(),
+  scope: z.enum(["default", "brand"]).default("default"),
+  brandId: z.string().regex(/^[\w-]{1,160}$/).nullable().optional(),
   language: z.string().trim().min(2).max(16).default("da"),
   orderTypes: z.array(z.enum(["pickup", "delivery", "booking"])).min(1).max(3),
   questions: z.array(QuestionSchema).min(1).max(50),
   createdAt: z.any().optional(),
   updatedAt: z.any().optional(),
 }).superRefine((version, context) => {
+  if (version.scope === 'brand' && !version.brandId) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['brandId'], message: 'Select a brand for this question version.' });
+  }
+  if (version.scope === 'default' && version.brandId) {
+    context.addIssue({ code: z.ZodIssueCode.custom, path: ['brandId'], message: 'Default question versions cannot belong to one brand.' });
+  }
   const ids = new Set<string>();
   version.questions.forEach((question, index) => {
     const error = (message: string) => context.addIssue({ code: z.ZodIssueCode.custom, path: ['questions', index], message });

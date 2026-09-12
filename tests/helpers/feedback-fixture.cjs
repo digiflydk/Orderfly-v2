@@ -49,7 +49,7 @@ function fixture(){
  return{mocks,mailProvider,mailQueue:loadTs('src/lib/feedback/mail-queue.ts',mocks),mailWorker:loadTs('src/lib/feedback/mail-worker.ts',mocks),mailAdmin:loadTs('src/lib/feedback/mail-admin.ts',mocks),invitations:loadTs('src/lib/feedback/order-invitations.ts',mocks),records,writes,reads,auth,failure,questions,db,access:loadTs('src/lib/feedback/access.ts',mocks),report:loadTs('src/lib/feedback/report.ts',mocks),settings:loadTs('src/lib/feedback/settings.ts',mocks),reviews:loadTs('src/lib/feedback/public-reviews.ts',mocks),admin:loadTs('src/app/superadmin/feedback/actions.ts',mocks),public:loadTs('src/app/feedback/actions.ts',mocks),store:loadTs('src/lib/feedback/question-store.ts',mocks)};
 }
 function versionForm(overrides={}){
- const values={versionLabel:'Ny version',isActive:'',language:'da',orderTypes:['delivery'],questions:JSON.stringify(questions),...overrides};const form=new FormData();
+ const values={versionLabel:'Ny version',isActive:'',scope:'default',language:'da',orderTypes:['delivery'],questions:JSON.stringify(questions),...overrides};const form=new FormData();
  for(const [key,value]of Object.entries(values))for(const item of Array.isArray(value)?value:[value])if(item!==undefined)form.append(key,item);
  return form;
 }

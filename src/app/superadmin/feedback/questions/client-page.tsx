@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo, useState } from 'react';
 import Link from '@/components/superadmin/admin-link';
 
 import type { FeedbackQuestionsVersion } from '@/types';
@@ -8,9 +9,22 @@ type Version = FeedbackQuestionsVersion & { createdAt?: Date | string | number }
 
 export default function FeedbackQuestionsClientPage({
   initialVersions,
+  brands = [],
 }: {
   initialVersions: Version[];
+  brands: { id: string; name: string }[];
 }) {
+  const [scopeFilter, setScopeFilter] = useState('all');
+  const brandNames = useMemo(() => new Map(brands.map(brand => [brand.id, brand.name])), [brands]);
+  const versions = useMemo(() => initialVersions
+    .filter(version => scopeFilter === 'all' || (scopeFilter === 'default'
+      ? version.scope !== 'brand'
+      : version.scope === 'brand' && version.brandId === scopeFilter))
+    .sort((a, b) => {
+      const aScope = a.scope === 'brand' ? brandNames.get(a.brandId || '') || a.brandId || '' : '';
+      const bScope = b.scope === 'brand' ? brandNames.get(b.brandId || '') || b.brandId || '' : '';
+      return aScope.localeCompare(bScope) || a.versionLabel.localeCompare(b.versionLabel) || a.id.localeCompare(b.id);
+    }), [brandNames, initialVersions, scopeFilter]);
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -28,12 +42,22 @@ export default function FeedbackQuestionsClientPage({
         </Link>
       </div>
 
+      <div className="max-w-sm space-y-2">
+        <label htmlFor="question-scope-filter" className="text-sm font-medium">Vis spørgsmål for</label>
+        <select id="question-scope-filter" className="h-10 w-full rounded-md border bg-background px-3" value={scopeFilter} onChange={event => setScopeFilter(event.target.value)}>
+          <option value="all">Alle</option>
+          <option value="default">Standard · alle brands</option>
+          {brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
+        </select>
+      </div>
+
       <div className="rounded-xl border bg-card">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead className="bg-muted/50 text-left">
               <tr>
                 <th className="px-4 py-3 font-medium">ID</th>
+                <th className="px-4 py-3 font-medium">Gælder for</th>
                 <th className="px-4 py-3 font-medium">Sprog</th>
                 <th className="px-4 py-3 font-medium">Oplevelse</th>
                 <th className="px-4 py-3 font-medium">Label</th>
@@ -43,16 +67,17 @@ export default function FeedbackQuestionsClientPage({
               </tr>
             </thead>
             <tbody>
-              {!initialVersions || initialVersions.length === 0 ? (
+              {versions.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-6 text-muted-foreground" colSpan={7}>
+                  <td className="px-4 py-6 text-muted-foreground" colSpan={8}>
                     Ingen spørgsmålsversioner fundet.
                   </td>
                 </tr>
               ) : (
-                initialVersions.map((q) => (
+                versions.map((q) => (
                   <tr key={q.id} className="border-t">
                     <td className="px-4 py-3">{q.id}</td>
+                    <td className="px-4 py-3">{q.scope === 'brand' ? brandNames.get(q.brandId || '') || 'Ukendt brand' : 'Standard · alle brands'}</td>
                     <td className="px-4 py-3">{q.language || "-"}</td>
                     <td className="px-4 py-3">{q.orderTypes?.join(', ') || '-'}</td>
                     <td className="px-4 py-3">{q.versionLabel || "-"}</td>

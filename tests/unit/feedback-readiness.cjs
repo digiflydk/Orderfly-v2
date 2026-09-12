@@ -20,6 +20,31 @@ test('activation conflicts reject without disabling existing types; language-spe
  assert.equal((await f.public.getActiveFeedbackQuestionsForExperience('pickup','da')).id,'v1');
  assert.equal((await f.public.getActiveFeedbackQuestionsForExperience('pickup','en')).id,'en');assert.equal(await f.public.getActiveFeedbackQuestionsForExperience('delivery','da'),null);
 });
+test('brand-specific versions override defaults only for their own brand',async()=>{
+ const f=fixture();
+ const brand=await f.admin.createOrUpdateQuestionVersion(versionForm({isActive:'on',scope:'brand',brandId:'b',orderTypes:['pickup'],versionLabel:'Esmeralda pickup'}));
+ assert.equal(brand.ok,true,JSON.stringify(brand));
+ assert.equal((await f.store.readActiveQuestionsForBrand('b','pickup','da')).id,brand.id);
+ assert.equal((await f.store.readActiveQuestionsForBrand('other','pickup','da')).id,'v1');
+ assert.equal((await f.public.getActiveFeedbackQuestionsForExperience('pickup','da')).id,'v1');
+ const duplicate=await f.admin.createOrUpdateQuestionVersion(versionForm({isActive:'on',scope:'brand',brandId:'b',orderTypes:['pickup']}));
+ assert.equal(duplicate.ok,false);assert.match(duplicate.error,/Deactivate/);
+ const other=await f.admin.createOrUpdateQuestionVersion(versionForm({isActive:'on',scope:'brand',brandId:'other',orderTypes:['pickup']}));
+ assert.equal(other.ok,true,JSON.stringify(other));
+});
+test('feedback submission accepts only the version resolved for the order brand',async()=>{
+ const f=fixture();const brand=await f.admin.createOrUpdateQuestionVersion(versionForm({isActive:'on',scope:'brand',brandId:'b',orderTypes:['pickup']}));
+ assert.equal(brand.ok,true,JSON.stringify(brand));
+ const forged=await f.public.submitFeedbackAction(null,responseForm());assert.equal(forged.error,true);assert.equal([...f.records.keys()].filter(key=>key.startsWith('feedback/')).length,0);
+ await redirected(f.public.submitFeedbackAction(null,responseForm({questionVersionId:brand.id})));
+ assert.equal([...f.records.keys()].filter(key=>key.startsWith('feedback/')).length,1);
+});
+test('brand scope requires an existing brand',async()=>{
+ const f=fixture();
+ for(const override of [{scope:'brand',brandId:undefined},{scope:'brand',brandId:'missing'}]){
+  const result=await f.admin.createOrUpdateQuestionVersion(versionForm(override));assert.equal(result.ok,false);
+ }
+});
 test('concurrent activation allows only one matching active version',async()=>{
  const f=fixture();const results=await Promise.all([f.admin.createOrUpdateQuestionVersion(versionForm({isActive:'on'})),f.admin.createOrUpdateQuestionVersion(versionForm({isActive:'on'}))]);assert.equal(results.filter(r=>r.ok).length,1);
 });
