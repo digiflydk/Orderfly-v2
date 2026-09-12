@@ -14,6 +14,7 @@ export function mountBrandTracking(brand: Brand, consent = { statistics: false, 
   if (!consent.statistics && !consent.marketing) return () => {};
   const frame = document.createElement('iframe');
   frame.hidden = true;
+  frame.referrerPolicy = 'no-referrer';
   frame.title = 'Brand analytics';
   frame.setAttribute('aria-hidden', 'true');
   frame.setAttribute('sandbox', 'allow-scripts allow-same-origin');
@@ -25,7 +26,7 @@ export function mountBrandTracking(brand: Brand, consent = { statistics: false, 
   } catch { /* Ignore unavailable/corrupt optional attribution. */ }
   const attribution = resolveAttribution(campaignAttribution(new URLSearchParams(window.location.search), window.location.pathname, document.referrer), stored);
   if (attribution && !consent.marketing) { delete attribution.gclid; delete attribution.gbraid; delete attribution.wbraid; delete attribution.fbclid; }
-  const landing = new URL(attribution?.landingPath || window.location.pathname, window.location.origin);
+  const landing = new URL(window.location.pathname, window.location.origin);
   for (const [field,param] of [['source','utm_source'],['medium','utm_medium'],['campaign','utm_campaign'],['campaignId','utm_id'],['term','utm_term'],['content','utm_content'],['gclid','gclid'],['gbraid','gbraid'],['wbraid','wbraid'],['fbclid','fbclid']] as const) {
     if (attribution?.[field]) landing.searchParams.set(param, attribution[field]!);
   }
@@ -35,6 +36,7 @@ export function mountBrandTracking(brand: Brand, consent = { statistics: false, 
     adsSendTo: consent.marketing && brand.googleAdsConversionId && brand.googleAdsPurchaseLabel ? `${brand.googleAdsConversionId}/${brand.googleAdsPurchaseLabel}` : undefined,
     meta: consent.marketing ? brand.metaPixelId : undefined,
     pageLocation: landing.href,
+    pageReferrer: attribution?.referrerHost ? `https://${attribution.referrerHost}/` : '',
     attribution,
     campaign: { campaign_source: attribution?.source, campaign_medium: attribution?.medium, campaign_name: attribution?.campaign, campaign_id: attribution?.campaignId, campaign_term: attribution?.term, campaign_content: attribution?.content },
   }).replace(/</g, '\\u003c');
@@ -46,9 +48,9 @@ export function mountBrandTracking(brand: Brand, consent = { statistics: false, 
   // Basic consent: no runtime exists until a relevant purpose is granted.
   gtag('consent','default',{analytics_storage:config.consent.statistics?'granted':'denied',ad_storage:config.consent.marketing?'granted':'denied',ad_user_data:config.consent.marketing?'granted':'denied',ad_personalization:config.consent.marketing?'granted':'denied'});
   gtag('set','ads_data_redaction',!config.consent.marketing);
-  if(config.gtm){dataLayer.push({event:'orderfly_tracking_ready',brandId:config.brandId,page_location:config.pageLocation,...config.attribution});dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});script('https://www.googletagmanager.com/gtm.js?id='+encodeURIComponent(config.gtm));}
+  if(config.gtm){dataLayer.push({event:'orderfly_tracking_ready',brandId:config.brandId,page_location:config.pageLocation,page_referrer:config.pageReferrer,...config.attribution});dataLayer.push({'gtm.start':Date.now(),event:'gtm.js'});script('https://www.googletagmanager.com/gtm.js?id='+encodeURIComponent(config.gtm));}
   // GTM owns GA4. Ads and Meta each have one explicit, consent-gated owner here.
-  if((!config.gtm&&config.ga)||config.ads){script('https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(config.ads||config.ga));gtag('js',new Date());if(!config.gtm&&config.ga)gtag('config',config.ga,{send_page_view:true,page_location:config.pageLocation,...config.campaign});if(config.ads)gtag('config',config.ads,{send_page_view:false,page_location:config.pageLocation});}
+  if((!config.gtm&&config.ga)||config.ads){script('https://www.googletagmanager.com/gtag/js?id='+encodeURIComponent(config.ads||config.ga));gtag('js',new Date());if(!config.gtm&&config.ga)gtag('config',config.ga,{send_page_view:true,page_location:config.pageLocation,page_referrer:config.pageReferrer,...config.campaign});if(config.ads)gtag('config',config.ads,{send_page_view:false,page_location:config.pageLocation});}
   if(config.meta){const fbq=function(){fbq.callMethod?fbq.callMethod.apply(fbq,arguments):fbq.queue.push(arguments)};fbq.queue=[];fbq.loaded=true;fbq.version='2.0';window.fbq=fbq;script('https://connect.facebook.net/en_US/fbevents.js');fbq('set','autoConfig',false,config.meta);fbq('init',config.meta);fbq('trackSingle',config.meta,'PageView');}
   addEventListener('message',({source,origin,data})=>{
     if(source!==parent||origin!==config.origin||data?.type!=='orderfly:brand-event'||data.event?.brandId!==config.brandId)return;
@@ -57,9 +59,10 @@ export function mountBrandTracking(brand: Brand, consent = { statistics: false, 
     const mapped=mapping[event.event];
     if(!mapped)return;
     const ecommerce=event.ecommerce||{currency:event.currency||'DKK',...(typeof event.cartValue==='number'?{value:event.cartValue}:{}),...(event.items?{items:event.items}:event.productId?{items:[{item_id:event.productId,quantity:event.itemsCount||1,...(typeof event.cartValue==='number'?{price:event.cartValue/(event.itemsCount||1)}:{})}]}:{})};
-    const parameters={...ecommerce,brand_id:config.brandId,location_id:event.locationId||ecommerce.location_id,...config.campaign,page_location:config.pageLocation};
+    const pageLocation=typeof event.pagePath==='string'&&/^\\/[^?#]*$/.test(event.pagePath)?config.origin+event.pagePath:config.pageLocation;
+    const parameters={...ecommerce,brand_id:config.brandId,location_id:event.locationId||ecommerce.location_id,...config.campaign,page_location:pageLocation,page_referrer:config.pageReferrer};
     if(config.consent.statistics&&event.destinations?.statistics!==false){
-      if(config.gtm){dataLayer.push({ecommerce:null});dataLayer.push({event:mapped[0],ecommerce,brand_id:config.brandId,location_id:parameters.location_id,page_location:config.pageLocation});}
+      if(config.gtm){dataLayer.push({ecommerce:null});dataLayer.push({event:mapped[0],ecommerce,brand_id:config.brandId,location_id:parameters.location_id,page_location:pageLocation,page_referrer:config.pageReferrer});}
       else if(config.ga)gtag('event',mapped[0],{...parameters,send_to:config.ga});
     }
     if(config.consent.marketing&&event.destinations?.marketing!==false){

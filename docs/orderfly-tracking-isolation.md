@@ -90,7 +90,13 @@ separate gates. Issue #125 stays open until these have completed.
 ## External setup checkpoint (2026-09-12)
 
 - Existing GA account Orderfly: 361886243. Existing Firebase properties are not
-  repurposed. New property being prepared: Esmeralda – Orderfly, Denmark/DKK.
+  repurposed. New property created: Esmeralda – Orderfly, Denmark/DKK. Web stream
+  Esmeralda – Orderfly web: 15763775538, measurement ID G-551JD0H72K.
+  Enhanced measurement was explicitly disabled before stream creation; only
+  standard pageviews remain. IDs have not been installed in the live brand.
+- Google Ads session exposes only closed account 871-063-4119 under
+  okh2071@gmail.com. Access to the active Esmeralda Ads account is required
+  before a dedicated Orderfly conversion action can be configured.
 - GTM account/container form: Orderfly / Esmeralda – Orderfly, Denmark, Web,
   optional anonymous Google data sharing unchecked. Creation is blocked at the
   Google Tag Manager terms and GDPR processor terms by automatic approval review.

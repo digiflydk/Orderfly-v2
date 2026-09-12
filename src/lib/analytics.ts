@@ -44,7 +44,7 @@ export function trackClientEvent(eventName: AnalyticsEventName | 'web_vital', da
           ? [{ item_id: item.item_id, quantity: Number.isFinite(item.quantity) && item.quantity > 0 ? item.quantity : 1,
               ...(Number.isFinite(item.price) && item.price >= 0 ? { price: item.price } : {}) }] : []) : undefined;
       const event: BrandTrackingEvent = { ...payload, event: eventName, brandId: payload.brandId, currency: /^[A-Z]{3}$/.test(data.currency) ? data.currency : 'DKK',
-        ...(items ? { items } : {}), destinations: consent };
+        ...(items ? { items } : {}), pagePath: window.location.pathname, destinations: consent };
       if (window.orderflyBrandTracker?.brandId === payload.brandId) window.orderflyBrandTracker.emit(event);
       else {
         window.orderflyPendingTracking ||= [];

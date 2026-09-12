@@ -46,10 +46,11 @@ before(async()=>{
  function EditorFixture(){const [rules,setRules]=useState({});return <><ToppingConditionEditor groups={conditionalGroups} toppings={conditionalToppings} value={rules} onChange={setRules}/><pre id="rules">{JSON.stringify(rules)}</pre></>;}
  function ConditionalFixture(){const cart=useCart();useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);return <><ProductDialog product={conditionalProduct} isOpen={true} setIsOpen={()=>{}} allToppingGroups={conditionalGroups} allToppings={conditionalToppings}/><Debug/></>;}
  function ToppingCapFixture(){const cart=useCart();useEffect(()=>cart.setCartContext(brand,location,{deliveryType:'pickup',discounts:[]}),[]);return <><ProductDialog product={capProduct} isOpen={true} setIsOpen={()=>{}} allToppingGroups={capGroups} allToppings={capToppings}/><Debug/></>;}
+ import {BrandTracking} from '@/components/brand-tracking';
  function ConsentFixture(){const [events,setEvents]=useState([]);useEffect(()=>{const original=window.fetch;window.fetch=(url,options)=>{if(url==='/api/analytics/collect')setEvents(previous=>[...previous,JSON.parse(options.body)]);return original(url,options);};return()=>{window.fetch=original;};},[]);const consent=statistics=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics}));window.dispatchEvent(new Event('orderfly:consent'));};return <aside><button onClick={()=>consent(true)}>Allow analytics</button><button onClick={()=>consent(false)}>Reject analytics</button><pre id="funnel-events">{JSON.stringify(events)}</pre></aside>;}
  function DashboardFixture(){const [count,setCount]=useState(1);const data={totals:{sessions:2,measuredPurchasingSessions:1,view_menu:2,view_product:1,add_to_cart:1,start_checkout:1,click_purchase:1,payment_succeeded:count,revenue_paid:count*100},daily:[],byLocation:[],attribution:[],dataQualityWarnings:[]};return <><button onClick={()=>setCount(7)}>Receive refreshed report</button><AnalyticsDashboardClient initialData={data} locations={[]} searchParams={{dateFrom:'2026-09-01',dateTo:'2026-09-11',counting:'events'}}/></>;}
  const mode=new URLSearchParams(window.location.search).get('deliveryMethod')==='delivery'?'delivery':'pickup';
- createRoot(document.getElementById('root')).render(window.location.pathname==='/dashboard-fixture'?<DashboardFixture/>:window.location.pathname==='/condition-editor'?<EditorFixture/>:window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}><ConsentFixture/><CartProvider>{window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
+ createRoot(document.getElementById('root')).render(window.location.pathname==='/dashboard-fixture'?<DashboardFixture/>:window.location.pathname==='/condition-editor'?<EditorFixture/>:window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}>{new URLSearchParams(window.location.search).has('tracking')&&<BrandTracking brand={{...brand,ga4MeasurementId:'G-FIXTURE',metaPixelId:'123456'}}/>}<ConsentFixture/><CartProvider>{window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const aliases={
   '@/app/superadmin/analytics/cust-funnel/actions':fixture('funnel-actions','export const runAggregationForDates=async()=>({success:true});'),
@@ -393,4 +394,22 @@ test('#125 no analytics identity before consent; 30-minute brand session survive
  assert.equal((await events()).length,before);
  await page.getByRole('button',{name:'Allow analytics',exact:true}).click();
  await expect.poll(async()=> (await events()).filter(e=>e.name==='view_menu').length).toBeGreaterThan(1);
+});
+
+test('#125 adding marketing consent sends the currently open product to the newly allowed Meta runtime',async t=>{
+ const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup&tracking=1');
+ await page.route(/https:\/\/(www.googletagmanager.com|connect.facebook.net)\//,route=>route.fulfill({body:'',contentType:'application/javascript'}));
+ await page.getByRole('button',{name:'Allow analytics',exact:true}).click();
+ await page.getByRole('button',{name:'Se Fixture Pizza',exact:true}).click();
+ await page.getByRole('dialog').waitFor();
+ const current=()=>page.frames().find(frame=>frame!==page.mainFrame());
+ await expect.poll(async()=>!!current()).toBe(true);
+ await expect.poll(async()=>current().evaluate(()=>window.dataLayer.filter(x=>x[0]==='event'&&x[1]==='view_item').length)).toBe(1);
+ assert.equal(await current().evaluate(()=>typeof window.fbq),'undefined');
+ await page.evaluate(()=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics:true,marketing:true}));window.dispatchEvent(new Event('orderfly:consent'));});
+ await expect.poll(async()=>{try{return await current().evaluate(()=>window.fbq?.queue.filter(x=>x[2]==='ViewContent').length||0);}catch{return 0;}}).toBe(1);
+ await page.getByRole('checkbox',{name:/Bacon/}).check();
+ assert.equal(await current().evaluate(()=>window.fbq.queue.filter(x=>x[2]==='ViewContent').length),1);
+ await page.evaluate(()=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics:false,marketing:false}));window.dispatchEvent(new Event('orderfly:consent'));});
+ await expect.poll(async()=>page.frames().length).toBe(1);
 });

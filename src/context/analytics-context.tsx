@@ -117,7 +117,7 @@ export function AnalyticsProvider({ children, brand: brandProp }: AnalyticsProvi
   }, [sessionId, brand, brandProp, attribution, consent]);
 
   return (
-    <AnalyticsContext.Provider value={{ trackEvent, sessionId, attribution, measurementKey: consent.statistics ? sessionId || 'pending' : consent.marketing ? 'marketing' : 'denied' }}>
+    <AnalyticsContext.Provider value={{ trackEvent, sessionId, attribution, measurementKey: `${consent.statistics ? sessionId || 'pending' : 'no-statistics'}/${consent.marketing ? 'marketing' : 'no-marketing'}` }}>
       {children}
     </AnalyticsContext.Provider>
   );

@@ -28,7 +28,7 @@ test('brand tracking sends explicit destinations and destroys the previous runti
   frame=page.frames().find(f=>f!==page.mainFrame());
   await frame.waitForFunction(()=>window.dataLayer.some(x=>x.event==='purchase'));
   const second=await frame.evaluate(()=>({events:window.dataLayer.filter(x=>x.event==='purchase'),meta:window.fbq.queue.map(x=>Array.from(x))}));
-  assert.equal(second.events.length,1);assert.equal(second.events[0].brandId,'b');
+  assert.equal(second.events.length,1);assert.equal(second.events[0].brand_id,'b');
   assert.deepEqual(second.meta.find(x=>x[2]==='Purchase').slice(0,3),['trackSingle','222','Purchase']);
   await page.evaluate(()=>window.stop());assert.equal(page.frames().length,1);
   assert.equal(await page.evaluate(()=>window.orderflyBrandTracker),undefined);
