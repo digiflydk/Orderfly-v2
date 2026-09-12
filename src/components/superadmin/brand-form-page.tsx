@@ -37,6 +37,7 @@ const brandSchema = z.object({
   id: z.string().optional(),
   
   // Step 1: User Info
+  ownerId: z.string().optional(),
   ownerName: z.string().min(2, 'Owner name is required.'),
   ownerEmail: z.string().email('A valid email for the owner is required.'),
 
@@ -86,12 +87,13 @@ type BrandFormValues = z.infer<typeof brandSchema>;
 
 interface BrandFormPageProps {
   brand?: Brand;
+  centralAdmin?: boolean;
   users: User[];
   plans: SubscriptionPlan[];
   foodCategories: FoodCategory[];
 }
 
-export function BrandFormPage({ brand, users, plans, foodCategories }: BrandFormPageProps) {
+export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmin = false }: BrandFormPageProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
   
@@ -110,6 +112,7 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
         offersHeading: brand.offersHeading || '',
         combosHeading: brand.combosHeading || '',
     } : {
+      ownerId: undefined,
       ownerName: '',
       ownerEmail: '',
       companyName: '',
@@ -365,6 +368,22 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
                                     <CardDescription>Details for the primary brand administrator.</CardDescription>
                                 </CardHeader>
                                 <CardContent className="space-y-4">
+                                    {centralAdmin && !brand && <FormField control={form.control} name="ownerId" render={({field}) => (
+                                        <FormItem>
+                                            <FormLabel>Existing owner</FormLabel>
+                                            <Select value={field.value || ''} onValueChange={id => {
+                                                field.onChange(id);
+                                                const owner = users.find(user => user.id === id);
+                                                form.setValue('ownerName', owner?.name || '', {shouldValidate:true});
+                                                form.setValue('ownerEmail', owner?.email || '', {shouldValidate:true});
+                                            }}>
+                                                <FormControl><SelectTrigger><SelectValue placeholder="Select a user from mPanel" /></SelectTrigger></FormControl>
+                                                <SelectContent>{users.map(user => <SelectItem key={user.id} value={user.id}>{user.name} · {user.email} · {user.id}</SelectItem>)}</SelectContent>
+                                            </Select>
+                                            <FormDescription>Create the user in mPanel first, then select them here.</FormDescription>
+                                            <FormMessage />
+                                        </FormItem>
+                                    )} />}
                                     <FormField
                                         control={form.control}
                                         name="ownerName"
@@ -372,7 +391,7 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
                                             <FormItem>
                                             <FormLabel>Owner Name</FormLabel>
                                             <FormControl>
-                                                <Input placeholder="John Doe" {...field} disabled={!!brand} />
+                                                <Input placeholder="John Doe" {...field} disabled={!!brand || centralAdmin} />
                                             </FormControl>
                                             {brand && <FormDescription>Brand owner cannot be changed after creation.</FormDescription>}
                                             <FormMessage />
@@ -386,7 +405,7 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
                                             <FormItem>
                                             <FormLabel>Owner Email</FormLabel>
                                             <FormControl>
-                                                <Input type="email" placeholder="john.doe@example.com" {...field} disabled={!!brand} />
+                                                <Input type="email" placeholder="john.doe@example.com" {...field} disabled={!!brand || centralAdmin} />
                                             </FormControl>
                                             {brand && <FormDescription>Brand owner cannot be changed after creation.</FormDescription>}
                                             <FormMessage />

@@ -16,7 +16,7 @@ before(async()=>{
  fetch('/data').then(r=>r.json()).then(data=>{
  let page;
  if(location.pathname.includes('/error'))page=<SuperadminError error={new Error('Server Action "abc" was not found on the server.')} reset={()=>{window.resetCount=(window.resetCount||0)+1;}}/>;
- else if(location.pathname.includes('/brands/'))page=<BrandFormPage brand={data.brand} users={[{id:'u',name:'QA Owner',email:'qa@example.test'}]} plans={[]} foodCategories={[]}/>;
+ else if(location.pathname.includes('/brands/'))page=<BrandFormPage brand={location.pathname.endsWith('/new')?undefined:data.brand} centralAdmin={location.pathname.endsWith('/new')} users={[{id:'u',name:'QA Owner',email:'QA@example.test'},{id:'u2',name:'Other owner',email:'qa@example.test'}]} plans={[]} foodCategories={[]}/>;
  else page=<LocationFormPage location={data.location} brands={data.brands}/>;
  createRoot(document.getElementById('root')).render(<React.StrictMode>{page}</React.StrictMode>);
  });`);
@@ -150,4 +150,16 @@ test('segment retry performs a full page reload for missing actions',async t=>{
  await page.evaluate(()=>window.reloadSentinel=true);await page.getByRole('button',{name:'Genindlæs siden'}).click();
  await page.waitForFunction(()=>window.reloadSentinel===undefined);
  assert.equal(await page.evaluate(()=>window.resetCount),undefined);
+});
+
+test('central brand owner selector distinguishes native IDs despite matching normalized emails',async t=>{
+ const page=await setup(t,'/superadmin/brands/new');
+ const owner=page.getByRole('combobox',{name:'Existing owner',exact:true});await owner.click();
+ await page.getByRole('option',{name:'Other owner · qa@example.test · u2',exact:true}).click();
+ assert.equal(await page.getByLabel('Owner Name',{exact:true}).inputValue(),'Other owner');
+ assert.equal(await page.getByLabel('Owner Email',{exact:true}).inputValue(),'qa@example.test');
+ await owner.click();await page.getByRole('option',{name:'QA Owner · QA@example.test · u',exact:true}).click();
+ assert.equal(await page.getByLabel('Owner Name',{exact:true}).inputValue(),'QA Owner');
+ assert.equal(await page.getByLabel('Owner Email',{exact:true}).inputValue(),'QA@example.test');
+ assert.equal(await page.getByLabel('Owner Email',{exact:true}).isDisabled(),true);
 });

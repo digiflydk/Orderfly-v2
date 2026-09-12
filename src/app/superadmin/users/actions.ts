@@ -1,6 +1,7 @@
 
 
 'use server';
+import { assertLegacyAdminWrite } from '@/lib/mpanel-admin-cutover';
 
 import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -23,6 +24,7 @@ export async function createOrUpdateUser(
   prevState: FormState,
   formData: FormData
 ): Promise<FormState> {
+  assertLegacyAdminWrite();
   const rawData: Record<string, any> = Object.fromEntries(formData.entries());
   rawData.roleIds = formData.getAll('roleIds');
   
@@ -59,6 +61,7 @@ export async function createOrUpdateUser(
 }
 
 export async function deleteUser(userId: string) {
+    assertLegacyAdminWrite();
     try {
         const db = getAdminDb();
         await db.collection("users").doc(userId).delete();
@@ -76,7 +79,7 @@ export async function getUsers(): Promise<User[]> {
     const db = getAdminDb();
     const q = db.collection('users').orderBy('name');
     const querySnapshot = await q.get();
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as User[];
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as User[];
 }
 
 export async function getUserById(id: string): Promise<User | null> {
@@ -84,7 +87,7 @@ export async function getUserById(id: string): Promise<User | null> {
     const docRef = db.collection('users').doc(id);
     const docSnap = await docRef.get();
     if (docSnap.exists) {
-        return { id: docSnap.id, ...docSnap.data() } as User;
+        return { ...docSnap.data(), id: docSnap.id } as User;
     }
     return null;
 }

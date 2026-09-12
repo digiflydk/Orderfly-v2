@@ -2,6 +2,9 @@
 
 'use server';
 
+import { mpanelAdminEnabled } from '@/lib/mpanel-admin-cutover';
+import { createOrUpdateBrand as saveCanonicalBrand } from '@/app/superadmin/brands/actions';
+
 import 'server-only';
 
 import { revalidatePath } from 'next/cache';
@@ -83,6 +86,7 @@ export async function createOrUpdateBrand(
   prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
+  if (mpanelAdminEnabled()) return saveCanonicalBrand(prevState, formData);
 
   const rawData: Record<string, any> = Object.fromEntries(formData.entries());
   rawData.foodCategories = formData.getAll('foodCategories');

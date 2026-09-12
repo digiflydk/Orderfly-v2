@@ -1,6 +1,7 @@
 
 
 'use server';
+import { assertLegacyAdminWrite } from '@/lib/mpanel-admin-cutover';
 
 import { revalidatePath } from 'next/cache';
 import { db } from '@/lib/firebase';
@@ -29,6 +30,7 @@ export async function createOrUpdateRole(
   prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
+  assertLegacyAdminWrite();
   const rawData: Record<string, any> = Object.fromEntries(formData.entries());
   rawData.permissions = formData.getAll('permissions');
 
@@ -62,6 +64,7 @@ export async function createOrUpdateRole(
 }
 
 export async function deleteRole(roleId: string) {
+    assertLegacyAdminWrite();
     // Note: In a real app, you'd check if this role is assigned to any users before deleting.
     try {
         await deleteDoc(doc(db, "roles", roleId));
@@ -77,14 +80,14 @@ export async function deleteRole(roleId: string) {
 export async function getRoles(): Promise<Role[]> {
     const q = query(collection(db, 'roles'), orderBy('name'));
     const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Role[];
+    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Role[];
 }
 
 export async function getRoleById(roleId: string): Promise<Role | null> {
     const docRef = doc(db, 'roles', roleId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as Role;
+        return { ...docSnap.data(), id: docSnap.id } as Role;
     }
     return null;
 }

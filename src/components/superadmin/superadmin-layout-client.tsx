@@ -12,6 +12,7 @@ import type { PlatformBrandingSettings } from '@/types'
 
 type Props = {
   children: React.ReactNode
+  centralAdmin?: boolean
   brandingSettings?: PlatformBrandingSettings | null
 }
 
@@ -26,11 +27,11 @@ function LayoutWithLoader({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function SuperAdminLayoutClient({ children, brandingSettings }: Props) {
+export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmin }: Props) {
   return (
     <S.SidebarProvider>
       <S.Sidebar collapsible="icon" className="border-r">
-        <SuperAdminSidebarClient
+        <SuperAdminSidebarClient centralAdmin={centralAdmin}
           brandingSettings={
             brandingSettings ?? { platformHeading: 'Orderfly Studio' }
           }

@@ -1,6 +1,7 @@
 
 
 'use server';
+import { mpanelAdminEnabled } from '@/lib/mpanel-admin-cutover';
 
 import 'server-only';
 
@@ -30,6 +31,7 @@ const brandSchema = z.object({
   id: z.string().optional(),
   
   // Step 1: User Info
+  ownerId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).optional(),
   ownerName: z.string().min(2, 'Owner name is required.'),
   ownerEmail: z.string().email('A valid email for the owner is required.'),
 
@@ -109,7 +111,7 @@ export async function createOrUpdateBrand(
     };
   }
 
-  const { id, ownerName, ownerEmail, companyRegNo, slug, ...brandData } = validatedFields.data;
+  const { id, ownerId: requestedOwnerId, ownerName, ownerEmail, companyRegNo, slug, ...brandData } = validatedFields.data;
   
   try {
     const db = getAdminDb();
@@ -140,7 +142,22 @@ export async function createOrUpdateBrand(
 
     let ownerId: string;
 
-    if (id) {
+    if (mpanelAdminEnabled()) {
+      // Serialize reference changes with central catalog deletions.
+      const brandRef = id ? db.collection('brands').doc(id) : db.collection('brands').doc();
+      await db.runTransaction(async tx => {
+        const lock = db.collection('platformAdminControl').doc('catalog');
+        await tx.get(lock);
+        const existing = id ? await tx.get(brandRef) : null;
+        if (id && !existing?.exists) throw new Error('Brandet findes ikke længere.');
+        let selectedOwnerId = existing?.data()?.ownerId;
+        if (!id) selectedOwnerId = requestedOwnerId;
+        if (!selectedOwnerId || !(await tx.get(db.collection('users').doc(selectedOwnerId))).exists) throw new Error('Ejeren findes ikke i mPanel.');
+        if (brandData.subscriptionPlanId && !(await tx.get(db.collection('subscription_plans').doc(brandData.subscriptionPlanId))).exists) throw new Error('Abonnementsplanen findes ikke længere.');
+        tx.set(brandRef, {...brandData, companyRegNo, slug, id:brandRef.id, ownerId:selectedOwnerId}, {merge:true});
+        tx.set(lock, {lastBrandId:brandRef.id});
+      });
+    } else if (id) {
       // For updates, we assume the owner doesn't change via this form.
       const brandDoc = await db.collection('brands').doc(id).get();
       if (!brandDoc.exists) {

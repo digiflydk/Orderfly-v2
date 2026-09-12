@@ -68,3 +68,52 @@ test('both missing-action messages trigger reload recovery; ordinary failures do
  assert.equal(isMissingServerAction(Error('Network unavailable')),false);
  assert.equal(isMissingServerAction(Error('Validation failed')),false);
 });
+
+
+test('central cutover requires existing owners and plans and serializes brand references',async()=>{
+ const old=process.env.MPANEL_PLATFORM_ADMIN_ENABLED;process.env.MPANEL_PLATFORM_ADMIN_ENABLED='true';
+ try {
+  const seed=[['users/u',{name:'QA Owner',email:'QA@example.test'}],['users/u2',{name:'Other owner',email:'qa@example.test'}],['subscription_plans/p',{name:'Basic'}]];
+  const f=fixture(seed);
+  await redirected(f.brands.createOrUpdateBrand(null,formData({...brand,id:undefined,subscriptionPlanId:'p',ownerName:'QA Owner',ownerEmail:'qa@example.test'})));
+  assert.equal(f.records.get('brands/new').ownerId,'u');assert.equal(f.records.get('brands/new').subscriptionPlanId,'p');
+  assert.ok(f.writes.includes('platformAdminControl/catalog'));
+  const noId=fixture(seed);assert.equal((await noId.brands.createOrUpdateBrand(null,formData({...brand,id:undefined,ownerId:undefined,subscriptionPlanId:'p',ownerName:'QA Owner',ownerEmail:'qa@example.test'}))).error,true);assert.equal(noId.writes.length,0);assert.ok(!f.writes.some(p=>p.startsWith('users/')));
+  for(const records of [[],[['users/u',{email:'qa@example.test'}]]]){
+   const rejected=fixture(records);const result=await rejected.brands.createOrUpdateBrand(null,formData({...brand,id:undefined,subscriptionPlanId:'p',ownerName:'QA Owner',ownerEmail:'qa@example.test'}));
+   assert.equal(result.error,true);assert.equal(rejected.writes.length,0);
+  }
+ } finally {if(old===undefined)delete process.env.MPANEL_PLATFORM_ADMIN_ENABLED;else process.env.MPANEL_PLATFORM_ADMIN_ENABLED=old;}
+});
+
+
+test('catalogue readers retain canonical IDs even when stored IDs point to another existing record',async()=>{
+ const f=fixture([
+  ['users/u',{id:'u2',name:'Selected Owner',email:'QA@example.test'}],
+  ['users/u2',{id:'u2',name:'Other Owner',email:'qa@example.test'}],
+  ['subscription_plans/p',{id:'p2',name:'Selected plan',priceMonthly:10}],
+  ['subscription_plans/p2',{id:'p2',name:'Other plan',priceMonthly:20}],
+  ['roles/r',{id:'r2',name:'Selected role'}],
+  ['roles/r2',{id:'r2',name:'Other role'}]
+ ]);
+ const owner=(await f.users.getUsers()).find(u=>u.name==='Selected Owner');
+ const plan=(await f.plans.getSubscriptionPlans()).find(p=>p.name==='Selected plan');
+ assert.equal(owner.id,'u');assert.equal((await f.users.getUserById('u')).id,'u');
+ assert.equal(plan.id,'p');assert.equal((await f.roles.getRoles()).find(r=>r.name==='Selected role').id,'r');
+ assert.equal((await f.roles.getRoleById('r')).id,'r');
+ const old=process.env.MPANEL_PLATFORM_ADMIN_ENABLED;process.env.MPANEL_PLATFORM_ADMIN_ENABLED='true';
+ try {
+  await redirected(f.brands.createOrUpdateBrand(null,formData({...brand,id:undefined,ownerId:owner.id,ownerName:owner.name,ownerEmail:owner.email,subscriptionPlanId:plan.id})));
+  assert.equal(f.records.get('brands/new').ownerId,'u');assert.equal(f.records.get('brands/new').subscriptionPlanId,'p');
+ } finally {if(old===undefined)delete process.env.MPANEL_PLATFORM_ADMIN_ENABLED;else process.env.MPANEL_PLATFORM_ADMIN_ENABLED=old;}
+});
+
+test('web role readers also preserve Firestore document identity over embedded IDs',async()=>{
+ const snap={id:'r',data:()=>({id:'other',name:'Selected role'}),exists:()=>true};
+ const roles=loadTs('src/app/superadmin/roles/actions.ts',{
+  'server-only':{},'next/cache':{revalidatePath:()=>{}},'next/navigation':{},
+  '@/lib/firebase':{db:{}},'@/lib/permissions':{ALL_PERMISSIONS:[]},
+  'firebase/firestore':{collection:()=>({}),query:()=>({}),orderBy:()=>({}),doc:()=>({}),getDocs:async()=>({docs:[snap]}),getDoc:async()=>snap}
+ });
+ assert.equal((await roles.getRoles())[0].id,'r');assert.equal((await roles.getRoleById('r')).id,'r');
+});

@@ -1,6 +1,7 @@
 
 
 'use server';
+import { assertLegacyAdminWrite } from '@/lib/mpanel-admin-cutover';
 
 import { revalidatePath } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -26,6 +27,7 @@ export async function createOrUpdatePlan(
   prevState: FormState,
   formData: FormData
 ): Promise<FormState> {
+  assertLegacyAdminWrite();
   const rawData = Object.fromEntries(formData.entries());
   const validatedFields = planSchema.safeParse(rawData);
 
@@ -57,6 +59,7 @@ export async function createOrUpdatePlan(
 }
 
 export async function deletePlan(planId: string) {
+    assertLegacyAdminWrite();
     try {
         const db = getAdminDb();
         await db.collection("subscription_plans").doc(planId).delete();
@@ -72,5 +75,5 @@ export async function deletePlan(planId: string) {
 export async function getSubscriptionPlans(): Promise<SubscriptionPlan[]> {
   const db = getAdminDb();
   const snapshot = await db.collection('subscription_plans').orderBy('priceMonthly').get();
-  return snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as SubscriptionPlan[];
+  return snapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as SubscriptionPlan[];
 }

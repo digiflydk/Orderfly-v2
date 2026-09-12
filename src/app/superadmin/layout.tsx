@@ -1,3 +1,4 @@
+import { mpanelAdminEnabled } from '@/lib/mpanel-admin-cutover';
 
 import type { Metadata } from 'next';
 import React from 'react';
@@ -31,14 +32,14 @@ export default async function SuperadminLayout({
 
   if (!canAccess) {
     return (
-      <SuperAdminLayoutClient brandingSettings={brandingSettings}>
+      <SuperAdminLayoutClient centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings}>
         <AccessDeniedPage />
       </SuperAdminLayoutClient>
     );
   }
 
   return (
-    <SuperAdminLayoutClient brandingSettings={brandingSettings}>
+    <SuperAdminLayoutClient centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings}>
       {children}
     </SuperAdminLayoutClient>
   );

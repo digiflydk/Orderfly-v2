@@ -66,6 +66,15 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Platform administration and brand-reference regression
+        run: node --test tests/unit/mpanel-platform-admin.cjs tests/unit/brand-location-edit.cjs
+
+      - name: Install Chromium for brand-owner regression
+        run: npx playwright install --with-deps chromium
+
+      - name: Brand form browser regression
+        run: node --test tests/unit/brand-location-browser.cjs
+
       - name: Build
         run: npm run build
 

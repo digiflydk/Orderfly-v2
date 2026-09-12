@@ -1,8 +1,9 @@
+import { mpanelAdminEnabled } from '@/lib/mpanel-admin-cutover';
 import { SuperAdminSidebarClient } from "./sidebar-client";
 import { getPlatformBrandingSettings } from "@/app/superadmin/settings/queries";
 
 export async function SuperAdminSidebar() {
 	const brandingSettings = await getPlatformBrandingSettings();
 
-	return <SuperAdminSidebarClient brandingSettings={brandingSettings ?? undefined} />;
+	return <SuperAdminSidebarClient centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings ?? undefined} />;
 }

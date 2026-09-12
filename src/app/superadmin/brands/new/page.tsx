@@ -1,3 +1,4 @@
+import { mpanelAdminEnabled } from '@/lib/mpanel-admin-cutover';
 
 
 import { BrandFormPage } from '@/components/superadmin/brand-form-page';
@@ -14,6 +15,7 @@ export default async function NewBrandPage() {
 
     return (
         <BrandFormPage
+            centralAdmin={mpanelAdminEnabled()}
             foodCategories={foodCategories}
             plans={plans}
             users={users}
