@@ -35,6 +35,7 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
    const target=page.frames().find(f=>f!==page.mainFrame());
    await target.evaluate(()=>{
     window.metaPrepared=[];
+    window.fbq.getFbeventsModules('SignalsFBEventsLogging').enableVerboseDebugLogging();
     window.fbq.getFbeventsModules('SignalsFBEventsSendEventEvent').listen(event=>{
      const payload=window.fbq.getFbeventsModules('signalsFBEventsFillParamList')(event).toPayload().toQueryString();
      window.metaPrepared.push(payload);
@@ -69,7 +70,11 @@ test('real GA4, GTM and Meta libraries generate sanitized commerce requests', {t
    assert.equal(new URL(cart.get('dl')).pathname,'/esmeralda/checkout');
    assert.equal(new URL(cart.get('dl')).searchParams.get('utm_source'),'vendor_fixture');
    assert.doesNotMatch(JSON.stringify(results[mode].metaState.prepared),/private_fixture_token|receipt_token|private_referrer|tracking\/frame/);
+   const suppression='[Meta Pixel] - [Meta pixel] Bot traffic detected and blocked - pixel_id: 1830622624963740';
+   const unexpected=results[mode].errors.filter(x=>x!==suppression&&!x.startsWith('An iframe which has both allow-scripts and allow-same-origin')&&x!=='www.google-analytics.com: net::ERR_ABORTED');
+   assert.deepEqual(unexpected,[],mode+' must have no unexpected runtime/vendor errors');
    if(results[mode].metaState.botBlocked){
+    assert.ok(results[mode].errors.includes(suppression),'Meta must explicitly report actual bot suppression from its send handler');
     // Meta's current public configuration explicitly suppresses HeadlessChrome.
     // Verify that exact reason; never spoof the browser or disable vendor protection.
     assert.equal(cart.get('bfs[b]'),'1','SDK must mark the event as bot traffic');
