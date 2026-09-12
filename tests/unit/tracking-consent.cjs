@@ -3,6 +3,24 @@ const assert=require('node:assert/strict');
 const vm=require('node:vm');
 const {loadTs}=require('../helpers/load-ts.cjs');
 
+test('HTTP frame is inert until a consented same-origin parent initializes it once',()=>{
+ const {BRAND_TRACKING_DOCUMENT}=loadTs('src/lib/brand-tracking-frame.ts');
+ const listeners=new Set(),elements=[],parent={postMessage(){}};
+ const context={parent,location:{origin:'https://orderfly.dk'},Date,encodeURIComponent,
+  document:{createElement:()=>({}),head:{appendChild:x=>elements.push(x)}},
+  addEventListener:(type,fn)=>listeners.add(fn),removeEventListener:(type,fn)=>listeners.delete(fn)};
+ context.window=context;vm.createContext(context);
+ vm.runInContext(BRAND_TRACKING_DOCUMENT.match(/<script>([\s\S]*)<\/script>/)[1],context);
+ const config={origin:'https://orderfly.dk',brandId:'b',consent:{statistics:true,marketing:false},ga:'G-TEST'};
+ const send=(source,origin,cfg)=>{for(const fn of [...listeners])fn({source,origin,data:{type:'orderfly:brand-init',config:cfg}})};
+ assert.equal(elements.length,0);
+ send({},config.origin,config);send(parent,'https://other.example',config);
+ send(parent,config.origin,{...config,consent:{statistics:false,marketing:false}});
+ assert.equal(elements.length,0);
+ send(parent,config.origin,config);assert.equal(elements.length,1);
+ send(parent,config.origin,config);assert.equal(elements.length,1,'duplicate init must not reload tags');
+});
+
 // Execute the real generated runtime with inert script elements: no browser or network.
 function runtime(consent, gtm=false){
  const previous={window:global.window,document:global.document};

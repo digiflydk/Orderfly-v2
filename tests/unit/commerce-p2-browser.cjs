@@ -69,6 +69,7 @@ before(async()=>{
  const css=(await postcss([tailwind({...loadTs('tailwind.config.ts',{'tailwindcss-animate':{default:require('tailwindcss-animate')}}).default,content:[path.join(root,'src/**/*.{ts,tsx}')]})]).process(fs.readFileSync(path.join(root,'src/app/globals.css'),'utf8'),{from:undefined})).css;
  server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
+  if(url.pathname==='/tracking/frame'){res.setHeader('Content-Type','text/html');return res.end(loadTs('src/lib/brand-tracking-frame.ts').BRAND_TRACKING_DOCUMENT);}
   if(url.pathname.endsWith('.js')){const file=path.join(dir,path.basename(url.pathname));if(fs.existsSync(file)){res.setHeader('Content-Type','application/javascript; charset=utf-8');return res.end(fs.readFileSync(file));}}
   if(url.pathname==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css+'\n'+fs.readFileSync(path.join(root,'src/styles/commerce-ui.css'),'utf8'));}
   if(url.pathname==='/image.png'){res.setHeader('Content-Type','image/png');return res.end(Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l1YAAAAASUVORK5CYII=','base64'));}
@@ -404,7 +405,7 @@ test('#125 adding marketing consent sends the currently open product to the newl
  await page.getByRole('dialog').waitFor();
  const current=()=>page.frames().find(frame=>frame!==page.mainFrame());
  await expect.poll(async()=>!!current()).toBe(true);
- await expect.poll(async()=>current().evaluate(()=>window.dataLayer.filter(x=>x[0]==='event'&&x[1]==='view_item').length)).toBe(1);
+ await expect.poll(async()=>{try{return await current().evaluate(()=>window.dataLayer?.filter(x=>x[0]==='event'&&x[1]==='view_item').length||0);}catch{return 0;}}).toBe(1);
  assert.equal(await current().evaluate(()=>typeof window.fbq),'undefined');
  await page.evaluate(()=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics:true,marketing:true}));window.dispatchEvent(new Event('orderfly:consent'));});
  await expect.poll(async()=>{try{return await current().evaluate(()=>window.fbq?.queue.filter(x=>x[2]==='ViewContent').length||0);}catch{return 0;}}).toBe(1);
