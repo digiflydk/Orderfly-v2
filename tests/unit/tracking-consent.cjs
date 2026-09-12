@@ -85,7 +85,7 @@ test('purchase can wait for a runtime, deduplicates per purpose and never sends 
  global.sessionStorage={getItem:key=>storage.get(key),setItem:(key,value)=>storage.set(key,value)};
  try{
   const {pushPaidPurchase}=loadTs('src/lib/analytics.ts');
-  const order={orderId:'o',brandId:'b',locationId:'l',value:50,items:[{id:'p',quantity:2,unitPrice:25}]};
+  const order={orderId:'o',brandId:'b',locationId:'l',value:50,items:[{id:'p',name:'Margherita (V)',quantity:2,unitPrice:25}]};
   assert.equal(pushPaidPurchase(order),false);
   global.window.orderflyBrandTracker={brandId:'wrong',ready:true,statistics:true,marketing:true,emit:x=>sent.push(x)};
   assert.equal(pushPaidPurchase(order),false);
@@ -94,7 +94,7 @@ test('purchase can wait for a runtime, deduplicates per purpose and never sends 
   consent={statistics:true,marketing:true};
   assert.equal(pushPaidPurchase(order),true);assert.deepEqual(sent[1].destinations,{statistics:false,marketing:true});
   consent={statistics:false,marketing:false};assert.equal(pushPaidPurchase(order),false);
-  assert.equal(sent.length,2);assert.equal(sent[0].ecommerce.items[0].quantity,2);
+  assert.equal(sent.length,2);assert.deepEqual(sent[0].ecommerce.items,[{item_id:'p',item_name:'Margherita (V)',quantity:2,price:25}]);
  }finally{Object.assign(global,old);}
 });
 test('server commerce metrics never contact a global GA destination, including paid orders',async()=>{
