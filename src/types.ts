@@ -1013,6 +1013,8 @@ export type FunnelOutput = {
   totals: {
     sessions: number;
     measuredPurchasingSessions?: number;
+    paidOrders?: number;
+    measuredPaidOrders?: number;
     view_menu: number;
     view_product: number;
     add_to_cart: number;

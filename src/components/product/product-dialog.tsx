@@ -70,7 +70,7 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   const [allergenError, setAllergenError] = useState(false);
   const { cartReady, addToCart, deliveryType, location, cartTotal } = useCart();
   const { toast } = useToast();
-  const { trackEvent } = useAnalytics();
+  const { trackEvent, measurementKey } = useAnalytics();
 
   const configuredToppingGroups = useMemo(() => {
     if (!product.toppingGroupIds || !allToppingGroups || !allToppings) return [];
@@ -149,11 +149,11 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
   useEffect(() => {
     if (!isOpen) { trackedView.current = ''; return; }
     if (!location) return;
-    const key = `${product.id}/${location.id}`;
+    const key = `${product.id}/${location.id}/${measurementKey}`;
     if (trackedView.current !== key && trackEvent('view_product', {productId: product.id, locationId: location.id})) {
       trackedView.current = key;
     }
-  }, [isOpen, product.id, location?.id, trackEvent]);
+  }, [isOpen, product.id, location?.id, trackEvent, measurementKey]);
 
   const basePrice = useMemo(() => {
     return (product as any).basePrice ?? (deliveryType === 'delivery' ? (product.priceDelivery ?? product.price) : product.price);
@@ -225,7 +225,10 @@ export function ProductDialog({ product, isOpen, setIsOpen, allToppingGroups, al
         productName: product.productName,
         price: finalPrice,
         quantity: quantity,
-        cartValue: cartTotal + totalItemPrice
+        locationId: location?.id,
+        itemsCount: quantity,
+        cartValue: totalItemPrice,
+        deliveryType
     });
 
     setIsOpen(false);

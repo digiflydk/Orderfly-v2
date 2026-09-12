@@ -369,3 +369,28 @@ test('#123 report renders refreshed server data instead of initial state',async 
  await expect(page.getByText('700,00 kr.',{exact:true})).toBeVisible();
  await expect(page.getByText('50.00%',{exact:true})).toBeVisible();
 });
+
+// #125: real provider storage lifecycle, with synthetic customer-free actions.
+test('#125 no analytics identity before consent; 30-minute brand session survives reload, rotates and revokes',async t=>{
+ const page=await setup(t,390,'/fixture/restaurant?deliveryMethod=pickup');
+ const session=async()=> (await page.context().cookies()).find(c=>c.name==='orderfly_session_id_b');
+ assert.equal(await session(),undefined);
+ await page.getByRole('button',{name:'Allow analytics',exact:true}).click();
+ await expect.poll(async()=>!!(await session())).toBe(true);
+ const first=await session();
+ assert.ok(first.expires-Date.now()/1000>1700 && first.expires-Date.now()/1000<=1801);
+ await page.reload();
+ await expect(page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true})).toBeEnabled();
+ assert.equal((await session()).value,first.value);
+ await page.evaluate(()=>{document.cookie='orderfly_session_id_b=; Max-Age=0; Path=/';});
+ await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+ await expect.poll(async()=> (await session())?.value).not.toBe(first.value);
+ await page.getByRole('button',{name:'Reject analytics',exact:true}).click();
+ await expect.poll(session).toBeUndefined();
+ const events=()=>page.locator('#funnel-events').evaluate(node=>JSON.parse(node.textContent));
+ const before=(await events()).length;
+ await page.getByRole('button',{name:'Tilføj Fixture Soda',exact:true}).click();
+ assert.equal((await events()).length,before);
+ await page.getByRole('button',{name:'Allow analytics',exact:true}).click();
+ await expect.poll(async()=> (await events()).filter(e=>e.name==='view_menu').length).toBeGreaterThan(1);
+});

@@ -314,7 +314,7 @@ function OrderSummaryContent() {
 
 function CheckoutForm({ location }: { location: Location }) {
   const keyboardOpen = useCheckoutKeyboard();
-  const { trackEvent, sessionId: analyticsSessionId, attribution: analyticsAttribution } = useAnalytics();
+  const { trackEvent, measurementKey, attribution: analyticsAttribution } = useAnalytics();
   const {
     cartItems,
     subtotal,
@@ -498,10 +498,10 @@ function CheckoutForm({ location }: { location: Location }) {
 
   const checkoutTracked = useRef('');
   useEffect(() => {
-    const key = `${brand?.id}/${location?.id}`;
+    const key = `${brand?.id}/${location?.id}/${measurementKey}`;
     if (!itemCount || checkoutTracked.current === key) return;
-    if (trackEvent('start_checkout', {locationId: location?.id, cartValue: checkoutTotal, itemsCount: itemCount, deliveryType})) checkoutTracked.current = key;
-  }, [trackEvent, brand?.id, location?.id, checkoutTotal, itemCount, deliveryType]);
+    if (trackEvent('start_checkout', {locationId: location?.id, cartValue: checkoutTotal, itemsCount: itemCount, deliveryType, items: cartItems.map(item => ({item_id: item.id, quantity: item.quantity, price: item.itemTotal}))})) checkoutTracked.current = key;
+  }, [trackEvent, brand?.id, location?.id, checkoutTotal, itemCount, deliveryType, measurementKey]);
 
   useEffect(() => {
     const subscription = form.watch((_, { name, type }) => {
@@ -583,11 +583,12 @@ function CheckoutForm({ location }: { location: Location }) {
         if(consentAttempt.current?.key!==key)consentAttempt.current={key,id:crypto.randomUUID()};
       }
       // The server receives an explicit consent boolean and stable retry identity.
+      const currentAnalyticsSession = statisticsAllowed() ? Cookies.get(`orderfly_session_id_${brand.id}`) : undefined;
       const customerInfo: CustomerInfo = {
         ...formValues,
         subscribeToNewsletter: !!formValues.subscribeToNewsletter,
         ...(formValues.subscribeToNewsletter && consentAttempt.current ? {newsletterConsentId:consentAttempt.current.id,newsletterConsentVersion:NEWSLETTER_CONSENT_VERSION}:{}),
-        ...(statisticsAllowed() && analyticsSessionId ? {analyticsSessionId, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const, ...(analyticsAttribution ? { analyticsAttribution } : {})} : {})
+        ...(statisticsAllowed() && currentAnalyticsSession ? {analyticsSessionId: currentAnalyticsSession, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const, ...(analyticsAttribution ? { analyticsAttribution } : {})} : {})
       };
 
       const result = await requestHostedCheckout(

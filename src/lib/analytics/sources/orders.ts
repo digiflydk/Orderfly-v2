@@ -19,6 +19,7 @@ export interface PurchaseResult {
     brandId: string;
     locationId: string;
     count: number;
+    ordersBySession: Record<string, number>;
     revenue: number;
     deliveryFee: number;
     discount: number;
@@ -39,7 +40,7 @@ export async function getPurchasesInRange(params: PurchaseParams): Promise<Purch
     // We filter brandId and locationId later in code to avoid composite indexes for now
     
     const snap = await q.get();
-    const ordersByLocation = new Map<string, { count: number, revenue: number, deliveryFee: number, discount: number, sessionIds: Set<string> }>();
+    const ordersByLocation = new Map<string, { count: number, revenue: number, deliveryFee: number, discount: number, sessionIds: Set<string>, ordersBySession: Record<string, number> }>();
 
     snap.forEach(doc => {
         const order = doc.data() as OrderDetail;
@@ -69,7 +70,7 @@ export async function getPurchasesInRange(params: PurchaseParams): Promise<Purch
 
         const key = JSON.stringify([order.brandId, order.locationId, source, medium, campaign, device, date]);
         if (!ordersByLocation.has(key)) {
-            ordersByLocation.set(key, { count: 0, revenue: 0, deliveryFee: 0, discount: 0, sessionIds: new Set() });
+            ordersByLocation.set(key, { count: 0, revenue: 0, deliveryFee: 0, discount: 0, sessionIds: new Set(), ordersBySession: {} });
         }
         const bucket = ordersByLocation.get(key)!;
         bucket.count++;
@@ -78,6 +79,7 @@ export async function getPurchasesInRange(params: PurchaseParams): Promise<Purch
         bucket.discount += order.paymentDetails?.discountTotal ?? 0;
         const sessionId = order.analytics?.sessionId || order.id;
         bucket.sessionIds.add(sessionId);
+        bucket.ordersBySession[sessionId] = (bucket.ordersBySession[sessionId] || 0) + 1;
     });
 
     return Array.from(ordersByLocation.entries()).map(([key, data]) => {

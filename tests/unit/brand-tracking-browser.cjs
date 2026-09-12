@@ -13,7 +13,7 @@ test('brand tracking sends explicit destinations and destroys the previous runti
   const page=await browser.newPage();
   await page.route(/https:\/\/(www.googletagmanager.com|connect.facebook.net)\//,r=>r.fulfill({body:'',contentType:'application/javascript'}));
   await page.goto('http://127.0.0.1:'+server.address().port+'/?utm_source=google&utm_campaign=pizza&gclid=allowed123&receipt_token=private&session_id=private');
-  await page.evaluate(()=>{window.stop=window.mount({id:'a',ga4MeasurementId:'G-A',googleAdsConversionId:'AW-A',googleAdsPurchaseLabel:'purchase',metaPixelId:'111'});window.orderflyBrandTracker.emit({event:'purchase',brandId:'a',ecommerce:{transaction_id:'test-1',value:100,currency:'DKK',items:[]}})});
+  await page.evaluate(()=>{window.stop=window.mount({id:'a',ga4MeasurementId:'G-A',googleAdsConversionId:'AW-A',googleAdsPurchaseLabel:'purchase',metaPixelId:'111'},{statistics:true,marketing:true});window.orderflyBrandTracker.emit({event:'purchase',brandId:'a',ecommerce:{transaction_id:'test-1',value:100,currency:'DKK',items:[]}})});
   let frame=page.frames().find(f=>f!==page.mainFrame());
   await frame.waitForFunction(()=>window.dataLayer.some(x=>x[0]==='event'&&x[1]==='purchase'));
   const first=await frame.evaluate(()=>({google:window.dataLayer.map(x=>Array.from(x)),meta:window.fbq.queue.map(x=>Array.from(x))}));
@@ -23,7 +23,7 @@ test('brand tracking sends explicit destinations and destroys the previous runti
   assert.doesNotMatch(JSON.stringify(first),/receipt_token|session_id|private/);
   assert.equal(first.google.find(x=>x[1]==='conversion')[2].send_to,'AW-A/purchase');
   assert.deepEqual(first.meta.find(x=>x[2]==='Purchase').slice(0,3),['trackSingle','111','Purchase']);
-  await page.evaluate(()=>{window.stop();window.stop=window.mount({id:'b',gtmContainerId:'GTM-B',metaPixelId:'222'});window.orderflyBrandTracker.emit({event:'purchase',brandId:'a',ecommerce:{transaction_id:'wrong'}});window.orderflyBrandTracker.emit({event:'purchase',brandId:'b',ecommerce:{transaction_id:'test-2',value:200,currency:'DKK',items:[]}})});
+  await page.evaluate(()=>{window.stop();window.stop=window.mount({id:'b',gtmContainerId:'GTM-B',metaPixelId:'222'},{statistics:true,marketing:true});window.orderflyBrandTracker.emit({event:'purchase',brandId:'a',ecommerce:{transaction_id:'wrong'}});window.orderflyBrandTracker.emit({event:'purchase',brandId:'b',ecommerce:{transaction_id:'test-2',value:200,currency:'DKK',items:[]}})});
   assert.equal(frame.isDetached(),true);
   frame=page.frames().find(f=>f!==page.mainFrame());
   await frame.waitForFunction(()=>window.dataLayer.some(x=>x.event==='purchase'));
