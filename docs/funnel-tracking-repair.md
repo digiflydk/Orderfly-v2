@@ -22,3 +22,25 @@ The Work cloud browser cannot open the local fixture URL (ERR_BLOCKED_BY_CLIENT)
 
 ## Release acceptance
 Require green CI and independent review before merge/deploy. After deployment repeat the invalid same-origin probe (expected 400, never 403), confirm active build, then verify a controlled consented storefront session through the report. Denied consent must produce no browser funnel events. Real payment/marketing/email writes require the separately authorized controlled scenario. The issue stays open until live acceptance. Historical missing views cannot be reconstructed. GA4/Ads/Meta delivery is a separate acceptance check.
+
+## Separate measured activity from paid sales (12 September 2026)
+
+A reported 0 Click Purchase / 29 Purchase exposed misleading presentation. Browser
+steps require statistics consent and are independent counts (or independent unique
+session counts), while paid orders come from the server. Dividing adjacent counts
+is not a sequential conversion rate: resumed carts, repeated actions and direct
+add-to-cart can yield more later actions than earlier actions.
+
+The dashboard now labels the chart "Målte handlinger", removes adjacent-step
+percentages, and keeps authoritative paid orders outside that chart. Zero bars
+have zero width. The paid KPI always uses paidOrders, including when browsing
+unique-session counts. Inline explanations distinguish server sales from vendor
+receipt and consented browser events. Paid orders with zero measured payment clicks
+raise a specific diagnostic warning; no clicks or sessions are fabricated.
+
+The real checkout already calls click_purchase in proceedToStripe after form
+validation and optional upsell selection. Its existing browser regression checks
+one collected payment click with brand, location and session after late consent.
+A zero in a historical live report still requires examining that exact period,
+brand, consent coverage and payment attempts. This UI correction does not establish
+that those 29 orders had analytics consent or that Meta received 29 Purchase events.

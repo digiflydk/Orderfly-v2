@@ -63,3 +63,17 @@ test('collected events reach filtered funnel; sales remain authoritative and con
  assert.equal((await getFunnelData({...filters,locationId:'missing'})).totals.payment_succeeded,0);
  assert.equal((await getFunnelData({...filters,counting:'unique'})).totals.payment_succeeded,2);
 });
+
+test('paid orders never fabricate missing payment clicks or measured sessions',async()=>{
+ const db=fixtureDb(),now=new Date();
+ db.rows.set('locations/l',{name:'Fixture'});
+ for(let i=0;i<29;i++)db.rows.set(`orders/paid-${i}`,{id:`paid-${i}`,brandId:'b',locationId:'l',paidAt:admin.firestore.Timestamp.fromDate(now),paymentStatus:'Paid',totalAmount:100});
+ const {getFunnelData}=loadTs('src/lib/analytics/getFunnelData.ts',{'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db}});
+ const result=await getFunnelData({dateFrom:now.toISOString(),dateTo:now.toISOString(),brandId:'b',counting:'events'});
+ assert.equal(result.totals.paidOrders,29);
+ assert.equal(result.totals.click_purchase,0);
+ assert.equal(result.totals.sessions,0);
+ assert.equal(result.totals.measuredPaidOrders,0);
+ assert.equal(result.totals.measuredPurchasingSessions,0);
+ assert.ok(result.dataQualityWarnings.some(message=>message.includes('ingen målte betalingsklik')));
+});
