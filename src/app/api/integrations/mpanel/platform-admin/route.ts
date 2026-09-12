@@ -12,8 +12,12 @@ export async function POST(request:Request) {
   const actor=process.env.MPANEL_PLATFORM_ADMIN_EMPLOYEE_ID,organization=process.env.MPANEL_PLATFORM_ADMIN_ORGANIZATION_ID;
   if(!actor||!organization) return reply({error:'configuration_missing'},503);
   try {
-    const text=await request.text();
-    if(text.length>20000) return reply({error:'invalid_payload'},400);
+    const reader=request.body?.getReader();
+    const chunks:Uint8Array[]=[];let size=0;
+    if(reader) try {
+      while(true){const {done,value}=await reader.read();if(done)break;size+=value.length;if(size>20000)return reply({error:'invalid_payload'},400);chunks.push(value);}
+    } finally {await reader.cancel().catch(()=>{});}
+    const text=Buffer.concat(chunks).toString('utf8');
     const input=envelopeSchema.parse(JSON.parse(text));
     if(input.actorId!==actor||input.organizationId!==organization) return reply({error:'forbidden'},403);
     return reply(await executePlatformAdmin(input));

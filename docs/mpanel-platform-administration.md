@@ -25,3 +25,7 @@ Rollback disables the feature flag, restoring legacy administration and closing 
 ## Tests and release limits
 
 `node --test tests/unit/mpanel-platform-admin.cjs tests/unit/brand-location-edit.cjs` exercises the actual service, route and cutover guard plus existing brand/location regressions. In-memory transaction fixtures do not substitute for Firestore emulator/live concurrency tests. `npm run typecheck` checks the affected application types. The companion repository includes owner-boundary contracts and fully intercepted mobile/desktop CRUD browser tests. Full release preflight, deployment configuration, Firestore-rule verification and live checks are still required before enabling.
+
+## Review hardening
+
+The HTTP route stops and cancels requests beyond 20 KB while reading, before decoding JSON. Regression coverage includes request-ID reuse with changed content and runs in Orderfly CI alongside the brand reference tests. The companion tests now execute the shared language and theme scripts, cover English at 390/768/1440 px, and reject stale catalogue replies after logout. Local fixture results remain separate from independent review and runtime verification.
