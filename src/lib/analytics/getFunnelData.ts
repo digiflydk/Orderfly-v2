@@ -87,8 +87,9 @@ export async function getFunnelData(filters: FunnelFilters, _user?: unknown): Pr
     value.revenue += row.revenue; channels.set(key, value);
   }
   const attribution = [...channels.values()].map(({ sessionIds: _sessionIds, ...row }) => row).sort((a, b) => b.revenue - a.revenue);
-  const sequence = [totals.view_menu, totals.view_product, totals.add_to_cart, totals.start_checkout, totals.click_purchase, totals.payment_succeeded];
-  const dataQualityWarnings = sequence.some((value, index) => index > 0 && value > sequence[index - 1])
-    ? ['Trinene har forskellig dækning. Alle betalte ordrer vises, men besøg kræver analytics-samtykke. Hurtig tilføjelse kan springe produktvisningen over. Kontroller tracking, hvis trin mangler helt.'] : [];
+  const dataQualityWarnings: string[] = [];
+  if (totals.paidOrders && !totals.click_purchase) dataQualityWarnings.push(
+    'Der er betalte ordrer, men ingen målte betalingsklik i det valgte udsnit. Det kan skyldes manglende samtykke, ældre ordrer eller manglende tracking. Betalte ordrer må ikke bruges til at genskabe klik.');
+
   return { totals, daily, byLocation, attribution, dataQualityWarnings };
 }

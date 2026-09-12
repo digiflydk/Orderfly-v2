@@ -26,7 +26,7 @@ type Props = {
   searchParams: FunnelFilters;
 };
 
-function KpiCard({ title, value, rate, tooltipText }: { title: string; value: string | number, rate?: number, tooltipText?: string }) {
+function KpiCard({ title, value, tooltipText }: { title: string; value: string | number, tooltipText?: string }) {
     const cardContent = (
          <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
@@ -35,11 +35,7 @@ function KpiCard({ title, value, rate, tooltipText }: { title: string; value: st
             </CardHeader>
             <CardContent>
                 <div className="text-2xl font-bold">{typeof value === 'number' ? value.toLocaleString('da-DK') : value}</div>
-                {rate !== undefined && (
-                    <p className="text-xs text-muted-foreground">
-                        {rate.toFixed(1)}% from previous step
-                    </p>
-                )}
+
             </CardContent>
         </Card>
     );
@@ -192,33 +188,31 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
         )}
       </Card>
       {data.dataQualityWarnings.map(warning => <Alert key={warning} variant="destructive"><AlertTitle>Datakvalitet</AlertTitle><AlertDescription>{warning}</AlertDescription></Alert>)}
-      
+      <p className="text-sm text-muted-foreground">Browserhændelser kræver statistik-samtykke. Tallene nedenfor tælles hver for sig og er ikke en sammenhængende salgstragt. Samlet salg omfatter også ordrer uden et målt besøg.</p>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <KpiCard title="Sessions" value={totals.sessions} tooltipText={tooltipText} />
-            <KpiCard title="View Menu" value={totals.view_menu} rate={totals.sessions > 0 ? (totals.view_menu / totals.sessions) * 100 : 0} tooltipText={tooltipText} />
-            <KpiCard title="View Product" value={totals.view_product} rate={totals.view_menu > 0 ? (totals.view_product / totals.view_menu) * 100 : 0} tooltipText={tooltipText} />
-            <KpiCard title="Add to Cart" value={totals.add_to_cart} rate={totals.view_product > 0 ? (totals.add_to_cart / totals.view_product) * 100 : 0} tooltipText={tooltipText} />
+            <KpiCard title="View Menu" value={totals.view_menu} tooltipText={tooltipText} />
+            <KpiCard title="View Product" value={totals.view_product} tooltipText={tooltipText} />
+            <KpiCard title="Add to Cart" value={totals.add_to_cart} tooltipText={tooltipText} />
         </div>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <KpiCard title="Start Checkout" value={totals.start_checkout} rate={totals.add_to_cart > 0 ? (totals.start_checkout / totals.add_to_cart) * 100 : 0} tooltipText={tooltipText} />
-            <KpiCard title="Click Purchase" value={totals.click_purchase} rate={totals.start_checkout > 0 ? (totals.click_purchase / totals.start_checkout) * 100 : 0} tooltipText={tooltipText} />
-            <KpiCard title="Purchase" value={totals.payment_succeeded} tooltipText="Betalte ordrer fra serveren. Indeholder også køb uden analytics-samtykke." />
+            <KpiCard title="Start Checkout" value={totals.start_checkout} tooltipText={tooltipText} />
+            <KpiCard title="Click Purchase" value={totals.click_purchase} tooltipText={tooltipText} />
+            <KpiCard title="Alle betalte ordrer" value={totals.paidOrders ?? totals.payment_succeeded} tooltipText="Betalte ordrer fra serveren. Indeholder også køb uden analytics-samtykke." />
             <KpiCard title="Målt konvertering" value={totalCR} tooltipText="Andel målte sessions med en betalt ordre i perioden. Køb uden en matchende målt session indgår kun i salgstallet." />
        </div>
        <div className="grid gap-6 lg:grid-cols-[1.2fr_.8fr]">
         <Card>
-          <CardHeader><CardTitle>Salgstragt</CardTitle></CardHeader>
+          <CardHeader><CardTitle>Målte handlinger</CardTitle><p className="text-sm text-muted-foreground">{isUniqueCount ? "Unikke sessions pr. handling" : "Antal hændelser pr. handling"}. Gentagne besøg og genoptagne kurve kan give flere checkout-hændelser end tilføjelser til kurven. Produktvisning kan springes over ved hurtig tilføjelse.</p></CardHeader>
           <CardContent className="space-y-3">
             {([
               ['Menuvisning', totals.view_menu], ['Produktvisning', totals.view_product], ['Tilføjet til kurv', totals.add_to_cart],
-              ['Checkout startet', totals.start_checkout], ['Klik på betaling', totals.click_purchase], ['Betalt ordre', totals.payment_succeeded],
-            ] as Array<[string, number]>).map(([label, value], index, rows) => {
-              const max = Math.max(1, rows[0][1]);
-              const previous = index ? rows[index - 1][1] : value;
-              const rate = previous ? value / previous * 100 : 0;
+              ['Checkout startet', totals.start_checkout], ['Klik på betaling', totals.click_purchase],
+            ] as Array<[string, number]>).map(([label, value], _index, rows) => {
+              const max = Math.max(1, ...rows.map(([, count]) => count));
               return <div key={label}>
-                <div className="mb-1 flex justify-between gap-3 text-sm"><span>{label}</span><span className="font-medium tabular-nums">{value.toLocaleString('da-DK')}{index && index < rows.length - 1 ? ` · ${rate.toFixed(1)}%` : ''}</span></div>
-                <div className="h-8 overflow-hidden rounded bg-muted"><div className="flex h-full min-w-1 items-center bg-primary px-2 text-xs font-semibold text-primary-foreground" style={{width:`${Math.max(2, value / max * 100)}%`}} /></div>
+                <div className="mb-1 flex justify-between gap-3 text-sm"><span>{label}</span><span className="font-medium tabular-nums">{value.toLocaleString('da-DK')}</span></div>
+                <div className="h-8 overflow-hidden rounded bg-muted"><div className="h-full bg-primary text-xs font-semibold text-primary-foreground" style={{width:`${value / max * 100}%`}} /></div>
               </div>;
             })}
           </CardContent>
@@ -226,6 +220,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
         <Card>
           <CardHeader><CardTitle>Verificeret salg</CardTitle></CardHeader>
           <CardContent className="space-y-4">
+            <p className="text-sm text-muted-foreground">Betalte ordrer fra serveren i det valgte udsnit. Dette tal dokumenterer salg, ikke modtagelse hos Google eller Meta.</p>
             <div><p className="text-sm text-muted-foreground">Verificerede ordrer</p><p className="text-2xl font-semibold tabular-nums">{totals.paidOrders ?? totals.payment_succeeded}</p></div>
             <div><p className="text-sm text-muted-foreground">Køb med målt besøg</p><p className="text-2xl font-semibold tabular-nums">{totals.measuredPaidOrders ?? 0} / {totals.paidOrders ?? totals.payment_succeeded}</p><p className="text-xs text-muted-foreground">{totals.paidOrders ? `${((totals.measuredPaidOrders || 0) / totals.paidOrders * 100).toFixed(1)} % måledækning` : 'Ingen køb i det valgte udsnit'}</p></div>
             <div><p className="text-sm text-muted-foreground">Omsætning</p><p className="text-3xl font-bold tabular-nums">{formatPrice(totals.revenue_paid)}</p></div>
