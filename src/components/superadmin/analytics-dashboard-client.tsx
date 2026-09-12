@@ -226,8 +226,10 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
         <Card>
           <CardHeader><CardTitle>Verificeret salg</CardTitle></CardHeader>
           <CardContent className="space-y-4">
+            <div><p className="text-sm text-muted-foreground">Verificerede ordrer</p><p className="text-2xl font-semibold tabular-nums">{totals.paidOrders ?? totals.payment_succeeded}</p></div>
+            <div><p className="text-sm text-muted-foreground">Køb med målt besøg</p><p className="text-2xl font-semibold tabular-nums">{totals.measuredPaidOrders ?? 0} / {totals.paidOrders ?? totals.payment_succeeded}</p><p className="text-xs text-muted-foreground">{totals.paidOrders ? `${((totals.measuredPaidOrders || 0) / totals.paidOrders * 100).toFixed(1)} % måledækning` : 'Ingen køb i det valgte udsnit'}</p></div>
             <div><p className="text-sm text-muted-foreground">Omsætning</p><p className="text-3xl font-bold tabular-nums">{formatPrice(totals.revenue_paid)}</p></div>
-            <div><p className="text-sm text-muted-foreground">Gennemsnitsordre</p><p className="text-2xl font-semibold tabular-nums">{formatPrice(totals.payment_succeeded ? totals.revenue_paid / totals.payment_succeeded : 0)}</p></div>
+            <div><p className="text-sm text-muted-foreground">Gennemsnitsordre</p><p className="text-2xl font-semibold tabular-nums">{formatPrice((totals.paidOrders ?? totals.payment_succeeded) ? totals.revenue_paid / (totals.paidOrders ?? totals.payment_succeeded) : 0)}</p></div>
             <p className="text-xs text-muted-foreground">Alle serververificerede betalte ordrer tæller som salg. Besøg og trin før køb kræver analytics-samtykke. Målt konvertering omfatter kun sessions, der kan matches til et køb.</p>
           </CardContent>
         </Card>

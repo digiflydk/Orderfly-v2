@@ -91,12 +91,16 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     useEffect(() => {
         if (order?.paymentStatus === 'Paid' && brand && location) {
             completeCheckout(order.id, brand.id, location.id);
-            pushPaidPurchase({
+            const sendPurchase = () => pushPaidPurchase({
                 orderId: order.id, value: order.totalAmount, brandId: brand.id, locationId: location.id, currency: order.invoice?.currency || brand.currency || 'DKK',
                 ...(!brand.gtmContainerId && brand.googleAdsConversionId && brand.googleAdsPurchaseLabel
                     ? { googleAdsSendTo: `${brand.googleAdsConversionId}/${brand.googleAdsPurchaseLabel}` } : {}),
                 items: order.productItems.map(item => ({ id: item.id, quantity: item.quantity, unitPrice: item.unitPrice })),
             });
+            sendPurchase();
+            window.addEventListener('orderfly:tracking-ready', sendPurchase);
+            window.addEventListener('orderfly:consent', sendPurchase);
+            return () => { window.removeEventListener('orderfly:tracking-ready', sendPurchase); window.removeEventListener('orderfly:consent', sendPurchase); };
         }
     }, [order, brand, location, completeCheckout]);
 

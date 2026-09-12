@@ -603,8 +603,8 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
                     </div>
                     <Card>
                         <CardHeader>
-                            <CardTitle>Analytics Overrides</CardTitle>
-                            <CardDescription>Optionally override global analytics settings for this brand.</CardDescription>
+                            <CardTitle>Orderfly tracking</CardTitle>
+                            <CardDescription>Separate datakilder til dette brand på Orderfly. GTM styrer GA4; Google Ads og Meta sendes via felterne nedenfor. Opret ikke Ads-/Meta-tags i samme GTM-container.</CardDescription>
                         </CardHeader>
                         <CardContent className="space-y-4">
                             <FormField control={form.control} name="ga4MeasurementId" render={({ field }) => (
@@ -625,7 +625,7 @@ export function BrandFormPage({ brand, users, plans, foodCategories }: BrandForm
                                 <FormItem>
                                     <FormLabel>Google Ads Conversion ID</FormLabel>
                                     <FormControl><Input placeholder="AW-123456789" {...field} value={field.value ?? ''} /></FormControl>
-                                    <FormDescription>Kan konfigureres direkte eller via brandets GTM-container.</FormDescription>
+                                    <FormDescription>Separat Orderfly-konvertering i den eksisterende Google Ads-konto. Undgå samtidig import af samme køb som primær GA4-konvertering.</FormDescription>
                                     <FormMessage />
                                 </FormItem>
                             )}/>

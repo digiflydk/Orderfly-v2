@@ -51,7 +51,7 @@ export function MenuClient({
   initialActiveStandardDiscounts,
 }: MenuClientProps) {
   const { setCartContext, deliveryType, itemCount, standardDiscounts, cartReady } = useCart();
-  const { trackEvent } = useAnalytics();
+  const { trackEvent, measurementKey } = useAnalytics();
   const categoryRefs = useRef<Record<string, HTMLDivElement | null>>({});
   const [activeCategory, setActiveCategory] = useState<string>('offers');
   const [search, setSearch] = useState('');
@@ -90,10 +90,10 @@ export function MenuClient({
   }, []);
   const trackedMenu = useRef('');
   useEffect(() => {
-    const key = `${brand.id}/${location.id}`;
+    const key = `${brand.id}/${location.id}/${measurementKey}`;
     if (trackedMenu.current === key) return;
-    if (trackEvent('view_menu', {locationId: location.id})) trackedMenu.current = key;
-  }, [brand.id, location.id, trackEvent]);
+    if (trackEvent('view_menu', {locationId: location.id, items: initialProducts.map(product => ({ item_id: product.id, quantity: 1 }))})) trackedMenu.current = key;
+  }, [brand.id, location.id, trackEvent, measurementKey]);
 
   useEffect(() => {
     // OF-399: Show delivery modal only if a delivery method has not been previously selected in this session.

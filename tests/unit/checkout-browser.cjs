@@ -96,7 +96,7 @@ before(async()=>{
   '@/app/superadmin/settings/actions':fixture('settings','export const getActiveStripeKey=async()=>"pk_test_fixture";'),
   '@stripe/stripe-js':fixture('stripe-js','export const loadStripe=()=>Promise.resolve(null);'),
   '@stripe/react-stripe-js':fixture('stripe-elements','export const Elements=({children})=>children;'),
-  '@/lib/analytics':fixture('telemetry',`import {statisticsAllowed,trackClientEvent as track} from ${JSON.stringify(path.join(root,'src/lib/analytics.ts'))};export {statisticsAllowed};export const trackClientEvent=(...args)=>{if(window.telemetryUnavailable)throw Error('analytics denied');return track(...args);};`),
+  '@/lib/analytics':fixture('telemetry',`import {statisticsAllowed,trackingConsent,trackClientEvent as track} from ${JSON.stringify(path.join(root,'src/lib/analytics.ts'))};export {statisticsAllowed,trackingConsent};export const trackClientEvent=(...args)=>{if(window.telemetryUnavailable)throw Error('analytics denied');return track(...args);};`),
   '@/hooks/use-toast':fixture('toast','const toast=()=>{};export const useToast=()=>({toast});'),
   '@/app/superadmin/locations/client-actions':fixture('times',`export const calculateTimeSlots=()=>({asap_pickup:'Today - 18:20',asap_delivery:'Today - 18:40',pickup_times:['Today - 18:20'],delivery_times:['Today - 18:40']});`),
   [path.join(root,'src/components/checkout/timeslot-dialog')]:fixture('time-dialog','export const TimeSlotDialog=()=>null;'),

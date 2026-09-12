@@ -15,14 +15,5 @@ export async function recordCommerceMetric(name: unknown, props: Record<string, 
     verifiedPayment: trusted && name === 'payment_succeeded',
     provenance: trusted && name === 'payment_succeeded' ? 'server-verified-payment-v1' : 'client-commerce-v1',
   }), undefined, 1500);
-  const measurementId = process.env.GA_MEASUREMENT_ID || process.env.NEXT_PUBLIC_GA_MEASUREMENT_ID;
-  const apiSecret = process.env.GA_API_SECRET;
-  if (measurementId && apiSecret && event.sessionId) {
-    const paid = trusted && name === 'payment_succeeded';
-    await optionalCheckoutValue(() => fetch(`https://www.google-analytics.com/mp/collect?${new URLSearchParams({measurement_id: measurementId, api_secret: apiSecret})}`, {
-      method: 'POST', headers: {'Content-Type': 'application/json'}, signal: AbortSignal.timeout(1500),
-      body: JSON.stringify({client_id: event.sessionId, events: [{name: paid ? 'purchase' : name,
-        params: {...event, ...(event.cartValue !== undefined ? {value: event.cartValue, currency: 'DKK'} : {}), ...(paid ? {transaction_id: event.orderId} : {})}}]}),
-    }), undefined, 1500);
-  }
+  // Internal operational metrics never forward to a global advertising/analytics destination.
 }

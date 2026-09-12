@@ -4,6 +4,8 @@ on:
     paths:
       - 'src/**'
       - 'tests/unit/funnel-tracking.cjs'
+      - 'tests/unit/tracking-consent.cjs'
+      - 'tests/unit/brand-tracking-browser.cjs'
       - 'tests/unit/commerce-p2-browser.cjs'
       - 'tests/unit/checkout-browser.cjs'
       - '.github/workflows/funnel-regression.yml'
@@ -21,5 +23,5 @@ jobs:
           cache: npm
       - run: npm ci
       - run: npx playwright install --with-deps chromium
-      - run: node --test tests/unit/funnel-tracking.cjs tests/unit/invoice-attribution.cjs
-      - run: node --test tests/unit/commerce-p2-browser.cjs tests/unit/checkout-browser.cjs
+      - run: node --test tests/unit/funnel-tracking.cjs tests/unit/invoice-attribution.cjs tests/unit/tracking-consent.cjs
+      - run: node --test tests/unit/commerce-p2-browser.cjs tests/unit/checkout-browser.cjs tests/unit/brand-tracking-browser.cjs

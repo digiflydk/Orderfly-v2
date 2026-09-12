@@ -51,18 +51,18 @@ const getSelectionText = (group: ComboMenu['productGroups'][0]): string => {
 
 export function ComboBuilderDialog({ combo, isOpen, setIsOpen, brandProducts, initialItem, initialQuantity, preselectedProductId, onSaved }: ComboBuilderDialogProps) {
   const { cartReady, addComboToCart, deliveryType, location } = useCart();
-  const { trackEvent } = useAnalytics();
+  const { trackEvent, measurementKey } = useAnalytics();
   const { toast } = useToast();
 
   const trackedView = useRef('');
   useEffect(() => {
     if (!isOpen) { trackedView.current = ''; return; }
     if (!location) return;
-    const key = `${combo.id}/${location.id}`;
+    const key = `${combo.id}/${location.id}/${measurementKey}`;
     if (trackedView.current !== key && trackEvent('view_product', {productId: combo.id, locationId: location.id})) {
       trackedView.current = key;
     }
-  }, [isOpen, combo.id, location?.id, trackEvent]);
+  }, [isOpen, combo.id, location?.id, trackEvent, measurementKey]);
 
   const initialized = useRef('');
   const committed = useRef(false);

@@ -158,6 +158,14 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
     marketing: false,
   });
 
+  useEffect(() => {
+    if (!isModalOpen) return;
+    try {
+      const saved = JSON.parse(optionalGet(CONSENT_COOKIE_NAME) || Cookies.get(CONSENT_COOKIE_NAME) || '{}');
+      setPreferences({ necessary: true, functional: saved.functional === true, statistics: saved.statistics === true || saved.analytics === true, marketing: saved.marketing === true });
+    } catch { /* Keep conservative defaults. */ }
+  }, [isModalOpen]);
+
    useEffect(() => {
     if (pathname.includes('/superadmin') || pathname.includes('/admin')) {
       setShowBanner(false);
@@ -225,6 +233,7 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
             <CardDescription>{texts.banner_description}</CardDescription>
           </CardHeader>
           <CardFooter className="flex-col sm:flex-row gap-2">
+            <Button className="w-full sm:w-auto" variant="outline" onClick={() => saveConsent({ necessary: true, functional: false, statistics: false, marketing: false, consent_version: texts.consent_version })}>Afvis valgfrie</Button>
             <Button className="w-full sm:w-auto" onClick={handleAcceptAll}>{texts.accept_all_button}</Button>
             <Button className="w-full sm:w-auto" variant="outline" onClick={handleCustomize}>{texts.customize_button}</Button>
           </CardFooter>

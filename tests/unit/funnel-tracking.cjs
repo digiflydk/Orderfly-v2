@@ -56,6 +56,7 @@ test('collected events reach filtered funnel; sales remain authoritative and con
  assert.equal(result.totals.payment_session_created,1,'server metric remains visible without creating a browser session');
  for(const step of ['view_menu','view_product','add_to_cart','start_checkout','click_purchase'])assert.equal(result.totals[step],1);
  assert.equal(result.totals.payment_succeeded,3);assert.equal(result.totals.revenue_paid,225);
+ assert.equal(result.totals.paidOrders,3);assert.equal(result.totals.measuredPaidOrders,2);
  assert.equal(result.totals.measuredPurchasingSessions,1);assert.equal(result.byLocation[0].convSessionsToPurchase,100);
  assert.equal(result.daily[0].sessions,1);
  assert.equal((await getFunnelData({...filters,utmSource:'meta'})).totals.sessions,0);

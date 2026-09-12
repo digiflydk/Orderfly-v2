@@ -38,6 +38,8 @@ export async function getFunnelData(filters: FunnelFilters, _user?: unknown): Pr
     ? new Set(purchases.flatMap(row => [...row.sessionIds])).size
     : purchases.reduce((sum, row) => sum + row.count, 0);
   const totals: FunnelOutput['totals'] = {
+    paidOrders: purchases.reduce((sum, row) => sum + row.count, 0),
+    measuredPaidOrders: purchases.reduce((sum, row) => sum + Object.entries(row.ordersBySession || {}).filter(([id]) => sessions.has(id)).reduce((n, [, count]) => n + count, 0), 0),
     sessions: sessions.size, measuredPurchasingSessions: new Set(purchases.flatMap(row => [...row.sessionIds]).filter(id => sessions.has(id))).size, view_menu: 0, view_product: 0, add_to_cart: 0, start_checkout: 0, click_purchase: 0,
     payment_succeeded: paidCount,
     payment_session_created: 0, upsell_offer_shown: 0, upsell_accepted: 0, upsell_rejected: 0,
