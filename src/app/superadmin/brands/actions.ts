@@ -1,7 +1,7 @@
 
 
 'use server';
-import { mpanelAdminEnabled } from '@/lib/mpanel-admin-cutover';
+import { mpanelAdminEnabled, assertLegacyAdminWrite } from '@/lib/mpanel-admin-cutover';
 
 import 'server-only';
 
@@ -171,6 +171,7 @@ export async function createOrUpdateBrand(
 
     } else {
       // Create new user first
+      assertLegacyAdminWrite();
       const newUserRef = db.collection('users').doc();
       await newUserRef.set({ 
         id: newUserRef.id,

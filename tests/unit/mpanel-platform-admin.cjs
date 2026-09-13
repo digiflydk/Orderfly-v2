@@ -25,7 +25,7 @@ assert.equal((await route.POST(req({padding:'ø'.repeat(20000)},'a'.repeat(48)))
 assert.equal(calls,0);
 assert.equal((await route.POST(req({actorId:f.actorId,organizationId:f.organizationId,command:{action:'list'}},'a'.repeat(48)))).status,200);assert.equal(calls,1);
 });
-test('legacy write switch fails closed after cutover',()=>{const m=loadTs('src/lib/mpanel-admin-cutover.ts',{'server-only':{}});process.env.MPANEL_PLATFORM_ADMIN_ENABLED='false';m.assertLegacyAdminWrite();process.env.MPANEL_PLATFORM_ADMIN_ENABLED='true';assert.throws(()=>m.assertLegacyAdminWrite(),/mPanel/);delete process.env.MPANEL_PLATFORM_ADMIN_ENABLED;});
+test('legacy catalogue writes stay closed before cutover and during rollback',()=>{const m=loadTs('src/lib/mpanel-admin-cutover.ts',{'server-only':{}});const old=process.env.MPANEL_PLATFORM_ADMIN_ENABLED;try{for(const flag of ['false','true',undefined]){if(flag===undefined)delete process.env.MPANEL_PLATFORM_ADMIN_ENABLED;else process.env.MPANEL_PLATFORM_ADMIN_ENABLED=flag;assert.throws(()=>m.assertLegacyAdminWrite(),/mPanel/);}}finally{if(old===undefined)delete process.env.MPANEL_PLATFORM_ADMIN_ENABLED;else process.env.MPANEL_PLATFORM_ADMIN_ENABLED=old;}});
 
 test('reusing an audit request with different content never mutates twice',async()=>{const f=fixture(),requestId=crypto.randomUUID();const command={action:'save',kind:'users',requestId,data:{name:'First',email:'first@example.test',roleIds:[]}};await f.call(command);const writes=f.writes();await assert.rejects(f.call({...command,data:{...command.data,name:'Second'}}),/request_conflict/);assert.equal(f.writes(),writes);});
 
