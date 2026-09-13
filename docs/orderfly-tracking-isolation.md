@@ -51,8 +51,9 @@ introduced without a separately designed consent and delivery contract.
 Internal view_menu/view_product/start_checkout map to Google view_item_list /
 view_item / begin_checkout. Meta receives PageView, ViewContent, AddToCart,
 InitiateCheckout and Purchase when marketing is allowed. Product IDs and numeric
-quantities/prices are allowlisted; no names, email, phone or checkout fields are
-sent. Product-dialog add_to_cart is the added line's value, not the whole cart.
+quantities/prices are allowlisted. Paid purchases also send saved catalog product
+names as described below; customer names, email, phone and free-text checkout
+fields are never sent. Product-dialog add_to_cart is the added line's value, not the whole cart.
 
 Purchase remains gated by the receipt's server-verified Paid order. Order ID is
 Google transaction_id and Meta eventID. Browser deduplication is per purpose and
