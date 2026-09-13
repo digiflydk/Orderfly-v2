@@ -17,10 +17,13 @@ type ActionResult = { ok: true; id: string } | { ok: false; error: string };
 export async function createOrUpdateQuestionVersion(formData: FormData): Promise<ActionResult> {
   try {
     await requireQuestionAccess(true);
+    const scope = formData.get('scope') === 'brand' ? 'brand' : 'default';
     const parsed = FeedbackQuestionsVersionSchema.safeParse({
       id: formData.get('id') || undefined,
       versionLabel: formData.get('versionLabel'),
       isActive: ['on', 'true'].includes(String(formData.get('isActive'))),
+      scope,
+      brandId: scope === 'brand' ? formData.get('brandId') : null,
       language: formData.get('language') || 'da',
       orderTypes: [...new Set(formData.getAll('orderTypes'))],
       questions: JSON.parse(String(formData.get('questions') || '[]')),
@@ -33,15 +36,24 @@ export async function createOrUpdateQuestionVersion(formData: FormData): Promise
     // Serialize activation changes so two admins cannot activate conflicting versions.
     const lock = db.collection('feedbackConfiguration').doc('versionLock');
     await db.runTransaction(async tx => {
-      await tx.get(lock);
-      const existing = await tx.get(ref);
+      const [existing, active, brand] = await Promise.all([
+        tx.get(ref),
+        tx.get(col.where('isActive', '==', true)),
+        data.scope === 'brand' && data.brandId ? tx.get(db.collection('brands').doc(data.brandId)) : Promise.resolve(null),
+        tx.get(lock),
+      ]);
       if (id && !existing.exists) throw new Error('Question version no longer exists.');
-      const active = await tx.get(col.where('isActive', '==', true));
-      const conflict = active.docs.some(doc => doc.id !== ref.id && doc.data().language === data.language &&
-        (doc.data().orderTypes || []).some((type: string) => data.orderTypes.includes(type as FeedbackExperienceType)));
+      if (data.scope === 'brand' && !brand?.exists) throw new Error('The selected brand no longer exists.');
+      const conflict = active.docs.some(doc => {
+        const current = doc.data();
+        const currentScope = current.scope === 'brand' ? 'brand' : 'default';
+        const sameScope = currentScope === data.scope && (data.scope === 'default' || current.brandId === data.brandId);
+        return doc.id !== ref.id && sameScope && current.language === data.language &&
+          (current.orderTypes || []).some((type: string) => data.orderTypes.includes(type as FeedbackExperienceType));
+      });
       if (data.isActive && conflict) throw new Error('Deactivate the existing version for this language and experience type first.');
       const timestamp = getAdminFieldValue().serverTimestamp();
-      const payload = { ...JSON.parse(JSON.stringify(data)), id: ref.id, updatedAt: timestamp };
+      const payload = { ...JSON.parse(JSON.stringify(data)), brandId: data.scope === 'brand' ? data.brandId : null, id: ref.id, updatedAt: timestamp };
       if (id) tx.update(ref, payload);
       else tx.create(ref, { ...payload, createdAt: timestamp });
       tx.set(lock, { updatedAt: timestamp });

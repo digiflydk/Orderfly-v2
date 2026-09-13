@@ -150,22 +150,8 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
     if (!source) return { message: 'Feedback source could not be verified.', error: true };
 
     const db = getAdminDb();
-    const [questionsSnapshot, brandSettingsSnapshot] = await Promise.all([
-      db.collection('feedbackQuestionsVersion').doc(parsed.data.questionVersionId).get(),
-      db.collection('feedbackSettings').doc(source.brandId).get(),
-    ]);
-    if (!questionsSnapshot.exists) return { message: 'Feedback form is no longer available.', error: true };
-    const questionsData = questionsSnapshot.data() ?? {};
-    const selectedVersionId = feedbackAutomation(brandSettingsSnapshot.data()).questionVersionId;
-    if (selectedVersionId && selectedVersionId !== parsed.data.questionVersionId) return { message: 'Feedback form is no longer assigned to this brand.', error: true };
-    const allowedTypes = Array.isArray(questionsData.orderTypes) ? questionsData.orderTypes : [];
-    if (
-      questionsData.isActive !== true ||
-      questionsData.language !== parsed.data.language ||
-      !allowedTypes.includes(source.experienceType)
-    ) {
-      return { message: 'Feedback form is not valid for this visit.', error: true };
-    }
+    const questionsData = await readActiveQuestionsForBrand(source.brandId, source.experienceType, parsed.data.language);
+    if (!questionsData || questionsData.id !== parsed.data.questionVersionId) return { message: 'Feedback form is no longer assigned to this brand.', error: true };
 
     const responseValidation = validateFeedbackResponses(questionsData.questions, parsed.data.responses);
     if (!responseValidation.ok) {

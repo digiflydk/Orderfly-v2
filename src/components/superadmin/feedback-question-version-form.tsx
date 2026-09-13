@@ -34,6 +34,8 @@ type VersionDraft = {
   id?: string;
   versionLabel: string;
   isActive: boolean;
+  scope: 'default' | 'brand';
+  brandId: string;
   language: string;
   orderTypes: ExperienceType[];
   questions: QuestionDraft[];
@@ -44,6 +46,7 @@ export interface FeedbackQuestionVersionFormProps {
   id?: string;
   initialData?: Record<string, any> | null;
   version?: FeedbackQuestionsVersion;
+  brands?: { id: string; name: string }[];
   supportedLanguages: LanguageSetting[];
   action?: (formData: FormData) => Promise<any>;
 }
@@ -81,6 +84,8 @@ function draftFrom(version?: FeedbackQuestionsVersion): VersionDraft {
     return {
       versionLabel: '',
       isActive: false,
+      scope: 'default',
+      brandId: '',
       language: 'da',
       orderTypes: ['pickup', 'delivery'],
       questions: [],
@@ -91,6 +96,8 @@ function draftFrom(version?: FeedbackQuestionsVersion): VersionDraft {
     id: version.id,
     versionLabel: String(version.versionLabel || ''),
     isActive: Boolean((version as any).isActive),
+    scope: (version as any).scope === 'brand' ? 'brand' : 'default',
+    brandId: (version as any).scope === 'brand' ? String((version as any).brandId || '') : '',
     language: String((version as any).language || 'da'),
     orderTypes: normalizeExperienceTypes((version as any).orderTypes),
     questions: Array.isArray((version as any).questions)
@@ -101,6 +108,7 @@ function draftFrom(version?: FeedbackQuestionsVersion): VersionDraft {
 
 export default function FeedbackQuestionVersionForm({
   version,
+  brands = [],
   supportedLanguages,
 }: FeedbackQuestionVersionFormProps) {
   const [isPending, startTransition] = useTransition();
@@ -151,6 +159,10 @@ export default function FeedbackQuestionVersionForm({
       toast({ title: 'Manglende målgruppe', description: 'Vælg mindst én oplevelsestype.', variant: 'destructive' });
       return;
     }
+    if (draft.scope === 'brand' && !draft.brandId) {
+      toast({ title: 'Manglende brand', description: 'Vælg hvilket brand spørgsmålene gælder for.', variant: 'destructive' });
+      return;
+    }
     if (draft.questions.length === 0 || draft.questions.some((question) => question.label.trim().length < 3)) {
       toast({ title: 'Manglende spørgsmål', description: 'Tilføj mindst ét gyldigt spørgsmål.', variant: 'destructive' });
       return;
@@ -160,6 +172,8 @@ export default function FeedbackQuestionVersionForm({
     if (draft.id) formData.append('id', draft.id);
     formData.append('versionLabel', draft.versionLabel.trim());
     if (draft.isActive) formData.append('isActive', 'on');
+    formData.append('scope', draft.scope);
+    if (draft.scope === 'brand') formData.append('brandId', draft.brandId);
     formData.append('language', draft.language);
     draft.orderTypes.forEach((type) => formData.append('orderTypes', type));
     formData.append('questions', JSON.stringify(draft.questions));
@@ -200,6 +214,26 @@ export default function FeedbackQuestionVersionForm({
               <Label htmlFor="version-label">Version Label</Label>
               <Input id="version-label" value={draft.versionLabel} onChange={(event) => setDraft({ ...draft, versionLabel: event.target.value })} />
             </div>
+            <div className="space-y-2">
+              <Label htmlFor="question-scope">Gælder for</Label>
+              <Select value={draft.scope} onValueChange={(scope: 'default' | 'brand') => setDraft({ ...draft, scope, brandId: scope === 'default' ? '' : draft.brandId })}>
+                <SelectTrigger id="question-scope"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="default">Standard · alle brands</SelectItem>
+                  <SelectItem value="brand">Et bestemt brand</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">Standard bruges som fallback for brands uden deres eget aktive skema.</p>
+            </div>
+            {draft.scope === 'brand' && (
+              <div className="space-y-2">
+                <Label htmlFor="question-brand">Brand</Label>
+                <Select value={draft.brandId} onValueChange={(brandId) => setDraft({ ...draft, brandId })}>
+                  <SelectTrigger id="question-brand"><SelectValue placeholder="Vælg brand" /></SelectTrigger>
+                  <SelectContent>{brands.map((brand) => <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>)}</SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-2">
               <Label>Language</Label>
               <Select value={draft.language} onValueChange={(language) => setDraft({ ...draft, language })}>

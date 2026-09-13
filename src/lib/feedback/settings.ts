@@ -29,6 +29,7 @@ export async function writeFeedbackSettings(input: unknown) {
       const parsed = FeedbackQuestionsVersionSchema.safeParse(version.data());
       const language = data.language ?? feedbackAutomation(current.data()).language;
       if (!version.exists || !parsed.success || !parsed.data.isActive || parsed.data.language !== language) throw new Error('Vælg et aktivt feedbackskema på det valgte sprog.');
+      if (parsed.data.scope === 'brand' && parsed.data.brandId !== data.brandId) throw new Error('Feedbackskemaet tilhører et andet brand.');
     }
     const { brandId, ...settings } = data;
     tx.set(db.collection('feedbackSettings').doc(data.brandId), { ...Object.fromEntries(Object.entries(settings).filter(([,value]) => value !== undefined)), updatedAt: getAdminFieldValue().serverTimestamp(), updatedBy: access.uid }, { merge: true });

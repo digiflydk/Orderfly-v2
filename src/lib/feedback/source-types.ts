@@ -7,6 +7,8 @@ export type ExperienceFeedbackQuestionsVersion = {
   id: string;
   versionLabel: string;
   isActive: boolean;
+  scope: 'default' | 'brand';
+  brandId?: string | null;
   language: string;
   orderTypes: FeedbackExperienceType[];
   questions: FeedbackQuestion[];
