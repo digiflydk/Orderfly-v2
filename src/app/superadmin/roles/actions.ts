@@ -4,7 +4,8 @@
 import { assertLegacyAdminWrite } from '@/lib/mpanel-admin-cutover';
 
 import { revalidatePath } from 'next/cache';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { db } from '@/lib/firebase';
+import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, getDoc } from 'firebase/firestore';
 import type { Role } from '@/types';
 import { z } from 'zod';
 import { ALL_PERMISSIONS } from '@/lib/permissions';
@@ -32,7 +33,6 @@ export async function createOrUpdateRole(
   assertLegacyAdminWrite();
   const rawData: Record<string, any> = Object.fromEntries(formData.entries());
   rawData.permissions = formData.getAll('permissions');
-  const db = getAdminDb();
 
   const validatedFields = roleSchema.safeParse(rawData);
 
@@ -50,8 +50,8 @@ export async function createOrUpdateRole(
   const { id, ...roleData } = validatedFields.data;
 
   try {
-    const roleRef = id ? db.collection('roles').doc(id) : db.collection('roles').doc();
-    await roleRef.set({ ...roleData, id: roleRef.id }, { merge: true });
+    const roleRef = id ? doc(db, 'roles', id) : doc(collection(db, 'roles'));
+    await setDoc(roleRef, { ...roleData, id: roleRef.id }, { merge: true });
 
   } catch (e) {
     console.error(e);
@@ -67,8 +67,7 @@ export async function deleteRole(roleId: string) {
     assertLegacyAdminWrite();
     // Note: In a real app, you'd check if this role is assigned to any users before deleting.
     try {
-        const db = getAdminDb();
-        await db.collection("roles").doc(roleId).delete();
+        await deleteDoc(doc(db, "roles", roleId));
         revalidatePath("/superadmin/roles");
         return { message: "Role deleted successfully.", error: false };
     } catch (e) {
@@ -79,17 +78,15 @@ export async function deleteRole(roleId: string) {
 }
 
 export async function getRoles(): Promise<Role[]> {
-    const db = getAdminDb();
-    const q = db.collection('roles').orderBy('name');
-    const querySnapshot = await q.get();
+    const q = query(collection(db, 'roles'), orderBy('name'));
+    const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Role[];
 }
 
 export async function getRoleById(roleId: string): Promise<Role | null> {
-    const db = getAdminDb();
-    const docRef = db.collection('roles').doc(roleId);
-    const docSnap = await docRef.get();
-    if (docSnap.exists) {
+    const docRef = doc(db, 'roles', roleId);
+    const docSnap = await getDoc(docRef);
+    if (docSnap.exists()) {
         return { ...docSnap.data(), id: docSnap.id } as Role;
     }
     return null;

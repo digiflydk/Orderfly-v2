@@ -6,7 +6,7 @@ Draft implementation paired with digiflydk/esmeralda-restaurant-operations#273. 
 
 mPanel owns the new users, roles and subscription-plan editing UI. The server-only POST `/api/integrations/mpanel/platform-admin` retains the existing Firestore collections and native IDs. It exposes strict list/save/delete commands with bounded fields, known Orderfly permissions, revision conflicts, request-ID idempotency, reference checks and audit events. Edits preserve unrelated fields, including plan feature IDs.
 
-Set `MPANEL_PLATFORM_ADMIN_ENABLED=true` only during the coordinated cutover. This enables the bridge, redirects legacy users/roles/subscriptions pages and nested editors to `https://www.esmeraldapizza.dk/mpanel#platform`, removes their menu entries and rejects their old server writes. Billing stays available. Brand creation then requires an existing mPanel-managed owner, and brand owner/plan references are validated within a transaction sharing the catalogue lock. Disabled is the default and preserves legacy behavior.
+Set `MPANEL_PLATFORM_ADMIN_ENABLED=true` only during the coordinated cutover. This enables the bridge, redirects legacy users/roles/subscriptions pages and nested editors to `https://www.esmeraldapizza.dk/mpanel#platform`, removes their menu entries and rejects their old server writes. Billing stays available. Brand creation then requires an existing mPanel-managed owner, and brand owner/plan references are validated within a transaction sharing the catalogue lock. Disabled is the default. With activation preparation #137, legacy catalogue writes remain retired even while the bridge is disabled.
 
 This does not create authentication accounts, replace the current Orderfly login, implement shared Opsfly permissions, assign customer subscriptions or enforce subscription entitlements. Moving the administration is phase one of the shared platform architecture.
 
@@ -25,7 +25,7 @@ New server-only collections: `platformAdminAudit` (immutable request result and 
 
 Deploy the coordinated pair disabled; configure secrets out of band. Before enabling, verify Firestore rules deny direct browser reads/writes to the two new internal collections and direct browser writes to users/roles/plans. Rules are not checked in by this change. Audit other writers of brand owner/subscription and subscription plan references against the shared transaction lock; fixture tests cannot prove their concurrency safety. Finish exact-head checks and independent review in both repositories, then activate and verify a selected dummy-record lifecycle, legacy redirects/write rejection and normal billing. No runtime configuration has been changed as part of this draft.
 
-Rollback disables the feature flag, restoring legacy administration and closing the bridge while retaining records, edits and audit events. It needs no destructive reverse migration.
+With activation preparation #137, rollback disables the feature flag and closes the bridge while retaining records, edits and audit events. Catalogue editing stays closed during rollback; it does not reopen legacy server writers. See the activation runbook.
 
 ## Tests and release limits
 

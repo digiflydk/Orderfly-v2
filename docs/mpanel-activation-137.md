@@ -67,10 +67,14 @@ alone does not prove the serving revision is configured.
    Firestore rules do not protect Admin SDK/server actions; the bridge owner
    checks and legacy write guards are independently required.
 
-The existing superadmin role actions now use the Admin SDK like the other native
-catalogue actions. This is required before publishing the rules, including for
-flag-off operation and rollback. Both duplicate role action paths retain the
-same cutover guard, validation and canonical document identity.
+Legacy catalogue mutations are now permanently retired in this release: both
+role action paths, user and pricing-plan create/update/delete reject before
+database access regardless of the bridge flag. Both legacy brand creators also
+reject automatic user creation. There is no new Admin SDK writer or fallback
+permission scheme. The authenticated mPanel bridge is the sole catalogue writer.
+During the staged flag-off interval and rollback, catalogue administration is
+read-only; new-brand creation resumes when the central bridge is activated and
+an existing owner can be selected. Existing brand edits and billing remain.
 
 ## Release order and verification
 
@@ -79,7 +83,7 @@ same cutover guard, validation and canonical document identity.
    with cutover off. Include all affected shared Supabase importers, not just the
    mPanel bundle. Record exact deployed commits and component versions.
 3. Confirm the serving Orderfly revision includes the secret binding, matching
-   owner IDs and the Admin SDK role fix. Confirm mPanel secrets are configured.
+   owner IDs and the retired legacy-writer guards. Confirm mPanel secrets are configured.
 4. Re-read the current published Firestore rules immediately before publication;
    their hash must match the reviewed input. Publish only the tested candidate
    in `orderfly-39325`, never the hosting project. If state changed, stop and
@@ -95,17 +99,18 @@ same cutover guard, validation and canonical document identity.
    owner bridge fails, disable cutover again and keep the issue open.
 
 Rollback retains protected Firestore rules and audit history. Disable cutover
-and roll out again; legacy server catalogue operations remain available because
-the role writer was corrected before rules publication. Do not restore permissive
-rules or roll the code back past the Admin SDK fix while protections remain live.
+and roll out again; catalogue editing remains closed. Restoring the bridge
+restores editing through the verified owner only. Never restore permissive rules
+or roll back past the retired-writer guards: older Admin SDK actions can bypass
+Firestore rules. Fix forward within this release baseline.
 
 ## Tests
 
 `node --test tests/unit/platform-firestore-preparation.mjs` checks that unknown,
 stricter, broader and truncated policies cannot be substituted silently.
 `node --test tests/unit/platform-role-server.cjs` executes both actual role
-implementations, including create/read/update/delete, canonical IDs and pre-I/O
-cutover denial. Existing platform/brand browser and service regressions remain.
+catalogue entry points, including pre-I/O save/delete rejection with the flag
+on, off and absent, plus both brand auto-user-creation paths. Existing platform/brand browser and service regressions remain.
 
 `npm ci --prefix tests/firestore` then `npm test --prefix tests/firestore` runs
 the real Firestore emulator (Java 21, Node 24). The isolated, locked test package

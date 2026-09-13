@@ -1,50 +1,63 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadTs } = require('../helpers/load-ts.cjs');
+const { fixture, formData, brand } = require('../helpers/brand-location-fixture.cjs');
 
-for (const filename of ['src/roles/actions.ts', 'src/app/superadmin/roles/actions.ts']) {
-  test(`${filename}: server role lifecycle works without public Firestore writes; cutover rejects writes`, async () => {
-    const rows = new Map();
-    let enabled = false, dbCalls = 0;
-    const snapshot = id => ({ id, exists: rows.has(id), data: () => rows.get(id) });
-    const db = { collection: name => {
-      assert.equal(name, 'roles');
-      return {
-        doc: (id = 'native-role') => ({ id,
-          set: async value => rows.set(id, value),
-          get: async () => snapshot(id),
-          delete: async () => rows.delete(id),
-        }),
-        orderBy: () => ({ get: async () => ({ docs: [...rows.keys()].map(snapshot) }) }),
-      };
-    } };
-    const actions = loadTs(filename, {
-      '@/lib/firebase-admin': { getAdminDb: () => { dbCalls++; return db; } },
-      '@/lib/firebase': new Proxy({}, { get: () => { throw Error('Browser database must not be used'); } }),
-      '@/lib/mpanel-admin-cutover': { assertLegacyAdminWrite: () => { if (enabled) throw Error('Managed in mPanel'); } },
-      'next/cache': { revalidatePath() {} },
-      'next/navigation': { redirect() {} },
+test('all retired catalogue server writers reject before database access, including rollback', async () => {
+  const prior = process.env.MPANEL_PLATFORM_ADMIN_ENABLED;
+  let calls = 0;
+  const forbiddenDb = () => { calls++; throw Error('Unexpected database access'); };
+  const mocks = {
+    'server-only': {}, 'next/cache': {}, 'next/navigation': {},
+    '@/lib/firebase-admin': { getAdminDb: forbiddenDb },
+    '@/lib/firebase': { db: {} },
+    'firebase/firestore': { collection: forbiddenDb, doc: forbiddenDb, setDoc: forbiddenDb, deleteDoc: forbiddenDb },
+  };
+  try {
+    for (const flag of ['true', 'false', undefined]) {
+      if (flag === undefined) delete process.env.MPANEL_PLATFORM_ADMIN_ENABLED;
+      else process.env.MPANEL_PLATFORM_ADMIN_ENABLED = flag;
+      for (const [file, save, remove] of [
+        ['src/roles/actions.ts', 'createOrUpdateRole', 'deleteRole'],
+        ['src/app/superadmin/roles/actions.ts', 'createOrUpdateRole', 'deleteRole'],
+        ['src/app/superadmin/users/actions.ts', 'createOrUpdateUser', 'deleteUser'],
+        ['src/app/superadmin/subscriptions/actions.ts', 'createOrUpdatePlan', 'deletePlan'],
+      ]) {
+        const actions = loadTs(file, mocks);
+        await assert.rejects(actions[save](null, new FormData()), /mPanel/);
+        await assert.rejects(actions[remove]('record'), /mPanel/);
+      }
+    }
+    assert.equal(calls, 0);
+  } finally {
+    if (prior === undefined) delete process.env.MPANEL_PLATFORM_ADMIN_ENABLED;
+    else process.env.MPANEL_PLATFORM_ADMIN_ENABLED = prior;
+  }
+});
+
+test('legacy brand creation cannot create catalogue users while the bridge is off', async () => {
+  const prior = process.env.MPANEL_PLATFORM_ADMIN_ENABLED;
+  process.env.MPANEL_PLATFORM_ADMIN_ENABLED = 'false';
+  try {
+    const f = fixture([]);
+    const legacy = loadTs('src/brands/actions.ts', {
+      'server-only': {}, 'next/cache': {}, 'next/navigation': {},
+      '@/lib/firebase-admin': { getAdminDb: () => ({ collection: () => ({
+        where: () => ({ get: async () => ({ empty: true, docs: [] }) }),
+        doc: () => { throw Error('Catalogue creation reached the database'); },
+      }) }) },
+      '@/lib/permissions': { hasPermission: () => true },
     });
-    const form = (name, id) => {
-      const value = new FormData(); value.set('name', name); value.append('permissions', 'users:view');
-      if (id) value.set('id', id);
-      return value;
-    };
-    await actions.createOrUpdateRole(null, form('Reader'));
-    assert.equal((await actions.getRoleById('native-role')).name, 'Reader');
-    await actions.createOrUpdateRole(null, form('Updated', 'native-role'));
-    rows.get('native-role').id = 'stale-import-id';
-    assert.equal((await actions.getRoles())[0].id, 'native-role');
-    assert.equal((await actions.getRoleById('native-role')).id, 'native-role');
-    assert.equal((await actions.getRoles())[0].name, 'Updated');
-    enabled = true;
-    const before = dbCalls;
-    await assert.rejects(actions.createOrUpdateRole(null, form('Blocked')), /mPanel/);
-    await assert.rejects(actions.deleteRole('native-role'), /mPanel/);
-    assert.equal(dbCalls, before);
-    assert.equal(rows.size, 1);
-    enabled = false;
-    assert.equal((await actions.deleteRole('native-role')).error, false);
-    assert.equal(await actions.getRoleById('native-role'), null);
-  });
-}
+    for (const actions of [f.brands, legacy]) {
+      const result = await actions.createOrUpdateBrand(null, formData({ ...brand,
+        id: undefined, slug: 'new-brand', ownerName: 'Owner', ownerEmail: 'owner@example.test',
+      }));
+      assert.equal(result.error, true);
+      assert.match(result.message, /mPanel/);
+    }
+    assert.deepEqual(f.writes, []);
+  } finally {
+    if (prior === undefined) delete process.env.MPANEL_PLATFORM_ADMIN_ENABLED;
+    else process.env.MPANEL_PLATFORM_ADMIN_ENABLED = prior;
+  }
+});
