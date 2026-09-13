@@ -95,7 +95,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                 orderId: order.id, value: order.totalAmount, brandId: brand.id, locationId: location.id, currency: order.invoice?.currency || brand.currency || 'DKK',
                 ...(!brand.gtmContainerId && brand.googleAdsConversionId && brand.googleAdsPurchaseLabel
                     ? { googleAdsSendTo: `${brand.googleAdsConversionId}/${brand.googleAdsPurchaseLabel}` } : {}),
-                items: order.productItems.map(item => ({ id: item.id, quantity: item.quantity, unitPrice: item.unitPrice })),
+                items: order.productItems.map(item => ({ id: item.id, name: item.name, quantity: item.quantity, unitPrice: item.unitPrice })),
             });
             sendPurchase();
             window.addEventListener('orderfly:tracking-ready', sendPurchase);

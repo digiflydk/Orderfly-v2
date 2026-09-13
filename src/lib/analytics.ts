@@ -54,7 +54,7 @@ export function trackClientEvent(eventName: AnalyticsEventName | 'web_vital', da
     return true;
   } catch { return false; }
 }
-export function pushPaidPurchase(data: {orderId: string; value: number; brandId: string; locationId: string; currency?: string; googleAdsSendTo?: string; items: Array<{id?: string; quantity: number; unitPrice: number}>}) {
+export function pushPaidPurchase(data: {orderId: string; value: number; brandId: string; locationId: string; currency?: string; googleAdsSendTo?: string; items: Array<{id?: string; name?: string; quantity: number; unitPrice: number}>}) {
   try {
     const consent = trackingConsent();
     const tracker = window.orderflyBrandTracker;
@@ -65,7 +65,7 @@ export function pushPaidPurchase(data: {orderId: string; value: number; brandId:
     const ecommerce = {
       transaction_id: data.orderId, value: data.value, currency: data.currency || 'DKK',
       affiliation: data.brandId, location_id: data.locationId,
-      items: data.items.map((item, index) => ({ item_id: item.id || `line-${index + 1}`, quantity: item.quantity, price: item.unitPrice })),
+      items: data.items.map((item, index) => ({ item_id: item.id || `line-${index + 1}`, ...(typeof item.name === 'string' && item.name.trim() ? { item_name: item.name.trim().slice(0, 200) } : {}), quantity: item.quantity, price: item.unitPrice })),
     };
     tracker.emit({ event: 'purchase', brandId: data.brandId, ecommerce, destinations });
     if (destinations.statistics) sessionStorage.setItem(key + '_statistics', '1');

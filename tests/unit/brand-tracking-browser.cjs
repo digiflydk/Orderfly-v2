@@ -24,11 +24,14 @@ test('brand tracking sends explicit destinations and destroys the previous runti
   assert.doesNotMatch(JSON.stringify(first),/receipt_token|session_id|private/);
   assert.equal(first.google.find(x=>x[1]==='conversion')[2].send_to,'AW-A/purchase');
   assert.deepEqual(first.meta.find(x=>x[2]==='Purchase').slice(0,3),['trackSingle','111','Purchase']);
-  await page.evaluate(()=>{window.stop();window.stop=window.mount({id:'b',gtmContainerId:'GTM-B',metaPixelId:'222'},{statistics:true,marketing:true});window.orderflyBrandTracker.emit({event:'purchase',brandId:'a',ecommerce:{transaction_id:'wrong'}});window.orderflyBrandTracker.emit({event:'purchase',brandId:'b',ecommerce:{transaction_id:'test-2',value:200,currency:'DKK',items:[]}})});
+  await page.evaluate(()=>{window.stop();window.stop=window.mount({id:'b',gtmContainerId:'GTM-B',metaPixelId:'222'},{statistics:true,marketing:true});window.orderflyBrandTracker.emit({event:'purchase',brandId:'a',ecommerce:{transaction_id:'wrong'}});window.orderflyBrandTracker.emit({event:'purchase',brandId:'b',ecommerce:{transaction_id:'test-2',value:200,currency:'DKK',items:[{item_id:'pizza',item_name:'Margherita (V)',quantity:2,price:79}]}})});
   assert.equal(frame.isDetached(),true);
   frame=page.frames().find(f=>f!==page.mainFrame());
   await frame.waitForFunction(()=>window.dataLayer.some(x=>x.event==='purchase'));
   const second=await frame.evaluate(()=>({events:window.dataLayer.filter(x=>x.event==='purchase'),meta:window.fbq.queue.map(x=>Array.from(x))}));
+  assert.deepEqual(second.events[0].ecommerce.items,[{item_id:'pizza',item_name:'Margherita (V)',quantity:2,price:79}]);
+  assert.equal(second.meta.find(x=>x[2]==='Purchase')[3].content_name,'Margherita (V)');
+  assert.deepEqual(second.meta.find(x=>x[2]==='Purchase')[3].contents,[{id:'pizza',quantity:2,item_price:79}]);
   assert.equal(second.events.length,1);assert.equal(second.events[0].brand_id,'b');
   assert.deepEqual(second.meta.find(x=>x[2]==='Purchase').slice(0,3),['trackSingle','222','Purchase']);
   await page.evaluate(()=>window.stop());assert.equal(page.frames().length,1);

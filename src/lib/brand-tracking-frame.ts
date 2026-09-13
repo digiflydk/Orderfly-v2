@@ -115,7 +115,7 @@ export const BRAND_TRACKING_DOCUMENT = `<!doctype html><html><head><meta charset
     }
     if(config.consent.marketing&&event.destinations?.marketing!==false){
       if(event.event==='purchase'&&config.adsSendTo)gtag('event','conversion',{send_to:config.adsSendTo,value:ecommerce.value,currency:ecommerce.currency,transaction_id:ecommerce.transaction_id,page_location:config.pageLocation});
-      if(config.meta&&mapped[1])window.fbq('trackSingle',config.meta,mapped[1],{referrer_host:referrerHost,...(typeof ecommerce.value==='number'?{value:ecommerce.value}:{}),currency:ecommerce.currency,content_type:'product',content_ids:(ecommerce.items||[]).map(item=>item.item_id),contents:(ecommerce.items||[]).map(item=>({id:item.item_id,quantity:item.quantity,item_price:item.price}))},{eventID:ecommerce.transaction_id||event.eventId});
+      if(config.meta&&mapped[1])window.fbq('trackSingle',config.meta,mapped[1],{referrer_host:referrerHost,...(typeof ecommerce.value==='number'?{value:ecommerce.value}:{}),currency:ecommerce.currency,content_type:'product',...((ecommerce.items||[]).some(item=>item.item_name)?{content_name:(ecommerce.items||[]).map(item=>item.item_name).filter(Boolean).join(', ').slice(0,1000)}:{}),content_ids:(ecommerce.items||[]).map(item=>item.item_id),contents:(ecommerce.items||[]).map(item=>({id:item.item_id,quantity:item.quantity,item_price:item.price}))},{eventID:ecommerce.transaction_id||event.eventId});
     }
   });
   parent.postMessage({type:'orderfly:brand-ready',brandId:config.brandId},config.origin);

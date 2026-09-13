@@ -51,8 +51,9 @@ introduced without a separately designed consent and delivery contract.
 Internal view_menu/view_product/start_checkout map to Google view_item_list /
 view_item / begin_checkout. Meta receives PageView, ViewContent, AddToCart,
 InitiateCheckout and Purchase when marketing is allowed. Product IDs and numeric
-quantities/prices are allowlisted; no names, email, phone or checkout fields are
-sent. Product-dialog add_to_cart is the added line's value, not the whole cart.
+quantities/prices are allowlisted. Paid purchases also send saved catalog product
+names as described below; customer names, email, phone and free-text checkout
+fields are never sent. Product-dialog add_to_cart is the added line's value, not the whole cart.
 
 Purchase remains gated by the receipt's server-verified Paid order. Order ID is
 Google transaction_id and Meta eventID. Browser deduplication is per purpose and
@@ -131,3 +132,10 @@ Meta iframe constraint: replacing document.referrer with an external campaign or
 Vendor diagnosis: Meta 2.9.398's shared global_config is embedded in fbevents.js; no separate global_config download was needed. Both configurations complete, with no pending locks or async event queue. The actual pixel configuration includes HeadlessChrome in BotBlocking and the global client-side blocking guardrail has passRate=1. The CI test observes the real SDK send stage and asserts sanitized commerce payloads plus the bot flag and actual suppression message from the SDK send handler. Unexpected runtime/vendor errors fail the fixture. If the vendor permits the browser, actual outgoing AddToCart remains required. No browser identity or vendor protection is modified. CI bot suppression does not establish live customer delivery; ordinary-browser receipt is a separate acceptance gate.
 
 Review coverage: commerce pagePath changes retain the sanitized landing query, including UTM and consent-eligible click IDs. The vendor fixture uses a production-shaped pagePath and explicitly requires the initial Google page_view as well as add_to_cart.
+
+
+## Purchased product names
+
+Verified paid purchases include the saved order product name as GA4 `items[].item_name`, alongside item ID, quantity and unit price. Names are trimmed and limited to 200 characters; legacy lines without a name still send their ID and numeric values. Only the product name is selected, never customer notes or contact details. GTM forwards the ecommerce items unchanged. Meta receives names in `content_name`, and keeps product IDs, quantities and prices in its standard `content_ids`/`contents` fields. Consent, brand isolation and per-destination purchase deduplication are unchanged.
+
+Validation: `tracking-consent.cjs` tests purchase assembly and consent/deduplication; `brand-tracking-browser.cjs` checks named items reaching the GTM data layer and Meta payload in the isolated browser fixture. This does not prove vendor receipt in production. Existing historical purchases are not replayed.
