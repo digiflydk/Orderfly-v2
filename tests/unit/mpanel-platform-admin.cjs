@@ -28,3 +28,111 @@ assert.equal((await route.POST(req({actorId:f.actorId,organizationId:f.organizat
 test('legacy write switch fails closed after cutover',()=>{const m=loadTs('src/lib/mpanel-admin-cutover.ts',{'server-only':{}});process.env.MPANEL_PLATFORM_ADMIN_ENABLED='false';m.assertLegacyAdminWrite();process.env.MPANEL_PLATFORM_ADMIN_ENABLED='true';assert.throws(()=>m.assertLegacyAdminWrite(),/mPanel/);delete process.env.MPANEL_PLATFORM_ADMIN_ENABLED;});
 
 test('reusing an audit request with different content never mutates twice',async()=>{const f=fixture(),requestId=crypto.randomUUID();const command={action:'save',kind:'users',requestId,data:{name:'First',email:'first@example.test',roleIds:[]}};await f.call(command);const writes=f.writes();await assert.rejects(f.call({...command,data:{...command.data,name:'Second'}}),/request_conflict/);assert.equal(f.writes(),writes);});
+
+async function accessFixture(){
+ const f=fixture();f.records.set('brands/brand',{name:'Dummy brand'});
+ const save=async(kind,data)=>{const result=await f.call({action:'save',kind,requestId:crypto.randomUUID(),data});return (await f.call({action:'list'}))[kind].find(r=>r.id===result.id);};
+ const plan=await save('accessPlans',{name:'Both products',modules:['orderfly.orders','opsfly.production'],isActive:true});
+ const role=await save('accessRoles',{name:'Reader',permissions:['orderfly.orders:view','opsfly.production:view'],isActive:true});
+ const company=await save('companies',{name:'Dummy company',orderflyBrandIds:['brand'],opsflyOrganizationId:f.organizationId,planId:plan.id,status:'active',expiresAt:null});
+ const member=await save('memberships',{name:'Dummy membership',companyId:company.id,product:'orderfly',principalId:'user',principalOrganizationId:null,roleIds:[role.id],isActive:true});
+ const preview=overrides=>f.call({action:'preview',companyId:company.id,product:'orderfly',principalId:'user',module:'orderfly.orders',permission:'view',...overrides});
+ const edit=async(kind,row,changes)=>{const {id,revision,...data}=row;return f.call({action:'save',kind,id,revision,requestId:crypto.randomUUID(),data:{...data,...changes}});};
+ return {...f,save,edit,plan,role,company,member,preview};
+}
+test('shared access is company + active plan + explicit role intersection, never a global admin grant',async()=>{
+ const f=await accessFixture();assert.equal((await f.preview()).allowed,true);
+ for(const [query,reason] of [[{permission:'manage'},'permission_missing'],[{module:'orderfly.billing'},'module_not_in_plan'],[{companyId:'foreign'},'company_inactive'],[{principalId:'foreign'},'membership_inactive'],[{module:'opsfly.production'},'product_mismatch']]){
+  assert.equal((await f.preview(query)).reason,reason);
+ }
+ await f.edit('accessRoles',f.role,{isActive:false});assert.equal((await f.preview()).reason,'permission_missing');
+});
+test('Orderfly only, Opsfly only and combined subscriptions keep identity namespaces separate',async()=>{
+ const f=await accessFixture();await f.save('memberships',{name:'Opsfly user',companyId:f.company.id,product:'opsfly',principalId:f.actorId,principalOrganizationId:f.organizationId,roleIds:[f.role.id],isActive:true});
+ const ops={product:'opsfly',principalId:f.actorId,module:'opsfly.production'};
+ assert.equal((await f.preview(ops)).allowed,true);
+ await f.edit('accessPlans',f.plan,{modules:['opsfly.production']});assert.equal((await f.preview()).reason,'module_not_in_plan');assert.equal((await f.preview(ops)).allowed,true);
+ const plan=(await f.call({action:'list'})).accessPlans[0];await f.edit('accessPlans',plan,{modules:['orderfly.orders']});assert.equal((await f.preview()).allowed,true);assert.equal((await f.preview(ops)).reason,'module_not_in_plan');
+});
+test('suspension, expiry and inactive membership/plan immediately deny saved previews',async()=>{
+ for(const scenario of ['company','expiry','member','plan']){
+  const f=await accessFixture();
+  if(scenario==='company')await f.edit('companies',f.company,{status:'suspended'});
+  if(scenario==='expiry')await f.edit('companies',f.company,{expiresAt:'2000-01-01T00:00:00.000Z'});
+  if(scenario==='member')await f.edit('memberships',f.member,{isActive:false});
+  if(scenario==='plan')await f.edit('accessPlans',f.plan,{isActive:false});
+  assert.equal((await f.preview()).allowed,false,scenario);
+ }
+});
+test('shared references, duplicate links, foreign organizations and duplicate memberships fail without writes',async()=>{
+ const f=await accessFixture(),{id,revision,...company}=f.company,{id:mid,revision:rev,...member}=f.member;
+ for(const [kind,data,pattern] of [
+  ['companies',{...company,name:'Other'},/reference_in_use/],
+  ['companies',{...company,orderflyBrandIds:['missing'],opsflyOrganizationId:null},/reference_missing/],
+  ['memberships',member,/reference_in_use/],
+  ['memberships',{...member,principalId:'missing'},/reference_missing/],
+  ['memberships',{...member,product:'opsfly',principalId:f.actorId,principalOrganizationId:crypto.randomUUID()},/organization_mismatch/],
+  ['memberships',{...member,roleIds:['missing']},/role_missing/],
+ ]){const writes=f.writes();await assert.rejects(f.save(kind,data),pattern);assert.equal(f.writes(),writes);}
+});
+test('referenced shared records cannot be deleted; clearing dependencies enables deletion',async()=>{
+ const f=await accessFixture();const remove=(kind,row)=>f.call({action:'delete',kind,id:row.id,revision:row.revision,requestId:crypto.randomUUID()});
+ for(const [kind,row] of [['companies',f.company],['accessPlans',f.plan],['accessRoles',f.role]])await assert.rejects(remove(kind,row),/record_in_use/);
+ await remove('memberships',f.member);await remove('companies',f.company);await remove('accessPlans',f.plan);await remove('accessRoles',f.role);
+ assert.equal((await f.call({action:'list'})).companies.length,0);
+});
+test('shared edits use optimistic revisions and replay-safe audit; invalid permissions never persist',async()=>{
+ const f=await accessFixture(),writes=f.writes();
+ await assert.rejects(f.save('accessRoles',{name:'Invalid',isActive:true,permissions:['opsfly.production:*']}));
+ assert.equal(f.writes(),writes);
+ await f.edit('companies',f.company,{name:'Renamed'});await assert.rejects(f.edit('companies',f.company,{name:'Stale'}),/record_changed/);
+ const cmd={action:'save',kind:'accessPlans',requestId:crypto.randomUUID(),data:{name:'Retry plan',isActive:false,modules:[]}};
+ const first=await f.call(cmd),count=f.writes();assert.deepEqual(await f.call(cmd),first);assert.equal(f.writes(),count);
+});
+test('organization links cannot move under Opsfly memberships; stale embedded identity cannot redirect grants',async()=>{
+ const f=await accessFixture();await f.save('memberships',{name:'Ops user',companyId:f.company.id,product:'opsfly',principalId:f.actorId,principalOrganizationId:f.organizationId,roleIds:[f.role.id],isActive:true});
+ await assert.rejects(f.edit('companies',f.company,{opsflyOrganizationId:crypto.randomUUID()}),/record_in_use/);
+ f.records.get('platformCompanies/'+f.company.id).id='foreign';
+ assert.equal((await f.preview({companyId:'foreign'})).allowed,false);assert.equal((await f.preview()).allowed,true);
+});
+
+test('preview denies native brands or users deleted outside the platform catalogue',async()=>{
+ let f=await accessFixture();f.records.delete('brands/brand');assert.equal((await f.preview()).reason,'product_unlinked');
+ f=await accessFixture();f.records.delete('users/user');assert.equal((await f.preview()).reason,'membership_inactive');
+});
+test('same native ID in Opsfly never blocks deletion of an unrelated Orderfly user',async()=>{
+ const f=await accessFixture();f.records.set('users/'+f.actorId,{name:'Unrelated',email:'other@example.test',roleIds:[]});
+ await f.save('memberships',{name:'Opsfly identity',companyId:f.company.id,product:'opsfly',principalId:f.actorId,principalOrganizationId:f.organizationId,roleIds:[f.role.id],isActive:true});
+ const user=(await f.call({action:'list'})).users.find(u=>u.id===f.actorId);
+ await f.call({action:'delete',kind:'users',id:user.id,revision:user.revision,requestId:crypto.randomUUID()});
+ assert.equal(f.records.has('users/'+f.actorId),false);
+ const linked=(await f.call({action:'list'})).users.find(u=>u.id==='user');
+ await assert.rejects(f.call({action:'delete',kind:'users',id:linked.id,revision:linked.revision,requestId:crypto.randomUUID()}),/record_in_use/);
+});
+
+test('all seven catalogues reject record 501 without locking out edits, deletes or successful retries',async()=>{
+ const definitions={
+  users:['users',{name:'Capacity user',email:'capacity@example.test',roleIds:[]}],
+  roles:['roles',{name:'Capacity role',description:'',permissions:[]}],
+  plans:['subscription_plans',{name:'Capacity plan',priceMonthly:0,priceYearly:0,serviceFee:0,isActive:false,isMostPopular:false}],
+  companies:['platformCompanies',{name:'Capacity company',orderflyBrandIds:[],opsflyOrganizationId:null,planId:null,status:'suspended',expiresAt:null}],
+  accessPlans:['platformAccessPlans',{name:'Capacity plan',modules:[],isActive:false}],
+  accessRoles:['platformAccessRoles',{name:'Capacity role',permissions:[],isActive:false}],
+ };
+ for(const kind of [...Object.keys(definitions),'memberships']){
+  const f=await accessFixture();
+  const [collection,data]=kind==='memberships'?['platformMemberships',{name:'Capacity member',companyId:f.company.id,product:'orderfly',principalId:'user',principalOrganizationId:null,roleIds:[],isActive:false}]:definitions[kind];
+  for(const key of [...f.records.keys()])if(key.startsWith(collection+'/'))f.records.delete(key);
+  for(let i=0;i<499;i++)f.records.set(collection+'/capacity'+i,{...data,...(kind==='memberships'?{principalId:'synthetic'+i}:{})});
+  const command={action:'save',kind,requestId:crypto.randomUUID(),data};
+  const saved=await f.call(command),writes=f.writes();
+  assert.deepEqual(await f.call(command),saved,kind+' successful retry at capacity');
+  await assert.rejects(f.call({...command,requestId:crypto.randomUUID()}),/catalog_too_large/,kind);
+  assert.equal(f.writes(),writes,kind+' rejected create must not audit or mutate');
+  let rows=(await f.call({action:'list'}))[kind];assert.equal(rows.length,500);
+  await f.edit(kind,rows.find(r=>r.id===saved.id),{name:'Edited at capacity'});
+  rows=(await f.call({action:'list'}))[kind];const updated=rows.find(r=>r.id===saved.id);
+  await f.call({action:'delete',kind,id:updated.id,revision:updated.revision,requestId:crypto.randomUUID()});
+  assert.equal((await f.call({action:'list'}))[kind].length,499,kind+' delete remains available');
+ }
+});
