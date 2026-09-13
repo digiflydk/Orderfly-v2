@@ -1,4 +1,9 @@
 env:
+  # #137: operator-created secret; never put its value in source or browser config.
+  - variable: MPANEL_PLATFORM_ADMIN_SECRET
+    secret: MPANEL_PLATFORM_ADMIN_SECRET@1
+    availability:
+      - RUNTIME
   # Activate only after the paid-order release prerequisites in docs are verified.
   - variable: ORDERFLY_OMNISEND_PAID_ORDERS_ENABLED
     value: "false"

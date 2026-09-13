@@ -12,6 +12,11 @@ This does not create authentication accounts, replace the current Orderfly login
 
 ## Server configuration and authorization
 
+The staged secret binding and rules preparation are documented in
+[`mpanel-activation-137.md`](mpanel-activation-137.md). That follow-up requires
+current published-rule comparison, emulator tests and live verification before
+activation; secret creation alone is not a completed release.
+
 Both runtimes must have the same dedicated `MPANEL_PLATFORM_ADMIN_SECRET` (at least 32 random characters), verified `MPANEL_PLATFORM_ADMIN_EMPLOYEE_ID` and `MPANEL_PLATFORM_ADMIN_ORGANIZATION_ID`. Never expose these as public/browser variables or reuse notification secrets. The mPanel function authenticates the exact active configured owner session; Orderfly authenticates the machine secret using a timing-safe comparison and independently verifies the actor and organization envelope. This is intentionally global platform-owner access to all catalogue records, not per-brand customer access. Unknown admin identities must not receive this scope.
 
 ## Data and rollout
