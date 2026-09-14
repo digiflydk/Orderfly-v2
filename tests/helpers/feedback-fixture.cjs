@@ -1,6 +1,6 @@
 const {loadTs}=require('./load-ts.cjs');
 const {Timestamp}=require('firebase-admin/firestore');
-process.env.ORDERFLY_FEEDBACK_ACCESS=JSON.stringify([{uid:'qa-platform',role:'platform_admin'},{uid:'qa-editor',role:'brand_editor',brandIds:['b']},{uid:'qa-viewer',role:'brand_viewer',brandIds:['b']}]);
+const legacyFixtureAccess=JSON.stringify([{uid:'qa-platform',role:'platform_admin'},{uid:'qa-editor',role:'brand_editor',brandIds:['b']},{uid:'qa-viewer',role:'brand_viewer',brandIds:['b']}]);
 const stamp=()=>Timestamp.fromDate(new Date('2026-09-09T10:00:00Z'));
 const questions=[{questionId:'rating',label:'Hvordan var besøget?',type:'stars',isRequired:true},{questionId:'nps',label:'Vil du anbefale os?',type:'nps',isRequired:false},{questionId:'text',label:'Kommentar',type:'text',isRequired:false}];
 function fixture(){
@@ -8,6 +8,19 @@ function fixture(){
  records.set('brands/b',{name:'Esmeralda QA',slug:'esmeralda',status:'active'});records.set('brands/other',{name:'Other Brand',slug:'other',status:'active'});
  records.set('locations/l',{brandId:'b',name:'Amager',slug:'amager',isActive:true});records.set('locations/l2',{brandId:'b',name:'Hellerup',slug:'hellerup',isActive:true});records.set('locations/foreign',{brandId:'other',name:'Foreign',slug:'foreign',isActive:true});
  records.set('customers/c',{brandId:'b',fullName:'QA Guest',email:'private@example.test',phone:'12345678'});
+ const key=uid=>require('node:crypto').createHash('sha256').update(JSON.stringify(['firebase',uid])).digest('hex');
+ process.env.MPANEL_PLATFORM_ADMIN_EMPLOYEE_ID='11111111-1111-4111-8111-111111111111';
+ process.env.MPANEL_PLATFORM_ADMIN_ORGANIZATION_ID='22222222-2222-4222-8222-222222222222';
+ records.set('platformAdminControl/access-v1',{
+  principals:['qa-platform','qa-editor','qa-viewer'].map(uid=>({id:key(uid),active:true})),
+  companies:[{id:'b',active:true,locationIds:['l','l2'],orderflyBrandIds:['b'],opsflyOrganizationId:null}],
+  roles:[{id:'platform',name:'Superuser',companyId:null,kind:'superuser',permissions:[],active:true},
+   {id:'editor',name:'Editor',companyId:'b',kind:'company_user',permissions:['orderfly.feedback:view','orderfly.feedback:edit'],active:true},
+   {id:'viewer',name:'Viewer',companyId:'b',kind:'company_user',permissions:['orderfly.feedback:view'],active:true}],
+  memberships:[{id:'platform',principalId:key('qa-platform'),companyId:null,locationIds:null,roleIds:['platform'],active:true},
+   {id:'editor',principalId:key('qa-editor'),companyId:'b',locationIds:null,roleIds:['editor'],active:true},
+   {id:'viewer',principalId:key('qa-viewer'),companyId:'b',locationIds:null,roleIds:['viewer'],active:true}]
+ });
  const auth={uid:'qa-platform',cookie:true};const reads=[];
  const failure={write:false,auth:false,read:false};let sequence=0,queue=Promise.resolve();const writes=[];
  const snap=key=>({id:key.split('/')[1],ref:query(key.split('/')[0]).doc(key.split('/')[1]),exists:records.has(key),data:()=>records.has(key)?{...records.get(key)}:undefined,get:field=>records.get(key)?.[field]});
@@ -30,7 +43,7 @@ function fixture(){
     if(kind==='create'&&records.has(key)||kind==='update'&&!records.has(key))throw Error('Invalid document existence');
     records.set(key,{...(kind==='create'?{}:records.get(key)),...data});writes.push(key);
    }
-   return{id,key,get:async()=>{reads.push({key});return snap(key);},create:async data=>write(data,'create'),update:async data=>write(data,'update'),set:async data=>write(data,'set'),delete:async()=>{if(failure.write)throw Error('Synthetic write failure');records.delete(key);writes.push(key);}};
+   return{id,key,get:async()=>{if(name!=='platformAdminControl')reads.push({key});return snap(key);},create:async data=>write(data,'create'),update:async data=>write(data,'update'),set:async data=>write(data,'set'),delete:async()=>{if(failure.write)throw Error('Synthetic write failure');records.delete(key);writes.push(key);}};
   }
  };}
  const db={collection:query,runTransaction:fn=>{

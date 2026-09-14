@@ -3,8 +3,10 @@
 'use server';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, getDoc, writeBatch } from 'firebase/firestore';
+import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { getLocationCatalogDocument, listLocationCatalog, mutateLocationCatalog, reorderLocationCatalog } from '@/lib/access/location-catalog';
+
 import type { Category, Location } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
@@ -29,8 +31,9 @@ export async function createOrUpdateCategory(
   prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
+  await verifiedOrderflyIdentity();
   const rawData: Record<string, any> = Object.fromEntries(formData.entries());
-  
+
   const locationIds = formData.getAll('locationIds');
   rawData.locationIds = Array.isArray(locationIds) ? locationIds : [locationIds].filter(Boolean);
 
@@ -40,9 +43,9 @@ export async function createOrUpdateCategory(
   // The form should provide a brandId to satisfy the schema.
   if (!rawData.brandId) {
     const firstLocationId = rawData.locationIds[0];
-    if (firstLocationId) {
-        const locSnap = await getDoc(doc(db, 'locations', firstLocationId));
-        if (locSnap.exists()) {
+    if (typeof firstLocationId==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(firstLocationId)) {
+        const locSnap = await getAdminDb().collection('locations').doc(firstLocationId).get();
+        if (locSnap.exists) {
             rawData.brandId = (locSnap.data() as Location).brandId;
         }
     }
@@ -64,9 +67,8 @@ export async function createOrUpdateCategory(
   const { id, brandId, ...categoryData } = validatedFields.data;
 
   try {
-    const categoryRef = id ? doc(db, 'categories', id) : doc(collection(db, 'categories'));
-    // The 'brandId' is implicitly defined by the locations and is not saved on the category document itself.
-    await setDoc(categoryRef, { ...categoryData, id: categoryRef.id }, { merge: true });
+    const categoryId=id||getAdminDb().collection('categories').doc().id;
+    await mutateLocationCatalog('categories',categoryId,id?'orderfly.catalog:edit':'orderfly.catalog:create',before=>({...before,...categoryData,id:categoryId}));
 
   } catch (e) {
     console.error(e);
@@ -81,7 +83,7 @@ export async function createOrUpdateCategory(
 
 export async function deleteCategory(categoryId: string) {
     try {
-        await deleteDoc(doc(db, "categories", categoryId));
+        await mutateLocationCatalog('categories',categoryId,'orderfly.catalog:delete',()=>null);
         revalidatePath("/superadmin/categories");
     revalidateTag('storefront');
         return { message: "Category deleted successfully.", error: false };
@@ -94,12 +96,7 @@ export async function deleteCategory(categoryId: string) {
 
 export async function updateCategorySortOrder(orderedCategories: {id: string, sortOrder: number}[]) {
     try {
-        const batch = writeBatch(db);
-        orderedCategories.forEach(category => {
-            const docRef = doc(db, 'categories', category.id);
-            batch.update(docRef, { sortOrder: category.sortOrder });
-        });
-        await batch.commit();
+        await reorderLocationCatalog('categories',orderedCategories);
         revalidatePath('/superadmin/categories');
     revalidateTag('storefront');
         return { message: 'Category order updated.', error: false };
@@ -110,32 +107,17 @@ export async function updateCategorySortOrder(orderedCategories: {id: string, so
 }
 
 export async function getCategoriesForLocation(locationId: string): Promise<Category[]> {
-    const q = query(
-        collection(db, 'categories'),
-        where('locationIds', 'array-contains', locationId),
-        where('isActive', '==', true)
-    );
-    const querySnapshot = await getDocs(q);
-    const categories = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Category[];
-    
-    return categories.sort((a, b) => (a.sortOrder || 999) - (b.sortOrder || 999));
+    if(!/^[A-Za-z0-9_-]{1,128}$/.test(locationId))return [];
+    const db=getAdminDb(),location=await db.collection('locations').doc(locationId).get();
+    if(!location.exists||location.data()?.isActive!==true)return [];
+    const querySnapshot=await db.collection('categories').where('locationIds','array-contains',locationId).where('isActive','==',true).get();
+    return querySnapshot.docs.map(doc=>{
+      const data=doc.data();return {id:doc.id,brandId:location.data()!.brandId,categoryName:data.categoryName,description:data.description||'',icon:data.icon||'',sortOrder:data.sortOrder??999,isActive:true,locationIds:[locationId]} as Category;
+    }).sort((a,b)=>(a.sortOrder??999)-(b.sortOrder??999));
 }
-
 export async function getCategories(brandId?: string): Promise<Category[]> {
-    let q;
-    // Note: Fetching all categories and filtering on the client now,
-    // as a category can span multiple brands via its locations.
-    q = query(collection(db, 'categories'), orderBy('categoryName', 'asc'));
-    const querySnapshot = await getDocs(q);
-    return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Category[];
+    return (await listLocationCatalog('categories',brandId) as Category[]).sort((a,b)=>a.categoryName.localeCompare(b.categoryName));
 }
-
 export async function getCategoryById(id: string): Promise<Category | null> {
-    const docRef = doc(db, 'categories', id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const data = docSnap.data();
-        return { id: docSnap.id, ...data } as Category;
-    }
-    return null;
+    return await getLocationCatalogDocument('categories',id) as Category|null;
 }

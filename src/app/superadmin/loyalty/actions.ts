@@ -2,8 +2,9 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
+
 import type { LoyaltySettings } from '@/types';
 
 import { scoreSettingsSchema as loyaltySettingsSchema } from '@/lib/loyalty/model';
@@ -18,10 +19,9 @@ export async function getLoyaltySettings(): Promise<LoyaltySettings> {
 }
 
 export async function getLoyaltySettingsState(): Promise<{settings:LoyaltySettings;warning:string|null}> {
-  const docRef = doc(db, 'platform_settings', 'loyalty');
-  const docSnap = await getDoc(docRef);
+  const docSnap = await getAdminDb().collection('platform_settings').doc('loyalty').get();
 
-  if (docSnap.exists()) {
+  if (docSnap.exists) {
     const parsed=loyaltySettingsSchema.safeParse(docSnap.data());
     if(parsed.success)return {settings:parsed.data,warning:null};
   }
@@ -66,7 +66,7 @@ export async function getLoyaltySettingsState(): Promise<{settings:LoyaltySettin
         atRisk: { min: 0, max: 49 },
       },
     };
-    return {settings,warning:docSnap.exists()?'De gemte scoreindstillinger er ugyldige. Standardværdier vises, indtil du har rettet og gemt indstillingerne.':null};
+    return {settings,warning:docSnap.exists?'De gemte scoreindstillinger er ugyldige. Standardværdier vises, indtil du har rettet og gemt indstillingerne.':null};
   }
 }
 
@@ -74,7 +74,8 @@ export async function updateLoyaltySettings(
   prevState: FormState,
   formData: FormData
 ): Promise<FormState> {
-  
+  await requirePlatformSuperuser();
+
   const rawData = {
     weights: {
         totalOrders: formData.get('weights.totalOrders'),
@@ -116,7 +117,7 @@ export async function updateLoyaltySettings(
   };
 
   const validatedFields = loyaltySettingsSchema.safeParse(rawData);
-  
+
   if (!validatedFields.success) {
     const errorMessages = Object.entries(validatedFields.error.flatten().fieldErrors)
         .map(([field, errors]) => `${field}: ${errors.join(', ')}`)
@@ -128,7 +129,7 @@ export async function updateLoyaltySettings(
   }
 
   try {
-    await setDoc(doc(db, 'platform_settings', 'loyalty'), validatedFields.data);
+    await getAdminDb().collection('platform_settings').doc('loyalty').set(validatedFields.data);
     revalidatePath('/superadmin/loyalty');
     return { message: 'Loyalty settings updated successfully.', error: false };
   } catch (e) {
