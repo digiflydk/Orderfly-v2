@@ -116,3 +116,8 @@ Use the approved main commits for both repositories. Confirm the existing App Ho
 ### Independent review corrections (2026-09-14)
 
 Review of `6f7f375569ba0fbe8159a272073bd4465feded04` found two blocking residual surfaces: the actual storefront data loaders still serialized full native documents, and the catalog repair preview lacked current authorization. All three loaders in `lib/data/brand-location.ts` now use public projections, with new cache namespaces to prevent cached private records surviving deployment. Both catalog repair methods require the same current platform-superuser API guard as the other diagnostics; POST retains its additional operator token. Executable tests cover actual loaders, serialized combined props, and rejection before database access. No release or activation is claimed by this correction.
+
+
+### Projection consumer audit after second review
+
+The second independent review of `6fab0378c0b3b0623c00235255d15e5f23d384ee` confirmed the privacy and diagnostic fixes, but found a tracking regression: the public brand projection omitted Google Ads conversion ID/purchase label and Meta pixel ID. The complete mounted storefront/checkout/confirmation/review consumer audit found no other required stored-field omissions; location support flags and brandSlug are derived by their existing callers. Only these three public destination identifiers are added. Owner identity remains redacted and subscription bindings, private contact and arbitrary integration fields remain excluded. The existing browser regression now passes the actual public loader result into the real tracking runtime and retains purchase destination, tenant-isolation, attribution privacy and teardown assertions.

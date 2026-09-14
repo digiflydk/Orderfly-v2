@@ -5,6 +5,12 @@ const {chromium}=require('@playwright/test');
 const {loadTs}=require('../helpers/load-ts.cjs');
 
 test('brand tracking sends explicit destinations and destroys the previous runtime',async()=>{
+ const nativeBrand={id:'a',name:'Pizza',ga4MeasurementId:'G-A',googleAdsConversionId:'AW-A',googleAdsPurchaseLabel:'purchase',metaPixelId:'111',ownerId:'private-owner',subscriptionPlanId:'private-plan',integrationSecret:'private-secret'};
+ const db={collection:()=>{const q={where:()=>q,limit:()=>q,get:async()=>({empty:false,docs:[{id:'a',data:()=>nativeBrand}]})};return q;}};
+ const api=loadTs('src/lib/data/brand-location.ts',{'@/lib/firebase-admin':{getAdminDb:()=>db},react:{cache:fn=>fn},'next/cache':{unstable_cache:fn=>fn},'@/lib/storefront-media':{storefrontMedia:value=>value}});
+ const publicBrand=await api.getBrandBySlug('pizza');
+ assert.ok(!JSON.stringify(publicBrand).includes('private-'));
+
  const attributionCode=ts.transpileModule(fs.readFileSync('src/lib/analytics-attribution.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const code=ts.transpileModule(fs.readFileSync('src/lib/brand-tracking-frame.ts','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
  const server=http.createServer((req,res)=>{if(req.url==='/tracking/frame'){res.setHeader('content-type','text/html');return res.end(loadTs('src/lib/brand-tracking-frame.ts').BRAND_TRACKING_DOCUMENT);}if(req.url==='/bundle.js'){res.setHeader('content-type','application/javascript');return res.end('const attributionExports={};(function(exports){'+attributionCode+'})(attributionExports);const require=()=>attributionExports;const exports={};'+code+';window.mount=exports.mountBrandTracking;');}res.setHeader('content-type','text/html');res.end('<!doctype html><html><body><script src="/bundle.js"></script></body></html>')});
@@ -14,7 +20,8 @@ test('brand tracking sends explicit destinations and destroys the previous runti
   const page=await browser.newPage();
   await page.route(/https:\/\/(www.googletagmanager.com|connect.facebook.net)\//,r=>r.fulfill({body:'',contentType:'application/javascript'}));
   await page.goto('http://127.0.0.1:'+server.address().port+'/?utm_source=google&utm_campaign=pizza&gclid=allowed123&receipt_token=private&session_id=private');
-  await page.evaluate(()=>{window.stop=window.mount({id:'a',ga4MeasurementId:'G-A',googleAdsConversionId:'AW-A',googleAdsPurchaseLabel:'purchase',metaPixelId:'111'},{statistics:true,marketing:true});window.orderflyBrandTracker.emit({event:'purchase',brandId:'a',ecommerce:{transaction_id:'test-1',value:100,currency:'DKK',items:[]}})});
+  await page.evaluate(brand=>{window.stop=window.mount(brand,{statistics:true,marketing:true});window.orderflyBrandTracker.emit({event:'purchase',brandId:'a',ecommerce:{transaction_id:'test-1',value:100,currency:'DKK',items:[]}})},publicBrand);
+  assert.equal(await page.evaluate(()=>window.orderflyBrandTracker.marketing),true);
   let frame=page.frames().find(f=>f!==page.mainFrame());
   await frame.waitForFunction(()=>window.dataLayer.some(x=>x[0]==='event'&&x[1]==='purchase'));
   const first=await frame.evaluate(()=>({google:window.dataLayer.map(x=>Array.from(x)),meta:window.fbq.queue.map(x=>Array.from(x))}));
