@@ -1,10 +1,13 @@
 
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 export const dynamic="force-dynamic"; export const runtime="nodejs"; export const fetchCache="default-no-store";
 
 /* ---------- POST (commit) ---------- */
 export async function POST(req:Request){
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   const token=process.env.DEBUG_TOKEN, hdr=(req.headers.get("x-debug-token")||"").trim();
   if(!token || hdr!==token) return NextResponse.json({ok:false,error:"Unauthorized"},{status:401});
   const body = await req.json().catch(()=>({}));
@@ -52,6 +55,8 @@ export async function POST(req:Request){
 
 /* ---------- GET (dry-run/preview) ---------- */
 export async function GET(req:Request){
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   const url=new URL(req.url); const brandSlug=url.searchParams.get("brandSlug")?.trim();
   if(!brandSlug) return NextResponse.json({ok:false,error:"Missing brandSlug",usage:{dryRun:"/api/ops/catalog/ensure-menu?brandSlug=<slug>",post:{url:"/api/ops/catalog/ensure-menu",headers:{"x-debug-token":"$DEBUG_TOKEN","Content-Type":"application/json"},body:{brandSlug:"<slug>",dryRun:false}}}},{status:400});
   try{

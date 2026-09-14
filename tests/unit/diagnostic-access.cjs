@@ -2,6 +2,7 @@ const {test}=require('node:test'),assert=require('node:assert/strict');
 const fs=require('node:fs'),ts=require('typescript');
 const root='src/app/api/';
 const files=['debug','diag','developer','env'].flatMap(folder=>fs.readdirSync(root+folder,{recursive:true}).filter(p=>p.endsWith('route.ts')).map(p=>root+folder+'/'+p));
+files.push(root+'ops/catalog/ensure-menu/route.ts');
 for(const file of files)test(`diagnostic denies before data access: ${file}`,async()=>{
  const source=fs.readFileSync(file,'utf8');
  if(!source.includes('requireSuperadminApi'))return; // Synchronous disabled endpoints have no business operations.

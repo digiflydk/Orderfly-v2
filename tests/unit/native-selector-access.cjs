@@ -46,3 +46,15 @@ test('private brand editor lookup requires current platform authority before dat
  const api=loadTs('src/app/superadmin/brands/actions.ts',{'server-only':{},'@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>{throw forbidden();}},'@/lib/firebase-admin':{getAdminDb:()=>{throw Error('must not read data');}}});
  await assert.rejects(api.getBrandForAdministration('b'),e=>e.status===403);
 });
+
+test('actual storefront loaders serialize only public brand and location fields',async()=>{
+ const records={brands:{id:'brand',data:()=>({id:'forged',slug:'pizza',name:'Pizza',ownerId:'private-owner',subscriptionPlanId:'private-plan',integrationSecret:'private-secret'})},locations:{id:'location',data:()=>({id:'forged',brandId:'brand',slug:'shop',name:'Shop',email:'private-email',integrationSecret:'private-secret'})}};
+ const db={collection:name=>{const q={where:()=>q,limit:()=>q,get:async()=>({empty:false,docs:[records[name]]})};return q;}};
+ const api=loadTs('src/lib/data/brand-location.ts',{'@/lib/firebase-admin':{getAdminDb:()=>db},react:{cache:fn=>fn},'next/cache':{unstable_cache:fn=>fn},'@/lib/storefront-media':{storefrontMedia:value=>value}});
+ const brand=await api.getBrandBySlug('pizza');
+ assert.equal(brand.id,'brand');assert.equal(brand.name,'Pizza');assert.equal(brand.ownerId,'');assert.equal(brand.subscriptionPlanId,undefined);assert.equal(brand.integrationSecret,undefined);
+ for(const location of [await api.getLocationBySlug('brand','shop'),...(await api.getLocationsForBrand('brand'))]){
+  assert.equal(location.id,'location');assert.equal(location.brandId,'brand');assert.equal(location.name,'Shop');assert.equal(location.email,undefined);assert.equal(location.integrationSecret,undefined);
+ }
+ const combined=await api.getBrandAndLocation('pizza','shop');assert.equal(combined.ok,true);assert.equal(combined.brandMatchesLocation,true);assert.ok(!JSON.stringify(combined).includes('private-'));
+});
