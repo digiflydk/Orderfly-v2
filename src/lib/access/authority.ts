@@ -20,6 +20,7 @@ export const authorityCommandSchema=z.discriminatedUnion('action',[
   z.object({action:z.literal('initialize'),requestId:z.string().uuid()}).strict(),
   z.object({action:z.literal('list')}).strict(),
   z.object({action:z.literal('session')}).strict(),
+  z.object({action:z.literal('nativePermissions'),product:z.enum(['opsfly','orderfly']),tenantId:key,locationIds:z.array(key).max(500).nullable()}).strict(),
   z.object({action:z.literal('nativeGrants'),product:z.enum(['opsfly','orderfly']),permission:z.string().max(160)}).strict(),
   z.object({action:z.literal('check'),companyId:key.nullable(),locationIds:z.array(key).max(500).nullable(),permission:z.string().max(160)}).strict(),
   z.object({action:z.literal('checkNative'),product:z.enum(['opsfly','orderfly']),tenantId:key,locationIds:z.array(key).max(500).nullable(),permission:z.string().max(160)}).strict(),
@@ -74,6 +75,11 @@ export async function executeAuthority(db:any,identity:VerifiedIdentity,input:un
       const memberships=policy.memberships.filter(m=>m.principalId===actor&&m.active&&(m.companyId===null||policy.companies.some(c=>c.id===m.companyId&&c.active)));
       const roles=policy.roles.filter(r=>r.active&&memberships.some(m=>m.roleIds.includes(r.id)));
       return {actorId:actor,superuser,name:policy.principals.find(p=>p.id===actor)?.name||'Bruger',permissions:superuser?PERMISSIONS:[...new Set(roles.flatMap(r=>r.permissions))]};
+    }
+    if(command.action==='nativePermissions') {
+      const company=policy.companies.find(c=>command.product==='opsfly'?c.opsflyOrganizationId===command.tenantId:c.orderflyBrandIds.includes(command.tenantId));
+      const permissions=company?PERMISSIONS.filter(permission=>(permission.startsWith(command.product+'.')||permission.startsWith('platform.'))&&authorize(policy,{principalId:actor,companyId:company.id,locationIds:command.locationIds,permission}).allowed):[];
+      return {permissions};
     }
     if(command.action==='nativeGrants') {
       if(!(command.permission.startsWith(command.product+'.')||command.permission.startsWith('platform.'))||!PERMISSIONS.includes(command.permission))return reject('permission_missing');

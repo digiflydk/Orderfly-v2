@@ -181,3 +181,14 @@ test('native platform feature permissions stay within the company and observe re
  await f.change('roles',{id:'notifier',name:'Notification reader',companyId:'a',kind:'company_user',active:false,permissions:['platform.notifications:view']});
  assert.equal((await f.call(worker,command)).allowed,false);
 });
+
+test('native permission discovery is scoped and immediately reflects revoked membership',async()=>{
+ const f=await companyFixture();
+ await f.change('companies',{id:'a',active:true,locationIds:['a1','a2'],opsflyOrganizationId:owner.organizationId});
+ await f.change('memberships',{id:'worker',principalId:principalKey(worker),companyId:'a',locationIds:['a1'],roleIds:['reader'],active:true});
+ const command={action:'nativePermissions',product:'opsfly',tenantId:owner.organizationId,locationIds:['a1']};
+ assert.deepEqual((await f.call(worker,command)).permissions,['opsfly.schedule:view']);
+ for(const extra of [{locationIds:null},{locationIds:['a2']},{tenantId:'unlinked'}])assert.deepEqual((await f.call(worker,{...command,...extra})).permissions,[]);
+ await f.change('memberships',{id:'worker',principalId:principalKey(worker),companyId:'a',locationIds:['a1'],roleIds:['reader'],active:false});
+ assert.deepEqual((await f.call(worker,command)).permissions,[]);
+});
