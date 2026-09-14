@@ -7,7 +7,6 @@ import { FeedbackDetailClient } from './client-page';
 import { getDoc, doc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import type { Customer, OrderDetail } from '@/types';
-import { getOrderDetails } from '@/app/superadmin/sales/orders/[orderId]/page';
 
 async function getCustomerName(customerId: string): Promise<string> {
     const customerRef = doc(db, 'customers', customerId);

@@ -1,7 +1,7 @@
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveSearchParams } from "@/lib/next/resolve-props";
 import { notFound, redirect } from 'next/navigation';
-import { getOrderDetails } from '@/app/superadmin/sales/orders/[orderId]/page';
+import { getOrderById } from '@/app/checkout/order-actions';
 import { getActiveFeedbackQuestionsForBrand } from './actions';
 import { FeedbackFormClient } from './form-client';
 import { resolveBookingFeedbackInvitationToken } from '@/lib/integrations/esmeralda-feedback-integration';
@@ -61,10 +61,12 @@ export default async function Page({ searchParams }: AsyncPageProps) {
   const customerId = invitation?.customerId || (typeof query.customerId === 'string' ? query.customerId : undefined);
   if (!orderId || !customerId) notFound();
 
-  const order = await getOrderDetails(orderId);
+  const order = await getOrderById(orderId);
   if (!order || order.customerDetails.id !== customerId || !completedFeedbackOrder(order)) notFound();
   if (invitation && (invitation.brandId !== order.brandId || invitation.locationId !== order.locationId)) notFound();
 
+  const brandSnapshot = await getAdminDb().collection('brands').doc(order.brandId).get();
+  const brandLogoUrl = brandSnapshot.data()?.logoUrl;
   const questionsVersion = await getActiveFeedbackQuestionsForBrand(
     order.brandId, order.deliveryType.toLowerCase() as 'pickup' | 'delivery', language,
   );
@@ -79,7 +81,7 @@ export default async function Page({ searchParams }: AsyncPageProps) {
     locationId: order.locationId,
     brandId: order.brandId,
     brandName: order.brandName,
-    brandLogoUrl: order.brandLogoUrl,
+    brandLogoUrl: typeof brandLogoUrl === 'string' ? brandLogoUrl : null,
     displayReference: order.id,
     ...(orderToken ? { invitationToken: orderToken } : {}),
     experienceType: order.deliveryType.toLowerCase() as 'pickup' | 'delivery',

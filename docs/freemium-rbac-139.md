@@ -68,3 +68,5 @@ Categories and legacy topping/group actions use native-location catalogue guards
 The permission catalogue includes separate own-time/schedule/training/checklist features and explicit deletion rights for time/production/inventory/procurement. Paired Opsfly labels these in mPanel. These additions do not assign any production user rights. TypeScript checks pass at this checkpoint.
 
 The paired module is still incomplete. Remaining blockers include the other Orderfly catalogue/analytics/billing/legacy-client paths, complete delegated navigation, native account provisioning/linking, native Opsfly SQL and profile/document integration, full preflight and independent review. No bootstrap, production change, merge or deployment is claimed.
+
+The private order-detail loader lives in a server-only library rather than a Next.js page export. The public feedback form reads its order internally after resolving the invitation, preserves customer/completion/brand/location validation, and exposes only the existing finite feedback context. It does not call the administrative order permission gate.
