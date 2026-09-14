@@ -55,13 +55,17 @@ export const membershipSchema = scope.extend({
 });
 export const policySchema = z.object({
   principals: z.array(z.object({ id: key, active: z.boolean() }).strict()).max(500),
-  companies: z.array(z.object({ id: key, active: z.boolean(), locationIds: keys }).strict()).max(500),
+  companies: z.array(z.object({ id: key, active: z.boolean(), locationIds: keys, orderflyBrandIds: keys.default([]), opsflyOrganizationId: z.string().uuid().nullable().default(null) }).strict()).max(500),
   roles: z.array(roleSchema).max(500),
   memberships: z.array(membershipSchema).max(500),
 }).strict().superRefine((s, ctx) => {
   for (const rows of [s.principals, s.companies, s.roles, s.memberships])
     if (new Set(rows.map(r => r.id)).size !== rows.length)
       ctx.addIssue({ code: 'custom', message: 'Duplicate record ID' });
+  const brands=s.companies.flatMap(c=>c.orderflyBrandIds);
+  const organizations=s.companies.map(c=>c.opsflyOrganizationId).filter(Boolean);
+  if(new Set(brands).size!==brands.length||new Set(organizations).size!==organizations.length)
+    ctx.addIssue({code:'custom',message:'Native tenant belongs to more than one company'});
   for (const member of s.memberships) {
     if (!s.principals.some(p => p.id === member.principalId) ||
         (member.companyId !== null && !s.companies.some(c => c.id === member.companyId)))

@@ -71,3 +71,16 @@ stale mutation records. It runs in the existing CI regression step.
 `npm run typecheck` checks the complete application. Independent review and PO
 acceptance remain separate from implementation. This draft must not be merged
 or deployed as the completed access-control solution.
+
+
+## Authority and native identity adapter (2026-09-14 candidate)
+
+The candidate now includes `src/lib/access/authority.ts` and a machine-authenticated `/api/integrations/mpanel/access` endpoint. Policy lives in the existing browser-denied `platformAdminControl/access-v1` document; writes and audit events share a Firestore transaction. Initialization is explicit, allowed only for the runtime-configured verified Opsfly owner, and rejected once initialized. That bootstrap identity does not override stored grants afterward. Policy is bounded to 500 records per collection and 750 KB.
+
+`list`, `check`, `checkNative` and revision-checked `change` commands use current stored policy. Company administrators may delegate permitted roles/memberships within their current scope. Global principal/company changes require an active superuser; removing the last superuser through principal deactivation is rejected. Reads return only administrable memberships and company-wide administrable roles to company administrators. Company records bind native Orderfly brands and an Opsfly organization uniquely; subscriptions are not evaluated.
+
+Canonical principal IDs are hashes of provider plus immutable subject, including the organization for Opsfly employees. The API only accepts the authenticated Opsfly bridge envelope. `orderfly-session.ts` separately verifies a Firebase session cookie with revocation checks and resolves current native brand/location access. Its guard is prepared but not yet called by existing business handlers.
+
+New tests cover bootstrap rejection/reset prevention, competing revisions, tenant-filtered catalogues, global principal deactivation, current-policy authorization on retries, native namespace isolation, native tenant mapping and rejected/revoked cookies. These are fixture tests, not a production rollout or a completed security cutover.
+
+Remaining blockers: mPanel needs the new authority editor and verified native account provisioning/binding. Existing business handlers and Server Actions still require migration to the new guard. Opsfly booking RPCs currently receive actor IDs and several retain native legacy authorization, so changing just the HTTP guard is insufficient; their authorization and exact tenant/location boundaries must be reviewed with the handler changes. Existing always-allow Orderfly helpers remain a release blocker. No initialization request or production write was performed.
