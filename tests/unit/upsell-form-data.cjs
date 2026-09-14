@@ -17,6 +17,9 @@ test('controlled create values satisfy the real server parser and persist native
   let saved;
   const api=load('src/app/superadmin/upsells/actions.ts',{
     '@/lib/upsell-serialization':serialization,
+    '@/lib/access/orderfly-session':{verifiedOrderflyIdentity:async()=>({provider:'firebase',subject:'actor'})},
+    '@/lib/access/location-catalog':{},
+    '@/lib/access/scoped-data':{mutateScopedDocument:async(collection,id,permission,scope,update)=>{assert.equal(collection,'upsells');assert.equal(permission,'orderfly.catalog:create');assert.equal(scope,'locations');saved=await update(null);const check=v=>{assert.notEqual(v,undefined);if(v&&typeof v==='object')Object.values(v).forEach(check);};check(saved);}},
     '@/lib/promotion-rules':{},'next/cache':{revalidatePath:()=>{}},'next/navigation':{redirect:()=>{throw Error('REDIRECT');}},'../products/actions':{},
     '@/lib/firebase-admin':{admin:{firestore:{Timestamp:{now:()=>0,fromDate:d=>d.toISOString()}}},getAdminDb:()=>({collection:()=>({doc:()=>({id:'new-upsell',set:async data=>{const check=v=>{assert.notEqual(v,undefined,'Firestore rejects undefined');if(v && typeof v==='object')Object.values(v).forEach(check);};check(data);saved=data;}})})})},
   });
@@ -54,6 +57,8 @@ test('persistent feedback renders non-validation failures and disappears on succ
 test('existing upsell and nested related data expose Dates rather than Firestore prototypes',async()=>{
   class Timestamp {toDate(){return new Date('2026-09-07T10:00:00Z');}}
   const api=load('src/app/superadmin/upsells/actions.ts',{
+    '@/lib/access/orderfly-session':{},'@/lib/access/location-catalog':{},
+    '@/lib/access/scoped-data':{getScopedDocument:async()=>({id:'existing',data:()=>({brandId:'b',startDate:new Timestamp(),createdAt:new Timestamp(),nested:{updatedAt:new Timestamp()}})})},
     '@/lib/upsell-serialization':serialization,'@/lib/promotion-rules':{},'next/cache':{},'next/navigation':{},'../products/actions':{},
     '@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({doc:()=>({get:async()=>({id:'existing',exists:true,data:()=>({brandId:'b',startDate:new Timestamp(),createdAt:new Timestamp(),nested:{updatedAt:new Timestamp()}})})})})})},
   });
@@ -99,4 +104,20 @@ test('actual form prevents native reset, keeps Hellerup on failed submit and ret
   assert.equal(attempts.length,2);
   assert.deepEqual(attempts[1].getAll('locationIds'),['location-m3']);
   pending=true;render().props.onSubmit(event);assert.equal(attempts.length,2);
+});
+
+test('upsell administration rejects denied access without touching business data',async()=>{
+ const deny=async()=>{throw Error('forbidden');};
+ const api=load('src/app/superadmin/upsells/actions.ts',{
+  '@/lib/upsell-serialization':serialization,'@/lib/promotion-rules':{},'next/cache':{},'next/navigation':{},'../products/actions':{},
+  '@/lib/access/orderfly-session':{verifiedOrderflyIdentity:deny},'@/lib/access/location-catalog':{listLocationCatalog:deny},
+  '@/lib/access/scoped-data':{getScopedDocument:deny,listScopedDocuments:deny,mutateScopedDocument:deny},
+  '@/lib/firebase-admin':{getAdminDb:()=>({})},
+ });
+ assert.equal((await api.createOrUpdateUpsell(null,upsellFormData(values))).error,true);
+ assert.equal((await api.deleteUpsell('existing')).error,true);
+ await assert.rejects(api.getUpsellById('existing'),/forbidden/);
+ await assert.rejects(api.getUpsells(),/forbidden/);
+ await assert.rejects(api.getProductsForBrand('b'),/forbidden/);
+ await assert.rejects(api.getCategoriesForBrand('b'),/forbidden/);
 });
