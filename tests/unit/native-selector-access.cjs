@@ -30,3 +30,19 @@ test('administrative list actions reject before opening the database when no cur
   await assert.rejects(api[method](),e=>e.status===403);
  }
 });
+
+test('public native lookups expose finite storefront fields and keep canonical identity',async()=>{
+ const {fixture,brand,location}=require('../helpers/brand-location-fixture.cjs');
+ const f=fixture([['brands/b',{...brand,id:'forged',ownerId:'private-owner',subscriptionPlanId:'private-plan',stripeSecret:'private-key'}],['locations/l',{...location,id:'forged',brandId:'b',isActive:true,integrationToken:'private-token'}]]);
+ for(const value of [await f.brands.getBrandById('b'),await f.brands.getBrandBySlug(brand.slug)]){
+  assert.equal(value.id,'b');assert.equal(value.name,brand.name);assert.equal(value.ownerId,'');assert.equal(value.subscriptionPlanId,undefined);assert.equal(value.stripeSecret,undefined);
+ }
+ for(const value of [await f.locations.getLocationById('l'),await f.locations.getLocationBySlug('b',location.slug),await f.locations.getActiveLocationBySlug('b',location.slug)]){
+  assert.equal(value.id,'l');assert.equal(value.integrationToken,undefined);assert.deepEqual(value.openingHours,location.openingHours);
+ }
+ assert.equal((await f.brands.getBrandForAdministration('b')).ownerId,'private-owner');
+});
+test('private brand editor lookup requires current platform authority before database access',async()=>{
+ const api=loadTs('src/app/superadmin/brands/actions.ts',{'server-only':{},'@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>{throw forbidden();}},'@/lib/firebase-admin':{getAdminDb:()=>{throw Error('must not read data');}}});
+ await assert.rejects(api.getBrandForAdministration('b'),e=>e.status===403);
+});

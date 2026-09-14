@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import type { Brand, FoodCategory, Allergen, BrandAppearances } from '@/types';
+import { publicBrandRecord } from '@/lib/public-native-records';
 import { selectorCatalog } from '@/lib/access/native-catalog';
 import { brandRecord } from '@/lib/brand-record';
 import { hasPermission } from '@/lib/auth/permissions';
@@ -225,13 +226,19 @@ export async function getAllergens(): Promise<Allergen[]> {
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Allergen[];
 }
 
+export async function getBrandForAdministration(brandId:string):Promise<Brand|null> {
+    await requirePlatformSuperuser();
+    const saved=await getAdminDb().collection('brands').doc(brandId).get();
+    return saved.exists?brandRecord(saved.id,saved.data()||{}):null;
+}
+
 export async function getBrandById(brandId: string): Promise<Brand | null> {
     const db = getAdminDb();
     const docRef = db.collection('brands').doc(brandId);
     const docSnap = await docRef.get();
     if (docSnap.exists) {
         const data = docSnap.data();
-        return brandRecord(docSnap.id, data || {});
+        return publicBrandRecord(docSnap.id, data || {});
     }
     return null;
 }
@@ -247,7 +254,7 @@ export async function getBrandBySlug(brandSlug?: string): Promise<Brand | null> 
         return null;
     }
     const data = querySnapshot.docs[0].data();
-    return brandRecord(querySnapshot.docs[0].id, data);
+    return publicBrandRecord(querySnapshot.docs[0].id, data);
 }
 
 export async function getBrands(): Promise<Brand[]> {

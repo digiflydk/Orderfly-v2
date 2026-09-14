@@ -1,6 +1,7 @@
 
 'use server';
 import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
+import { publicLocationRecord } from '@/lib/public-native-records';
 import { selectorCatalog } from '@/lib/access/native-catalog';
 import { calculateTimeSlots } from '@/lib/time-slots';
 
@@ -181,7 +182,7 @@ export async function getActiveLocationBySlug(brandId: string, locationSlug: str
 
     if (locationDoc) {
         const data = locationDoc.data();
-        return { id: locationDoc.id, ...data } as Location;
+        return publicLocationRecord(locationDoc.id, data);
     }
     return null;
 }
@@ -212,7 +213,7 @@ export async function getLocationById(locationId: string): Promise<Location | nu
     const docSnap = await docRef.get();
     if (docSnap.exists) {
         const data = docSnap.data();
-        return { ...data, id: docSnap.id } as Location;
+        return publicLocationRecord(docSnap.id, data || {});
     }
     return null;
 }
@@ -241,5 +242,5 @@ export async function getLocationBySlug(brandId: string, slug: string) {
 
   if (snap.empty) return null;
   const doc = snap.docs[0];
-  return { id: doc.id, ...doc.data() };
+  return publicLocationRecord(doc.id, doc.data());
 }
