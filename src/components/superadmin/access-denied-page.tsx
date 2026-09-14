@@ -21,7 +21,7 @@ export function AccessDeniedPage() {
                 </CardHeader>
                 <CardContent>
                     <Button asChild>
-                        <Link href="/superadmin/dashboard">Go to Dashboard</Link>
+                        <Link href="/admin-login">Log ind</Link>
                     </Button>
                 </CardContent>
             </Card>

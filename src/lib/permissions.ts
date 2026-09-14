@@ -46,22 +46,3 @@ export const ALL_PERMISSIONS: Permission[] = [
     { id: 'settings:view', name: 'View Settings', description: 'Can view platform settings.', group: 'Platform' },
     { id: 'settings:edit', name: 'Edit Settings', description: 'Can edit global platform settings.', group: 'Platform' },
 ];
-
-
-// This is a placeholder for a real permission check function that would
-// get the current user's permissions from their roles.
-// For now, it simulates a "SuperAdmin" user who always has all permissions.
-export function hasPermission(permissionId: string): boolean {
-    // In a real app, you would:
-    // 1. Get the current logged-in user from Firebase Auth.
-    // 2. Look up their user document in Firestore to get their `roleIds`.
-    // 3. Look up those roles in the `roles` collection.
-    // 4. Aggregate all permissions from those roles into a Set.
-    // 5. Return `userPermissions.has(permissionId)`.
-
-    // For now, we assume the user is a SuperAdmin and has all permissions.
-    // This prevents being locked out during development.
-    // To test the logic, you can temporarily return `false` or check a specific permission.
-    console.log(`Checking for permission: ${permissionId}. Granting access as SuperAdmin.`);
-    return true;
-}

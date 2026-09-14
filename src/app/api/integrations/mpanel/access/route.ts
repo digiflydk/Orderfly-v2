@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getAdminDb, getAdminApp } from '@/lib/firebase-admin';
 import { isValidMachineSecret } from '@/lib/integrations/esmeralda-customer-contract';
 import { mpanelAdminEnabled } from '@/lib/mpanel-admin-cutover';
 import { authorityCommandSchema, AuthorityError, executeAuthority } from '@/lib/access/authority';
@@ -20,7 +20,17 @@ export async function POST(request:Request) {
     // The bridge authenticates the employee's native session; the authority
     // derives its canonical principal and loads current grants itself.
     const result=await executeAuthority(getAdminDb(),{provider:'opsfly',subject:input.actorId,organizationId:input.organizationId},input.command,
-      {provider:'opsfly',subject:actor!,organizationId:organization!});
+      {provider:'opsfly',subject:actor!,organizationId:organization!},async identity=>{
+        if(identity.provider==='opsfly')return true; // The bridge verifies native Opsfly enrollment targets.
+        try{return !(await getAdminApp().auth().getUser(identity.subject)).disabled;}catch{return false;}
+      });
+    if(input.command.action==='list'&&'superuser' in result&&result.superuser) {
+      const db=getAdminDb();
+      const [users,brands,locations]=await Promise.all([getAdminApp().auth().listUsers(500),db.collection('brands').limit(501).get(),db.collection('locations').limit(501).get()]);
+      if(users.pageToken||brands.size>500||locations.size>500)throw new AuthorityError('catalog_too_large',409);
+      return reply({...result,firebaseUsers:users.users.filter(u=>!u.disabled).map(u=>({id:u.uid,name:u.displayName||u.email||'Bruger',identity:{provider:'firebase',subject:u.uid}})),
+        orderflyBrands:brands.docs.map(d=>({id:d.id,name:d.data().name||d.id})),orderflyLocations:locations.docs.map(d=>({id:d.id,name:d.data().name||d.id,brandId:d.data().brandId}))});
+    }
     return reply(result);
   }catch(error){
     if(error instanceof AuthorityError)return reply({error:error.code},error.status);

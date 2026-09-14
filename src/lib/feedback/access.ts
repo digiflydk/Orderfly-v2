@@ -1,7 +1,7 @@
 import 'server-only';
 import { cookies } from 'next/headers';
 import { getAdminApp } from '@/lib/firebase-admin';
-import { hasPermission } from '@/lib/permissions';
+import { hasPermission } from '@/lib/auth/permissions';
 import { z } from 'zod';
 
 export type FeedbackAccess = { uid: string; permissions: string[]; brandIds: string[] | null };
@@ -33,7 +33,7 @@ export async function feedbackAccessForUid(uid: string): Promise<FeedbackAccess>
 }
 
 export async function requireFeedbackAccess(permission = 'feedback:view'): Promise<FeedbackAccess> {
-  if (temporaryFeedbackTestAccessEnabled() && hasPermission('users:view')) {
+  if (temporaryFeedbackTestAccessEnabled() && await hasPermission('users:view')) {
     const access = { uid: 'temporary-feedback-test-access', permissions: ['feedback:view', 'feedback:edit', 'settings:view', 'settings:edit'], brandIds: null };
     if (!access.permissions.includes(permission)) throw new FeedbackAccessError();
     return access;

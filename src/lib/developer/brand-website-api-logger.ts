@@ -1,4 +1,4 @@
-'use server';
+import 'server-only';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
 

@@ -8,7 +8,7 @@ import { z } from 'zod';
 import { toppingConditionsSchema, validateToppingConditions } from '@/lib/topping-condition-validation';
 import type { Topping, ToppingGroup } from '@/types';
 import { createHash } from 'node:crypto';
-import { hasPermission } from '@/lib/permissions';
+import { hasPermission } from '@/lib/auth/permissions';
 import { uploadProductImage } from '@/lib/superadmin/product-image-storage';
 import { getProductBrandReferences } from '@/lib/superadmin/product-brand-references';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -142,7 +142,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
     }
   
     try {
-      if (!hasPermission(id ? 'products:edit' : 'products:create')) {
+      if (!await hasPermission(id ? 'products:edit' : 'products:create')) {
         return { ok: false, error: { message: 'You do not have permission to save products.' } };
       }
       const db = getAdminDb();

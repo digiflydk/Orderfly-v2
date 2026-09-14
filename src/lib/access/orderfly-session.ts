@@ -27,3 +27,34 @@ export async function requireOrderflyAccess(brandId:string,locationIds:string[]|
   }
   return {identity,brandId,locationIds};
 }
+
+const bootstrapIdentity=():VerifiedIdentity=>({provider:'opsfly',subject:process.env.MPANEL_PLATFORM_ADMIN_EMPLOYEE_ID||'',organizationId:process.env.MPANEL_PLATFORM_ADMIN_ORGANIZATION_ID||''});
+export async function orderflySession():Promise<{identity:VerifiedIdentity;actorId:string;superuser:boolean;name:string;permissions:string[]}> {
+  const identity=await verifiedOrderflyIdentity();
+  const result=await executeAuthority(getAdminDb(),identity,{action:'session'},bootstrapIdentity());
+  if(!('permissions' in result)||!('superuser' in result))throw new AuthorityError('forbidden');
+  return {identity,...result};
+}
+export async function requirePlatformSuperuser() {
+  const session=await orderflySession();
+  if(!session.superuser)throw new AuthorityError('forbidden');
+  return session;
+}
+export async function orderflyReadGrants(permission:string):Promise<Array<{brandId:string;locationIds:string[]|null}>> {
+  const identity=await verifiedOrderflyIdentity(),db=getAdminDb();
+  const result=await executeAuthority(db,identity,{action:'nativeGrants',product:'orderfly',permission},bootstrapIdentity());
+  if(!('grants' in result))throw new AuthorityError('forbidden');
+  const grants:Array<{brandId:string;locationIds:string[]|null}>=[];
+  for(const grant of result.grants as Array<{tenantId:string;locationIds:string[]|null}>){
+    if(!(await db.collection('brands').doc(grant.tenantId).get()).exists)continue;
+    let locationIds:string[]|null=null;
+    if(grant.locationIds!==null){
+      const locations=await Promise.all(grant.locationIds.map(id=>db.collection('locations').doc(id).get()));
+      locationIds=locations.filter(row=>row.exists&&row.data()?.brandId===grant.tenantId).map(row=>row.id);
+      if(!locationIds.length)continue;
+    }
+    grants.push({brandId:grant.tenantId,locationIds});
+  }
+  if(!grants.length)throw new AuthorityError('forbidden');
+  return grants;
+}

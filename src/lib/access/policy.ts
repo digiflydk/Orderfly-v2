@@ -54,8 +54,8 @@ export const membershipSchema = scope.extend({
     ctx.addIssue({ code: 'custom', message: 'Platform membership cannot have location scope' });
 });
 export const policySchema = z.object({
-  principals: z.array(z.object({ id: key, active: z.boolean() }).strict()).max(500),
-  companies: z.array(z.object({ id: key, active: z.boolean(), locationIds: keys, orderflyBrandIds: keys.default([]), opsflyOrganizationId: z.string().uuid().nullable().default(null) }).strict()).max(500),
+  principals: z.array(z.object({ id: key, active: z.boolean(), name: z.string().trim().min(1).max(160).optional() }).strict()).max(500),
+  companies: z.array(z.object({ id: key, active: z.boolean(), name: z.string().trim().min(1).max(160).optional(), locationIds: keys, orderflyBrandIds: keys.default([]), opsflyOrganizationId: z.string().uuid().nullable().default(null) }).strict()).max(500),
   roles: z.array(roleSchema).max(500),
   memberships: z.array(membershipSchema).max(500),
 }).strict().superRefine((s, ctx) => {

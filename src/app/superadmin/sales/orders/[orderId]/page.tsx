@@ -13,6 +13,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getOrderById } from '@/app/checkout/order-actions';
+import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
 import { getAdminDb } from '@/lib/firebase-admin';
 
 export const revalidate = 0; // Force dynamic rendering
@@ -22,6 +23,7 @@ export async function getOrderDetails(orderId: string): Promise<(OrderDetail & {
 	if (!order) {
 		return null;
 	}
+	await requireOrderflyAccess(order.brandId,order.locationId?[order.locationId]:null,'orderfly.orders:view');
 	const brand = await getBrandById(order.brandId);
 
 	return {

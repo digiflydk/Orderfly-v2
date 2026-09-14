@@ -3,7 +3,7 @@
 'use server';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
-import { requireSuperadmin } from '@/lib/auth/superadmin';
+import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
 import type { BrandWebsiteHome } from '@/types';
 import {
   brandWebsiteHomeSchema,
@@ -69,7 +69,7 @@ export async function getBrandWebsiteHome(
   const start = Date.now();
   const action = 'getBrandWebsiteHome';
   try {
-    await requireSuperadmin();
+    await requireOrderflyAccess(brandId,null,'orderfly.website:view');
     const result = await readHome(brandId);
     await logBrandWebsiteApiCall({
         layer: 'cms', action, brandId, status: 'success', durationMs: Date.now() - start, path: homePath(brandId)
@@ -92,7 +92,7 @@ async function savePartial<T>(
     const start = Date.now();
     const actionName = `saveBrandWebsite${field.charAt(0).toUpperCase() + field.slice(1)}`;
     try {
-        await requireSuperadmin();
+        await requireOrderflyAccess(brandId,null,'orderfly.website:edit');
         const validatedData = schema.parse(data);
         const currentHome = await readHome(brandId);
         const newHome = {

@@ -2,9 +2,8 @@
 'use server';
 
 import 'server-only';
-import { requireSuperadmin } from '@/lib/auth/superadmin';
-import { getAdminDb } from '@/lib/firebase-admin';
-import type { User } from '@/types';
+import { getAdminApp } from '@/lib/firebase-admin';
+import { orderflySession } from '@/lib/access/orderfly-session';
 
 export interface SuperadminUser {
 	id: string | null;
@@ -13,42 +12,11 @@ export interface SuperadminUser {
 	name?: string;
 }
 
-/**
- * Gets the current superadmin user context.
- * In a real app, this would involve fetching session data.
- * For now, it leverages the mock implementation in hasPermission.
- */
+/** Returns the verified caller, never a different account from the directory. */
 export async function getSuperadminUserContext(): Promise<SuperadminUser> {
-	try {
-		// This is a placeholder for a real session check.
-		// In a real app, you would replace this with something like:
-		// const session = await getSession();
-		// const user = session?.user;
-		await requireSuperadmin();
-
-		const db = getAdminDb();
-		const userQuery = await db.collection('users').limit(1).get();
-
-		if (!userQuery.empty) {
-			const userData = userQuery.docs[0].data() as User;
-
-			return {
-				id: userQuery.docs[0].id,
-				email: userData.email,
-				name: userData.name,
-				role: 'superadmin'
-			};
-		}
-	} catch (e) {
-		// If requireSuperadmin throws or user not found, we fall back.
-		// This will now return a structured null-state object instead of an error.
-	}
-
-	// Fallback for unauthenticated or non-existent user
-	return {
-		id: null,
-		email: null,
-		role: null,
-		name: undefined,
-	};
+  try {
+    const session=await orderflySession();
+    const user=await getAdminApp().auth().getUser(session.identity.subject);
+    return {id:user.uid,email:user.email||null,name:user.displayName||session.name,role:session.superuser?'superadmin':'company_user'};
+  } catch { return {id:null,email:null,role:null}; }
 }

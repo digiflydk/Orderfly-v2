@@ -11,7 +11,7 @@ import { redirect } from 'next/navigation';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import type { Brand, FoodCategory, Allergen, BrandAppearances } from '@/types';
 import { brandRecord } from '@/lib/brand-record';
-import { hasPermission } from '@/lib/permissions';
+import { hasPermission } from '@/lib/auth/permissions';
 
 const appearancesSchema = z.object({
   colors: z.object({
@@ -90,7 +90,7 @@ export async function createOrUpdateBrand(
   formData: FormData
 ): Promise<FormState> {
 
-  if (!hasPermission(formData.get('id') ? 'brands:edit' : 'brands:create')) {
+  if (!await hasPermission(formData.get('id') ? 'brands:edit' : 'brands:create')) {
     return { message: 'Du har ikke adgang til at gemme dette brand.', error: true };
   }
 

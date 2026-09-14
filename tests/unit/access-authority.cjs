@@ -8,7 +8,7 @@ function fixture(){
  const db={collection:name=>({doc:id=>({path:name+'/'+id})}),runTransaction:run=>{
   const job=queue.then(async()=>{const staged=new Map(records),tx={get:async ref=>({exists:staged.has(ref.path),data:()=>structuredClone(staged.get(ref.path))}),set:(ref,value)=>staged.set(ref.path,structuredClone(value))};const result=await run(tx);records.clear();for(const row of staged)records.set(...row);return result;});queue=job.catch(()=>{});return job;
  }};
- const call=(identity,command)=>executeAuthority(db,identity,command,owner);
+ const call=(identity,command)=>executeAuthority(db,identity,command,owner,async native=>native.subject!=='missing');
  const list=(identity=owner)=>call(identity,{action:'list'});
  const change=async(kind,value,id=value?.id,identity=owner)=>call(identity,{action:'change',kind,id,value,requestId:crypto.randomUUID(),revision:(await list(identity)).revision});
  return {records,call,list,change};
@@ -124,4 +124,47 @@ test('Orderfly guard rejects missing brands and foreign native locations even af
  locationBrand='brand';assert.equal((await mod.requireOrderflyAccess('brand',['location'],'orderfly.orders:view')).brandId,'brand');
  brandExists=false;await assert.rejects(mod.requireOrderflyAccess('brand',null,'orderfly.orders:view'),/forbidden/);
  brandExists=true;decision={allowed:false,reason:'permission_missing'};await assert.rejects(mod.requireOrderflyAccess('brand',null,'orderfly.orders:view'),/forbidden/);
+});
+
+
+test('enrollment adds a verified existing identity and membership atomically',async()=>{
+ const f=await companyFixture();
+ const command={action:'enroll',identity:{provider:'firebase',subject:'new-user'},name:'New user',companyId:'a',locationIds:['a1'],roleIds:['reader'],revision:(await f.list(admin)).revision,requestId:crypto.randomUUID()};
+ await f.call(admin,command);
+ const native={provider:'firebase',subject:'new-user'};
+ assert.equal((await f.call(native,{action:'check',companyId:'a',locationIds:['a1'],permission:'opsfly.schedule:view'})).allowed,true);
+ const list=await f.list();assert.equal(list.principals.find(p=>p.id===principalKey(native)).name,'New user');
+ assert.equal(list.memberships.filter(m=>m.principalId===principalKey(native)).length,1);
+ await f.call(admin,command);assert.equal((await f.list()).memberships.filter(m=>m.principalId===principalKey(native)).length,1);
+});
+test('enrollment rejects missing native accounts, foreign organizations and excessive roles without creating a principal',async()=>{
+ const f=await companyFixture(),before=(await f.list()).principals.length;
+ const base={action:'enroll',identity:{provider:'firebase',subject:'missing'},name:'Missing user',companyId:'a',locationIds:['a1'],roleIds:['reader'],revision:(await f.list(admin)).revision,requestId:crypto.randomUUID()};
+ await assert.rejects(f.call(admin,base),/native_identity_unavailable/);
+ await assert.rejects(f.call(admin,{...base,identity:{provider:'opsfly',organizationId:owner.organizationId,subject:owner.subject},requestId:crypto.randomUUID()}),/organization_mismatch/);
+ await assert.rejects(f.call(admin,{...base,identity:{provider:'firebase',subject:'new-user'},companyId:null,locationIds:null,roleIds:['platform-owner'],requestId:crypto.randomUUID()}),/platform_access_required/);
+ assert.equal((await f.list()).principals.length,before);
+});
+
+test('enrollment retry retains create permission and still observes later revocation',async()=>{
+ const f=await companyFixture();
+ const manager=(await f.list()).roles.find(r=>r.id==='manager');
+ await f.change('roles',{...manager,permissions:manager.permissions.filter(p=>p!=='platform.members:edit')});
+ const command={action:'enroll',identity:{provider:'firebase',subject:'create-only-target'},name:'Target',companyId:'a',locationIds:['a1'],roleIds:['reader'],revision:(await f.list(admin)).revision,requestId:crypto.randomUUID()};
+ await f.call(admin,command);await f.call(admin,command);
+ await f.change('roles',{...manager,permissions:manager.permissions.filter(p=>p!=='platform.members:create')});
+ await assert.rejects(f.call(admin,command),/administration_scope_missing/);
+});
+
+test('session grants contain only the caller active memberships and native grants never become cross-company wildcards',async()=>{
+ const f=await companyFixture();
+ await f.change('companies',{id:'a',active:true,locationIds:['a1','a2'],opsflyOrganizationId:owner.organizationId,orderflyBrandIds:['brand-a']});
+ await f.change('memberships',{id:'worker',principalId:principalKey(worker),companyId:'a',locationIds:['a1'],roleIds:['reader'],active:true});
+ const session=await f.call(worker,{action:'session'});assert.equal(session.superuser,false);assert.deepEqual(session.permissions,['opsfly.schedule:view']);
+ assert.deepEqual(await f.call(worker,{action:'nativeGrants',product:'opsfly',permission:'opsfly.schedule:view'}),{grants:[{tenantId:owner.organizationId,locationIds:['a1']}]});
+ assert.deepEqual(await f.call(worker,{action:'nativeGrants',product:'orderfly',permission:'orderfly.orders:view'}),{grants:[]});
+ await assert.rejects(f.call(worker,{action:'nativeGrants',product:'opsfly',permission:'orderfly.orders:view'}),/permission_missing/);
+ await f.change('roles',{...(await f.list()).roles.find(r=>r.id==='reader'),active:false});
+ assert.deepEqual((await f.call(worker,{action:'session'})).permissions,[]);
+ assert.deepEqual(await f.call(worker,{action:'nativeGrants',product:'opsfly',permission:'opsfly.schedule:view'}),{grants:[]});
 });

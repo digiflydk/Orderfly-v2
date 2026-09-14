@@ -9,7 +9,7 @@ import type { Location, Brand, TimeSlotResponse } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import * as admin from 'firebase-admin';
-import { hasPermission } from '@/lib/permissions';
+import { hasPermission } from '@/lib/auth/permissions';
 
 
 const openingHoursSchema = z.object({
@@ -60,7 +60,7 @@ export async function createOrUpdateLocation(
   prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
-  if (!hasPermission(formData.get('id') ? 'locations:edit' : 'locations:create')) {
+  if (!await hasPermission(formData.get('id') ? 'locations:edit' : 'locations:create')) {
     return { message: 'Du har ikke adgang til at gemme denne lokation.', error: true };
   }
   const isChecked = (key: string) => ['true', 'on'].includes(String(formData.get(key)));

@@ -2,85 +2,44 @@
 
 ## Product contract
 
-All functions are commercially available during freemium. Subscriptions, plan
-status and commercial expiry do not grant or deny user access. An active identity,
-active company membership, the requested company/location scope and explicit
-function/action permission are required. Superusers have platform authority;
-company administrators can delegate only within their own authority. Role names
-are editable display text and never confer authority.
+All functions are commercially available during freemium. Subscription plans and expiry do not grant or deny access. Access requires a verified identity, active company membership, the requested company/location scope and explicit function/action permission. Role names are display text. Company administrators may delegate only permissions and scope they possess; only platform superusers administer global principals and companies. The final active superuser cannot be removed.
 
-## Implemented in this branch
+## Current candidate
 
-`src/lib/access/policy.ts` defines the version-one policy vocabulary and pure
-decisions for access, membership changes and role changes. It validates records,
-rejects unknown permissions and references across companies, supports distinct
-memberships in multiple companies, checks revocation, prevents delegation beyond
-the administrator's permissions/scope and protects the last active superuser.
-Company administrators need explicit member/role management permissions. Company
-users do not gain delegation authority by receiving similarly named permissions.
+- `access/policy.ts` validates the permission catalogue, principals, companies, roles and memberships. Company bindings uniquely reference native Orderfly brands and Opsfly organizations. Null location scope means all locations in one company; an empty list never grants unrestricted access.
+- `access/authority.ts` stores policy in the existing browser-denied `platformAdminControl/access-v1` document. Policy and immutable audit events commit in one Firestore transaction. Revision checks prevent lost updates. Maximums are 500 records per collection and 750 KB. Explicit initialization accepts only the runtime-configured verified Opsfly owner and never resets a populated authority; that bootstrap identity does not override later grants.
+- Native identities are namespaced hashes of provider and immutable subject, including organization for Opsfly employees. `enroll` verifies an existing native account and atomically adds its central principal and company membership. It preserves create authorization on idempotent retries and rechecks current grants. Existing inactive principals cannot be reactivated through enrollment. Native login creation and linking two provider accounts to one person are not implemented.
+- `/api/integrations/mpanel/access` authenticates the fixed Opsfly machine bridge and its strict actor envelope. `initialize`, `list`, `check`, `checkNative`, `session`, `nativeGrants`, `enroll` and revision/request-ID checked `change` are validated commands. Browser actor injection and unknown commands deny. Opsfly targets are verified by the authenticated bridge; Firebase targets must exist and be active in Firebase Auth.
+- The paired mPanel editor creates companies/roles and enrolls or edits/deactivates existing users, using native directory selectors and mobile dialogs. Only superusers see the Firebase directory. Delegated native Opsfly directory reads require company-wide member-view permission. Listings never initialize or grant access automatically. The new screen does not contain subscriptions.
+- `/admin-login` and `/api/admin/session` establish an HTTP-only session only after same-origin verification, a fresh revoked-checked Firebase ID token and current central Orderfly access. Every runtime guard verifies the session cookie with revocation checking. `getSuperadminUserContext` reads the verified Firebase account, never the first directory record.
+- Legacy global `hasPermission` moved to a server-only module and now requires a current central superuser. Its shared client catalogue contains no always-allow implementation. This is a global administration guard; company operations require explicit native scope.
 
-Location IDs are canonical platform location IDs; the runtime adapter must resolve
-the product's brand/location/organization record to this ID server-side. A null
-location list means all locations in one company. An empty list means no location
-access, never unrestricted access. A location-limited grant cannot authorize a
-company-wide query. An edited role affects every assignee, so company-wide
-administration authority is required to change a company role definition.
+## Runtime integration status
 
-The caller must use one transactionally consistent snapshot for authorization and
-the resulting mutation. `before` must come from that transaction, not from an
-untrusted request. Platform records must remain inaccessible to client writes.
-Snapshot validation failure denies the operation; it is not a reason to replace
-live policy with a default or a superuser fallback.
+| Surface | Candidate behavior |
+| --- | --- |
+| Orderfly order list | Queries are restricted to granted brands and native-owned locations. |
+| Orderfly order detail | Checks `orderfly.orders:view` for the stored brand/location before returning the detail. |
+| Orderfly order status | Checks `orderfly.orders:edit`; transaction rejects changed ownership and preserves payment requirements. |
+| Orderfly brand website CMS | Config, home, menu and page operations use explicit `orderfly.website` view/create/edit/delete permissions for the brand. Internal audit/storage helpers are no longer exposed Server Actions. |
+| Orderfly existing global permission checks/API helpers | Require verified central superuser instead of an always-allow placeholder. |
+| Opsfly shared customer API | Uses current company-wide `opsfly.customers:view`, or `edit` for backfill, after native session and active organization verification. Native admin role alone is insufficient. |
+| Other Orderfly/Opsfly protected operations | Migration and full entrypoint audit remain incomplete. |
 
-## Not implemented / release blockers
+`nativeGrants` returns explicit native tenants and permitted location lists, never an all-tenant wildcard. Native location ownership is checked independently of catalogue mappings. Public storefront/checkout helpers and worker credentials remain separate from employee authority; mixed public/admin files must be classified at operation level before applying guards.
 
-This branch is a policy foundation, **not an activated RBAC release**. No deployed
-handler calls this policy yet. Existing preview schemas are a separate legacy
-format and are not silently migrated. No authentication or runtime protection is
-claimed from unit tests. The following remain required for issue completion:
+## Remaining release blockers
 
-1. A canonical identity registry binding verified Opsfly employee sessions and
-   verified Orderfly identities. Never select the first user or trust an email,
-   browser-supplied actor, role or company as proof of identity.
-2. Transactional policy storage and scoped CRUD endpoints, native identity and
-   location reference validation, revision checks and immutable audit events.
-   Deactivation of a principal/company must preserve the last-superuser invariant
-   too; the current change only implements role/membership mutations.
-3. mPanel forms for superusers, company admins/users and dynamic roles, with
-   company/location choices, filtered directory reads, mobile dialogs and visible
-   errors. Regular users must be able to authenticate, not just legacy admins.
-4. Runtime adapters for every protected Orderfly API/Server Action and Opsfly
-   operation, enforcing resource scope in queries. The feature list here is a
-   vocabulary, not a completed endpoint inventory. Mixed public/admin handlers
-   must be split or classified by operation; public checkout and trusted workers
-   retain their separate identity rules.
-5. Replace the always-true `hasPermission` mock and the first-user context only
-   with a working authenticated login path, avoiding an incomplete lockout.
-6. Controlled bootstrap/migration from the approved operator to explicit
-   superusers, paired product deployment, live allowed/denied verification and
-   full mobile create/edit/deactivate tests. The unverified earlier activation
-   rollout is not proof of these capabilities.
+This is an **incomplete paired draft, not an activated RBAC release**. The following are required before issue completion:
+
+1. Complete the protected API/Server Action and Opsfly operation inventory and migrate all remaining operations, query scopes, database RPCs and navigation to current authority. Menus/layouts alone do not protect direct calls.
+2. Finish user onboarding and native account provisioning/binding, delegated administration UX, and the broader company/location access scenarios.
+3. Review Firestore data rules and all native client write paths together. The existing protected authority collections do not imply that the legacy business database has been secured.
+4. Preserve the independently released Opsfly #281 inventory notification work during branch integration.
+5. Complete affected browser tests, full paired type/contract/R3 preflight, independent exact-head review and acceptance. Then perform controlled bootstrap and coordinated deployment with live allow/deny verification. No production initialization or write has been performed by this development work.
 
 ## Verification
 
-`node --test tests/unit/freemium-access.cjs` exercises the policy with permitted
-access and rejection cases, including immediate deactivation, cross-company and
-location escape attempts, excessive delegation, last-superuser protection and
-stale mutation records. It runs in the existing CI regression step.
+`tests/unit/freemium-access.cjs` and `access-authority.cjs` cover scope, revocation, delegation, last-superuser invariants, namespace isolation, native mapping, concurrent revisions, explicit bootstrap, enrollment and verified cookies. `order-access.cjs` executes the actual order query/status code with external I/O replaced, including denied edits and ownership changes during a transaction. `admin-session.cjs` verifies current central authorization, caller identity, fresh login, origin rejection and HTTP-only cookies. Existing brand/location and legacy catalogue regression fixtures keep their original assertions and replace the relocated permission I/O boundary.
 
-`npm run typecheck` checks the complete application. Independent review and PO
-acceptance remain separate from implementation. This draft must not be merged
-or deployed as the completed access-control solution.
-
-
-## Authority and native identity adapter (2026-09-14 candidate)
-
-The candidate now includes `src/lib/access/authority.ts` and a machine-authenticated `/api/integrations/mpanel/access` endpoint. Policy lives in the existing browser-denied `platformAdminControl/access-v1` document; writes and audit events share a Firestore transaction. Initialization is explicit, allowed only for the runtime-configured verified Opsfly owner, and rejected once initialized. That bootstrap identity does not override stored grants afterward. Policy is bounded to 500 records per collection and 750 KB.
-
-`list`, `check`, `checkNative` and revision-checked `change` commands use current stored policy. Company administrators may delegate permitted roles/memberships within their current scope. Global principal/company changes require an active superuser; removing the last superuser through principal deactivation is rejected. Reads return only administrable memberships and company-wide administrable roles to company administrators. Company records bind native Orderfly brands and an Opsfly organization uniquely; subscriptions are not evaluated.
-
-Canonical principal IDs are hashes of provider plus immutable subject, including the organization for Opsfly employees. The API only accepts the authenticated Opsfly bridge envelope. `orderfly-session.ts` separately verifies a Firebase session cookie with revocation checks and resolves current native brand/location access. Its guard is prepared but not yet called by existing business handlers.
-
-New tests cover bootstrap rejection/reset prevention, competing revisions, tenant-filtered catalogues, global principal deactivation, current-policy authorization on retries, native namespace isolation, native tenant mapping and rejected/revoked cookies. These are fixture tests, not a production rollout or a completed security cutover.
-
-Remaining blockers: mPanel needs the new authority editor and verified native account provisioning/binding. Existing business handlers and Server Actions still require migration to the new guard. Opsfly booking RPCs currently receive actor IDs and several retain native legacy authorization, so changing just the HTTP guard is insufficient; their authorization and exact tenant/location boundaries must be reviewed with the handler changes. Existing always-allow Orderfly helpers remain a release blocker. No initialization request or production write was performed.
+The paired Opsfly browser tests exercise company, role, membership and error flows on desktop/mobile. Customer handler tests use the real central decision adapter and fixture business queries. These are development tests, not deployment proof. The draft must remain unmerged until every release blocker is resolved.

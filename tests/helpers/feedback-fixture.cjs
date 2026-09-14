@@ -41,7 +41,7 @@ function fixture(){
  const mocks={'server-only':{},'next/cache':{revalidatePath:()=>{}},'next/navigation':{redirect:url=>{throw Object.assign(Error('redirect'),{digest:'NEXT_REDIRECT',url});}},
   'next/headers':{cookies:async()=>({get:()=>auth.cookie?{value:'synthetic-session'}:undefined})},
   '@/lib/firebase-admin':{getAdminApp:()=>({auth:()=>({verifySessionCookie:async()=>{if(failure.auth)throw Error('Invalid session');return{uid:auth.uid};}})}),getAdminDb:()=>db,getAdminFieldValue:()=>({serverTimestamp:stamp}),admin:{firestore:{FieldValue:{serverTimestamp:stamp}}}},
-  '@/lib/permissions':{hasPermission:()=>!failure.auth},
+  '@/lib/auth/permissions':{hasPermission:()=>!failure.auth},
   '@/app/checkout/order-actions':{getOrderById:async id=>records.has('orders/'+id)?{...records.get('orders/'+id),id}:null},
   '@/lib/integrations/esmeralda-feedback-integration':{resolveBookingFeedbackInvitationToken:async token=>token==='valid'?{booking_id:'booking',customer_id:'c',organization_id:'b',location_id:'l',invitation_id:'i',starts_at:'2026-01-01T10:00:00Z',status:records.get('integrationFeedbackInvitations/i')?.status}:null},
  };

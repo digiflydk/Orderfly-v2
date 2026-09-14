@@ -43,7 +43,7 @@ function fixture(){
  }})})}),getDownloadURL:async()=>{storageCalls.push({operation:'metadata'});throw Object.assign(Error('Synthetic Firebase metadata permission denied after GCS save'),{code:403});}};
  const mocks={'server-only':{},'next/cache':{revalidatePath:()=>{},revalidateTag:()=>{}},'next/navigation':{},
   '@/lib/firebase-admin':{getAdminDb:()=>db,getAdminApp:()=>({options:{projectId:'orderfly-test',credential:{clientEmail:'qa-uploader@orderfly-test.iam.gserviceaccount.com',privateKey:'synthetic-private-key-must-not-be-logged'}}})},'firebase-admin/storage':storage,
-  '@/lib/permissions':{hasPermission:()=>!failure.permission},sharp:{default:sharp}};
+  '@/lib/auth/permissions':{hasPermission:()=>!failure.permission},sharp:{default:sharp}};
  const actions=loadTs('src/app/superadmin/products/actions.ts',mocks);
  const upload=loadTs('src/lib/superadmin/product-image-storage.ts',mocks).uploadProductImage;
  function props(id){
