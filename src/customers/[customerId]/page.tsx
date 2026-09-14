@@ -160,8 +160,8 @@ export default async function CustomerDetailPage({ params }: { params: { custome
                                         {feedbackEntries.map(feedback => (
                                             <TableRow key={feedback.id}>
                                                 <TableCell className="font-mono text-xs">{feedback.id.substring(0, 6).toUpperCase()}</TableCell>
-                                                <TableCell>{format(new Date(feedback.receivedAt), 'MMM d, yyyy')}</TableCell>
-                                                <TableCell><RatingStars rating={feedback.rating} /></TableCell>
+                                                <TableCell>{feedback.receivedAt ? format(new Date(feedback.receivedAt), 'MMM d, yyyy') : '-'}</TableCell>
+                                                <TableCell>{feedback.rating === null ? '-' : <RatingStars rating={feedback.rating} />}</TableCell>
                                                 <TableCell className="text-sm text-muted-foreground truncate max-w-xs">{feedback.comment || '-'}</TableCell>
                                                 <TableCell className="text-right">
                                                     <Button variant="ghost" size="sm" asChild>

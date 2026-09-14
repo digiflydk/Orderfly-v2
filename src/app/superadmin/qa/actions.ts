@@ -1,11 +1,12 @@
 
 'use server';
 
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/server/firestore-compat';
 import {
   collection, doc, getDoc, getDocs, setDoc, updateDoc, deleteDoc, orderBy, query, runTransaction
-} from 'firebase/firestore';
+} from '@/lib/server/firestore-compat';
 export type { QaStepTemplate } from '@/app/superadmin/qa/qa-utils';
 
 export type QaStatus = 'Draft' | 'Ready' | 'Deprecated';
@@ -39,12 +40,14 @@ async function nextCode(): Promise<string> {
 }
 
 export async function listQa(): Promise<QaTestcase[]> {
+  await requirePlatformSuperuser();
   const q = query(collection(db, COLL), orderBy('createdAt', 'desc'));
   const snap = await getDocs(q);
   return snap.docs.map(d => d.data() as QaTestcase);
 }
 
 export async function getQa(code: string): Promise<QaTestcase | null> {
+  await requirePlatformSuperuser();
   const refDoc = doc(db, COLL, code);
   const snap = await getDoc(refDoc);
   return snap.exists() ? (snap.data() as QaTestcase) : null;
@@ -52,6 +55,7 @@ export async function getQa(code: string): Promise<QaTestcase | null> {
 
 // create uden "code" — genereres automatisk
 export async function createQa(input: Omit<QaTestcase,'code'|'createdAt'|'updatedAt'>) {
+  await requirePlatformSuperuser();
   const now = Date.now();
   const code = await nextCode();
   const payload: QaTestcase = { ...input, code, createdAt: now, updatedAt: now };
@@ -61,11 +65,13 @@ export async function createQa(input: Omit<QaTestcase,'code'|'createdAt'|'update
 }
 
 export async function updateQa(code: string, partial: Partial<Omit<QaTestcase,'code'|'createdAt'>>) {
+  await requirePlatformSuperuser();
   await updateDoc(doc(db, COLL, code), { ...partial, updatedAt: Date.now() });
   revalidatePath('/superadmin/qa');
 }
 
 export async function deleteQa(code: string) {
+  await requirePlatformSuperuser();
   await deleteDoc(doc(db, COLL, code));
   revalidatePath('/superadmin/qa');
 }

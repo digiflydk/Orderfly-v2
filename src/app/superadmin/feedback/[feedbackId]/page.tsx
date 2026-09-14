@@ -7,7 +7,6 @@ import { FeedbackDetailClient } from './client-page';
 
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Customer, OrderDetail } from '@/types';
-import { getOrderDetails } from '@/app/superadmin/sales/orders/[orderId]/page';
 import { requireFeedbackAccess } from '@/lib/feedback/access';
 
 async function getCustomerName(customerId: string, brandId: string): Promise<string> {

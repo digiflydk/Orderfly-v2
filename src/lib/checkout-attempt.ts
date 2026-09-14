@@ -1,6 +1,6 @@
 import { createHash, randomBytes, createCipheriv, createDecipheriv } from 'node:crypto';
-import { doc, runTransaction, updateDoc, serverTimestamp } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, runTransaction, updateDoc, serverTimestamp } from '@/lib/server/firestore-compat';
+import { db } from '@/lib/server/firestore-compat';
 
 type CheckoutResult = { success: boolean; url?: string | null; orderId?: string; error?: string; retryable?: boolean };
 type AttemptResult = CheckoutResult & { pending?: boolean };

@@ -11,7 +11,7 @@ export const revalidate = 0;
 
 import { SuperAdminLayoutClient } from '@/components/superadmin/superadmin-layout-client';
 import { getPlatformBrandingSettings } from './settings/queries';
-import { hasPermission } from '@/lib/permissions';
+import { orderflySession } from '@/lib/access/orderfly-session';
 import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
 
 export default async function SuperadminLayout({
@@ -27,19 +27,19 @@ export default async function SuperadminLayout({
     brandingSettings = null;
   }
 
-  // Simpelt permission-tjek (kan udbygges senere)
-  const canAccess = hasPermission('users:view');
+  const session = await orderflySession().catch(() => null);
+  const canAccess = session?.superuser || session?.permissions.some(p => p.startsWith('orderfly.'));
 
   if (!canAccess) {
     return (
-      <SuperAdminLayoutClient centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings}>
+      <SuperAdminLayoutClient access={session} centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings}>
         <AccessDeniedPage />
       </SuperAdminLayoutClient>
     );
   }
 
   return (
-    <SuperAdminLayoutClient centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings}>
+    <SuperAdminLayoutClient access={session} centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings}>
       {children}
     </SuperAdminLayoutClient>
   );

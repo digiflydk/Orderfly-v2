@@ -5,8 +5,10 @@
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import type { AnalyticsSettings, PaymentGatewaySettings, LanguageSettings, Brand, PlatformBrandingSettings } from '@/types';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
+import { getActiveStripePublishableKey } from '@/lib/server/payment-settings';
+
 import { getPlatformBrandingSettings } from './queries';
 
 
@@ -93,8 +95,8 @@ const defaultLanguageSettings: LanguageSettings = {
 const defaultAnalyticsSettings: AnalyticsSettings = { ga4TrackingId: '', gtmContainerId: '' };
 
 async function saveBranding(data: PlatformBrandingSettings) {
-	const settingsRef = doc(db, 'platform_settings', 'branding');
-	await setDoc(settingsRef, data, { merge: true });
+	const settingsRef = getAdminDb().collection('platform_settings').doc('branding');
+	await settingsRef.set(data, { merge: true });
 }
 
 // Function to update analytics settings
@@ -102,6 +104,7 @@ export async function updateAnalyticsSettings(
 	prevState: FormState | null,
 	formData: FormData
 ): Promise<FormState> {
+	await requirePlatformSuperuser();
 	const rawData = {
 		ga4TrackingId: formData.get('ga4TrackingId'),
 		gtmContainerId: formData.get('gtmContainerId'),
@@ -120,8 +123,8 @@ export async function updateAnalyticsSettings(
 	}
 
 	try {
-		const settingsRef = doc(db, 'platform_settings', 'analytics');
-		await setDoc(settingsRef, validatedFields.data);
+		const settingsRef = getAdminDb().collection('platform_settings').doc('analytics');
+		await settingsRef.set(validatedFields.data);
 		revalidatePath('/superadmin/settings');
 		return { message: 'Analytics settings updated successfully.', error: false };
 	} catch (e) {
@@ -136,6 +139,7 @@ export async function updatePaymentGatewaySettings(
 	prevState: FormState | null,
 	formData: FormData
 ): Promise<FormState> {
+	await requirePlatformSuperuser();
 	const activeMode = formData.get('activeMode') as 'test' | 'live';
 
 	const rawData = {
@@ -165,8 +169,8 @@ export async function updatePaymentGatewaySettings(
 	}
 
 	try {
-		const settingsRef = doc(db, 'platform_settings', 'payment_gateway');
-		await setDoc(settingsRef, validatedFields.data);
+		const settingsRef = getAdminDb().collection('platform_settings').doc('payment_gateway');
+		await settingsRef.set(validatedFields.data);
 		revalidatePath('/superadmin/settings');
 		return { message: 'Payment gateway settings updated successfully.', error: false };
 	} catch (e) {
@@ -181,6 +185,7 @@ export async function updateLanguageSettings(
 	prevState: FormState | null,
 	formData: FormData
 ): Promise<FormState> {
+	await requirePlatformSuperuser();
 	try {
 		const supportedLanguages = JSON.parse(formData.get('supportedLanguages') as string || '[]');
 		const validatedFields = languageSettingsSchema.safeParse({ supportedLanguages });
@@ -190,7 +195,7 @@ export async function updateLanguageSettings(
 			return { message: 'Invalid language data.', error: true };
 		}
 
-		await setDoc(doc(db, 'platform_settings', 'languages'), validatedFields.data);
+		await getAdminDb().collection('platform_settings').doc('languages').set(validatedFields.data);
 		revalidatePath('/superadmin/settings');
 		return { message: 'Language settings updated successfully.', error: false };
 
@@ -205,6 +210,7 @@ export async function updateBrandingSettings(
 	prevState: FormState | null,
 	formData: FormData
 ): Promise<FormState> {
+	await requirePlatformSuperuser();
 	const rawData = {
 		platformLogoUrl: formData.get('platformLogoUrl'),
 		platformFaviconUrl: formData.get('platformFaviconUrl'),
@@ -240,20 +246,21 @@ export async function getPlatformSettings(): Promise<{
 	languageSettings: LanguageSettings;
 	brandingSettings: PlatformBrandingSettings | null;
 }> {
-	const analyticsDoc = await getDoc(doc(db, 'platform_settings', 'analytics'));
-	const paymentDoc = await getDoc(doc(db, 'platform_settings', 'payment_gateway'));
-	const languagesDoc = await getDoc(doc(db, 'platform_settings', 'languages'));
+	await requirePlatformSuperuser();
+	const analyticsDoc = await getAdminDb().collection('platform_settings').doc('analytics').get();
+	const paymentDoc = await getAdminDb().collection('platform_settings').doc('payment_gateway').get();
+	const languagesDoc = await getAdminDb().collection('platform_settings').doc('languages').get();
 	const brandingSettings = await getPlatformBrandingSettings();
 
-	const analyticsSettings: AnalyticsSettings = analyticsDoc.exists()
+	const analyticsSettings: AnalyticsSettings = analyticsDoc.exists
 		? (analyticsDoc.data() as AnalyticsSettings)
 		: defaultAnalyticsSettings;
 
-	const paymentGatewaySettings: PaymentGatewaySettings = paymentDoc.exists()
+	const paymentGatewaySettings: PaymentGatewaySettings = paymentDoc.exists
 		? (paymentDoc.data() as PaymentGatewaySettings)
 		: defaultPaymentGatewaySettings;
 
-	const languageSettings: LanguageSettings = languagesDoc.exists()
+	const languageSettings: LanguageSettings = languagesDoc.exists
 		? (languagesDoc.data() as LanguageSettings)
 		: defaultLanguageSettings;
 
@@ -268,19 +275,5 @@ export async function getPlatformSettings(): Promise<{
 
 // Helpers to get active Stripe keys
 export async function getActiveStripeKey(): Promise<string | null> {
-	const settings = await getPlatformSettings();
-	const mode = settings.paymentGatewaySettings.activeMode;
-	return settings.paymentGatewaySettings[mode]?.publishableKey || null;
-}
-
-export async function getActiveStripeSecretKey(): Promise<string | null> {
-	const settings = await getPlatformSettings();
-	const mode = settings.paymentGatewaySettings.activeMode;
-	return settings.paymentGatewaySettings[mode]?.secretKey || null;
-}
-
-export async function getActiveStripeWebhookSecret(): Promise<string | null> {
-	const settings = await getPlatformSettings();
-	const mode = settings.paymentGatewaySettings.activeMode;
-	return settings.paymentGatewaySettings[mode]?.webhookSecret || null;
+	return getActiveStripePublishableKey();
 }

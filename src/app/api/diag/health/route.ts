@@ -1,3 +1,4 @@
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 
 // src/app/api/diag/health/route.ts
 import { NextResponse } from "next/server";
@@ -8,6 +9,8 @@ export const runtime = "nodejs";
 export const fetchCache = "default-no-store";
 
 export async function GET() {
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   const probe = await adminHealthProbe();
   const status = probe.ok ? 200 : 503;
   return NextResponse.json(

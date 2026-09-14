@@ -1,3 +1,4 @@
+import { getOrderDetails } from '@/lib/access/order-details';
 import { FeedbackRequestButton } from '@/components/superadmin/feedback-request-button';
 
 
@@ -11,24 +12,9 @@ import Link from '@/components/superadmin/admin-link';
 import { format } from 'date-fns';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
-import { getBrandById } from '@/app/superadmin/brands/actions';
-import { getOrderById } from '@/app/checkout/order-actions';
-import { getAdminDb } from '@/lib/firebase-admin';
 
 export const revalidate = 0; // Force dynamic rendering
 
-export async function getOrderDetails(orderId: string): Promise<(OrderDetail & { brandLogoUrl?: string | null }) | null> {
-	const order = await getOrderById(orderId);
-	if (!order) {
-		return null;
-	}
-	const brand = await getBrandById(order.brandId);
-
-	return {
-		...order,
-		brandLogoUrl: brand?.logoUrl
-	} as OrderDetail & { brandLogoUrl?: string | null };
-}
 
 const statusVariantMap: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
 	'Completed': 'default',

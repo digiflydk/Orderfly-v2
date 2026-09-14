@@ -4,6 +4,7 @@
 import { getAdminDb } from "@/lib/firebase-admin";
 import { cache } from 'react';
 import { unstable_cache } from 'next/cache';
+import { publicBrandRecord, publicLocationRecord } from '@/lib/public-native-records';
 import { storefrontMedia } from '@/lib/storefront-media';
 import type { Brand, Location } from "@/types";
 
@@ -21,18 +22,18 @@ const cachedBrand = cache(unstable_cache(async (slug: string): Promise<BrandDoc>
     const snap = await q.get();
     if (snap.empty) return null;
     const doc = snap.docs[0];
-    return storefrontMedia({ ...doc.data(), id: doc.id } as Brand, 'brands', doc.id);
+    return storefrontMedia(publicBrandRecord(doc.id, doc.data()), 'brands', doc.id);
   } catch (err) {
       console.error(`[data.getBrandBySlug] Failed to fetch brand by slug '${slug}':`, err);
       throw err;
   }
-}, ['storefront-brand-v1'], {revalidate:60,tags:['storefront']}));
+}, ['storefront-brand-public-v2'], {revalidate:60,tags:['storefront']}));
 
 export async function getLocationsForBrand(brandId: string): Promise<Location[]> {
     const db = getAdminDb();
     const q = db.collection('locations').where('brandId', '==', brandId);
     const querySnapshot = await q.get();
-    return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Location[];
+    return querySnapshot.docs.map(doc => publicLocationRecord(doc.id, doc.data()));
 }
 
 
@@ -49,8 +50,8 @@ const cachedLocation = cache(unstable_cache(async (brandId: string, locationSlug
   
   const locationDoc = querySnapshot.docs[0];
   const data = locationDoc.data();
-  return storefrontMedia({ ...data, id: locationDoc.id } as Location, 'locations', locationDoc.id);
-}, ['storefront-location-v1'], {revalidate: 60, tags: ['storefront']}));
+  return storefrontMedia(publicLocationRecord(locationDoc.id, data), 'locations', locationDoc.id);
+}, ['storefront-location-public-v2'], {revalidate: 60, tags: ['storefront']}));
 
 
 export async function getBrandAndLocation(brandSlug: string, locationSlug: string) {

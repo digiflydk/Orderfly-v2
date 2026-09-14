@@ -6,7 +6,7 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 function load(path,mocks={}) {
  const mod={exports:{}};
  const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
- new Function('require','module','exports',code)(name=>['./money','@/lib/money'].includes(name)?require('../helpers/load-ts.cjs').loadTs('src/lib/money.ts'):name in mocks?mocks[name]:require(name),mod,mod.exports);return mod.exports;
+ new Function('require','module','exports',code)(name=>['./money','@/lib/money'].includes(name)?require('../helpers/load-ts.cjs').loadTs('src/lib/money.ts'):name === '@/lib/server/firestore-compat' && mocks['firebase/firestore'] ? {...mocks['firebase/firestore'],db:mocks['@/lib/firebase']?.db} : name in mocks ?mocks[name]:require(name),mod,mod.exports);return mod.exports;
 }
 const rules=load('src/lib/promotion-rules.ts');
 const pricing=load('src/lib/checkout-price-validation.ts',{'./promotion-rules':rules});
@@ -49,7 +49,7 @@ test('actual checkout action rejects tampering before side effects, allows valid
   '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),
   stripe:{default:class Stripe {}},'@/lib/firebase':{db:{}},
   '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>{if(++identityCalls===2)throw Error('AFTER_PRICE_VALIDATION');return {ref:{id:'c'},exists:()=>true,data:()=>({brandId:'b'})};}},
-  '../superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
+  '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
   '@/lib/url':{getOrigin:async()=> 'https://example.test'},
   '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b',slug:'brand'})},
   '@/app/superadmin/locations/actions':{getLocationById:async()=>({id:'l',brandId:'b',slug:'location',isActive:true,deliveryTypes:['pickup'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'12:00',close:'22:00'}]))})},

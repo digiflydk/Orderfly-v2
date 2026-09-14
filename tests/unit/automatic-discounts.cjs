@@ -5,10 +5,10 @@ const ts=require('typescript');
 function load(path,mocks={}) {
  const mod={exports:{}};
  const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
- new Function('require','module','exports',code)(name=>name in mocks?mocks[name]:require(name),mod,mod.exports);
+ new Function('require','module','exports',code)(name=>name in mocks ?mocks[name]:require(name),mod,mod.exports);
  return mod.exports;
 }
-const calc=load('src/lib/automatic-discounts.ts');
+const calc=load('src/lib/automatic-discounts.ts',{'./money':load('src/lib/money.ts')});
 const schema=load('src/lib/standard-discount-schema.ts');
 const rules=load('src/lib/promotion-rules.ts');
 const offer={brandId:'b',locationIds:['l'],discountName:'3 for 2',discountType:'category',referenceIds:['pizza'],discountMethod:'buy_x_pay_y',buyQuantity:3,payQuantity:2,isActive:true,orderTypes:['pickup','delivery'],activeDays:[],activeTimeSlots:[],timeSlotValidationType:'orderTime'};
@@ -66,10 +66,20 @@ test('same form/server schema accepts supported scopes and rejects invalid deals
  assert.equal(schema.standardDiscountSchema.safeParse({...offer,discountMethod:'percentage',discountValue:101}).success,false);
 });
 test('real action persists quantity fields, retains location on edit, rejects cross-brand references',async()=>{
- let saved; const records={'brands/b':{},'locations/l':{brandId:'b'},'categories/pizza':{locationIds:['l']},'products/foreign':{brandId:'other'}};
+ let saved, sequence=0; const records={'brands/b':{},'locations/l':{brandId:'b'},'categories/pizza':{locationIds:['l']},'products/foreign':{brandId:'other'}};
  const api=load('src/app/superadmin/standard-discounts/actions.ts',{
-  '@/lib/automatic-discounts':calc,'@/lib/standard-discount-schema':schema,'@/lib/promotion-rules':rules,'@/lib/firebase':{db:{}},'next/cache':{revalidatePath:()=>{},revalidateTag:()=>{}},'next/navigation':{redirect:()=>{throw Error('REDIRECT');}},
-  'firebase/firestore':{collection:(_,p)=>p,doc:(db,p,id)=>typeof db==='string'?{id:'new',path:db+'/new'}:{id,path:p+'/'+id},getDoc:async ref=>({exists:()=>ref.path in records,data:()=>records[ref.path]}),Timestamp:{now:()=>0,fromDate:d=>d.toISOString()},setDoc:async(ref,data)=>{assert.ok(Object.values(data).every(v=>v!==undefined));saved=data;records[ref.path]=data;}}
+  '@/lib/automatic-discounts':calc,'@/lib/standard-discount-schema':schema,'@/lib/promotion-rules':rules,
+  '@/lib/access/orderfly-session':{verifiedOrderflyIdentity:async()=>({provider:'firebase',subject:'actor'})},
+  '@/lib/firebase-admin':{getAdminDb:()=>({collection:p=>({doc:(id=(sequence++===0?'new':'new-'+sequence))=>({id,path:p+'/'+id})})})},
+  '@/lib/access/scoped-data':{mutateScopedDocument:async(collection,id,permission,scope,update)=>{
+    assert.equal(collection,'standard_discounts');assert.equal(scope,'locations');
+    assert.equal(permission,records[collection+'/'+id]?'orderfly.discounts:edit':'orderfly.discounts:create');
+    const data=await update(records[collection+'/'+id]||null,{get:async ref=>({exists:ref.path in records,data:()=>records[ref.path]})});
+    assert.ok(Object.values(data).every(v=>v!==undefined));saved=data;records[collection+'/'+id]=data;
+  }},
+  'next/cache':{revalidatePath:()=>{},revalidateTag:()=>{}},'next/navigation':{redirect:()=>{throw Error('REDIRECT');}},
+  'firebase-admin/firestore':{Timestamp:{now:()=>0,fromDate:d=>d.toISOString()}}
+
  });
  const form=data=>{const f=new FormData();for(const[k,v]of Object.entries(data)){if(k==='activeTimeSlots'||k==='quantityTiers')f.set(k,JSON.stringify(v));else if(Array.isArray(v))v.forEach(x=>f.append(k,x));else if(v!==undefined&&v!==false)f.set(k,String(v));}return f;};
  await assert.rejects(api.createOrUpdateStandardDiscount(null,form(offer)),/REDIRECT/);

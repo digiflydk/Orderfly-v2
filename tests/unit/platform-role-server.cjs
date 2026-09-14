@@ -46,7 +46,7 @@ test('legacy brand creation cannot create catalogue users while the bridge is of
         where: () => ({ get: async () => ({ empty: true, docs: [] }) }),
         doc: () => { throw Error('Catalogue creation reached the database'); },
       }) }) },
-      '@/lib/permissions': { hasPermission: () => true },
+      '@/lib/auth/permissions': { hasPermission: () => true },
     });
     for (const actions of [f.brands, legacy]) {
       const result = await actions.createOrUpdateBrand(null, formData({ ...brand,

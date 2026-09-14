@@ -1,6 +1,9 @@
 
 'use server';
 
+import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
+import { getScopedDocument, listScopedDocuments, mutateScopedDocument } from '@/lib/access/scoped-data';
+import { listLocationCatalog } from '@/lib/access/location-catalog';
 import { restaurantClock } from '@/lib/promotion-rules';
 import { upsellClientData } from '@/lib/upsell-serialization';
 import { revalidatePath } from 'next/cache';
@@ -90,6 +93,7 @@ export async function createOrUpdateUpsell(
   formData: FormData
 ): Promise<FormState> {
   try {
+    await verifiedOrderflyIdentity();
     const id = formData.get('id') as string | null;
 
     const safeParseFloat = (value: FormDataEntryValue | null): number | undefined => {
@@ -159,7 +163,7 @@ export async function createOrUpdateUpsell(
     };
 
     const db = getAdminDb();
-    const existing = id ? await getUpsellById(id) : null;
+
     
     const dataToSave: Omit<
       Upsell,
@@ -174,18 +178,18 @@ export async function createOrUpdateUpsell(
     } = {
       ...normalised,
       updatedAt: admin.firestore.Timestamp.now(),
-      views: existing?.views ?? 0,
-      conversions: existing?.conversions ?? 0,
+      views: 0,
+      conversions: 0,
     };
     
     if (startDate) dataToSave.startDate = admin.firestore.Timestamp.fromDate(startDate);
     if (endDate) dataToSave.endDate = admin.firestore.Timestamp.fromDate(endDate);
-    if (!existing) dataToSave.createdAt = admin.firestore.Timestamp.now();
+    if (!id) dataToSave.createdAt = admin.firestore.Timestamp.now();
 
     const upsellRef = id ? db.collection('upsells').doc(id) : db.collection('upsells').doc();
     
     const writeData = Object.fromEntries(Object.entries({ ...dataToSave, id: upsellRef.id }).filter(([, value]) => value !== undefined));
-    await upsellRef.set(writeData, { merge: true });
+    await mutateScopedDocument('upsells',upsellRef.id,id?'orderfly.catalog:edit':'orderfly.catalog:create','locations',before=>({...before,...writeData,views:before?.views??0,conversions:before?.conversions??0}));
     
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -200,7 +204,7 @@ export async function createOrUpdateUpsell(
 export async function deleteUpsell(upsellId: string) {
     try {
         const db = getAdminDb();
-        await db.collection("upsells").doc(upsellId).delete();
+        await mutateScopedDocument('upsells',upsellId,'orderfly.catalog:delete','locations',()=>null);
         revalidatePath("/superadmin/upsells");
         return { message: "Upsell deleted successfully.", error: false };
     } catch (e) {
@@ -211,10 +215,8 @@ export async function deleteUpsell(upsellId: string) {
 }
 
 export async function getUpsells(): Promise<Upsell[]> {
-  const db = getAdminDb();
-  const q = db.collection('upsells').orderBy('upsellName');
-  const querySnapshot = await q.get();
-  return querySnapshot.docs.map(doc => {
+  const documents=await listScopedDocuments('upsells','orderfly.catalog:view','locations');
+  return documents.sort((a,b)=>String(a.data().upsellName||'').localeCompare(String(b.data().upsellName||''))).map(doc => {
     const data = doc.data() as Omit<Upsell, 'id'>;
     return upsellClientData({
       ...data,
@@ -224,10 +226,8 @@ export async function getUpsells(): Promise<Upsell[]> {
 }
 
 export async function getUpsellById(upsellId: string): Promise<Upsell | null> {
-    const db = getAdminDb();
-    const docRef = db.collection('upsells').doc(upsellId);
-    const docSnap = await docRef.get();
-    if (docSnap.exists) {
+    const docSnap=await getScopedDocument('upsells',upsellId,'orderfly.catalog:view','locations');
+    if (docSnap) {
         const data = docSnap.data() as Omit<Upsell, 'id'>;
         return upsellClientData({
             ...data,
@@ -378,43 +378,9 @@ export async function incrementUpsellConversion(upsellId: string): Promise<{ suc
 }
 
 export async function getProductsForBrand(brandId: string): Promise<ProductForMenu[]> {
-  if (!brandId) return [];
-  const db = getAdminDb();
-  const q = db.collection('products').where('brandId', '==', brandId);
-  const querySnapshot = await q.get();
-  const products = querySnapshot.docs.map(doc => ({id: doc.id, ...doc.data()})) as Product[];
-  // Sort in memory to avoid needing a composite index for sorting
-  return upsellClientData(products.sort((a,b) => (a.sortOrder || 999) - (b.sortOrder || 999)));
+  const rows=await listScopedDocuments('products','orderfly.catalog:view','locations',[['brandId','==',brandId]]);
+  return upsellClientData(rows.map(doc=>({...doc.data(),id:doc.id})).sort((a:any,b:any)=>(a.sortOrder||999)-(b.sortOrder||999))) as ProductForMenu[];
 }
-
 export async function getCategoriesForBrand(brandId: string): Promise<Category[]> {
-    if (!brandId) return [];
-    const db = getAdminDb();
-    
-    const locationsQuery = db.collection('locations').where('brandId', '==', brandId);
-    const locationsSnapshot = await locationsQuery.get();
-    if (locationsSnapshot.empty) return [];
-    const locationIds = locationsSnapshot.docs.map(doc => doc.id);
-
-    const categoryPromises: Promise<admin.firestore.QuerySnapshot>[] = [];
-    for (let i = 0; i < locationIds.length; i += 30) {
-        const chunk = locationIds.slice(i, i + 30);
-        const categoriesQuery = db.collection('categories').where('locationIds', 'array-contains-any', chunk);
-        categoryPromises.push(categoriesQuery.get());
-    }
-    
-    const categorySnapshots = await Promise.all(categoryPromises);
-    const categories: Category[] = [];
-    const categoryIds = new Set<string>();
-
-    categorySnapshots.forEach(snapshot => {
-        snapshot.forEach((doc: admin.firestore.QueryDocumentSnapshot) => {
-            if (!categoryIds.has(doc.id)) {
-                categories.push({ id: doc.id, ...doc.data() } as Category);
-                categoryIds.add(doc.id);
-            }
-        });
-    });
-
-    return upsellClientData(categories.sort((a, b) => a.categoryName.localeCompare(b.categoryName)));
+  return (await listLocationCatalog('categories',brandId)).sort((a,b)=>String(a.categoryName).localeCompare(String(b.categoryName))) as Category[];
 }

@@ -2,7 +2,7 @@
 'use server';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
-import { requireSuperadmin } from '@/lib/auth/superadmin';
+import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
 import type { BrandWebsiteMenuSettings, BrandWebsiteMenuHero } from '@/types';
 import {
   brandWebsiteMenuSettingsSchema,
@@ -77,7 +77,7 @@ export async function getBrandWebsiteMenuSettings(
   const start = Date.now();
   const action = 'getBrandWebsiteMenuSettings';
   try {
-    await requireSuperadmin();
+    await requireOrderflyAccess(brandId,null,'orderfly.website:view');
     const result = await readMenuSettings(brandId);
      await logBrandWebsiteApiCall({
         layer: 'cms', action, brandId, status: 'success', durationMs: Date.now() - start, path: menuSettingsPath(brandId)
@@ -98,7 +98,7 @@ export async function saveBrandWebsiteMenuSettings(
     const start = Date.now();
     const actionName = 'saveBrandWebsiteMenuSettings';
     try {
-        await requireSuperadmin();
+        await requireOrderflyAccess(brandId,null,'orderfly.website:edit');
         const validatedInput = brandWebsiteMenuSettingsSchema.parse(input);
         const currentSettings = await readMenuSettings(brandId);
         const newSettings = {
@@ -136,7 +136,7 @@ export async function saveBrandWebsiteMenuHero(
     const start = Date.now();
     const actionName = 'saveBrandWebsiteMenuHero';
     try {
-        await requireSuperadmin();
+        await requireOrderflyAccess(brandId,null,'orderfly.website:edit');
 
         let validatedHero: BrandWebsiteMenuHero | null = null;
         if (hero) {

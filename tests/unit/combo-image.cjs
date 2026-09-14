@@ -3,7 +3,7 @@ const assert = require('node:assert/strict');
 const { loadTs } = require('../helpers/load-ts.cjs');
 const { optionalImageUrl } = loadTs('src/lib/optional-image-url.ts');
 
-function fixture() {
+function fixture({allowed=true}={}) {
   const saved = new Map();
   class Timestamp { constructor(date) { this.date = date; } toDate() { return this.date; } static now() { return new Timestamp(new Date()); } static fromDate(date) { return new Timestamp(date); } }
   function strict(value) {
@@ -14,9 +14,18 @@ function fixture() {
     'next/cache': { revalidatePath() {}, revalidateTag() {} }, 'next/navigation': { redirect: () => { throw Error('REDIRECT'); } },
     '@/lib/storefront-cache': {}, '@/lib/firebase': { db: {} },
     '../products/actions': { getProductsByIds: async () => [{ id: 'p', brandId: 'b', price: 75 }] },
-    'firebase/firestore': { Timestamp, collection: () => 'comboMenus', doc: (_, collection, id) => ({ id: id || 'new' }),
-      setDoc: async (ref, data) => { strict(data); saved.set(ref.id, { ...saved.get(ref.id), ...data }); },
-      getDoc: async ref => ({ id: ref.id, exists: () => saved.has(ref.id), data: () => saved.get(ref.id) }),
+    'firebase-admin/firestore': {Timestamp},
+    '@/lib/firebase-admin': {getAdminDb:()=>({collection:name=>({doc:id=>({id:id||'new',collection:name})})})},
+    '@/lib/access/orderfly-session': {verifiedOrderflyIdentity:async()=>{if(!allowed)throw Error('forbidden');return{provider:'firebase',subject:'actor'};}},
+    '@/lib/access/scoped-data': {
+      mutateScopedDocument:async(collection,id,permission,scope,update)=>{
+        assert.equal(collection,'comboMenus');assert.equal(scope,'locations');assert.ok(['orderfly.catalog:create','orderfly.catalog:edit','orderfly.catalog:delete'].includes(permission));
+        if(!allowed)throw Error('forbidden');
+        const data=await update(saved.get(id)||null,{get:async()=>({exists:true,data:()=>({brandId:'b'})})});
+        if(data){strict(data);saved.set(id,data);}else saved.delete(id);
+      },
+      getScopedDocument:async(collection,id,permission,scope)=>{assert.equal(permission,'orderfly.catalog:view');assert.equal(scope,'locations');if(!allowed)throw Error('forbidden');return saved.has(id)?{id,data:()=>saved.get(id)}:null;},
+      listScopedDocuments:async()=>{if(!allowed)throw Error('forbidden');return [...saved].map(([id,data])=>({id,data:()=>data}));},
     },
   });
   function form(image, id) {
@@ -48,4 +57,13 @@ test('editing can clear an existing image; bad images and missing locations stil
   const noLocation = form('', 'new'); noLocation.delete('locationIds');
   assert.equal((await api.createOrUpdateCombo(null, noLocation)).error, true);
   assert.equal(JSON.stringify([...saved]), before);
+});
+
+test('combo entrypoints reject denied access and do not write',async()=>{
+ const {api,form,saved}=fixture({allowed:false});
+ assert.equal((await api.createOrUpdateCombo(null,form(''))).error,true);
+ assert.equal((await api.deleteCombo('new')).error,true);
+ await assert.rejects(api.getComboById('new'),/forbidden/);
+ await assert.rejects(api.getCombos(),/forbidden/);
+ assert.equal(saved.size,0);
 });

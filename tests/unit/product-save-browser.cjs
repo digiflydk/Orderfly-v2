@@ -73,7 +73,7 @@ for(const format of ['jpeg','png','avif'])test(`create and reload actual ${forma
  const page=await setup(t),bytes=await image(format);
  await page.locator('input[type="file"]').setInputFiles({name:`water.${format}`,mimeType:`image/${format}`,buffer:bytes});
  await page.getByRole('button',{name:'Create Product',exact:true}).click();
- await page.waitForURL('**/superadmin/products');assert.ok(lastId);
+ await page.waitForURL('**/superadmin/products').catch(async error=>{error.message+='\nForm: '+await page.locator('body').innerText();throw error;});assert.ok(lastId);
  const saved=f.records.get('products/'+lastId);assert.equal(saved.brandId,'b');assert.equal(saved.price,20);assert.equal(saved.priceDelivery,20);assert.deepEqual(saved.locationIds,['l']);
  await page.goto(origin+'/superadmin/products/edit/'+lastId);await page.reload();
  assert.equal(await page.getByLabel('Product Name',{exact:true}).inputValue(),'Kildevand 0,5 l');

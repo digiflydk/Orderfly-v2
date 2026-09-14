@@ -1,9 +1,12 @@
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 
 export const runtime = 'nodejs';
 import { IMPORT_SWEEP_LIST } from '@/diag/importList';
 import { logger } from '@/lib/logger';
 
 export async function GET() {
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   const results: Array<{ module: string; ok: boolean; error?: string }> = [];
   for (const mod of IMPORT_SWEEP_LIST) {
     try {

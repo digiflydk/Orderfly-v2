@@ -1,7 +1,6 @@
 'use server'
 
-import { db } from '@/lib/firebase'
-import { collection, getDocs, orderBy, query } from 'firebase/firestore'
+import { nativeCatalog } from '@/lib/access/native-catalog'
 import type { Brand, Location } from '@/types'
 import type { SACommonFilters } from '@/types/superadmin'
 
@@ -10,21 +9,7 @@ export async function getFiltersData(): Promise<{
   locations: { id: string; name: string; brandId: string }[]
   initial: SACommonFilters
 }> {
-  // Hent brands
-  const [brandsSnap, locSnap] = await Promise.all([
-    getDocs(query(collection(db, 'brands'), orderBy('name', 'asc'))),
-    getDocs(collection(db, 'locations')),
-  ])
-  const brands: { id: string; name: string }[] = brandsSnap.docs.map(d => {
-    const data = d.data() as Partial<Brand>
-    return { id: d.id, name: data.name ?? 'Unnamed' }
-  })
-
-  // Hent locations
-  const locations: { id: string; name: string; brandId: string }[] = locSnap.docs.map(d => {
-    const data = d.data() as Partial<Location>
-    return { id: d.id, name: data.name ?? 'Unnamed', brandId: data.brandId ?? '' }
-  })
+  const {brands, locations} = await nativeCatalog('orderfly.analytics:view');
 
   const today = new Date().toISOString().slice(0, 10)
   const initial: SACommonFilters = {

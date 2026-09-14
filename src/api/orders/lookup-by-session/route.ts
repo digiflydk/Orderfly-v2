@@ -3,7 +3,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { db } from '@/lib/firebase';
 import { collection, query, where, getDocs, limit, Timestamp, doc, getDoc } from 'firebase/firestore';
 import Stripe from 'stripe';
-import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
+import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 import type { OrderDetail } from '@/types';
 
 async function getOrder(orderId: string): Promise<OrderDetail | null> {

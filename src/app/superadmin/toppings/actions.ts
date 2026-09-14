@@ -2,8 +2,11 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, writeBatch, where, getDoc } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
+import { AuthorityError } from '@/lib/access/authority';
+import { authorizeLocationCatalog, getLocationCatalogDocument, listLocationCatalog, mutateLocationCatalog, reorderLocationCatalog } from '@/lib/access/location-catalog';
+
 import type { Topping, ToppingGroup } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
@@ -40,7 +43,7 @@ export async function createOrUpdateToppingGroup(
   formData: FormData
 ): Promise<FormState> {
   const rawData: Record<string, any> = Object.fromEntries(formData.entries());
-  
+
   rawData.locationIds = formData.getAll('locationIds');
 
   const validatedFields = toppingGroupSchema.safeParse(rawData);
@@ -55,8 +58,14 @@ export async function createOrUpdateToppingGroup(
   const { id, ...groupData } = validatedFields.data;
 
   try {
-    const groupRef = id ? doc(db, 'topping_groups', id) : doc(collection(db, 'topping_groups'));
-    await setDoc(groupRef, { ...groupData, id: groupRef.id }, { merge: true });
+    const groupId=id||getAdminDb().collection('topping_groups').doc().id;
+    await mutateLocationCatalog('topping_groups',groupId,id?'orderfly.catalog:edit':'orderfly.catalog:create',async(before,tx)=>{
+      if(before){const children=await tx.get(getAdminDb().collection('toppings').where('groupId','==',groupId).limit(101));
+        if(children.size>100)throw new AuthorityError('too_many_records',409);
+        if(children.docs.some(child=>!Array.isArray(child.data().locationIds)||!child.data().locationIds.every((location:string)=>groupData.locationIds.includes(location))))throw new AuthorityError('group_has_toppings_outside_scope',409);
+      }
+      return {...before,...groupData,id:groupId};
+    });
 
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -68,19 +77,19 @@ export async function createOrUpdateToppingGroup(
 
 export async function deleteToppingGroup(groupId: string) {
     try {
-        const batch = writeBatch(db);
-
-        const groupRef = doc(db, "topping_groups", groupId);
-        batch.delete(groupRef);
-
-        const toppingsQuery = query(collection(db, "toppings"), where("groupId", "==", groupId));
-        const toppingsSnapshot = await getDocs(toppingsQuery);
-        toppingsSnapshot.forEach(toppingDoc => {
-            batch.delete(toppingDoc.ref);
+        if(!/^[A-Za-z0-9_-]{1,128}$/.test(groupId))throw new AuthorityError('invalid_identifier',400);
+        const identity=await verifiedOrderflyIdentity(),db=getAdminDb();
+        await db.runTransaction(async tx=>{
+            const ref=db.collection('topping_groups').doc(groupId),group=await tx.get(ref);
+            if(!group.exists)throw new AuthorityError('record_missing',404);
+            await authorizeLocationCatalog(tx,identity,group.data()!,'orderfly.catalog:delete');
+            const children=await tx.get(db.collection('toppings').where('groupId','==',groupId).limit(101));
+            if(children.size>100)throw new AuthorityError('too_many_records',409);
+            for(const child of children.docs)await authorizeLocationCatalog(tx,identity,child.data(),'orderfly.catalog:delete');
+            for(const child of children.docs)tx.delete(child.ref);
+            tx.delete(ref);
         });
 
-        await batch.commit();
-        
         revalidatePath("/superadmin/toppings");
         return { message: "Topping group and its toppings deleted successfully.", error: false };
     } catch (e) {
@@ -94,14 +103,14 @@ export async function createOrUpdateTopping(
   prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
-  
+
   const rawData: Record<string, any> = {};
 
   const id = formData.get('id') as string | null;
   if (id) {
     rawData.id = id;
   }
-  
+
   formData.forEach((value, key) => {
       if (key === 'locationIds') {
           if (!rawData[key]) rawData[key] = [];
@@ -113,9 +122,9 @@ export async function createOrUpdateTopping(
 
   rawData.isActive = formData.has('isActive');
   rawData.isDefault = formData.has('isDefault');
-  
+
   const validatedFields = toppingSchema.safeParse(rawData);
-  
+
   if (!validatedFields.success) {
     const errorMessages = Object.entries(validatedFields.error.flatten().fieldErrors)
         .map(([field, errors]) => `${field}: ${errors.join(', ')}`)
@@ -125,12 +134,18 @@ export async function createOrUpdateTopping(
       error: true,
     };
   }
-  
+
   const { id: validatedId, ...toppingData } = validatedFields.data;
-  
+
   try {
-    const toppingRef = validatedId ? doc(db, 'toppings', validatedId) : doc(collection(db, 'toppings'));
-    await setDoc(toppingRef, { ...toppingData, id: toppingRef.id }, { merge: true });
+    const toppingId=validatedId||getAdminDb().collection('toppings').doc().id;
+    await mutateLocationCatalog('toppings',toppingId,validatedId?'orderfly.catalog:edit':'orderfly.catalog:create',async(before,tx,identity)=>{
+      if(!/^[A-Za-z0-9_-]{1,128}$/.test(toppingData.groupId))throw new AuthorityError('invalid_identifier',400);
+      const group=await tx.get(getAdminDb().collection('topping_groups').doc(toppingData.groupId));
+      if(!group.exists||!toppingData.locationIds.every(location=>group.data()!.locationIds?.includes(location)))throw new AuthorityError('invalid_group_scope');
+      await authorizeLocationCatalog(tx,identity,group.data()!,'orderfly.catalog:view');
+      return {...before,...toppingData,id:toppingId};
+    });
 
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -143,7 +158,7 @@ export async function createOrUpdateTopping(
 
 export async function deleteTopping(toppingId: string) {
     try {
-        await deleteDoc(doc(db, "toppings", toppingId));
+        await mutateLocationCatalog('toppings',toppingId,'orderfly.catalog:delete',()=>null);
         revalidatePath("/superadmin/toppings");
         return { message: "Topping deleted successfully.", error: false };
     } catch (e) {
@@ -155,12 +170,7 @@ export async function deleteTopping(toppingId: string) {
 
 export async function updateToppingSortOrder(orderedToppings: {id: string, sortOrder: number}[]) {
     try {
-        const batch = writeBatch(db);
-        orderedToppings.forEach(topping => {
-            const docRef = doc(db, 'toppings', topping.id);
-            batch.update(docRef, { sortOrder: topping.sortOrder });
-        });
-        await batch.commit();
+        await reorderLocationCatalog('toppings',orderedToppings);
         revalidatePath('/superadmin/toppings');
         return { message: 'Topping order updated.', error: false };
     } catch(e) {
@@ -170,61 +180,21 @@ export async function updateToppingSortOrder(orderedToppings: {id: string, sortO
 }
 
 
+async function publicLocation(locationId:string){
+  if(!/^[A-Za-z0-9_-]{1,128}$/.test(locationId))return false;
+  const location=await getAdminDb().collection('locations').doc(locationId).get();return location.exists&&location.data()?.isActive===true;
+}
 export async function getToppingGroups(locationId?: string): Promise<ToppingGroup[]> {
-    let q;
-    if (locationId) {
-        q = query(collection(db, 'topping_groups'), where('locationIds', 'array-contains', locationId));
-    } else {
-        q = query(collection(db, 'topping_groups'), orderBy('groupName'));
-    }
-    const querySnapshot = await getDocs(q);
-    const groups = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as ToppingGroup[];
-
-    // Sort in-memory if locationId is provided to avoid composite index requirement
-    if (locationId) {
-        return groups.sort((a, b) => a.groupName.localeCompare(b.groupName));
-    }
-    
-    return groups;
+  if(!locationId)return (await listLocationCatalog('topping_groups') as ToppingGroup[]).sort((a,b)=>a.groupName.localeCompare(b.groupName));
+  if(!await publicLocation(locationId))return [];
+  const rows=await getAdminDb().collection('topping_groups').where('locationIds','array-contains',locationId).get();
+  return rows.docs.map(doc=>{const d=doc.data();return {id:doc.id,locationIds:[locationId],groupName:d.groupName,minSelection:d.minSelection,maxSelection:d.maxSelection} as ToppingGroup;}).sort((a,b)=>a.groupName.localeCompare(b.groupName));
 }
-
-export async function getToppingGroupById(id: string): Promise<ToppingGroup | null> {
-    const docRef = doc(db, 'topping_groups', id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as ToppingGroup;
-    }
-    return null;
-}
-
-
+export async function getToppingGroupById(id:string):Promise<ToppingGroup|null>{return await getLocationCatalogDocument('topping_groups',id) as ToppingGroup|null;}
 export async function getToppings(locationId?: string): Promise<Topping[]> {
-    let q;
-    if (locationId) {
-        q = query(
-            collection(db, 'toppings'),
-            where('locationIds', 'array-contains', locationId),
-            where('isActive', '==', true)
-        );
-    } else {
-        q = query(collection(db, 'toppings'), orderBy('toppingName'));
-    }
-    const querySnapshot = await getDocs(q);
-    const toppings = querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Topping[];
-
-    // Sort in-memory if locationId is provided to avoid composite index requirement
-    if (locationId) {
-        return toppings.sort((a, b) => (a.sortOrder || 999) - (b.sortOrder || 999));
-    }
-    
-    return toppings;
+  if(!locationId)return (await listLocationCatalog('toppings') as Topping[]).sort((a,b)=>a.toppingName.localeCompare(b.toppingName));
+  if(!await publicLocation(locationId))return [];
+  const rows=await getAdminDb().collection('toppings').where('locationIds','array-contains',locationId).where('isActive','==',true).get();
+  return rows.docs.map(doc=>{const d=doc.data();return {id:doc.id,locationIds:[locationId],groupId:d.groupId,toppingName:d.toppingName,price:d.price,isActive:true,isDefault:d.isDefault===true,sortOrder:d.sortOrder} as Topping;}).sort((a,b)=>(a.sortOrder??999)-(b.sortOrder??999));
 }
-
-export async function getToppingById(id: string): Promise<Topping | null> {
-    const docRef = doc(db, 'toppings', id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        return { id: docSnap.id, ...docSnap.data() } as Topping;
-    }
-    return null;
-}
+export async function getToppingById(id:string):Promise<Topping|null>{return await getLocationCatalogDocument('toppings',id) as Topping|null;}

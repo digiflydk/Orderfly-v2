@@ -24,9 +24,8 @@ import {
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
-import { getBrands } from '@/app/superadmin/brands/actions'
-import type { Brand, Customer } from '@/types'
-import { createOrUpdateCustomer } from '@/app/superadmin/customers/actions'
+import type { Customer } from '@/types'
+import { createOrUpdateCustomer, getCustomerFormBrands } from '@/app/superadmin/customers/actions'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2 } from 'lucide-react'
 
@@ -46,9 +45,26 @@ interface CustomerFormProps {
 }
 
 export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps) {
-  const [brands, setBrands] = useState<Brand[]>([])
+  const [brands, setBrands] = useState<Array<{id:string;name:string}>>([])
   const [brandId, setBrandId] = useState('')
-  useEffect(() => { if (isOpen && !customer) void getBrands().then(setBrands).catch(() => setBrands([])); }, [isOpen, customer])
+  const [loadingBrands, setLoadingBrands] = useState(false)
+  const [formError, setFormError] = useState('')
+  useEffect(() => {
+    let current = true
+    setFormError(''); setBrandId(''); setBrands([])
+    if (isOpen && !customer) {
+      setLoadingBrands(true)
+      void getCustomerFormBrands().then(rows => {
+        if (!current) return
+        setBrands(rows)
+        if (rows.length === 1) setBrandId(rows[0].id)
+        if (!rows.length) setFormError('You do not have permission to create customers for a brand.')
+      }).catch(() => {
+        if (current) setFormError('Brands could not be loaded. Close the form and try again.')
+      }).finally(() => { if (current) setLoadingBrands(false) })
+    }
+    return () => { current = false }
+  }, [isOpen, customer])
   const { toast } = useToast()
   const [isPending, startTransition] = useTransition()
 
@@ -99,10 +115,12 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
     formData.append('status', data.status ? 'active' : 'inactive')
 
     startTransition(async () => {
-      // Cast til any for at slippe for type-fejl på første argument
-      const result = await (createOrUpdateCustomer as any)(null, formData)
+      setFormError('')
+      try {
+      const result = await createOrUpdateCustomer(null, formData)
 
       if (result?.error) {
+        setFormError(result.message)
         toast({
           variant: 'destructive',
           title: 'Error',
@@ -115,11 +133,14 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
         })
         setIsOpen(false)
       }
+      } catch {
+        setFormError('The customer could not be saved. Your entries are preserved. Please try again.')
+      }
     })
   }
 
   return (
-    <Dialog open={isOpen} onOpenChange={setIsOpen}>
+    <Dialog open={isOpen} onOpenChange={open => { if (!isPending) setIsOpen(open) }}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
@@ -127,9 +148,11 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
         </DialogHeader>
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4 py-4">
+            {formError && <p role="alert" className="rounded-md border border-red-700 bg-red-50 p-3 text-sm text-red-950">{formError}</p>}
+            <fieldset disabled={isPending} className="space-y-4">
             {!customer && <label className="block">Brand
-              <select className="mt-1 w-full rounded-md border p-2" required value={brandId} onChange={event => setBrandId(event.target.value)}>
-                <option value="">Select brand</option>
+              <select className="mt-1 w-full rounded-md border p-2 text-base" required disabled={loadingBrands} value={brandId} onChange={event => setBrandId(event.target.value)}>
+                <option value="">{loadingBrands ? 'Loading brands…' : 'Select brand'}</option>
                 {brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
               </select>
             </label>}
@@ -197,7 +220,7 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
               <Button type="button" variant="ghost" onClick={() => setIsOpen(false)}>
                 Cancel
               </Button>
-              <Button type="submit" disabled={isPending || isSubmitting}>
+              <Button type="submit" disabled={isPending || isSubmitting || (!customer && (loadingBrands || !brandId))}>
                 {isPending || isSubmitting ? (
                   <Loader2 className="animate-spin" />
                 ) : isEditing ? (
@@ -207,6 +230,7 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
                 )}
               </Button>
             </DialogFooter>
+            </fieldset>
           </form>
         </Form>
       </DialogContent>

@@ -2,8 +2,10 @@
 
 'use server';
 
-import { db } from '@/lib/firebase';
-import { collection, getDocs, query, Timestamp, doc, setDoc, updateDoc, deleteDoc, getDoc, where } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { orderflyReadGrants, requireOrderflyAccess } from '@/lib/access/orderfly-session';
+import { getScopedDocument, listScopedDocuments, mutateScopedDocument } from '@/lib/access/scoped-data';
+import { Timestamp } from 'firebase-admin/firestore';
 import type { Customer, OrderDetail, Feedback } from '@/types';
 import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
@@ -25,9 +27,15 @@ export type FormState = {
   error: boolean;
 };
 
+export async function getCustomerFormBrands(): Promise<Array<{id:string;name:string}>> {
+  const grants = await orderflyReadGrants('orderfly.customers:create');
+  const documents = await Promise.all(grants.filter(grant=>grant.locationIds===null)
+    .map(grant=>getAdminDb().collection('brands').doc(grant.brandId).get()));
+  return documents.filter(doc=>doc.exists).map(doc=>({id:doc.id,name:String(doc.data()?.name || doc.id)}));
+}
 
 export async function createOrUpdateCustomer(
-  prevState: FormState,
+  prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
     const rawData = {
@@ -62,29 +70,15 @@ export async function createOrUpdateCustomer(
     }
 
     const { id, ...customerData } = validatedFields.data;
-    const docId = id || doc(collection(db, 'customers')).id;
+    const docId = id || getAdminDb().collection('customers').doc().id;
 
     try {
-        const customerRef = doc(db, 'customers', docId);
-        
-        if (id) {
-             await updateDoc(customerRef, customerData);
-        } else {
-            const brandId = z.string().min(1).max(150).refine(value => !value.includes('/')).parse(formData.get('brandId'));
-            if (!(await getDoc(doc(db, 'brands', brandId))).exists()) throw new Error('Select an existing brand.');
-            const newCustomerData = {
-                ...customerData,
-                id: docId,
-                brandId,
-                createdAt: Timestamp.now(),
-                totalOrders: 0,
-                totalSpend: 0,
-                locationIds: [],
-                loyaltyScore: 0,
-                loyaltyClassification: 'New',
-            }
-            await setDoc(customerRef, newCustomerData);
-        }
+        const brandId = id ? null : z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).parse(formData.get('brandId'));
+        if (brandId) await requireOrderflyAccess(brandId, null, 'orderfly.customers:create');
+        await mutateScopedDocument('customers', docId, `orderfly.customers:${id ? 'edit' : 'create'}`, 'company', before => {
+          if (before) return { ...before, ...customerData };
+          return { ...customerData, id: docId, brandId, createdAt: Timestamp.now(), totalOrders: 0, totalSpend: 0, locationIds: [], loyaltyScore: 0, loyaltyClassification: 'New' };
+        });
 
         return { message: `Customer ${id ? 'updated' : 'created'} successfully.`, error: false };
     } catch (e) {
@@ -95,7 +89,7 @@ export async function createOrUpdateCustomer(
 
 export async function deleteCustomer(customerId: string) {
     try {
-        await deleteDoc(doc(db, "customers", customerId));
+        await mutateScopedDocument('customers', customerId, 'orderfly.customers:delete', 'company', () => null);
         revalidatePath("/superadmin/customers");
         return { message: "Customer deleted successfully.", error: false };
     } catch (e) {
@@ -107,12 +101,14 @@ export async function deleteCustomer(customerId: string) {
 
 
 export async function getCustomers(): Promise<Customer[]> {
-  const customerQuery = query(collection(db, 'customers'));
-  const [customerSnapshot, ordersSnapshot, loyaltySettings] = await Promise.all([
-    getDocs(customerQuery),
-    getDocs(query(collection(db, 'orders'))),
-    getLoyaltySettings()
+  const customerDocs = await listScopedDocuments('customers', 'orderfly.customers:view', 'company');
+  const brandIds = [...new Set(customerDocs.map(d => d.data().brandId))];
+  const [ordersByBrand, loyaltySettings] = await Promise.all([
+    Promise.all(brandIds.map(brandId => getAdminDb().collection('orders').where('brandId', '==', brandId).get())),
+    getLoyaltySettings(),
   ]);
+  const customerSnapshot = { docs: customerDocs };
+  const ordersSnapshot = { docs: ordersByBrand.flatMap(result => result.docs) };
 
   const allOrders = ordersSnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as OrderDetail));
   const ordersByCustomerId = allOrders.reduce((acc, order) => {
@@ -166,14 +162,13 @@ export async function getCustomerDetails(customerId: string): Promise<{
     feedbackAccess: boolean;
 } | null> {
     const decodedCustomerId = decodeURIComponent(customerId);
-    const customerRef = doc(db, 'customers', decodedCustomerId);
-    const customerSnap = await getDoc(customerRef);
+    const customerSnap = await getScopedDocument('customers', decodedCustomerId, 'orderfly.customers:view', 'company');
 
-    if (!customerSnap.exists()) {
+    if (!customerSnap) {
         return null;
     }
 
-    const customerData = customerSnap.data();
+    const customerData = customerSnap.data()!;
     // Convert timestamps before creating the final customer object
     const finalCustomerData: any = {
       ...customerData,
@@ -189,13 +184,8 @@ export async function getCustomerDetails(customerId: string): Promise<{
 
     const customer: Customer = finalCustomerData as Customer;
 
-    const ordersQuery = query(
-        collection(db, 'orders'),
-        where('customerDetails.id', '==', decodedCustomerId),
-        where('brandId','==',customer.brandId)
-    );
-    
-    const ordersSnapshot = await getDocs(ordersQuery);
+    const ordersSnapshot = await getAdminDb().collection('orders')
+      .where('customerDetails.id', '==', decodedCustomerId).where('brandId', '==', customer.brandId).get();
     const sourceOrders = ordersSnapshot.docs.map(snapshot => snapshot.data() as OrderDetail);
     const allOrders = ordersSnapshot.docs.map(doc => {
         const data = doc.data();

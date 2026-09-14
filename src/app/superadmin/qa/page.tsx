@@ -1,10 +1,12 @@
 
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { listQa } from './actions';
 import { QaClientPage } from './client-page';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { db } from '@/lib/server/firestore-compat';
+import { doc, getDoc, setDoc } from '@/lib/server/firestore-compat';
 
 async function seedInitialTestCase() {
+  await requirePlatformSuperuser();
     const docRef = doc(db, "qaTestcases", "OFQ-001");
     const docSnap = await getDoc(docRef);
 

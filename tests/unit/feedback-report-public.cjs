@@ -55,17 +55,17 @@ test('authenticated roles enforce brand scope on queries and mutations',async()=
 test('absent, revoked, unassigned and malformed access denies database reads',async()=>{
  const cases=[f=>f.auth.cookie=false,f=>f.failure.auth=true,f=>f.auth.uid='unknown'];
  for(const configure of cases){const f=fixture();configure(f);await assert.rejects(()=>f.admin.getFeedbackEntries());assert.equal(f.reads.length,0);assert.equal(f.writes.length,0);}
- const setting=process.env.ORDERFLY_FEEDBACK_ACCESS;
- try{for(const config of ['invalid','[]','[{"uid":"qa-platform","role":"brand_editor","brandIds":[]}]','[{"uid":"qa-platform","role":"platform_admin"},{"uid":"qa-platform","role":"brand_viewer","brandIds":["b"]}]']){
-  process.env.ORDERFLY_FEEDBACK_ACCESS=config;const f=fixture();await assert.rejects(()=>f.admin.getFeedbackEntries());assert.equal(f.reads.length,0);
- }}finally{process.env.ORDERFLY_FEEDBACK_ACCESS=setting;}
+ for(const state of [null,{}, {principals:[],companies:[],roles:[],memberships:[]}]){
+  const f=fixture();if(state===null)f.records.delete('platformAdminControl/access-v1');else f.records.set('platformAdminControl/access-v1',state);
+  await assert.rejects(()=>f.admin.getFeedbackEntries());assert.equal(f.reads.length,0);
+ }
 });
-test('explicit dummy-data switch removes the separate feedback session while retaining the superadmin gate',async()=>{
+test('historical dummy-data switch cannot bypass the verified session or central authority',async()=>{
  const previous=process.env.ORDERFLY_FEEDBACK_TEST_ACCESS;
  try{
   process.env.ORDERFLY_FEEDBACK_TEST_ACCESS='enabled-for-dummy-data';const f=fixture();f.auth.cookie=false;f.records.set('feedback/b',row());
-  assert.equal((await f.admin.getFeedbackEntries()).length,1);await f.settings.writeFeedbackSettings({brandId:'b',publicReviewsEnabled:true});assert.equal(f.records.get('feedbackSettings/b').updatedBy,'temporary-feedback-test-access');
-  f.failure.auth=true;await assert.rejects(()=>f.admin.getFeedbackEntries());
+  await assert.rejects(()=>f.admin.getFeedbackEntries());assert.equal(f.writes.length,0);
+  f.auth.cookie=true;f.failure.auth=true;await assert.rejects(()=>f.admin.getFeedbackEntries());
  }finally{previous===undefined?delete process.env.ORDERFLY_FEEDBACK_TEST_ACCESS:process.env.ORDERFLY_FEEDBACK_TEST_ACCESS=previous;}
 });
 test('a brand can select one active compatible feedback form',async()=>{
@@ -119,8 +119,9 @@ test('public pagination is bounded and never includes another location',async()=
 });
 
 test('session endpoint requires same-origin, recently authenticated and explicitly authorized Firebase identity',async()=>{
- const calls=[];let uid='qa-platform',age=0;
+ const calls=[];let uid='qa-platform',age=0;const authorityFixture=fixture();
  const route=loadTs('src/app/api/feedback-admin/session/route.ts',{
+  '@/lib/feedback/access':authorityFixture.access,
   'server-only':{},'@/lib/url':{getOrigin:async()=> 'https://orderfly.dk'},
   '@/lib/firebase-admin':{getAdminApp:()=>({auth:()=>({
    verifyIdToken:async(token,revoked)=>{calls.push({token,revoked});return{uid,auth_time:Math.floor(Date.now()/1000)-age};},

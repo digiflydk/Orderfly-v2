@@ -1,6 +1,7 @@
 
 
 'use server';
+import { requirePlatformSuperuser, requireOrderflyAccess } from '@/lib/access/orderfly-session';
 import { mpanelAdminEnabled, assertLegacyAdminWrite } from '@/lib/mpanel-admin-cutover';
 
 import 'server-only';
@@ -10,8 +11,10 @@ import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import type { Brand, FoodCategory, Allergen, BrandAppearances } from '@/types';
+import { publicBrandRecord } from '@/lib/public-native-records';
+import { selectorCatalog } from '@/lib/access/native-catalog';
 import { brandRecord } from '@/lib/brand-record';
-import { hasPermission } from '@/lib/permissions';
+import { hasPermission } from '@/lib/auth/permissions';
 
 const appearancesSchema = z.object({
   colors: z.object({
@@ -90,7 +93,7 @@ export async function createOrUpdateBrand(
   formData: FormData
 ): Promise<FormState> {
 
-  if (!hasPermission(formData.get('id') ? 'brands:edit' : 'brands:create')) {
+  if (!await hasPermission(formData.get('id') ? 'brands:edit' : 'brands:create')) {
     return { message: 'Du har ikke adgang til at gemme dette brand.', error: true };
   }
 
@@ -202,6 +205,7 @@ export async function createOrUpdateBrand(
 
 
 export async function deleteBrand(brandId: string) {
+  await requirePlatformSuperuser();
     try {
         const db = getAdminDb();
         await db.collection("brands").doc(brandId).delete();
@@ -222,13 +226,19 @@ export async function getAllergens(): Promise<Allergen[]> {
     return querySnapshot.docs.map(doc => ({ id: doc.id, ...doc.data() })) as Allergen[];
 }
 
+export async function getBrandForAdministration(brandId:string):Promise<Brand|null> {
+    await requirePlatformSuperuser();
+    const saved=await getAdminDb().collection('brands').doc(brandId).get();
+    return saved.exists?brandRecord(saved.id,saved.data()||{}):null;
+}
+
 export async function getBrandById(brandId: string): Promise<Brand | null> {
     const db = getAdminDb();
     const docRef = db.collection('brands').doc(brandId);
     const docSnap = await docRef.get();
     if (docSnap.exists) {
         const data = docSnap.data();
-        return brandRecord(docSnap.id, data || {});
+        return publicBrandRecord(docSnap.id, data || {});
     }
     return null;
 }
@@ -244,10 +254,12 @@ export async function getBrandBySlug(brandSlug?: string): Promise<Brand | null> 
         return null;
     }
     const data = querySnapshot.docs[0].data();
-    return brandRecord(querySnapshot.docs[0].id, data);
+    return publicBrandRecord(querySnapshot.docs[0].id, data);
 }
 
 export async function getBrands(): Promise<Brand[]> {
+  const scope=await selectorCatalog();
+  if(!scope.superuser)return scope.brands.map(row=>brandRecord(row.id,row));
   const db = getAdminDb();
   // Firestore orderBy('name') omits records where name is missing entirely.
   const querySnapshot = await db.collection('brands').get();
@@ -261,6 +273,7 @@ export async function updateBrandAppearances(
 ): Promise<FormState> {
   try {
     const brandId = formData.get('brandId') as string;
+    await requireOrderflyAccess(brandId, null, 'orderfly.website:edit');
     const appearancesJSON = formData.get('appearances') as string;
     const appearances = JSON.parse(appearancesJSON) as BrandAppearances;
     const db = getAdminDb();

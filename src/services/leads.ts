@@ -1,7 +1,8 @@
 
 'use server';
-import { collection, addDoc, getDocs, orderBy, query } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
+import { collection, addDoc, getDocs, orderBy, query } from '@/lib/server/firestore-compat';
+import { db } from '@/lib/server/firestore-compat';
 
 const LEADS_COLLECTION_ID = 'leads';
 
@@ -26,6 +27,7 @@ export async function saveLead(leadData: Omit<Lead, 'id'>): Promise<string> {
 }
 
 export async function getAllLeads(): Promise<Lead[]> {
+  await requirePlatformSuperuser();
     try {
         const leadsCollection = collection(db, LEADS_COLLECTION_ID);
         const q = query(leadsCollection, orderBy('createdAt', 'desc'));

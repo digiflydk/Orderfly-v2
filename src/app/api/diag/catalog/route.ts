@@ -1,9 +1,12 @@
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 export const dynamic="force-dynamic"; export const runtime="nodejs"; export const fetchCache="default-no-store";
 
 export async function GET(req:Request){
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   const url=new URL(req.url); const brandSlug=url.searchParams.get("brandSlug")?.trim();
   if(!brandSlug) return NextResponse.json({ok:false,error:"Missing brandSlug"},{status:400});
   try{

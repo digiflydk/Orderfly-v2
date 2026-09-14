@@ -4,16 +4,16 @@
 
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from 'firebase/firestore';
+import { db } from '@/lib/server/firestore-compat';
+import { collection, doc, setDoc, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from '@/lib/server/firestore-compat';
 import type { CartItem, Discount, OrderDetail, Brand, Location, CustomerInfo, Customer, StandardDiscount, PaymentDetails, MinimalCartItem, Product, ComboMenu, Topping, ComboSelection, LoyaltySettings, AnonymousCookieConsent } from '@/types';
-import { getDiscountByCode } from '@/app/superadmin/discounts/actions';
+import { getDiscountByCode } from '@/lib/server/checkout-discounts';
 import { getActiveStandardDiscounts } from '@/app/superadmin/standard-discounts/actions';
 import { getBrandById } from '@/app/superadmin/brands/actions';
 import { getLocationById } from '@/app/superadmin/locations/actions';
 import { getToppings } from '@/app/superadmin/toppings/actions';
 import { getLoyaltySettings } from '@/app/superadmin/loyalty/actions';
-import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
+import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 import { getOrigin } from '@/lib/url';
 import { generateOrderId } from '@/lib/order-id';
 import { getOrderById, getOrderByCheckoutSessionId as getOrderBySessionId } from './order-actions';

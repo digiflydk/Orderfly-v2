@@ -2,7 +2,7 @@
 'use server';
 
 import { getAdminDb, admin } from '@/lib/firebase-admin';
-import { requireSuperadmin } from '@/lib/auth/superadmin';
+import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
 import type { BrandWebsitePage, BrandWebsitePageSummary, BrandWebsitePageCreateInput, BrandWebsitePageUpdateInput } from '@/types';
 import { brandWebsitePageCreateSchema, brandWebsitePageSlugSchema, brandWebsitePageUpdateSchema } from './pages-schemas';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
@@ -23,7 +23,7 @@ export async function listBrandWebsitePages(brandId: string): Promise<BrandWebsi
     const action = 'listBrandWebsitePages';
     const path = pagesCollectionPath(brandId);
     try {
-        await requireSuperadmin();
+        await requireOrderflyAccess(brandId,null,'orderfly.website:view');
         const db = getAdminDb();
         const snapshot = await db.collection(path).get();
 
@@ -65,7 +65,7 @@ export async function getBrandWebsitePage(brandId: string, slug: string): Promis
     const action = 'getBrandWebsitePage';
     const path = `${pagesCollectionPath(brandId)}/${slug}`;
     try {
-        await requireSuperadmin();
+        await requireOrderflyAccess(brandId,null,'orderfly.website:view');
         brandWebsitePageSlugSchema.parse(slug);
 
         const db = getAdminDb();
@@ -104,7 +104,7 @@ export async function createBrandWebsitePage(brandId: string, input: BrandWebsit
     const start = Date.now();
 
     try {
-        await requireSuperadmin();
+        await requireOrderflyAccess(brandId,null,'orderfly.website:create');
         const validated = brandWebsitePageCreateSchema.parse(input);
         
         const db = getAdminDb();
@@ -158,7 +158,7 @@ export async function updateBrandWebsitePage(brandId: string, slug: string, inpu
     const action = 'updateBrandWebsitePage';
     let path = `${pagesCollectionPath(brandId)}/${slug}`;
     try {
-        await requireSuperadmin();
+        await requireOrderflyAccess(brandId,null,'orderfly.website:edit');
         brandWebsitePageSlugSchema.parse(slug);
         const validatedInput = brandWebsitePageUpdateSchema.parse(input);
         
@@ -235,7 +235,7 @@ export async function deleteBrandWebsitePage(brandId: string, slug: string): Pro
     const action = 'deleteBrandWebsitePage';
     const path = `${pagesCollectionPath(brandId)}/${slug}`;
     try {
-        await requireSuperadmin();
+        await requireOrderflyAccess(brandId,null,'orderfly.website:delete');
         brandWebsitePageSlugSchema.parse(slug);
 
         const db = getAdminDb();

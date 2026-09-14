@@ -125,7 +125,7 @@ test('#71 SSR menu excludes explicit test data regardless of its public-looking 
 });
 test('#71 marketing endpoints fail closed without verified credentials',async()=>{
  let token='';let revoked=false;
- const {workerAuthorized,marketingAdminAuthorized}=loadTs('src/lib/marketing/auth.ts',{'server-only':{},'next/headers':{cookies:async()=>({get:()=>token?{value:token}:undefined})},'@/lib/firebase-admin':{getAdminApp:()=>({auth:()=>({verifySessionCookie:async(value,checkRevoked)=>{assert.equal(checkRevoked,true);if(revoked)throw Error('revoked');return {uid:value};}})})}});
+ const {workerAuthorized,marketingAdminAuthorized}=loadTs('src/lib/marketing/auth.ts',{'server-only':{},'@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>{if(token!=='allowed'||revoked)throw Error('Current authority denies');}}});
  delete process.env.ORDERFLY_MARKETING_WORKER_SECRET;assert.equal(workerAuthorized(new Request('https://fixture.test')),false);
  process.env.ORDERFLY_MARKETING_WORKER_SECRET='x'.repeat(32);assert.equal(workerAuthorized(new Request('https://fixture.test',{headers:{authorization:'Bearer '+'x'.repeat(32)}})),true);
  assert.equal(workerAuthorized(new Request('https://fixture.test',{headers:{authorization:'Bearer wrong'}})),false);
@@ -146,6 +146,7 @@ test('#71 stale upsell products cannot hide a later scoped public offer',async()
  const offer=id=>({id,brandId:'b',locationIds:['l'],isActive:true,orderTypes:['pickup'],activeDays:[],activeTimeSlots:[],offerType:'product',offerProductIds:[id+'-product'],offerCategoryIds:[],triggerConditions:[{type:'cart_value_over',referenceId:'0'}],upsellName:id,discountType:'none'});
  const docs=[offer('stale'),offer('valid')].map(data=>({id:data.id,data:()=>data}));const calls=[];
  const {getActiveUpsellForCart}=loadTs('src/app/superadmin/upsells/actions.ts',{
+  '@/lib/access/orderfly-session':{},'@/lib/access/scoped-data':{},'@/lib/access/location-catalog':{},
   '@/lib/promotion-rules':{restaurantClock:()=>({day:'monday',time:'12:00'})},'next/cache':{},'next/navigation':{},'@/lib/upsell-serialization':{},
   '@/lib/firebase-admin':{admin:{firestore:{Timestamp:{now:()=>0,fromDate:d=>d},FieldPath:{documentId:()=>''}}},getAdminDb:()=>({collection:()=>({where(){return this},get:async()=>({docs})})})},
   '../products/actions':{getProductsByIds:async(ids,brandId,locationId)=>{calls.push([ids,brandId,locationId]);return ids[0]==='valid-product'?[{id:'valid-product'}]:[];}},
@@ -164,7 +165,9 @@ test('#71 scoped upsell products preserve brand-wide availability and exclude pr
  const docs=products.map(data=>({id:data.id,data:()=>data}));
  const {getProductsByIds}=loadTs('src/app/superadmin/products/actions.ts',{
   'server-only':{},'next/cache':{},'next/navigation':{},'firebase-admin':{firestore:{FieldPath:{documentId:()=>''}}},
-  '@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({where(){return this},get:async()=>({docs})})})},
+  '@/lib/firebase-admin':{getAdminDb:()=>({collection:name=>{
+    const filters=[];const q={where(field,operator,value){if(operator==='==')filters.push([field,value]);return q;},get:async()=>({docs:docs.filter(doc=>filters.every(([field,value])=>doc.data()[field]===value))}),doc:()=>({get:async()=>({exists:true,data:()=>name==='locations'?{brandId:'b',isActive:true}:{status:'active'}})})};return q;
+  }})},
  });
  const result=await getProductsByIds(products.map(p=>p.id),'b','l');assert.deepEqual(result.map(p=>p.id),['global','local']);
 });

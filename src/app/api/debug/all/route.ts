@@ -1,3 +1,4 @@
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 
 // src/app/api/debug/all/route.ts
 import "server-only";
@@ -10,6 +11,8 @@ import { buildAllDebugPayload } from "@/lib/debug/all";
 import { adminHealthProbe } from "@/lib/firebase-admin";
 
 export async function GET() {
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   try {
     const adminHealth = await adminHealthProbe();
     if (!adminHealth.ok) {

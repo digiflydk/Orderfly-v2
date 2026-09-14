@@ -1,9 +1,10 @@
 
 'use server';
 
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, updateDoc } from 'firebase/firestore';
+import { db } from '@/lib/server/firestore-compat';
+import { doc, getDoc, setDoc, updateDoc } from '@/lib/server/firestore-compat';
 import type { QaTestcase, QaStepTemplate, QaContext } from '../../qa/actions';
 
 export type RunStepStatus = 'Pending' | 'Approved' | 'Failed';
@@ -40,6 +41,7 @@ function computeStartUrl(context: QaContext, startPath: string): string {
 }
 
 export async function createRunFromTestcase(tc: QaTestcase): Promise<string> {
+  await requirePlatformSuperuser();
   const runId = buildRunId(tc.code);
   const steps: RunStep[] = tc.stepsTemplate.map(s => ({ ...s, status: 'Pending' }));
   const run: QaRun = {
@@ -56,11 +58,13 @@ export async function createRunFromTestcase(tc: QaTestcase): Promise<string> {
 }
 
 export async function getRun(runId: string): Promise<QaRun | null> {
+  await requirePlatformSuperuser();
   const snap = await getDoc(doc(db, 'qaRuns', runId));
   return snap.exists() ? (snap.data() as QaRun) : null;
 }
 
 export async function setStepStatus(runId: string, stepIndex: number, status: RunStepStatus, errorNote?: string, proofUrl?: string) {
+  await requirePlatformSuperuser();
   const ref = doc(db, 'qaRuns', runId);
   const snap = await getDoc(ref);
   if (!snap.exists()) throw new Error('Run not found');
@@ -79,6 +83,7 @@ export async function setStepStatus(runId: string, stepIndex: number, status: Ru
 }
 
 export async function finishRun(runId: string) {
+  await requirePlatformSuperuser();
   const ref = doc(db, 'qaRuns', runId);
   await updateDoc(ref, { finishedAt: Date.now() });
 }

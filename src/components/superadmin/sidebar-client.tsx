@@ -2,6 +2,7 @@
 'use client'
 
 import * as React from 'react'
+import { filterNavigation, type NavigationAccess } from '@/lib/access/navigation'
 import Link from '@/components/superadmin/admin-link'
 import Image from 'next/image'
 import { usePathname } from 'next/navigation'
@@ -75,15 +76,19 @@ function isActive(pathname: string, href?: string) {
 export function SuperAdminSidebarClient({
   brandingSettings,
   centralAdmin = false,
+  access,
 }: {
   brandingSettings?: PlatformBrandingSettings
   centralAdmin?: boolean
+  access?: NavigationAccess | null
 }) {
   const pathname = usePathname()
   const [user, setUser] = React.useState<SuperadminUser | null>(null);
 
   React.useEffect(() => {
-    getSuperadminUserContext().then(setUser);
+    let active = true;
+    getSuperadminUserContext().then(value => { if (active) setUser(value); }).catch(() => { if (active) setUser(null); });
+    return () => { active = false; };
   }, []);
 
   const logoUrl =
@@ -206,7 +211,9 @@ export function SuperAdminSidebarClient({
     },
   ]
 
-  const groups: Group[] = centralAdmin ? allGroups.filter(g => g.key !== 'people').map(g => g.key === 'billing' ? {...g, items:g.items.filter(i => i.href !== '/superadmin/subscriptions')} : g).concat([{key:'platform', title:'Platform', items:[{label:'Brugere, roller og abonnementer · mPanel',href:'https://www.esmeraldapizza.dk/mpanel#platform',icon:Users}]}]) : allGroups;
+  const candidateGroups: Group[] = centralAdmin ? allGroups.filter(g => g.key !== 'people').map(g => g.key === 'billing' ? {...g, items:g.items.filter(i => i.href !== '/superadmin/subscriptions')} : g).concat([{key:'platform', title:'Platform', items:[{label:'Brugere og roller · mPanel',href:'https://www.esmeraldapizza.dk/mpanel#platform',icon:Users}]}]) : allGroups;
+
+  const groups: Group[] = candidateGroups.map(group => ({...group, items: filterNavigation(group.items, access)})).filter(group => group.items.length > 0);
 
   const [open, setOpen] = React.useState<Record<string, boolean>>(() => {
     const state: Record<string, boolean> = {

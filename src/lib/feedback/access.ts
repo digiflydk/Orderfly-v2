@@ -1,50 +1,44 @@
 import 'server-only';
 import { cookies } from 'next/headers';
-import { getAdminApp } from '@/lib/firebase-admin';
-import { hasPermission } from '@/lib/permissions';
-import { z } from 'zod';
+import { getAdminApp, getAdminDb } from '@/lib/firebase-admin';
+import { executeAuthority, type VerifiedIdentity } from '@/lib/access/authority';
 
 export type FeedbackAccess = { uid: string; permissions: string[]; brandIds: string[] | null };
 export class FeedbackAccessError extends Error {
-  constructor() { super('Log ind med en administrator, der har adgang til feedback.'); }
+  constructor() { super('Log ind med en bruger, der har adgang til feedback.'); }
 }
 
-export function temporaryFeedbackTestAccessEnabled() {
-  return process.env.ORDERFLY_FEEDBACK_TEST_ACCESS === 'enabled-for-dummy-data';
-}
-const grant = z.object({
-  uid: z.string().min(1).max(128),
-  role: z.enum(['platform_admin', 'brand_editor', 'brand_viewer']),
-  brandIds: z.array(z.string().regex(/^[\w-]{1,160}$/)).max(50).default([]),
-}).strict().refine(value => value.role === 'platform_admin' || value.brandIds.length > 0);
+// Kept for the existing layout while its historical environment banner is retired.
+export function temporaryFeedbackTestAccessEnabled() { return false; }
 
-/** Server configuration is authoritative while legacy user/role editors remain unprotected. */
-export async function feedbackAccessForUid(uid: string): Promise<FeedbackAccess> {
+/** The UID must come from a revoked-checked Firebase token, never request input. */
+export async function feedbackAccessForUid(uid: string, permission = 'feedback:view'): Promise<FeedbackAccess> {
+  if (!['feedback:view','feedback:edit','settings:view','settings:edit'].includes(permission)) throw new FeedbackAccessError();
+  const identity: VerifiedIdentity = {provider:'firebase',subject:uid};
+  const bootstrap: VerifiedIdentity = {provider:'opsfly',subject:process.env.MPANEL_PLATFORM_ADMIN_EMPLOYEE_ID||'',organizationId:process.env.MPANEL_PLATFORM_ADMIN_ORGANIZATION_ID||''};
   try {
-    const grants = z.array(grant).max(100).parse(JSON.parse(process.env.ORDERFLY_FEEDBACK_ACCESS || '[]'));
-    if (new Set(grants.map(g => g.uid)).size !== grants.length) throw new FeedbackAccessError();
-    const entry = grants.find(g => g.uid === uid);
-    if (!entry) throw new FeedbackAccessError();
-    return { uid,
-      permissions: entry.role === 'platform_admin' ? ['feedback:view', 'feedback:edit', 'settings:view', 'settings:edit'] : entry.role === 'brand_editor' ? ['feedback:view', 'feedback:edit'] : ['feedback:view'],
-      brandIds: entry.role === 'platform_admin' ? null : [...new Set(entry.brandIds)],
-    };
+    const db=getAdminDb();
+    const session=await executeAuthority(db,identity,{action:'session'},bootstrap);
+    if (!('superuser' in session)) throw new FeedbackAccessError();
+    if (session.superuser) return {uid,permissions:['feedback:view','feedback:edit','settings:view','settings:edit'],brandIds:null};
+    // Question versions are global; a company grant cannot edit them.
+    if (permission.startsWith('settings:')) throw new FeedbackAccessError();
+    const result=await executeAuthority(db,identity,{action:'nativeGrants',product:'orderfly',permission:'orderfly.'+permission},bootstrap);
+    if (!('grants' in result)) throw new FeedbackAccessError();
+    // The current feedback aggregate combines locations, so it requires a
+    // company-wide grant. A selected-location grant must never expand here.
+    const brandIds=(result.grants as Array<{tenantId:string;locationIds:string[]|null}>).filter(g=>g.locationIds===null).map(g=>g.tenantId);
+    if (!brandIds.length) throw new FeedbackAccessError();
+    return {uid,permissions:[permission],brandIds:[...new Set(brandIds)]};
   } catch { throw new FeedbackAccessError(); }
 }
 
 export async function requireFeedbackAccess(permission = 'feedback:view'): Promise<FeedbackAccess> {
-  if (temporaryFeedbackTestAccessEnabled() && hasPermission('users:view')) {
-    const access = { uid: 'temporary-feedback-test-access', permissions: ['feedback:view', 'feedback:edit', 'settings:view', 'settings:edit'], brandIds: null };
-    if (!access.permissions.includes(permission)) throw new FeedbackAccessError();
-    return access;
-  }
-  const cookie = (await cookies()).get('__session')?.value;
+  const cookie=(await cookies()).get('__session')?.value;
   if (!cookie) throw new FeedbackAccessError();
   try {
-    const token = await getAdminApp().auth().verifySessionCookie(cookie, true);
-    const access = await feedbackAccessForUid(token.uid);
-    if (!access.permissions.includes(permission)) throw new FeedbackAccessError();
-    return access;
+    const token=await getAdminApp().auth().verifySessionCookie(cookie,true);
+    return await feedbackAccessForUid(token.uid,permission);
   } catch { throw new FeedbackAccessError(); }
 }
 
@@ -53,8 +47,7 @@ export function assertFeedbackBrand(access: FeedbackAccess, brandId: unknown): a
 }
 
 export async function requireQuestionAccess(edit = false) {
-  const access = await requireFeedbackAccess(edit ? 'settings:edit' : 'settings:view');
-  // Question versions are currently shared by all brands.
-  if (access.brandIds !== null) throw new FeedbackAccessError();
+  const access=await requireFeedbackAccess(edit?'settings:edit':'settings:view');
+  if (access.brandIds!==null) throw new FeedbackAccessError();
   return access;
 }

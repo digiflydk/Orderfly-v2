@@ -3,6 +3,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { FoodCategory } from '@/types';
 import { z } from 'zod';
@@ -41,6 +42,7 @@ export async function createOrUpdateFoodCategory(
   const db = getAdminDb();
 
   try {
+    await requirePlatformSuperuser();
     const categoryRef = id ? db.collection('food_categories').doc(id) : db.collection('food_categories').doc();
     await categoryRef.set({ ...categoryData, id: categoryRef.id }, { merge: true });
 
@@ -56,6 +58,7 @@ export async function createOrUpdateFoodCategory(
 
 export async function deleteFoodCategory(categoryId: string) {
     try {
+        await requirePlatformSuperuser();
         const db = getAdminDb();
         await db.collection("food_categories").doc(categoryId).delete();
         revalidatePath("/superadmin/food-categories");

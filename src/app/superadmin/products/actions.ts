@@ -8,12 +8,14 @@ import { z } from 'zod';
 import { toppingConditionsSchema, validateToppingConditions } from '@/lib/topping-condition-validation';
 import type { Topping, ToppingGroup } from '@/types';
 import { createHash } from 'node:crypto';
-import { hasPermission } from '@/lib/permissions';
+import { requireOrderflyAccess, verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
+import { authorizeTransaction, getScopedDocument, listScopedDocuments, mutateScopedDocument } from '@/lib/access/scoped-data';
 import { uploadProductImage } from '@/lib/superadmin/product-image-storage';
 import { getProductBrandReferences } from '@/lib/superadmin/product-brand-references';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Product, ProductForMenu } from '@/types';
 import * as admin from 'firebase-admin';
+import { menuProduct, publicMenuProducts } from '@/lib/server/menu-products';
 import { upsellClientData } from '@/lib/upsell-serialization';
 
 const asBool = (v: unknown) => {
@@ -29,7 +31,7 @@ const optionalNonNegativePrice = z.preprocess(
 );
 
 const baseFields = {
-  id: z.string().optional().nullable(),
+  id: z.preprocess(value => value === '' ? undefined : value, z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).optional().nullable()),
   creationKey: z.string().uuid().optional(),
   originalBrandId: z.string().min(1).optional(),
   brandId: z.string().min(1, 'A brand must be selected.'),
@@ -142,9 +144,9 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
     }
   
     try {
-      if (!hasPermission(id ? 'products:edit' : 'products:create')) {
-        return { ok: false, error: { message: 'You do not have permission to save products.' } };
-      }
+      const permission = `orderfly.catalog:${id ? 'edit' : 'create'}`;
+      const identity = await verifiedOrderflyIdentity();
+      await requireOrderflyAccess(productData.brandId, productData.locationIds.length ? productData.locationIds : null, permission);
       const db = getAdminDb();
       const brand = await db.collection('brands').doc(productData.brandId).get();
       if (!brand.exists) throw new Error('The selected brand no longer exists.');
@@ -159,6 +161,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       if (id && !existing.exists) throw new Error('The product no longer exists.');
       if (id) {
         const currentBrandId = existing.data()?.brandId;
+        await requireOrderflyAccess(currentBrandId, existing.data()?.locationIds?.length ? existing.data()!.locationIds : null, 'orderfly.catalog:edit');
         // Compare the submitted source with the stored brand, separately from permission checks.
         if ((originalBrandId !== undefined && originalBrandId !== currentBrandId) ||
             (currentBrandId !== productData.brandId && originalBrandId !== currentBrandId)) {
@@ -226,29 +229,31 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
       }
       // With no replacement file, omit imageUrl entirely to preserve the stored image.
       const now = new Date();
-      if (id) {
-        await ref.update({
-          ...toWrite,
-          ...(clearPriceDelivery ? { priceDelivery: admin.firestore.FieldValue.delete() } : {}),
-          updatedAt: now,
-        }, { lastUpdateTime: existing.updateTime! });
-      } else {
-        const payload = {
-          ...toWrite, id: ref.id,
-          ...(creationKey ? { creationKey } : {}),
-          ...(creationFingerprint ? { creationFingerprint } : {}),
-          isActive: toWrite.isActive ?? false,
-          createdAt: now, updatedAt: now,
-        };
-        try {
-          await ref.create(payload);
-        } catch (error: any) {
-          // Concurrent retries may race, but must never create a second product.
-          const saved = creationKey ? await ref.get() : null;
-          if (saved?.data()?.creationKey !== creationKey ||
-              saved?.data()?.brandId !== productData.brandId ||
-              saved?.data()?.creationFingerprint !== creationFingerprint) throw error;
+      try {
+      await db.runTransaction(async tx => {
+        const current = await tx.get(ref);
+        if (id) {
+          if (!current.exists || !current.updateTime?.isEqual(existing.updateTime!)) throw Object.assign(new Error('The product changed while saving.'), { code: 'failed-precondition' });
+          await authorizeTransaction(tx, identity, current.data()!, 'orderfly.catalog:edit', 'locations');
+          await authorizeTransaction(tx, identity, { ...current.data(), ...toWrite }, 'orderfly.catalog:edit', 'locations');
+          tx.update(ref, { ...toWrite, ...(clearPriceDelivery ? { priceDelivery: admin.firestore.FieldValue.delete() } : {}), updatedAt: now });
+        } else {
+          await authorizeTransaction(tx, identity, productData, 'orderfly.catalog:create', 'locations');
+          if (current.exists) {
+            if (!creationKey || current.data()?.creationKey !== creationKey || current.data()?.brandId !== productData.brandId || current.data()?.creationFingerprint !== creationFingerprint) throw new Error('Creation reference was already saved with different values.');
+            return;
+          }
+          tx.create(ref, { ...toWrite, id: ref.id, ...(creationKey ? { creationKey } : {}), ...(creationFingerprint ? { creationFingerprint } : {}), isActive: toWrite.isActive ?? false, createdAt: now, updatedAt: now });
         }
+      });
+      } catch (error) {
+        // A committed creation may lose its acknowledgement. Recheck current
+        // authority and the exact saved payload before acknowledging that retry.
+        if (id || !creationKey) throw error;
+        await requireOrderflyAccess(productData.brandId, productData.locationIds.length ? productData.locationIds : null, permission);
+        const saved = await ref.get();
+        if (saved.data()?.creationKey !== creationKey || saved.data()?.brandId !== productData.brandId ||
+            saved.data()?.creationFingerprint !== creationFingerprint) throw error;
       }
       // A cache failure must not turn a committed write into a misleading save error.
       try {
@@ -284,7 +289,7 @@ export async function createOrUpdateProduct(prevState: FormState | null, formDat
 export async function deleteProduct(productId: string) {
     try {
         const db = getAdminDb();
-        await db.collection("products").doc(productId).delete();
+        await mutateScopedDocument('products', productId, 'orderfly.catalog:delete', 'locations', () => null);
         revalidatePath("/superadmin/products");
     revalidateTag('storefront');
         return { message: "Product deleted successfully.", error: false };
@@ -298,12 +303,19 @@ export async function deleteProduct(productId: string) {
 export async function updateProductSortOrder(orderedProducts: {id: string, sortOrder: number}[]) {
     try {
         const db = getAdminDb();
-        const batch = db.batch();
-        orderedProducts.forEach(product => {
-            const docRef = db.collection('products').doc(product.id);
-            batch.update(docRef, { sortOrder: product.sortOrder });
+        const rows = z.array(z.object({ id: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/), sortOrder: z.number().int().min(0) }).strict()).max(400).parse(orderedProducts);
+        if (new Set(rows.map(row => row.id)).size !== rows.length) throw new Error('Duplicate product.');
+        const identity = await verifiedOrderflyIdentity();
+        await db.runTransaction(async tx => {
+          const updates = [];
+          for (const row of rows) {
+            const ref = db.collection('products').doc(row.id), saved = await tx.get(ref);
+            if (!saved.exists) throw new Error('Product not found.');
+            await authorizeTransaction(tx, identity, saved.data()!, 'orderfly.catalog:edit', 'locations');
+            updates.push({ ref, sortOrder: row.sortOrder });
+          }
+          for (const row of updates) tx.update(row.ref, { sortOrder: row.sortOrder });
         });
-        await batch.commit();
         revalidatePath('/superadmin/products');
     revalidateTag('storefront');
         return { message: 'Product order updated.', error: false };
@@ -316,7 +328,7 @@ export async function updateProductSortOrder(orderedProducts: {id: string, sortO
 export async function getProducts(): Promise<Product[]> {
     const db = getAdminDb();
     // New/imported products may not have sortOrder yet; orderBy would omit them.
-    const querySnapshot = await db.collection('products').get();
+    const querySnapshot = { docs: await listScopedDocuments('products', 'orderfly.catalog:view', 'locations') };
     const products = querySnapshot.docs.map(doc => upsellClientData({ ...doc.data(), id: doc.id })) as Product[];
     const order = (product: Product) => Number.isFinite(product.sortOrder) ? product.sortOrder! : Number.MAX_SAFE_INTEGER;
     return products.sort((a, b) => order(a) - order(b) || a.id.localeCompare(b.id));
@@ -324,69 +336,27 @@ export async function getProducts(): Promise<Product[]> {
 
 export async function getProductById(productId: string): Promise<Product | null> {
     const db = getAdminDb();
-    const docRef = db.collection('products').doc(productId);
-    const docSnap = await docRef.get();
-    if (docSnap.exists) {
+    const docSnap = await getScopedDocument('products', productId, 'orderfly.catalog:view', 'locations');
+    if (docSnap) {
         return upsellClientData({ ...docSnap.data(), id: docSnap.id }) as Product;
     }
     return null;
 }
 
 export async function getProductsByIds(productIds: string[], brandId?: string, locationId?: string): Promise<ProductForMenu[]> {
-    if (!productIds || productIds.length === 0) return [];
-    const db = getAdminDb();
-    
-    const productPromises: Promise<Product[]>[] = [];
-    for (let i = 0; i < productIds.length; i += 30) {
-        const chunk = productIds.slice(i, i + 30);
-        let q: admin.firestore.Query = db.collection('products').where(admin.firestore.FieldPath.documentId(), 'in', chunk);
-        if (brandId) {
-            q = q.where('brandId', '==', brandId);
-        }
-        const p = q.get().then(snapshot => snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Product)));
-        productPromises.push(p);
+    const ids = [...new Set(z.array(z.string().regex(/^[A-Za-z0-9_-]{1,128}$/)).max(500).parse(productIds))];
+    if (locationId) {
+      if (!brandId) throw new Error('A brand is required for a public menu.');
+      return publicMenuProducts(locationId, ids, brandId);
     }
-    
-    const productArrays = await Promise.all(productPromises);
-    const allProducts = productArrays.flat().filter(product => !locationId || (
-        product.isActive === true &&
-        product.isTestData !== true &&
-        (!(product.locationIds || []).length || product.locationIds.includes(locationId))
-    ));
-
-    const finalProducts: ProductForMenu[] = allProducts.map(p => ({
-        id: p.id,
-        productName: p.productName,
-        description: p.description,
-        price: p.price,
-        priceDelivery: p.priceDelivery,
-        imageUrl: p.imageUrl,
-        isFeatured: p.isFeatured,
-        isNew: p.isNew,
-        isPopular: p.isPopular,
-        allergenIds: p.allergenIds,
-        toppingGroupIds: p.toppingGroupIds,
-        toppingGroupConditions: p.toppingGroupConditions,
-        categoryId: p.categoryId,
-        brandId: p.brandId,
-        sortOrder: p.sortOrder,
-    }));
-    
-    if (process.env.NODE_ENV === 'development') {
-      console.log(
-        '[DEBUG] getProductsByIds:',
-        finalProducts.map((p) => ({
-          id: p.id,
-          productName: p.productName,
-          price: p.price,
-          toppingGroups: p.toppingGroupIds?.length,
-          imageSize: p.imageUrl?.length,
-          fullSize: JSON.stringify(p).length
-        }))
-      );
+    // Admin selectors may include inactive products, with per-record scope checks.
+    await verifiedOrderflyIdentity();
+    const products: ProductForMenu[] = [];
+    for (const id of ids) {
+      const doc = await getScopedDocument('products', id, 'orderfly.catalog:view', 'locations');
+      if (doc && (!brandId || doc.data()?.brandId === brandId)) products.push(menuProduct({...doc.data(),id:doc.id} as Product));
     }
-    
-    return finalProducts;
+    return products;
 }
 
 export async function duplicateProducts({
@@ -398,54 +368,43 @@ export async function duplicateProducts({
   targetBrandId: string;
   targetLocationIds: string[];
 }): Promise<{ success: boolean; message: string }> {
-  if (!productIds || productIds.length === 0) {
-    return { success: false, message: 'No products selected for duplication.' };
-  }
-  if (!targetBrandId) {
-    return { success: false, message: 'Target brand must be selected.' };
-  }
-  const db = getAdminDb();
   try {
-    const productsToDuplicate: Product[] = [];
-    for (let i = 0; i < productIds.length; i += 30) {
-      const chunk = productIds.slice(i, i + 30);
-      const q = db.collection('products').where(admin.firestore.FieldPath.documentId(), 'in', chunk);
-      const snapshot = await q.get();
-      snapshot.forEach(doc => {
-        productsToDuplicate.push({ id: doc.id, ...doc.data() } as Product);
-      });
-    }
-
-    if (productsToDuplicate.length === 0) {
-      return { success: false, message: 'Could not find the selected products to duplicate.' };
-    }
-
-    const batch = db.batch();
-    let duplicatedCount = 0;
-
-    for (const product of productsToDuplicate) {
-      const newProductId = db.collection('products').doc().id;
-      const { id, ...originalData } = product;
-      
-      const newProductData = {
-        ...originalData,
-        id: newProductId,
-        brandId: targetBrandId,
-        locationIds: targetLocationIds,
-        productName: product.productName, 
-        sortOrder: 9999,
-      };
-      
-      batch.set(db.collection('products').doc(newProductId), newProductData);
-      duplicatedCount++;
-    }
-
-    await batch.commit();
+    const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+    const input = z.object({ productIds:z.array(identifier).min(1).max(100),targetBrandId:identifier,targetLocationIds:z.array(identifier).max(100) }).parse({productIds,targetBrandId,targetLocationIds});
+    const ids = [...new Set(input.productIds)];
+    const identity = await verifiedOrderflyIdentity(), db = getAdminDb();
+    const locations = [...new Set(input.targetLocationIds)];
+    await requireOrderflyAccess(input.targetBrandId, locations.length ? locations : null, 'orderfly.catalog:create');
+    await db.runTransaction(async tx => {
+      const targetLocations = await tx.get(db.collection('locations').where('brandId','==',input.targetBrandId));
+      const requiredLocations = locations.length ? locations : targetLocations.docs.map(doc=>doc.id);
+      if (!requiredLocations.length) throw new Error('The target brand needs a location before products can be copied.');
+      const copies = [];
+      for (const id of ids) {
+        const source = await tx.get(db.collection('products').doc(id));
+        if (!source.exists) throw new Error('A selected product no longer exists.');
+        const original = source.data()!;
+        await authorizeTransaction(tx, identity, original, 'orderfly.catalog:view', 'locations');
+        const target: Record<string,any> = {...original,brandId:input.targetBrandId,locationIds:locations};
+        await authorizeTransaction(tx, identity, target, 'orderfly.catalog:create', 'locations');
+        const category = await tx.get(db.collection('categories').doc(identifier.parse(original.categoryId)));
+        if (!category.exists || requiredLocations.some(location=>!category.data()?.locationIds?.includes(location))) throw new Error('The product category must be available at every target location.');
+        for (const groupId of original.toppingGroupIds || []) {
+          const group = await tx.get(db.collection('topping_groups').doc(identifier.parse(groupId)));
+          if (!group.exists || requiredLocations.some(location=>!group.data()?.locationIds?.includes(location))) throw new Error('The topping groups must be available at every target location.');
+        }
+        // A copy is a new creation. It must not inherit a previous form's
+        // idempotency key, which could acknowledge an unrelated retry.
+        const {id:_id,creationKey:_key,creationFingerprint:_fingerprint,...data} = target;
+        const ref = db.collection('products').doc(), now = new Date();
+        copies.push({ref,data:{...data,id:ref.id,sortOrder:9999,createdAt:now,updatedAt:now}});
+      }
+      for (const copy of copies) tx.create(copy.ref,copy.data);
+    });
     revalidatePath('/superadmin/products');
     revalidateTag('storefront');
-    return { success: true, message: `${duplicatedCount} products duplicated successfully.` };
-  } catch (e: any) {
-    console.error('Failed to duplicate products:', e);
-    return { success: false, message: `An error occurred: ${e.message}` };
+    return {success:true,message:`${ids.length} products duplicated successfully.`};
+  } catch (error) {
+    return {success:false,message:error instanceof Error ? error.message : 'Products could not be copied.'};
   }
 }

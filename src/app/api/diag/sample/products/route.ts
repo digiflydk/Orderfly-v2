@@ -1,3 +1,4 @@
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 
 // src/app/api/diag/sample/products/route.ts
 import { NextResponse } from "next/server";
@@ -8,6 +9,8 @@ export const runtime = "nodejs";
 export const fetchCache = "default-no-store";
 
 export async function GET(req: Request) {
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   const url = new URL(req.url);
   const brandSlug = url.searchParams.get("brandSlug") || "";
   const limit = Math.min(Number(url.searchParams.get("limit") || 3), 25);

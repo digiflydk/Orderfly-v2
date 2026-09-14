@@ -2,7 +2,7 @@
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
 import { BrandFormPage } from '@/components/superadmin/brand-form-page';
-import { getBrandById } from '@/app/superadmin/brands/actions';
+import { getBrandForAdministration } from '@/app/superadmin/brands/actions';
 import { getSubscriptionPlans } from '@/app/superadmin/subscriptions/actions';
 import { getUsers } from '@/app/superadmin/users/actions';
 import { notFound } from 'next/navigation';
@@ -13,7 +13,7 @@ export default async function Page({ params, searchParams }: AsyncPageProps) {
     const query = await resolveSearchParams(searchParams);
 
     const [brand, foodCategories, plans, users] = await Promise.all([
-        getBrandById(routeParams.brandId),
+        getBrandForAdministration(routeParams.brandId),
         getFoodCategories(),
         getSubscriptionPlans(),
         getUsers(),

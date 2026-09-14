@@ -10,7 +10,7 @@ const location = {id:'l',brandId:'missing-brand',name:'Esmeralda QA Amager',slug
 function fixture(seed,allowed=true) {
  const records = new Map(seed || [['brands/b',{...brand}],['brands/c',{...brand,id:'c',name:'CPH QA',slug:'cph-qa',companyRegNo:'87654321'}],['locations/l',structuredClone(location)]]);
  const writes=[],invalidations=[];
- const snap=key=>({id:key.split('/').pop(),exists:records.has(key),data:()=>structuredClone(records.get(key))});
+ const snap=key=>({ref:{path:key},id:key.split('/').pop(),exists:records.has(key),data:()=>structuredClone(records.get(key))});
  const ref=key=>({key,id:key.split('/').pop(),get:async()=>snap(key),set:async(data)=>{records.set(key,{...records.get(key),...structuredClone(data)});writes.push(key);},update:async(data)=>{if(!records.has(key))throw Error('not found');records.set(key,{...records.get(key),...structuredClone(data)});writes.push(key);}});
  function collection(name,filters=[],orderedBy,cap=Infinity) {
   return {doc:(id='new')=>ref(name+'/'+id),where:(field,op,value)=>collection(name,[...filters,[field,value]],orderedBy,cap),
@@ -21,12 +21,12 @@ function fixture(seed,allowed=true) {
     return {docs,size:docs.length,empty:docs.length===0};
    }};
  }
- const db={collection,runTransaction:async fn=>{
+ const db={collection,doc:key=>ref(key),runTransaction:async fn=>{
   const pending=[];const result=await fn({get:ref=>ref.get(),set:(ref,data)=>pending.push([ref,data])});
   for(const [ref,data] of pending)await ref.set(data);return result;
  }};
- const mocks={'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},
-  '@/lib/permissions':{hasPermission:()=>allowed},'next/cache':{revalidatePath:(...args)=>invalidations.push(args),revalidateTag:()=>{}},
+ const mocks={'server-only':{},'@/lib/access/native-catalog':{selectorCatalog:async()=>({superuser:true,brands:[],locations:[]})},'@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>({superuser:true})},'@/lib/firebase-admin':{getAdminDb:()=>db},
+  '@/lib/auth/permissions':{hasPermission:()=>allowed},'next/cache':{revalidatePath:(...args)=>invalidations.push(args),revalidateTag:()=>{}},
   'next/navigation':{redirect:path=>{const error=Error('redirect');error.digest='NEXT_REDIRECT;replace;'+path+';307;';throw error;}}};
  return {records,writes,invalidations,users:loadTs('src/app/superadmin/users/actions.ts',mocks),plans:loadTs('src/app/superadmin/subscriptions/actions.ts',mocks),roles:loadTs('src/roles/actions.ts',mocks),brands:loadTs('src/app/superadmin/brands/actions.ts',mocks),locations:loadTs('src/app/superadmin/locations/actions.ts',mocks)};
 }

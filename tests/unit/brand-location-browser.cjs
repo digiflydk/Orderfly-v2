@@ -36,7 +36,7 @@ before(async()=>{
  server=http.createServer(async(req,res)=>{
   const url=new URL(req.url,'http://localhost');
   if(url.pathname==='/bundle.js'){res.setHeader('content-type','application/javascript');return res.end(fs.readFileSync(path.join(dir,'bundle.js')));}
-  if(url.pathname==='/data'){res.setHeader('content-type','application/json');return res.end(JSON.stringify({brand:await f.brands.getBrandById('b'),brands:await f.brands.getBrands(),location:await f.locations.getLocationById('l')}));}
+  if(url.pathname==='/data'){res.setHeader('content-type','application/json');return res.end(JSON.stringify({brand:await f.brands.getBrandForAdministration('b'),brands:await f.brands.getBrands(),location:await f.locations.getLocationById('l')}));}
   if(url.pathname.startsWith('/save/')){
    attempts++;res.setHeader('content-type','application/json');
    if(failNext){const failure=failNext;failNext=null;return res.end(JSON.stringify({failure}));}

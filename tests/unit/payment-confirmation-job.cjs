@@ -23,7 +23,7 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
  const snapshot=value=>({exists:()=>!!value,data:()=>value});
  const mocks={
   'server-only':{},'@/lib/firebase':{db:{}},
-  '@/app/superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'fixture'},
+  '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'fixture'},
   'stripe':{default:class{checkout={sessions:{retrieve:async()=>structuredClone(session)}}}},
   'next/server':{NextResponse:{json:(body,init)=>Response.json(body,init)}},
   '@/lib/analytics-server':{trackServerEvent:async()=>{analytics++;}},
@@ -126,7 +126,7 @@ test('signed asynchronous success invokes the same settlement; invalid signature
  const api=loadTs('src/app/api/stripe/webhook/route.ts',{
   '@/lib/server/settle-checkout':{settlePaidCheckoutSession:async value=>{assert.equal(value,session);calls++;}},
   '@/lib/discount-reservations':{},'next/headers':{headers:async()=>({get:()=> 'signature'})},
-  '@/app/superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'fixture',getActiveStripeWebhookSecret:async()=> 'fixture'},
+  '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'fixture',getActiveStripeWebhookSecret:async()=> 'fixture'},
   stripe:{default:class{webhooks={constructEventAsync:async()=>{if(invalid)throw Error('invalid');return{type:'checkout.session.async_payment_succeeded',data:{object:session}};}}}},
  });
  const request=()=>new Request('https://fixture.test',{method:'POST',body:'event'});

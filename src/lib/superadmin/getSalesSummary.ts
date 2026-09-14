@@ -3,8 +3,9 @@
 
 // src/lib/superadmin/getSalesSummary.ts
 import { getFeedbackReport } from '@/lib/feedback/report';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, Timestamp } from 'firebase/firestore';
+import { listScopedDocuments } from '@/lib/access/scoped-data';
+import { nativeCatalog } from '@/lib/access/native-catalog';
+import { Timestamp } from 'firebase-admin/firestore';
 import type { OrderSummary, Customer } from '@/types';
 import type { SACommonFilters } from '@/types/superadmin';
 import { startOfDay, endOfDay, subDays } from 'date-fns';
@@ -19,32 +20,20 @@ type SalesOrder = OrderSummary & {
 };
 
 export const getSalesDashboardData = async (filters: SACommonFilters) => {
-    let q = query(
-        collection(db, 'orders'),
-        where('createdAt', '>=', Timestamp.fromDate(startOfDay(new Date(filters.dateFrom)))),
-        where('createdAt', '<=', Timestamp.fromDate(endOfDay(new Date(filters.dateTo))))
-    );
-    if(filters.brandId && filters.brandId !== 'all') {
-        q = query(q, where('brandId', '==', filters.brandId));
-    }
-    if(filters.locationIds && filters.locationIds.length > 0) {
-        if(filters.locationIds.length <= 30) {
-           q = query(q, where('locationId', 'in', filters.locationIds));
-        } else {
-            console.warn("Location filter exceeds 30 items, query will be less efficient.");
-        }
-    }
-    
-    const [ordersSnapshot, brandsSnap, locationsSnap, customersSnap, feedbackReport, cookieSnap] = await Promise.all([
-        getDocs(q),
-        getDocs(collection(db, 'brands')),
-        getDocs(collection(db, 'locations')),
-        getDocs(collection(db, 'customers')),
-        getFeedbackReport({ from: filters.dateFrom, to: filters.dateTo, ...(filters.brandId && filters.brandId !== 'all' ? { brandId: filters.brandId } : {}) }).catch(() => null),
-        getDocs(collection(db, 'anonymous_cookie_consents')),
+    const queryFilters: Array<[string, any, any]> = [
+      ['createdAt', '>=', Timestamp.fromDate(startOfDay(new Date(filters.dateFrom)))],
+      ['createdAt', '<=', Timestamp.fromDate(endOfDay(new Date(filters.dateTo)))],
+    ];
+    if(filters.brandId && filters.brandId !== 'all')queryFilters.push(['brandId', '==', filters.brandId]);
+    if(filters.locationIds?.length && filters.locationIds.length<=30)queryFilters.push(['locationId', 'in', filters.locationIds]);
+    const [orderDocs, metadata, customerDocs, feedbackReport, cookieDocs] = await Promise.all([
+      listScopedDocuments('orders','orderfly.analytics:view','location',queryFilters),
+      nativeCatalog('orderfly.analytics:view'),
+      listScopedDocuments('customers','orderfly.analytics:view','company'),
+      getFeedbackReport({ from: filters.dateFrom, to: filters.dateTo, ...(filters.brandId && filters.brandId !== 'all' ? { brandId: filters.brandId } : {}) }).catch(() => null),
+      listScopedDocuments('anonymous_cookie_consents','orderfly.analytics:view','company',[],'brand_id'),
     ]);
-    
-    let orders: SalesOrder[] = ordersSnapshot.docs.map(doc => doc.data() as SalesOrder);
+    let orders: SalesOrder[] = orderDocs.map(doc => doc.data() as SalesOrder);
     
     if (filters.locationIds && filters.locationIds.length > 30) {
         const locationSet = new Set(filters.locationIds);
@@ -66,8 +55,8 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
     const canceledOrders = orders.filter(o => o.status === 'Canceled').length;
     const totalDiscounts = paidOrders.reduce((sum, order) => sum + (order.paymentDetails?.discountTotal ?? 0), 0);
     
-    const totalActiveBrands = brandsSnap.docs.filter(b => b.data().status === 'active').length;
-    const totalActiveLocations = locationsSnap.docs.filter(l => l.data().isActive).length;
+    const totalActiveBrands = metadata.brands.filter(b => b.status === 'active').length;
+    const totalActiveLocations = metadata.locations.filter(l => l.isActive).length;
 
     // New KPI Calculations
     const totalUpsellsAmount = paidOrders.reduce((sum, order) => sum + (order.paymentDetails?.upsellAmount ?? 0), 0);
@@ -84,7 +73,7 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
     }, 0);
     const totalComboDealsOrders = comboOrders.length;
     
-    const allCustomers = customersSnap.docs.map(doc => doc.data() as Customer);
+    const allCustomers = customerDocs.map(doc => doc.data() as Customer);
     const totalUniqueCustomers = allCustomers.length;
     
     const sixtyDaysAgo = subDays(new Date(), 60);
@@ -92,7 +81,7 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
     const totalRetentionRate = totalUniqueCustomers > 0 ? (returningCustomers / totalUniqueCustomers) * 100 : 0;
     
     const totalFeedbacks = feedbackReport ? (filters.locationIds?.length ? feedbackReport.locationSummary.filter(l => filters.locationIds!.includes(l.id)).reduce((sum, l) => sum + l.responses, 0) : feedbackReport.summary.responses) : null;
-    const totalCookieConsents = cookieSnap.size;
+    const totalCookieConsents = cookieDocs.length;
 
 
     return {

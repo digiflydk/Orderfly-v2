@@ -1,3 +1,4 @@
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 
 // src/app/api/debug/diag-logs/route.ts
 import { NextResponse } from "next/server";
@@ -13,6 +14,8 @@ export const fetchCache = "default-no-store";
  * - Med scope: undgå composite index ved at hente uden orderBy og sortere i memory
  */
 export async function GET(req: Request) {
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   const url = new URL(req.url);
   const limit = Math.min(Number(url.searchParams.get("limit") || 10), 100);
   const scope = url.searchParams.get("scope")?.trim();

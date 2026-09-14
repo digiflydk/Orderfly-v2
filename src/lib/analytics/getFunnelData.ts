@@ -1,5 +1,6 @@
 'use server';
 
+import { listScopedDocuments } from '@/lib/access/scoped-data';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { AnalyticsEvent, FunnelFilters, FunnelOutput } from '@/types';
 import { getPurchasesInRange } from './sources/orders';
@@ -14,17 +15,17 @@ export async function getFunnelData(filters: FunnelFilters, _user?: unknown): Pr
   const dateFrom = startOfDay(new Date(filters.dateFrom));
   const dateTo = endOfDay(new Date(filters.dateTo));
   const db = getAdminDb();
-  let query: admin.firestore.Query = db.collection(COL_EVENTS)
-    .where('ts', '>=', admin.firestore.Timestamp.fromDate(dateFrom))
-    .where('ts', '<=', admin.firestore.Timestamp.fromDate(dateTo));
-  if (filters.brandId && filters.brandId !== 'all') query = query.where('brandId', '==', filters.brandId);
-  if (filters.locationId && filters.locationId !== 'all') query = query.where('locationId', '==', filters.locationId);
-
-  const [snapshot, purchases] = await Promise.all([
-    query.get(),
+  const queryFilters: Array<[string, any, any]> = [
+    ['ts', '>=', admin.firestore.Timestamp.fromDate(dateFrom)],
+    ['ts', '<=', admin.firestore.Timestamp.fromDate(dateTo)],
+  ];
+  if (filters.brandId && filters.brandId !== 'all') queryFilters.push(['brandId', '==', filters.brandId]);
+  if (filters.locationId && filters.locationId !== 'all') queryFilters.push(['locationId', '==', filters.locationId]);
+  const [documents, purchases] = await Promise.all([
+    listScopedDocuments(COL_EVENTS, 'orderfly.analytics:view', 'location', queryFilters),
     getPurchasesInRange({ startDate: dateFrom, endDate: dateTo, brandId: filters.brandId, locationId: filters.locationId, device: filters.device, utmSource: filters.utmSource }),
   ]);
-  const allEvents = snapshot.docs.map(doc => doc.data() as AnalyticsEvent).filter(event => {
+  const allEvents = documents.map(doc => doc.data() as AnalyticsEvent).filter(event => {
     if (filters.device && filters.device !== 'all' && event.deviceType !== filters.device) return false;
     if (filters.utmSource && String((event as unknown as Record<string, unknown>).source || '').toLowerCase() !== filters.utmSource.toLowerCase()) return false;
     return true;

@@ -1,7 +1,8 @@
 
 'use server';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
+import { doc, getDoc, setDoc } from '@/lib/server/firestore-compat';
+import { db } from '@/lib/server/firestore-compat';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { unstable_cache, revalidateTag } from 'next/cache';
 import { storefrontMedia } from '@/lib/storefront-media';
@@ -37,6 +38,7 @@ export async function getStorefrontSettings() { return cachedSettings(); }
 
 
 export async function saveGeneralSettings(settings: Partial<GeneralSettings>): Promise<void> {
+  await requirePlatformSuperuser();
     try {
         const settingsDocRef = doc(db, SETTINGS_COLLECTION_ID, SETTINGS_DOC_ID);
         await setDoc(settingsDocRef, settings, { merge: true });

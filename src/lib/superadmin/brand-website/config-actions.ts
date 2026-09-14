@@ -19,7 +19,7 @@ import {
   VIRTUAL_CONFIG,
 } from './config-schemas';
 import { serializeTimestamp } from './config-utils';
-import { requireSuperadmin } from '@/lib/auth/superadmin';
+import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
 import type { ZodSchema } from 'zod';
 import { logBrandWebsiteAuditEntry } from './brand-website-audit';
 import { logBrandWebsiteApiCall } from '@/lib/developer/brand-website-api-logger';
@@ -67,7 +67,7 @@ async function writeConfig(brandId: string, data: Partial<BrandWebsiteConfig>): 
 export async function getBrandWebsiteConfig(brandId: string): Promise<BrandWebsiteConfig> {
   const start = Date.now();
   try {
-    await requireSuperadmin();
+    await requireOrderflyAccess(brandId,null,'orderfly.website:view');
     const result = await readConfig(brandId);
     await logBrandWebsiteApiCall({
         layer: 'cms', action: 'getBrandWebsiteConfig', brandId, status: 'success', durationMs: Date.now() - start, path: configPath(brandId)
@@ -84,7 +84,7 @@ export async function getBrandWebsiteConfig(brandId: string): Promise<BrandWebsi
 export async function saveBrandWebsiteConfig(brandId: string, input: SaveBrandWebsiteConfigInput, faviconFile?: File): Promise<BrandWebsiteConfig> {
   const start = Date.now();
   try {
-    await requireSuperadmin();
+    await requireOrderflyAccess(brandId,null,'orderfly.website:edit');
     const validatedInput = brandWebsiteConfigBaseSchema.parse(input);
     const currentConfig = await readConfig(brandId);
     
@@ -132,7 +132,7 @@ async function savePartial<T>(
     const start = Date.now();
     const actionName = `saveBrandWebsite${field.charAt(0).toUpperCase() + field.slice(1)}`;
     try {
-        await requireSuperadmin();
+        await requireOrderflyAccess(brandId,null,'orderfly.website:edit');
         const validatedInput = schema.parse(data);
         const currentConfig = await readConfig(brandId);
         
@@ -171,6 +171,7 @@ export async function saveBrandWebsiteDesignSystem(brandId: string, input: Desig
 }
 
 export async function saveBrandWebsiteSeo(brandId: string, input: SeoInput, ogImageFile?: File): Promise<BrandWebsiteConfig> {
+  await requireOrderflyAccess(brandId,null,'orderfly.website:edit');
   let ogImageUrl = input.ogImageUrl;
   if (ogImageFile) {
     ogImageUrl = await uploadFileToFirebaseStorage(ogImageFile, `brands/${brandId}/website/og-image`);

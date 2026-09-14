@@ -2,9 +2,9 @@
 
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
-import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
+import { doc, getDoc } from '@/lib/server/firestore-compat';
+import { db } from '@/lib/server/firestore-compat';
+import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 import { releaseDiscount } from '@/lib/discount-reservations';
 
 export async function cancelCheckout(orderId: string, token: string): Promise<{ status: 'canceled' | 'paid' | 'error' }> {

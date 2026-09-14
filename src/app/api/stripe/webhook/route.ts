@@ -2,7 +2,7 @@ import { settlePaidCheckoutSession } from '@/lib/server/settle-checkout';
 import { releaseDiscount } from '@/lib/discount-reservations';
 
 import Stripe from 'stripe';
-import { getActiveStripeSecretKey, getActiveStripeWebhookSecret } from '@/app/superadmin/settings/actions';
+import { getActiveStripeSecretKey, getActiveStripeWebhookSecret } from '@/lib/server/payment-settings';
 import { headers } from 'next/headers';
 
 

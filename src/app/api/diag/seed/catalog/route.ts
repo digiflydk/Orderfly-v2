@@ -1,3 +1,4 @@
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 import { NextResponse } from "next/server";
 import { getAdminDb } from "@/lib/firebase-admin";
 
@@ -6,6 +7,8 @@ export const runtime = "nodejs";
 export const fetchCache = "default-no-store";
 
 export async function POST(req: Request) {
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   const token = process.env.DEBUG_TOKEN;
   const auth = (req.headers.get("x-debug-token") || "").trim();
   if (!token || auth !== token) {

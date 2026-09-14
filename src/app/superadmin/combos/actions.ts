@@ -5,8 +5,10 @@
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { comboEligible } from '@/lib/combo-eligibility';
 import { storefrontRows } from '@/lib/storefront-cache';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, Timestamp, getDoc, documentId, runTransaction } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
+import { getScopedDocument, listScopedDocuments, mutateScopedDocument } from '@/lib/access/scoped-data';
+import { Timestamp } from 'firebase-admin/firestore';
 import type { ComboMenu, Product, Category, ProductForMenu } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
@@ -76,6 +78,7 @@ export async function createOrUpdateCombo(
   formData: FormData
 ): Promise<FormState> {
   try {
+    await verifiedOrderflyIdentity();
     const id = formData.get('id') as string | null;
 
     const safeParseFloat = (value: FormDataEntryValue | null): number | undefined => {
@@ -187,15 +190,20 @@ export async function createOrUpdateCombo(
     if (comboData.startDate) dataToSave.startDate = Timestamp.fromDate(comboData.startDate);
     if (comboData.endDate) dataToSave.endDate = Timestamp.fromDate(comboData.endDate);
 
-    const comboIdToSave = id || doc(collection(db, 'comboMenus')).id;
+    const comboIdToSave = id || getAdminDb().collection('comboMenus').doc().id;
     dataToSave.id = comboIdToSave;
 
     if (!id) {
       dataToSave.createdAt = Timestamp.now();
     }
 
-    const comboRef = doc(db, 'comboMenus', comboIdToSave);
-    await setDoc(comboRef, omitUndefinedFields(dataToSave), { merge: true });
+    await mutateScopedDocument('comboMenus',comboIdToSave,id?'orderfly.catalog:edit':'orderfly.catalog:create','locations',async(before,tx)=>{
+      for(const productId of new Set(allProductIds)) {
+        const product=await tx.get(getAdminDb().collection('products').doc(productId));
+        if(!product.exists||product.data()?.brandId!==comboData.brandId)throw new Error('All selected products must belong to the selected brand.');
+      }
+      return {...before,...omitUndefinedFields(dataToSave)};
+    });
 
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -210,7 +218,7 @@ export async function createOrUpdateCombo(
 
 export async function deleteCombo(comboId: string) {
     try {
-        await deleteDoc(doc(db, "comboMenus", comboId));
+        await mutateScopedDocument('comboMenus',comboId,'orderfly.catalog:delete','locations',()=>null);
         revalidatePath("/superadmin/combos");
     revalidateTag('storefront');
         return { message: "Combo deleted successfully.", error: false };
@@ -222,9 +230,8 @@ export async function deleteCombo(comboId: string) {
 }
 
 export async function getCombos(): Promise<ComboMenu[]> {
-  const q = query(collection(db, 'comboMenus'), orderBy('comboName'));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => {
+  const documents=await listScopedDocuments('comboMenus','orderfly.catalog:view','locations');
+  return documents.sort((a,b)=>String(a.data().comboName||'').localeCompare(String(b.data().comboName||''))).map(doc => {
     const data = doc.data();
     return {
       ...data,
@@ -238,10 +245,9 @@ export async function getCombos(): Promise<ComboMenu[]> {
 }
 
 export async function getComboById(comboId: string): Promise<ComboMenu | null> {
-    const docRef = doc(db, 'comboMenus', comboId);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const data = docSnap.data();
+    const docSnap = await getScopedDocument('comboMenus',comboId,'orderfly.catalog:view','locations');
+    if (docSnap) {
+        const data = docSnap.data()!;
         return {
             ...data,
             id: docSnap.id,

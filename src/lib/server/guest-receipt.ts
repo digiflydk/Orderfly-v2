@@ -2,7 +2,7 @@ import 'server-only';
 import Stripe from 'stripe';
 import { createHash, timingSafeEqual } from 'node:crypto';
 import { getOrderById, getOrderByCheckoutSessionId } from '@/app/checkout/order-actions';
-import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
+import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 import { settlePaidCheckoutSession } from './settle-checkout';
 import type { OrderDetail } from '@/types';
 

@@ -1,15 +1,17 @@
 
 'use server';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
+import { publicLocationRecord } from '@/lib/public-native-records';
+import { selectorCatalog } from '@/lib/access/native-catalog';
 import { calculateTimeSlots } from '@/lib/time-slots';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, getDoc, limit, writeBatch } from 'firebase/firestore';
 import type { Location, Brand, TimeSlotResponse } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import * as admin from 'firebase-admin';
-import { hasPermission } from '@/lib/permissions';
+import { hasPermission } from '@/lib/auth/permissions';
 
 
 const openingHoursSchema = z.object({
@@ -60,7 +62,7 @@ export async function createOrUpdateLocation(
   prevState: FormState | null,
   formData: FormData
 ): Promise<FormState> {
-  if (!hasPermission(formData.get('id') ? 'locations:edit' : 'locations:create')) {
+  if (!await hasPermission(formData.get('id') ? 'locations:edit' : 'locations:create')) {
     return { message: 'Du har ikke adgang til at gemme denne lokation.', error: true };
   }
   const isChecked = (key: string) => ['true', 'on'].includes(String(formData.get(key)));
@@ -152,6 +154,7 @@ export async function createOrUpdateLocation(
 }
 
 export async function deleteLocation(locationId: string, brandId: string) {
+  await requirePlatformSuperuser();
     try {
         const db = getAdminDb();
         await db.collection("locations").doc(locationId).delete();
@@ -179,12 +182,14 @@ export async function getActiveLocationBySlug(brandId: string, locationSlug: str
 
     if (locationDoc) {
         const data = locationDoc.data();
-        return { id: locationDoc.id, ...data } as Location;
+        return publicLocationRecord(locationDoc.id, data);
     }
     return null;
 }
 
 export async function getAllLocations(brandId?: string): Promise<Location[]> {
+    const scope=await selectorCatalog();
+    if(!scope.superuser)return scope.locations.filter(row=>!brandId||row.brandId===brandId) as Location[];
     const db = getAdminDb();
     let q: admin.firestore.Query = db.collection('locations');
     if (brandId) {
@@ -208,7 +213,7 @@ export async function getLocationById(locationId: string): Promise<Location | nu
     const docSnap = await docRef.get();
     if (docSnap.exists) {
         const data = docSnap.data();
-        return { ...data, id: docSnap.id } as Location;
+        return publicLocationRecord(docSnap.id, data || {});
     }
     return null;
 }
@@ -237,5 +242,5 @@ export async function getLocationBySlug(brandId: string, slug: string) {
 
   if (snap.empty) return null;
   const doc = snap.docs[0];
-  return { id: doc.id, ...doc.data() };
+  return publicLocationRecord(doc.id, doc.data());
 }

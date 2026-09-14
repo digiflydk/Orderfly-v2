@@ -1,6 +1,7 @@
 
 'use server';
 
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { AnonymousCookieConsent, AnalyticsDaily } from '@/types';
 import { z } from 'zod';
@@ -8,6 +9,7 @@ import { startOfDay, endOfDay } from 'date-fns';
 import * as admin from 'firebase-admin';
 
 export async function getAnonymousCookieConsents(startDate?: Date, endDate?: Date): Promise<AnonymousCookieConsent[]> {
+  await requirePlatformSuperuser();
   const db = getAdminDb();
   const consentsCollection = db.collection('anonymous_cookie_consents');
   let q: admin.firestore.Query = consentsCollection;

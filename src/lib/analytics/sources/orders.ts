@@ -1,7 +1,7 @@
 
 'use server';
 
-import { getAdminDb } from '@/lib/firebase-admin';
+import { listScopedDocuments } from '@/lib/access/scoped-data';
 import type { OrderDetail } from '@/types';
 import * as admin from 'firebase-admin';
 
@@ -32,14 +32,13 @@ export interface PurchaseResult {
 }
 
 export async function getPurchasesInRange(params: PurchaseParams): Promise<PurchaseResult[]> {
-    const db = getAdminDb();
-    let q: admin.firestore.Query = db.collection(COL_ORDERS)
-        .where('paidAt', '>=', admin.firestore.Timestamp.fromDate(params.startDate))
-        .where('paidAt', '<=', admin.firestore.Timestamp.fromDate(params.endDate));
-    
-    // We filter brandId and locationId later in code to avoid composite indexes for now
-    
-    const snap = await q.get();
+    const filters: Array<[string, any, any]> = [
+      ['paidAt', '>=', admin.firestore.Timestamp.fromDate(params.startDate)],
+      ['paidAt', '<=', admin.firestore.Timestamp.fromDate(params.endDate)],
+    ];
+    if (params.brandId && params.brandId !== 'all') filters.push(['brandId', '==', params.brandId]);
+    if (params.locationId && params.locationId !== 'all') filters.push(['locationId', '==', params.locationId]);
+    const snap = await listScopedDocuments(COL_ORDERS, 'orderfly.analytics:view', 'location', filters);
     const ordersByLocation = new Map<string, { count: number, revenue: number, deliveryFee: number, discount: number, sessionIds: Set<string>, ordersBySession: Record<string, number> }>();
 
     snap.forEach(doc => {
