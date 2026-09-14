@@ -20,6 +20,7 @@ export const authorityCommandSchema=z.discriminatedUnion('action',[
   z.object({action:z.literal('initialize'),requestId:z.string().uuid()}).strict(),
   z.object({action:z.literal('list')}).strict(),
   z.object({action:z.literal('session')}).strict(),
+  z.object({action:z.literal('manageNativeIdentity'),identity:identitySchema,operation:z.enum(['profile','credentials','activate','deactivate'])}).strict(),
   z.object({action:z.literal('nativePermissions'),product:z.enum(['opsfly','orderfly']),tenantId:key,locationIds:z.array(key).max(500).nullable()}).strict(),
   z.object({action:z.literal('nativeGrants'),product:z.enum(['opsfly','orderfly']),permission:z.string().max(160)}).strict(),
   z.object({action:z.literal('check'),companyId:key.nullable(),locationIds:z.array(key).max(500).nullable(),permission:z.string().max(160)}).strict(),
@@ -75,6 +76,24 @@ export async function executeAuthority(db:any,identity:VerifiedIdentity,input:un
       const memberships=policy.memberships.filter(m=>m.principalId===actor&&m.active&&(m.companyId===null||policy.companies.some(c=>c.id===m.companyId&&c.active)));
       const roles=policy.roles.filter(r=>r.active&&memberships.some(m=>m.roleIds.includes(r.id)));
       return {actorId:actor,superuser,name:policy.principals.find(p=>p.id===actor)?.name||'Bruger',permissions:superuser?PERMISSIONS:[...new Set(roles.flatMap(r=>r.permissions))]};
+    }
+    if(command.action==='manageNativeIdentity') {
+      const target=principalKey(command.identity);
+      if(command.identity.provider!=='opsfly'||identity.provider!=='opsfly'||command.identity.organizationId!==identity.organizationId)return reject('organization_mismatch');
+      const organizationId=command.identity.organizationId;
+      const company=policy.companies.find(c=>c.opsflyOrganizationId===organizationId);
+      if(!company||!authorize(policy,{principalId:actor,companyId:company.id,locationIds:null,permission:'platform.members:edit'}).allowed)return reject('forbidden');
+      // Resetting credentials, reactivating an account or editing its login email
+      // must not let an administrator take over someone with greater access.
+      for(const membership of policy.memberships.filter(m=>m.principalId===target)) {
+        const decision=authorizeMembershipChange(policy,actor,membership,membership);
+        if(!decision.allowed)return reject(decision.reason);
+      }
+      // Native deactivation happens outside the authority transaction. Require
+      // removing all platform memberships centrally first, where last-owner
+      // protection is atomic. Two simultaneous native disables cannot orphan it.
+      if(command.operation==='deactivate'&&policy.memberships.some(m=>m.principalId===target&&m.companyId===null&&m.active))return reject('remove_platform_membership_first');
+      return {allowed:true,reason:'granted'};
     }
     if(command.action==='nativePermissions') {
       const company=policy.companies.find(c=>command.product==='opsfly'?c.opsflyOrganizationId===command.tenantId:c.orderflyBrandIds.includes(command.tenantId));

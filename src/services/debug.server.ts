@@ -1,8 +1,9 @@
 
 "use server";
 
-import { db } from "@/lib/firebase";
-import { collection, getDocs, limit, orderBy, query, startAfter, doc, getDoc } from "firebase/firestore";
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
+import { db } from '@/lib/server/firestore-compat';
+import { collection, getDocs, limit, orderBy, query, startAfter, doc, getDoc } from '@/lib/server/firestore-compat';
 import { DEBUG_COLLECTIONS, DEBUG_DEFAULT_PAGE_SIZE, DEBUG_MASK_FIELDS } from "@/config/debug";
 
 function maskValue(v: any) {
@@ -45,6 +46,7 @@ export type DebugListResponse = {
 };
 
 export async function listCollection(req: DebugListRequest): Promise<DebugListResponse> {
+  await requirePlatformSuperuser();
   const path = req.path;
   const pageSize = Math.min(req.pageSize || DEBUG_DEFAULT_PAGE_SIZE, 200);
   if (!DEBUG_COLLECTIONS.includes(path)) {

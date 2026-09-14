@@ -8,7 +8,7 @@ function load(path, mocks = {}) {
   const code = ts.transpileModule(fs.readFileSync(path, 'utf8'), {
     compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 },
   }).outputText;
-  new Function('require', 'module', 'exports', code)(name => name in mocks ? mocks[name] : require(name), mod, mod.exports);
+  new Function('require', 'module', 'exports', code)(name => name === '@/lib/server/firestore-compat' && mocks['firebase/firestore'] ? {...mocks['firebase/firestore'],db:mocks['@/lib/firebase']?.db} : name in mocks ? mocks[name] : require(name), mod, mod.exports);
   return mod.exports;
 }
 const model = load('src/lib/loyalty/model.ts');

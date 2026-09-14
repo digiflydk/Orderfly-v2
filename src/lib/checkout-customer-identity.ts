@@ -1,5 +1,5 @@
-import { db } from '@/lib/firebase';
-import { collection, query, where, limit, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/server/firestore-compat';
+import { collection, query, where, limit, getDocs } from '@/lib/server/firestore-compat';
 
 export async function findCheckoutCustomer(brandId: string, email: string) {
   const normalizedEmail = email.trim().toLowerCase();

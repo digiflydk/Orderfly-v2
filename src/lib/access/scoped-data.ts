@@ -28,19 +28,19 @@ export function documentScope(data: Row, kind: DocumentScope) {
 
 // Full customer/company records require company-wide grants. Location rows are
 // queried within native tenants before they are returned, never fetched globally.
-export async function listScopedDocuments(collection: string, permission: string, kind: DocumentScope, filters: Array<[string, any, any]> = []) {
+export async function listScopedDocuments(collection: string, permission: string, kind: DocumentScope, filters: Array<[string, any, any]> = [], brandField: 'brandId' | 'brand_id' = 'brandId') {
   const db = getAdminDb(), grants = await orderflyReadGrants(permission);
   const documents = new Map<string, FirebaseFirestore.QueryDocumentSnapshot>();
   for (const grant of grants) {
     if (kind === 'company' && grant.locationIds !== null) continue;
     const scopes = grant.locationIds === null ? [null] : Array.from({ length: Math.ceil(grant.locationIds.length / 30) }, (_, i) => grant.locationIds!.slice(i * 30, (i + 1) * 30));
     for (const locations of scopes) {
-      let query: FirebaseFirestore.Query = db.collection(collection).where('brandId', '==', grant.brandId);
+      let query: FirebaseFirestore.Query = db.collection(collection).where(brandField, '==', grant.brandId);
       if (locations) query = query.where(kind === 'location' ? 'locationId' : 'locationIds', kind === 'location' ? 'in' : 'array-contains-any', locations);
       for (const [field, operator, value] of filters) query = query.where(field, operator, value);
       const snapshot = await query.get();
       for (const doc of snapshot.docs) {
-        const scope = documentScope(doc.data(), kind);
+        const scope = documentScope({...doc.data(),brandId:doc.data()[brandField]}, kind);
         // A shared record may span several locations. Viewing it requires the
         // whole record scope so another location's customer data cannot leak.
         if (grant.locationIds !== null && (scope.locationIds === null || !scope.locationIds.every(id => grant.locationIds!.includes(id)))) continue;

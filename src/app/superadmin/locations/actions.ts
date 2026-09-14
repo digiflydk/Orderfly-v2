@@ -1,5 +1,6 @@
 
 'use server';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { calculateTimeSlots } from '@/lib/time-slots';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
@@ -152,6 +153,7 @@ export async function createOrUpdateLocation(
 }
 
 export async function deleteLocation(locationId: string, brandId: string) {
+  await requirePlatformSuperuser();
     try {
         const db = getAdminDb();
         await db.collection("locations").doc(locationId).delete();

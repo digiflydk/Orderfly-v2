@@ -1,8 +1,9 @@
 
 'use server';
 
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
+import { db } from '@/lib/server/firestore-compat';
 import {
 	collection,
 	doc,
@@ -12,7 +13,7 @@ import {
 	orderBy,
 	Timestamp,
 	getDoc,
-} from 'firebase/firestore';
+} from '@/lib/server/firestore-compat';
 import type { CookieTexts } from '@/types';
 import { redirect } from 'next/navigation';
 
@@ -60,6 +61,7 @@ type CookieTextsFormResult =
 export async function createOrUpdateCookieTexts(
 	formData: FormData,
 ): Promise<CookieTextsFormResult | void> {
+  await requirePlatformSuperuser();
 	// Helper to normalize form values to string
 	const normalize = (value: FormDataEntryValue | null): string =>
 		typeof value === 'string' ? value : '';

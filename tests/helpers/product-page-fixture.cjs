@@ -31,7 +31,7 @@ function fixture(){
   const extra={'./client-page':{ProductsClientPage:client},'@/components/superadmin/product-form-page':{ProductFormPage:client}};
   const mod={exports:{}};
   const code=ts.transpileModule(fs.readFileSync('src/app/superadmin/products/'+files[kind],'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  new Function('require','module','exports',code)(name=>name in extra?extra[name]:name in mocks?mocks[name]:require(name),mod,mod.exports);
+  new Function('require','module','exports',code)(name=>name in extra?extra[name]:name in mocks ?mocks[name]:require(name),mod,mod.exports);
   return mod.exports.default;
  }
  async function pageProps(kind,id='p'){

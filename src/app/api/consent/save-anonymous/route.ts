@@ -1,8 +1,8 @@
 
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, getDoc, Timestamp } from 'firebase/firestore';
+import { db } from '@/lib/server/firestore-compat';
+import { collection, doc, setDoc, getDoc, Timestamp } from '@/lib/server/firestore-compat';
 import { z } from 'zod';
 import type { AnonymousCookieConsent } from '@/types';
 

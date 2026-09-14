@@ -1,6 +1,7 @@
 
 
 'use server';
+import { requirePlatformSuperuser, requireOrderflyAccess } from '@/lib/access/orderfly-session';
 import { mpanelAdminEnabled, assertLegacyAdminWrite } from '@/lib/mpanel-admin-cutover';
 
 import 'server-only';
@@ -202,6 +203,7 @@ export async function createOrUpdateBrand(
 
 
 export async function deleteBrand(brandId: string) {
+  await requirePlatformSuperuser();
     try {
         const db = getAdminDb();
         await db.collection("brands").doc(brandId).delete();
@@ -261,6 +263,7 @@ export async function updateBrandAppearances(
 ): Promise<FormState> {
   try {
     const brandId = formData.get('brandId') as string;
+    await requireOrderflyAccess(brandId, null, 'orderfly.website:edit');
     const appearancesJSON = formData.get('appearances') as string;
     const appearances = JSON.parse(appearancesJSON) as BrandAppearances;
     const db = getAdminDb();

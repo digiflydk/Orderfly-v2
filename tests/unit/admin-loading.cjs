@@ -7,7 +7,7 @@ const {renderToStaticMarkup}=require('react-dom/server');
 function load(path,mocks={}) {
  const mod={exports:{}};
  const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX,esModuleInterop:true}}).outputText;
- new Function('require','module','exports',code)(name=>name in mocks?mocks[name]:require(name),mod,mod.exports);return mod.exports;
+ new Function('require','module','exports',code)(name=>name === '@/lib/server/firestore-compat' && mocks['firebase/firestore'] ? {...mocks['firebase/firestore'],db:mocks['@/lib/firebase']?.db} : name in mocks ?mocks[name]:require(name),mod,mod.exports);return mod.exports;
 }
 test('link feedback follows pending, retains navigation props and clears on completion',()=>{
  let pending=false,received;
@@ -29,16 +29,11 @@ test('route fallback is visible without a timer and announces loading',()=>{
  const html=renderToStaticMarkup(React.createElement(api.default));
  assert.match(html,/aria-busy="true"/);assert.match(html,/role="status"/);
 });
-test('filter reads start concurrently and preserve mapped results',async()=>{
- const started=[],resolve={};
+test('filter reads use the authorized analytics catalogue and preserve mapped results',async()=>{
+ let permission;
  const api=load('src/app/superadmin/_filters-data.ts',{
-  '@/lib/firebase':{db:{}},
-  'firebase/firestore':{collection:(_,name)=>name,query:q=>q,orderBy:()=>null,getDocs:name=>{started.push(name);return new Promise(r=>resolve[name]=r);}},
+  '@/lib/access/native-catalog':{nativeCatalog:async value=>{permission=value;return {brands:[{id:'b',name:'Brand'}],locations:[{id:'l',name:'Location',brandId:'b'}]};}},
  });
- const result=api.getFiltersData();
- assert.deepEqual(started,['brands','locations']);
- resolve.brands({docs:[{id:'b',data:()=>({name:'Brand'})}]});
- resolve.locations({docs:[{id:'l',data:()=>({name:'Location',brandId:'b'})}]});
- const data=await result;
+ const data=await api.getFiltersData();assert.equal(permission,'orderfly.analytics:view');
  assert.deepEqual(data.brands,[{id:'b',name:'Brand'}]);assert.deepEqual(data.locations,[{id:'l',name:'Location',brandId:'b'}]);
 });

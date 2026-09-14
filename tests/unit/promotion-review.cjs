@@ -5,7 +5,7 @@ const ts = require('typescript');
 function load(path, mocks = {}) {
  const mod = { exports: {} };
  const code = ts.transpileModule(fs.readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText;
- new Function('require', 'module', 'exports', code)(name => { if (!(name in mocks)) throw Error(name); return mocks[name]; }, mod, mod.exports);
+ new Function('require', 'module', 'exports', code)(name => { if (name === '@/lib/server/firestore-compat' && mocks['firebase/firestore']) return {...mocks['firebase/firestore'],db:mocks['@/lib/firebase']?.db}; if (!(name in mocks)) throw Error(name); return mocks[name]; }, mod, mod.exports);
  return mod.exports;
 }
 const rules = load('src/lib/promotion-rules.ts');

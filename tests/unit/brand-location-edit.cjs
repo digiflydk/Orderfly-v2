@@ -111,6 +111,7 @@ test('catalogue readers retain canonical IDs even when stored IDs point to anoth
 test('web role readers also preserve Firestore document identity over embedded IDs',async()=>{
  const snap={id:'r',data:()=>({id:'other',name:'Selected role'}),exists:()=>true};
  const roles=loadTs('src/app/superadmin/roles/actions.ts',{
+  '@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>({superuser:true})},
   'server-only':{},'next/cache':{revalidatePath:()=>{}},'next/navigation':{},
   '@/lib/firebase':{db:{}},'@/lib/permissions':{ALL_PERMISSIONS:[]},
   'firebase/firestore':{collection:()=>({}),query:()=>({}),orderBy:()=>({}),doc:()=>({}),getDocs:async()=>({docs:[snap]}),getDoc:async()=>snap}

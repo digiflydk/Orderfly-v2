@@ -1,7 +1,7 @@
 'use server'
 
-import { db } from '@/lib/firebase'
-import { doc, getDoc } from 'firebase/firestore'
+import { db } from '@/lib/server/firestore-compat'
+import { doc, getDoc } from '@/lib/server/firestore-compat'
 import type { PlatformBrandingSettings } from '@/types'
 
 export async function getPlatformBrandingSettings(): Promise<PlatformBrandingSettings | null> {

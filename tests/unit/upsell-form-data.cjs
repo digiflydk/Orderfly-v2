@@ -5,7 +5,7 @@ const ts=require('typescript');
 function load(path,mocks={}) {
   const mod={exports:{}};
   const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  new Function('require','module','exports',code)(name=>name in mocks?mocks[name]:require(name),mod,mod.exports);
+  new Function('require','module','exports',code)(name=>name in mocks ?mocks[name]:require(name),mod,mod.exports);
   return mod.exports;
 }
 const {upsellFormData}=load('src/lib/upsell-form-data.ts');

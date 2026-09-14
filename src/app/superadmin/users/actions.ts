@@ -1,6 +1,7 @@
 
 
 'use server';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { assertLegacyAdminWrite } from '@/lib/mpanel-admin-cutover';
 
 import { revalidatePath } from 'next/cache';
@@ -76,6 +77,7 @@ export async function deleteUser(userId: string) {
 }
 
 export async function getUsers(): Promise<User[]> {
+  await requirePlatformSuperuser();
     const db = getAdminDb();
     const q = db.collection('users').orderBy('name');
     const querySnapshot = await q.get();
@@ -83,6 +85,7 @@ export async function getUsers(): Promise<User[]> {
 }
 
 export async function getUserById(id: string): Promise<User | null> {
+  await requirePlatformSuperuser();
     const db = getAdminDb();
     const docRef = db.collection('users').doc(id);
     const docSnap = await docRef.get();

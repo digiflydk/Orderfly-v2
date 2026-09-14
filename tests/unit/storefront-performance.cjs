@@ -6,7 +6,7 @@ const sharp=require('sharp');
 function load(path,mocks={}) {
  const mod={exports:{}};
  const js=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
- new Function('require','module','exports',js)(name=>name in mocks?mocks[name]:require(name),mod,mod.exports);return mod.exports;
+ new Function('require','module','exports',js)(name=>name in mocks ?mocks[name]:require(name),mod,mod.exports);return mod.exports;
 }
 const media=load('src/lib/storefront-media.ts');
 test('inline pictures become short versioned URLs; image response is compressed, cacheable and scoped',async()=>{

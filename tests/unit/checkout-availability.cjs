@@ -6,7 +6,7 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 function load(path, mocks = {}) {
   const mod = { exports: {} };
   const code = ts.transpileModule(fs.readFileSync(path, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-  new Function('require', 'module', 'exports', code)(name => ['./money','@/lib/money'].includes(name) ? require('../helpers/load-ts.cjs').loadTs('src/lib/money.ts') : name in mocks ? mocks[name] : require(name), mod, mod.exports);
+  new Function('require', 'module', 'exports', code)(name => ['./money','@/lib/money'].includes(name) ? require('../helpers/load-ts.cjs').loadTs('src/lib/money.ts') : name === '@/lib/server/firestore-compat' && mocks['firebase/firestore'] ? {...mocks['firebase/firestore'],db:mocks['@/lib/firebase']?.db} : name in mocks ? mocks[name] : require(name), mod, mod.exports);
   return mod.exports;
 }
 const { calculateTimeSlots } = load('src/lib/time-slots.ts');

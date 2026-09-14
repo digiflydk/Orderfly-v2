@@ -1,11 +1,12 @@
 
 
 'use server';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { assertLegacyAdminWrite } from '@/lib/mpanel-admin-cutover';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, getDoc } from 'firebase/firestore';
+import { db } from '@/lib/server/firestore-compat';
+import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, getDoc } from '@/lib/server/firestore-compat';
 import type { Role } from '@/types';
 import { z } from 'zod';
 import { ALL_PERMISSIONS } from '@/lib/permissions';
@@ -78,12 +79,14 @@ export async function deleteRole(roleId: string) {
 }
 
 export async function getRoles(): Promise<Role[]> {
+  await requirePlatformSuperuser();
     const q = query(collection(db, 'roles'), orderBy('name'));
     const querySnapshot = await getDocs(q);
     return querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Role[];
 }
 
 export async function getRoleById(roleId: string): Promise<Role | null> {
+  await requirePlatformSuperuser();
     const docRef = doc(db, 'roles', roleId);
     const docSnap = await getDoc(docRef);
     if (docSnap.exists()) {

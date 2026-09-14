@@ -1,6 +1,7 @@
 
 'use server';
 
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { AnalyticsEvent, AnalyticsDaily } from '@/types';
 import { eachDayOfInterval, startOfDay, endOfDay } from 'date-fns';
@@ -15,6 +16,7 @@ function toDateKey(d: Date) {
 }
 
 export async function aggregateDailyData(startISO: string, endISO: string) {
+  await requirePlatformSuperuser();
   const localStart = new Date(startISO);
   const localEnd = new Date(endISO); 
 

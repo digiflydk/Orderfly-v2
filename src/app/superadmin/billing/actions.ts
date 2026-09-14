@@ -3,12 +3,13 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { requirePlatformSuperuser, requireOrderflyAccess } from '@/lib/access/orderfly-session';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Brand, Subscription, SubscriptionPlan, User, Invoice } from '@/types';
 import { getBrands } from '../brands/actions';
 import { getUsers } from '../users/actions';
 import { getSubscriptionPlans } from '../subscriptions/actions';
-import { getActiveStripeKey } from '../settings/actions';
+import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 import Stripe from 'stripe';
 
 async function getSubscriptions(): Promise<Subscription[]> {
@@ -31,6 +32,7 @@ async function getInvoices(brandId?: string): Promise<Invoice[]> {
 
 
 export async function getBillingDashboardData() {
+    await requirePlatformSuperuser();
     const [brands, plans, subscriptions] = await Promise.all([
         getBrands(),
         getSubscriptionPlans(),
@@ -65,6 +67,7 @@ export async function getBillingDashboardData() {
 
 
 export async function getBrandBillingDetails(brandId: string) {
+    await requireOrderflyAccess(brandId, null, 'orderfly.billing:view');
     const db = getAdminDb();
     const [brandDoc, subscriptionDocs] = await Promise.all([
         db.collection('brands').doc(brandId).get(),
@@ -107,6 +110,7 @@ export async function getBrandBillingDetails(brandId: string) {
 
 export async function updateBrandStatus(brandId: string, status: Brand['status']) {
     try {
+        await requirePlatformSuperuser();
         const db = getAdminDb();
         await db.collection('brands').doc(brandId).update({ status });
         revalidatePath('/superadmin/billing');
@@ -121,8 +125,9 @@ export async function updateBrandStatus(brandId: string, status: Brand['status']
 
 export async function createStripePortalLink(brandId: string) {
     try {
+        await requireOrderflyAccess(brandId, null, 'orderfly.billing:edit');
         const db = getAdminDb();
-        const stripeKey = await getActiveStripeKey();
+        const stripeKey = await getActiveStripeSecretKey();
         if (!stripeKey) throw new Error('Stripe API key is not configured.');
         
         const stripe = new Stripe(stripeKey);

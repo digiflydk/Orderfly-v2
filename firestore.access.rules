@@ -1,0 +1,11 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // All business reads and writes go through authenticated/scoped server
+    // handlers or the separately validated public checkout/storefront handlers.
+    // Firebase Auth custom claims cannot bypass the central live authority.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

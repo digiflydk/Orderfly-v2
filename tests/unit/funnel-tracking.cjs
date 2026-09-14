@@ -16,6 +16,11 @@ function fixtureDb(){
   })).map(([key])=>snapshot(key));return {docs,forEach:fn=>docs.forEach(fn)};},
  });return {rows,collection};
 }
+function accessIo(db) {
+ return {'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},
+  './orderfly-session':{orderflyReadGrants:async permission=>{assert.equal(permission,'orderfly.analytics:view');return [{brandId:'b',locationIds:null}];}}
+ };
+}
 test('production collector accepts public origin behind proxy, rejects foreign origins and forged payments',async()=>{
  const previous=process.env.NODE_ENV;process.env.NODE_ENV='production';
  try{
@@ -31,7 +36,7 @@ test('production collector accepts public origin behind proxy, rejects foreign o
  }finally{if(previous===undefined)delete process.env.NODE_ENV;else process.env.NODE_ENV=previous;}
 });
 test('collected events reach filtered funnel; sales remain authoritative and conversion uses matched sessions',async()=>{
- const db=fixtureDb();const io={'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db}};
+ const db=fixtureDb();const io=accessIo(db);
  // No external Measurement Protocol requests during an isolated test.
  const {recordCommerceMetric}=loadTs('src/lib/server/record-commerce-metric.ts',{...io,'@/lib/optional-checkout':{optionalCheckoutValue:async fn=>{if(String(fn).includes('fetch('))return;return fn();}}});
  const {POST}=loadTs('src/app/api/analytics/collect/route.ts',{'@/lib/server/record-commerce-metric':{recordCommerceMetric}});
@@ -68,7 +73,7 @@ test('paid orders never fabricate missing payment clicks or measured sessions',a
  const db=fixtureDb(),now=new Date();
  db.rows.set('locations/l',{name:'Fixture'});
  for(let i=0;i<29;i++)db.rows.set(`orders/paid-${i}`,{id:`paid-${i}`,brandId:'b',locationId:'l',paidAt:admin.firestore.Timestamp.fromDate(now),paymentStatus:'Paid',totalAmount:100});
- const {getFunnelData}=loadTs('src/lib/analytics/getFunnelData.ts',{'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db}});
+ const {getFunnelData}=loadTs('src/lib/analytics/getFunnelData.ts',accessIo(db));
  const result=await getFunnelData({dateFrom:now.toISOString(),dateTo:now.toISOString(),brandId:'b',counting:'events'});
  assert.equal(result.totals.paidOrders,29);
  assert.equal(result.totals.click_purchase,0);

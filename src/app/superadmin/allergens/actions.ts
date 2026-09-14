@@ -3,6 +3,7 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Allergen } from '@/types';
 import { z } from 'zod';
@@ -42,6 +43,7 @@ export async function createOrUpdateAllergen(
   const db = getAdminDb();
 
   try {
+    await requirePlatformSuperuser();
     const allergenRef = id ? db.collection('allergens').doc(id) : db.collection('allergens').doc();
     await allergenRef.set({ ...allergenData, id: allergenRef.id }, { merge: true });
 
@@ -57,6 +59,7 @@ export async function createOrUpdateAllergen(
 
 export async function deleteAllergen(allergenId: string) {
     try {
+        await requirePlatformSuperuser();
         const db = getAdminDb();
         await db.collection("allergens").doc(allergenId).delete();
         revalidatePath("/superadmin/allergens");

@@ -192,3 +192,21 @@ test('native permission discovery is scoped and immediately reflects revoked mem
  await f.change('memberships',{id:'worker',principalId:principalKey(worker),companyId:'a',locationIds:['a1'],roleIds:['reader'],active:false});
  assert.deepEqual((await f.call(worker,command)).permissions,[]);
 });
+
+test('native account management cannot take over a stronger principal or disable platform owners',async()=>{
+ const f=await initialized(),nativeAdmin={...owner,subject:'cccccccc-cccc-4ccc-8ccc-cccccccccccc'},nativeWorker={...owner,subject:'dddddddd-dddd-4ddd-8ddd-dddddddddddd'};
+ await f.change('companies',{id:'native',active:true,locationIds:[],opsflyOrganizationId:owner.organizationId,orderflyBrandIds:[]});
+ for(const identity of [nativeAdmin,nativeWorker])await f.change('principals',{id:principalKey(identity),active:true});
+ await f.change('roles',{id:'native-manager',name:'Native manager',companyId:'native',kind:'company_admin',active:true,permissions:['platform.members:view','platform.members:edit','opsfly.schedule:view']});
+ await f.change('roles',{id:'native-reader',name:'Native reader',companyId:'native',kind:'company_user',active:true,permissions:['opsfly.schedule:view']});
+ await f.change('memberships',{id:'native-manager',principalId:principalKey(nativeAdmin),companyId:'native',locationIds:null,roleIds:['native-manager'],active:true});
+ await f.change('memberships',{id:'native-reader',principalId:principalKey(nativeWorker),companyId:'native',locationIds:null,roleIds:['native-reader'],active:true});
+ for(const operation of ['profile','credentials','activate','deactivate']){
+  assert.equal((await f.call(nativeAdmin,{action:'manageNativeIdentity',identity:nativeWorker,operation})).allowed,true);
+  await assert.rejects(f.call(nativeAdmin,{action:'manageNativeIdentity',identity:owner,operation}),/platform_access_required/);
+ }
+ await assert.rejects(f.call(owner,{action:'manageNativeIdentity',identity:owner,operation:'deactivate'}),/remove_platform_membership_first/);
+ await assert.rejects(f.call(nativeAdmin,{action:'manageNativeIdentity',identity:{...nativeWorker,organizationId:'eeeeeeee-eeee-4eee-8eee-eeeeeeeeeeee'},operation:'credentials'}),/organization_mismatch/);
+ await f.change('roles',{id:'native-reader',name:'Now privileged',companyId:'native',kind:'company_user',active:true,permissions:['opsfly.payroll:view']});
+ await assert.rejects(f.call(nativeAdmin,{action:'manageNativeIdentity',identity:nativeWorker,operation:'credentials'}),/cannot_delegate_permission/);
+});

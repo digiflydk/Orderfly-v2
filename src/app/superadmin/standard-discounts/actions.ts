@@ -4,8 +4,10 @@
 import { isQuantityMethod } from '@/lib/automatic-discounts';
 import { restaurantClock } from '@/lib/promotion-rules';
 import { revalidatePath, revalidateTag } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, Timestamp, getDoc, where, documentId, updateDoc } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
+import { getScopedDocument, listScopedDocuments, mutateScopedDocument } from '@/lib/access/scoped-data';
+import { Timestamp } from 'firebase-admin/firestore';
 import type { StandardDiscount, CartItem, Product, ProductForMenu } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';
@@ -32,6 +34,7 @@ export async function createOrUpdateStandardDiscount(
 	formData: FormData
 ): Promise<FormState> {
 	try {
+		await verifiedOrderflyIdentity();
 		const rawData: Record<string, any> = Object.fromEntries(formData.entries());
 
 		// Explicitly handle array fields from FormData
@@ -72,30 +75,7 @@ export async function createOrUpdateStandardDiscount(
 		}
 
 		const { id, ...discountData } = validatedFields.data;
-        if (!(await getDoc(doc(db, 'brands', discountData.brandId))).exists()) throw new Error('Brand not found.');
-        if (id) {
-          const existing = await getDoc(doc(db, 'standard_discounts', id));
-          if (!existing.exists() || existing.data().brandId !== discountData.brandId) throw new Error('Discount not found for this brand.');
-        }
-        for (const locationId of discountData.locationIds) {
-          const location = await getDoc(doc(db, 'locations', locationId));
-          if (!location.exists() || location.data().brandId !== discountData.brandId) throw new Error('Location does not belong to this brand.');
-        }
-        if (discountData.discountType === 'product' || discountData.discountType === 'category') {
-          const collectionName = discountData.discountType === 'product' ? 'products' : 'categories';
-          for (const ref of discountData.referenceIds) {
-            const record = await getDoc(doc(db, collectionName, ref));
-            if (!record.exists()) throw new Error('Selected product or category does not exist.');
-            const value = record.data();
-            // Categories derive ownership from locations; they do not store brandId.
-            const matches = discountData.discountType === 'category'
-              ? discountData.locationIds.some(loc => (value.locationIds || []).includes(loc))
-              : value.brandId === discountData.brandId;
-            if (!matches) throw new Error('Selected product or category does not belong to this brand/location.');
-          }
-        }
-
-		const docId = id || doc(collection(db, 'standard_discounts')).id;
+		const docId = id || getAdminDb().collection('standard_discounts').doc().id;
 
 		const dataToSave: any = {
 			...discountData,
@@ -111,7 +91,24 @@ export async function createOrUpdateStandardDiscount(
 
 		Object.keys(dataToSave).forEach(key => dataToSave[key] === undefined && delete dataToSave[key]);
 
-		await setDoc(doc(db, 'standard_discounts', docId), dataToSave, { merge: true });
+		await mutateScopedDocument('standard_discounts', docId, id ? 'orderfly.discounts:edit' : 'orderfly.discounts:create', 'locations', async (before, tx) => {
+          if (before && before.brandId !== discountData.brandId) throw new Error('Discount not found for this brand.');
+
+        if (discountData.discountType === 'product' || discountData.discountType === 'category') {
+          const collectionName = discountData.discountType === 'product' ? 'products' : 'categories';
+          for (const ref of discountData.referenceIds) {
+            const record = await tx.get(getAdminDb().collection(collectionName).doc(ref));
+            if (!record.exists) throw new Error('Selected product or category does not exist.');
+            const value = record.data()!;
+            // Categories derive ownership from locations; they do not store brandId.
+            const matches = discountData.discountType === 'category'
+              ? discountData.locationIds.some(loc => (value.locationIds || []).includes(loc))
+              : value.brandId === discountData.brandId;
+            if (!matches) throw new Error('Selected product or category does not belong to this brand/location.');
+          }
+        }
+          return { ...before, ...dataToSave };
+        });
 
 	} catch (e) {
 		const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -125,7 +122,7 @@ export async function createOrUpdateStandardDiscount(
 
 export async function deleteStandardDiscount(id: string): Promise<StandardDiscountActionResult> {
 	try {
-		await deleteDoc(doc(db, "standard_discounts", id));
+		await mutateScopedDocument('standard_discounts', id, 'orderfly.discounts:delete', 'locations', () => null);
 		revalidatePath("/superadmin/standard-discounts");
     revalidateTag('storefront');
 		return { success: true, message: "Discount deleted successfully." };
@@ -137,9 +134,8 @@ export async function deleteStandardDiscount(id: string): Promise<StandardDiscou
 }
 
 export async function getStandardDiscounts(): Promise<StandardDiscount[]> {
-	const q = query(collection(db, 'standard_discounts'), orderBy('discountName'));
-	const querySnapshot = await getDocs(q);
-	return querySnapshot.docs.map(doc => {
+	const documents = await listScopedDocuments('standard_discounts', 'orderfly.discounts:view', 'locations');
+	return documents.sort((a, b) => String(a.data().discountName || '').localeCompare(String(b.data().discountName || ''))).map(doc => {
 		const data = doc.data();
 		return {
 			...data,
@@ -162,10 +158,9 @@ export type SerializedStandardDiscount = Omit<StandardDiscount, 'startDate' | 'e
 
 
 export async function getStandardDiscountById(id: string): Promise<SerializedStandardDiscount | null> {
-	const docRef = doc(db, 'standard_discounts', id);
-	const docSnap = await getDoc(docRef);
-	if (docSnap.exists()) {
-		const data = docSnap.data();
+	const docSnap = await getScopedDocument('standard_discounts', id, 'orderfly.discounts:view', 'locations');
+	if (docSnap) {
+		const data = docSnap.data()!;
 		return {
 			...(data as StandardDiscount),
 			id: docSnap.id,
@@ -203,14 +198,10 @@ export async function getActiveStandardDiscounts({ brandId, locationId, delivery
 	if (discountsForTest) {
 		allDiscountsForBrand = discountsForTest;
 	} else {
-		const q = query(
-			collection(db, 'standard_discounts'),
-			where('brandId', '==', brandId),
-			where('locationIds', 'array-contains', locationId),
-			where('isActive', '==', true)
-		);
-
-		const snapshot = await getDocs(q);
+		const snapshot = await getAdminDb().collection('standard_discounts')
+          .where('brandId', '==', brandId)
+          .where('locationIds', 'array-contains', locationId)
+          .where('isActive', '==', true).get();
 		if (snapshot.empty) return [];
 
 		allDiscountsForBrand = snapshot.docs.map(doc => {
@@ -254,8 +245,8 @@ export async function getActiveStandardDiscounts({ brandId, locationId, delivery
 
 export async function updateStandardDiscountStatus(id: string, isActive: boolean): Promise<StandardDiscountActionResult> {
 	try {
-		const discountRef = doc(db, "standard_discounts", id);
-		await updateDoc(discountRef, { isActive });
+		if (typeof isActive !== 'boolean') throw new Error('Invalid activation value.');
+		await mutateScopedDocument('standard_discounts', id, 'orderfly.discounts:edit', 'locations', before => ({ ...before, isActive, updatedAt: Timestamp.now() }));
 		revalidatePath('/superadmin/standard-discounts');
     revalidateTag('storefront');
 		return { success: true, message: 'Standard discount status updated successfully.' };

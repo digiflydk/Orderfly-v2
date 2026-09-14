@@ -2,8 +2,8 @@
 
 import { createHash } from 'node:crypto';
 import Stripe from 'stripe';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { doc, getDoc } from '@/lib/server/firestore-compat';
+import { db } from '@/lib/server/firestore-compat';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 import { releaseDiscount } from '@/lib/discount-reservations';
 
