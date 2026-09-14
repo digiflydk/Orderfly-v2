@@ -1,6 +1,6 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { orderflyReadGrants } from './orderfly-session';
+import { orderflyReadGrants, orderflySession } from './orderfly-session';
 
 export async function nativeCatalog(permission: string) {
  const grants=await orderflyReadGrants(permission),db=getAdminDb();
@@ -13,4 +13,15 @@ export async function nativeCatalog(permission: string) {
   for(const row of rows)if(row.exists&&row.data()?.brandId===grant.brandId)locations.push({id:row.id,name:String(row.data()?.name||row.id),brandId:grant.brandId,isActive:row.data()?.isActive===true});
  }
  return {brands,locations};
+}
+
+// Selector metadata may span several permitted features, but each native scope
+// is evaluated independently. Session-wide permission names are not scopes.
+export async function selectorCatalog() {
+ const session=await orderflySession();
+ if(session.superuser)return {superuser:true as const,brands:[],locations:[]};
+ const results=await Promise.all(session.permissions.filter(p=>p.endsWith(':view')&&(p.startsWith('orderfly.')||p==='platform.companies:view'||p==='platform.locations:view')).map(async permission=>{
+  try{return await nativeCatalog(permission);}catch(error){if((error as {status?:number}).status===403)return {brands:[],locations:[]};throw error;}
+ }));
+ return {superuser:false as const,brands:[...new Map(results.flatMap(r=>r.brands).map(r=>[r.id,r])).values()],locations:[...new Map(results.flatMap(r=>r.locations).map(r=>[r.id,r])).values()]};
 }

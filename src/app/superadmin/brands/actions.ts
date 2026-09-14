@@ -11,6 +11,7 @@ import { z } from 'zod';
 import { redirect } from 'next/navigation';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import type { Brand, FoodCategory, Allergen, BrandAppearances } from '@/types';
+import { selectorCatalog } from '@/lib/access/native-catalog';
 import { brandRecord } from '@/lib/brand-record';
 import { hasPermission } from '@/lib/auth/permissions';
 
@@ -250,6 +251,8 @@ export async function getBrandBySlug(brandSlug?: string): Promise<Brand | null> 
 }
 
 export async function getBrands(): Promise<Brand[]> {
+  const scope=await selectorCatalog();
+  if(!scope.superuser)return scope.brands.map(row=>brandRecord(row.id,row));
   const db = getAdminDb();
   // Firestore orderBy('name') omits records where name is missing entirely.
   const querySnapshot = await db.collection('brands').get();

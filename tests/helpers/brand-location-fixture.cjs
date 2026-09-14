@@ -25,7 +25,7 @@ function fixture(seed,allowed=true) {
   const pending=[];const result=await fn({get:ref=>ref.get(),set:(ref,data)=>pending.push([ref,data])});
   for(const [ref,data] of pending)await ref.set(data);return result;
  }};
- const mocks={'server-only':{},'@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>({superuser:true})},'@/lib/firebase-admin':{getAdminDb:()=>db},
+ const mocks={'server-only':{},'@/lib/access/native-catalog':{selectorCatalog:async()=>({superuser:true,brands:[],locations:[]})},'@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>({superuser:true})},'@/lib/firebase-admin':{getAdminDb:()=>db},
   '@/lib/auth/permissions':{hasPermission:()=>allowed},'next/cache':{revalidatePath:(...args)=>invalidations.push(args),revalidateTag:()=>{}},
   'next/navigation':{redirect:path=>{const error=Error('redirect');error.digest='NEXT_REDIRECT;replace;'+path+';307;';throw error;}}};
  return {records,writes,invalidations,users:loadTs('src/app/superadmin/users/actions.ts',mocks),plans:loadTs('src/app/superadmin/subscriptions/actions.ts',mocks),roles:loadTs('src/roles/actions.ts',mocks),brands:loadTs('src/app/superadmin/brands/actions.ts',mocks),locations:loadTs('src/app/superadmin/locations/actions.ts',mocks)};

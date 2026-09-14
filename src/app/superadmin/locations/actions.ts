@@ -1,6 +1,7 @@
 
 'use server';
 import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
+import { selectorCatalog } from '@/lib/access/native-catalog';
 import { calculateTimeSlots } from '@/lib/time-slots';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
@@ -186,6 +187,8 @@ export async function getActiveLocationBySlug(brandId: string, locationSlug: str
 }
 
 export async function getAllLocations(brandId?: string): Promise<Location[]> {
+    const scope=await selectorCatalog();
+    if(!scope.superuser)return scope.locations.filter(row=>!brandId||row.brandId===brandId) as Location[];
     const db = getAdminDb();
     let q: admin.firestore.Query = db.collection('locations');
     if (brandId) {
