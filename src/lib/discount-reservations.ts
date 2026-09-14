@@ -1,6 +1,5 @@
 import { createHash } from 'node:crypto';
-import { db } from '@/lib/firebase';
-import { doc, runTransaction, type Transaction } from 'firebase/firestore';
+import { db, doc, runTransaction, type Transaction } from '@/lib/server/firestore-compat';
 
 function refs(brandId: string, customerId: string, discountId: string | null) {
   const key = (parts: string[]) => createHash('sha256').update(JSON.stringify(parts)).digest('hex');

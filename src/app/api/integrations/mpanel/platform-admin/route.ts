@@ -1,3 +1,5 @@
+import { executeAuthority, AuthorityError } from '@/lib/access/authority';
+import { getAdminDb } from '@/lib/firebase-admin';
 import { isValidMachineSecret } from '@/lib/integrations/esmeralda-customer-contract';
 import { envelopeSchema, executePlatformAdmin, PlatformAdminError } from '@/lib/integrations/mpanel-platform-admin';
 import { mpanelAdminEnabled } from '@/lib/mpanel-admin-cutover';
@@ -20,8 +22,18 @@ export async function POST(request:Request) {
     const text=Buffer.concat(chunks).toString('utf8');
     const input=envelopeSchema.parse(JSON.parse(text));
     if(input.actorId!==actor||input.organizationId!==organization) return reply({error:'forbidden'},403);
+    const identity={provider:'opsfly' as const,subject:actor,organizationId:organization};
+    try {
+      const session=await executeAuthority(getAdminDb(),identity,{action:'session'},identity);
+      if(!('superuser' in session)||!session.superuser)return reply({error:'forbidden'},403);
+    } catch(error) {
+      // Before explicit initialization only the original verified bootstrap owner
+      // can use the legacy catalogue. Disabled/current principals never fall back.
+      if(!(error instanceof AuthorityError)||error.code!=='not_initialized')throw error;
+    }
     return reply(await executePlatformAdmin(input));
   } catch(error) {
+    if(error instanceof AuthorityError)return reply({error:error.code},error.status);
     if(error instanceof PlatformAdminError) return reply({error:error.code},error.status);
     if(error instanceof z.ZodError||error instanceof SyntaxError) return reply({error:'invalid_payload'},400);
     return reply({error:'service_unavailable'},503);

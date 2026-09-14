@@ -125,7 +125,7 @@ test('#71 SSR menu excludes explicit test data regardless of its public-looking 
 });
 test('#71 marketing endpoints fail closed without verified credentials',async()=>{
  let token='';let revoked=false;
- const {workerAuthorized,marketingAdminAuthorized}=loadTs('src/lib/marketing/auth.ts',{'server-only':{},'next/headers':{cookies:async()=>({get:()=>token?{value:token}:undefined})},'@/lib/firebase-admin':{getAdminApp:()=>({auth:()=>({verifySessionCookie:async(value,checkRevoked)=>{assert.equal(checkRevoked,true);if(revoked)throw Error('revoked');return {uid:value};}})})}});
+ const {workerAuthorized,marketingAdminAuthorized}=loadTs('src/lib/marketing/auth.ts',{'server-only':{},'@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>{if(token!=='allowed'||revoked)throw Error('Current authority denies');}}});
  delete process.env.ORDERFLY_MARKETING_WORKER_SECRET;assert.equal(workerAuthorized(new Request('https://fixture.test')),false);
  process.env.ORDERFLY_MARKETING_WORKER_SECRET='x'.repeat(32);assert.equal(workerAuthorized(new Request('https://fixture.test',{headers:{authorization:'Bearer '+'x'.repeat(32)}})),true);
  assert.equal(workerAuthorized(new Request('https://fixture.test',{headers:{authorization:'Bearer wrong'}})),false);

@@ -1,3 +1,4 @@
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 
 import "server-only";
 export const runtime = "nodejs";
@@ -8,6 +9,8 @@ import { isDebugSnapshotEnabled } from "@/lib/debug/flags";
 import { buildAllDebugPayload } from "@/lib/debug/all";
 
 export async function GET() {
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   // Feature-gate
   const enabled = await isDebugSnapshotEnabled();
   if (!enabled) {

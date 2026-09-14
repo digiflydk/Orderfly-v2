@@ -5,7 +5,6 @@ import { calculateTimeSlots } from '@/lib/time-slots';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, getDoc, limit, writeBatch } from 'firebase/firestore';
 import type { Location, Brand, TimeSlotResponse } from '@/types';
 import { z } from 'zod';
 import { redirect } from 'next/navigation';

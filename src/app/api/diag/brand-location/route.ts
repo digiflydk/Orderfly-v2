@@ -1,3 +1,4 @@
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 
 // src/app/api/diag/brand-location/route.ts
 import { NextResponse } from "next/server";
@@ -8,6 +9,8 @@ export const runtime = "nodejs";
 export const fetchCache = "default-no-store";
 
 export async function GET(req: Request) {
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   const { searchParams } = new URL(req.url);
   const brandSlug = searchParams.get("brandSlug") || "";
   const locationSlug = searchParams.get("locationSlug") || "";

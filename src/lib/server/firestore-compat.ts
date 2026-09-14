@@ -32,7 +32,8 @@ export const increment = (value: number) => FieldValue.increment(value);
 export const arrayUnion = (...values: any[]) => FieldValue.arrayUnion(...values);
 export const deleteField = () => FieldValue.delete();
 export const documentId = () => '__name__';
-export async function runTransaction<T>(_db: unknown, run: (tx: any) => Promise<T>): Promise<T> {
+export type Transaction = { get(ref: Reference): Promise<ReturnType<typeof snapshot>>; set(ref: Reference, data: any, options?: any): unknown; update(ref: Reference, data: any): unknown; delete(ref: Reference): unknown };
+export async function runTransaction<T>(_db: unknown, run: (tx: Transaction) => Promise<T>): Promise<T> {
   return getAdminDb().runTransaction(async tx => run({
     get: async (ref: Reference) => snapshot(await tx.get(native(ref))),
     set: (ref: Reference, data: any, options?: any) => options ? tx.set(native(ref), data, options) : tx.set(native(ref), data),
