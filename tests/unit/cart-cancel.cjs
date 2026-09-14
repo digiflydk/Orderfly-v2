@@ -21,7 +21,7 @@ async function fixture() {
   let expires = 0, fail = false;
   const api = loadTs('src/app/checkout/cancel-actions.ts', { ...mocks,
     '@/lib/discount-reservations': reservations,
-    '@/app/superadmin/settings/actions': { getActiveStripeSecretKey: async () => 'fixture' },
+    '@/lib/server/payment-settings': { getActiveStripeSecretKey: async () => 'fixture' },
     stripe: { default: class Stripe { checkout = { sessions: {
       retrieve: async () => session,
       expire: async () => { expires++; if (fail) throw Error('provider unavailable'); session.status = 'expired'; return session; },

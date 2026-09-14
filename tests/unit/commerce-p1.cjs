@@ -104,7 +104,7 @@ function receiptFixture({paymentStatus='Paid',stripeStatus='paid',legacy=false,f
  const snapshot={id:order.id,exists:true,data:()=>structuredClone(order)};
  const db={collection:()=>({doc:id=>({get:async()=>{reads++;return id===order.id?snapshot:{exists:false}}}),where:(_,__,value)=>({limit:()=>({get:async()=>{reads++;return {empty:value!==sessionId,docs:value===sessionId?[snapshot]:[]}}})})})};
  const mocks={'server-only':{},'firebase-admin/firestore':{},'@/lib/firebase-admin':{getAdminDb:()=>db},
-  '@/app/superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'fixture'},
+  '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'fixture'},
   stripe:{default:class Stripe{checkout={sessions:{retrieve:async()=>{if(fail)throw Error('network');return{id:sessionId,status:stripeStatus==='expired'?'expired':'complete',payment_status:stripeStatus,metadata:{orderId:order.id,brandId:'b',locationId:'l'}}}}};}},
   './settle-checkout':{settlePaidCheckoutSession:async()=>{settlements++;order.paymentStatus='Paid';}},
  };

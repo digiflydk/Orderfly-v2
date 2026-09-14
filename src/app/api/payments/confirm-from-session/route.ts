@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import Stripe from 'stripe';
 import { db } from '@/lib/firebase';
 import { doc, getDoc } from 'firebase/firestore';
-import { getActiveStripeSecretKey } from '@/app/superadmin/settings/actions';
+import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 import { settlePaidCheckoutSession } from '@/lib/server/settle-checkout';
 import { z } from 'zod';
 

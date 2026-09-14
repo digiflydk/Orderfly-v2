@@ -2,6 +2,7 @@
 'use client'
 
 import { Suspense } from 'react'
+import type { NavigationAccess } from '@/lib/access/navigation'
 import { usePathname } from 'next/navigation'
 import * as S from '@/components/ui/sidebar'
 
@@ -12,6 +13,7 @@ import type { PlatformBrandingSettings } from '@/types'
 
 type Props = {
   children: React.ReactNode
+  access?: NavigationAccess | null
   centralAdmin?: boolean
   brandingSettings?: PlatformBrandingSettings | null
 }
@@ -27,11 +29,11 @@ function LayoutWithLoader({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmin }: Props) {
+export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmin, access }: Props) {
   return (
     <S.SidebarProvider>
       <S.Sidebar collapsible="icon" className="border-r">
-        <SuperAdminSidebarClient centralAdmin={centralAdmin}
+        <SuperAdminSidebarClient access={access} centralAdmin={centralAdmin}
           brandingSettings={
             brandingSettings ?? { platformHeading: 'Orderfly Studio' }
           }

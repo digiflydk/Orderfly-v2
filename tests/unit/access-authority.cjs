@@ -168,3 +168,16 @@ test('session grants contain only the caller active memberships and native grant
  assert.deepEqual((await f.call(worker,{action:'session'})).permissions,[]);
  assert.deepEqual(await f.call(worker,{action:'nativeGrants',product:'opsfly',permission:'opsfly.schedule:view'}),{grants:[]});
 });
+
+test('native platform feature permissions stay within the company and observe revocation',async()=>{
+ const f=await companyFixture();
+ await f.change('companies',{id:'a',active:true,locationIds:['a1'],opsflyOrganizationId:owner.organizationId,orderflyBrandIds:['brand-a']});
+ await f.change('roles',{id:'notifier',name:'Notification reader',companyId:'a',kind:'company_user',active:true,permissions:['platform.notifications:view']});
+ await f.change('memberships',{id:'worker',principalId:principalKey(worker),companyId:'a',locationIds:null,roleIds:['notifier'],active:true});
+ const command={action:'checkNative',product:'opsfly',tenantId:owner.organizationId,locationIds:null,permission:'platform.notifications:view'};
+ assert.equal((await f.call(worker,command)).allowed,true);
+ assert.equal((await f.call(worker,{...command,tenantId:'foreign'})).allowed,false);
+ assert.equal((await f.call(worker,{...command,permission:'platform.notifications:edit'})).allowed,false);
+ await f.change('roles',{id:'notifier',name:'Notification reader',companyId:'a',kind:'company_user',active:false,permissions:['platform.notifications:view']});
+ assert.equal((await f.call(worker,command)).allowed,false);
+});

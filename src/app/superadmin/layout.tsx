@@ -32,14 +32,14 @@ export default async function SuperadminLayout({
 
   if (!canAccess) {
     return (
-      <SuperAdminLayoutClient centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings}>
+      <SuperAdminLayoutClient access={session} centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings}>
         <AccessDeniedPage />
       </SuperAdminLayoutClient>
     );
   }
 
   return (
-    <SuperAdminLayoutClient centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings}>
+    <SuperAdminLayoutClient access={session} centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings}>
       {children}
     </SuperAdminLayoutClient>
   );

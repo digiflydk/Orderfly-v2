@@ -57,7 +57,7 @@ export function MenuClient({ brand, location, initialCategories, initialProducts
             if (initialActiveCombos.length > 0) {
                 const comboProductIds = [...new Set(initialActiveCombos.flatMap(c => c.productGroups.flatMap(g => g.productIds)))];
                 if (comboProductIds.length > 0) {
-                    const fetchedComboProducts = await getProductsByIds(comboProductIds);
+                    const fetchedComboProducts = await getProductsByIds(comboProductIds, brand.id, location.id);
                     setComboProducts(fetchedComboProducts);
                 }
             }

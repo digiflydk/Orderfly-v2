@@ -3,8 +3,10 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { db } from '@/lib/firebase';
-import { collection, doc, setDoc, deleteDoc, getDocs, query, orderBy, where, Timestamp, getDoc } from 'firebase/firestore';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
+import { getScopedDocument, listScopedDocuments, mutateScopedDocument } from '@/lib/access/scoped-data';
+import { Timestamp } from 'firebase-admin/firestore';
 import type { Discount } from '@/types';
 import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
@@ -97,38 +99,10 @@ export async function createOrUpdateDiscount(
     
     const { id: validatedId, ...discountData } = validatedFields.data;
 
-    if (discountData.assignedToCustomerId) {
-      const customer = await getDoc(doc(db, 'customers', discountData.assignedToCustomerId));
-      if (!customer.exists() || customer.data().brandId !== discountData.brandId) {
-        return { error: true, message: 'Select a customer belonging to this brand.' };
-      }
-    }
-
-    // Check for uniqueness
-    const uniquenessQuery = query(
-        collection(db, 'discounts'),
-        where('brandId', '==', discountData.brandId),
-        where('code', '==', discountData.code)
-    );
-    const existingSnapshot = await getDocs(uniquenessQuery);
-    if (!existingSnapshot.empty) {
-        const existingDoc = existingSnapshot.docs[0];
-        if (existingDoc.id !== validatedId) {
-            const duplicateCodeIssue: ZodIssue = {
-                code: 'custom',
-                path: ['code'],
-                message: 'This code is already in use.',
-            };
-
-            return {
-                message: 'This discount code already exists for this brand.',
-                error: true,
-                errors: [duplicateCodeIssue],
-            };
-        }
-    }
-    
-    const docId = validatedId || doc(collection(db, 'discounts')).id;
+    const permission = `orderfly.discounts:${validatedId ? 'edit' : 'create'}`;
+    await requireOrderflyAccess(discountData.brandId, discountData.locationIds, permission);
+    const db = getAdminDb();
+    const docId = validatedId || db.collection('discounts').doc().id;
 
     const dataToSave: any = {
         id: docId,
@@ -136,7 +110,7 @@ export async function createOrUpdateDiscount(
         startDate: discountData.startDate ? Timestamp.fromDate(new Date(discountData.startDate)) : undefined,
         endDate: discountData.endDate ? Timestamp.fromDate(new Date(discountData.endDate)) : undefined,
         updatedAt: Timestamp.now(),
-        usedCount: id ? (await getDiscountById(id))?.usedCount ?? 0 : 0,
+        usedCount: 0,
     };
     
     if (!id) {
@@ -146,7 +120,16 @@ export async function createOrUpdateDiscount(
     // Remove undefined fields to prevent Firestore errors
     Object.keys(dataToSave).forEach(key => dataToSave[key] === undefined && delete dataToSave[key]);
 
-    await setDoc(doc(db, 'discounts', docId), dataToSave, { merge: true });
+    await mutateScopedDocument('discounts', docId, permission, 'locations', async (before, tx) => {
+      if (before && before.brandId !== discountData.brandId) throw new Error('A discount cannot move to another brand.');
+      if (discountData.assignedToCustomerId) {
+        const customer = await tx.get(db.collection('customers').doc(discountData.assignedToCustomerId));
+        if (!customer.exists || customer.data()?.brandId !== discountData.brandId) throw new Error('Select a customer belonging to this brand.');
+      }
+      const duplicates = await tx.get(db.collection('discounts').where('brandId', '==', discountData.brandId).where('code', '==', discountData.code));
+      if (duplicates.docs.some(record => record.id !== docId)) throw new Error('This discount code already exists for this brand.');
+      return { ...before, ...dataToSave, usedCount: before?.usedCount ?? 0 };
+    });
 
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -160,19 +143,10 @@ export async function createOrUpdateDiscount(
 
 export async function deleteDiscount(id: string) {
     try {
-        const discountRef = doc(db, "discounts", id);
-        const discountSnap = await getDoc(discountRef);
-        
-        if (!discountSnap.exists()) {
-            return { message: "Discount not found.", error: true };
-        }
-        
-        const discountData = discountSnap.data();
-        if (discountData.usedCount > 0) {
-            return { message: "Cannot delete a discount that has been used. Please deactivate it instead.", error: true };
-        }
-
-        await deleteDoc(discountRef);
+        await mutateScopedDocument('discounts', id, 'orderfly.discounts:delete', 'locations', before => {
+          if (before!.usedCount > 0) throw new Error('Cannot delete a discount that has been used. Please deactivate it instead.');
+          return null;
+        });
         revalidatePath("/superadmin/discounts");
         return { message: "Discount deleted successfully.", error: false };
     } catch (e) {
@@ -183,9 +157,8 @@ export async function deleteDiscount(id: string) {
 }
 
 export async function getDiscounts(): Promise<Discount[]> {
-  const q = query(collection(db, 'discounts'), orderBy('code'));
-  const querySnapshot = await getDocs(q);
-  return querySnapshot.docs.map(doc => {
+  const documents = await listScopedDocuments('discounts', 'orderfly.discounts:view', 'locations');
+  return documents.sort((a, b) => String(a.data().code).localeCompare(String(b.data().code))).map(doc => {
     const data = doc.data();
     return { 
       ...data,
@@ -199,10 +172,9 @@ export async function getDiscounts(): Promise<Discount[]> {
 }
 
 export async function getDiscountById(id: string): Promise<Discount | null> {
-    const docRef = doc(db, 'discounts', id);
-    const docSnap = await getDoc(docRef);
-    if (docSnap.exists()) {
-        const data = docSnap.data();
+    const docSnap = await getScopedDocument('discounts', id, 'orderfly.discounts:view', 'locations');
+    if (docSnap) {
+        const data = docSnap.data()!;
         return { 
             ...data,
             id: docSnap.id,
@@ -215,37 +187,9 @@ export async function getDiscountById(id: string): Promise<Discount | null> {
     return null;
 }
 
-export async function getDiscountByCode(code: string, brandId: string): Promise<Discount | null> {
-  if (!code || !brandId) return null;
-
-  const q = query(
-    collection(db, 'discounts'),
-    where('code', '==', code),
-    where('brandId', '==', brandId)
-  );
-  
-  const querySnapshot = await getDocs(q);
-  if (querySnapshot.empty) {
-    return null;
-  }
-  
-  const data = querySnapshot.docs[0].data();
-  if (data.applicationType === 'newsletter_signup') {
-    return null;
-  }
-  // Return raw Date objects, they will be handled by the client
-  return {
-    ...data,
-    id: querySnapshot.docs[0].id,
-    startDate: data.startDate?.toDate(),
-    endDate: data.endDate?.toDate(),
-    createdAt: data.createdAt.toDate(),
-    updatedAt: data.updatedAt.toDate(),
-  } as Discount;
-}
-
 export async function getDiscountCustomers(brandId: string): Promise<{id: string; name: string; email: string}[]> {
   if (!brandId) return [];
-  const snapshot = await getDocs(query(collection(db, 'customers'), where('brandId', '==', brandId)));
+  await requireOrderflyAccess(brandId, null, 'orderfly.discounts:view');
+  const snapshot = await getAdminDb().collection('customers').where('brandId', '==', brandId).get();
   return snapshot.docs.map(d => ({ id: d.id, name: d.data().fullName || '', email: d.data().email || '' }));
 }

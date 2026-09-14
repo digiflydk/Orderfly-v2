@@ -230,3 +230,19 @@ test('403 then removing selected file reuses creation key without a duplicate; i
  f.failure.upload=false;const edit=form({id:result.id,originalBrandId:'b',imageUrl:new File([await image()],'water.jpg',{type:'image/jpeg'})});assert.equal((await f.actions.createOrUpdateProduct(null,edit)).ok,true);
  assert.equal(f.objects.size,1);assert.equal([...f.records.keys()].filter(k=>k.startsWith('products/')).length,2);assert.match(f.records.get('products/'+result.id).imageUrl,/firebasestorage/);
 });
+
+test('product copying checks source and target scope atomically and removes creation keys',async()=>{
+ const f=fixture();Object.assign(f.records.get('products/hellerup'),{creationKey:'old-key',creationFingerprint:'old-fingerprint'});
+ const result=await f.actions.duplicateProducts({productIds:['hellerup'],targetBrandId:'b',targetLocationIds:['l2']});
+ assert.equal(result.success,true,result.message);
+ const copy=f.records.get(f.writes[0]);assert.equal(copy.brandId,'b');assert.deepEqual(copy.locationIds,['l2']);
+ assert.equal(copy.creationKey,undefined);assert.equal(copy.creationFingerprint,undefined);assert.notEqual(copy.id,'hellerup');
+});
+test('product copying cannot use foreign references or source permissions from another membership',async()=>{
+ for(const limited of [false,true]){
+  const f=fixture();
+  if(limited){const policy=f.records.get('platformAdminControl/access-v1');policy.roles[0]={id:'owner',name:'Limited creator',companyId:'company-b',kind:'company_user',active:true,permissions:['orderfly.catalog:create']};policy.memberships[0].companyId='company-b';}
+  const result=await f.actions.duplicateProducts({productIds:['hellerup'],targetBrandId:limited?'b':'c',targetLocationIds:limited?['l2']:['foreign']});
+  assert.equal(result.success,false);assert.deepEqual(f.writes,[]);
+ }
+});

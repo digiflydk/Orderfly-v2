@@ -50,7 +50,7 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
    }).prepareCapacitySettlement(tx,order,paid),
   },
   'next/server':{}, stripe:{default:Stripe},
-  '@/app/superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'test',getActiveStripeWebhookSecret:async()=> 'test'},
+  '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test',getActiveStripeWebhookSecret:async()=> 'test'},
   'next/headers':{headers:async()=>({get:()=> 'signature'})}, '@/lib/firebase':{db:{}},
   '@/lib/analytics-server':{trackServerEvent:async()=>{}},
   'firebase/firestore':{
@@ -160,7 +160,7 @@ test('cancel requires capability, confirms expiration before release and tolerat
  const api=load('src/app/checkout/cancel-actions.ts',{
   'node:crypto':crypto, stripe:{default:Stripe}, '@/lib/firebase':{db:{}},
   'firebase/firestore':{doc:()=> 'order',getDoc:async()=>({exists:()=>true,data:()=>({brandId:'b',locationId:'l',psp:{checkoutSessionId:'s'},cancelTokenHash:crypto.createHash('sha256').update(token).digest('hex')})})},
-  '@/app/superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'test'},
+  '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test'},
   '@/lib/discount-reservations':{releaseDiscount:async()=>{assert.equal(status,'expired');releases++;}},
  });
  assert.equal((await api.cancelCheckout('ORD-1','b'.repeat(64))).status,'error');

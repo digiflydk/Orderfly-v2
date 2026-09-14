@@ -49,10 +49,10 @@ async function checkout({existing=false,kind='none',identityCleaner=false, fault
   '@/lib/discount-reservations':{reserveDiscount:async()=>{events.push('reserve');if(fault==='reserve')throw Error('Discount capacity reached');},releaseDiscount:async()=>{events.push('release');if(fault==='release')throw Error('cleanup offline');}},
   '@/lib/order-id':{generateOrderId:()=> 'ORD-TEST'},'@/lib/firebase':{db:{}},
   '@/lib/url':{getOrigin:async()=> 'https://example.test'},
-  '../superadmin/settings/actions':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
+  '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
   '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b',slug:'brand',name:'Test brand',bagFee:4,adminFee:0,...brandOverrides})},
   '@/app/superadmin/locations/actions':{getLocationById:async()=>({id:'l',slug:'location',brandId:'b',city,name:'Test location',isActive:true,deliveryTypes:['pickup','delivery'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'12:00',close:'22:00'}])),...locationOverrides})},
-  '@/app/superadmin/discounts/actions':{getDiscountById:async()=>records.get('discounts/d')},
+  '@/lib/server/checkout-discounts':{getDiscountById:async()=>records.get('discounts/d')},
   '@/app/superadmin/standard-discounts/actions':{getActiveStandardDiscounts:async()=>standardDiscounts || (kind==='automatic'?[{...offer,discountName:'Automatic 10%',discountType:'cart',discountMethod:'percentage'}]:[])},
   stripe:{default:class Stripe {
    on(_,listener){this.listener=listener;}

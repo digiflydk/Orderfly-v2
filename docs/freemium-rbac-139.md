@@ -24,6 +24,12 @@ All functions are commercially available during freemium. Subscription plans and
 | Orderfly brand website CMS | Config, home, menu and page operations use explicit `orderfly.website` view/create/edit/delete permissions for the brand. Internal audit/storage helpers are no longer exposed Server Actions. |
 | Orderfly existing global permission checks/API helpers | Require verified central superuser instead of an always-allow placeholder. |
 | Opsfly shared customer API | Uses current company-wide `opsfly.customers:view`, or `edit` for backfill, after native session and active organization verification. Native admin role alone is insufficient. |
+| Orderfly products | Scoped create/edit/delete/copy/reorder and list/detail. Writes recheck current policy, old ownership and resulting ownership in the same transaction. Legacy product mutations delegate to these actions. |
+| Orderfly discounts and customers | Current company/location guards on list/detail/create/edit/delete. Customer records require company-wide scope. Customer creation uses a bounded authorized brand selector with visible load/save failures. |
+| Orderfly settings and payment credentials | Global settings require a current superuser. Private Stripe keys are internal server-only helpers; the public action returns only the publishable key. |
+| Orderfly navigation | Sidebar entries use the verified session permission set; each server operation still performs its own check. |
+| Public product lookup | The native location determines the brand. Only active, non-test menu fields for that brand/location are returned; lookup without a location requires authenticated catalogue access. |
+| Opsfly booking and notifications | Every known action selects an explicit current permission before business I/O. Booking uses the native resolved location; notifications require company-wide `platform.notifications` rights. |
 | Other Orderfly/Opsfly protected operations | Migration and full entrypoint audit remain incomplete. |
 
 `nativeGrants` returns explicit native tenants and permitted location lists, never an all-tenant wildcard. Native location ownership is checked independently of catalogue mappings. Public storefront/checkout helpers and worker credentials remain separate from employee authority; mixed public/admin files must be classified at operation level before applying guards.
@@ -43,3 +49,11 @@ This is an **incomplete paired draft, not an activated RBAC release**. The follo
 `tests/unit/freemium-access.cjs` and `access-authority.cjs` cover scope, revocation, delegation, last-superuser invariants, namespace isolation, native mapping, concurrent revisions, explicit bootstrap, enrollment and verified cookies. `order-access.cjs` executes the actual order query/status code with external I/O replaced, including denied edits and ownership changes during a transaction. `admin-session.cjs` verifies current central authorization, caller identity, fresh login, origin rejection and HTTP-only cookies. Existing brand/location and legacy catalogue regression fixtures keep their original assertions and replace the relocated permission I/O boundary.
 
 The paired Opsfly browser tests exercise company, role, membership and error flows on desktop/mobile. Customer handler tests use the real central decision adapter and fixture business queries. These are development tests, not deployment proof. The draft must remain unmerged until every release blocker is resolved.
+
+## Additional implementation checkpoint (2026-09-14)
+
+The candidate remains incomplete and must not be activated. New focused verification: 89 policy/authority/scoped-data/product/menu/discount/settings/navigation tests and 18 actual-component browser tests passed (the browser suite includes customer creation at widths 390 and 1280 and the existing product image/retry cases). The unchanged order/session/website/legacy policy group also passed, and `npm run typecheck` passed.
+
+The broader checkout selection has 94 passes and two failures: the cart-restoration unavailable-topping-group case and the webhook atomic-retry fixture. Both failures reproduce on the untouched starting commit `d8f4ee77bee451117adcb3995fb21b759446521f`. They have not been skipped, weakened or counted as green. The Opsfly paired gate additionally cannot resolve its required npm dependency in this environment (`Connection refused` from registry.npmjs.org). Full exact-head preflight, independent review and live verification therefore have no passing evidence.
+
+Remaining implementation is substantial: HR/PIN and employee self-service, production/inventory/procurement and privileged SQL RPCs, remaining Orderfly catalogue/loyalty/feedback/billing/analytics/legacy client write paths, native account creation/linking and full delegated navigation still require migration. This checkpoint is not evidence that the whole access module is finished.

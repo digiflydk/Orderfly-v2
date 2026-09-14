@@ -121,11 +121,20 @@ test('stacking includes a menu at its charged price',async()=>{
 
 test('newsletter stacking setting saves and reopens both on and off',async()=>{
  let saved;
+ const identity={provider:'firebase',subject:'newsletter-editor'};
+ const principalId=loadTs('src/lib/access/authority.ts',{'server-only':{}}).principalKey(identity);
+ const policy={principals:[{id:principalId,active:true}],companies:[{id:'company',active:true,orderflyBrandIds:['b'],locationIds:['l']}],roles:[{id:'editor',name:'Discount editor',companyId:'company',kind:'company_user',active:true,permissions:['orderfly.discounts:create','orderfly.discounts:edit','orderfly.discounts:view']}],memberships:[{id:'member',principalId,companyId:'company',locationIds:['l'],roleIds:['editor'],active:true}]};
+ const data=path=>path==='discounts/d'?saved:path==='platformAdminControl/access-v1'?policy:path==='brands/b'?{}:path==='locations/l'?{brandId:'b'}:null;
+ const snapshot=path=>({id:path.split('/')[1],exists:!!data(path),data:()=>data(path)});
+ const db={collection:name=>({doc:(id='d')=>({path:name+'/'+id,id,get:async()=>snapshot(name+'/'+id)}),where(){return this;},get:async()=>({docs:[]})}),runTransaction:async run=>{
+  let next=saved;
+  const result=await run({get:async ref=>ref.path?snapshot(ref.path):ref.get(),set:(ref,value)=>{assert.equal(ref.path,'discounts/d');next=value;}});
+  saved=next;return result;
+ }};
+ const session={verifiedOrderflyIdentity:async()=>identity,requireOrderflyAccess:async()=>{}};
  const api=loadTs('src/app/superadmin/discounts/actions.ts',{
-  '@/lib/firebase':{db:{}},'next/cache':{revalidatePath:()=>{}},'next/navigation':{redirect:()=>{throw Error('REDIRECT');}},
-  'firebase/firestore':{collection:(_,p)=>p,doc:(_,p,id)=>({id:id||'d'}),where:()=>null,query:()=>null,
-   getDocs:async()=>({empty:true,docs:[]}),getDoc:async()=>({id:'d',exists:()=>!!saved,data:()=>saved}),
-   setDoc:async(_,data)=>{saved={...saved,...data};},Timestamp:{now:()=>({toDate:()=>new Date('2026-09-09T00:00:00Z')}),fromDate:d=>({toDate:()=>d})}},
+  'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},'@/lib/access/orderfly-session':session,'./orderfly-session':session,
+  'next/cache':{revalidatePath:()=>{}},'next/navigation':{redirect:()=>{throw Error('REDIRECT');}},
  });
  for(const enabled of [true,false]){
   const form=new FormData();

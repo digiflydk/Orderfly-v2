@@ -76,7 +76,7 @@ export async function executeAuthority(db:any,identity:VerifiedIdentity,input:un
       return {actorId:actor,superuser,name:policy.principals.find(p=>p.id===actor)?.name||'Bruger',permissions:superuser?PERMISSIONS:[...new Set(roles.flatMap(r=>r.permissions))]};
     }
     if(command.action==='nativeGrants') {
-      if(!command.permission.startsWith(command.product+'.')||!PERMISSIONS.includes(command.permission))return reject('permission_missing');
+      if(!(command.permission.startsWith(command.product+'.')||command.permission.startsWith('platform.'))||!PERMISSIONS.includes(command.permission))return reject('permission_missing');
       const grants:Array<{tenantId:string;locationIds:string[]|null}>=[];
       for(const company of policy.companies.filter(c=>c.active)) {
         const tenants=command.product==='orderfly'?company.orderflyBrandIds:company.opsflyOrganizationId?[company.opsflyOrganizationId]:[];
@@ -90,7 +90,7 @@ export async function executeAuthority(db:any,identity:VerifiedIdentity,input:un
     if(command.action==='check')return authorize(policy,{principalId:actor,companyId:command.companyId,locationIds:command.locationIds,permission:command.permission});
     if(command.action==='checkNative') {
       const company=policy.companies.find(c=>command.product==='opsfly'?c.opsflyOrganizationId===command.tenantId:c.orderflyBrandIds.includes(command.tenantId));
-      if(!company||!command.permission.startsWith(command.product+'.'))return {allowed:false,reason:'native_tenant_unlinked'};
+      if(!company||!(command.permission.startsWith(command.product+'.')||command.permission.startsWith('platform.')))return {allowed:false,reason:'native_tenant_unlinked'};
       return authorize(policy,{principalId:actor,companyId:company.id,locationIds:command.locationIds,permission:command.permission});
     }
     if(command.action==='list') {
