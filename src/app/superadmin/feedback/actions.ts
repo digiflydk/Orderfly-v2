@@ -36,8 +36,9 @@ export async function createOrUpdateQuestionVersion(formData: FormData): Promise
       await tx.get(lock);
       const existing = await tx.get(ref);
       if (id && !existing.exists) throw new Error('Question version no longer exists.');
+      const brandId = existing.data()?.brandId;
       const active = await tx.get(col.where('isActive', '==', true));
-      const conflict = active.docs.some(doc => doc.id !== ref.id && doc.data().language === data.language &&
+      const conflict = active.docs.some(doc => doc.id !== ref.id && (doc.data().brandId || null) === (brandId || null) && doc.data().language === data.language &&
         (doc.data().orderTypes || []).some((type: string) => data.orderTypes.includes(type as FeedbackExperienceType)));
       if (data.isActive && conflict) throw new Error('Deactivate the existing version for this language and experience type first.');
       const timestamp = getAdminFieldValue().serverTimestamp();
