@@ -156,10 +156,12 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
     ]);
     if (!questionsSnapshot.exists) return { message: 'Feedback form is no longer available.', error: true };
     const questionsData = questionsSnapshot.data() ?? {};
-    const selectedVersionId = feedbackAutomation(brandSettingsSnapshot.data()).questionVersionId;
+    const settings = feedbackAutomation(brandSettingsSnapshot.data());
+    const selectedVersionId = source.experienceType === 'booking' ? settings.bookingQuestionVersionId || settings.questionVersionId : settings.questionVersionId;
     if (selectedVersionId && selectedVersionId !== parsed.data.questionVersionId) return { message: 'Feedback form is no longer assigned to this brand.', error: true };
     const allowedTypes = Array.isArray(questionsData.orderTypes) ? questionsData.orderTypes : [];
     if (
+      (questionsData.brandId && questionsData.brandId !== source.brandId) ||
       questionsData.isActive !== true ||
       questionsData.language !== parsed.data.language ||
       !allowedTypes.includes(source.experienceType)

@@ -18,6 +18,7 @@ export const QuestionSchema = z.object({
 
 export const FeedbackQuestionsVersionSchema = z.object({
   id: z.string().optional(),
+  brandId: z.string().regex(/^[\w-]{1,160}$/).optional(),
   versionLabel: z.string().trim().min(1).max(200),
   isActive: z.boolean(),
   language: z.string().trim().min(2).max(16).default("da"),

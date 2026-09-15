@@ -3,6 +3,7 @@ const assert=require('node:assert/strict');
 const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http=require('node:http');
 const {chromium}=require('@playwright/test');
 const {fixture}=require('../helpers/feedback-fixture.cjs');
+const {loadTs}=require('../helpers/load-ts.cjs');
 const webpackModule=require('next/dist/compiled/webpack/webpack');webpackModule.init();
 const root=process.cwd();let dir,server,browser,origin,f;
 function file(name,code){const target=path.join(dir,name+'.js');fs.writeFileSync(target,code);return target;}
@@ -18,7 +19,7 @@ before(async()=>{
  import {FeedbackDetailClient} from ${JSON.stringify(path.join(root,'src/app/superadmin/feedback/[feedbackId]/client-page.tsx'))};
  import {PublicReviewsView} from ${JSON.stringify(path.join(root,'src/components/feedback/public-reviews-view.tsx'))};
  import FeedbackLogin from ${JSON.stringify(path.join(root,'src/app/feedback-admin/login/page.tsx'))};
- const route=location.pathname;fetch('/data?path='+encodeURIComponent(route)+'&query='+encodeURIComponent(location.search)).then(r=>r.json()).then(data=>createRoot(document.getElementById('root')).render(route==='/login'?<FeedbackLogin/>:route==='/report'?<FeedbackReportView {...data}/>:route==='/settings'?<FeedbackSettingsView {...data}/>:route==='/detail'?<FeedbackDetailClient {...data}/>:route==='/reviews'?<PublicReviewsView {...data}/>:route==='/public'?<FeedbackFormClient {...data}/>:route.endsWith('/new')||route.includes('/edit/')?<QuestionForm {...data}/>:route==='/inbox'?<FeedbackClientPage {...data}/>:<QuestionList initialVersions={data}/>));`);
+ const route=location.pathname;fetch('/data?path='+encodeURIComponent(route)+'&query='+encodeURIComponent(location.search)).then(r=>r.json()).then(data=>createRoot(document.getElementById('root')).render(route==='/login'?<FeedbackLogin/>:route==='/report'?<FeedbackReportView {...data}/>:route==='/settings'?<FeedbackSettingsView {...data}/>:route==='/detail'?<FeedbackDetailClient {...data}/>:route==='/reviews'?<PublicReviewsView {...data}/>:(route==='/public'||route==='/booking-public')?<FeedbackFormClient {...data}/>:route.endsWith('/new')||route.includes('/edit/')?<QuestionForm {...data}/>:route==='/inbox'?<FeedbackClientPage {...data}/>:<QuestionList initialVersions={data}/>));`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const actions=file('actions',`const send=async(kind,data)=>{const response=await fetch('/action/'+kind,{method:'POST',body:data instanceof FormData?data:JSON.stringify(data),headers:data instanceof FormData?{}:{'content-type':'application/json'}});if(!response.ok)throw Error('Transport failed');const result=await response.json();if(result.redirect){location.assign(result.redirect);return;}return result;};
  export const createOrUpdateQuestionVersion=data=>send('version',data);export const submitFeedbackAction=(_,data)=>send('public',data);export const updateFeedback=(id,data)=>send('update',{id,data});export const deleteFeedback=id=>send('delete',{id});export const saveFeedbackSettings=data=>send('settings',data);export const retryFeedbackMail=(id,confirmed)=>send('retry',{id,confirmed});`);
@@ -56,6 +57,12 @@ before(async()=>{
    else if(pathname==='/settings')data={brands:[{id:'b',name:'Esmeralda QA',slug:'esmeralda',...await f.settings.readFeedbackSettings('b')}],locations:[{id:'l',name:'Amager',brandId:'b',slug:'amager'}],questionVersions:[{id:'v1',name:'Besøg',language:'da',orderTypes:['pickup','booking']},{id:'en',name:'English',language:'en',orderTypes:['pickup']}],canEdit:true,jobs:await f.mailAdmin.feedbackMailJobs('b')};
    else if(pathname==='/detail')data={initialFeedback:{...await f.admin.getFeedbackById('f'),customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager'},canEdit:true};
    else if(pathname==='/reviews')data={locationName:'Amager',menuHref:'/menu',reviews:(await f.reviews.readPublicReviews('b','l'))?.reviews||[]};
+   else if(pathname==='/booking-public'){
+    const seed=loadTs('src/lib/feedback/esmeralda-booking-setup.ts',f.mocks).ESMERALDA_BOOKING_QUESTIONS;
+    if(!f.records.has('feedbackQuestionsVersion/booking'))f.records.set('feedbackQuestionsVersion/booking',{...seed,brandId:'b'});
+    f.records.set('feedbackSettings/b',{questionVersionId:'v1',bookingQuestionVersionId:'booking'});
+    data={context:{sourceType:'booking',sourceId:'booking',customerId:'c',locationId:'l',brandId:'b',brandName:'Esmeralda QA',experienceType:'booking',displayReference:'QA visit',invitationToken:'valid'},questionsVersion:await f.store.readQuestionVersion('booking')};
+   }
    else if(pathname==='/public')data={context:{sourceType:'commerce_order',sourceId:'order',customerId:'c',locationId:'l',brandId:'b',brandName:'Esmeralda QA',experienceType:'pickup',displayReference:'QA order'},questionsVersion:await f.store.readQuestionVersion('v1')};
    else if(pathname==='/inbox')data={initialFeedback:(await f.admin.getFeedbackEntries()).map(row=>({...row,customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',questionVersionLabel:'Besøg'})),brands:[{id:'b',name:'Esmeralda QA'}],locations:[{id:'l',name:'Amager',brandId:'b'}]};
    else if(pathname.endsWith('/new')||pathname.includes('/edit/'))data={mode:pathname.endsWith('/new')?'create':'edit',version:pathname.endsWith('/new')?undefined:await f.store.readQuestionVersion(pathname.split('/').pop()),supportedLanguages:[{code:'da',name:'Dansk'},{code:'en',name:'English'}]};
@@ -154,4 +161,23 @@ test('feedback login retains fields after session rejection and navigates only a
  await page.unroute('**/api/feedback-admin/session');let payload;
  await page.route('**/api/feedback-admin/session',route=>{payload=route.request().postDataJSON();return route.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'});});
  await page.getByRole('button',{name:'Log ind',exact:true}).click();await page.waitForURL('**/superadmin/feedback');assert.deepEqual(payload,{idToken:'SYNTHETIC_ID_TOKEN'});
+});
+
+for(const width of [390,1280])test(`booking questionnaire requires key answers, retains optional NPS zero and submits once (${width})`,async t=>{
+ const page=await setup(t,'/booking-public',width);
+ await page.getByRole('button',{name:'Send feedback',exact:true}).click();await page.getByRole('alert').waitFor();
+ for(const name of ['Hvordan var din samlede oplevelse hos Esmeralda?','Hvordan var maden?','Hvordan var betjeningen?'])await page.getByRole('group',{name,exact:false}).getByRole('button',{name:'5 stjerner',exact:true}).click();
+ await page.getByRole('button',{name:'0',exact:true}).click();
+ await page.getByRole('textbox',{name:'Hvad fungerede godt, og hvad kan vi gøre bedre?',exact:true}).fill('God mad og venlig betjening');
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ await page.getByRole('button',{name:'Send feedback',exact:true}).click();await page.waitForURL('**/feedback/thank-you');
+ const entries=await f.admin.getFeedbackEntries();assert.equal(entries.length,1);assert.equal(entries[0].sourceType,'booking');assert.equal(entries[0].npsScore,0);assert.equal(entries[0].questionVersionId,'booking');
+ assert.equal(f.records.get('integrationFeedbackInvitations/i').status,'submitted');
+});
+test('dedicated booking selection persists separately from the order form',async t=>{
+ const page=await setup(t,'/settings',390);
+ await page.getByLabel('Feedbackskema til restaurantbesøg',{exact:true}).selectOption('v1');
+ await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();await page.getByRole('status').waitFor();
+ await page.reload();assert.equal(await page.getByLabel('Feedbackskema til restaurantbesøg',{exact:true}).inputValue(),'v1');
+ assert.equal(f.records.get('feedbackSettings/b').questionVersionId,null);assert.equal(f.records.get('feedbackSettings/b').bookingQuestionVersionId,'v1');
 });
