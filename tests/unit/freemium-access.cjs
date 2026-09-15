@@ -23,14 +23,14 @@ const fixture=()=>({
  ],
 });
 const query=(overrides={})=>({principalId:'worker',companyId:'a',locationIds:['a1'],permission:'opsfly.schedule:view',...overrides});
-test('batch and employee booking grants cannot become production or booking administration',()=>{
+test('employee batch, booking and counting grants cannot become administration',()=>{
  const s=fixture();
- s.roles[2].permissions=['opsfly.booking_summary:view',...['view','create','edit','delete','approve'].map(action=>`opsfly.production_batches:${action}`)];
+ s.roles[2].permissions=[...['view','create','edit','approve'].map(action=>`opsfly.inventory_count:${action}`),'opsfly.booking_summary:view',...['view','create','edit','delete','approve'].map(action=>`opsfly.production_batches:${action}`)];
  for(const permission of s.roles[2].permissions){
   assert.equal(authorize(s,query({permission})).allowed,true,permission);
   assert.equal(authorize(s,query({permission,locationIds:['a2']})).allowed,false,permission);
  }
- for(const feature of ['opsfly.production','opsfly.booking'])for(const action of ['view','create','edit','delete','approve'])
+ for(const feature of ['opsfly.production','opsfly.booking','opsfly.inventory'])for(const action of ['view','create','edit','delete','approve'])
   assert.equal(authorize(s,query({permission:`${feature}:${action}`})).allowed,false);
  s.roles[2].active=false;
  for(const permission of s.roles[2].permissions)assert.equal(authorize(s,query({permission})).allowed,false);
