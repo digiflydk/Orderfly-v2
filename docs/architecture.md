@@ -83,7 +83,7 @@ Default time calculation uses Copenhagen's calendar day, excludes expired same-d
 
 ### Feedback and transactional notifications (#102)
 
-Feedback question versions remain reusable definitions. `feedbackSettings/{brandId}.questionVersionId` can assign one active, language-compatible definition to a brand; an unset value retains the deterministic platform default for backward compatibility. Public rendering and submission both resolve the brand assignment, and submission rejects a forged active version assigned elsewhere.
+Feedback question versions remain reusable definitions. A version is either a platform `default` or belongs to one `brandId`; legacy versions without scope remain defaults. `feedbackSettings/{brandId}.questionVersionId` can explicitly assign an active, language-compatible default or same-brand definition. Without an explicit assignment, resolution prefers that brand's active version and falls back to the deterministic platform default. Public rendering and submission use the same resolver, and submission rejects a forged active version assigned elsewhere.
 
 A completed paid order can create an idempotent feedback invitation. Its signed link is generated only while the worker prepares the message. A reply consumes the invitation transactionally and suppresses any pending reminder. Moderation writes a separate public projection; the website never reads private feedback or customer documents.
 

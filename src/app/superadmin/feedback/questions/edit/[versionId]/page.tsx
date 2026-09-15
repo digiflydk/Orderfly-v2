@@ -11,6 +11,7 @@ import { requireQuestionAccess } from '@/lib/feedback/access';
 import type { FeedbackQuestionsVersion } from '@/types';
 import FeedbackQuestionVersionForm from '@/components/superadmin/feedback-question-version-form';
 import { getPlatformSettings } from '@/app/superadmin/settings/actions';
+import { feedbackScopeOptions } from '@/lib/feedback/admin-data';
 
 type Lang = { code: string; name: string };
 
@@ -31,11 +32,12 @@ export default async function EditFeedbackQuestionVersionPage(props: any){
   const params = await Promise.resolve((props as any)?.params ?? {});
   const searchParams = await Promise.resolve((props as any)?.searchParams ?? {});
 
-  await requireQuestionAccess();
+  const access = await requireQuestionAccess();
   const normalizedId = normalizeId(params.versionId);
-  const [version, settings] = await Promise.all([
+  const [version, settings, options] = await Promise.all([
     readQuestionVersion(normalizedId),
     getPlatformSettings(),
+    feedbackScopeOptions(access),
   ]);
   if (!version) notFound();
   const supportedLanguages = resolveSupportedLanguages(settings);
@@ -43,6 +45,7 @@ export default async function EditFeedbackQuestionVersionPage(props: any){
     <FeedbackQuestionVersionForm
       mode="edit"
       version={version as FeedbackQuestionsVersion}
+      brands={options.brands}
       supportedLanguages={supportedLanguages}
     />
   );
