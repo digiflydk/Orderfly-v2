@@ -23,6 +23,18 @@ const fixture=()=>({
  ],
 });
 const query=(overrides={})=>({principalId:'worker',companyId:'a',locationIds:['a1'],permission:'opsfly.schedule:view',...overrides});
+test('batch and employee booking grants cannot become production or booking administration',()=>{
+ const s=fixture();
+ s.roles[2].permissions=['opsfly.booking_summary:view',...['view','create','edit','delete','approve'].map(action=>`opsfly.production_batches:${action}`)];
+ for(const permission of s.roles[2].permissions){
+  assert.equal(authorize(s,query({permission})).allowed,true,permission);
+  assert.equal(authorize(s,query({permission,locationIds:['a2']})).allowed,false,permission);
+ }
+ for(const feature of ['opsfly.production','opsfly.booking'])for(const action of ['view','create','edit','delete','approve'])
+  assert.equal(authorize(s,query({permission:`${feature}:${action}`})).allowed,false);
+ s.roles[2].active=false;
+ for(const permission of s.roles[2].permissions)assert.equal(authorize(s,query({permission})).allowed,false);
+});
 test('freemium needs no subscription but still requires explicit permission',()=>{
  assert.equal(authorize(fixture(),query()).allowed,true);
  assert.equal(authorize(fixture(),query({permission:'opsfly.schedule:edit'})).allowed,false);
