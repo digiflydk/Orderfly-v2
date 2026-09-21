@@ -13,6 +13,7 @@ import { SuperAdminLayoutClient } from '@/components/superadmin/superadmin-layou
 import { getPlatformBrandingSettings } from './settings/queries';
 import { orderflySession } from '@/lib/access/orderfly-session';
 import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
+import { redirect } from 'next/navigation';
 
 export default async function SuperadminLayout({
   children,
@@ -28,6 +29,7 @@ export default async function SuperadminLayout({
   }
 
   const session = await orderflySession().catch(() => null);
+  if(!session)redirect('/admin-login');
   const canAccess = session?.superuser || session?.permissions.some(p => p.startsWith('orderfly.'));
 
   if (!canAccess) {
