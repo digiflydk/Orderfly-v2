@@ -26,6 +26,24 @@ test('native identity is reverified on every request and never taken from the lo
   assert.ok(calls.filter(c=>c.body.action==='session').every(c=>c.headers['x-session-token']===token));
  }finally{global.fetch=original;}
 });
+test('PostgreSQL timestamp offsets remain valid and expired offsets are denied',async()=>{
+ const original=global.fetch;
+ try {
+  const future=new Date(Date.now()+3600000);
+  for(const expires of [future.toISOString().replace('Z','+00:00'),new Date(future.getTime()+7200000).toISOString().replace('Z','+02:00')]) {
+   global.fetch=async()=>Response.json({identity,expires_at:expires});
+   const verified=await auth.nativeOpsflySession(token);
+   assert.deepEqual(verified.identity,identity);
+   const cookie=auth.createOpsflyCookie(token,verified.expires_at);
+   assert.ok(cookie.maxAge>3500&&cookie.maxAge<=3600);
+   assert.equal(auth.readOpsflyCookie(cookie.value),token);
+  }
+  for(const expires of ['2000-01-01T00:00:00+00:00','2000-01-01T02:00:00+02:00','not-a-date']) {
+   global.fetch=async()=>Response.json({identity,expires_at:expires});
+   await assert.rejects(auth.nativeOpsflySession(token));
+  }
+ }finally{global.fetch=original;}
+});
 test('upstream throttling, failures, oversize and malformed identity fail closed',async()=>{
  const original=global.fetch;
  try {

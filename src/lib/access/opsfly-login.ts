@@ -10,7 +10,7 @@ export const SESSION_SECONDS = 8 * 60 * 60;
 const tokenSchema = z.string().regex(/^[0-9a-f]{64}$/);
 const nativeSchema = z.object({
   identity: z.object({ provider: z.literal('opsfly'), organizationId: z.string().uuid(), subject: z.string().uuid() }).strict(),
-  expires_at: z.string().datetime(),
+  expires_at: z.string().datetime({ offset: true }),
 }).strict();
 
 export class OpsflyLoginError extends Error {
