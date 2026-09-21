@@ -4,18 +4,15 @@ import { getBrands } from '@/app/superadmin/brands/actions';
 import { CookiesClientPage } from './client-page';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
+import { cookieReportDay } from '@/lib/analytics/cookie-consent-dates';
 
 export const revalidate = 0;
 
 async function CookiesPageContent() {
-    const todayStart = new Date();
-    todayStart.setHours(0, 0, 0, 0);
-
-    const todayEnd = new Date();
-    todayEnd.setHours(23, 59, 59, 999);
+    const today = cookieReportDay();
 
     const [consents, brands] = await Promise.all([
-        getAnonymousCookieConsents(todayStart, todayEnd),
+        getAnonymousCookieConsents(today, today),
         getBrands(),
     ]);
 
@@ -31,12 +28,14 @@ async function CookiesPageContent() {
              <div>
                 <h1 className="text-2xl font-bold tracking-tight">Cookie Consent Management</h1>
                 <p className="text-muted-foreground">
-                    View and manage cookie consents from anonymous users across all brands.
+                    View cookie consent records across all brands. Dates and times are shown in Europe/Copenhagen.
                 </p>
             </div>
             <CookiesClientPage
                 initialConsents={consentsWithDetails}
                 brands={brands}
+                initialDateFrom={today}
+                initialDateTo={today}
             />
         </div>
     );
