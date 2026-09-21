@@ -19,7 +19,7 @@ interface DateRangePickerProps extends React.HTMLAttributes<HTMLDivElement> {
     onRangeChange: (range: DateRange | undefined) => void;
     initialDateFrom?: string;
     initialDateTo?: string;
-    value?: DateRange;
+    value?: DateRange | null;
 }
 
 export function DateRangePicker({ className, onRangeChange, initialDateFrom, initialDateTo, value }: DateRangePickerProps) {
@@ -27,7 +27,7 @@ export function DateRangePicker({ className, onRangeChange, initialDateFrom, ini
     from: initialDateFrom ? new Date(initialDateFrom) : undefined,
     to: initialDateTo ? new Date(initialDateTo) : undefined,
   });
-  const date = value ?? internalDate;
+  const date = value === undefined ? internalDate : value ?? undefined;
 
   const handleSelect = (range: DateRange | undefined) => {
     setDate(range);

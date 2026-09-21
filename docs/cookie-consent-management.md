@@ -9,6 +9,10 @@ The user requested these fixes in the existing analytics PR #151.
 - Clear Filters previously left the date range and its data unchanged. It now
   resets all filters to today and reloads that period, including when the date
   range is the only active filter.
+- Independent review found that clearing the selected range start jumped back
+  to today, preventing a historical single-day selection. A cleared calendar
+  now stays empty, invalidates any pending read and retains the last loaded
+  table until a new day/range is chosen. Only Clear Filters resets to today.
 - Server-local date boundaries and UTC display could disagree with the selected
   Danish calendar day. Both queries and timestamps now use Europe/Copenhagen.
   The end boundary is the following midnight, exclusive, including DST days.

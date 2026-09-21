@@ -38,11 +38,11 @@ export function CookiesClientPage({ initialConsents, brands, initialDateFrom, in
   const [error, setError] = useState<string | null>(null);
   const requestId = useRef(0);
   useEffect(() => () => { requestId.current++; }, []);
-  const [dateRange, setDateRange] = useState<DateRange>(() => ({
+  const [loadedRange, setLoadedRange] = useState<DateRange>(() => ({
     from: parseISO(initialDateFrom || cookieReportDay()),
     to: parseISO(initialDateTo || initialDateFrom || cookieReportDay()),
   }));
-  const [loadedRange, setLoadedRange] = useState(dateRange);
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(loadedRange);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [filters, setFilters] = useState({
@@ -77,9 +77,15 @@ export function CookiesClientPage({ initialConsents, brands, initialDateFrom, in
   };
 
   const handleDateRangeChange = (range: DateRange | undefined) => {
-    const next = range?.from ? range : { from: parseISO(cookieReportDay()), to: parseISO(cookieReportDay()) };
-    setDateRange(next);
-    void loadRange(next);
+    setDateRange(range);
+    if (range?.from) {
+      void loadRange(range);
+    } else {
+      // Clearing the calendar starts a new selection; only Clear Filters resets to today.
+      requestId.current++;
+      setIsPending(false);
+      setError(null);
+    }
   };
 
 
@@ -108,7 +114,7 @@ export function CookiesClientPage({ initialConsents, brands, initialDateFrom, in
 
   const today = cookieReportDay();
   const isFiltered = searchQuery !== '' || Object.values(filters).some(v => v !== 'all') ||
-    (dateRange.from && (format(dateRange.from, 'yyyy-MM-dd') !== today || format(dateRange.to || dateRange.from, 'yyyy-MM-dd') !== today));
+    !dateRange?.from || format(dateRange.from, 'yyyy-MM-dd') !== today || format(dateRange.to || dateRange.from, 'yyyy-MM-dd') !== today;
 
   const formatDate = (dateString: string | Date) => {
     if (!dateString) return 'N/A';
@@ -156,7 +162,7 @@ export function CookiesClientPage({ initialConsents, brands, initialDateFrom, in
                 <SelectItem value="false">Ikke accepteret</SelectItem>
               </SelectContent>
             </Select>
-            <DateRangePicker value={dateRange} onRangeChange={handleDateRangeChange} />
+            <DateRangePicker value={dateRange ?? null} onRangeChange={handleDateRangeChange} />
           </div>
           {isFiltered && (
             <Button variant="ghost" onClick={clearFilters} className="h-8 px-4">
@@ -166,7 +172,7 @@ export function CookiesClientPage({ initialConsents, brands, initialDateFrom, in
         </CardContent>
       </Card>
 
-      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription><Button variant="outline" className="mt-2" onClick={() => void loadRange(dateRange)} disabled={isPending}>Prøv igen</Button></Alert>}
+      {error && <Alert variant="destructive"><AlertDescription>{error}</AlertDescription><Button variant="outline" className="mt-2" onClick={() => { if (dateRange) void loadRange(dateRange); }} disabled={isPending}>Prøv igen</Button></Alert>}
       <p className="text-sm text-muted-foreground">
         Viser samtykker sidst opdateret {loadedRange.from && format(loadedRange.from, 'dd.MM.yyyy')} – {loadedRange.from && format(loadedRange.to || loadedRange.from, 'dd.MM.yyyy')} (Europe/Copenhagen).
       </p>

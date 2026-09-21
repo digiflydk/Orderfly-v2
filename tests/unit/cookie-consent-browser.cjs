@@ -66,7 +66,7 @@ async function setup(t) {
   const nextRequest = async () => {await expect.poll(() => requests.length).toBeGreaterThan(0);return requests.shift();};
   await page.goto(origin);
   await expect(page.getByRole('cell', {name:'QA Brand',exact:true})).toBeVisible();
-  return {page, nextRequest};
+  return {page, nextRequest, requests};
 }
 const complete = (route, data = rows) => route.fulfill({json:data});
 async function selectDay(page, day, open = true) {
@@ -118,6 +118,32 @@ test('date-only Clear Filters resets the picker, fetches today and clears pendin
   await expect(page.getByText('No consents found.')).toBeVisible();
   await expect(page.getByRole('status')).toHaveCount(0);
   await expect(page.locator('[aria-busy="true"]')).toHaveCount(0);
+});
+
+test('clearing the calendar permits a historical single day without snapping back to today', async t => {
+  const {page, nextRequest, requests} = await setup(t);
+  await selectDay(page, 20);
+  const old = await nextRequest();
+  await selectDay(page, 20, false);
+  await expect(page.locator('#date')).toHaveText('Pick a date');
+  await expect(page.getByRole('status')).toHaveCount(0);
+  assert.equal(requests.length, 0, 'clearing must not fetch today');
+  await old.fulfill({status:500,body:'Superseded read failed'});
+  await selectDay(page, 20, false);
+  const single = await nextRequest();
+  assert.deepEqual(single.request().postDataJSON(), {from:'2026-09-20',to:'2026-09-20'});
+  await expect(page.getByRole('status')).toHaveText('Indlæser samtykker…');
+  await complete(single, [{...rows[0],consent_version:'single-day'}]);
+  await expect(page.getByRole('cell', {name:'single-day',exact:true})).toBeVisible();
+  await expect(page.getByText('Viser samtykker sidst opdateret 20.09.2026 – 20.09.2026 (Europe/Copenhagen).')).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByRole('status')).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', {name:'Clear Filters'}).click();
+  const reset = await nextRequest();
+  assert.deepEqual(reset.request().postDataJSON(), {from:'2026-09-21',to:'2026-09-21'});
+  await complete(reset);
+  await expect(page.locator('#date')).toHaveText('Sep 21, 2026 - Sep 21, 2026');
 });
 
 for (const order of ['older-success-first', 'latest-success-first', 'latest-then-old-error']) test(`latest date selection wins: ${order}`, async t => {
