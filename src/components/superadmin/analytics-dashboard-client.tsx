@@ -18,6 +18,7 @@ import { FiltersBar } from './FiltersBar';
 import { Label } from '../ui/label';
 import { Input } from '../ui/input';
 import { formatPrice } from '@/lib/storefront-format';
+import { PendingFeedback } from './pending-feedback';
 
 type Props = {
   initialData: FunnelOutput;
@@ -86,6 +87,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
   const [currentFilters, setCurrentFilters] = useState<FunnelFilters>(searchParams);
   useEffect(() => setCurrentFilters(searchParams), [searchParams]);
   const [pending, start] = useTransition();
+  const [isNavigating, startNavigation] = useTransition();
   const [status, setStatus] = useState<string | null>(null);
 
   
@@ -109,7 +111,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
     }
     if (next.utmSource) params.set('utmSource', next.utmSource);
     
-    router.push(`${pathname}?${params.toString()}`);
+    startNavigation(() => router.push(`${pathname}?${params.toString()}`));
   };
 
   async function aggregate() {
@@ -122,7 +124,7 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
   }
 
   const { totals } = data;
-  const isUniqueCount = currentFilters.counting === 'unique';
+  const isUniqueCount = searchParams.counting === 'unique';
 
   const totalCR = totals.sessions > 0 ? (((totals.measuredPurchasingSessions || 0) / totals.sessions) * 100).toFixed(2) + '%' : 'Ikke målbart';
   const tooltipText = isUniqueCount ? "Antal unikke sessions der nåede dette trin." : "Samlet antal hændelser for dette trin.";
@@ -130,7 +132,9 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
   const currentSAFilters = mapFunnelToCommon(currentFilters);
 
   return (
-    <div className="space-y-6">
+    <>
+    {isNavigating && <PendingFeedback />}
+    <div className="space-y-6" aria-busy={isNavigating}>
       <Card>
         <CardContent className="p-4 flex flex-col gap-4">
              <FiltersBar 
@@ -242,5 +246,6 @@ export function AnalyticsDashboardClient({ initialData, brands, locations, searc
         <TableBody>{data.byLocation.map(row => <TableRow key={row.locationId}><TableCell>{row.locationName}</TableCell><TableCell className="text-right">{row.sessions}</TableCell><TableCell className="text-right">{row.purchases}</TableCell><TableCell className="text-right">{row.convSessionsToPurchase.toFixed(1)}%</TableCell><TableCell className="text-right">{formatPrice(row.revenue || 0)}</TableCell></TableRow>)}</TableBody></Table></CardContent>
        </Card>
     </div>
+    </>
   );
 }
