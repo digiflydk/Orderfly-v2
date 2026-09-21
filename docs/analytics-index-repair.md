@@ -28,7 +28,8 @@ The exact definitions are in [analytics-firestore-indexes.json](analytics-firest
 This is a partial manifest, not the full production index inventory. Do not
 deploy it as a replacement manifest or approve deletion of other indexes.
 
-After PO acceptance, the release operator should open Firestore **Indexes** in
+For future planned releases, first obtain PO acceptance and merge the reviewed
+change. Only then should the release operator open Firestore **Indexes** in
 the **data project `orderfly-39325`**, database `(default)`, and create only
 missing indexes with query scope **Collection**:
 
@@ -69,5 +70,31 @@ aggregation behavior. The Firestore emulator does not prove production index
 readiness; the live acceptance checks above are required. No TypeScript or UI
 behavior is changed by this documentation/configuration-only PR.
 
-At preparation time the indexes have **not** been created, and the live defect
-remains open pending PO acceptance and the additive production repair.
+## Live repair verification, 2026-09-21
+
+The PO explicitly approved both immediate production index creation and
+publication of the repair documentation in the task conversation. The two
+indexes were created additively under that approval, without an application
+deployment or a merge of this documentation PR. This incident record does not
+change the normal post-merge release procedure above.
+
+Both indexes now show **Enabled** in the production data project's console:
+
+| Index | Fields | State |
+| --- | --- | --- |
+| `CICAgNiroIEK` | `brandId`, `paidAt` | Enabled |
+| `CICAgLiIkYMK` | `brandId`, `locationId`, `paidAt` | Enabled |
+
+Read-only verification with the existing authenticated superuser passed for
+the default Customer Funnel view, the Esmeralda brand filter, and the Esmeralda
+Pizza Amager location filter. Completed navigation URLs included the selected
+brand and location, and each dashboard rendered populated metrics and the
+paid-order/revenue results instead of the Server Components error boundary.
+The refreshed missing-index log view showed only the earlier failures, with no
+new failure from these verification requests. No records were modified and the
+aggregation action was not used. A location-limited account was not exercised;
+authorization and query code are unchanged.
+
+JSON syntax, whitespace checks, and all three existing funnel regression tests
+passed. The operational defect is repaired live. PR #149 retains the manifest,
+runbook and verification record for the separate repository review/merge gate.
