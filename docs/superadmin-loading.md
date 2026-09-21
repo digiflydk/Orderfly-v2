@@ -30,6 +30,25 @@ Compare warm timings on landing/dashboard/upsells before and after release.
 
 Reference: https://nextjs.org/docs/15/app/api-reference/functions/use-link-status
 
+## Customer Funnel analytics (#150)
+
+The Customer Funnel route and its data Suspense boundary reuse the same
+`Indlæser…` spinner while the initial dashboard loads. Filter navigation runs in
+a React transition and displays the same feedback until the new server-rendered
+results commit. Existing results stay visible during the request, with the
+dashboard marked `aria-busy`. Counting labels continue to describe the displayed
+results until the next result arrives. No timers estimate completion, and the
+existing route error boundary still handles failed reads.
+
+Validation: `npm run typecheck` and
+`node --test tests/unit/admin-loading.cjs tests/unit/analytics-loading-browser.cjs`.
+The browser regression uses the production dashboard, filters and loading
+component with controlled synthetic data and navigation transport. It checks
+initial loading, pending filters, empty results, consecutive requests and errors.
+It does not access production data. After independent review, PO acceptance,
+merge and deployment, verify the initial spinner and date/brand/location filters
+with a throttled connection on the live Customer Funnel page.
+
 Requested sidebar cleanup in #53: remove Discount Validation and Offers/Combos
 Validation links, move Upsells from Catalog to Promotions, place People & Access
 directly before Billing, and remove Code Review, QA and UI Validation from System.

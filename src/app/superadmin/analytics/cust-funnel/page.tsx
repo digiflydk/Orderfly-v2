@@ -7,6 +7,7 @@ import { AnalyticsDashboardClient } from '@/components/superadmin/analytics-dash
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import type { FunnelFilters } from '@/types';
+import Loading from './loading';
 
 export const revalidate = 0;
 
@@ -49,7 +50,7 @@ export default async function CustomerFunnelPage({ params, searchParams }: Async
           Analyze the customer journey from first visit to final purchase across all brands.
         </p>
       </div>
-      <Suspense fallback={<p>Loading dashboard...</p>}>
+      <Suspense fallback={<Loading />}>
         <AnalyticsData searchParams={query as FunnelFilters} />
       </Suspense>
     </div>

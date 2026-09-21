@@ -5,19 +5,24 @@ import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { AnonymousCookieConsent, AnalyticsDaily } from '@/types';
 import { z } from 'zod';
-import { startOfDay, endOfDay } from 'date-fns';
+import { cookieConsentDateRange } from '@/lib/analytics/cookie-consent-dates';
 import * as admin from 'firebase-admin';
 
-export async function getAnonymousCookieConsents(startDate?: Date, endDate?: Date): Promise<AnonymousCookieConsent[]> {
+export async function getAnonymousCookieConsents(startDate?: Date | string, endDate?: Date | string): Promise<AnonymousCookieConsent[]> {
   await requirePlatformSuperuser();
+  if ((startDate === undefined) !== (endDate === undefined)) {
+    throw new Error('Vælg både startdato og slutdato.');
+  }
+  const range = startDate !== undefined && endDate !== undefined
+    ? cookieConsentDateRange(startDate, endDate) : null;
   const db = getAdminDb();
   const consentsCollection = db.collection('anonymous_cookie_consents');
   let q: admin.firestore.Query = consentsCollection;
 
-  if (startDate && endDate) {
-    const startTimestamp = admin.firestore.Timestamp.fromDate(startOfDay(startDate));
-    const endTimestamp = admin.firestore.Timestamp.fromDate(endOfDay(endDate));
-    q = q.where('last_seen', '>=', startTimestamp).where('last_seen', '<=', endTimestamp).orderBy('last_seen', 'desc');
+  if (range) {
+    const startTimestamp = admin.firestore.Timestamp.fromDate(range.start);
+    const endTimestamp = admin.firestore.Timestamp.fromDate(range.end);
+    q = q.where('last_seen', '>=', startTimestamp).where('last_seen', '<', endTimestamp).orderBy('last_seen', 'desc');
   } else {
     q = q.orderBy('last_seen', 'desc');
   }

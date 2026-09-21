@@ -9,6 +9,9 @@ on:
       - 'tests/unit/vendor-tracking-browser.cjs'
       - 'tests/unit/commerce-p2-browser.cjs'
       - 'tests/unit/checkout-browser.cjs'
+      - 'tests/unit/analytics-loading-browser.cjs'
+      - 'tests/unit/cookie-consent-management.cjs'
+      - 'tests/unit/cookie-consent-browser.cjs'
       - '.github/workflows/funnel-regression.yml'
 permissions:
   contents: read
@@ -26,4 +29,6 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - run: node --test tests/unit/funnel-tracking.cjs tests/unit/invoice-attribution.cjs tests/unit/tracking-consent.cjs
       - run: node --test tests/unit/vendor-tracking-browser.cjs
+      - run: node --test tests/unit/admin-loading.cjs tests/unit/analytics-loading-browser.cjs
+      - run: node --test tests/unit/cookie-consent-management.cjs tests/unit/cookie-consent-browser.cjs
       - run: node --test tests/unit/commerce-p2-browser.cjs tests/unit/checkout-browser.cjs tests/unit/brand-tracking-browser.cjs
