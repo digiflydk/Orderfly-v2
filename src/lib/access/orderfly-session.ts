@@ -2,11 +2,13 @@ import 'server-only';
 import { cookies } from 'next/headers';
 import { getAdminApp, getAdminDb } from '@/lib/firebase-admin';
 import { AuthorityError, executeAuthority, type VerifiedIdentity } from './authority';
+import { OPSFLY_COOKIE_PREFIX, verifyOpsflyCookie } from './opsfly-login';
 
 export async function verifiedOrderflyIdentity(): Promise<VerifiedIdentity> {
   const session=(await cookies()).get('__session')?.value;
   if(!session)throw new AuthorityError('unauthorized',401);
   try {
+    if(session.startsWith(OPSFLY_COOKIE_PREFIX))return await verifyOpsflyCookie(session);
     // Check revocation and disabled accounts, not just the signed expiry.
     const token=await getAdminApp().auth().verifySessionCookie(session,true);
     return {provider:'firebase',subject:token.uid};
