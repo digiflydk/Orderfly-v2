@@ -32,6 +32,7 @@ export const feedbackAutomationSchema = z.object({
   reminderAfterHours: z.number().int().min(24).max(336).default(24),
   maxReminders: z.number().int().min(0).max(1).default(0),
   autoReplyEnabled: z.boolean().default(false), language: z.string().regex(/^[a-z]{2}(?:-[A-Z]{2})?$/).default('da'),
+  bookingQuestionVersionId: z.string().regex(/^[\w-]{1,160}$/).nullable().default(null),
   questionVersionId: z.string().regex(/^[\w-]{1,160}$/).nullable().default(null),
 });
 export type FeedbackAutomation = z.infer<typeof feedbackAutomationSchema>;

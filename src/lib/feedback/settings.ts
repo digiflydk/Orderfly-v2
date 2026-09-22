@@ -24,11 +24,13 @@ export async function writeFeedbackSettings(input: unknown) {
       tx.get(db.collection('feedbackSettings').doc(data.brandId)),
     ]);
     if (!brand.exists) throw new Error('Brandet findes ikke.');
-    if (data.questionVersionId) {
-      const version = await tx.get(db.collection('feedbackQuestionsVersion').doc(data.questionVersionId));
+    for (const field of ['questionVersionId', 'bookingQuestionVersionId'] as const) {
+      const selected = data[field] === undefined ? current.data()?.[field] : data[field];
+      if (!selected) continue;
+      const version = await tx.get(db.collection('feedbackQuestionsVersion').doc(selected));
       const parsed = FeedbackQuestionsVersionSchema.safeParse(version.data());
       const language = data.language ?? feedbackAutomation(current.data()).language;
-      if (!version.exists || !parsed.success || !parsed.data.isActive || parsed.data.language !== language) throw new Error('Vælg et aktivt feedbackskema på det valgte sprog.');
+      if (!version.exists || !parsed.success || !parsed.data.isActive || parsed.data.language !== language || (parsed.data.brandId && parsed.data.brandId !== data.brandId) || (field === 'bookingQuestionVersionId' && !parsed.data.orderTypes.includes('booking'))) throw new Error('Vælg et aktivt feedbackskema på det valgte sprog.');
     }
     const { brandId, ...settings } = data;
     tx.set(db.collection('feedbackSettings').doc(data.brandId), { ...Object.fromEntries(Object.entries(settings).filter(([,value]) => value !== undefined)), updatedAt: getAdminFieldValue().serverTimestamp(), updatedBy: access.uid }, { merge: true });

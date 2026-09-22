@@ -16,16 +16,17 @@ export async function readQuestionVersion(id: string): Promise<ExperienceFeedbac
 }
 
 export async function readActiveQuestions(type: FeedbackExperienceType, language = 'da') {
-  // Versions are currently platform-wide. Never choose a random language/version.
+  // Brand-owned forms must never become another brand’s global fallback.
   const versions = await readQuestionVersions();
-  return versions.filter(v => FeedbackQuestionsVersionSchema.safeParse(v).success && v.isActive && v.language === language && v.orderTypes?.includes(type))
+  return versions.filter(v => !v.brandId && FeedbackQuestionsVersionSchema.safeParse(v).success && v.isActive && v.language === language && v.orderTypes?.includes(type))
     .sort((a, b) => a.id.localeCompare(b.id))[0] || null;
 }
 
 export async function readActiveQuestionsForBrand(brandId: string, type: FeedbackExperienceType, language = 'da') {
-  const selected = (await getAdminDb().collection('feedbackSettings').doc(brandId).get()).data()?.questionVersionId;
+  const settings = (await getAdminDb().collection('feedbackSettings').doc(brandId).get()).data();
+  const selected = type === 'booking' ? settings?.bookingQuestionVersionId || settings?.questionVersionId : settings?.questionVersionId;
   if (typeof selected !== 'string' || !/^[\w-]{1,160}$/.test(selected)) return readActiveQuestions(type, language);
   const version = await readQuestionVersion(selected);
-  return version && FeedbackQuestionsVersionSchema.safeParse(version).success && version.isActive && version.language === language && version.orderTypes.includes(type)
+  return version && (!version.brandId || version.brandId === brandId) && FeedbackQuestionsVersionSchema.safeParse(version).success && version.isActive && version.language === language && version.orderTypes.includes(type)
     ? version : null;
 }

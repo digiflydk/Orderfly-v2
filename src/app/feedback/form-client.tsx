@@ -76,7 +76,7 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
               <button
                 key={i}
                 type="button"
-                aria-label={`${i + 1} stars`}
+                aria-label={`${i + 1} ${context.sourceType === 'booking' && questionsVersion.language === 'da' ? 'stjerner' : 'stars'}`}
                 aria-pressed={response?.answer === i + 1}
                 onClick={() => handleValueChange(qid, question.label, 'stars', i + 1)}
               >
@@ -105,7 +105,8 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
       case 'text':
         return (
           <Textarea
-            placeholder="Your feedback..."
+            aria-label={question.label}
+            placeholder={context.sourceType === 'booking' && questionsVersion.language === 'da' ? 'Din feedback...' : 'Your feedback...'}
             rows={4}
             onChange={(e) => handleValueChange(qid, question.label, 'text', e.target.value)}
           />
@@ -179,11 +180,10 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
             {error && <p role="alert" className="text-destructive">{error}</p>}
             <fieldset disabled={isPending} className="min-w-0 space-y-8">
             {questionsVersion.questions.map((question) => (
-              <div key={question.questionId}>
-                <Label className="text-lg font-semibold">{question.label}</Label>
-                {question.isRequired && <span className="text-destructive ml-1">*</span>}
+              <fieldset key={question.questionId} className="min-w-0">
+                <legend className="text-lg font-semibold">{question.label}{question.isRequired && <span className="text-destructive ml-1">*</span>}</legend>
                 <div className="pt-4">{renderQuestion(question)}</div>
-              </div>
+              </fieldset>
             ))}
             </fieldset>
             <Button type="submit" className="w-full" disabled={isPending}>

@@ -5,6 +5,7 @@ export type FeedbackExperienceType = 'pickup' | 'delivery' | 'booking';
 
 export type ExperienceFeedbackQuestionsVersion = {
   id: string;
+  brandId?: string;
   versionLabel: string;
   isActive: boolean;
   language: string;
