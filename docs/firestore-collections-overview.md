@@ -39,7 +39,7 @@ their schemas, dependencies, and how each collection connects Superadmin and the
 |  | `createdAt` / `updatedAt` | timestamp | ✅ | System-managed |
 
 | **orders** | `brandId`, `locationId`, `items[]`, `total`, `paymentStatus` | various | ✅ | Written via Stripe webhook |
-| **feedbackQuestionsVersion** | `versionLabel`, `questions[]`, `language`, `orderTypes` | object | ✅ | Each version linked to specific order types |
+| **feedbackQuestionsVersion** | `versionLabel`, `questions[]`, `language`, `orderTypes`, `scope`, `brandId?` | object | ✅ | Default for all brands or restricted to one brand; linked to specific experience types |
 | **categories** | `name`, `sortOrder`, `isActive` | string/number/bool | ✅ | Used to structure menu hierarchy |
 | **toppings** | `groupName`, `items[]`, `maxSelectable` | string/array/number | ✅ | Defines topping selection rules |
 

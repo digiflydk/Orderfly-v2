@@ -4,6 +4,7 @@ export const runtime = "nodejs";
 import FeedbackQuestionVersionForm from "@/components/superadmin/feedback-question-version-form";
 import { getPlatformSettings } from "@/app/superadmin/settings/actions";
 import { requireQuestionAccess } from "@/lib/feedback/access";
+import { feedbackScopeOptions } from "@/lib/feedback/admin-data";
 
 type Lang = { code: string; name: string };
 
@@ -17,12 +18,13 @@ function resolveSupportedLanguages(settings: any): Lang[] {
 }
 
 export default async function NewFeedbackQuestionVersionPage() {
-  await requireQuestionAccess();
-  const settings = await getPlatformSettings();
+  const access = await requireQuestionAccess();
+  const [settings, options] = await Promise.all([getPlatformSettings(), feedbackScopeOptions(access)]);
   const supportedLanguages = resolveSupportedLanguages(settings);
   return (
     <FeedbackQuestionVersionForm
       mode="create"
+      brands={options.brands}
       supportedLanguages={supportedLanguages}
     />
   );

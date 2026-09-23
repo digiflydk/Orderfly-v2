@@ -75,6 +75,12 @@ test('a brand can select one active compatible feedback form',async()=>{
  await assert.rejects(()=>f.settings.writeFeedbackSettings({brandId:'b',questionVersionId:'en',language:'da'}));
  await assert.rejects(()=>f.settings.writeFeedbackSettings({brandId:'b',questionVersionId:'missing',language:'da'}));
 });
+test('a brand cannot select another brand question form',async()=>{
+ const f=fixture();f.records.set('feedbackQuestionsVersion/foreign',{versionLabel:'Foreign',isActive:true,scope:'brand',brandId:'other',language:'da',orderTypes:['pickup'],questions:f.questions});
+ await assert.rejects(()=>f.settings.writeFeedbackSettings({brandId:'b',questionVersionId:'foreign',language:'da'}),/andet brand/);
+ await f.settings.writeFeedbackSettings({brandId:'other',questionVersionId:'foreign',language:'da'});
+ assert.equal((await f.store.readActiveQuestionsForBrand('other','pickup','da')).id,'foreign');
+});
 test('approval publishes only the safe projection, with anonymous default and scope checks',async()=>{
  const f=fixture();f.records.set('feedback/f',row({maskCustomerName:false,internalNote:'PRIVATE_NOTE',orderId:'PRIVATE_ORDER',comment:'Mail private@example.test eller +45 12345678. https://example.test',npsScore:0}));
  const original=f.records.get('feedback/f').comment;
