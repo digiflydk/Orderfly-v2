@@ -170,3 +170,5 @@ Rollout is coordinated: deploy Orderfly's new contract and delivery check with b
 
 
 Local verification (2026-09-23): TypeScript typecheck passed; 53 targeted booking/mail/readiness tests passed; 12 browser flows passed, including booking minute/hour persistence at 390px and 1280px. Tests use isolated fixtures and do not send production mail. The companion mPanel R3 gates and independent review remain required before release. GitHub publication was blocked by automatic approval review pending explicit approval for the destination repositories. No merge, deployment or activation was performed.
+
+Orderfly CI now runs the 53 targeted booking/mail/readiness tests and feedback browser flows on every candidate, including the new mobile/desktop timing controls.

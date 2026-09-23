@@ -69,11 +69,14 @@ jobs:
       - name: Platform administration and brand-reference regression
         run: node --test tests/unit/mpanel-platform-admin.cjs tests/unit/brand-location-edit.cjs tests/unit/platform-role-server.cjs tests/unit/freemium-access.cjs tests/unit/access-authority.cjs tests/unit/order-access.cjs tests/unit/admin-session.cjs tests/unit/opsfly-login.cjs tests/unit/website-access.cjs
 
+      - name: Booking feedback and mail regression
+        run: node --test tests/unit/booking-feedback-timing.cjs tests/unit/feedback-mail.cjs tests/unit/feedback-readiness.cjs
+
       - name: Install Chromium for brand-owner regression
         run: npx playwright install --with-deps chromium
 
       - name: Brand form browser regression
-        run: node --test tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs
+        run: node --test tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/feedback-browser.cjs
 
       - name: Build
         run: npm run build
