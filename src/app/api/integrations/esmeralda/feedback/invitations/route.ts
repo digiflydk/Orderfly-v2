@@ -36,7 +36,7 @@ export async function POST(request: Request) {
 
   try {
     const { invitation, token } = await createBookingFeedbackInvitation(parsed.data);
-    const mailJob = invitation.status === 'active' ? await queueBookingFeedback({ brandId: invitation.organization_id, locationId: invitation.location_id, customerId: invitation.customer_id, sourceId: invitation.booking_id, sourceType: 'booking', invitationId: invitation.invitation_id, invitationToken: token }, invitation.starts_at).catch(() => null) : null;
+    const mailJob = invitation.status === 'active' ? await queueBookingFeedback({ brandId: invitation.organization_id, locationId: invitation.location_id, customerId: invitation.customer_id, sourceId: invitation.booking_id, sourceType: 'booking', invitationId: invitation.invitation_id, invitationToken: token }, invitation.ends_at) : null;
     const origin = new URL(request.url).origin;
     const feedbackPath = `/feedback?token=${encodeURIComponent(token)}`;
     return NextResponse.json(
@@ -48,6 +48,7 @@ export async function POST(request: Request) {
         feedback_path: feedbackPath,
         feedback_url: `${origin}${feedbackPath}`,
         email_queue: mailJob ? 'queued' : 'not_queued',
+        automation_owner: 'orderfly',
       },
       { status: 200 },
     );

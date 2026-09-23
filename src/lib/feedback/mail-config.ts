@@ -28,6 +28,10 @@ export function feedbackMailConfig(_brandId: string) {
 
 export const feedbackAutomationSchema = z.object({
   emailEnabled: z.boolean().default(false), automaticRequests: z.boolean().default(false),
+  bookingAutomaticRequests: z.boolean().default(false),
+  bookingDelayMinutes: z.number().int().min(0).max(10080).default(120),
+  bookingReminderAfterMinutes: z.number().int().min(1).max(20160).default(1440),
+  bookingMaxReminders: z.number().int().min(0).max(1).default(0),
   delayHours: z.number().int().min(0).max(168).default(2),
   reminderAfterHours: z.number().int().min(24).max(336).default(24),
   maxReminders: z.number().int().min(0).max(1).default(0),

@@ -138,7 +138,7 @@ test('mail settings persist zero delay and disabled options; uncertain jobs requ
  const page=await setup(t,'/settings',390);
  await page.getByLabel('Aktivt feedbackskema for brandet',{exact:true}).selectOption('v1');
  await page.getByLabel('Ventetid i timer',{exact:true}).fill('0');await page.getByLabel('Påmindelser',{exact:true}).selectOption('1');await page.getByLabel('Timer før påmindelse',{exact:true}).fill('48');
- await page.getByRole('switch',{name:'Invitér automatisk efter gennemført oplevelse',exact:true}).check();await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();await page.getByText('Indstillingerne er gemt.',{exact:true}).waitFor();
+ await page.getByRole('switch',{name:'Invitér automatisk efter gennemført onlineordre',exact:true}).check();await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();await page.getByText('Indstillingerne er gemt.',{exact:true}).waitFor();
  await page.reload();assert.equal(await page.getByLabel('Ventetid i timer',{exact:true}).inputValue(),'0');assert.equal(await page.getByLabel('Påmindelser',{exact:true}).inputValue(),'1');assert.equal(await page.getByLabel('Aktivt feedbackskema for brandet',{exact:true}).inputValue(),'v1');assert.equal(f.records.get('feedbackSettings/b').emailEnabled,false);assert.equal(f.records.get('feedbackSettings/b').autoReplyEnabled,false);
  const id='a'.repeat(64)+'-invitation';f.records.set('feedbackMailJobs/'+id,{brandId:'b',kind:'invitation',state:'uncertain',attempts:1,createdAt:Date.now(),updatedAt:Date.now(),invitationToken:'PRIVATE_TOKEN',email:'PRIVATE_EMAIL'});
  await page.reload();await page.getByText('Invitation · Kræver kontrol',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Bekræft ikke modtaget og genstart',exact:true}).isVisible(),false);
@@ -154,4 +154,20 @@ test('feedback login retains fields after session rejection and navigates only a
  await page.unroute('**/api/feedback-admin/session');let payload;
  await page.route('**/api/feedback-admin/session',route=>{payload=route.request().postDataJSON();return route.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'});});
  await page.getByRole('button',{name:'Log ind',exact:true}).click();await page.waitForURL('**/superadmin/feedback');assert.deepEqual(payload,{idToken:'SYNTHETIC_ID_TOKEN'});
+});
+
+for(const width of [390,1280])test('booking delay units persist independently of order settings ('+width+')',async t=>{
+ const page=await setup(t,'/settings',width);
+ await page.getByRole('switch',{name:'Automatisk feedback efter restaurantbesøg',exact:true}).check();
+ await page.getByRole('combobox',{name:'Ventetid efter planlagt sluttid enhed',exact:true}).selectOption('minutes');
+ await page.getByLabel('Ventetid efter planlagt sluttid',{exact:true}).fill('35');
+ await page.getByRole('switch',{name:'Send én reminder ved manglende besvarelse',exact:true}).check();
+ await page.getByRole('combobox',{name:'Ventetid efter første afsendelse enhed',exact:true}).selectOption('hours');
+ await page.getByLabel('Ventetid efter første afsendelse',{exact:true}).fill('2');
+ await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();await page.getByRole('status').filter({hasText:'Indstillingerne er gemt.'}).waitFor();
+ assert.equal(f.records.get('feedbackSettings/b').bookingDelayMinutes,35);assert.equal(f.records.get('feedbackSettings/b').bookingReminderAfterMinutes,120);assert.equal(f.records.get('feedbackSettings/b').automaticRequests,false);
+ await page.reload();assert.equal(await page.getByLabel('Ventetid efter planlagt sluttid',{exact:true}).inputValue(),'35');
+ assert.equal(await page.getByLabel('Ventetid efter første afsendelse',{exact:true}).inputValue(),'2');
+ assert.equal(await page.getByRole('switch',{name:'Automatisk feedback efter restaurantbesøg',exact:true}).isChecked(),true);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
 });

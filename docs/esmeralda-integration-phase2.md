@@ -71,3 +71,18 @@ Firebase App Hosting injects `ORDERFLY_ESMERALDA_INTEGRATION_SECRET` from Secret
 - Existing feedback rows without `sourceType` are interpreted as `commerce_order`, with `orderId` used as the canonical source id.
 - Existing customer order/spend/loyalty aggregates are not changed by booking integration.
 - Existing same-brand legacy checkout customer ids are retained when safely resolvable; only new/cross-brand-conflicting identities move to the brand-scoped v2 id format.
+
+
+## Planned-end booking feedback (issues Orderfly #152 / mPanel #295)
+
+Booking feedback is scheduled from `bookings.ends_at`, without requiring manual completion. Confirmed, arrived, seated and completed bookings are eligible; cancellation and no-show stop delivery. Orderfly owns invitation/reminder scheduling. mPanel never falls back to the legacy `booking.feedback` sender.
+
+Booking automation is a separate opt-in, disabled by default. `bookingDelayMinutes` is X (0–10080, default 120); `bookingReminderAfterMinutes` is Y (1–20160, default 1440); `bookingMaxReminders` permits zero or one reminder (default zero). UI accepts minutes or hours. Jobs freeze timing settings. Invitations wait until current planned end + X; reminders wait until the initial message was accepted by the provider + Y and never precede the current booking end. Worker cadence can add latency. Provider acceptance is not proof of inbox delivery.
+
+All email content stays in Notification Center: `orderfly.feedback.invitation`, `orderfly.feedback.reminder`, `orderfly.feedback.thank_you`, with existing published DA/EN versions and preview/edit/publish flow. Queued legacy `booking.feedback` sends are suppressed. An already sent legacy invitation prevents a second invitation. Thank-you remains conditional on the existing automatic-reply setting.
+
+Before provider delivery, mPanel checks current booking status/end, recipient, tenant/location/customer mapping and calls Orderfly's read-only, shared-secret protected `POST /api/integrations/esmeralda/feedback/delivery-check`. Orderfly checks the exact event/job, scope, current settings and whether feedback has been submitted. Replies stop invitations/reminders; lookup failures retry without sending. Suppression uses the existing terminal failed state with `booking_feedback_suppressed`; intentional waiting does not consume attempts. Pending central messages recheck within 60 seconds, including bookings moved earlier. Orderfly's preliminary worker may enqueue after a concurrent schedule change; this final check enforces the current authoritative end.
+
+Migration `20260923055845_booking_feedback_planned_end.sql` adds `schedule_version` (old rows remain 0). Only future existing visits are seeded as version 1; past history is not replayed. Booking changes reschedule the one booking job. The trigger preserves booking operations if integration bookkeeping fails. The sync worker skips old-version jobs and requires `automation_owner: orderfly` in the handoff response. Handoff success is not email delivery (`notification_enqueued_at` remains null).
+
+Rollout is coordinated: deploy Orderfly's new contract and delivery check with booking automation disabled, then apply the mPanel migration and deploy notification-worker with both shared helpers. Verify the two matching revisions and existing central templates before enabling the booking switch. Do not enable during a mixed-version rollout. No production activation or mail send is part of these changes. Post-deployment verification starts only after deployment evidence; rollback disables booking automation first, since reverting to the old sender can recreate duplicates.

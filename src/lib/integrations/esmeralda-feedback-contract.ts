@@ -8,6 +8,7 @@ export const esmeraldaBookingFeedbackInvitationSchema = z.object({
   full_name: z.string().trim().min(1).max(200),
   email: z.string().trim().email().max(320),
   starts_at: z.string().datetime({ offset: true }).optional().nullable(),
+  ends_at: z.string().datetime({ offset: true }).optional().nullable(),
 });
 
 export const esmeraldaCustomerHistorySchema = z.object({

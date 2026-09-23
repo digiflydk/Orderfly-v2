@@ -35,6 +35,7 @@ export type BookingFeedbackInvitation = {
   full_name: string;
   email: string;
   starts_at: string | null;
+  ends_at: string | null;
   expires_at: string;
   status: 'active' | 'submitted' | 'revoked';
   feedback_id: string | null;
@@ -163,6 +164,11 @@ export async function createBookingFeedbackInvitation(
         throw new Error('Existing booking feedback invitation has an integration scope mismatch.');
       }
 
+      // Repair an interrupted handoff and keep a moved visit current without reissuing its token.
+      if (data.status === 'active' && parsed.ends_at) {
+        transaction.update(ref, { startsAt: parsed.starts_at ?? null, endsAt: parsed.ends_at, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        return { data: { ...data, startsAt: parsed.starts_at ?? null, endsAt: parsed.ends_at }, created: false };
+      }
       return { data, created: false };
     }
 
@@ -176,6 +182,7 @@ export async function createBookingFeedbackInvitation(
       fullName: parsed.full_name.trim(),
       email: parsed.email.trim().toLowerCase(),
       startsAt: parsed.starts_at ?? null,
+      endsAt: parsed.ends_at ?? null,
       status: 'active',
       feedbackId: null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -209,6 +216,7 @@ export async function createBookingFeedbackInvitation(
       full_name: String(result.data.fullName ?? parsed.full_name),
       email: String(result.data.email ?? parsed.email).toLowerCase(),
       starts_at: typeof result.data.startsAt === 'string' ? result.data.startsAt : parsed.starts_at ?? null,
+      ends_at: typeof result.data.endsAt === 'string' ? result.data.endsAt : null,
       expires_at: expiresAtDate.toISOString(),
       status: result.data.status === 'submitted' || result.data.status === 'revoked' ? result.data.status : 'active',
       feedback_id: typeof result.data.feedbackId === 'string' ? result.data.feedbackId : null,
@@ -251,6 +259,7 @@ export async function resolveBookingFeedbackInvitationToken(
     full_name: typeof data.fullName === 'string' ? data.fullName : 'Guest',
     email: typeof data.email === 'string' ? data.email : '',
     starts_at: typeof data.startsAt === 'string' ? data.startsAt : null,
+    ends_at: typeof data.endsAt === 'string' ? data.endsAt : null,
     expires_at: expiresAt.toISOString(),
     status: data.status === 'submitted' ? 'submitted' : 'active',
     feedback_id: typeof data.feedbackId === 'string' ? data.feedbackId : null,

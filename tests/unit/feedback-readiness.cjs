@@ -58,6 +58,6 @@ test('feedback canonical id and nested timestamps serialize; date fallback; mail
  assert.equal(loadTs('src/lib/feedback/display.ts').feedbackDate('invalid'),'Dato mangler');
 });
 test('debug route exposes no feedback data and reserved question IDs are rejected',async()=>{
- const response=await loadTs('src/app/api/debug/feedback/route.ts').GET();assert.equal(response.status,404);assert.deepEqual(await response.json(),{error:'Not found'});
+ const response=await loadTs('src/app/api/debug/feedback/route.ts', {'@/lib/auth/superadmin-api':{requireSuperadminApi:async()=>null}}).GET();assert.equal(response.status,404);assert.deepEqual(await response.json(),{error:'Not found'});
  const f=fixture();const result=await f.admin.createOrUpdateQuestionVersion(versionForm({questions:JSON.stringify([{...questions[0],questionId:'__proto__'}])}));assert.equal(result.ok,false);assert.equal(f.writes.length,0);
 });
