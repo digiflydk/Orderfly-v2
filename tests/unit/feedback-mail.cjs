@@ -92,8 +92,8 @@ test('manual retry needs explicit provider check and scoped editor; admin queue 
  assert.doesNotMatch(JSON.stringify(await f.mailAdmin.feedbackMailJobs('b')),/PRIVATE_TOKEN|private@example|customerId|sourceId|invitationId/);
  await assert.rejects(()=>f.mailAdmin.feedbackMailJobs('other'));
 });
-test('booking automation waits until the visit and stops for revoked invitations',async t=>{
- const f=setup(t);const source={brandId:'b',locationId:'l',customerId:'c',sourceType:'booking',sourceId:'booking',invitationId:'i',invitationToken:'valid'};
+test('booking automation waits until the planned end and stops for revoked invitations',async t=>{
+ const f=setup(t);f.records.get('feedbackSettings/b').bookingAutomaticRequests=true;const source={brandId:'b',locationId:'l',customerId:'c',sourceType:'booking',sourceId:'booking',invitationId:'i',invitationToken:'valid'};
  const now=Date.now();const id=await f.mailQueue.queueBookingFeedback(source,new Date(now+3600000).toISOString());assert.ok(f.records.get('feedbackMailJobs/'+id).nextAttemptAt>=now+3*3600000);
  f.records.get('integrationFeedbackInvitations/i').status='revoked';await f.mailWorker.runFeedbackMailWorker(f.provider,now+4*3600000);assert.equal(f.records.get('feedbackMailJobs/'+id).state,'suppressed');assert.equal(f.events.length,0);
 });

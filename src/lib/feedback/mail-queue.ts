@@ -6,10 +6,10 @@ import { completedFeedbackOrder, feedbackSourceKey } from './order-invitations';
 import { readActiveQuestionsForBrand } from './question-store';
 
 export type FeedbackMailKind = 'invitation' | 'reminder' | 'thankYou';
-export type FeedbackMailSource = { brandId: string; locationId: string; customerId: string; sourceId: string; sourceType: 'commerce_order' | 'booking'; invitationId: string; invitationToken?: string };
+export type FeedbackMailSource = { brandId: string; locationId: string; customerId: string; sourceId: string; sourceType: 'commerce_order' | 'booking'; invitationId: string; invitationToken?: string; bookingDelayMinutes?: number; reminderDelayMinutes?: number };
 export function pendingFeedbackMessage(source: FeedbackMailSource, kind: FeedbackMailKind, dueAt: number) {
-  const { brandId, locationId, customerId, sourceId, sourceType, invitationId, invitationToken } = source;
-  return { brandId, locationId, customerId, sourceId, sourceType, invitationId, ...(invitationToken ? { invitationToken } : {}), kind, state: 'pending', eventId: randomUUID(), nextAttemptAt: dueAt, attempts: 0, createdAt: Date.now(), updatedAt: Date.now() };
+  const { brandId, locationId, customerId, sourceId, sourceType, invitationId, invitationToken, bookingDelayMinutes, reminderDelayMinutes } = source;
+  return { brandId, locationId, customerId, sourceId, sourceType, invitationId, ...(invitationToken ? { invitationToken } : {}), ...(bookingDelayMinutes !== undefined ? { bookingDelayMinutes } : {}), ...(reminderDelayMinutes !== undefined ? { reminderDelayMinutes } : {}), kind, state: 'pending', eventId: randomUUID(), nextAttemptAt: dueAt, attempts: 0, createdAt: Date.now(), updatedAt: Date.now() };
 }
 export async function enqueueFeedbackMessage(source: FeedbackMailSource, kind: FeedbackMailKind, dueAt: number) {
   const db = getAdminDb(), id = feedbackSourceKey(source.brandId, source.sourceType, source.sourceId) + '-' + kind;
@@ -44,11 +44,20 @@ export async function queueOrderFeedback(orderId: string, automatic = false) {
   return enqueueFeedbackMessage(source, 'invitation', Date.now() + (automatic ? settings.delayHours * 3600000 : 0));
 }
 
-export async function queueBookingFeedback(source: FeedbackMailSource, startsAt: string | null) {
+export async function queueBookingFeedback(source: FeedbackMailSource, endsAt: string | null) {
   const settings = feedbackAutomation((await getAdminDb().collection('feedbackSettings').doc(source.brandId).get()).data());
-  if (!settings.emailEnabled || !settings.automaticRequests || !feedbackMailConfig(source.brandId)) return null;
+  if (!settings.emailEnabled || !settings.bookingAutomaticRequests || !feedbackMailConfig(source.brandId)) return null;
   if (!await readActiveQuestionsForBrand(source.brandId, 'booking', settings.language)) return null;
-  const time = startsAt ? Date.parse(startsAt) : NaN;
+  const time = endsAt ? Date.parse(endsAt) : NaN;
   if (!Number.isFinite(time)) return null;
-  return enqueueFeedbackMessage(source, 'invitation', Math.max(Date.now(), time + settings.delayHours * 3600000));
+  const db = getAdminDb(), id = feedbackSourceKey(source.brandId, 'booking', source.sourceId) + '-invitation';
+  const ref = db.collection('feedbackMailJobs').doc(id);
+  await db.runTransaction(async tx => {
+    const existing = (await tx.get(ref)).data();
+    if (!existing) tx.create(ref, pendingFeedbackMessage({ ...source, bookingDelayMinutes: settings.bookingDelayMinutes }, 'invitation', Math.max(Date.now(), time + settings.bookingDelayMinutes * 60000)));
+    else if (existing.state === 'pending' && Number.isInteger(existing.bookingDelayMinutes)) {
+      tx.update(ref, { nextAttemptAt: Math.max(Date.now(), time + existing.bookingDelayMinutes * 60000), ...(source.invitationToken ? { invitationToken: source.invitationToken } : {}), updatedAt: Date.now() });
+    }
+  });
+  return id;
 }

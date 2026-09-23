@@ -16,13 +16,13 @@ import { IntegrationBoundaryError } from '@/lib/integrations/esmeralda-consumer-
 const INVITATION_TTL_MS = 30 * 24 * 60 * 60 * 1000;
 
 type InvitationTokenPayload = {
-  v: 1;
+  v: 1 | 2;
   source_type: 'booking';
   organization_id: string;
   location_id: string;
   booking_id: string;
   customer_id: string;
-  exp: number;
+  exp?: number;
 };
 
 export type BookingFeedbackInvitation = {
@@ -35,6 +35,7 @@ export type BookingFeedbackInvitation = {
   full_name: string;
   email: string;
   starts_at: string | null;
+  ends_at: string | null;
   expires_at: string;
   status: 'active' | 'submitted' | 'revoked';
   feedback_id: string | null;
@@ -78,17 +79,18 @@ function parseInvitationToken(token: string): InvitationTokenPayload | null {
   try {
     const parsed = JSON.parse(Buffer.from(encoded, 'base64url').toString('utf8')) as Partial<InvitationTokenPayload>;
     if (
-      parsed.v !== 1 ||
+      (parsed.v !== 1 && parsed.v !== 2) ||
       parsed.source_type !== 'booking' ||
       typeof parsed.organization_id !== 'string' ||
       typeof parsed.location_id !== 'string' ||
       typeof parsed.booking_id !== 'string' ||
       typeof parsed.customer_id !== 'string' ||
-      typeof parsed.exp !== 'number'
+      (parsed.v === 1 && typeof parsed.exp !== 'number') ||
+      (parsed.v === 2 && parsed.exp !== undefined)
     ) {
       return null;
     }
-    if (parsed.exp <= Date.now()) return null;
+    if (parsed.v === 1 && parsed.exp! <= Date.now()) return null;
     return parsed as InvitationTokenPayload;
   } catch {
     return null;
@@ -149,6 +151,8 @@ export async function createBookingFeedbackInvitation(
   const id = invitationId(parsed.organization_id, parsed.booking_id);
   const ref = db.collection('integrationFeedbackInvitations').doc(id);
   const now = Date.now();
+  const plannedEnd = parsed.ends_at ? Date.parse(parsed.ends_at) : now;
+  const plannedExpiry = Math.max(now, plannedEnd) + INVITATION_TTL_MS;
 
   const result = await db.runTransaction(async (transaction) => {
     const snapshot = await transaction.get(ref);
@@ -163,10 +167,19 @@ export async function createBookingFeedbackInvitation(
         throw new Error('Existing booking feedback invitation has an integration scope mismatch.');
       }
 
+      // V2 links retain their signed identity; expiry is checked on the current server record.
+      if (data.status === 'active' && parsed.ends_at) {
+        const expiresAt = data.endsAt !== parsed.ends_at
+          ? admin.firestore.Timestamp.fromMillis(Math.max(toDate(data.expiresAt)?.getTime() ?? 0, plannedExpiry))
+          : data.expiresAt;
+        const patch = { startsAt: parsed.starts_at ?? null, endsAt: parsed.ends_at, expiresAt };
+        transaction.update(ref, { ...patch, updatedAt: admin.firestore.FieldValue.serverTimestamp() });
+        return { data: { ...data, ...patch }, created: false };
+      }
       return { data, created: false };
     }
 
-    const expiresAt = admin.firestore.Timestamp.fromMillis(now + INVITATION_TTL_MS);
+    const expiresAt = admin.firestore.Timestamp.fromMillis(plannedExpiry);
     const data = {
       sourceType: 'booking',
       organizationId: parsed.organization_id,
@@ -176,6 +189,7 @@ export async function createBookingFeedbackInvitation(
       fullName: parsed.full_name.trim(),
       email: parsed.email.trim().toLowerCase(),
       startsAt: parsed.starts_at ?? null,
+      endsAt: parsed.ends_at ?? null,
       status: 'active',
       feedbackId: null,
       createdAt: admin.firestore.FieldValue.serverTimestamp(),
@@ -188,13 +202,12 @@ export async function createBookingFeedbackInvitation(
 
   const expiresAtDate = toDate(result.data.expiresAt) ?? new Date(now + INVITATION_TTL_MS);
   const payload: InvitationTokenPayload = {
-    v: 1,
+    v: 2,
     source_type: 'booking',
     organization_id: parsed.organization_id,
     location_id: parsed.location_id,
     booking_id: parsed.booking_id,
     customer_id: parsed.customer_id,
-    exp: expiresAtDate.getTime(),
   };
 
   return {
@@ -209,6 +222,7 @@ export async function createBookingFeedbackInvitation(
       full_name: String(result.data.fullName ?? parsed.full_name),
       email: String(result.data.email ?? parsed.email).toLowerCase(),
       starts_at: typeof result.data.startsAt === 'string' ? result.data.startsAt : parsed.starts_at ?? null,
+      ends_at: typeof result.data.endsAt === 'string' ? result.data.endsAt : null,
       expires_at: expiresAtDate.toISOString(),
       status: result.data.status === 'submitted' || result.data.status === 'revoked' ? result.data.status : 'active',
       feedback_id: typeof result.data.feedbackId === 'string' ? result.data.feedbackId : null,
@@ -251,6 +265,7 @@ export async function resolveBookingFeedbackInvitationToken(
     full_name: typeof data.fullName === 'string' ? data.fullName : 'Guest',
     email: typeof data.email === 'string' ? data.email : '',
     starts_at: typeof data.startsAt === 'string' ? data.startsAt : null,
+    ends_at: typeof data.endsAt === 'string' ? data.endsAt : null,
     expires_at: expiresAt.toISOString(),
     status: data.status === 'submitted' ? 'submitted' : 'active',
     feedback_id: typeof data.feedbackId === 'string' ? data.feedbackId : null,

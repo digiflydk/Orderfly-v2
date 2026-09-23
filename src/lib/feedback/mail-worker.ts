@@ -40,12 +40,12 @@ async function context(job: Job) {
     url = feedbackOrigin() + '/feedback?orderToken=' + encodeURIComponent(signOrderFeedbackInvitation(job.invitationId, invitation.expiresAt)) + '&lang=' + encodeURIComponent(invitation.language || 'da');
   } else {
     const invitation = job.invitationToken ? await resolveBookingFeedbackInvitationToken(job.invitationToken) : null;
-    if (!invitation || invitation.organization_id !== job.brandId || invitation.location_id !== job.locationId || invitation.customer_id !== job.customerId || invitation.booking_id !== job.sourceId || invitation.status === 'revoked' || !invitation.starts_at || !Number.isFinite(Date.parse(invitation.starts_at)) || Date.parse(invitation.starts_at) > Date.now()) return null;
+    if ((job.kind !== 'thankYou' && !settings.bookingAutomaticRequests) || !invitation || invitation.organization_id !== job.brandId || invitation.location_id !== job.locationId || invitation.customer_id !== job.customerId || invitation.booking_id !== job.sourceId || invitation.status === 'revoked' || !invitation.ends_at || !Number.isFinite(Date.parse(invitation.ends_at))) return null;
     answered ||= invitation.status === 'submitted';
     url = feedbackOrigin() + '/feedback?token=' + encodeURIComponent(job.invitationToken!) + '&lang=' + encodeURIComponent(settings.language);
   }
   if (job.kind === 'thankYou' ? !answered || !settings.autoReplyEnabled : answered) return null;
-  if (job.kind === 'reminder' && settings.maxReminders === 0) return null;
+  if (job.kind === 'reminder' && (job.sourceType === 'booking' ? settings.bookingMaxReminders : settings.maxReminders) === 0) return null;
   return { email, url, settings, locationName: String(location.data()?.name || ''), brandName: String(brand.data()?.name || '') };
 }
 
@@ -71,13 +71,13 @@ export async function runFeedbackMailWorker(makeProvider = (config: NonNullable<
     counts.processed++;
     if (job === 'recovered_uncertain') { counts.uncertain++; continue; }
     let dispatched = false;
-    const finish = async (state: string, lastError: string | null = null, retry = false, reminderHours?: number) => db.runTransaction(async tx => {
+    const finish = async (state: string, lastError: string | null = null, retry = false, reminderMinutes?: number) => db.runTransaction(async tx => {
       const current = (await tx.get(ref)).data(); if (current?.lease !== lease) return;
-      const reminderRef = reminderHours ? db.collection('feedbackMailJobs').doc(feedbackSourceKey(job.brandId, job.sourceType, job.sourceId) + '-reminder') : null;
+      const reminderRef = reminderMinutes ? db.collection('feedbackMailJobs').doc(feedbackSourceKey(job.brandId, job.sourceType, job.sourceId) + '-reminder') : null;
       const reminder = reminderRef ? await tx.get(reminderRef) : null;
       const attempts = (current.attempts || 0) + 1;
       tx.update(ref, { state: retry && attempts < 3 ? 'pending' : state, attempts, lease: null, lastError, updatedAt: Date.now(), nextAttemptAt: retry && attempts < 3 ? Date.now() + 60000 : never, ...(state === 'accepted' ? { acceptedAt: Date.now() } : {}) });
-      if (reminderRef && !reminder?.exists) tx.create(reminderRef, pendingFeedbackMessage(job, 'reminder', Date.now() + reminderHours! * 3600000));
+      if (reminderRef && !reminder?.exists) tx.create(reminderRef, pendingFeedbackMessage({ ...job, reminderDelayMinutes: reminderMinutes }, 'reminder', Date.now() + reminderMinutes! * 60000));
     });
     try {
       const config = feedbackMailConfig(job.brandId); if (!config) throw new FeedbackMailError('mail_configuration_required');
@@ -96,7 +96,7 @@ export async function runFeedbackMailWorker(makeProvider = (config: NonNullable<
       if (!ownsLease) continue;
       dispatched = true;
       await provider.send(job.eventId, job.kind, current.email, { feedbackUrl: job.kind === 'thankYou' ? undefined : current.url, brandName: current.brandName, locationName: current.locationName, sourceType: job.sourceType, sourceId: job.sourceId, language: current.settings.language });
-      await finish('accepted', null, false, job.kind === 'invitation' && current.settings.maxReminders > 0 ? current.settings.reminderAfterHours : undefined); counts.accepted++;
+      await finish('accepted', null, false, job.kind === 'invitation' && (job.sourceType === 'booking' ? current.settings.bookingMaxReminders : current.settings.maxReminders) > 0 ? (job.sourceType === 'booking' ? current.settings.bookingReminderAfterMinutes : current.settings.reminderAfterHours * 60) : undefined); counts.accepted++;
     } catch (error) {
       const known = error instanceof FeedbackMailError ? error : new FeedbackMailError(dispatched ? 'provider_result_unknown' : 'provider_preflight_failed', dispatched, !dispatched && transientReadError(error));
       const state = known.uncertain ? 'uncertain' : 'failed';
