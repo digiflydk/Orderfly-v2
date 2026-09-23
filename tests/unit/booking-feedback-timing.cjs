@@ -59,3 +59,23 @@ test('delivery endpoint fails closed before reads on bad secret, payload or tena
  assert.equal((await route.POST(req('bad',{scope:'allowed'}))).status,401);assert.equal((await route.POST(req('valid',{scope:'foreign'}))).status,400);assert.equal(calls,0);
  const response=await route.POST(req('valid',{scope:'allowed'}));assert.equal(response.status,503);assert.equal(response.headers.get('cache-control'),'no-store');assert.doesNotMatch(await response.text(),/private database/);
 });
+
+test('booking links survive long-lead reschedules but retain expiry, revocation and signature checks',async t=>{
+ const f=setup(t),secret='z'.repeat(40),previous=process.env.ORDERFLY_ESMERALDA_INTEGRATION_SECRET;
+ process.env.ORDERFLY_ESMERALDA_INTEGRATION_SECRET=secret;t.after(()=>previous===undefined?delete process.env.ORDERFLY_ESMERALDA_INTEGRATION_SECRET:process.env.ORDERFLY_ESMERALDA_INTEGRATION_SECRET=previous);
+ const {Timestamp}=require('firebase-admin/firestore');
+ const mocks={...f.mocks,'@/lib/loyalty/model':{},'@/app/superadmin/loyalty/actions':{},'@/lib/integrations/esmeralda-consumer-customer':{IntegrationBoundaryError:class extends Error{}}};
+ mocks['@/lib/firebase-admin']={...mocks['@/lib/firebase-admin'],admin:{firestore:{Timestamp,FieldValue:{serverTimestamp:()=>Timestamp.now()}}}};
+ const api=loadTs('src/lib/integrations/esmeralda-feedback-integration.ts',mocks);
+ const firstEnd=new Date(Date.now()+60*86400000).toISOString(),input={organization_id:'b',location_id:'l',customer_id:'c',booking_id:'33333333-3333-4333-8333-333333333333',full_name:'Guest',email:'private@example.test',ends_at:firstEnd};
+ const first=await api.createBookingFeedbackInvitation(input);assert.equal(Date.parse(first.invitation.expires_at),Date.parse(firstEnd)+30*86400000);
+ const laterEnd=new Date(Date.now()+120*86400000).toISOString(),moved=await api.createBookingFeedbackInvitation({...input,ends_at:laterEnd});
+ assert.equal(moved.token,first.token);assert.equal(Date.parse(moved.invitation.expires_at),Date.parse(laterEnd)+30*86400000);
+ assert.equal((await api.resolveBookingFeedbackInvitationToken(first.token)).ends_at,laterEnd);
+ const row=f.records.get('integrationFeedbackInvitations/'+first.invitation.invitation_id);row.status='revoked';assert.equal(await api.resolveBookingFeedbackInvitationToken(first.token),null);
+ row.status='active';row.expiresAt=Timestamp.fromMillis(Date.now()-1);assert.equal(await api.resolveBookingFeedbackInvitationToken(first.token),null);
+ row.expiresAt=Timestamp.fromMillis(Date.now()+86400000);assert.equal(await api.resolveBookingFeedbackInvitationToken(first.token+'x'),null);
+ const payload=Buffer.from(JSON.stringify({...JSON.parse(Buffer.from(first.token.split('.')[0],'base64url')),v:1,exp:Date.now()-1})).toString('base64url');
+ const legacy=payload+'.'+require('node:crypto').createHmac('sha256',secret).update(payload).digest('base64url');assert.equal(await api.resolveBookingFeedbackInvitationToken(legacy),null);
+ const job=await f.mailQueue.queueBookingFeedback({...source,invitationToken:'old'},firstEnd);await f.mailQueue.queueBookingFeedback({...source,invitationToken:moved.token},laterEnd);assert.equal(f.records.get('feedbackMailJobs/'+job).invitationToken,moved.token);
+});

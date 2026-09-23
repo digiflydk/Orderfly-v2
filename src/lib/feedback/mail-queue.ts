@@ -56,7 +56,7 @@ export async function queueBookingFeedback(source: FeedbackMailSource, endsAt: s
     const existing = (await tx.get(ref)).data();
     if (!existing) tx.create(ref, pendingFeedbackMessage({ ...source, bookingDelayMinutes: settings.bookingDelayMinutes }, 'invitation', Math.max(Date.now(), time + settings.bookingDelayMinutes * 60000)));
     else if (existing.state === 'pending' && Number.isInteger(existing.bookingDelayMinutes)) {
-      tx.update(ref, { nextAttemptAt: Math.max(Date.now(), time + existing.bookingDelayMinutes * 60000), updatedAt: Date.now() });
+      tx.update(ref, { nextAttemptAt: Math.max(Date.now(), time + existing.bookingDelayMinutes * 60000), ...(source.invitationToken ? { invitationToken: source.invitationToken } : {}), updatedAt: Date.now() });
     }
   });
   return id;
