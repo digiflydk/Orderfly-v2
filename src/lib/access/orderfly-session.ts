@@ -1,10 +1,13 @@
 import 'server-only';
+import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { getAdminApp, getAdminDb } from '@/lib/firebase-admin';
 import { AuthorityError, executeAuthority, type VerifiedIdentity } from './authority';
 import { OPSFLY_COOKIE_PREFIX, verifyOpsflyCookie } from './opsfly-login';
 
-export async function verifiedOrderflyIdentity(): Promise<VerifiedIdentity> {
+// React cache is scoped to a single server render, never shared across requests.
+// Repeated layout/page/helper checks reuse verification; the next request revalidates.
+export const verifiedOrderflyIdentity = cache(async (): Promise<VerifiedIdentity> => {
   const session=(await cookies()).get('__session')?.value;
   if(!session)throw new AuthorityError('unauthorized',401);
   try {
@@ -13,7 +16,7 @@ export async function verifiedOrderflyIdentity(): Promise<VerifiedIdentity> {
     const token=await getAdminApp().auth().verifySessionCookie(session,true);
     return {provider:'firebase',subject:token.uid};
   }catch{throw new AuthorityError('unauthorized',401);}
-}
+});
 export async function requireOrderflyAccess(brandId:string,locationIds:string[]|null,permission:string) {
   const identity=await verifiedOrderflyIdentity();
   const db=getAdminDb();

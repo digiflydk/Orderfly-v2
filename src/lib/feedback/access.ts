@@ -1,6 +1,6 @@
 import 'server-only';
-import { cookies } from 'next/headers';
-import { getAdminApp, getAdminDb } from '@/lib/firebase-admin';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
 import { executeAuthority, type VerifiedIdentity } from '@/lib/access/authority';
 
 export type FeedbackAccess = { uid: string; permissions: string[]; brandIds: string[] | null };
@@ -13,13 +13,17 @@ export function temporaryFeedbackTestAccessEnabled() { return false; }
 
 /** The UID must come from a revoked-checked Firebase token, never request input. */
 export async function feedbackAccessForUid(uid: string, permission = 'feedback:view'): Promise<FeedbackAccess> {
+  return feedbackAccessForIdentity({provider:'firebase',subject:uid},permission);
+}
+
+async function feedbackAccessForIdentity(identity: VerifiedIdentity, permission: string): Promise<FeedbackAccess> {
   if (!['feedback:view','feedback:edit','settings:view','settings:edit'].includes(permission)) throw new FeedbackAccessError();
-  const identity: VerifiedIdentity = {provider:'firebase',subject:uid};
   const bootstrap: VerifiedIdentity = {provider:'opsfly',subject:process.env.MPANEL_PLATFORM_ADMIN_EMPLOYEE_ID||'',organizationId:process.env.MPANEL_PLATFORM_ADMIN_ORGANIZATION_ID||''};
   try {
     const db=getAdminDb();
     const session=await executeAuthority(db,identity,{action:'session'},bootstrap);
     if (!('superuser' in session)) throw new FeedbackAccessError();
+    const uid = identity.provider === 'firebase' ? identity.subject : session.actorId;
     if (session.superuser) return {uid,permissions:['feedback:view','feedback:edit','settings:view','settings:edit'],brandIds:null};
     // Question versions are global; a company grant cannot edit them.
     if (permission.startsWith('settings:')) throw new FeedbackAccessError();
@@ -34,11 +38,8 @@ export async function feedbackAccessForUid(uid: string, permission = 'feedback:v
 }
 
 export async function requireFeedbackAccess(permission = 'feedback:view'): Promise<FeedbackAccess> {
-  const cookie=(await cookies()).get('__session')?.value;
-  if (!cookie) throw new FeedbackAccessError();
   try {
-    const token=await getAdminApp().auth().verifySessionCookie(cookie,true);
-    return await feedbackAccessForUid(token.uid,permission);
+    return await feedbackAccessForIdentity(await verifiedOrderflyIdentity(),permission);
   } catch { throw new FeedbackAccessError(); }
 }
 
