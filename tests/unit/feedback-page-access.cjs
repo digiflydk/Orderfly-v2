@@ -7,6 +7,7 @@ function fixture({invitation=null,customer='customer',status='Completed',brandId
  const order={id:'order',brandId:'brand',locationId:'location',brandName:'Restaurant',customerDetails:{id:customer,email:'private@example.test'},deliveryType:'Pickup',status};
  const mocks={
   'react/jsx-runtime':{jsx,jsxs:jsx},
+  '@/lib/feedback/presentation':require('../helpers/load-ts.cjs').loadTs('src/lib/feedback/presentation.ts',{}),
   '@/lib/next/resolve-props':{resolveSearchParams:async p=>p},
   'next/navigation':{notFound:()=>{throw Error('not-found');},redirect:()=>{throw Error('redirect');}},
   '@/app/checkout/order-actions':{getOrderById:async()=>order},
@@ -23,7 +24,7 @@ function fixture({invitation=null,customer='customer',status='Completed',brandId
 }
 test('guest feedback renders its finite context without an administrative session',async()=>{
  const page=await fixture()({searchParams:Promise.resolve({orderId:'order',customerId:'customer'})});
- const context=page.props.children.props.context;
+ const context=page.props.context;
  assert.equal(context.sourceId,'order');assert.equal(context.customerId,'customer');assert.equal(context.brandLogoUrl,'https://example.test/logo.png');
  assert.equal(JSON.stringify(context).includes('private'),false);
 });
@@ -32,5 +33,5 @@ test('guest feedback rejects mismatched customers, incomplete orders and invalid
  await assert.rejects(fixture()({searchParams:{orderToken:'invalid'}}),/not-found/);
  const invitation={sourceId:'order',customerId:'customer',status:'pending'};
  for(const options of [{brandId:'foreign'},{locationId:'foreign'}])await assert.rejects(fixture({invitation,...options})({searchParams:{orderToken:'valid'}}),/not-found/);
- const page=await fixture({invitation})({searchParams:{orderToken:'valid'}});assert.equal(page.props.children.props.context.invitationToken,'valid');
+ const page=await fixture({invitation})({searchParams:{orderToken:'valid'}});assert.equal(page.props.context.invitationToken,'valid');
 });

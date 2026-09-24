@@ -3,7 +3,6 @@
 import { useForm } from 'react-hook-form';
 import { useTransition, useState } from 'react';
 import type { ExperienceFeedbackQuestionsVersion, FeedbackSourceContext } from '@/lib/feedback/source-types';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Label } from '@/components/ui/label';
@@ -13,7 +12,8 @@ import { submitFeedbackAction } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2, Star } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import Image from 'next/image';
+import { ExperienceShell } from '@/components/feedback/experience-shell';
+import { feedbackCopy } from '@/lib/feedback/presentation';
 
 interface FeedbackFormClientProps {
   context: FeedbackSourceContext;
@@ -28,6 +28,7 @@ type FormValues = {
 
 export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormClientProps) {
   const { toast } = useToast();
+  const copy = feedbackCopy[questionsVersion.language === 'en' ? 'en' : 'da'];
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const form = useForm<FormValues>({ defaultValues: { responses: {} } });
@@ -35,6 +36,8 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
   const watchedResponses = watch('responses');
 
   const onSubmit = (data: FormValues) => {
+    const missing = questionsVersion.questions.some(q => q.isRequired && (data.responses[q.questionId]?.answer === undefined || data.responses[q.questionId]?.answer === '' || (Array.isArray(data.responses[q.questionId]?.answer) && !data.responses[q.questionId].answer.length)));
+    if (missing) { setError(copy.required); return; }
     const formData = new FormData();
     formData.append('sourceType', context.sourceType);
     formData.append('sourceId', context.sourceId);
@@ -49,13 +52,13 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
       try {
       const result = await submitFeedbackAction(null, formData);
       if (result?.error) {
-        setError(result.message);
-        toast({ variant: 'destructive', title: 'Error', description: result.message });
+        setError(questionsVersion.language === 'en' ? result.message : copy.error);
+        toast({ variant: 'destructive', title: questionsVersion.language === 'en' ? 'Error' : 'Fejl', description: questionsVersion.language === 'en' ? result.message : copy.error });
       }
       } catch (error) {
         // Next redirects are handled by the router; transport errors retain the answers.
         if (error && typeof error === 'object' && 'digest' in error && String(error.digest).startsWith('NEXT_REDIRECT')) throw error;
-        setError('Kunne ikke sende feedback. Dine svar er bevaret. Prøv igen.');
+        setError(copy.error);
       }
     });
   };
@@ -71,41 +74,47 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
     switch (question.type) {
       case 'stars':
         return (
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-start gap-2">
             {[...Array(5)].map((_, i) => (
               <button
                 key={i}
                 type="button"
-                aria-label={`${i + 1} stars`}
+                aria-label={`${i + 1} ${copy.star}`}
+                className="rounded-lg p-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[var(--feedback-accent)]"
                 aria-pressed={response?.answer === i + 1}
                 onClick={() => handleValueChange(qid, question.label, 'stars', i + 1)}
               >
-                <Star className={cn('h-10 w-10 text-muted-foreground/30 transition-colors', (response?.answer > i) && 'text-yellow-400 fill-yellow-400')} />
+                <Star className={cn('h-9 w-9 text-[var(--feedback-muted)] transition-colors sm:h-10 sm:w-10', (response?.answer > i) && 'text-[var(--feedback-accent)] fill-[var(--feedback-accent)]')} />
               </button>
             ))}
           </div>
         );
       case 'nps':
         return (
-          <div className="flex flex-wrap justify-center gap-2">
+          <div><div className="grid grid-cols-6 gap-2 sm:grid-cols-11">
             {[...Array(11)].map((_, i) => (
               <Button
                 key={i}
                 type="button"
                 variant={response?.answer === i ? 'default' : 'outline'}
                 size="icon"
+                className={cn('h-11 w-full border-[var(--feedback-border)] bg-transparent text-[var(--feedback-ink)] hover:bg-[var(--feedback-hover)]', response?.answer === i && 'border-[var(--feedback-accent)] bg-[var(--feedback-accent)] text-[var(--feedback-selected-ink)] hover:bg-[var(--feedback-accent)]')}
                 aria-pressed={response?.answer === i}
                 onClick={() => handleValueChange(qid, question.label, 'nps', i)}
               >
                 {i}
               </Button>
             ))}
-          </div>
+          </div><div className="mt-3 flex justify-between gap-4 text-xs text-[var(--feedback-muted)]"><span>{copy.low}</span><span className="text-right">{copy.high}</span></div></div>
         );
       case 'text':
         return (
           <Textarea
-            placeholder="Your feedback..."
+            id={`answer-${qid}`}
+            aria-label={question.label}
+            placeholder={copy.placeholder}
+            className="border-[var(--feedback-border)] bg-[var(--feedback-input)] text-[var(--feedback-ink)] placeholder:text-[var(--feedback-muted)] focus-visible:ring-[var(--feedback-accent)]"
+            maxLength={5000}
             rows={4}
             onChange={(e) => handleValueChange(qid, question.label, 'text', e.target.value)}
           />
@@ -156,42 +165,33 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
   const isBooking = context.sourceType === 'booking';
 
   return (
-    <div className="max-w-2xl mx-auto px-4">
-      <Card className="shadow-lg">
-        <CardHeader className="text-center space-y-4">
-          <Image
-            src={context.brandLogoUrl || '/orderfly-logo.svg'}
-            alt={context.brandName}
-            width={100}
-            height={40}
-            className="mx-auto"
-          />
-          <CardTitle className="text-2xl">
-            {isBooking ? 'Tak for dit besøg!' : 'Thank you for your order!'}
-          </CardTitle>
-          <CardDescription>
-            {isBooking ? 'Vi vil meget gerne høre om dit restaurantbesøg' : 'We would love to hear your feedback'}{' '}
-            <span className="font-mono text-foreground bg-muted p-1 rounded-sm">{context.displayReference}</span>
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
-            {error && <p role="alert" className="text-destructive">{error}</p>}
-            <fieldset disabled={isPending} className="min-w-0 space-y-8">
-            {questionsVersion.questions.map((question) => (
-              <div key={question.questionId}>
-                <Label className="text-lg font-semibold">{question.label}</Label>
-                {question.isRequired && <span className="text-destructive ml-1">*</span>}
-                <div className="pt-4">{renderQuestion(question)}</div>
+    <ExperienceShell brandId={context.brandId} brandName={context.brandName} logoUrl={context.brandLogoUrl}>
+      <div className="px-5 py-8 sm:px-10 sm:py-10">
+        <div className="mb-9 text-left">
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[var(--feedback-accent)]">{questionsVersion.language === 'en' ? 'Your experience matters' : 'Din oplevelse betyder noget'}</p>
+          <h1 className="heading-style-h1">{isBooking ? copy.visit : copy.order}</h1>
+          <p className="text-size-regular mt-4 max-w-xl text-[var(--feedback-muted)]">{copy.intro}</p>
+          <p className="mt-4 text-xs text-[var(--feedback-accent)]">{questionsVersion.questions.length} {questionsVersion.language === 'en' ? 'questions · about 1 minute' : 'spørgsmål · cirka 1 minut'}</p>
+          <p className="mt-2 text-xs text-[var(--feedback-muted)]">{context.displayReference}</p>
+        </div>
+        <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
+          {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
+          <fieldset disabled={isPending} className="min-w-0 space-y-0">
+            {questionsVersion.questions.map((question, index) => (
+              <div key={question.questionId} role="group" aria-labelledby={`question-${question.questionId}`} className="border-t border-[var(--feedback-border)] py-6">
+                <div className="mb-4 flex items-start gap-3"><span aria-hidden="true" className="mt-0.5 text-xs font-semibold text-[var(--feedback-accent)]">{String(index + 1).padStart(2, '0')}</span>
+                  <label id={`question-${question.questionId}`} htmlFor={question.type === 'text' ? `answer-${question.questionId}` : undefined} className="text-size-regular font-semibold">{question.label}{question.isRequired ? <span className="ml-1 text-[var(--feedback-accent)]">*</span> : <span className="ml-2 text-xs font-normal text-[var(--feedback-muted)]">({copy.optional})</span>}</label>
+                </div>
+                {renderQuestion(question)}
               </div>
             ))}
-            </fieldset>
-            <Button type="submit" className="w-full" disabled={isPending}>
-              {isPending ? <Loader2 className="animate-spin" /> : 'Send feedback'}
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-    </div>
+          </fieldset>
+          <Button type="submit" className="button w-full focus-visible:ring-[var(--feedback-accent)]" disabled={isPending}>
+            {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{copy.sending}</> : copy.send}
+          </Button>
+          <p className="text-left text-sm leading-6 text-[var(--feedback-muted)]">{copy.private}</p>
+        </form>
+      </div>
+    </ExperienceShell>
   );
 }
