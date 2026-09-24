@@ -118,7 +118,7 @@ Fixtures erstatter Firebase/mPanel/Mailtrap I/O. De beviser ikke produktions-IAM
 - Legacy unsigned ordrelinks, platformens øvrige adgangskontrol og Firestore-regler er udtrykkelige afgrænsninger; de må ikke beskrives som løst af modulsessionen.
 - Indbakken læser alle svar inden for brugerens tilladte brands. Stor-skala inbox-pagination, opbevaringspolitik og automatisk opfølgning på lave ratings er ikke leveret her.
 - Der er ikke bygget leveringswebhook, historisk kø-backfill eller en troværdig leveringsbaseret svarprocent.
-- Før Done: uafhængigt review → PO-accept → releaseansvarlig merger/deployer → verificér normal login for rette UID, dummyflagets tydelige advarsel, afvisning på tværs af brands, rapport fra kendte svar, individuel godkendelse/tilbagetrækning og deaktiveret offentlig side. Kontrolleret mailtest skal bruge særskilt godkendt testmodtager og verificere Orderfly-job, mPanel-job **og** faktisk Mailtrap-mail.
+- Før Done: uafhængigt review → PO-accept → releaseansvarlig merger/deployer → verificér fælles Opsfly-/Firebase-login uden ekstra feedbacklogin, korrekt aktøridentitet, afvisning af revokeret session ved næste request, afvisning på tværs af brands, rapport fra kendte svar, individuel godkendelse/tilbagetrækning og deaktiveret offentlig side. Kontrolleret mailtest skal bruge særskilt godkendt testmodtager og verificere Orderfly-job, mPanel-job **og** faktisk Mailtrap-mail.
 
 Orderfly-issue #102 og den koordinerede mPanel-opgave forbliver åbne indtil den aftalte liveverifikation. Work merger eller deployer ikke sin egen PR.
 
