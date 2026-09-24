@@ -74,17 +74,17 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
     switch (question.type) {
       case 'stars':
         return (
-          <div className="flex justify-center gap-2">
+          <div className="flex justify-start gap-2">
             {[...Array(5)].map((_, i) => (
               <button
                 key={i}
                 type="button"
                 aria-label={`${i + 1} ${copy.star}`}
-                className="rounded-lg p-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#997527]"
+                className="rounded-lg p-1 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#e9aa3f]"
                 aria-pressed={response?.answer === i + 1}
                 onClick={() => handleValueChange(qid, question.label, 'stars', i + 1)}
               >
-                <Star className={cn('h-9 w-9 text-[#b8b4a8] transition-colors sm:h-10 sm:w-10', (response?.answer > i) && 'text-[#b38b37] fill-[#b38b37]')} />
+                <Star className={cn('h-9 w-9 text-[#999999] transition-colors sm:h-10 sm:w-10', (response?.answer > i) && 'text-[#e9aa3f] fill-[#e9aa3f]')} />
               </button>
             ))}
           </div>
@@ -98,14 +98,14 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
                 type="button"
                 variant={response?.answer === i ? 'default' : 'outline'}
                 size="icon"
-                className={cn('h-11 w-full border-[#ccc5b7] bg-transparent text-[#22231f] hover:bg-[#eee4cf]', response?.answer === i && 'border-[#171c19] bg-[#171c19] text-white hover:bg-[#29362e]')}
+                className={cn('h-11 w-full border-[#555555] bg-transparent text-[#ffffff] hover:bg-[#2d2d2d]', response?.answer === i && 'border-[#e9aa3f] bg-[#e9aa3f] text-black hover:bg-[#f5aa24]')}
                 aria-pressed={response?.answer === i}
                 onClick={() => handleValueChange(qid, question.label, 'nps', i)}
               >
                 {i}
               </Button>
             ))}
-          </div><div className="mt-3 flex justify-between gap-4 text-xs text-[#68675e]"><span>{copy.low}</span><span className="text-right">{copy.high}</span></div></div>
+          </div><div className="mt-3 flex justify-between gap-4 text-xs text-[#cccccc]"><span>{copy.low}</span><span className="text-right">{copy.high}</span></div></div>
         );
       case 'text':
         return (
@@ -113,7 +113,7 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
             id={`answer-${qid}`}
             aria-label={question.label}
             placeholder={copy.placeholder}
-            className="border-[#ccc5b7] bg-white text-[#22231f] placeholder:text-[#77776b] focus-visible:ring-[#997527]"
+            className="border-[#555555] bg-black text-[#ffffff] placeholder:text-[#aaaaaa] focus-visible:ring-[#e9aa3f]"
             maxLength={5000}
             rows={4}
             onChange={(e) => handleValueChange(qid, question.label, 'text', e.target.value)}
@@ -167,29 +167,29 @@ export function FeedbackFormClient({ context, questionsVersion }: FeedbackFormCl
   return (
     <ExperienceShell brandId={context.brandId} brandName={context.brandName} logoUrl={context.brandLogoUrl}>
       <div className="px-5 py-8 sm:px-10 sm:py-10">
-        <div className="mb-9 text-center">
-          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#826528]">{questionsVersion.language === 'en' ? 'Your experience matters' : 'Din oplevelse betyder noget'}</p>
-          <h1 className="font-serif text-3xl leading-tight sm:text-4xl">{isBooking ? copy.visit : copy.order}</h1>
-          <p className="mx-auto mt-4 max-w-md text-sm leading-6 text-[#65665b]">{copy.intro}</p>
-          <p className="mt-4 text-xs text-[#826528]">{questionsVersion.questions.length} {questionsVersion.language === 'en' ? 'questions · about 1 minute' : 'spørgsmål · cirka 1 minut'}</p>
-          <p className="mt-2 text-xs text-[#68675e]">{context.displayReference}</p>
+        <div className="mb-9 text-left">
+          <p className="mb-3 text-[11px] font-semibold uppercase tracking-[0.2em] text-[#e9aa3f]">{questionsVersion.language === 'en' ? 'Your experience matters' : 'Din oplevelse betyder noget'}</p>
+          <h1 className="heading-style-h1">{isBooking ? copy.visit : copy.order}</h1>
+          <p className="text-size-regular mt-4 max-w-xl text-[#cccccc]">{copy.intro}</p>
+          <p className="mt-4 text-xs text-[#e9aa3f]">{questionsVersion.questions.length} {questionsVersion.language === 'en' ? 'questions · about 1 minute' : 'spørgsmål · cirka 1 minut'}</p>
+          <p className="mt-2 text-xs text-[#cccccc]">{context.displayReference}</p>
         </div>
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">
           {error && <p role="alert" className="rounded-lg bg-red-50 p-3 text-sm text-red-800">{error}</p>}
           <fieldset disabled={isPending} className="min-w-0 space-y-0">
             {questionsVersion.questions.map((question, index) => (
-              <div key={question.questionId} role="group" aria-labelledby={`question-${question.questionId}`} className="border-t border-[#e8e0d2] py-6">
-                <div className="mb-4 flex items-start gap-3"><span aria-hidden="true" className="mt-0.5 text-xs font-semibold text-[#997527]">{String(index + 1).padStart(2, '0')}</span>
-                  <label id={`question-${question.questionId}`} htmlFor={question.type === 'text' ? `answer-${question.questionId}` : undefined} className="text-[15px] font-semibold leading-6">{question.label}{question.isRequired ? <span className="ml-1 text-[#826528]">*</span> : <span className="ml-2 text-xs font-normal text-[#68675e]">({copy.optional})</span>}</label>
+              <div key={question.questionId} role="group" aria-labelledby={`question-${question.questionId}`} className="border-t border-[#333333] py-6">
+                <div className="mb-4 flex items-start gap-3"><span aria-hidden="true" className="mt-0.5 text-xs font-semibold text-[#e9aa3f]">{String(index + 1).padStart(2, '0')}</span>
+                  <label id={`question-${question.questionId}`} htmlFor={question.type === 'text' ? `answer-${question.questionId}` : undefined} className="text-size-regular font-semibold">{question.label}{question.isRequired ? <span className="ml-1 text-[#e9aa3f]">*</span> : <span className="ml-2 text-xs font-normal text-[#cccccc]">({copy.optional})</span>}</label>
                 </div>
                 {renderQuestion(question)}
               </div>
             ))}
           </fieldset>
-          <Button type="submit" className="h-12 w-full rounded-lg bg-[#c5a358] text-base font-semibold text-[#171c19] hover:bg-[#d4b778] focus-visible:ring-[#997527]" disabled={isPending}>
+          <Button type="submit" className="button w-full focus-visible:ring-[#e9aa3f]" disabled={isPending}>
             {isPending ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" />{copy.sending}</> : copy.send}
           </Button>
-          <p className="text-center text-xs leading-5 text-[#68675e]">{copy.private}</p>
+          <p className="text-left text-sm leading-6 text-[#cccccc]">{copy.private}</p>
         </form>
       </div>
     </ExperienceShell>

@@ -1,15 +1,17 @@
 import type { ReactNode } from 'react';
 import { isEsmeraldaFeedback } from '@/lib/feedback/presentation';
+import { esmeraldaFeedbackAssets, esmeraldaFeedbackStyles } from '@/lib/feedback/brand-styles';
 
 export function ExperienceShell({ brandId, brandName, logoUrl, children }: { brandId: string; brandName: string; logoUrl?: string | null; children: ReactNode }) {
   const esmeralda = isEsmeraldaFeedback(brandId);
-  return <main className="min-h-screen bg-[#f5f1e9] px-4 py-6 text-[#22231f] sm:py-12" data-testid="feedback-experience" data-brand={esmeralda ? 'esmeralda' : 'restaurant'}>
-    <div className="mx-auto max-w-[640px] overflow-hidden rounded-2xl border border-[#ded8cc] bg-[#fffdf8] shadow-[0_16px_60px_rgba(35,30,20,0.08)]">
-      <header className="border-b-4 border-[#c5a358] bg-[#171c19] px-6 py-8 text-center text-[#f8f3e7]">
-        {esmeralda ? <><div className="font-serif text-3xl tracking-[0.18em] sm:text-4xl">ESMERALDA</div><div className="mt-2 text-[10px] tracking-[0.3em] text-[#dcc18b]">PIZZA &amp; RESTAURANT · AMAGER</div></> : <>{logoUrl && <img src={logoUrl} alt="" className="mx-auto mb-3 max-h-16 max-w-[180px] object-contain" />}<div className="font-serif text-3xl">{brandName}</div></>}
+  return <main className="min-h-screen bg-black px-4 pb-8 text-white sm:px-6 sm:pb-16" data-testid="feedback-experience" data-brand={esmeralda ? 'esmeralda' : 'restaurant'}>
+    {esmeralda && <style>{esmeraldaFeedbackStyles}</style>}
+    <div className="mx-auto max-w-[720px]">
+      <header className="mb-8 flex min-h-[94px] items-center border-b border-white/10 py-4 sm:mb-12">
+        {esmeralda ? <a href="https://www.esmeraldapizza.dk" aria-label="Esmeralda Pizza & Restaurant"><img src={esmeraldaFeedbackAssets.logo} alt="Esmeralda Pizza & Restaurant" className="es-header-v2__logo" width="142" height="77" /></a> : <>{logoUrl && <img src={logoUrl} alt="" className="mr-4 max-h-16 max-w-[180px] object-contain" />}<div className="text-3xl">{brandName}</div></>}
       </header>
-      {children}
-      <footer className="border-t border-[#e8e0d2] px-6 py-5 text-center text-xs leading-6 text-[#68675e]">{esmeralda ? <>Esmeralda Pizza &amp; Restaurant<br />Albaniensgade 6 · 2300 København S</> : brandName}</footer>
+      <div className="booking-widget-card rounded-2xl bg-[#111111]">{children}</div>
+      <footer className="mt-8 border-t border-white/20 pt-6 text-left text-sm leading-6 text-white/80">{esmeralda ? <>Esmeralda Pizza &amp; Restaurant<br />Albaniensgade 6 · 2300 København S</> : brandName}</footer>
     </div>
   </main>;
 }

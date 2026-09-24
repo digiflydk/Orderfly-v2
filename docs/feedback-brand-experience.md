@@ -1,6 +1,6 @@
 # Feedback customer experience
 
-The feedback invitation, form and completion screen use Esmeralda's charcoal, warm ivory and gold presentation. The public form and thank-you screen share one layout. Danish forms have Danish placeholders, validation, submission progress and thank-you copy; English versions retain English copy. Booking timestamps explicitly use Europe/Copenhagen rather than server time.
+The feedback invitation, form and completion screen reuse Esmeralda's verified Webflow design, replacing the initial invented ivory/serif proposal. The public form and thank-you screen share one layout. Danish forms have Danish placeholders, validation, submission progress and thank-you copy; English versions retain English copy. Booking timestamps explicitly use Europe/Copenhagen rather than server time.
 
 After successful submission or reopening a consumed invitation, the server redirects with the verified brand ID and language. The thank-you URL never contains a customer identifier or invitation bearer token. It reads public brand presentation only and sends Esmeralda guests back to https://www.esmeraldapizza.dk.
 
@@ -21,3 +21,11 @@ The browser fixtures use synthetic data, not production bookings. Chromium was p
 ## Release
 
 This is an implementation candidate, not evidence of production deployment. Follow AGENTS.md: PR review, PO acceptance, separate merge/deploy and read-only live verification. Deploy the companion notification-admin and notification-worker changes as well before the next controlled booking/email test. No production template, booking, feedback or automation setting was modified for this design change. Existing already-delivered emails retain their old appearance. Styling does not establish or fix inbox placement.
+
+## Webflow source of truth (customer correction, 2026-09-24)
+
+Read the actual Webflow site `6a6c7110638d57d95365ad1c`, its published homepage CSS and booking page, and `rules/universal-layout-and-typography.md` before choosing presentation values. Reuse the original `esmeralda-logo.png` asset, Bourton Base (`bourtonbase.woff2`) for 38px/1.1 H1 headings and CTA typography, and Brandon Text Office Regular at 16px/1.5 for normal body copy. The scope retains the published `.heading-style-h1`, `.text-size-regular`, `.button` and `.es-header-v2__logo` conventions without importing Webflow's unrelated global CSS.
+
+Use the existing black page background, #111111 booking card, white text, #e9aa3f standard button, #2a1000 button text/hover, 10px button radius and 16px booking-card radius. All content is left aligned. The actual header logo is 142px desktop and 104px mobile. No typographic replacement logo or invented serif is used.
+
+Web fonts and logo point to the original published Webflow assets. Visual QA used exact downloaded copies through the optional `FEEDBACK_ASSET_DIR` fixture route because the local test browser could not reach the CDN; this is not evidence of CDN loading in production. QA asserts both font faces loaded and logo naturalWidth > 0, and renders 390/768/1024/1280px widths. The email renderer requests the same fonts; clients without web-font support use the declared safe fallbacks, including Arial for legacy Outlook.
