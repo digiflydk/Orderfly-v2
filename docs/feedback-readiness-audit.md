@@ -10,7 +10,7 @@ Opdateret 9. september 2026. Denne opfølgning bygger på #88 og gør det priori
 | Aktivering | Transaktion med fælles låsedokument afviser konfliktende aktive versioner for sprog + pickup/delivery/booking. Et aktivt, sprogkompatibelt skema kan derefter vælges eksplicit pr. brand i Feedbackindstillinger. Uden valg bruges den hidtidige deterministiske standard. |
 | Kundesvar | Autoritative spørgsmål, kilde/kunde/brand og oplevelsestype valideres på serveren. Numeriske svar kræver faktiske tal; ægte NPS=0 bevares. Påkrævede svar og valgmuligheder valideres. Formularindhold bevares ved fejl. |
 | Dubletter | Deterministisk feedback-ID pr. brand/kildetype/kilde; transaktion respekterer også gamle ordresvar. Invitationens forbrug og eventuel tak-mail gemmes i samme transaktion som svaret. |
-| Adgang | Serververificeret Firebase-session med revokationskontrol. Feedbackrettigheder og brandtilknytning kommer fra betroet serverkonfiguration, ikke den gamle `hasPermission`-placeholder eller åbne rolle-/brugereditorer. Se releasekrav. |
+| Adgang | Fælles serververificeret Orderfly-session (Opsfly eller Firebase). Aktuelle centrale rettigheder og brandgrænser kontrolleres ved hver adgang; intet ekstra feedbacklogin. |
 | Moderation | Strengt feltskema; eksisterende post og brandadgang kræves. Private svar, offentlig projektion og moderationsaudit opdateres atomisk. Audit indeholder aktør, brand, feedback-ID, handling, feltnavne og tidspunkt; ingen notetekst. |
 | Kvalitetsrapport | `/superadmin/feedback/report`: periode, brand, lokation, onlineordre/restaurantbesøg, svarantal, rating, NPS, lave ratings, lokationssammenligning, udvikling pr. dag, CSV og udskrift. Kun aggregater sendes til rapportklienten. |
 | Offentlig visning | `/{brandSlug}/{locationSlug}/reviews`: kun godkendte projektioner fra den aktive lokation og det aktive brand. Brandets offentlig-visning-indstilling er fra som standard. Menulink vises først efter aktivering. |
@@ -20,24 +20,15 @@ Opdateret 9. september 2026. Denne opfølgning bygger på #88 og gør det priori
 
 ## Adgang og afgrænsning
 
-Den eksisterende Firebase-feedbacksession bevares som normal fail-closed adgang. Under den udtrykkeligt afgrænsede dummytest kan releaseansvarlig sætte `ORDERFLY_FEEDBACK_TEST_ACCESS` til den præcise værdi `enabled-for-dummy-data`. Så følger modulet den eksisterende Superadmin-grænse uden at vise den særskilte feedback-login, og UI viser en vedvarende advarsel. Det er ikke en erstatning for den planlagte fælles platform-login. Flaget skal fjernes, før miljøet indeholder rigtige kundedata.
+Feedback bruger `verifiedOrderflyIdentity()` fra den fælles administration. Opsfly-sessioner kontrolleres mod den aktive native session; Firebase-sessioner kontrolleres med revokation. Den verificerede identitet sendes til den centrale authority med provider og organisation intakt.
 
-| Rolle | Adgang |
-| --- | --- |
-| `platform_admin` | Alle feedbackbrands, moderation/indstillinger samt globale spørgeskemaer |
-| `brand_editor` | Læse rapport/feedback og moderere/ændre feedbackindstillinger for de angivne brands |
-| `brand_viewer` | Kun læse feedback/rapport for de angivne brands |
-
-Eksempel på **syntaks**, ikke produktionskonti:
-
-```json
-[
-  {"uid":"EXISTING_FIREBASE_ADMIN_UID","role":"platform_admin"},
-  {"uid":"EXISTING_FIREBASE_EDITOR_UID","role":"brand_editor","brandIds":["ESMERALDA_BRAND_ID"]}
-]
-```
-
-Dette beskytter feedbackmodulets servergrænser. Det er **ikke en færdig adgangsmodel for resten af Superadmin**. Legacy bruger-/rolle-/kunde-/ordreruter uden reel adgangskontrol skal gennemgås i et separat platformarbejde. Feedbackroller må ikke lagres i de åbne legacy-role-dokumenter. Adgang til andre kundeoplysninger ligger uden for denne ændring.
+- Centrale superbrugere har adgang til alle brands og globale spørgeskemaer.
+- Andre brugere kræver den konkrete `orderfly.feedback:view` eller `orderfly.feedback:edit`-rettighed med branddækkende grant. Lokationsbegrænsede grants giver ikke adgang til det branddækkende feedbackmodul.
+- Globale spørgsmål kræver superbruger; en brand-editor kan ikke ændre dem.
+- Manglende/ugyldig session fører til `/admin-login`. En logget ind bruger uden feedbackrettigheder får adgang afvist.
+- `/feedback-admin/login` er kun en viderestilling til `/superadmin/feedback`. Den tidligere særskilte formular er fjernet. Det gamle session-API bevares kompatibelt med samme origin-, token- og rettighedskontrol.
+- `ORDERFLY_FEEDBACK_ACCESS` og `ORDERFLY_FEEDBACK_TEST_ACCESS` giver ingen adgang og må ikke bruges som omgåelse.
+- Audit bevarer Firebase UID for eksisterende Firebase-brugere. Opsfly-handlinger bruger den centrale `actorId`, der entydigt inkluderer provider og organisation i principalnøglen.
 
 ## Rapportdefinitioner
 
@@ -93,8 +84,8 @@ Ingen af nedenstående runtimeændringer er udført fra Work.
 | --- | --- |
 | Data/Auth | Eksisterende **orderfly-39325**; må ikke flyttes til App Hosting-projektet |
 | Hosting | Eksisterende **orderfly-v21-10334086-b3076**; produktbilledlager fra #90 bevares uændret |
-| `ORDERFLY_FEEDBACK_ACCESS` | Betroede eksisterende Firebase UID'er, roller og brand-ID'er; konfigurér før feedbackruter tages i brug |
-| `ORDERFLY_FEEDBACK_TEST_ACCESS` | Kun dummytest: præcis `enabled-for-dummy-data`. Fjerner den særskilte feedback-login bag den eksisterende Superadmin-grænse. Fjernes før rigtige kundedata. |
+| `ORDERFLY_FEEDBACK_ACCESS` | Udfaset; ignoreres. Brug den centrale adgangspolitik. |
+| `ORDERFLY_FEEDBACK_TEST_ACCESS` | Udfaset; ignoreres. Ingen test-bypass. |
 | `ORDERFLY_NOTIFICATION_ENDPOINT` | Fast server-runtimeværdi: `https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/orderfly-notification-enqueue`; ingen query/hash eller browseradgang |
 | `ORDERFLY_NOTIFICATION_ORGANIZATION_ID` | Fast server-runtimeværdi: `aaa94d25-3ca6-4ebf-a673-164608db6c55` for Esmeralda Pizza & Restaurant |
 | `ORDERFLY_NOTIFICATION_SECRET` | Refererer i `apphosting.yaml` til den eksisterende Secret Manager-secret `ORDERFLY_ESMERALDA_INTEGRATION_SECRET`; værdien kopieres ikke og eksponeres aldrig i browser/Git |
@@ -175,3 +166,11 @@ Orderfly CI now runs the 53 targeted booking/mail/readiness tests and feedback b
 
 
 Reschedule hardening: new booking links use a v2 signed immutable scope with expiry checked on the server record. Initial expiry is 30 days after the later of now/planned end; an authorized active reschedule may extend it. V1 links retain their signed expiry deadline. Pending jobs receive the current token on handoff. Central delivery waits for the rescheduled version-1 handoff to complete, so an old queued URL is not suppressed before the server expiry refresh. Future visits remain pending in mPanel until planned end even during disabled rollout; enabling never backfills visits that ended while disabled. Tests cover long-lead links, reschedules, revocation/tampering/expiry and no premature future handoff.
+
+## OF-154: Fælles feedbacklogin
+
+Årsag: Feedback forsøgte at verificere enhver `__session` som Firebase, selv når den allerede var en gyldig Opsfly-session. Rettelsen genbruger den fælles identitetsverifikation og bevarer central autorisation.
+
+Regression: `feedback-central-access.cjs` tester begge providers, superbruger, brandafgrænsning, inaktiv/revokeret/manglende session og globale spørgsmål. `opsfly-login-browser.cjs` tester ét login efterfulgt af feedbackadgang, gamle bookmarks og afvisning efter revokation på mobil og desktop. Browsermiljøet bruger syntetisk auth/data, aldrig produktion.
+
+Release: PR til main → CI og uafhængigt review → PO-accept → merge → deployment → læsende livekontrol. Ingen produktionsændring eller aktivering af mails er del af den lokale rettelse.

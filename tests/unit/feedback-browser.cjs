@@ -17,8 +17,7 @@ before(async()=>{
  import {FeedbackSettingsView} from ${JSON.stringify(path.join(root,'src/app/superadmin/feedback/settings/settings-view.tsx'))};
  import {FeedbackDetailClient} from ${JSON.stringify(path.join(root,'src/app/superadmin/feedback/[feedbackId]/client-page.tsx'))};
  import {PublicReviewsView} from ${JSON.stringify(path.join(root,'src/components/feedback/public-reviews-view.tsx'))};
- import FeedbackLogin from ${JSON.stringify(path.join(root,'src/app/feedback-admin/login/page.tsx'))};
- const route=location.pathname;fetch('/data?path='+encodeURIComponent(route)+'&query='+encodeURIComponent(location.search)).then(r=>r.json()).then(data=>createRoot(document.getElementById('root')).render(route==='/login'?<FeedbackLogin/>:route==='/report'?<FeedbackReportView {...data}/>:route==='/settings'?<FeedbackSettingsView {...data}/>:route==='/detail'?<FeedbackDetailClient {...data}/>:route==='/reviews'?<PublicReviewsView {...data}/>:route==='/public'?<FeedbackFormClient {...data}/>:route.endsWith('/new')||route.includes('/edit/')?<QuestionForm {...data}/>:route==='/inbox'?<FeedbackClientPage {...data}/>:<QuestionList initialVersions={data}/>));`);
+ const route=location.pathname;fetch('/data?path='+encodeURIComponent(route)+'&query='+encodeURIComponent(location.search)).then(r=>r.json()).then(data=>createRoot(document.getElementById('root')).render(route==='/report'?<FeedbackReportView {...data}/>:route==='/settings'?<FeedbackSettingsView {...data}/>:route==='/detail'?<FeedbackDetailClient {...data}/>:route==='/reviews'?<PublicReviewsView {...data}/>:route==='/public'?<FeedbackFormClient {...data}/>:route.endsWith('/new')||route.includes('/edit/')?<QuestionForm {...data}/>:route==='/inbox'?<FeedbackClientPage {...data}/>:<QuestionList initialVersions={data}/>));`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const actions=file('actions',`const send=async(kind,data)=>{const response=await fetch('/action/'+kind,{method:'POST',body:data instanceof FormData?data:JSON.stringify(data),headers:data instanceof FormData?{}:{'content-type':'application/json'}});if(!response.ok)throw Error('Transport failed');const result=await response.json();if(result.redirect){location.assign(result.redirect);return;}return result;};
  export const createOrUpdateQuestionVersion=data=>send('version',data);export const submitFeedbackAction=(_,data)=>send('public',data);export const updateFeedback=(id,data)=>send('update',{id,data});export const deleteFeedback=id=>send('delete',{id});export const saveFeedbackSettings=data=>send('settings',data);export const retryFeedbackMail=(id,confirmed)=>send('retry',{id,confirmed});`);
@@ -144,16 +143,6 @@ test('mail settings persist zero delay and disabled options; uncertain jobs requ
  await page.reload();await page.getByText('Invitation · Kræver kontrol',{exact:true}).waitFor();assert.equal(await page.getByRole('button',{name:'Bekræft ikke modtaget og genstart',exact:true}).isVisible(),false);
  await page.getByText('Genstart efter kontrol',{exact:true}).click();await page.getByRole('button',{name:'Bekræft ikke modtaget og genstart',exact:true}).click();await page.getByText('Invitation · I kø',{exact:true}).waitFor();assert.equal(f.records.get('feedbackMailJobs/'+id).lastRetriedBy,'qa-platform');assert.doesNotMatch(await page.locator('body').innerText(),/PRIVATE_TOKEN|PRIVATE_EMAIL/);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
-});
-
-test('feedback login retains fields after session rejection and navigates only after acceptance',async t=>{
- const page=await setup(t,'/login',390);
- await page.getByLabel('E-mail',{exact:true}).fill('qa@example.test');await page.getByLabel('Adgangskode',{exact:true}).fill('synthetic-password');
- await page.route('**/api/feedback-admin/session',route=>route.fulfill({status:403,contentType:'application/json',body:'{"error":"Forbidden"}'}));
- await page.getByRole('button',{name:'Log ind',exact:true}).click();await page.getByRole('alert').waitFor();assert.equal(await page.getByLabel('E-mail',{exact:true}).inputValue(),'qa@example.test');assert.equal(await page.getByLabel('Adgangskode',{exact:true}).inputValue(),'synthetic-password');
- await page.unroute('**/api/feedback-admin/session');let payload;
- await page.route('**/api/feedback-admin/session',route=>{payload=route.request().postDataJSON();return route.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'});});
- await page.getByRole('button',{name:'Log ind',exact:true}).click();await page.waitForURL('**/superadmin/feedback');assert.deepEqual(payload,{idToken:'SYNTHETIC_ID_TOKEN'});
 });
 
 for(const width of [390,1280])test('booking delay units persist independently of order settings ('+width+')',async t=>{
