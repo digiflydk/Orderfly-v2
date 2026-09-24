@@ -10,6 +10,8 @@ function loadTs(filename, mocks = {}) {
   }).outputText;
   new Function('require', 'module', 'exports', code)(name => {
     if (name === '@/lib/server/firestore-compat' && mocks['firebase/firestore']) return {...mocks['firebase/firestore'],db:mocks['@/lib/firebase']?.db}; if (name in mocks) return mocks[name];
+    // Next App Router uses its compiled React, including render-scoped cache.
+    if (name === 'react') return require('next/dist/compiled/react');
     const local = name.startsWith('@/') ? path.resolve('src', name.slice(2))
       : name.startsWith('.') ? path.resolve(path.dirname(filename), name) : null;
     if (local) return loadTs(`${local}.ts`, mocks);

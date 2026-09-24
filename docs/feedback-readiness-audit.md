@@ -174,3 +174,5 @@ Reschedule hardening: new booking links use a v2 signed immutable scope with exp
 Regression: `feedback-central-access.cjs` tester begge providers, superbruger, brandafgrænsning, inaktiv/revokeret/manglende session og globale spørgsmål. `opsfly-login-browser.cjs` tester ét login efterfulgt af feedbackadgang, gamle bookmarks og afvisning efter revokation på mobil og desktop. Browsermiljøet bruger syntetisk auth/data, aldrig produktion.
 
 Release: PR til main → CI og uafhængigt review → PO-accept → merge → deployment → læsende livekontrol. Ingen produktionsændring eller aktivering af mails er del af den lokale rettelse.
+
+Reviewopfølgning: Den fælles identitetsverifikation anvender React `cache` inden for den enkelte server-rendering. Layout, side og brandhjælpere genbruger én verificering. Ingen identitet caches på tværs af requests; næste request kontrollerer native session eller Firebase-revokation igen.
