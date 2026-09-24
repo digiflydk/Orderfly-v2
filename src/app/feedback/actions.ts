@@ -8,6 +8,7 @@ import { readActiveQuestions, readActiveQuestionsForBrand } from '@/lib/feedback
 import { feedbackMetrics } from '@/lib/feedback/metrics';
 import { resolveOrderFeedbackInvitation, completedFeedbackOrder } from '@/lib/feedback/order-invitations';
 import { feedbackAutomation, feedbackMailConfig } from '@/lib/feedback/mail-config';
+import { feedbackThankYouHref } from '@/lib/feedback/presentation';
 import { pendingFeedbackMessage } from '@/lib/feedback/mail-queue';
 
 import { admin, getAdminDb } from '@/lib/firebase-admin';
@@ -123,6 +124,7 @@ function extractCoreResponses(responses: Record<string, { type: string; answer: 
 }
 
 export async function submitFeedbackAction(_prevState: any, formData: FormData) {
+  let thankYouHref = '/feedback/thank-you';
   try {
     let responses: Record<string, unknown> = {};
     try {
@@ -149,6 +151,7 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
     const source = await resolveAuthoritativeSource(parsed.data);
     if (!source) return { message: 'Feedback source could not be verified.', error: true };
 
+    thankYouHref = feedbackThankYouHref(source.brandId, parsed.data.language);
     const db = getAdminDb();
     const [questionsSnapshot, brandSettingsSnapshot] = await Promise.all([
       db.collection('feedbackQuestionsVersion').doc(parsed.data.questionVersionId).get(),
@@ -233,5 +236,5 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
     return { message: 'Feedback kunne ikke gemmes. Dine svar er bevaret. Prøv igen.', error: true };
   }
 
-  redirect('/feedback/thank-you');
+  redirect(thankYouHref);
 }

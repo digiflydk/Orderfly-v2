@@ -11,13 +11,14 @@ before(async()=>{
  const entry=file('entry',`import React from'react';import{createRoot}from'react-dom/client';
  import QuestionForm from ${JSON.stringify(path.join(root,'src/components/superadmin/feedback-question-version-form.tsx'))};
  import QuestionList from ${JSON.stringify(path.join(root,'src/app/superadmin/feedback/questions/client-page.tsx'))};
+ import {FeedbackThankYouView} from ${JSON.stringify(path.join(root,'src/components/feedback/thank-you-view.tsx'))};
  import {FeedbackFormClient} from ${JSON.stringify(path.join(root,'src/app/feedback/form-client.tsx'))};
  import {FeedbackClientPage} from ${JSON.stringify(path.join(root,'src/app/superadmin/feedback/client-page.tsx'))};
  import {FeedbackReportView} from ${JSON.stringify(path.join(root,'src/app/superadmin/feedback/report/report-view.tsx'))};
  import {FeedbackSettingsView} from ${JSON.stringify(path.join(root,'src/app/superadmin/feedback/settings/settings-view.tsx'))};
  import {FeedbackDetailClient} from ${JSON.stringify(path.join(root,'src/app/superadmin/feedback/[feedbackId]/client-page.tsx'))};
  import {PublicReviewsView} from ${JSON.stringify(path.join(root,'src/components/feedback/public-reviews-view.tsx'))};
- const route=location.pathname;fetch('/data?path='+encodeURIComponent(route)+'&query='+encodeURIComponent(location.search)).then(r=>r.json()).then(data=>createRoot(document.getElementById('root')).render(route==='/report'?<FeedbackReportView {...data}/>:route==='/settings'?<FeedbackSettingsView {...data}/>:route==='/detail'?<FeedbackDetailClient {...data}/>:route==='/reviews'?<PublicReviewsView {...data}/>:route==='/public'?<FeedbackFormClient {...data}/>:route.endsWith('/new')||route.includes('/edit/')?<QuestionForm {...data}/>:route==='/inbox'?<FeedbackClientPage {...data}/>:<QuestionList initialVersions={data}/>));`);
+ const route=location.pathname;fetch('/data?path='+encodeURIComponent(route)+'&query='+encodeURIComponent(location.search)).then(r=>r.json()).then(data=>createRoot(document.getElementById('root')).render(route==='/feedback/thank-you'?<FeedbackThankYouView {...data}/>:route==='/report'?<FeedbackReportView {...data}/>:route==='/settings'?<FeedbackSettingsView {...data}/>:route==='/detail'?<FeedbackDetailClient {...data}/>:route==='/reviews'?<PublicReviewsView {...data}/>:route==='/public'?<FeedbackFormClient {...data}/>:route.endsWith('/new')||route.includes('/edit/')?<QuestionForm {...data}/>:route==='/inbox'?<FeedbackClientPage {...data}/>:<QuestionList initialVersions={data}/>));`);
  const loader=file('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const actions=file('actions',`const send=async(kind,data)=>{const response=await fetch('/action/'+kind,{method:'POST',body:data instanceof FormData?data:JSON.stringify(data),headers:data instanceof FormData?{}:{'content-type':'application/json'}});if(!response.ok)throw Error('Transport failed');const result=await response.json();if(result.redirect){location.assign(result.redirect);return;}return result;};
  export const createOrUpdateQuestionVersion=data=>send('version',data);export const submitFeedbackAction=(_,data)=>send('public',data);export const updateFeedback=(id,data)=>send('update',{id,data});export const deleteFeedback=id=>send('delete',{id});export const saveFeedbackSettings=data=>send('settings',data);export const retryFeedbackMail=(id,confirmed)=>send('retry',{id,confirmed});`);
@@ -51,11 +52,12 @@ before(async()=>{
   if(url.pathname==='/data'){
    const pathname=url.searchParams.get('path');let data;
    if(pathname==='/login')data={};
+   else if(pathname==='/feedback/thank-you')data={brandId:'oeypKaMyYcQjIwaa1PtV',brandName:'Esmeralda Pizza',language:'da',href:'https://www.esmeraldapizza.dk'};
    else if(pathname==='/report')data={report:await f.report.getFeedbackReport(Object.fromEntries(new URLSearchParams(url.searchParams.get('query')||'')))};
    else if(pathname==='/settings')data={brands:[{id:'b',name:'Esmeralda QA',slug:'esmeralda',...await f.settings.readFeedbackSettings('b')}],locations:[{id:'l',name:'Amager',brandId:'b',slug:'amager'}],questionVersions:[{id:'v1',name:'Besøg',language:'da',orderTypes:['pickup','booking']},{id:'en',name:'English',language:'en',orderTypes:['pickup']}],canEdit:true,jobs:await f.mailAdmin.feedbackMailJobs('b')};
    else if(pathname==='/detail')data={initialFeedback:{...await f.admin.getFeedbackById('f'),customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager'},canEdit:true};
    else if(pathname==='/reviews')data={locationName:'Amager',menuHref:'/menu',reviews:(await f.reviews.readPublicReviews('b','l'))?.reviews||[]};
-   else if(pathname==='/public')data={context:{sourceType:'commerce_order',sourceId:'order',customerId:'c',locationId:'l',brandId:'b',brandName:'Esmeralda QA',experienceType:'pickup',displayReference:'QA order'},questionsVersion:await f.store.readQuestionVersion('v1')};
+   else if(pathname==='/public')data={context:{sourceType:'commerce_order',sourceId:'order',customerId:'c',locationId:'l',brandId:'oeypKaMyYcQjIwaa1PtV',brandName:'Esmeralda Pizza',experienceType:'pickup',displayReference:'QA order'},questionsVersion:await f.store.readQuestionVersion('v1')};
    else if(pathname==='/inbox')data={initialFeedback:(await f.admin.getFeedbackEntries()).map(row=>({...row,customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',questionVersionLabel:'Besøg'})),brands:[{id:'b',name:'Esmeralda QA'}],locations:[{id:'l',name:'Amager',brandId:'b'}]};
    else if(pathname.endsWith('/new')||pathname.includes('/edit/'))data={mode:pathname.endsWith('/new')?'create':'edit',version:pathname.endsWith('/new')?undefined:await f.store.readQuestionVersion(pathname.split('/').pop()),supportedLanguages:[{code:'da',name:'Dansk'},{code:'en',name:'English'}]};
    else data=await f.admin.getFeedbackQuestionVersions();
@@ -88,11 +90,12 @@ test('create version, reopen, edit, list canonical name and retain draft on tran
  await page.goto(origin+'/superadmin/feedback/questions');await page.getByText('QA updated',{exact:true}).waitFor();await page.getByText('Besøg',{exact:true}).waitFor();assert.equal(await page.getByText('stale-id',{exact:true}).count(),0);
 });
 for(const width of [390,1280])test(`required answer, retry after transport error and successful feedback (${width})`,async t=>{
- const page=await setup(t,'/public',width);await page.getByRole('button',{name:'Send feedback',exact:true}).click();await page.getByRole('alert').filter({hasText:'Required feedback question is missing'}).waitFor();
- await page.getByRole('button',{name:'4 stars',exact:true}).click();await page.getByPlaceholder('Your feedback...').fill('God oplevelse');
- await page.route('**/action/public',route=>route.fulfill({status:503,body:'Unavailable'}));await page.getByRole('button',{name:'Send feedback',exact:true}).click();await page.getByRole('alert').filter({hasText:'Dine svar er bevaret'}).waitFor();
- assert.equal(await page.getByPlaceholder('Your feedback...').inputValue(),'God oplevelse');assert.equal(await page.getByRole('button',{name:'4 stars',exact:true}).getAttribute('aria-pressed'),'true');await page.unroute('**/action/public');
- await page.getByRole('button',{name:'Send feedback',exact:true}).click();await page.waitForURL('**/feedback/thank-you');
+ const page=await setup(t,'/public',width);await page.getByTestId('feedback-experience').waitFor();assert.equal(await page.getByTestId('feedback-experience').getAttribute('data-brand'),'esmeralda');if(process.env.FEEDBACK_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.FEEDBACK_SCREENSHOT_DIR,'feedback-'+width+'.png'),fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),'Feedback must fit the viewport');await page.getByRole('button',{name:'Send din feedback',exact:true}).click();await page.getByRole('alert').filter({hasText:'Besvar venligst alle spørgsmål markeret med *.'}).waitFor();
+ await page.getByRole('button',{name:'4 stjerner',exact:true}).click();await page.getByPlaceholder('Fortæl os, hvad der var godt, eller hvad vi kan gøre bedre…').fill('God oplevelse');
+ await page.route('**/action/public',route=>route.fulfill({status:503,body:'Unavailable'}));await page.getByRole('button',{name:'Send din feedback',exact:true}).click();await page.getByRole('alert').filter({hasText:'Dine svar er bevaret'}).waitFor();
+ assert.equal(await page.getByPlaceholder('Fortæl os, hvad der var godt, eller hvad vi kan gøre bedre…').inputValue(),'God oplevelse');assert.equal(await page.getByRole('button',{name:'4 stjerner',exact:true}).getAttribute('aria-pressed'),'true');await page.unroute('**/action/public');
+ await page.getByRole('button',{name:'Send din feedback',exact:true}).click();await page.waitForURL('**/feedback/thank-you?brand=b&lang=da');
+ await page.getByRole('heading',{name:'Tak for din feedback',exact:true}).waitFor();assert.equal(await page.getByRole('link',{name:'Besøg vores hjemmeside'}).getAttribute('href'),'https://www.esmeraldapizza.dk');if(process.env.FEEDBACK_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.FEEDBACK_SCREENSHOT_DIR,'thanks-'+width+'.png'),fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  const entries=await f.admin.getFeedbackEntries();assert.equal(entries.length,1);assert.equal(entries[0].rating,4);assert.equal(entries[0].comment,'God oplevelse');
 });
 test('inbox renders missing dates and rolls back moderation on lost network response',async t=>{
@@ -124,7 +127,8 @@ test('review, approve, render anonymously and withdraw an actual public review',
  const page=await setup(t,'/inbox');
  f.records.set('feedback/f',{brandId:'b',locationId:'l',customerId:'c',receivedAt:new Date('2026-09-09T10:00:00Z'),rating:5,comment:'God mad. Kontakt private@example.test',internalNote:'PRIVATE_NOTE',showPublicly:false,maskCustomerName:true});
  await f.settings.writeFeedbackSettings({brandId:'b',publicReviewsEnabled:true});
- await page.goto(origin+'/detail');await page.getByLabel('Tekst til offentlig visning',{exact:true}).fill('God mad. private@example.test');
+ await page.goto(origin+'/inbox');await page.getByText('QA Guest',{exact:true}).waitFor();
+ await page.goto(origin+'/detail');await page.getByText('QA Guest',{exact:true}).waitFor();await page.getByLabel('Tekst til offentlig visning',{exact:true}).fill('God mad. private@example.test');
  await page.getByRole('switch',{name:'Godkend til offentlig visning',exact:true}).check();await page.waitForFunction(()=>!document.querySelector('#showPublicly').disabled);
  assert.equal(f.records.get('feedback/f').showPublicly,true);
  await page.goto(origin+'/reviews');await page.getByText('Anonym kunde',{exact:true}).waitFor();await page.getByText('God mad. [e-mail fjernet]',{exact:true}).waitFor();

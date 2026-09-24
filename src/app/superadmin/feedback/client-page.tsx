@@ -112,7 +112,7 @@ export function FeedbackClientPage({ initialFeedback, brands, locations, canEdit
             return <TableRow key={feedback.id}>
               <TableCell><div className="space-y-1"><Badge variant={source === 'booking' ? 'secondary' : 'outline'}>{source === 'booking' ? 'Booking' : 'Online order'}</Badge><div className="max-w-36 truncate font-mono text-xs text-muted-foreground" title={sourceId}>{sourceId}</div></div></TableCell>
               <TableCell><RatingStars rating={feedback.rating} /></TableCell>
-              <TableCell>{feedback.maskCustomerName ? 'Anonymous' : feedback.customerName}</TableCell>
+              <TableCell>{feedback.customerName}</TableCell>
               <TableCell>{feedback.locationName}</TableCell>
               <TableCell>{feedbackDate(feedback.receivedAt)}</TableCell>
               <TableCell><Switch disabled={busy || !canEdit} aria-label="Show publicly" checked={feedback.showPublicly} onCheckedChange={(value) => toggle(feedback.id, value)} /></TableCell>
