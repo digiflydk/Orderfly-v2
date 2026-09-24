@@ -4,6 +4,14 @@ const fs=require('node:fs'),os=require('node:os'),path=require('node:path'),http
 const {chromium}=require('@playwright/test');
 const {fixture}=require('../helpers/feedback-fixture.cjs');
 const webpackModule=require('next/dist/compiled/webpack/webpack');webpackModule.init();
+const esmeraldaBrand='oeypKaMyYcQjIwaa1PtV';
+async function thankYouProps(query){
+ const ts=require('typescript'),jsx=(type,props)=>({type,props});
+ const mocks={...f.mocks,'react/jsx-runtime':{jsx,jsxs:jsx},'@/components/feedback/thank-you-view':{FeedbackThankYouView:'view'},'@/lib/next/resolve-props':{resolveSearchParams:async p=>p},'@/lib/feedback/presentation':require('../helpers/load-ts.cjs').loadTs('src/lib/feedback/presentation.ts',{})};
+ const code=ts.transpileModule(fs.readFileSync('src/app/feedback/thank-you/page.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+ const mod={exports:{}};new Function('require','module','exports',code)(name=>{assert.ok(name in mocks,name);return mocks[name]},mod,mod.exports);
+ return (await mod.exports.default({searchParams:Promise.resolve(Object.fromEntries(new URLSearchParams(query)))})).props;
+}
 const root=process.cwd();let dir,server,browser,origin,f;
 function file(name,code){const target=path.join(dir,name+'.js');fs.writeFileSync(target,code);return target;}
 before(async()=>{
@@ -52,12 +60,12 @@ before(async()=>{
   if(url.pathname==='/data'){
    const pathname=url.searchParams.get('path');let data;
    if(pathname==='/login')data={};
-   else if(pathname==='/feedback/thank-you')data={brandId:'oeypKaMyYcQjIwaa1PtV',brandName:'Esmeralda Pizza',language:'da',href:'https://www.esmeraldapizza.dk'};
+   else if(pathname==='/feedback/thank-you')data=await thankYouProps(url.searchParams.get('query')||'');
    else if(pathname==='/report')data={report:await f.report.getFeedbackReport(Object.fromEntries(new URLSearchParams(url.searchParams.get('query')||'')))};
    else if(pathname==='/settings')data={brands:[{id:'b',name:'Esmeralda QA',slug:'esmeralda',...await f.settings.readFeedbackSettings('b')}],locations:[{id:'l',name:'Amager',brandId:'b',slug:'amager'}],questionVersions:[{id:'v1',name:'Besøg',language:'da',orderTypes:['pickup','booking']},{id:'en',name:'English',language:'en',orderTypes:['pickup']}],canEdit:true,jobs:await f.mailAdmin.feedbackMailJobs('b')};
    else if(pathname==='/detail')data={initialFeedback:{...await f.admin.getFeedbackById('f'),customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager'},canEdit:true};
    else if(pathname==='/reviews')data={locationName:'Amager',menuHref:'/menu',reviews:(await f.reviews.readPublicReviews('b','l'))?.reviews||[]};
-   else if(pathname==='/public')data={context:{sourceType:'commerce_order',sourceId:'order',customerId:'c',locationId:'l',brandId:'oeypKaMyYcQjIwaa1PtV',brandName:'Esmeralda Pizza',experienceType:'pickup',displayReference:'QA order'},questionsVersion:await f.store.readQuestionVersion('v1')};
+   else if(pathname==='/public')data={context:{sourceType:'commerce_order',sourceId:'order',customerId:'c',locationId:'l',brandId:f.records.get('orders/order').brandId,brandName:f.records.get('brands/'+f.records.get('orders/order').brandId).name,experienceType:'pickup',displayReference:'QA order'},questionsVersion:await f.store.readQuestionVersion('v1')};
    else if(pathname==='/inbox')data={initialFeedback:(await f.admin.getFeedbackEntries()).map(row=>({...row,customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',questionVersionLabel:'Besøg'})),brands:[{id:'b',name:'Esmeralda QA'}],locations:[{id:'l',name:'Amager',brandId:'b'}]};
    else if(pathname.endsWith('/new')||pathname.includes('/edit/'))data={mode:pathname.endsWith('/new')?'create':'edit',version:pathname.endsWith('/new')?undefined:await f.store.readQuestionVersion(pathname.split('/').pop()),supportedLanguages:[{code:'da',name:'Dansk'},{code:'en',name:'English'}]};
    else data=await f.admin.getFeedbackQuestionVersions();
@@ -75,8 +83,8 @@ before(async()=>{
  browser=await chromium.launch({headless:true,executablePath:process.env.CART_CHROMIUM_PATH,args:['--no-sandbox','--disable-dev-shm-usage']});
 });
 after(async()=>{await browser?.close();await new Promise(resolve=>server?.close(resolve));if(dir)fs.rmSync(dir,{recursive:true,force:true});});
-async function setup(t,pathname,width=390){
- f=fixture();const context=await browser.newContext({viewport:{width,height:900}});t.after(()=>context.close());
+async function setup(t,pathname,width=390,brand=esmeraldaBrand){
+ f=fixture();if(pathname==='/public'){f.records.set('brands/'+esmeraldaBrand,{name:'Esmeralda Pizza',slug:'esmeralda',status:'active'});for(const key of ['orders/order','customers/c','locations/l'])f.records.set(key,{...f.records.get(key),brandId:brand});}const context=await browser.newContext({viewport:{width,height:900}});t.after(()=>context.close());
  const page=await context.newPage();page.setDefaultTimeout(7000);
  // Optional local copies are the exact published Webflow font/logo bytes, for offline visual QA.
  if(process.env.FEEDBACK_ASSET_DIR)await page.route('https://cdn.prod.website-files.com/6a6c7110638d57d95365ad1c/*',route=>{const asset=path.join(process.env.FEEDBACK_ASSET_DIR,new URL(route.request().url()).pathname.split('/').pop());return fs.existsSync(asset)?route.fulfill({path:asset,headers:{'access-control-allow-origin':'*'}}):route.abort();});const errors=[];page.on('pageerror',e=>errors.push(e.message));t.after(()=>assert.deepEqual(errors,[]));
@@ -96,7 +104,7 @@ for(const width of [390,768,1024,1280])test(`required answer, retry after transp
  await page.getByRole('button',{name:'4 stjerner',exact:true}).click();await page.getByPlaceholder('Fortæl os, hvad der var godt, eller hvad vi kan gøre bedre…').fill('God oplevelse');
  await page.route('**/action/public',route=>route.fulfill({status:503,body:'Unavailable'}));await page.getByRole('button',{name:'Send din feedback',exact:true}).click();await page.getByRole('alert').filter({hasText:'Dine svar er bevaret'}).waitFor();
  assert.equal(await page.getByPlaceholder('Fortæl os, hvad der var godt, eller hvad vi kan gøre bedre…').inputValue(),'God oplevelse');assert.equal(await page.getByRole('button',{name:'4 stjerner',exact:true}).getAttribute('aria-pressed'),'true');await page.unroute('**/action/public');
- await page.getByRole('button',{name:'Send din feedback',exact:true}).click();await page.waitForURL('**/feedback/thank-you?brand=b&lang=da');
+ await page.getByRole('button',{name:'Send din feedback',exact:true}).click();await page.waitForURL('**/feedback/thank-you?brand='+esmeraldaBrand+'&lang=da');
  await page.getByRole('heading',{name:'Tak for din feedback',exact:true}).waitFor();assert.equal(await page.getByRole('link',{name:'Besøg vores hjemmeside'}).getAttribute('href'),'https://www.esmeraldapizza.dk');await page.evaluate(()=>document.fonts.ready);if(process.env.FEEDBACK_ASSET_DIR){assert.equal(await page.evaluate(()=>document.fonts.check('38px "Bourton Base"')&&document.fonts.check('16px "Brandon Text Office Regular"')),true);assert.equal(await page.locator('.es-header-v2__logo').evaluate(img=>img.complete&&img.naturalWidth>0),true);}if(process.env.FEEDBACK_SCREENSHOT_DIR)await page.screenshot({path:path.join(process.env.FEEDBACK_SCREENSHOT_DIR,'thanks-'+width+'.png'),fullPage:true});assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
  const entries=await f.admin.getFeedbackEntries();assert.equal(entries.length,1);assert.equal(entries[0].rating,4);assert.equal(entries[0].comment,'God oplevelse');
 });
@@ -165,4 +173,19 @@ for(const width of [390,1280])test('booking delay units persist independently of
  assert.equal(await page.getByLabel('Ventetid efter første afsendelse',{exact:true}).inputValue(),'2');
  assert.equal(await page.getByRole('switch',{name:'Automatisk feedback efter restaurantbesøg',exact:true}).isChecked(),true);
  assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+});
+
+test('other tenant retains generic palette and source-derived thank-you branding',async t=>{
+ const page=await setup(t,'/public',390,'other');
+ await page.getByTestId('feedback-experience').waitFor();
+ assert.equal(await page.getByTestId('feedback-experience').getAttribute('data-brand'),'restaurant');
+ assert.notEqual(await page.getByTestId('feedback-experience').evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(0, 0, 0)');
+ await page.getByRole('button',{name:'4 stjerner',exact:true}).click();
+ assert.notEqual(await page.getByRole('button',{name:'4 stjerner',exact:true}).locator('svg').evaluate(el=>getComputedStyle(el).color),'rgb(233, 170, 63)');
+ await page.getByRole('button',{name:'Send din feedback',exact:true}).click();
+ await page.waitForURL('**/feedback/thank-you?brand=other&lang=da');
+ await page.getByRole('heading',{name:'Tak for din feedback',exact:true}).waitFor();
+ assert.equal(await page.getByTestId('feedback-experience').getAttribute('data-brand'),'restaurant');
+ assert.equal(await page.getByRole('link',{name:'Besøg vores hjemmeside'}).getAttribute('href'),'/other');
+ assert.equal(await page.locator('.es-header-v2__logo').count(),0);
 });
