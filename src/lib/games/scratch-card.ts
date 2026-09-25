@@ -26,13 +26,31 @@ export const scratchCardDraftSchema = z.object({
   if (new Set(draft.paths).size !== draft.paths.length)
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['paths'], message: 'En side må kun stå én gang.' });
   if (draft.prizes.reduce((sum,p)=>sum+p.probabilityPercent,0) > 100)
-    ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Samlet vinderchance må højst være 100 % pr. kort.' });
+    ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Samlet vinderchance må højst være 100 % pr. spil.' });
   if (draft.prizes.some(p=>p.maxWinners>draft.totalCardLimit))
     ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Et præmieloft kan ikke overstige kampagnens antal kort.' });
   if (draft.prizes.some(p => p.type === 'percent' && (p.value <= 0 || p.value > 100) || p.type === 'amount' && p.value <= 0 || p.type === 'item' && p.value !== 0))
     ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Ugyldig værdi for præmietypen.' });
 });
 export type ScratchCardDraft = z.infer<typeof scratchCardDraftSchema>;
+
+// A brand-specific, unsaved test preset. No public campaign or prize claim is
+// created merely by opening the editor or running the preview.
+export function esmeraldaScratchTest(brandId: string): ScratchCardDraft {
+  return scratchCardDraftSchema.parse({
+    brandId,
+    title:'Skrab 3 felter og vind hos Esmeralda',
+    instruction:'Skrab alle tre felter. Tre ens symboler viser din testpræmie.',
+    revealText:'Ingen gevinst denne gang',
+    logoUrl:'', cardsPerPlay:3, totalCardLimit:3000,
+    prizes:[
+      {name:'Pizza',type:'item',value:0,probabilityPercent:10,maxWinners:1000},
+      {name:'Tiramisu',type:'item',value:0,probabilityPercent:25,maxWinners:1000},
+      {name:'Pommes frites',type:'item',value:0,probabilityPercent:65,maxWinners:1000},
+    ],
+    placement:'selected',paths:['/'],
+  });
+}
 
 export function scratchCardOnPage(draft: ScratchCardDraft, pathname: string): boolean {
   return draft.placement === 'all' || draft.paths.includes(pathname);
