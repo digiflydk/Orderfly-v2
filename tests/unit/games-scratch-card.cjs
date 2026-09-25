@@ -19,3 +19,13 @@ test('page paths reject external URLs, double slashes and duplicates',()=>{
   for (const paths of [['https://example.com'],['//other'],['/menu','/menu'],['/menu?token=x']])
     assert.equal(validate({...base,paths}),false);
 });
+test('configured odds and winner caps cannot exceed campaign limits',()=>{
+  const settings={...base,cardsPerPlay:3,totalCardLimit:50,prizes:[
+    {name:'Dessert',type:'item',value:0,probabilityPercent:60,maxWinners:20},
+    {name:'Rabat',type:'percent',value:10,probabilityPercent:41,maxWinners:20},
+  ]};
+  assert.equal(validate(settings),false);
+  assert.equal(validate({...settings,prizes:[{...settings.prizes[0],probabilityPercent:10,maxWinners:51}]}),false);
+  assert.equal(validate({...settings,prizes:[{...settings.prizes[0],probabilityPercent:10,maxWinners:20}]}),true);
+  assert.equal(validate({...settings,cardsPerPlay:7}),false);
+});
