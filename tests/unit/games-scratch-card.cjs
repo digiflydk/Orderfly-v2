@@ -29,3 +29,12 @@ test('configured odds and winner caps cannot exceed campaign limits',()=>{
   assert.equal(validate({...settings,prizes:[{...settings.prizes[0],probabilityPercent:10,maxWinners:20}]}),true);
   assert.equal(validate({...settings,cardsPerPlay:7}),false);
 });
+test('Esmeralda test game draws one outcome per play with 10/25/65 boundaries',()=>{
+  const board = pathToFileURL(path.resolve('src/lib/games/scratch-card-preview.ts')).href;
+  const script = `Promise.all([import(${JSON.stringify(source)}),import(${JSON.stringify(board)})]).then(([config,preview])=>{const game=config.esmeraldaScratchTest('esmeralda');const rolls=[0,.0999,.1,.3499,.35,.9999];process.stdout.write(JSON.stringify({game,boards:rolls.map(roll=>preview.drawScratchBoard(game.prizes,3,game.revealText,roll))}));})`;
+  const {game,boards}=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
+  assert.equal(game.cardsPerPlay,3);
+  assert.deepEqual(game.prizes.map(p=>p.probabilityPercent),[10,25,65]);
+  assert.deepEqual(boards.map(b=>b[0]),['Pizza','Pizza','Tiramisu','Tiramisu','Pommes frites','Pommes frites']);
+  for(const b of boards)assert.equal(new Set(b).size,1);
+});
