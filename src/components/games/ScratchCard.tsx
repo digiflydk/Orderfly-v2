@@ -1,19 +1,9 @@
 'use client';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { ScratchCardDraft } from '@/lib/games/scratch-card';
+import { drawScratchBoard } from '@/lib/games/scratch-card-preview';
 
 type Prize = ScratchCardDraft['prizes'][number];
-function sample(prizes:Prize[], count:number):string[] {
-  return Array.from({length:count},()=>{
-    const draw=Math.random()*100;
-    let cumulative=0;
-    for(const prize of prizes) {
-      cumulative+=Math.max(0,Number(prize.probabilityPercent)||0);
-      if(draw<cumulative) return prize.name;
-    }
-    return '';
-  });
-}
 function Surface({label,index,round}:{label:string;index:number;round:number}) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const drawing = useRef(false);
@@ -73,14 +63,14 @@ function Surface({label,index,round}:{label:string;index:number;round:number}) {
 export function ScratchCard({brandName,logoUrl,title,instruction,noWinText,cardsPerPlay,prizes}:{brandName:string;logoUrl:string;title:string;instruction:string;noWinText:string;cardsPerPlay:number;prizes:Prize[]}) {
   const [round,setRound]=useState(0);
   const [outcomes,setOutcomes]=useState<string[]>([]);
-  useEffect(()=>setOutcomes(sample(prizes,cardsPerPlay)),[round,cardsPerPlay,prizes]);
+  useEffect(()=>setOutcomes(drawScratchBoard(prizes,cardsPerPlay,noWinText,Math.random())),[round,cardsPerPlay,prizes,noWinText]);
   return <section className="w-full min-w-0 rounded-2xl border border-yellow-400 bg-[#111] p-4 text-center text-white shadow-xl sm:p-6">
     {logoUrl?<img src={logoUrl} alt={`${brandName} logo`} className="mx-auto mb-3 max-h-16 max-w-[180px] object-contain"/>:<div className="text-xs font-semibold uppercase tracking-[.2em] text-yellow-400">{brandName}</div>}
     <div className="text-xs font-semibold uppercase tracking-[.2em] text-yellow-400">Scratch Card · Test</div>
     <h2 className="mt-3 text-xl font-bold sm:text-2xl">{title}</h2>
     <p className="mt-2 text-sm text-gray-300">{instruction}</p>
     <div className={`mt-6 grid gap-3 ${cardsPerPlay>1?'grid-cols-2':'grid-cols-1'}`}>
-      {Array.from({length:cardsPerPlay},(_,index)=><Surface key={`${round}-${index}`} index={index} round={round} label={outcomes[index]||noWinText}/>)}
+      {Array.from({length:cardsPerPlay},(_,index)=><Surface key={`${round}-${index}`} index={index} round={round} label={outcomes[index]||'…'}/>)}
     </div>
     <button type="button" onClick={()=>setRound(n=>n+1)} className="mt-5 rounded-md border border-white/60 px-4 py-2 text-sm">Ny test med samme sandsynligheder</button>
     <p className="mt-4 text-xs text-gray-400">Administrator-preview: Ingen præmie eller rabatkode bliver udstedt.</p>
