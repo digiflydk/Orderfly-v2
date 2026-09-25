@@ -1,5 +1,6 @@
 # Orderfly — Documentation Index
 
+- **[games-scratch-card.md](games-scratch-card.md)** — Games and Scratch Card draft preview, data, access and launch boundary
 - **[unified-order-flow-71.md](unified-order-flow-71.md)** — Unified cart, inline upsell, newsletter consent and Omnisend activation
 - **[qa-order-flow-71.md](qa-order-flow-71.md)** — Focused local evidence and remaining release QA
 - **[esmeralda-invoice-attribution.md](esmeralda-invoice-attribution.md)** — Paid invoice snapshot, coordinated email contract, Esmeralda storefront scope and campaign/funnel tracking
