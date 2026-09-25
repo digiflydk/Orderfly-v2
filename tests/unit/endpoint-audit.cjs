@@ -16,7 +16,8 @@ for(const name of ['list','download','bundle'])test(`internal docs ${name} autho
 function consentFixture(){
  let cookie;const records=new Map([['brands/b',{isActive:true}],['anonymous_cookie_consents/11111111-1111-4111-8111-111111111111',{marketing:false,linked_to_customer:true}]]);
  const snapshot=path=>({exists:records.has(path),data:()=>structuredClone(records.get(path))});
- const route=loadTs('src/app/api/consent/save-anonymous/route.ts',{'next/server':{NextResponse:Reply},'next/headers':{cookies:async()=>({get:()=>cookie?{value:cookie}:undefined})},'@/lib/url':{getOrigin:async()=> 'https://fixture.test'},
+ const identity=loadTs('src/lib/server/consent-identity.ts',{'server-only':{},'next/headers':{cookies:async()=>({get:()=>cookie?{value:cookie}:undefined})}});
+ const route=loadTs('src/app/api/consent/save-anonymous/route.ts',{'@/lib/server/consent-identity':identity,'next/server':{NextResponse:Reply},'next/headers':{cookies:async()=>({get:()=>cookie?{value:cookie}:undefined})},'@/lib/url':{getOrigin:async()=> 'https://fixture.test'},
  '@/lib/firebase-admin':{getAdminFieldValue:()=>({serverTimestamp:()=> 'now'}),getAdminDb:()=>({collection:c=>({doc:id=>c+'/'+id}),runTransaction:async run=>{const writes=[];const result=await run({get:async ref=>snapshot(ref),set:(ref,value)=>writes.push([ref,value])});for(const [ref,value]of writes)records.set(ref,{...records.get(ref),...value});return result;}})},
  });
  const input={anon_user_id:'11111111-1111-4111-8111-111111111111',marketing:true,statistics:true,functional:true,necessary:true,consent_version:'v1',origin_brand:'b',brand_id:'b',shared_scope:'orderfly'};
@@ -54,4 +55,10 @@ test('claimed upsell is accepted only when native offer scope, product and trigg
 test('public website projection excludes internal AI prompts and future private fields',()=>{
  const {publicGeneralSettings}=loadTs('src/lib/public-general-settings.ts');
  assert.deepEqual(publicGeneralSettings({websiteTitle:'Fixture',logoUrl:'/logo.png',aiSystemPrompt:'private',aiSystemPromptOpenAI:'private',aiProvider:'openai',aiModel:'private',futureSecret:'private'}),{websiteTitle:'Fixture',logoUrl:'/logo.png'});
+});
+
+test('older consent request cannot reverse a newer withdrawal at the database',async()=>{
+ const f=consentFixture(),first=await f.post({...f.input,choice_revision:1});const id=(await first.json()).anon_user_id;f.setCookie(first.cookie.value);
+ await f.post({...f.input,marketing:false,choice_revision:3});await f.post({...f.input,marketing:true,choice_revision:2});
+ assert.equal(f.records.get('anonymous_cookie_consents/'+id).marketing,false);
 });

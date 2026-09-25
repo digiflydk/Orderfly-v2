@@ -1,6 +1,7 @@
 'use server';
 
 import {getAdminDb} from '@/lib/firebase-admin';
+import {linkCheckoutConsent} from '@/lib/server/consent-identity';
 import {recordNewsletterConsent} from '@/lib/marketing/store';
 import { ore, money, sumMoney, percentageMoney } from '@/lib/money';
 import { trackServerEvent } from '@/lib/analytics-server';
@@ -86,28 +87,12 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     return { customerRef: scopedRef, customerDoc: scopedDoc, normalizedEmail };
 }
 
-async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: string, locationId: string, newOrderTotal: number, anonymousConsentId?: string, newsletterDiscountId?: string): Promise<string> {
+async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: string, locationId: string, newOrderTotal: number, newsletterDiscountId?: string): Promise<string> {
     try {
         const { customerRef, customerDoc, normalizedEmail } = await resolveCheckoutCustomerRef(customerInfo, brandId);
         const customerId = customerRef.id;
-        let cookieConsentData: Customer['cookie_consent'] | undefined = undefined;
-
-        if (anonymousConsentId) {
-            cookieConsentData = await optionalCheckoutValue(async () => {
-                const ref = doc(db, 'anonymous_cookie_consents', anonymousConsentId);
-                const snapshot = await getDoc(ref);
-                if (!snapshot.exists()) return undefined;
-                const data = snapshot.data() as AnonymousCookieConsent;
-                const timestamp = asDate(data.last_seen);
-                if (!timestamp || Number.isNaN(timestamp.getTime())) return undefined;
-                await updateDoc(ref, { linked_to_customer: true });
-                return {
-                    marketing: data.marketing, statistics: data.statistics, functional: data.functional,
-                    timestamp, consent_version: data.consent_version,
-                    linked_anon_id: anonymousConsentId, origin_brand: data.origin_brand,
-                };
-            }, undefined);
-        }
+        // Request UUIDs are untrusted; only the server cookie capability can link consent.
+        const cookieConsentData = await optionalCheckoutValue(() => linkCheckoutConsent(brandId), undefined);
 
         if (customerDoc.exists()) {
             const customerData = customerDoc.data() as Customer;
@@ -489,7 +474,7 @@ export async function createStripeCheckoutSessionAction(
     };
 
     stage = 'customer';
-    const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, anonymousConsentId, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined);
+    const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined);
 
     if (customerInfo.subscribeToNewsletter) {
       stage = 'newsletter_consent';
@@ -595,7 +580,6 @@ export async function createStripeCheckoutSessionAction(
             brandId,
             locationId,
             appliedDiscountId: appliedDiscountIdForOrder || '',
-            anonymousConsentId: anonymousConsentId || '',
         },
         payment_intent_data: {
             statement_descriptor_suffix: makeDescriptorSuffix(location.city),

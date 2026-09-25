@@ -15,8 +15,13 @@ Build/deploy must preserve Firebase data project orderfly-39325 and hosting proj
 
 ## Implementation verification (2026-09-25)
 - TypeScript typecheck: passed.
-- Complete non-browser unit inventory: 555 passed, zero skipped/failed.
+- Complete non-browser unit inventory: 561 passed, zero skipped/failed.
 - Real Chromium cart/checkout/commerce browser regressions: 83 passed, zero skipped/failed.
 - Additional baseline fixture repairs preserve real scoped product readers and RSC serialization, load the public location projection, and explicitly distinguish optional empty topping groups from mandatory groups that must reject restoration.
 - The normal Playwright browser download returned invalid archives in this workspace. Browser regressions ran using isolated npm-distributed Chromium 153; no project dependency or browser gate was changed.
 - These results do not include deployed production verification.
+
+## Independent review corrections
+Checkout now resolves consent from the same server cookie capability and checks its native brand inside the link transaction. A submitted UUID cannot select, copy or mark another browser's consent, including through the archived checkout import path. The browser no longer supplies consent authority, and Stripe metadata no longer repeats its unverified UUID.
+
+Consent choices are queued before network I/O, serialized, and acknowledged by exact pending value. A late acknowledgement cannot discard a newer failed withdrawal. A monotonic persisted choice revision also prevents a timed-out older request from overwriting a newer choice in the database. Tests cover active checkout with a forged foreign UUID, missing/wrong cookie, foreign brand, late acknowledgement plus failed withdrawal and out-of-order server requests.
