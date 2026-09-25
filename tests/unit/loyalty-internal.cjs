@@ -45,21 +45,35 @@ function fixture() {
     },
     Timestamp: { now: () => now },
   };
-  const settings = load('src/app/superadmin/loyalty/actions.ts', {
-    'next/cache': { revalidatePath() {} }, '@/lib/firebase': { db: {} }, 'firebase/firestore': client,
-    '@/lib/loyalty/model': model,
-  });
-  const customers = load('src/app/superadmin/customers/actions.ts', {
-    'next/cache': {}, '@/lib/firebase': { db: {} }, 'firebase/firestore': client,
-    '@/lib/loyalty/model': model, '../loyalty/actions': settings,
-  });
+  const ref = path => ({path,id:path.split('/').at(-1),get:async()=>snapshot(path,true),set:async data=>{writes.push(path);rows.set(path,clone(data));}});
   function nativeCollection(collection, filters = []) {
     return {
       where: (...filter) => nativeCollection(collection, [...filters, filter]),
-      doc: id => ({ get: async () => snapshot(`${collection}/${id}`, true) }),
+      doc: (id = `new-${++nextId}`) => ref(`${collection}/${id}`),
       get: async () => ({ docs: matches({ collection, filters }).map(path => snapshot(path, true)) }),
     };
   }
+  const nativeDb = {collection:nativeCollection,runTransaction:async run=>{
+    const staged=[];
+    const result=await run({get:async ref=>snapshot(ref.path,true),set:(ref,data)=>staged.push([ref.path,data])});
+    for(const [path,data]of staged){writes.push(path);rows.set(path,clone(data));}return result;
+  }};
+  const {loadTs}=require('../helpers/load-ts.cjs');
+  const identity={provider:'firebase',subject:'loyalty-fixture'};
+  const {principalKey}=loadTs('src/lib/access/authority.ts',{'server-only':{}});
+  rows.set('platformAdminControl/access-v1',{principals:[{id:principalKey(identity),active:true}],companies:[{id:'company',active:true,orderflyBrandIds:['b'],locationIds:[]}],roles:[{id:'role',name:'Fixture',companyId:'company',kind:'company_user',active:true,permissions:['orderfly.customers:view','orderfly.customers:create','orderfly.customers:edit']}],memberships:[{id:'member',principalId:principalKey(identity),companyId:'company',locationIds:null,roleIds:['role'],active:true}]});
+  rows.set('brands/b',{name:'Brand'});
+  const session={verifiedOrderflyIdentity:async()=>identity,orderflyReadGrants:async()=>[{brandId:'b',locationIds:null}],requireOrderflyAccess:async brand=>{if(brand!=='b'||!rows.has('brands/'+brand))throw Error('forbidden');},requirePlatformSuperuser:async()=>{}};
+  const nativeMocks={'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>nativeDb},'./orderfly-session':session,'@/lib/access/orderfly-session':session};
+  const scoped=loadTs('src/lib/access/scoped-data.ts',nativeMocks);
+  const settings=load('src/app/superadmin/loyalty/actions.ts',{
+    'next/cache':{revalidatePath(){}},'@/lib/firebase-admin':nativeMocks['@/lib/firebase-admin'],
+    '@/lib/access/orderfly-session':session,'@/lib/loyalty/model':model,
+  });
+  const customers=loadTs('src/app/superadmin/customers/actions.ts',{
+    ...nativeMocks,'next/cache':{},'firebase-admin/firestore':{Timestamp:{now:()=>now}},
+    '@/lib/access/scoped-data':scoped,'@/lib/loyalty/model':model,'../loyalty/actions':settings,
+  });
   const integration = load('src/lib/integrations/esmeralda-feedback-integration.ts', {
     'server-only': {}, '@/lib/loyalty/model': model, '@/app/superadmin/loyalty/actions': settings,
     '@/lib/firebase-admin': { getAdminDb: () => ({ collection: nativeCollection }) },

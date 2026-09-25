@@ -1,3 +1,4 @@
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 import "server-only";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -14,6 +15,8 @@ function contentType(name: string) {
 }
 
 export async function GET(req: Request) {
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   const url = new URL(req.url);
   const name = url.searchParams.get("name") || "";
 

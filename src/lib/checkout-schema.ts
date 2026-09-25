@@ -24,7 +24,7 @@ const customer = z.object({
   }
 });
 export const checkoutRequestSchema = z.tuple([
-  z.array(z.object({ id, name: z.string().min(1).max(200), quantity: z.number().int().min(1).max(999),
+  z.array(z.object({ id, upsellId: id.optional(), name: z.string().min(1).max(200), quantity: z.number().int().min(1).max(999),
     itemType: z.enum(['product', 'combo']).optional(),
     toppingIds: z.array(id).max(MAX_TOPPINGS_PER_ITEM).optional(),
     comboSelections: z.array(z.object({ groupId: id.optional(), groupName: z.string().min(1).max(200),

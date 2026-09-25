@@ -20,7 +20,6 @@ import { Badge } from '../ui/badge';
 import { cn } from '@/lib/utils';
 import { useMemo, useTransition, useEffect, useRef } from 'react';
 import { ScrollArea } from '../ui/scroll-area';
-import { incrementUpsellConversion } from '@/app/superadmin/upsells/actions';
 import { Loader2 } from 'lucide-react';
 import { useAnalytics } from '@/context/analytics-context';
 import { safeImage } from '@/lib/images';
@@ -77,10 +76,9 @@ export function UpsellDialog({ isOpen, setIsOpen, upsellData, onContinue }: Upse
         const { originalPrice, finalPrice } = calculatePrices(product);
         
         // Add item to cart and close dialog. The parent component will handle the next step.
-        addToCart(product, 1, [], originalPrice, finalPrice);
+        addToCart(product, 1, [], originalPrice, finalPrice, undefined, upsell.id);
         
-        // Conversion tracking is optional and must not hold the dialog open.
-        void incrementUpsellConversion(upsell.id).catch(() => {});
+        // Click telemetry is separate from server-confirmed paid conversions.
 
         trackEvent('upsell_accepted', {
             upsellId: upsell.id,

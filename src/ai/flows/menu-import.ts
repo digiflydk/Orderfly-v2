@@ -1,4 +1,5 @@
 'use server';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 
 /**
  * @fileOverview An AI agent that imports menu items from an image.
@@ -15,6 +16,7 @@ export type { MenuImportOutput } from '@/types';
 
 
 export async function menuImportFromImage(input: MenuImportInput): Promise<MenuImportOutput> {
+  await requirePlatformSuperuser();
   return menuImportFlow(input);
 }
 

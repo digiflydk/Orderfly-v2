@@ -6,10 +6,14 @@ const f=require('../helpers/cart-fixture.cjs');
 test('menu-valid products survive restoration when unrelated topping groups are unavailable',()=>{
  const catalog=f.catalog();
  catalog.products[0].toppingGroupIds.push('other-location-group','empty-group');
- catalog.groups.push({id:'empty-group',locationIds:['l'],minSelection:1,maxSelection:1});
+ catalog.groups.push({id:'empty-group',locationIds:['l'],minSelection:0,maxSelection:1});
  const restored=f.restoreCartItems([{...f.choice,toppings:['Cheese']}],catalog,f.scope);
  assert.equal(restored.removed,0);
  assert.equal(restored.items[0].itemTotal,85);
+ // A configured mandatory group must not be bypassed when its options disappear.
+ catalog.groups[1].minSelection=1;
+ assert.equal(f.restoreCartItems([{...f.choice,toppings:['Cheese']}],catalog,f.scope).removed,1);
+ catalog.groups[1].minSelection=0;
  // Requirements on groups actually offered by the menu are still enforced.
  catalog.groups[0].minSelection=2;
  assert.equal(f.restoreCartItems([{...f.choice,toppings:['Cheese']}],catalog,f.scope).removed,1);

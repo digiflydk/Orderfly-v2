@@ -160,3 +160,17 @@ test('release gate disabled keeps settlement working without private outbox read
   assert.equal(f.records()[jobKey].state,'pending');
  } finally {process.env.ORDERFLY_OMNISEND_PAID_ORDERS_ENABLED='true';}
 });
+
+ test('paid upsell counters require stored verified offers and matching brand/location, once per order',async()=>{
+   const f=fixture();const r=f.records();
+   r['orders/ORD-TEST'].verifiedUpsellIds=['u','u','foreign','wrong-location','deleted'];
+   r['upsells/u']={brandId:'b',locationIds:['l'],conversions:3};
+   r['upsells/foreign']={brandId:'elsewhere',locationIds:['l'],conversions:5};
+   r['upsells/wrong-location']={brandId:'b',locationIds:['elsewhere'],conversions:7};
+   await Promise.all([f.settle(),f.settle(),f.post()]);
+   assert.equal(f.records()['upsells/u'].conversions,4);
+   assert.equal(f.records()['upsells/foreign'].conversions,5);
+   assert.equal(f.records()['upsells/wrong-location'].conversions,7);
+   const ordinary=fixture();ordinary.records()['upsells/u']={brandId:'b',locationIds:['l'],conversions:4};
+   await ordinary.settle();assert.equal(ordinary.records()['upsells/u'].conversions,4);
+ });

@@ -5,6 +5,7 @@ import { doc, getDoc, setDoc } from '@/lib/server/firestore-compat';
 import { db } from '@/lib/server/firestore-compat';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { unstable_cache, revalidateTag } from 'next/cache';
+import { publicGeneralSettings } from '@/lib/public-general-settings';
 import { storefrontMedia } from '@/lib/storefront-media';
 import type { GeneralSettings } from '@/types/settings';
 
@@ -13,7 +14,7 @@ const SETTINGS_COLLECTION_ID = 'settings';
 const SETTINGS_DOC_ID = 'general';
 
 
-export async function getGeneralSettings(): Promise<GeneralSettings | null> {
+async function readGeneralSettings(): Promise<GeneralSettings | null> {
     try {
         const docSnap = await getAdminDb().collection(SETTINGS_COLLECTION_ID).doc(SETTINGS_DOC_ID).get();
         if (docSnap.exists) {
@@ -33,7 +34,11 @@ export async function getGeneralSettings(): Promise<GeneralSettings | null> {
         throw error;
     }
 }
-const cachedSettings = unstable_cache(async () => storefrontMedia(await getGeneralSettings(), 'settings', 'general'), ['storefront-settings-v1'], {revalidate:60,tags:['storefront']});
+export async function getGeneralSettings(): Promise<GeneralSettings | null> {
+  await requirePlatformSuperuser();
+  return readGeneralSettings();
+}
+const cachedSettings = unstable_cache(async () => storefrontMedia(publicGeneralSettings(await readGeneralSettings()), 'settings', 'general'), ['storefront-settings-v2'], {revalidate:60,tags:['storefront']});
 export async function getStorefrontSettings() { return cachedSettings(); }
 
 

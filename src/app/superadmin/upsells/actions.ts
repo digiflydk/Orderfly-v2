@@ -360,21 +360,9 @@ export async function getActiveUpsellForCart({
 }
 
 
-export async function incrementUpsellConversion(upsellId: string): Promise<{ success: boolean }> {
-    try {
-        const db = getAdminDb();
-        const upsellRef = db.collection('upsells').doc(upsellId);
-        await db.runTransaction(async (transaction) => {
-            const sfDoc = await transaction.get(upsellRef);
-            if (!sfDoc.exists) { throw "Document does not exist!"; }
-            const newConversions = (sfDoc.data()!.conversions || 0) + 1;
-            transaction.update(upsellRef, { conversions: newConversions });
-        });
-        return { success: true };
-    } catch(e) {
-        console.error("Failed to increment upsell conversions:", e);
-        return { success: false };
-    }
+// Retained for stale browser bundles. A browser click must never mutate paid counters.
+export async function incrementUpsellConversion(_upsellId: string): Promise<{ success: boolean }> {
+  return { success: false };
 }
 
 export async function getProductsForBrand(brandId: string): Promise<ProductForMenu[]> {

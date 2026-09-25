@@ -32,7 +32,7 @@ interface CartContextType {
   includeBagFee: boolean;
   toggleBagFee: (include: boolean) => void;
   setDeliveryType: (type: 'delivery' | 'pickup') => void;
-  addToCart: (product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number, expected?: CartItem) => boolean;
+  addToCart: (product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number, expected?: CartItem, upsellId?: string) => boolean;
   addComboToCart: (combo: ComboMenu, quantity: number, selections: ComboSelection[], price: number, expected?: CartItem) => boolean;
   removeFromCart: (cartItemId: string) => void;
   updateQuantity: (cartItemId: string, newQuantity: number) => void;
@@ -264,10 +264,11 @@ export function CartProvider({ children }: { children: ReactNode }) {
     return true;
   }, [persist]);
 
-  const addToCart = useCallback((product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number, expected?: CartItem) => {
+  const addToCart = useCallback((product: ProductForMenu, quantity: number, toppings: CartItemTopping[], basePrice: number, finalPrice: number, expected?: CartItem, upsellId?: string) => {
     const sorted = [...toppings].map(t => ({...t, price: money(t.price)})).sort((a,b) => (a.id || a.name).localeCompare(b.id || b.name));
     return commitItem({
       id: product.id, cartItemId: crypto.randomUUID(), itemType: 'product',
+      ...((upsellId || expected?.upsellId) ? {upsellId:upsellId || expected?.upsellId} : {}),
       productName: product.productName, description: product.description, imageUrl: product.imageUrl,
       basePrice: money(basePrice), price: money(finalPrice), quantity, toppings: sorted,
       itemTotal: sumMoney([finalPrice, ...sorted.map(t => t.price)]), categoryId: product.categoryId,

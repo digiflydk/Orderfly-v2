@@ -411,7 +411,7 @@ export async function createStripeCheckoutSessionAction(
     const itemDiscountTotal = money(Math.max(0, validated.subtotal - chargedItemsSubtotal));
     const upsellRows = await getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true)));
     const upsells = upsellRows.docs.map(row => ({ ...row.data(), id: row.id })) as Upsell[];
-    validateCheckoutPrices(cartItems, resolvedLines.map(({productSnap,catalog,combo,price},i) => ({
+    const verifiedUpsellIds = validateCheckoutPrices(cartItems, resolvedLines.map(({productSnap,catalog,combo,price},i) => ({
       id: catalog ? productSnap.id : cartItems[i].id!, categoryId: catalog?.categoryId, isCombo: !!combo, price,
       tags: catalog ? [...(catalog.isPopular ? ['Popular'] : []), ...(catalog.isFeatured ? ['Recommended'] : []), ...(catalog.isNew ? ['Campaign'] : [])] : [],
     })), activeStandardDiscounts, upsells, {brandId,locationId,deliveryType});
@@ -512,6 +512,7 @@ export async function createStripeCheckoutSessionAction(
         brandId,
         locationId,
         productItems: cartItems,
+        verifiedUpsellIds,
         totalAmount,
         paymentDetails: serverPaymentDetails,
         appliedDiscountId: appliedDiscountIdForOrder,

@@ -81,8 +81,21 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     const discountRef = discountId ? db.collection('discounts').doc(discountId) : null;
     const discountSnap = discountRef ? await transaction.get(discountRef) : null;
     if (discountSnap?.exists && discountSnap.data()?.brandId !== order.brandId) throw new Error('Discount scope mismatch');
+    const upsellIds = [...new Set<string>(Array.isArray(order.verifiedUpsellIds) ? order.verifiedUpsellIds.filter((id: unknown): id is string => typeof id === 'string' && /^[^/\\?#]{1,160}$/.test(id)) : [])].slice(0,97);
+    const upsellRecords = await Promise.all(upsellIds.map(async id => {
+      const ref = db.collection('upsells').doc(id);
+      return {ref,snapshot:await transaction.get(ref)};
+    }));
     const settleCapacity = await prepareAdminCapacitySettlement(db, transaction, order, true);
     settleCapacity();
+    // Counters and Paid transition commit atomically. A repeated webhook takes
+    // the Paid branch above and cannot count these offers again.
+    for (const {ref,snapshot} of upsellRecords) {
+      const offer = snapshot.data();
+      if (snapshot.exists && offer && offer.brandId === order.brandId && Array.isArray(offer.locationIds) && offer.locationIds.includes(order.locationId)) {
+        transaction.update(ref,{conversions:Math.max(0,Number(offer.conversions)||0)+1});
+      }
+    }
     const customer = customerSnap.data() || {};
     const usage = { ...(customer.discountUsage || {}) };
     if (discountRef && discountSnap?.exists) {

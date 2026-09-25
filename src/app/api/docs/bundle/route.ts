@@ -1,3 +1,4 @@
+import { requireSuperadminApi } from '@/lib/auth/superadmin-api';
 import "server-only";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -8,6 +9,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 
 export async function GET() {
+  const denied = await requireSuperadminApi();
+  if (denied) return denied;
   const parts: string[] = [];
   for (const name of DOC_WHITELIST) {
     if (!name.endsWith(".md")) continue; // bundle kun markdown-filer

@@ -76,17 +76,12 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
   async function sendConsentData(payload: any) {
     const data = JSON.stringify(payload);
 
-    // 1) sendBeacon first
-    try { if (navigator.sendBeacon) {
-      const blob = new Blob([data], { type: 'application/json' });
-      const ok = navigator.sendBeacon('/api/consent/save-anonymous', blob);
-      if (ok) { optionalRemove(PENDING_CONSENT_KEY); return; }
-    } } catch { /* Try the bounded HTTP fallback. */ }
-
-    // 2) fallback to await server action
+    // Wait for acknowledgement before discarding a queued consent change.
     try {
-      const response = await fetch('/api/consent/save-anonymous', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: data, signal: AbortSignal.timeout(5000)});
+      const response = await fetch('/api/consent/save-anonymous', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: data, keepalive:true, signal: AbortSignal.timeout(5000)});
       if (!response.ok) throw new Error('Consent save unavailable');
+      const result = await response.json();
+      if (typeof result.anon_user_id === 'string') optionalSet(ANONYMOUS_ID_COOKIE_NAME,result.anon_user_id);
       optionalRemove(PENDING_CONSENT_KEY);
       return;
     } catch (e) {

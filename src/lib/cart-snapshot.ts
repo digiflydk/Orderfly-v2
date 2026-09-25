@@ -6,7 +6,7 @@ export const CART_STORAGE_KEY = 'orderfly.cart.v1';
 export const CART_MAX_AGE = 24 * 60 * 60 * 1000;
 const id = z.string().min(1).max(200).refine(value => !value.includes('/'));
 export const cartChoiceSchema = z.object({
-  id, cartItemId: id, itemType: z.enum(['product', 'combo']),
+  id, cartItemId: id, upsellId: id.optional(), itemType: z.enum(['product', 'combo']),
   quantity: z.number().int().min(1).max(100),
   toppings: z.array(z.string().min(1).max(200)).max(MAX_TOPPINGS_PER_ITEM),
   toppingIds: z.array(id).max(MAX_TOPPINGS_PER_ITEM).optional(),
@@ -31,6 +31,7 @@ export type CartSnapshot = z.infer<typeof cartSnapshotSchema>;
 export function cartChoices(items: CartItem[]): CartChoice[] {
   return items.map(item => ({
     id: item.id, cartItemId: item.cartItemId, itemType: item.itemType, quantity: item.quantity,
+    ...(item.upsellId ? {upsellId:item.upsellId} : {}),
     toppings: item.toppings.map(topping => topping.name),
     ...(item.toppings.length && item.toppings.every(topping => topping.id) ? { toppingIds: item.toppings.map(topping => topping.id!) } : {}),
     offered: item.price < item.basePrice,

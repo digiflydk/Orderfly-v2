@@ -69,7 +69,7 @@ export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog,
       });
     }
     if (!valid) { removed++; continue; }
-    items.push({ id: record.id, cartItemId: choice.cartItemId, itemType: choice.itemType,
+    items.push({ ...(choice.upsellId ? {upsellId:choice.upsellId} : {}), id: record.id, cartItemId: choice.cartItemId, itemType: choice.itemType,
       productName: product ? product.productName : combo!.comboName, description: record.description,
       imageUrl: record.imageUrl || undefined, quantity: choice.quantity, basePrice, price: basePrice,
       itemTotal: basePrice, toppings, brandId: scope.brandId, categoryId: product?.categoryId,
