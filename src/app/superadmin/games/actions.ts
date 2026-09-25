@@ -6,14 +6,14 @@ import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { principalKey } from '@/lib/access/authority';
 import { scratchCardDraftSchema, type ScratchCardDraft } from '@/lib/games/scratch-card';
 
-export async function gameBrands(): Promise<Array<{id:string; name:string}>> {
+export async function gameBrands(): Promise<Array<{id:string; name:string; logoUrl:string}>> {
   const grants = await orderflyReadGrants('orderfly.website:view');
   const db = getAdminDb();
   const rows = await Promise.all(grants.filter(g => g.locationIds === null).map(async grant => {
     const doc = await db.collection('brands').doc(grant.brandId).get();
-    return doc.exists ? {id:doc.id, name:String(doc.data()?.name || doc.id)} : null;
+    return doc.exists ? {id:doc.id, name:String(doc.data()?.name || doc.id),logoUrl:String(doc.data()?.logoUrl || '')} : null;
   }));
-  return rows.filter((row): row is {id:string;name:string} => row !== null).sort((a,b)=>a.name.localeCompare(b.name,'da'));
+  return rows.filter((row): row is {id:string;name:string;logoUrl:string} => row !== null).sort((a,b)=>a.name.localeCompare(b.name,'da'));
 }
 
 export async function getScratchCardDraft(brandId: string): Promise<ScratchCardDraft | null> {
@@ -27,9 +27,16 @@ export async function getScratchCardDraft(brandId: string): Promise<ScratchCardD
 }
 
 export async function saveScratchCardDraft(form: FormData): Promise<{ok:boolean;message:string}> {
+  let prizes: unknown;
+  try { prizes=JSON.parse(String(form.get('prizes') || '[]')); }
+  catch { return {ok:false,message:'Præmierne kunne ikke læses.'}; }
   const parsed = scratchCardDraftSchema.safeParse({
     brandId: form.get('brandId'), title: form.get('title'),
     instruction: form.get('instruction'), revealText: form.get('revealText'),
+    logoUrl: form.get('logoUrl'),
+    cardsPerPlay:Number(form.get('cardsPerPlay')),
+    totalCardLimit:Number(form.get('totalCardLimit')),
+    prizes,
     placement: form.get('placement'),
     paths: String(form.get('paths') || '').split(/\r?\n/).map(p=>p.trim()).filter(Boolean),
   });
