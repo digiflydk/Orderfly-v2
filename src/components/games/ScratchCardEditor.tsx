@@ -2,12 +2,12 @@
 import { useState, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { saveScratchCardDraft } from '@/app/superadmin/games/actions';
-import type { ScratchCardDraft } from '@/lib/games/scratch-card';
+import { esmeraldaScratchTest, type ScratchCardDraft } from '@/lib/games/scratch-card';
 import { ScratchCard } from './ScratchCard';
 
 type Prize = ScratchCardDraft['prizes'][number];
 const starter:Prize = {name:'Testpræmie',type:'item',value:0,probabilityPercent:10,maxWinners:100};
-export function ScratchCardEditor({brands,brandId,draft}:{brands:Array<{id:string;name:string;logoUrl:string}>;brandId:string;draft:ScratchCardDraft|null}) {
+export function ScratchCardEditor({brands,brandId,draft,preset=false}:{brands:Array<{id:string;name:string;slug:string;logoUrl:string}>;brandId:string;draft:ScratchCardDraft|null;preset?:boolean}) {
   const router = useRouter();
   const [pending,startTransition] = useTransition();
   const [message,setMessage] = useState('');
@@ -26,6 +26,14 @@ export function ScratchCardEditor({brands,brandId,draft}:{brands:Array<{id:strin
   function changePrize(index:number, changes:Partial<Prize>) {
     setPrizes(current=>current.map((p,i)=>i===index?{...p,...changes}:p));
   }
+  function loadEsmeraldaTest() {
+    const sample=esmeraldaScratchTest(brandId);
+    setTitle(sample.title);setInstruction(sample.instruction);setRevealText(sample.revealText);
+    setLogoUrl(sample.logoUrl);setCardsPerPlay(sample.cardsPerPlay);
+    setTotalCardLimit(sample.totalCardLimit);setPrizes(sample.prizes);
+    setPlacement(sample.placement);setPaths(sample.paths.join('\n'));
+    setMessage('Esmeralda-testspillet er indlæst. Gem udkastet, hvis du vil bevare opsætningen.');
+  }
   function submit(event:React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = new FormData(event.currentTarget);
@@ -38,11 +46,12 @@ export function ScratchCardEditor({brands,brandId,draft}:{brands:Array<{id:strin
   const input = 'mt-1 w-full min-w-0 rounded-md border p-2';
   return <div className="grid min-w-0 gap-8 xl:grid-cols-2">
     <form onSubmit={submit} className="min-w-0 space-y-5 rounded-xl border bg-white p-4 shadow-sm sm:p-6">
-      <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">Status: Kun udkast. Sandsynligheder og præmielofter er til opsætning og preview. Ingen kunder kan spille eller vinde endnu.</div>
+      <div className="rounded-md bg-amber-50 p-3 text-sm text-amber-900">{preset?'Esmeraldas testspil er indlæst. Tryk Gem udkast for at bevare opsætningen. ':'Status: Kun udkast. '}Sandsynligheder og præmielofter er til opsætning og preview. Ingen kunder kan spille eller vinde endnu.</div>
       <label className="block text-sm font-medium">Brand
         <select className={input} value={brandId} onChange={e=>router.push(`/superadmin/games/scratch-card?brand=${encodeURIComponent(e.target.value)}`)}>{brands.map(b=><option key={b.id} value={b.id}>{b.name}</option>)}</select>
       </label>
       <input type="hidden" name="brandId" value={brandId}/>
+      {brand?.slug==='esmeralda'&&<button type="button" onClick={loadEsmeraldaTest} className="rounded-md border border-yellow-500 bg-yellow-50 px-4 py-2 text-sm font-medium">Indlæs Esmeralda-testspil: Pizza 10 %, Tiramisu 25 %, Pommes frites 65 %</button>}
       <label className="block text-sm font-medium">Brandlogo<input name="logoUrl" value={logoUrl} onChange={e=>setLogoUrl(e.target.value)} placeholder={brand?.logoUrl || 'https://…'} className={input}/><span className="mt-1 block text-xs text-muted-foreground">Tomt felt bruger brandets eksisterende logo. Alternativt en HTTPS billedadresse.</span></label>
       <label className="block text-sm font-medium">Overskrift<input name="title" value={title} onChange={e=>setTitle(e.target.value)} required maxLength={100} className={input}/></label>
       <label className="block text-sm font-medium">Instruktion<input name="instruction" value={instruction} onChange={e=>setInstruction(e.target.value)} required maxLength={240} className={input}/></label>
@@ -56,13 +65,13 @@ export function ScratchCardEditor({brands,brandId,draft}:{brands:Array<{id:strin
           <label className="text-sm font-medium sm:col-span-2">Præmie {index+1}<input value={prize.name} onChange={e=>changePrize(index,{name:e.target.value})} maxLength={100} className={input}/></label>
           <label className="text-sm font-medium">Type<select value={prize.type} onChange={e=>changePrize(index,{type:e.target.value as Prize['type'],value:e.target.value==='item'?0:10})} className={input}><option value="item">Gratis produkt</option><option value="percent">Rabat i %</option><option value="amount">Rabat i kr.</option></select></label>
           {prize.type!=='item' && <label className="text-sm font-medium">Værdi<input type="number" min={prize.type==='percent'?1:.01} max={prize.type==='percent'?100:10000} step={prize.type==='percent'?1:.01} value={prize.value} onChange={e=>changePrize(index,{value:Number(e.target.value)})} className={input}/></label>}
-          <label className="text-sm font-medium">Chance pr. kort (%)<input type="number" min={0} max={100} step={.01} value={prize.probabilityPercent} onChange={e=>changePrize(index,{probabilityPercent:Number(e.target.value)})} className={input}/></label>
+          <label className="text-sm font-medium">Chance pr. spil (%)<input type="number" min={0} max={100} step={.01} value={prize.probabilityPercent} onChange={e=>changePrize(index,{probabilityPercent:Number(e.target.value)})} className={input}/></label>
           <label className="text-sm font-medium">Maks. vindere<input type="number" min={1} max={totalCardLimit} step={1} value={prize.maxWinners} onChange={e=>changePrize(index,{maxWinners:Number(e.target.value)})} className={input}/></label>
           {prizes.length>1 && <button type="button" onClick={()=>setPrizes(current=>current.filter((_,i)=>i!==index))} className="text-left text-sm text-red-700">Fjern præmie</button>}
         </div>)}
         <input type="hidden" name="prizes" value={JSON.stringify(prizes)}/>
         {prizes.length<12 && <button type="button" onClick={()=>setPrizes(current=>[...current,{...starter,name:`Præmie ${current.length+1}`}])} className="rounded-md border px-3 py-2 text-sm">Tilføj præmie</button>}
-        <p className="text-sm">Samlet vinderchance: <strong className={chance>100?'text-red-700':''}>{chance.toFixed(2)} %</strong> pr. kort. Resten ({Math.max(0,100-chance).toFixed(2)} %) giver ingen gevinst.</p>
+        <p className="text-sm">Samlet vinderchance: <strong className={chance>100?'text-red-700':''}>{chance.toFixed(2)} %</strong> pr. spil. Resten ({Math.max(0,100-chance).toFixed(2)} %) giver ingen gevinst.</p>
       </fieldset>
       <label className="block text-sm font-medium">Fremtidig placering<select name="placement" value={placement} onChange={e=>setPlacement(e.target.value as 'all'|'selected')} className={input}><option value="selected">Kun valgte sider</option><option value="all">Hele brandsitet</option></select></label>
       {placement==='selected' && <label className="block text-sm font-medium">Sideadresser, én sti pr. linje<textarea name="paths" value={paths} onChange={e=>setPaths(e.target.value)} rows={4} placeholder={'/\n/menu'} className={input}/><span className="mt-1 block text-xs text-muted-foreground">Eksempel: / eller /menu. Brug stier uden domænenavn.</span></label>}
