@@ -22,6 +22,9 @@ export function AdminOverview({ brands, locations, destinations }: {
     (!selectedBrand || location.brandId === selectedBrand) &&
     (!selectedLocation || location.id === selectedLocation)
   ), [locations, selectedBrand, selectedLocation])
+  const brandCount = selectedLocation
+    ? new Set(visibleLocations.map(location => location.brandId)).size
+    : selectedBrand ? 1 : brands.length
 
   return (
     <div className="space-y-6">
@@ -39,7 +42,7 @@ export function AdminOverview({ brands, locations, destinations }: {
             <CardTitle className="text-sm font-medium text-muted-foreground">Brands i udvalget</CardTitle>
             <Building2 className="h-5 w-5 text-primary" aria-hidden="true" />
           </CardHeader>
-          <CardContent><p className="text-3xl font-semibold">{selectedBrand ? 1 : brands.length}</p></CardContent>
+          <CardContent><p className="text-3xl font-semibold">{brandCount}</p></CardContent>
         </Card>
         <Card>
           <CardHeader className="flex flex-row items-center justify-between pb-2">
