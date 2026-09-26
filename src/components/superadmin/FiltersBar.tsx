@@ -13,6 +13,7 @@ import {
 } from '@/components/ui/command'
 import type { SACommonFilters } from '@/types/superadmin'
 import { AdminDateRange } from '@/components/superadmin/admin-date-range'
+import { locationsAfterBrandChange } from '@/components/superadmin/filter-selection'
 
 type Brand = { id: string; name: string }
 type Location = { id: string; name: string; brandId: string }
@@ -87,6 +88,10 @@ export function FiltersBar({
     emit({ locationIds: next })
   }
 
+  const selectBrand = (brandId: string) => {
+    emit({ brandId, locationIds: locationsAfterBrandChange(safeFilters.locationIds, brandId, locations) })
+  }
+
   return (
     <div className={cn('admin-filter-bar w-full', className)}>
       <Command>
@@ -108,13 +113,13 @@ export function FiltersBar({
 
           {/* Brand */}
           <CommandGroup heading="Brand">
-            <CommandItem onSelect={() => emit({ brandId: 'all' })}>
+            <CommandItem onSelect={() => selectBrand('all')}>
               <span className={cn(safeFilters.brandId === 'all' && 'font-semibold')}>
                 All brands
               </span>
             </CommandItem>
             {visibleBrands.map((b) => (
-              <CommandItem key={b.id} onSelect={() => emit({ brandId: b.id })}>
+              <CommandItem key={b.id} onSelect={() => selectBrand(b.id)}>
                 <span className={cn(safeFilters.brandId === b.id && 'font-semibold')}>
                   {b.name ?? b.id}
                 </span>
