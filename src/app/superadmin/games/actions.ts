@@ -4,7 +4,7 @@ import { getAdminDb, admin } from '@/lib/firebase-admin';
 import { orderflyReadGrants, verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { principalKey } from '@/lib/access/authority';
-import { scratchCardDraftSchema, type ScratchCardDraft } from '@/lib/games/scratch-card';
+import { scratchCardDraftSchema, prizeChannels, type ScratchCardDraft } from '@/lib/games/scratch-card';
 import { gameMailConfig } from '@/lib/games/mail-config';
 import { NotificationPlatformClient } from '@/lib/notifications/platform';
 
@@ -16,6 +16,13 @@ export async function gameBrands(): Promise<Array<{id:string; name:string; slug:
     return doc.exists ? {id:doc.id, name:String(doc.data()?.name || doc.id),slug:String(doc.data()?.slug || ''),logoUrl:String(doc.data()?.logoUrl || '')} : null;
   }));
   return rows.filter((row): row is {id:string;name:string;slug:string;logoUrl:string} => row !== null).sort((a,b)=>a.name.localeCompare(b.name,'da'));
+}
+export async function gameProducts(brandId:string):Promise<Array<{id:string;name:string}>>{
+  if(!/^[A-Za-z0-9_-]{1,128}$/.test(brandId))return [];
+  const grants=await orderflyReadGrants('orderfly.website:view');
+  if(!grants.some(grant=>grant.brandId===brandId&&grant.locationIds===null))return [];
+  const rows=await getAdminDb().collection('products').where('brandId','==',brandId).get();
+  return rows.docs.filter(row=>row.data().isActive!==false).map(row=>({id:row.id,name:String(row.data().productName||row.id)})).sort((a,b)=>a.name.localeCompare(b.name,'da'));
 }
 
 export async function getScratchCardDraft(brandId: string): Promise<ScratchCardDraft | null> {
@@ -52,8 +59,12 @@ export async function saveScratchCardDraft(form: FormData): Promise<{ok:boolean;
     await db.runTransaction(async tx => {
       const before = await tx.get(ref);
       await authorizeTransaction(tx, identity, {brandId:input.brandId}, `orderfly.website:${before.exists ? 'edit' : 'create'}`, 'company');
-      if (((before.data()?.playedCount||0)+(before.data()?.testPlayedCount||0))>0 && JSON.stringify(before.data()?.prizes)!==JSON.stringify(input.prizes)) throw new Error('Præmier kan ikke ændres efter første spil.');
-      tx.set(ref, { ...input, status:before.data()?.status||'draft', playedCount:before.data()?.playedCount||0, winnerCounts:before.data()?.winnerCounts||input.prizes.map(()=>0), testPlayedCount:before.data()?.testPlayedCount||0, testWinnerCounts:before.data()?.testWinnerCounts||input.prizes.map(()=>0), updatedAt:admin.firestore.FieldValue.serverTimestamp() });
+      const productIds=[...new Set(input.prizes.filter(prize=>prize.type==='item'&&prize.redemptionChannels?.includes('orderfly')).map(prize=>prize.productId!))];
+      const products=await Promise.all(productIds.map(id=>tx.get(db.collection('products').doc(id))));
+      if(products.some(product=>!product.exists||product.data()?.brandId!==input.brandId||product.data()?.isActive===false))throw new Error('Det valgte gratis produkt er ikke aktivt i dette brand.');
+      const prizesChanged=JSON.stringify(before.data()?.prizes)!==JSON.stringify(input.prizes);
+      if ((before.data()?.playedCount||0)>0 && prizesChanged) throw new Error('Præmier kan ikke ændres efter første live-spil.');
+      tx.set(ref, { ...input, status:before.data()?.status||'draft', playedCount:before.data()?.playedCount||0, winnerCounts:before.data()?.winnerCounts||input.prizes.map(()=>0), testPlayedCount:before.data()?.testPlayedCount||0, testWinnerCounts:prizesChanged?input.prizes.map(()=>0):before.data()?.testWinnerCounts||input.prizes.map(()=>0), updatedAt:admin.firestore.FieldValue.serverTimestamp() });
       tx.set(db.collection('auditLogs').doc(), {
         module:'games', entity:'scratch-card', entityId:input.brandId,
         action:before.exists ? 'update' : 'create', brandId:input.brandId,
@@ -124,7 +135,7 @@ export async function sendGameTestEmail(brandId:string,email:string):Promise<{ok
     const game=scratchCardDraftSchema.safeParse((await db.collection('gameScratchDrafts').doc(brandId).get()).data());
     if(!mail||!game.success||!brand)return {ok:false,message:'Gevinstmailen er ikke konfigureret eller spillet er ikke gemt.'};
     const {randomUUID}=await import('node:crypto');
-    await new NotificationPlatformClient().send({idempotencyKey:`game-test-${randomUUID()}`,templateKey:'orderfly.games.prize',organizationId:mail.organizationId,senderProfile:mail.senderProfile,locale:'da',recipientEmail:email.trim().toLowerCase(),relatedEntity:{type:'game_test',id:brandId},variables:{brand_id:brandId,brand_name:String(brand.name||''),logo_url:game.data.logoUrl||String(brand.logoUrl||''),primary_color:game.data.primaryColor,surface_color:game.data.surfaceColor,subject:game.data.emailSubject,message:game.data.emailMessage,name:'Testmodtager',prize:game.data.prizes[0].name,code:'TEST-NOT-VALID',redemption:game.data.prizes[0].redemption,mode:'test'}});
+    await new NotificationPlatformClient().send({idempotencyKey:`game-test-${randomUUID()}`,templateKey:'orderfly.games.prize',organizationId:mail.organizationId,senderProfile:mail.senderProfile,locale:'da',recipientEmail:email.trim().toLowerCase(),relatedEntity:{type:'game_test',id:brandId},variables:{brand_id:brandId,brand_name:String(brand.name||''),logo_url:game.data.logoUrl||String(brand.logoUrl||''),primary_color:game.data.primaryColor,surface_color:game.data.surfaceColor,subject:game.data.emailSubject,message:game.data.emailMessage,name:'Testmodtager',prize:game.data.prizes[0].name,code:'TEST-NOT-VALID',redemption:prizeChannels(game.data.prizes[0]).join(', '),mode:'test'}});
     return {ok:true,message:'Testmail er accepteret af notifikationsplatformen. Kontrollér modtagerens indbakke.'};
   }catch{return {ok:false,message:'Testmailen kunne ikke sendes. Kontrollér brandets afsender og publiceret skabelon.'};}
 }
@@ -156,7 +167,7 @@ export async function redeemGameVoucher(brandId:string,code:string):Promise<{ok:
       const voucher=await tx.get(ref);
       await authorizeTransaction(tx,identity,{brandId},'orderfly.discounts:edit','company');
       const data=voucher.data();
-      if(!data||data.brandId!==brandId||data.mode!=='live'||data.state!=='issued'||data.redemption==='website')throw new Error('Kode kan ikke indløses.');
+      if(!data||data.brandId!==brandId||data.mode!=='live'||data.state!=='issued'||!(Array.isArray(data.redemptionChannels)?data.redemptionChannels.includes('restaurant'):data.redemption!=='website'))throw new Error('Kode kan ikke indløses.');
       const discountRef=db.collection('discounts').doc(`game_${id}`),discount=await tx.get(discountRef);
       if(discount.exists){
         const capacityRef=db.collection('checkout_discount_capacity').doc(createHash('sha256').update(JSON.stringify([brandId,discountRef.id])).digest('hex'));
