@@ -24,7 +24,8 @@ export async function playScratchCard(input:PlayInput, ip:string) {
     await requireOrderflyAccess(input.brandId,null,'orderfly.website:view');
     if(status!=='test'&&status!=='draft')throw new GameError(403,'Testspillet er ikke aktivt.');
   }else if(status!=='live'||!(input.pathname==='/games'||scratchCardOnPage(game,input.pathname)))throw new GameError(404,'Spillet er ikke aktivt på denne side.');
-  if(!marketingConfig(input.brandId) || !String(process.env.ORDERFLY_GAMES_EMAIL_ENABLED_BRANDS||'').split(',').includes(input.brandId))throw new GameError(503,'E-mail er ikke konfigureret for dette brand.');
+  const mailReady=!!marketingConfig(input.brandId) && String(process.env.ORDERFLY_GAMES_EMAIL_ENABLED_BRANDS||'').split(',').includes(input.brandId);
+  if(!input.test&&!mailReady)throw new GameError(503,'E-mail er ikke konfigureret for dette brand.');
   const day=new Date().toISOString().slice(0,10), ipKey=hash(`${input.brandId}\n${day}\n${ip}`);
   const leadKey=hash(`${input.brandId}\n${input.test?'test':'live'}\n${email}`);
   const playRef=db.collection('gamePlays').doc(leadKey), limiterRef=db.collection('gamePlayLimits').doc(ipKey);
@@ -66,15 +67,16 @@ export async function playScratchCard(input:PlayInput, ip:string) {
     tx.update(gameRef,input.test?{testPlayedCount:played+1,testWinnerCounts:counters}:{playedCount:played+1,winnerCounts:counters});
     tx.set(limiterRef,{brandId:input.brandId,day,count:(limit.data()?.count||0)+1,updatedAt:now});
     const board=won?Array(game.cardsPerPlay).fill(prize!.name):drawNoWinBoard(game.cardsPerPlay,game.revealText);
-    tx.create(playRef,{brandId:input.brandId,name,email,phone,newsletter:input.newsletter===true,newsletterText:input.newsletter?game.newsletterText:null,consentAt:input.newsletter?now:null,mode:input.test?'test':'live',board,prizeIndex:won?index:null,createdAt:now});
+    const newsletter=!input.test&&input.newsletter===true;
+    tx.create(playRef,{brandId:input.brandId,name,email,phone,newsletter,newsletterText:newsletter?game.newsletterText:null,consentAt:newsletter?now:null,mode:input.test?'test':'live',board,prizeIndex:won?index:null,createdAt:now});
     if(prize){
       if(uploadedRef)tx.update(uploadedRef,{available:false,claimedBy:playRef.id,claimedAt:now});
       tx.create(voucher,{brandId:input.brandId,code:actualCode,playId:playRef.id,prizeName:prize.name,prizeType:prize.type,redemption:prize.redemption,mode:input.test?'test':'live',state:'issued',issuedAt:now,email});
       if(discount)tx.create(discount,{id:discount.id,brandId:input.brandId,locationIds,applicationType:'code',code:actualCode,description:`Spilgevinst: ${prize.name}`,discountType:prize.type==='percent'?'percentage':'fixed_amount',discountValue:prize.value,minOrderValue:0,isActive:true,orderTypes:['pickup','delivery'],activeDays:[],activeTimeSlots:[],usageLimit:1,usedCount:0,perCustomerLimit:1,firstTimeCustomerOnly:false,allowStacking:false,createdAt:now,updatedAt:now});
-      tx.create(db.collection('gameMailOutbox').doc(playRef.id),{brandId:input.brandId,playId:playRef.id,code:actualCode,prizeName:prize.name,name,email,redemption:prize.redemption,mode:input.test?'test':'live',state:'pending',attempts:0,nextAttemptAt:Date.now(),createdAt:now});
+      if(mailReady)tx.create(db.collection('gameMailOutbox').doc(playRef.id),{brandId:input.brandId,playId:playRef.id,code:actualCode,prizeName:prize.name,name,email,redemption:prize.redemption,mode:input.test?'test':'live',state:'pending',attempts:0,nextAttemptAt:Date.now(),createdAt:now});
     }
-    if(input.newsletter)tx.create(db.collection('gameConsentOutbox').doc(playRef.id),{brandId:input.brandId,playId:playRef.id,email,wording:game.newsletterText,version:'game-email-da-v1',capturedAt:Date.now(),state:'pending',attempts:0,nextAttemptAt:Date.now()});
-    return {board,won,prizeName:prize?.name||null,mailQueued:!!prize};
+    if(newsletter)tx.create(db.collection('gameConsentOutbox').doc(playRef.id),{brandId:input.brandId,playId:playRef.id,email,wording:game.newsletterText,version:'game-email-da-v1',capturedAt:Date.now(),state:'pending',attempts:0,nextAttemptAt:Date.now()});
+    return {board,won,prizeName:prize?.name||null,mailQueued:!!prize&&mailReady};
   });
   return result;
 }
