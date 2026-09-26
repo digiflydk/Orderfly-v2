@@ -45,3 +45,13 @@ env:
     value: aaa94d25-3ca6-4ebf-a673-164608db6c55
     availability:
       - RUNTIME
+  # Esmeralda scratch prizes use the existing Notification Platform bridge.
+  # Deploy only after orderfly.games.prize is published in that organization.
+  - variable: ORDERFLY_GAMES_EMAIL_ENABLED_BRANDS
+    value: oeypKaMyYcQjIwaa1PtV
+    availability:
+      - RUNTIME
+  - variable: ORDERFLY_GAMES_NOTIFICATION_BRANDS
+    value: '{"oeypKaMyYcQjIwaa1PtV":{"organizationId":"aaa94d25-3ca6-4ebf-a673-164608db6c55","senderProfile":"orderfly"}}'
+    availability:
+      - RUNTIME
