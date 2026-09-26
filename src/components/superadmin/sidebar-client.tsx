@@ -253,7 +253,7 @@ export function SuperAdminSidebarClient({
   }
 
   return (
-    <Sidebar collapsible="icon">
+    <Sidebar collapsible="icon" className="border-r">
       <SidebarContent className="bg-[#142634] text-white">
         <div className="h-16 border-b border-white/10 px-3 py-2 group-data-[collapsible=icon]:px-2">
           <div className="flex h-full items-center">
@@ -296,11 +296,11 @@ export function SuperAdminSidebarClient({
                             <Link
                               href={item.href ?? '#'}
                               className={cn(
-                                'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
+                                'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm',
                                 active ? 'border-l-2 border-cyan-300 bg-[#1f495e] text-white' : 'text-slate-200 hover:bg-[#213849] hover:text-white'
                               )}
                             >
-                              <Icon className={cn('h-4 w-4', active ? 'text-cyan-200' : 'text-slate-300')} />
+                              <Icon className={cn('h-5 w-5 shrink-0', active ? 'text-cyan-200' : 'text-slate-300')} />
                               <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                             </Link>
                           </SidebarMenuButton>
@@ -318,9 +318,9 @@ export function SuperAdminSidebarClient({
                           <button
                             type="button"
                             onClick={() => toggle(key)}
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-200 hover:bg-[#213849] hover:text-white group-data-[collapsible=icon]:hidden"
+                            className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-slate-200 hover:bg-[#213849] hover:text-white group-data-[collapsible=icon]:hidden"
                           >
-                            <ParentIcon className="h-4 w-4 text-slate-300" />
+                            <ParentIcon className="h-5 w-5 shrink-0 text-slate-300" />
                             <span>{item.label}</span>
                             <ChevronDown
                               className={cn('ml-auto h-4 w-4 transition-transform', parentOpen ? 'rotate-180' : '')}
@@ -339,11 +339,11 @@ export function SuperAdminSidebarClient({
                                     <Link
                                       href={child.href ?? '#'}
                                       className={cn(
-                                        'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
+                                        'flex items-center gap-2.5 rounded-md px-3 py-2 text-sm',
                                         activeChild ? 'border-l-2 border-cyan-300 bg-[#1f495e] text-white' : 'text-slate-200 hover:bg-[#213849] hover:text-white'
                                       )}
                                     >
-                                      <CIcon className={cn('h-4 w-4', activeChild ? 'text-cyan-200' : 'text-slate-300')} />
+                                      <CIcon className={cn('h-5 w-5 shrink-0', activeChild ? 'text-cyan-200' : 'text-slate-300')} />
                                       <span>{child.label}</span>
                                     </Link>
                                   </SidebarMenuButton>

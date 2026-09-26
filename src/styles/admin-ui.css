@@ -1,5 +1,5 @@
-/* Shared Orderfly/Opsfly administration palette. Keep storefront styling separate. */
-.admin-shell {
+/* Body-level tokens also reach Radix dialogs, menus and selects portalled outside the shell. */
+:is(.admin-shell, body:has(.admin-shell)) {
   --admin-page: #f7f9fb;
   --admin-surface: #ffffff;
   --admin-text: #17232e;
@@ -10,37 +10,38 @@
   --admin-sidebar-active: #1f495e;
   --admin-primary: #0a789c;
   --admin-focus: #0a789c;
-  --background: 210 33% 98%;
-  --foreground: 206 33% 14%;
+  --background: 210 33% 97.65%;
+  --foreground: 209 33% 13.53%;
   --card: 0 0% 100%;
-  --card-foreground: 206 33% 14%;
+  --card-foreground: 209 33% 13.53%;
   --popover: 0 0% 100%;
-  --popover-foreground: 206 33% 14%;
-  --primary: 193 88% 33%;
+  --popover-foreground: 209 33% 13.53%;
+  --primary: 195 88% 32.55%;
   --primary-foreground: 0 0% 100%;
-  --secondary: 206 25% 95%;
-  --secondary-foreground: 206 33% 14%;
-  --muted: 206 25% 95%;
-  --muted-foreground: 205 15% 41%;
-  --accent: 196 62% 93%;
-  --accent-foreground: 206 33% 14%;
-  --border: 204 20% 90%;
-  --input: 204 20% 90%;
-  --ring: 193 88% 33%;
+  --secondary: 204 26% 96.3%;
+  --secondary-foreground: 209 33% 13.53%;
+  --muted: 204 26% 96.3%;
+  --muted-foreground: 208 14.4% 40.8%;
+  --accent: 193.2 52.2% 93.7%;
+  --accent-foreground: 209 33% 13.53%;
+  --border: 204 19.2% 89.8%;
+  --input: 204 19.2% 89.8%;
+  --ring: 195 88% 32.55%;
   --radius: .5rem;
   color: var(--admin-text);
   font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
-.admin-shell :is(button, input, select, textarea) { font-family: inherit; }
+:is(.admin-shell, body:has(.admin-shell)) :is(button, input, select, textarea) { font-family: inherit; }
 .admin-shell :is(h1, h2, h3, h4) { letter-spacing: -.02em; }
-.admin-shell :is(input[type="date"], select, [role="combobox"]) { min-height: 40px; }
-.admin-shell :is(input, select, textarea, [role="combobox"]):focus-visible {
+:is(.admin-shell, body:has(.admin-shell)) :is(input[type="date"], select, [role="combobox"]) { min-height: 40px; }
+:is(.admin-shell, body:has(.admin-shell)) :is(input, select, textarea, [role="combobox"]):focus-visible {
   outline: 2px solid var(--admin-focus);
   outline-offset: 2px;
 }
 .admin-shell [data-ui-button] { border-radius: 8px; }
 .admin-shell [data-ui-button][data-ui-variant="outline"] { background: var(--admin-surface); }
+.admin-shell [data-sidebar="menu-button"] > svg { width: 20px; height: 20px; }
 .admin-shell table { border-collapse: separate; border-spacing: 0; }
 .admin-shell table thead { background: #f3f6f8; }
 .admin-shell table th { color: var(--admin-muted); font-size: 12px; font-weight: 650; }

@@ -33,13 +33,11 @@ function LayoutWithLoader({ children }: { children: React.ReactNode }) {
 export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmin, access }: Props) {
   return (
     <S.SidebarProvider className="admin-shell">
-      <S.Sidebar collapsible="icon" className="border-r">
-        <SuperAdminSidebarClient access={access} centralAdmin={centralAdmin}
-          brandingSettings={
-            brandingSettings ?? { platformHeading: 'Orderfly Studio' }
-          }
-        />
-      </S.Sidebar>
+      <SuperAdminSidebarClient access={access} centralAdmin={centralAdmin}
+        brandingSettings={
+          brandingSettings ?? { platformHeading: 'Orderfly Studio' }
+        }
+      />
 
       <S.SidebarInset className="bg-background">
         {access&&<LogoutButton/>}
