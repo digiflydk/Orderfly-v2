@@ -11,7 +11,7 @@ export type ConsentEvent = {
     locationId: string;
     email: string;
     channel: 'email';
-    source: 'checkout';
+    source: 'checkout' | 'game';
     capturedAt: number;
     version: string;
     wording: string;
@@ -39,7 +39,7 @@ export function consentPayload(event: ConsentEvent) {
     return {
         identifiers: [{ type: 'email', id: event.email, sendWelcomeMessage: false,
                 channels: { email: { status: 'subscribed', statusChangedAt: new Date(event.capturedAt).toISOString() } },
-                consent: { source: 'orderfly-checkout', createdAt: new Date(event.capturedAt).toISOString() } }],
+                consent: { source: event.source === 'game' ? 'orderfly-game' : 'orderfly-checkout', createdAt: new Date(event.capturedAt).toISOString() } }],
         customProperties: { orderfly_brand_id: event.brandId, orderfly_consent_id: event.id,
             orderfly_location_id: event.locationId, orderfly_consent_version: event.version, orderfly_consent_source: event.source },
     };
@@ -51,5 +51,5 @@ export function canRenewConsent(event: ConsentEvent, channel: {
     statusChangedAt?: string;
 }) {
     const changed = channel.statusChangedAt ? Date.parse(channel.statusChangedAt) : NaN;
-    return event.version === NEWSLETTER_CONSENT_VERSION && event.source === 'checkout' && Number.isFinite(changed) && event.capturedAt > changed;
+    return ((event.version === NEWSLETTER_CONSENT_VERSION && event.source === 'checkout') || (event.version === 'game-email-da-v1' && event.source === 'game')) && Number.isFinite(changed) && event.capturedAt > changed;
 }

@@ -10,7 +10,7 @@ function validate(payload) {
   const script = `import(${JSON.stringify(source)}).then(m=>process.stdout.write(JSON.stringify(m.scratchCardDraftSchema.safeParse(${JSON.stringify(payload)}).success)))`;
   return JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
 }
-const base = {brandId:'brand_a',title:'Skrab her',instruction:'Afslør resultatet',revealText:'Testresultat',placement:'selected',paths:['/menu']};
+const base = {brandId:'brand_a',title:'Skrab her',instruction:'Afslør resultatet',revealText:'Testresultat',placement:'selected',paths:['/menu'],prizes:[{name:'Pizza',type:'item',value:0,probabilityPercent:10,maxWinners:100}]};
 test('a selected placement requires at least one explicit page',()=>{
   assert.equal(validate({...base,paths:[]}),false);
   assert.equal(validate(base),true);
@@ -37,4 +37,11 @@ test('Esmeralda test game draws one outcome per play with 10/25/65 boundaries',(
   assert.deepEqual(game.prizes.map(p=>p.probabilityPercent),[10,25,65]);
   assert.deepEqual(boards.map(b=>b[0]),['Pizza','Pizza','Tiramisu','Tiramisu','Pommes frites','Pommes frites']);
   for(const b of boards)assert.equal(new Set(b).size,1);
+});
+
+test('no win never displays a matching prize when winner cap is exhausted',()=>{
+  const board=pathToFileURL(path.resolve('src/lib/games/scratch-card-preview.ts')).href;
+  const script=`import(${JSON.stringify(board)}).then(m=>process.stdout.write(JSON.stringify([m.drawNoWinBoard(3,'Intet'),m.drawNoWinBoard(1,'Intet')])))`;
+  const [three,one]=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
+  assert.equal(new Set(three).size,3);assert.deepEqual(one,['Intet']);
 });

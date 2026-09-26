@@ -1,0 +1,7 @@
+{
+  "indexes": [
+    {"collectionGroup":"codes","queryScope":"COLLECTION","fields":[{"fieldPath":"prizeIndex","order":"ASCENDING"},{"fieldPath":"available","order":"ASCENDING"}]},
+    {"collectionGroup":"discounts","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"code","order":"ASCENDING"}]}
+  ],
+  "fieldOverrides": []
+}
