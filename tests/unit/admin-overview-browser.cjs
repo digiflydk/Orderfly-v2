@@ -1,0 +1,73 @@
+// Actual overview component and compiled admin CSS; only navigation and records are synthetic.
+const { test, before, after } = require('node:test');
+const assert = require('node:assert/strict');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
+const http = require('node:http');
+const { execFileSync } = require('node:child_process');
+const { chromium, expect } = require('@playwright/test');
+const webpackModule = require('next/dist/compiled/webpack/webpack');
+webpackModule.init();
+
+const root = process.cwd();
+let dir, server, browser, origin;
+const brands = [{ id: 'a', name: 'Nord' }, { id: 'b', name: 'Syd' }];
+const locations = [{ id: 'la', name: 'Nord Station', brandId: 'a' }, { id: 'lb', name: 'Syd Torv', brandId: 'b' }];
+
+before(async () => {
+  dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orderfly-admin-visual-'));
+  const entry = path.join(dir, 'entry.js');
+  fs.writeFileSync(entry, `import React from 'react';import {createRoot} from 'react-dom/client';
+    import {AdminOverview} from ${JSON.stringify(path.join(root, 'src/app/superadmin/overview-client.tsx'))};
+    const destinations=[{href:'/superadmin/dashboard',label:'Salgsoverblik',description:'Følg ordrer og omsætning.'},{href:'/superadmin/sales/orders',label:'Ordrer',description:'Find de seneste ordrer.'},{href:'/superadmin/products',label:'Produkter',description:'Vedligehold sortimentet.'}];
+    createRoot(document.getElementById('root')).render(<AdminOverview brands={${JSON.stringify(brands)}} locations={${JSON.stringify(locations)}} destinations={destinations}/>);`);
+  const link = path.join(dir, 'link.js');
+  fs.writeFileSync(link, `import React from 'react';export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}`);
+  const loader = path.join(dir, 'loader.js');
+  fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
+  await new Promise((resolve, reject) => webpackModule.webpack({
+    mode: 'development', devtool: false, entry,
+    output: { path: dir, filename: 'bundle.js' },
+    resolve: { alias: { '@/components/superadmin/admin-link': link, '@': path.join(root, 'src') }, extensions: ['.tsx', '.ts', '.js'], modules: [path.join(root, 'node_modules'), 'node_modules'] },
+    module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }, { test: /admin-visual-.*\.js$/, use: [loader] }] },
+  }).run((error, stats) => error ? reject(error) : stats.hasErrors() ? reject(Error(stats.toString({ all: false, errors: true }))) : resolve()));
+  execFileSync(path.join(root, 'node_modules/.bin/tailwindcss'), ['-c', path.join(root, 'tailwind.config.ts'), '-i', path.join(root, 'src/app/globals.css'), '-o', path.join(dir, 'styles.css'), '--minify'], { cwd: root, stdio: 'pipe' });
+  const styles = fs.readFileSync(path.join(dir, 'styles.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/styles/admin-ui.css'), 'utf8');
+  server = http.createServer((req, res) => {
+    if (req.url === '/bundle.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(dir, 'bundle.js'))); }
+    if (req.url === '/styles.css') { res.setHeader('content-type', 'text/css'); return res.end(styles); }
+    res.setHeader('content-type', 'text/html; charset=utf-8');
+    res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><main class="admin-shell min-h-screen bg-background p-4 md:p-8"><div id="root" class="mx-auto max-w-6xl"></div></main><script src="/bundle.js"></script></body></html>');
+  });
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+  origin = 'http://127.0.0.1:' + server.address().port;
+  browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+});
+
+after(async () => {
+  await browser?.close();
+  if (server) await new Promise(resolve => server.close(resolve));
+  if (dir) fs.rmSync(dir, { recursive: true, force: true });
+});
+
+for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844]]) {
+  test(`shared Orderfly overview renders and filters at ${name} width`, async t => {
+    const context = await browser.newContext({ viewport: { width, height } });
+    t.after(() => context.close());
+    const page = await context.newPage();
+    const errors = []; page.on('pageerror', error => errors.push(error.message));
+    await page.goto(origin);
+    await expect(page.getByRole('heading', { name: 'Overblik' })).toBeVisible();
+    await expect(page.locator('.admin-shell')).toHaveCSS('color', 'rgb(23, 35, 46)');
+    await page.getByLabel('Brand', { exact: true }).selectOption('b');
+    await expect(page.getByText('Brands i udvalget').locator('..').locator('..')).toContainText('1');
+    await page.getByLabel('Lokation', { exact: true }).selectOption('lb');
+    assert.equal(await page.getByLabel('Lokation', { exact: true }).inputValue(), 'lb');
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    assert.ok(overflow <= 1, `${name} horizontal overflow: ${overflow}px`);
+    fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+    await page.screenshot({ path: path.join(root, 'test-results', `admin-overview-${name}.png`), fullPage: true });
+    assert.deepEqual(errors, []);
+  });
+}
