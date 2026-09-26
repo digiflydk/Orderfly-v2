@@ -100,7 +100,7 @@ export function FiltersBar({
             />
           </div>
 
-          <AdminDateRange from={safeFilters.dateFrom} to={safeFilters.dateTo} onFromChange={onDateFrom} onToChange={onDateTo} />
+          <AdminDateRange from={safeFilters.dateFrom} to={safeFilters.dateTo} onFromChange={onDateFrom} onToChange={onDateTo} fromLabel="From date" toLabel="To date" groupLabel="Date range" />
         </div>
 
         <CommandList>

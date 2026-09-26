@@ -10,7 +10,7 @@ Orderfly and Opsfly use a neutral, Wolt-inspired administration interface for al
 | Secondary / destructive | White with neutral border / outlined error action |
 | Typography | Inter if available, then system sans; sentence-case headings, clear 12px table labels |
 | Buttons / controls | 40px height and 8px radius; Lucide icons in the sidebar and actions |
-| Dates | `AdminDateRange` gives labelled from/to fields. The consuming page applies its existing validation and submission behavior. |
+| Dates | `AdminDateRange` gives labelled from/to fields and accepts localized labels. The consuming page applies its existing validation and submission behavior. |
 | Dropdowns | `AdminSelectField` for simple native filters, Radix `Select` for searchable/complex controls; both use the same field tokens and focus treatment. |
 | Tables | Shared `Table` primitives with one column header row, soft row borders and horizontal scroll on narrow screens. |
 

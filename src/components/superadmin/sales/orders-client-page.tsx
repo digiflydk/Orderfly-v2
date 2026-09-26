@@ -161,7 +161,7 @@ export function OrdersClientPage({
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-              <AdminDateRange className="flex-1" from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} />
+              <AdminDateRange className="flex-1" from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} fromLabel="From date" toLabel="To date" groupLabel="Date range" />
 
               <div className="flex gap-2">
                 <Button type="submit">Apply</Button>
