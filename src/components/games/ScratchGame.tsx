@@ -37,7 +37,7 @@ export function ScratchGame({game,brandName,test=false,pathname}:Props){
       <button disabled={pending} className="w-full rounded-md px-4 py-3 font-semibold text-black disabled:opacity-50" style={{backgroundColor:game.primaryColor}}>{pending?'Starter…':'Start spillet'}</button>
       {error&&<p role="alert" className="text-sm text-red-200">{error}</p>}
     </form>:<div className="mt-6">
-      <div className={`grid gap-3 ${game.cardsPerPlay>1?'grid-cols-2':'grid-cols-1'}`}>
+      <div className={`grid gap-3 ${game.cardsPerPlay>=7?'grid-cols-3':game.cardsPerPlay>1?'grid-cols-2':'grid-cols-1'}`}>
         {board.map((label,index)=><ScratchSurface key={index} index={index} round={0} label={label} imageUrl={game.prizes.find(p=>p.name===label)?.imageUrl||''} color={game.primaryColor} onReveal={()=>setRevealed(n=>n+1)}/>)}
       </div>
       {revealed===board.length&&<p role="status" className="mt-5 text-base font-semibold">{won?test?`Du vandt ${prize} i testen. ${mailQueued?'En testkode er lagt i mailkøen; den kan ikke indløses.':'Ingen e-mail er sendt, da gevinstmail ikke er konfigureret.'}`:`Du vandt ${prize}! Din kode er lagt i kø til e-mail.`:game.revealText}</p>}
