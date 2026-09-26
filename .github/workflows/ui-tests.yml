@@ -78,6 +78,18 @@ jobs:
       - name: Brand form browser regression
         run: node --test tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/feedback-browser.cjs
 
+      - name: Shared admin overview visual regression
+        run: node --test tests/unit/admin-overview-browser.cjs
+
+      - name: Upload admin overview screenshots
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-overview-visual-${{ github.run_attempt }}
+          path: test-results/admin-overview-*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Build
         run: npm run build
 
