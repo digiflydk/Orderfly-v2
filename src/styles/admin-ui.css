@@ -1,0 +1,55 @@
+/* Shared Orderfly/Opsfly administration palette. Keep storefront styling separate. */
+.admin-shell {
+  --admin-page: #f7f9fb;
+  --admin-surface: #ffffff;
+  --admin-text: #17232e;
+  --admin-muted: #596977;
+  --admin-border: #e0e6ea;
+  --admin-sidebar: #142634;
+  --admin-sidebar-hover: #213849;
+  --admin-sidebar-active: #1f495e;
+  --admin-primary: #0a789c;
+  --admin-focus: #0a789c;
+  --background: 210 33% 98%;
+  --foreground: 206 33% 14%;
+  --card: 0 0% 100%;
+  --card-foreground: 206 33% 14%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 206 33% 14%;
+  --primary: 193 88% 33%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 206 25% 95%;
+  --secondary-foreground: 206 33% 14%;
+  --muted: 206 25% 95%;
+  --muted-foreground: 205 15% 41%;
+  --accent: 196 62% 93%;
+  --accent-foreground: 206 33% 14%;
+  --border: 204 20% 90%;
+  --input: 204 20% 90%;
+  --ring: 193 88% 33%;
+  --radius: .5rem;
+  color: var(--admin-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.admin-shell :is(button, input, select, textarea) { font-family: inherit; }
+.admin-shell :is(h1, h2, h3, h4) { letter-spacing: -.02em; }
+.admin-shell :is(input[type="date"], select, [role="combobox"]) { min-height: 40px; }
+.admin-shell :is(input, select, textarea, [role="combobox"]):focus-visible {
+  outline: 2px solid var(--admin-focus);
+  outline-offset: 2px;
+}
+.admin-shell [data-ui-button] { border-radius: 8px; }
+.admin-shell [data-ui-button][data-ui-variant="outline"] { background: var(--admin-surface); }
+.admin-shell table { border-collapse: separate; border-spacing: 0; }
+.admin-shell table thead { background: #f3f6f8; }
+.admin-shell table th { color: var(--admin-muted); font-size: 12px; font-weight: 650; }
+.admin-shell table td { border-bottom: 1px solid var(--admin-border); }
+.admin-shell table tbody tr:hover { background: #f7fafb; }
+.admin-shell table tbody tr:last-child td { border-bottom: 0; }
+.admin-shell :is(.admin-filter-bar, .admin-data-panel) { border: 1px solid var(--admin-border); border-radius: 12px; background: var(--admin-surface); }
+
+@media (max-width: 640px) {
+  .admin-shell .admin-date-range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-shell .admin-date-range input { width: 100%; min-width: 0; }
+}

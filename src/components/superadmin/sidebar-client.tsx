@@ -97,7 +97,10 @@ export function SuperAdminSidebarClient({
     'https://i.postimg.cc/HxTMqLGV/Orderfly-Logo-white-F.png'
 
   const allGroups: Group[] = [
-    { key: 'core', title: 'Core', items: [{ href: '/superadmin', label: 'Dashboard', icon: Home }] },
+    { key: 'core', title: 'Overblik', items: [
+      { href: '/superadmin', label: 'Overblik', icon: Home },
+      { href: '/superadmin/dashboard', label: 'Salgsoverblik', icon: BarChart3 },
+    ] },
     {
       key: 'commerce',
       title: 'Commerce',
@@ -251,8 +254,8 @@ export function SuperAdminSidebarClient({
 
   return (
     <Sidebar collapsible="icon">
-      <SidebarContent className="bg-black text-white">
-        <div className="h-14 border-b border-white/10 px-3 py-2 group-data-[collapsible=icon]:px-2">
+      <SidebarContent className="bg-[#142634] text-white">
+        <div className="h-16 border-b border-white/10 px-3 py-2 group-data-[collapsible=icon]:px-2">
           <div className="flex h-full items-center">
             <Image
               src={logoUrl}
@@ -273,7 +276,7 @@ export function SuperAdminSidebarClient({
               <button
                 type="button"
                 onClick={() => toggle(group.key)}
-                className="flex w-full items-center justify-between px-3 pb-2 text-[10px] font-semibold uppercase tracking-wider text-gray-400 hover:text-white group-data-[collapsible=icon]:hidden"
+                className="flex w-full items-center justify-between px-3 pb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300 hover:text-white group-data-[collapsible=icon]:hidden"
               >
                 <span>{group.title}</span>
                 <ChevronDown className={cn('h-4 w-4 transition-transform', isOpen ? 'rotate-180' : '')} />
@@ -294,10 +297,10 @@ export function SuperAdminSidebarClient({
                               href={item.href ?? '#'}
                               className={cn(
                                 'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
-                                active ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                                active ? 'border-l-2 border-cyan-300 bg-[#1f495e] text-white' : 'text-slate-200 hover:bg-[#213849] hover:text-white'
                               )}
                             >
-                              <Icon className={cn('h-4 w-4', active ? 'text-white' : 'text-gray-400')} />
+                              <Icon className={cn('h-4 w-4', active ? 'text-cyan-200' : 'text-slate-300')} />
                               <span className="group-data-[collapsible=icon]:hidden">{item.label}</span>
                             </Link>
                           </SidebarMenuButton>
@@ -315,9 +318,9 @@ export function SuperAdminSidebarClient({
                           <button
                             type="button"
                             onClick={() => toggle(key)}
-                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-gray-300 hover:bg-white/5 hover:text-white group-data-[collapsible=icon]:hidden"
+                            className="flex w-full items-center gap-2 rounded-md px-3 py-2 text-sm text-slate-200 hover:bg-[#213849] hover:text-white group-data-[collapsible=icon]:hidden"
                           >
-                            <ParentIcon className="h-4 w-4 text-gray-400" />
+                            <ParentIcon className="h-4 w-4 text-slate-300" />
                             <span>{item.label}</span>
                             <ChevronDown
                               className={cn('ml-auto h-4 w-4 transition-transform', parentOpen ? 'rotate-180' : '')}
@@ -337,10 +340,10 @@ export function SuperAdminSidebarClient({
                                       href={child.href ?? '#'}
                                       className={cn(
                                         'flex items-center gap-2 rounded-md px-3 py-2 text-sm',
-                                        activeChild ? 'bg-white/10 text-white' : 'text-gray-300 hover:bg-white/5 hover:text-white'
+                                        activeChild ? 'border-l-2 border-cyan-300 bg-[#1f495e] text-white' : 'text-slate-200 hover:bg-[#213849] hover:text-white'
                                       )}
                                     >
-                                      <CIcon className={cn('h-4 w-4', activeChild ? 'text-white' : 'text-gray-400')} />
+                                      <CIcon className={cn('h-4 w-4', activeChild ? 'text-cyan-200' : 'text-slate-300')} />
                                       <span>{child.label}</span>
                                     </Link>
                                   </SidebarMenuButton>

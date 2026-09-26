@@ -11,6 +11,10 @@ test('website routes require their own permission and unknown routes deny',()=>{
  const access={superuser:false,permissions:['orderfly.catalog:view']};
  assert.equal(canNavigate('/superadmin/brands',access),true);assert.equal(canNavigate('/superadmin/brands/websites',access),false);assert.equal(canNavigate('/superadmin/new-private-module',access),false);
 });
+test('sales overview is listed only for analytics viewers',()=>{
+ assert.equal(canNavigate('/superadmin/dashboard',{superuser:false,permissions:['orderfly.orders:view']}),false);
+ assert.equal(canNavigate('/superadmin/dashboard',{superuser:false,permissions:['orderfly.analytics:view']}),true);
+});
 test('missing sessions show no private navigation and mPanel requires member or role administration',()=>{
  assert.equal(canNavigate('/superadmin'),false);
  const url='https://www.esmeraldapizza.dk/mpanel#platform';

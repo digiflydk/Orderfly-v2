@@ -12,6 +12,7 @@ import {
   CommandSeparator,
 } from '@/components/ui/command'
 import type { SACommonFilters } from '@/types/superadmin'
+import { AdminDateRange } from '@/components/superadmin/admin-date-range'
 
 type Brand = { id: string; name: string }
 type Location = { id: string; name: string; brandId: string }
@@ -87,7 +88,7 @@ export function FiltersBar({
   }
 
   return (
-    <div className={cn('w-full rounded-md border bg-card', className)}>
+    <div className={cn('admin-filter-bar w-full', className)}>
       <Command>
         {/* Top row: søg + datoer */}
         <div className="flex flex-col gap-2 border-b p-3 md:flex-row md:items-center md:justify-between">
@@ -99,24 +100,7 @@ export function FiltersBar({
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <label className="text-muted-foreground">From</label>
-            <input
-              type="date"
-              className="h-9 rounded-md border bg-background px-2"
-              value={safeFilters.dateFrom}
-              max={safeFilters.dateTo}
-              onChange={(e) => onDateFrom(e.target.value)}
-            />
-            <label className="ml-2 text-muted-foreground">To</label>
-            <input
-              type="date"
-              className="h-9 rounded-md border bg-background px-2"
-              value={safeFilters.dateTo}
-              min={safeFilters.dateFrom}
-              onChange={(e) => onDateTo(e.target.value)}
-            />
-          </div>
+          <AdminDateRange from={safeFilters.dateFrom} to={safeFilters.dateTo} onFromChange={onDateFrom} onToChange={onDateTo} />
         </div>
 
         <CommandList>

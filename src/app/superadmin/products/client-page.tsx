@@ -59,7 +59,7 @@ type ProductWithDetails = Product & { brandName: string, categoryName: string };
 
 function priceLabel(price: Product['price']) {
     return typeof price === 'number' && Number.isFinite(price)
-        ? `kr.${price.toFixed(2)}` : 'Pris mangler';
+        ? new Intl.NumberFormat('da-DK', { style: 'currency', currency: 'DKK' }).format(price) : 'Pris mangler';
 }
 
 interface ProductsClientPageProps {
@@ -257,14 +257,14 @@ export function ProductsClientPage({ initialProducts, brands, locations }: Produ
   return (
     <>
         <div className="space-y-4">
-            <div className="flex items-center justify-between">
+            <div className="flex flex-wrap items-center justify-between gap-4">
                 <div>
                 <h1 className="text-2xl font-bold tracking-tight">Product Management</h1>
                 <p className="text-muted-foreground">
                     Create, view, and manage all products across all brands. Drag and drop to reorder.
                 </p>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                     <Button onClick={() => handleOpenDuplicateDialog()} disabled={selectedProductIds.length === 0} variant="outline">
                         <Copy className="mr-2 h-4 w-4" />
                         Duplicate ({selectedProductIds.length})
@@ -278,7 +278,7 @@ export function ProductsClientPage({ initialProducts, brands, locations }: Produ
                 </div>
             </div>
 
-            <div className="flex items-center gap-4">
+            <div className="admin-filter-bar flex flex-wrap items-center gap-4 p-4">
                 <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
