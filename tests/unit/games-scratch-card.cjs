@@ -19,6 +19,21 @@ test('page paths reject external URLs, double slashes and duplicates',()=>{
   for (const paths of [['https://example.com'],['//other'],['/menu','/menu'],['/menu?token=x']])
     assert.equal(validate({...base,paths}),false);
 });
+test('shared Promotions codes require a supported website discount and external origins are exact',()=>{
+  const shared={...base,prizes:[{name:'Ti procent',type:'percent',value:10,probabilityPercent:10,maxWinners:100,codeMode:'shared',sharedCode:'SAVE10',redemption:'website'}],allowedOrigins:['https://www.example.com']};
+  assert.equal(validate(shared),true);
+  assert.equal(validate({...shared,prizes:[{...shared.prizes[0],sharedCode:undefined}]}),false);
+  assert.equal(validate({...shared,prizes:[{...shared.prizes[0],redemption:'restaurant'}]}),false);
+  assert.equal(validate({...shared,allowedOrigins:['https://www.example.com/path']}),false);
+});
+test('public game payload never exposes shared codes or email settings',()=>{
+  const script=`import(${JSON.stringify(source)}).then(m=>{const game=m.scratchCardDraftSchema.parse(${JSON.stringify({...base,prizes:[{name:'Ti procent',type:'percent',value:10,probabilityPercent:10,maxWinners:100,codeMode:'shared',sharedCode:'SAVE10',redemption:'website'}],emailSubject:'Subject',emailMessage:'Secret email body',allowedOrigins:['https://www.example.com']})});process.stdout.write(JSON.stringify(m.publicScratchGame(game)))})`;
+  const publicGame=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
+  assert.equal(publicGame.prizes[0].sharedCode,undefined);
+  assert.equal(publicGame.emailSubject,undefined);
+  assert.equal(publicGame.emailMessage,undefined);
+  assert.equal(publicGame.allowedOrigins,undefined);
+});
 test('configured odds and winner caps cannot exceed campaign limits',()=>{
   const settings={...base,cardsPerPlay:3,totalCardLimit:50,prizes:[
     {name:'Dessert',type:'item',value:0,probabilityPercent:60,maxWinners:20},

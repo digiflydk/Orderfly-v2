@@ -7,7 +7,9 @@ export class NotificationPlatformError extends Error {
 
 export type NotificationMessage = {
   idempotencyKey: string;
-  templateKey: 'orderfly.order.confirmation' | 'orderfly.feedback.invitation' | 'orderfly.feedback.reminder' | 'orderfly.feedback.thank_you';
+  templateKey: 'orderfly.order.confirmation' | 'orderfly.feedback.invitation' | 'orderfly.feedback.reminder' | 'orderfly.feedback.thank_you' | 'orderfly.games.prize';
+  senderProfile?: string;
+  organizationId?: string;
   locale: string;
   recipientEmail: string;
   recipientName?: string;
@@ -26,8 +28,8 @@ export class NotificationPlatformClient {
         method: 'POST', cache: 'no-store', redirect: 'error', signal: AbortSignal.timeout(10000),
         headers: { 'x-orderfly-notification-secret': this.config.secret, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          organization_id: this.config.organizationId,
-          sender_profile: 'orderfly',
+          organization_id: message.organizationId || this.config.organizationId,
+          sender_profile: message.senderProfile || 'orderfly',
           idempotency_key: message.idempotencyKey,
           module: 'orderfly',
           template_key: message.templateKey,

@@ -7,6 +7,7 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { Brand, Location, OrderDetail } from '@/types';
 import { buildOrderInvoice, invoiceCounterId } from '@/lib/order-invoice';
 import { paidOrderMarketingEnabled } from '@/lib/marketing/config';
+import { scratchCardDraftSchema } from '@/lib/games/scratch-card';
 
 // Only call with a signed webhook or a session retrieved server-to-server from Stripe.
 export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session) {
@@ -81,6 +82,13 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     const discountRef = discountId ? db.collection('discounts').doc(discountId) : null;
     const discountSnap = discountRef ? await transaction.get(discountRef) : null;
     if (discountSnap?.exists && discountSnap.data()?.brandId !== order.brandId) throw new Error('Discount scope mismatch');
+    const gameVoucherRef=discountId?.startsWith('game_')?db.collection('gameVouchers').doc(discountId.slice(5)):null;
+    const gameVoucher=gameVoucherRef?await transaction.get(gameVoucherRef):null;
+    if(gameVoucher?.exists&&(gameVoucher.data()?.brandId!==order.brandId||gameVoucher.data()?.discountId!==discountId))throw new Error('Game voucher scope mismatch');
+    const gameDraftRef=discountSnap?.exists&&!gameVoucher?.exists?db.collection('gameScratchDrafts').doc(order.brandId):null;
+    const gameDraft=gameDraftRef?await transaction.get(gameDraftRef):null;
+    const sharedGame=gameDraft?scratchCardDraftSchema.safeParse(gameDraft.data()):null;
+    const sharedPrize=sharedGame?.success?sharedGame.data.prizes.find(p=>p.codeMode==='shared'&&p.sharedCode?.toUpperCase()===String(discountSnap?.data()?.code||'').toUpperCase()):null;
     const upsellIds = [...new Set<string>(Array.isArray(order.verifiedUpsellIds) ? order.verifiedUpsellIds.filter((id: unknown): id is string => typeof id === 'string' && /^[^/\\?#]{1,160}$/.test(id)) : [])].slice(0,97);
     const upsellRecords = await Promise.all(upsellIds.map(async id => {
       const ref = db.collection('upsells').doc(id);
@@ -101,6 +109,11 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     if (discountRef && discountSnap?.exists) {
       usage[discountId] = (usage[discountId] || 0) + 1;
       transaction.update(discountRef, { usedCount: (discountSnap.data()?.usedCount || 0) + 1 });
+    }
+    if(gameVoucher?.exists||sharedPrize){
+      const voucher=gameVoucher?.data();
+      transaction.create(db.collection('gameConversions').doc(createHash('sha256').update(JSON.stringify(['orderfly',order.brandId,metadata.orderId])).digest('hex')),{brandId:order.brandId,channel:'orderfly',orderId:metadata.orderId,playId:voucher?.playId||null,prizeName:voucher?.prizeName||sharedPrize?.name,codeMode:voucher?.codeMode||'shared',amount:Number(order.totalAmount),discountAmount:Number(order.paymentDetails?.discountTotal||0),currency:'DKK',status:'paid',createdAt:serverTimestamp()});
+      if(gameVoucherRef&&voucher?.state==='issued')transaction.update(gameVoucherRef,{state:'redeemed',redeemedAt:serverTimestamp(),redeemedOrderId:metadata.orderId});
     }
     if (customerSnap.exists) transaction.update(customerRef, {
       totalOrders: (customer.totalOrders || 0) + 1,
