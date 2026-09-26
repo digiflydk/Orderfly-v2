@@ -8,6 +8,7 @@ export function ScratchGame({game,brandName,test=false,pathname}:Props){
   const [board,setBoard]=useState<string[]|null>(null);
   const [won,setWon]=useState(false);
   const [prize,setPrize]=useState<string|null>(null);
+  const [mailQueued,setMailQueued]=useState(false);
   const [revealed,setRevealed]=useState(0);
   const [pending,setPending]=useState(false);
   const [error,setError]=useState('');
@@ -18,7 +19,7 @@ export function ScratchGame({game,brandName,test=false,pathname}:Props){
       const response=await fetch('/api/public/games/scratch',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brandId:game.brandId,name:data.get('name'),email:data.get('email'),phone:data.get('phone')||'',newsletter:data.get('newsletter')==='on',pathname,test})});
       const result=await response.json();
       if(!response.ok)throw new Error(result.error||'Prøv igen senere.');
-      setBoard(result.board);setWon(result.won);setPrize(result.prizeName);
+      setBoard(result.board);setWon(result.won);setPrize(result.prizeName);setMailQueued(result.mailQueued);
     }catch(e){setError(e instanceof Error?e.message:'Prøv igen senere.');}finally{setPending(false);}
   }
   const input='mt-1 w-full rounded-md border border-white/50 bg-white px-3 py-2 text-black';
@@ -31,15 +32,15 @@ export function ScratchGame({game,brandName,test=false,pathname}:Props){
       <label className="block text-sm">Navn<input required name="name" autoComplete="name" minLength={2} maxLength={100} className={input}/></label>
       <label className="block text-sm">E-mail<input required name="email" type="email" autoComplete="email" maxLength={254} className={input}/></label>
       {game.collectPhone&&<label className="block text-sm">Telefon (valgfrit)<input name="phone" type="tel" autoComplete="tel" maxLength={30} className={input}/></label>}
-      <label className="flex items-start gap-2 text-sm"><input type="checkbox" name="newsletter" className="mt-1"/><span>{game.newsletterText}</span></label>
-      <p className="text-xs text-white/75">Deltagelse kræver ikke tilmelding til nyhedsbrevet. Én deltagelse pr. e-mail. Vi bruger dine oplysninger til at sende en eventuel gevinst.</p>
+      {!test&&<label className="flex items-start gap-2 text-sm"><input type="checkbox" name="newsletter" className="mt-1"/><span>{game.newsletterText}</span></label>}
+      <p className="text-xs text-white/75">{test?'Administrator-test: Ingen tilmelding til nyhedsbrev eller indløselig kode. Brug en ny test-e-mail for hver prøve.':'Deltagelse kræver ikke tilmelding til nyhedsbrevet. Én deltagelse pr. e-mail. Vi bruger dine oplysninger til at sende en eventuel gevinst.'}</p>
       <button disabled={pending} className="w-full rounded-md px-4 py-3 font-semibold text-black disabled:opacity-50" style={{backgroundColor:game.primaryColor}}>{pending?'Starter…':'Start spillet'}</button>
       {error&&<p role="alert" className="text-sm text-red-200">{error}</p>}
     </form>:<div className="mt-6">
       <div className={`grid gap-3 ${game.cardsPerPlay>1?'grid-cols-2':'grid-cols-1'}`}>
         {board.map((label,index)=><ScratchSurface key={index} index={index} round={0} label={label} imageUrl={game.prizes.find(p=>p.name===label)?.imageUrl||''} color={game.primaryColor} onReveal={()=>setRevealed(n=>n+1)}/>)}
       </div>
-      {revealed===board.length&&<p role="status" className="mt-5 text-base font-semibold">{won?`Du vandt ${prize}! Din kode er lagt i kø til e-mail. ${test?'Koden er kun til test.':''}`:game.revealText}</p>}
+      {revealed===board.length&&<p role="status" className="mt-5 text-base font-semibold">{won?test?`Du vandt ${prize} i testen. ${mailQueued?'En testkode er lagt i mailkøen; den kan ikke indløses.':'Ingen e-mail er sendt, da gevinstmail ikke er konfigureret.'}`:`Du vandt ${prize}! Din kode er lagt i kø til e-mail.`:game.revealText}</p>}
     </div>}
   </section>;
 }
