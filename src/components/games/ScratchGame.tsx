@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PublicScratchGame } from '@/lib/games/scratch-card';
 import { ScratchSurface } from './ScratchCard';
 
@@ -13,6 +13,8 @@ export function ScratchGame({game,brandName,test=false,pathname,embedOrigin}:Pro
   const [pending,setPending]=useState(false);
   const [error,setError]=useState('');
   const [opened,setOpened]=useState(false);
+  const [resultDismissed,setResultDismissed]=useState(false);
+  const resultTitle=useRef<HTMLHeadingElement>(null);
   useEffect(()=>{
     if(test)return;
     const eventId=crypto.randomUUID().replace(/-/g,'');
@@ -38,8 +40,19 @@ export function ScratchGame({game,brandName,test=false,pathname,embedOrigin}:Pro
     }catch(e){setError(e instanceof Error?e.message:'Prøv igen senere.');}finally{setPending(false);}
   }
   const [playEventId,setPlayEventId]=useState<string|null>(null);
-  useEffect(()=>{if(playEventId&&board&&revealed===board.length)track('game_complete',playEventId);},[playEventId,board,revealed]); // eslint-disable-line react-hooks/exhaustive-deps
+  const finished=!!board&&revealed===board.length;
+  useEffect(()=>{
+    if(!finished)return;
+    if(playEventId)track('game_complete',playEventId);
+    resultTitle.current?.focus();
+  },[finished,playEventId]); // eslint-disable-line react-hooks/exhaustive-deps
   const input='mt-1 w-full rounded-md border border-white/50 bg-white px-3 py-2 text-black';
+  const prizeImage=game.prizes.find(item=>item.name===prize)?.imageUrl;
+  const resultMessage=won
+    ?test
+      ?mailQueued?'Testkoden er lagt i mailkøen og kan ikke indløses.':'Der blev ikke sendt en testmail.'
+      :mailQueued?'Din præmiekode er på vej til din e-mail.':'Din præmiekode kunne ikke sendes endnu.'
+    :game.revealText;
   return <section className="mx-auto w-full max-w-lg overflow-hidden rounded-2xl p-5 text-center text-white shadow-xl sm:p-8" style={{backgroundColor:game.surfaceColor,backgroundImage:game.backgroundUrl?`linear-gradient(#0009,#0009),url("${game.backgroundUrl}")`:undefined,backgroundSize:'cover',fontFamily:game.fontUrl?'ScratchBrandFont, system-ui':'system-ui'}}>
     {game.fontUrl&&<style>{`@font-face{font-family:ScratchBrandFont;src:url("${game.fontUrl}") format("woff2");font-display:swap}`}</style>}
     {game.logoUrl?<img src={game.logoUrl} alt={`${brandName} logo`} className="mx-auto mb-3 max-h-20 max-w-[200px] object-contain"/>:<div className="text-sm font-bold uppercase tracking-widest" style={{color:game.primaryColor}}>{brandName}</div>}
@@ -62,7 +75,22 @@ export function ScratchGame({game,brandName,test=false,pathname,embedOrigin}:Pro
           </div>
         </div>)}
       </div>
-      {revealed===board.length&&<p role="status" className="mt-5 text-base font-semibold">{won?test?`Du vandt ${prize} i testen. ${mailQueued?'En testkode er lagt i mailkøen; den kan ikke indløses.':'Ingen e-mail er sendt, da gevinstmail ikke er konfigureret.'}`:`Du vandt ${prize}! Din kode er lagt i kø til e-mail.`:game.revealText}</p>}
+      {finished&&<div role="status" className="mt-5 rounded-xl border border-white/30 p-4 text-center">
+        <p className="text-lg font-bold">{won?`Du vandt ${prize}!`:game.revealText}</p>
+        <p className="mt-2 text-sm">{resultMessage}</p>
+        {resultDismissed&&<button type="button" onClick={()=>setResultDismissed(false)} className="mt-3 rounded-md border border-white/60 px-4 py-2 text-sm">Se resultatet igen</button>}
+      </div>}
+    </div>}
+    {finished&&!resultDismissed&&<div className="game-result-overlay fixed inset-0 z-50 flex items-center justify-center overflow-y-auto bg-black/85 p-4" role="dialog" aria-modal="true" aria-labelledby="game-result-title">
+      <style>{`@keyframes game-result-enter{from{opacity:0;transform:translateY(28px) scale(.86)}to{opacity:1;transform:translateY(0) scale(1)}}@keyframes game-confetti{0%{opacity:0;transform:translate3d(0,-100px,0) rotate(0deg)}12%{opacity:1}100%{opacity:0;transform:translate3d(var(--drift),480px,0) rotate(680deg)}}.game-result-card{animation:game-result-enter .65s cubic-bezier(.16,1,.3,1) both}.game-confetti{position:absolute;top:0;left:var(--left);width:9px;height:16px;border-radius:2px;background:var(--color);animation:game-confetti 2.7s ease-out var(--delay) both;pointer-events:none}@media(prefers-reduced-motion:reduce){.game-result-card,.game-confetti{animation:none}.game-confetti{display:none}}`}</style>
+      {won&&Array.from({length:18},(_,index)=><span key={index} aria-hidden="true" className="game-confetti" style={{'--left':`${7+(index*37)%86}%`,'--drift':`${(index%2?-1:1)*(30+index*7)}px`,'--delay':`${(index%5)*.09}s`,'--color':index%3===0?game.primaryColor:index%3===1?'#fff':'#f59e0b'} as React.CSSProperties}/>)}
+      <div className="game-result-card relative z-10 w-full max-w-sm rounded-3xl border-2 bg-[#171717] px-6 py-8 text-center text-white shadow-2xl" style={{borderColor:game.primaryColor}}>
+        <p className="text-xs font-bold uppercase tracking-[.25em]" style={{color:game.primaryColor}}>{won?'Tillykke!':'Tak fordi du spillede'}</p>
+        {won&&prizeImage&&<img src={prizeImage} alt={prize||'Præmie'} className="mx-auto mt-5 h-32 w-32 rounded-2xl bg-white object-contain p-2"/>}
+        <h3 id="game-result-title" ref={resultTitle} tabIndex={-1} className="mt-5 text-3xl font-bold leading-tight outline-none">{won?`Du vandt ${prize}!`:game.revealText}</h3>
+        <p className="mt-4 text-base text-white/85">{resultMessage}</p>
+        <button type="button" onClick={()=>setResultDismissed(true)} className="mt-7 w-full rounded-lg px-5 py-3 font-bold text-black" style={{backgroundColor:game.primaryColor}}>Se mine lodder</button>
+      </div>
     </div>}
   </section>;
 }
