@@ -1,12 +1,11 @@
 import type { ScratchCardDraft } from './scratch-card';
 type Prize = ScratchCardDraft['prizes'][number];
-const filler = ['★','●','◆','♥','✦','▲','■','✚','⬟'];
 
 export function drawNoWinBoard(count:number,noWinText:string,prizes:Prize[]=[],excludedPrize=''):string[] {
   if(count===1)return [noWinText];
   const names=[...new Set(prizes.map(prize=>prize.name).filter(name=>name!==excludedPrize))];
   return Array.from({length:Math.ceil(count/3)},(_,ticket)=>{
-    const options=names.length>=3?names:[...names,...filler];
+    const options=names.length>=2?names:[...names,...['Prøv igen','Ingen gevinst','Næste gang'].filter(text=>!names.includes(text)).slice(0,3-names.length)];
     return Array.from({length:Math.min(3,count-ticket*3)},(_,slot)=>options[(ticket*2+slot)%options.length]);
   }).flat();
 }

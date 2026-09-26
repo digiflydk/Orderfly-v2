@@ -26,6 +26,13 @@ test('shared Promotions codes require a supported website discount and external 
   assert.equal(validate({...shared,prizes:[{...shared.prizes[0],redemption:'restaurant'}]}),false);
   assert.equal(validate({...shared,allowedOrigins:['https://www.example.com/path']}),false);
 });
+test('redemption channels support a product on Orderfly and external-only uploaded codes',()=>{
+  const prize={name:'Pizza',type:'item',value:0,probabilityPercent:10,maxWinners:100,codeMode:'generated',redemptionChannels:['restaurant','orderfly','external'],productId:'pizza_01'};
+  assert.equal(validate({...base,prizes:[prize]}),true);
+  assert.equal(validate({...base,prizes:[{...prize,productId:undefined}]}),false);
+  assert.equal(validate({...base,prizes:[{...prize,codeMode:'uploaded'}]}),false);
+  assert.equal(validate({...base,prizes:[{...prize,codeMode:'uploaded',redemptionChannels:['restaurant','external'],productId:undefined}]}),true);
+});
 test('public game payload never exposes shared codes or email settings',()=>{
   const script=`import(${JSON.stringify(source)}).then(m=>{const game=m.scratchCardDraftSchema.parse(${JSON.stringify({...base,prizes:[{name:'Ti procent',type:'percent',value:10,probabilityPercent:10,maxWinners:100,codeMode:'shared',sharedCode:'SAVE10',redemption:'website'}],emailSubject:'Subject',emailMessage:'Secret email body',allowedOrigins:['https://www.example.com']})});process.stdout.write(JSON.stringify(m.publicScratchGame(game)))})`;
   const publicGame=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
@@ -61,6 +68,12 @@ test('no win never displays a matching prize when winner cap is exhausted',()=>{
   const script=`import(${JSON.stringify(board)}).then(m=>process.stdout.write(JSON.stringify([m.drawNoWinBoard(3,'Intet'),m.drawNoWinBoard(1,'Intet')])))`;
   const [three,one]=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
   assert.equal(new Set(three).size,3);assert.deepEqual(one,['Intet']);
+});
+test('tickets never use decorative heart or star symbols',()=>{
+  const board=pathToFileURL(path.resolve('src/lib/games/scratch-card-preview.ts')).href;
+  const script=`import(${JSON.stringify(board)}).then(m=>process.stdout.write(JSON.stringify(m.drawWinBoard('Pommes frites',9,.33,['Pizza','Tiramisu','Pommes frites'].map(name=>({name}))))))`;
+  const symbols=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
+  assert.ok(symbols.every(s=>['Pizza','Tiramisu','Pommes frites'].includes(s)));
 });
 
 test('five prize products fill three tickets while exactly one ticket wins',()=>{

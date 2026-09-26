@@ -21,7 +21,10 @@ export function basketTotals({cartItems, appliedDiscount, standardDiscounts, del
       ? sumMoney([currentSubtotal, -currentItemDiscount]) : discountableSubtotal;
     if (appliedDiscount && voucherSubtotal >= (appliedDiscount.minOrderValue || 0)) {
         let voucherAmount = 0;
-        if (appliedDiscount.discountType === 'percentage') {
+        const prizeItem=appliedDiscount.gameProductId?unlockedItems.find(item=>item.id===appliedDiscount.gameProductId):null;
+        if(appliedDiscount.gameProductId){
+            voucherAmount=prizeItem?money(Math.min(voucherSubtotal,prizeItem.price)):0;
+        } else if (appliedDiscount.discountType === 'percentage') {
             voucherAmount = percentageMoney(voucherSubtotal, Math.min(100, appliedDiscount.discountValue));
         } else {
             voucherAmount = money(Math.min(voucherSubtotal, appliedDiscount.discountValue));

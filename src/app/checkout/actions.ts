@@ -425,7 +425,9 @@ export async function createStripeCheckoutSessionAction(
       if (!selectedDiscount) throw new Error('The selected discount no longer exists.');
       // Use validated charged merchandise, including options/combos, only when
       // the persisted newsletter campaign explicitly enables item stacking.
-      const selectedSubtotal = newsletterAllowsStacking(selectedDiscount) ? chargedItemsSubtotal : eligibleSubtotal;
+      const prizeIndex=selectedDiscount.gameProductId?resolvedLines.findIndex((line,index)=>line.catalog?.id===selectedDiscount!.gameProductId&&eligibleLines[index]>0):-1;
+      if(selectedDiscount.gameProductId&&prizeIndex<0)throw new Error('Add the prize product to your basket before using this code.');
+      const selectedSubtotal=prizeIndex>=0?money(Math.min(resolvedLines[prizeIndex].price,eligibleLines[prizeIndex])):newsletterAllowsStacking(selectedDiscount) ? chargedItemsSubtotal : eligibleSubtotal;
       const eligibilityError = validateDiscountEligibility(selectedDiscount, {
         brandId,
         locationId,
@@ -436,7 +438,7 @@ export async function createStripeCheckoutSessionAction(
         newsletterConsent: customerInfo.subscribeToNewsletter,
       });
       if (eligibilityError) throw new Error(eligibilityError);
-      selectedDiscountAmount = calculateDiscountAmount(selectedDiscount, selectedSubtotal);
+      selectedDiscountAmount = selectedDiscount.gameProductId ? selectedSubtotal : calculateDiscountAmount(selectedDiscount, selectedSubtotal);
     }
 
     const manualDiscountWins = selectedDiscountAmount > (automaticCartDiscount?.amount || 0);
@@ -668,7 +670,8 @@ export async function validateDiscountAction(
     locationId: string, 
     subtotal: number,
     deliveryType: 'delivery' | 'pickup',
-    customerEmail?: string
+    customerEmail?: string,
+    cartProductIds?: string[]
 ): Promise<{ success: boolean; message: string; discount?: Discount; }> {
     const codeUpper = code.toUpperCase();
     const discount = await getDiscountByCode(codeUpper, brandId);
@@ -676,6 +679,7 @@ export async function validateDiscountAction(
     if (!discount) {
         return { success: false, message: 'Invalid discount code.' };
     }
+    if(discount.gameProductId&&(!Array.isArray(cartProductIds)||!cartProductIds.includes(discount.gameProductId)))return {success:false,message:'Læg præmieproduktet i kurven, før du bruger koden.'};
     let customer: Customer | null = null;
     let customerId: string | undefined;
     if (customerEmail?.trim()) {
