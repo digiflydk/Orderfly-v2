@@ -37,8 +37,13 @@ export function ScratchGame({game,brandName,test=false,pathname}:Props){
       <button disabled={pending} className="w-full rounded-md px-4 py-3 font-semibold text-black disabled:opacity-50" style={{backgroundColor:game.primaryColor}}>{pending?'Starter…':'Start spillet'}</button>
       {error&&<p role="alert" className="text-sm text-red-200">{error}</p>}
     </form>:<div className="mt-6">
-      <div className={`grid gap-3 ${game.cardsPerPlay>=7?'grid-cols-3':game.cardsPerPlay>1?'grid-cols-2':'grid-cols-1'}`}>
-        {board.map((label,index)=><ScratchSurface key={index} index={index} round={0} label={label} imageUrl={game.prizes.find(p=>p.name===label)?.imageUrl||''} color={game.primaryColor} onReveal={()=>setRevealed(n=>n+1)}/>)}
+      <div className="space-y-4">
+        {Array.from({length:Math.ceil(board.length/3)},(_,ticket)=><div key={ticket} className="rounded-xl border border-white/30 p-2 sm:p-3">
+          {board.length>3&&<p className="mb-2 text-sm font-semibold">Lod {ticket+1}</p>}
+          <div className={`grid gap-2 ${board.slice(ticket*3,ticket*3+3).length===1?'grid-cols-1':'grid-cols-3'}`}>
+            {board.slice(ticket*3,ticket*3+3).map((label,slot)=>{const index=ticket*3+slot;return <ScratchSurface key={index} index={index} round={0} label={label} imageUrl={game.prizes.find(p=>p.name===label)?.imageUrl||''} color={game.primaryColor} onReveal={()=>setRevealed(n=>n+1)}/>;})}
+          </div>
+        </div>)}
       </div>
       {revealed===board.length&&<p role="status" className="mt-5 text-base font-semibold">{won?test?`Du vandt ${prize} i testen. ${mailQueued?'En testkode er lagt i mailkøen; den kan ikke indløses.':'Ingen e-mail er sendt, da gevinstmail ikke er konfigureret.'}`:`Du vandt ${prize}! Din kode er lagt i kø til e-mail.`:game.revealText}</p>}
     </div>}
