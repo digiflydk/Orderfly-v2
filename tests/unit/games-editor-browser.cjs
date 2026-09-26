@@ -41,7 +41,7 @@ before(async () => {
   server = http.createServer(async (request, response) => {
     if (request.url === '/bundle.js') { response.setHeader('content-type', 'application/javascript'); return response.end(fs.readFileSync(path.join(directory, 'bundle.js'))); }
     if (request.url === '/save') { const chunks = []; for await (const chunk of request) chunks.push(chunk); const data = await new Request('http://localhost/save', { method: 'POST', headers: { 'content-type': request.headers['content-type'] }, body: Buffer.concat(chunks) }).formData(); saved = Object.fromEntries(data); return response.end('OK'); }
-    response.setHeader('content-type', 'text/html'); response.end('<div id="root"></div><script src="/bundle.js"></script>');
+    response.setHeader('content-type', 'text/html; charset=utf-8'); response.end('<meta charset="utf-8"><style>.hidden{display:none}</style><div id="root"></div><script src="/bundle.js"></script>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = `http://127.0.0.1:${server.address().port}`;
