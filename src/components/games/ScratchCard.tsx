@@ -70,7 +70,7 @@ export function ScratchCard({brandName,logoUrl,title,instruction,noWinText,cards
     <div className="text-xs font-semibold uppercase tracking-[.2em] text-yellow-400">Scratch Card · Test</div>
     <h2 className="mt-3 text-xl font-bold sm:text-2xl">{title}</h2>
     <p className="mt-2 text-sm text-gray-300">{instruction}</p>
-    <div className={`mt-6 grid gap-3 ${cardsPerPlay>1?'grid-cols-2':'grid-cols-1'}`}>
+    <div className={`mt-6 grid gap-3 ${cardsPerPlay>=7?'grid-cols-3':cardsPerPlay>1?'grid-cols-2':'grid-cols-1'}`}>
       {Array.from({length:cardsPerPlay},(_,index)=><ScratchSurface key={`${round}-${index}`} index={index} round={round} label={outcomes[index]||'…'}/>)}
     </div>
     <button type="button" onClick={()=>setRound(n=>n+1)} className="mt-5 rounded-md border border-white/60 px-4 py-2 text-sm">Ny test med samme sandsynligheder</button>
