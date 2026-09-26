@@ -39,15 +39,16 @@ export async function playScratchCard(input:PlayInput, ip:string) {
     if((limit.data()?.count||0)>=20)throw new GameError(429,'For mange forsøg. Prøv igen senere.');
     const fresh=scratchCardDraftSchema.safeParse(current.data());
     if(!fresh.success||current.data()?.status!==status || (!input.test&&!(input.pathname==='/games'||scratchCardOnPage(fresh.data,input.pathname))))throw new GameError(409,'Kampagnen blev ændret. Prøv igen.');
-    const played=current.data()?.playedCount||0;
+    const played=(input.test?current.data()?.testPlayedCount:current.data()?.playedCount)||0;
+    const previousCounts=(input.test?current.data()?.testWinnerCounts:current.data()?.winnerCounts)||[];
     if(played>=game.totalCardLimit)throw new GameError(409,'Alle spil i kampagnen er brugt.');
     let index=-1, cumulative=0;
     for(let i=0;i<game.prizes.length;i++){cumulative+=game.prizes[i].probabilityPercent;if(roll*100<cumulative){index=i;break;}}
-    const won=index>=0&&((current.data()?.winnerCounts||[])[index]||0)<game.prizes[index].maxWinners;
+    const won=index>=0&&(previousCounts[index]||0)<game.prizes[index].maxWinners;
     const prize=won?game.prizes[index]:null;
     let actualCode=code, actualCodeId=codeId;
     let uploadedRef:FirebaseFirestore.DocumentReference|undefined;
-    if(prize?.codeMode==='uploaded'){
+    if(prize?.codeMode==='uploaded'&&!input.test){
       const pool=await tx.get(gameRef.collection('codes').where('prizeIndex','==',index).where('available','==',true).limit(1));
       if(pool.empty)throw new GameError(409,'Der er ingen ubrugte koder til denne præmie.');
       uploadedRef=pool.docs[0].ref;
@@ -60,9 +61,9 @@ export async function playScratchCard(input:PlayInput, ip:string) {
       const [existing, duplicate]=await Promise.all([tx.get(voucher),tx.get(db.collection('discounts').where('brandId','==',input.brandId).where('code','==',actualCode).limit(1))]);
       if(existing.exists||!duplicate.empty)throw new GameError(409,'Koden er allerede i brug. Prøv igen.');
     }
-    const counters=Array.from({length:game.prizes.length},(_,i)=>((current.data()?.winnerCounts||[])[i]||0)+(won&&i===index?1:0));
+    const counters=Array.from({length:game.prizes.length},(_,i)=>(previousCounts[i]||0)+(won&&i===index?1:0));
     const now=admin.firestore.FieldValue.serverTimestamp();
-    tx.update(gameRef,{playedCount:played+1,winnerCounts:counters});
+    tx.update(gameRef,input.test?{testPlayedCount:played+1,testWinnerCounts:counters}:{playedCount:played+1,winnerCounts:counters});
     tx.set(limiterRef,{brandId:input.brandId,day,count:(limit.data()?.count||0)+1,updatedAt:now});
     const board=won?Array(game.cardsPerPlay).fill(prize!.name):drawNoWinBoard(game.cardsPerPlay,game.revealText);
     tx.create(playRef,{brandId:input.brandId,name,email,phone,newsletter:input.newsletter===true,newsletterText:input.newsletter?game.newsletterText:null,consentAt:input.newsletter?now:null,mode:input.test?'test':'live',board,prizeIndex:won?index:null,createdAt:now});

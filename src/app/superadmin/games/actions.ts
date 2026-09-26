@@ -48,8 +48,8 @@ export async function saveScratchCardDraft(form: FormData): Promise<{ok:boolean;
     await db.runTransaction(async tx => {
       const before = await tx.get(ref);
       await authorizeTransaction(tx, identity, {brandId:input.brandId}, `orderfly.website:${before.exists ? 'edit' : 'create'}`, 'company');
-      if ((before.data()?.playedCount||0)>0 && JSON.stringify(before.data()?.prizes)!==JSON.stringify(input.prizes)) throw new Error('Præmier kan ikke ændres efter første spil.');
-      tx.set(ref, { ...input, status:before.data()?.status||'draft', playedCount:before.data()?.playedCount||0, winnerCounts:before.data()?.winnerCounts||input.prizes.map(()=>0), updatedAt:admin.firestore.FieldValue.serverTimestamp() });
+      if (((before.data()?.playedCount||0)+(before.data()?.testPlayedCount||0))>0 && JSON.stringify(before.data()?.prizes)!==JSON.stringify(input.prizes)) throw new Error('Præmier kan ikke ændres efter første spil.');
+      tx.set(ref, { ...input, status:before.data()?.status||'draft', playedCount:before.data()?.playedCount||0, winnerCounts:before.data()?.winnerCounts||input.prizes.map(()=>0), testPlayedCount:before.data()?.testPlayedCount||0, testWinnerCounts:before.data()?.testWinnerCounts||input.prizes.map(()=>0), updatedAt:admin.firestore.FieldValue.serverTimestamp() });
       tx.set(db.collection('auditLogs').doc(), {
         module:'games', entity:'scratch-card', entityId:input.brandId,
         action:before.exists ? 'update' : 'create', brandId:input.brandId,
