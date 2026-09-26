@@ -84,7 +84,7 @@ export function FiltersBar({
   const toggleLocation = (id: string) => {
     const current = safeFilters.locationIds ?? []
     const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id]
-    emit({ locationIds: next.length ? next : undefined })
+    emit({ locationIds: next })
   }
 
   return (
