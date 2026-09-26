@@ -67,7 +67,7 @@ jobs:
         run: npm run typecheck
 
       - name: Platform administration and brand-reference regression
-        run: node --test tests/unit/mpanel-platform-admin.cjs tests/unit/brand-location-edit.cjs tests/unit/platform-role-server.cjs tests/unit/freemium-access.cjs tests/unit/access-authority.cjs tests/unit/order-access.cjs tests/unit/admin-session.cjs tests/unit/opsfly-login.cjs tests/unit/website-access.cjs
+        run: node --test tests/unit/mpanel-platform-admin.cjs tests/unit/brand-location-edit.cjs tests/unit/platform-role-server.cjs tests/unit/freemium-access.cjs tests/unit/access-authority.cjs tests/unit/order-access.cjs tests/unit/admin-session.cjs tests/unit/opsfly-login.cjs tests/unit/mpanel-launch.cjs tests/unit/website-access.cjs
 
       - name: Booking feedback and mail regression
         run: node --test tests/unit/booking-feedback-timing.cjs tests/unit/feedback-mail.cjs tests/unit/feedback-readiness.cjs tests/unit/feedback-central-access.cjs
@@ -76,7 +76,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Brand form browser regression
-        run: node --test tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/feedback-browser.cjs
+        run: node --test tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs
 
       - name: Games editor browser regression
         run: node --test tests/unit/games-editor-browser.cjs
