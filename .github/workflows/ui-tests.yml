@@ -78,6 +78,9 @@ jobs:
       - name: Brand form browser regression
         run: node --test tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/feedback-browser.cjs
 
+      - name: Games editor browser regression
+        run: node --test tests/unit/games-editor-browser.cjs
+
       - name: Shared admin overview visual regression
         run: node --test tests/unit/admin-overview-browser.cjs
 
