@@ -5,6 +5,8 @@ import { orderflyReadGrants, verifiedOrderflyIdentity } from '@/lib/access/order
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { principalKey } from '@/lib/access/authority';
 import { scratchCardDraftSchema, type ScratchCardDraft } from '@/lib/games/scratch-card';
+import { gameMailConfig } from '@/lib/games/mail-config';
+import { NotificationPlatformClient } from '@/lib/notifications/platform';
 
 export async function gameBrands(): Promise<Array<{id:string; name:string; slug:string; logoUrl:string}>> {
   const grants = await orderflyReadGrants('orderfly.website:view');
@@ -34,6 +36,8 @@ export async function saveScratchCardDraft(form: FormData): Promise<{ok:boolean;
     brandId: form.get('brandId'), title: form.get('title'),
     instruction: form.get('instruction'), revealText: form.get('revealText'),
     logoUrl: form.get('logoUrl'), backgroundUrl: form.get('backgroundUrl'), fontUrl: form.get('fontUrl'), primaryColor: form.get('primaryColor'), surfaceColor: form.get('surfaceColor'), collectPhone: form.get('collectPhone') === 'on', newsletterText: form.get('newsletterText'),
+    emailSubject:form.get('emailSubject'),emailMessage:form.get('emailMessage'),displayCooldownDays:Number(form.get('displayCooldownDays')),
+    allowedOrigins:String(form.get('allowedOrigins')||'').split(/\r?\n/).map(value=>value.trim()).filter(Boolean),
     cardsPerPlay:Number(form.get('cardsPerPlay')),
     totalCardLimit:Number(form.get('totalCardLimit')),
     prizes,
@@ -112,6 +116,19 @@ export async function importGameCodes(brandId:string,prizeIndex:number,text:stri
   }catch{return {ok:false,message:'Koderne kunne ikke importeres. Kontrollér præmieindstilling og dubletter.'};}
 }
 
+export async function sendGameTestEmail(brandId:string,email:string):Promise<{ok:boolean;message:string}>{
+  if(!/^[A-Za-z0-9_-]{1,128}$/.test(brandId)||! /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)||email.length>254)return {ok:false,message:'Ugyldig e-mailadresse.'};
+  try{
+    await (await import('@/lib/access/orderfly-session')).requireOrderflyAccess(brandId,null,'orderfly.website:edit');
+    const mail=gameMailConfig(brandId),db=getAdminDb(),brand=(await db.collection('brands').doc(brandId).get()).data();
+    const game=scratchCardDraftSchema.safeParse((await db.collection('gameScratchDrafts').doc(brandId).get()).data());
+    if(!mail||!game.success||!brand)return {ok:false,message:'Gevinstmailen er ikke konfigureret eller spillet er ikke gemt.'};
+    const {randomUUID}=await import('node:crypto');
+    await new NotificationPlatformClient().send({idempotencyKey:`game-test-${randomUUID()}`,templateKey:'orderfly.games.prize',organizationId:mail.organizationId,senderProfile:mail.senderProfile,locale:'da',recipientEmail:email.trim().toLowerCase(),relatedEntity:{type:'game_test',id:brandId},variables:{brand_id:brandId,brand_name:String(brand.name||''),logo_url:game.data.logoUrl||String(brand.logoUrl||''),primary_color:game.data.primaryColor,surface_color:game.data.surfaceColor,subject:game.data.emailSubject,message:game.data.emailMessage,name:'Testmodtager',prize:game.data.prizes[0].name,code:'TEST-NOT-VALID',redemption:game.data.prizes[0].redemption,mode:'test'}});
+    return {ok:true,message:'Testmail er accepteret af notifikationsplatformen. Kontrollér modtagerens indbakke.'};
+  }catch{return {ok:false,message:'Testmailen kunne ikke sendes. Kontrollér brandets afsender og publiceret skabelon.'};}
+}
+
 export async function setScratchCardStatus(brandId:string,status:'draft'|'test'|'live'):Promise<{ok:boolean;message:string}> {
   if(!/^[A-Za-z0-9_-]{1,128}$/.test(brandId))return {ok:false,message:'Ugyldigt brand.'};
   try{
@@ -121,13 +138,13 @@ export async function setScratchCardStatus(brandId:string,status:'draft'|'test'|
       await authorizeTransaction(tx,identity,{brandId},'orderfly.website:edit','company');
       const parsed=scratchCardDraftSchema.safeParse(before.data());
       if(!parsed.success)throw new Error('Gem spillet først.');
-      if(status==='live'&&(!process.env.ORDERFLY_GAMES_EMAIL_ENABLED_BRANDS?.split(',').includes(brandId)))throw new Error('Mail mangler.');
+      if(status==='live'&&!gameMailConfig(brandId))throw new Error('Mail mangler.');
       tx.update(ref,{status,updatedAt:admin.firestore.FieldValue.serverTimestamp()});
       tx.create(db.collection('auditLogs').doc(),{module:'games',entity:'scratch-card',entityId:brandId,action:`status-${status}`,brandId,actorId:principalKey(identity),timestamp:admin.firestore.FieldValue.serverTimestamp()});
     });
     revalidatePath('/superadmin/games/scratch-card');
     return {ok:true,message:status==='live'?'Spillet er aktiveret.':'Status ændret.'};
-  }catch{return {ok:false,message:'Status kunne ikke ændres. Kontrollér opsætning og adgang.'};}
+  }catch(error){return {ok:false,message:error instanceof Error&&error.message==='Mail mangler.'?'Gevinstmailen mangler en verificeret brandafsender og en aktiv mailkonfiguration.':'Status kunne ikke ændres. Kontrollér opsætning og adgang.'};}
 }
 
 export async function redeemGameVoucher(brandId:string,code:string):Promise<{ok:boolean;message:string}> {

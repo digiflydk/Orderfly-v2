@@ -20,13 +20,18 @@ export const scratchCardDraftSchema = z.object({
     value: z.number().finite().min(0).max(10000),
     probabilityPercent: z.number().finite().min(0).max(100),
     maxWinners: z.number().int().min(1).max(1000000),
-    codeMode: z.enum(['generated', 'uploaded']).default('generated'),
+    codeMode: z.enum(['generated', 'shared', 'uploaded']).default('generated'),
+    sharedCode: z.string().trim().regex(/^[A-Za-z0-9_-]{5,40}$/).optional(),
     redemption: z.enum(['restaurant', 'website', 'both']).default('restaurant'),
   })).min(1).max(12),
   placement: z.enum(['all', 'selected']),
   paths: z.array(z.string().trim().max(180).regex(/^\/(?!\/)[a-zA-Z0-9/_-]*$/)).max(30),
   collectPhone: z.boolean().default(false),
   newsletterText: z.string().trim().min(10).max(320).default('Ja tak, jeg vil modtage nyheder og tilbud via e-mail. Jeg kan altid afmelde mig.'),
+  emailSubject: z.string().trim().min(3).max(140).default('Din gevinst er klar'),
+  emailMessage: z.string().trim().min(10).max(1200).default('Tak fordi du spillede med! Her er din præmie og din personlige kode.'),
+  displayCooldownDays: z.number().int().min(0).max(365).default(30),
+  allowedOrigins: z.array(z.string().url().startsWith('https://').max(250)).max(20).default([]),
 }).superRefine((draft, ctx) => {
   if (draft.placement === 'selected' && draft.paths.length === 0)
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['paths'], message: 'Vælg mindst én side.' });
@@ -42,8 +47,19 @@ export const scratchCardDraftSchema = z.object({
     ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Ugyldig værdi for præmietypen.' });
   if (draft.prizes.some(p => p.type === 'item' && p.redemption !== 'restaurant'))
     ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Gratis produkter kan kun indløses i restauranten i denne version.' });
+  if (draft.prizes.some(p => p.codeMode === 'shared' && (p.type === 'item' || p.redemption !== 'website' || !p.sharedCode)))
+    ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'En fælles kode kræver en eksisterende Promotions-rabat og indløsning på hjemmesiden.' });
+  const shared=draft.prizes.filter(p=>p.codeMode==='shared').map(p=>p.sharedCode?.toUpperCase());
+  if(new Set(shared).size!==shared.length)ctx.addIssue({code:z.ZodIssueCode.custom,path:['prizes'],message:'En fælles kode må kun bruges til én præmie i kampagnen.'});
+  if (new Set(draft.allowedOrigins).size !== draft.allowedOrigins.length || draft.allowedOrigins.some(value => {try{return new URL(value).origin !== value;}catch{return true;}}))
+    ctx.addIssue({ code:z.ZodIssueCode.custom, path:['allowedOrigins'], message:'Angiv unikke HTTPS-domæner uden sti.' });
 });
 export type ScratchCardDraft = z.infer<typeof scratchCardDraftSchema>;
+export type PublicScratchGame = Omit<ScratchCardDraft,'prizes'|'emailSubject'|'emailMessage'|'allowedOrigins'> & {prizes:Array<Omit<ScratchCardDraft['prizes'][number],'sharedCode'>>};
+export function publicScratchGame(game:ScratchCardDraft):PublicScratchGame {
+  const {emailSubject,emailMessage,allowedOrigins,prizes,...publicFields}=game;
+  return {...publicFields,prizes:prizes.map(({sharedCode,...prize})=>prize)};
+}
 export function esmeraldaScratchTest(brandId: string): ScratchCardDraft {
   return scratchCardDraftSchema.parse({
     brandId, title:'Skrab 3 felter og vind hos Esmeralda',

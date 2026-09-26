@@ -13,6 +13,7 @@ const root = process.cwd();
 const draft = {
   brandId: 'esmeralda', title: 'Skrab og vind', instruction: 'Skrab her', revealText: 'Prøv igen',
   cardsPerPlay: 3, totalCardLimit: 3000, collectPhone: false, newsletterText: 'Ja tak',
+  emailSubject:'Din gevinst er klar',emailMessage:'Her er din personlige gevinstkode.',displayCooldownDays:30,allowedOrigins:[],
   logoUrl: '', backgroundUrl: '', fontUrl: '', primaryColor: '#ffbd02', surfaceColor: '#111111',
   placement: 'selected', paths: ['/'],
   prizes: [{ name: 'Pizza', imageUrl: '', type: 'item', value: 0, probabilityPercent: 10, maxWinners: 100, codeMode: 'generated', redemption: 'restaurant' }],
@@ -23,7 +24,7 @@ before(async () => {
   directory = fs.mkdtempSync(path.join(os.tmpdir(), 'games-editor-'));
   const entry = file('entry', `import React from 'react';import{createRoot}from'react-dom/client';import{ScratchCardEditor}from ${JSON.stringify(path.join(root, 'src/components/games/ScratchCardEditor.tsx'))};createRoot(document.getElementById('root')).render(<ScratchCardEditor brands={[{id:'esmeralda',name:'Esmeralda',slug:'esmeralda',logoUrl:''}]} brandId="esmeralda" draft={${JSON.stringify(draft)}} status="test"/>);`);
   const loader = file('loader', `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
-  const actions = file('actions', `export async function saveScratchCardDraft(data){if(JSON.parse(data.get('prizes'))[0].probabilityPercent>100)return{ok:false,message:'Vinderchance må højst være 100 %.'};await fetch('/save',{method:'POST',body:data});return{ok:true,message:'Opsætningen er gemt.'}};export async function importGameCodes(){return{message:'OK'}};export async function redeemGameVoucher(){return{message:'OK'}};export async function setScratchCardStatus(){return{ok:true,message:'OK'}};export async function uploadGameAsset(){return{ok:false,message:'No upload'}};`);
+  const actions = file('actions', `export async function saveScratchCardDraft(data){if(JSON.parse(data.get('prizes'))[0].probabilityPercent>100)return{ok:false,message:'Vinderchance må højst være 100 %.'};await fetch('/save',{method:'POST',body:data});return{ok:true,message:'Opsætningen er gemt.'}};export async function importGameCodes(){return{message:'OK'}};export async function sendGameTestEmail(){return{message:'OK'}};export async function setScratchCardStatus(){return{ok:true,message:'OK'}};export async function uploadGameAsset(){return{ok:false,message:'No upload'}};`);
   const schema = file('schema', `export const scratchCardDraftSchema={parse:value=>value};export const esmeraldaScratchTest=()=>(${JSON.stringify(draft)});`);
   const preview = file('preview', `import React from 'react';export function ScratchGame({game}){return <div data-testid="preview">{game.title}: {game.cardsPerPlay} felter</div>}`);
   const navigation = file('navigation', `export const useRouter=()=>({push:()=>{},refresh:()=>{}});`);
