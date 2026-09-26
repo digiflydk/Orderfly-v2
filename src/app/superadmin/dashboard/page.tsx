@@ -38,7 +38,7 @@ export default async function SuperadminDashboardPage({ params, searchParams }: 
     dateFrom: (query.from as string),
     dateTo: (query.to as string),
     brandId: (query.brand as string) || 'all',
-    locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc as string]) : [],
+    locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc as string]).flatMap(value => value.split(',')).filter(Boolean) : [],
   };
 
   const [{ kpis, totalActiveBrands, totalActiveLocations }, brands, locations] = await Promise.all([
@@ -92,18 +92,11 @@ export default async function SuperadminDashboardPage({ params, searchParams }: 
       </div>
   );
   
-  const filtersBarProps = {
-    value: filters,
-    brands,
-    locations,
-    onFilterChange: handleFilterChange as any,
-  } as any;
-
   return (
     <div className="space-y-6">
       <h1 className="text-2xl font-bold tracking-tight">Superadmin Dashboard</h1>
       
-      <FiltersBar {...filtersBarProps} />
+      <FiltersBar filters={filters} brands={brands} locations={locations} onChange={handleFilterChange} />
 
       {!kpis && (
         <div style={{marginBottom:12,padding:12,border:'1px solid #f0c',background:'#fff0fa',borderRadius:8}}>
