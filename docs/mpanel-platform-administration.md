@@ -63,7 +63,7 @@ Every catalogue managed by this service enforces its 500-record capacity during 
 
 ## Orderfly module launch (#165, candidate)
 
-mPanel now has an Orderfly module entry paired with Opsfly #319. It opens a separate Orderfly window without asking for another PIN. The existing native Opsfly session is verified twice: when issuing the handoff and when redeeming it. Current central authority selects a permitted Orderfly landing page; product handlers still enforce their own native brand/location scope.
+mPanel now has an Orderfly module entry paired with Opsfly #319. It opens a separate Orderfly window without asking for another PIN. The existing native Opsfly session is verified twice: when issuing the handoff and when redeeming it. Current central authority selects a permitted Orderfly landing page using usable native brand/location grants. Selected-location feedback grants cannot open the company-wide feedback aggregate; billing alone cannot open the superuser-only billing overview. Ineligible destinations are skipped, and a user with no usable destination does not see the module. Global loyalty reads retain their existing permission check; product handlers still enforce their own native brand/location scope.
 
 The receiving `/admin-login/mpanel` page starts an exact-origin JSON request to `POST /api/admin/mpanel` (`action: start`). A Secure, HttpOnly, SameSite=Strict, host-only challenge cookie binds the exchange to this browser. Only an allowlisted Esmeralda opener can receive the random challenge or supply the code; both origins and window references are checked. There is no credential in the URL. Successful redemption detaches the opener and navigates to a fixed permission-derived path.
 

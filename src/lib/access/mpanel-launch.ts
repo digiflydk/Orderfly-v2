@@ -38,15 +38,34 @@ const destinations=[
   ['orderfly.loyalty:view','/superadmin/loyalty'],
   ['orderfly.analytics:view','/superadmin/analytics/cust-funnel'],
   ['orderfly.website:view','/superadmin/brands/websites'],
-  ['orderfly.billing:view','/superadmin/billing'],
 ] as const;
+async function usableDestination(db:Firestore,identity:VerifiedIdentity,permission:string) {
+  // Loyalty settings are global reads. Billing's overview is superuser-only
+  // and is deliberately absent from non-superuser destinations.
+  if(permission==='orderfly.loyalty:view')return true;
+  const result=await executeAuthority(db,identity,{action:'nativeGrants',product:'orderfly',permission},bootstrap());
+  if(!('grants' in result))return false;
+  for(const grant of result.grants as Array<{tenantId:string;locationIds:string[]|null}>) {
+    // Feedback aggregates locations and requires a company-wide grant.
+    if(permission==='orderfly.feedback:view'&&grant.locationIds!==null)continue;
+    if(!(await db.collection('brands').doc(grant.tenantId).get()).exists)continue;
+    if(grant.locationIds===null)return true;
+    for(const id of grant.locationIds) {
+      const location=await db.collection('locations').doc(id).get();
+      if(location.exists&&location.data()?.brandId===grant.tenantId)return true;
+    }
+  }
+  return false;
+}
 export async function checkLaunchAccess(db:Firestore,token:string) {
   const native=await nativeOpsflySession(token);
   const access=await executeAuthority(db,native.identity,{action:'session'},bootstrap());
   if(!('permissions' in access)||!('superuser' in access))throw new AuthorityError('forbidden');
-  const target=access.superuser?destinations[0]:destinations.find(([permission])=>access.permissions.includes(permission));
-  if(!target)throw new AuthorityError('forbidden');
-  return {native,path:target[1]};
+  if(access.superuser)return {native,path:destinations[0][1]};
+  for(const [permission,path] of destinations) {
+    if(access.permissions.includes(permission)&&await usableDestination(db,native.identity,permission))return {native,path};
+  }
+  throw new AuthorityError('forbidden');
 }
 export async function issueLaunch(db:Firestore,token:string,challenge:string) {
   launchNonce.parse(challenge);

@@ -4,16 +4,41 @@ process.env.MPANEL_PLATFORM_ADMIN_SECRET='synthetic-launch-secret-at-least-32-ch
 const identity={provider:'opsfly',organizationId:'11111111-1111-4111-8111-111111111111',subject:'22222222-2222-4222-8222-222222222222'};
 const token='a'.repeat(64),challenge='b'.repeat(64);
 const auth=loadTs('src/lib/access/opsfly-login.ts',{'server-only':{}});
-function fixture(){
- let active=true,permissions=['orderfly.catalog:view'],queue=Promise.resolve();const records=new Map(),seen=[];
- const db={collection(name){assert.equal(name,'platformAdminControl');return {doc(id){return {id,set:async data=>records.set(id,data)};}};},runTransaction(fn){const work=queue.then(()=>fn({get:async ref=>({data:()=>records.get(ref.id)}),delete:ref=>records.delete(ref.id)}));queue=work.catch(()=>{});return work;}};
- const service=loadTs('src/lib/access/mpanel-launch.ts',{'server-only':{},'./opsfly-login':{...auth,nativeOpsflySession:async value=>{assert.equal(value,token);if(!active)throw Error('revoked');return {identity,expires_at:new Date(Date.now()+3600000).toISOString()};}},'./authority':{...loadTs('src/lib/access/authority.ts',{'server-only':{}}),executeAuthority:async(_db,actor)=>{seen.push(actor);return {superuser:false,permissions};}}});
+function fixture(options={}){
+ let active=true,permissions=options.permissions||['orderfly.catalog:view'],queue=Promise.resolve();const records=new Map(),seen=[];
+ const db={collection(name){if(name==='brands'||name==='locations')return {doc(id){return {get:async()=>({exists:name==='brands'?options.brandExists!==false:options.locationValid!==false,id,data:()=>({brandId:options.locationValid===false?'foreign':'brand'})})};}};assert.equal(name,'platformAdminControl');return {doc(id){return {id,set:async data=>records.set(id,data)};}};},runTransaction(fn){const work=queue.then(()=>fn({get:async ref=>({data:()=>records.get(ref.id)}),delete:ref=>records.delete(ref.id)}));queue=work.catch(()=>{});return work;}};
+ const service=loadTs('src/lib/access/mpanel-launch.ts',{'server-only':{},'./opsfly-login':{...auth,nativeOpsflySession:async value=>{assert.equal(value,token);if(!active)throw Error('revoked');return {identity,expires_at:new Date(Date.now()+3600000).toISOString()};}},'./authority':{...loadTs('src/lib/access/authority.ts',{'server-only':{}}),executeAuthority:async(_db,actor,command)=>{seen.push(actor);return command.action==='nativeGrants'?{grants:options.grants?.[command.permission]??[{tenantId:'brand',locationIds:null}]}:{superuser:options.superuser===true,permissions};}}});
  return {service,db,records,seen,revoke:()=>active=false,deny:()=>permissions=['opsfly.own_time:view']};
 }
 test('launch binds native identity, encrypts token and opens the first permitted module',async()=>{
  const f=fixture(),{code}=await f.service.issueLaunch(f.db,token,challenge);
  assert.match(code,/^[a-f0-9]{64}\.[a-f0-9]{64}$/);assert.ok(!JSON.stringify([...f.records]).includes(token));
- const result=await f.service.redeemLaunch(f.db,code,challenge);assert.equal(result.path,'/superadmin/products');assert.equal(auth.readOpsflyCookie(result.cookie.value),token);assert.equal(f.records.size,0);assert.deepEqual(f.seen,[identity,identity]);
+ const result=await f.service.redeemLaunch(f.db,code,challenge);assert.equal(result.path,'/superadmin/products');assert.equal(auth.readOpsflyCookie(result.cookie.value),token);assert.equal(f.records.size,0);assert.ok(f.seen.length>=2);assert.ok(f.seen.every(actor=>actor===identity));
+});
+test('landing eligibility rejects billing-only, unmapped brands and invalid native locations',async()=>{
+ for(const options of [
+  {permissions:['orderfly.billing:view']},
+  {grants:{'orderfly.catalog:view':[]}},
+  {brandExists:false},
+  {grants:{'orderfly.catalog:view':[{tenantId:'brand',locationIds:['location']}]},locationValid:false},
+  {permissions:['orderfly.feedback:view'],grants:{'orderfly.feedback:view':[{tenantId:'brand',locationIds:['location']}]}},
+ ]){
+  const f=fixture(options);await assert.rejects(f.service.checkLaunchAccess(f.db,token));
+  await assert.rejects(f.service.issueLaunch(f.db,token,challenge));assert.equal(f.records.size,0);
+ }
+});
+test('landing skips unusable grants and retains valid location, company and superuser access',async()=>{
+ for(const [options,path] of [
+  [{permissions:['orderfly.feedback:view','orderfly.analytics:view'],grants:{'orderfly.feedback:view':[{tenantId:'brand',locationIds:['location']}]}},'/superadmin/analytics/cust-funnel'],
+  [{permissions:['orderfly.catalog:view','orderfly.website:view'],grants:{'orderfly.catalog:view':[]}},'/superadmin/brands/websites'],
+  [{grants:{'orderfly.catalog:view':[{tenantId:'brand',locationIds:['location']}]}},'/superadmin/products'],
+  [{permissions:['orderfly.feedback:view']},'/superadmin/feedback'],
+  [{permissions:['orderfly.loyalty:view'],brandExists:false},'/superadmin/loyalty'],
+  [{permissions:['orderfly.billing:view'],superuser:true},'/superadmin/sales/orders'],
+ ]){
+  const f=fixture(options),{code}=await f.service.issueLaunch(f.db,token,challenge);
+  assert.equal((await f.service.redeemLaunch(f.db,code,challenge)).path,path);
+ }
 });
 test('wrong receiving browser and altered codes cannot consume a valid grant',async()=>{
  const f=fixture(),{code}=await f.service.issueLaunch(f.db,token,challenge);
