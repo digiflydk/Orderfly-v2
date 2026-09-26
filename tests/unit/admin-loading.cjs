@@ -29,10 +29,23 @@ test('route fallback is visible without a timer and announces loading',()=>{
  const html=renderToStaticMarkup(React.createElement(api.default));
  assert.match(html,/aria-busy="true"/);assert.match(html,/role="status"/);
 });
-test('filter reads use the authorized analytics catalogue and preserve mapped results',async()=>{
+test('overview filter reads preserve the authorized selector union for delegated users',async()=>{
+ const api=load('src/app/superadmin/_filters-data.ts',{
+  '@/lib/access/native-catalog':{
+   selectorCatalog:async()=>({superuser:false,brands:[{id:'b',name:'Brand'}],locations:[{id:'l',name:'Location',brandId:'b'}]}),
+   nativeCatalog:async()=>{throw Error('delegated overview must not require analytics');},
+  },
+ });
+ const data=await api.getFiltersData();
+ assert.deepEqual(data.brands,[{id:'b',name:'Brand'}]);assert.deepEqual(data.locations,[{id:'l',name:'Location',brandId:'b'}]);
+});
+test('overview filter reads the complete native catalogue for platform superusers',async()=>{
  let permission;
  const api=load('src/app/superadmin/_filters-data.ts',{
-  '@/lib/access/native-catalog':{nativeCatalog:async value=>{permission=value;return {brands:[{id:'b',name:'Brand'}],locations:[{id:'l',name:'Location',brandId:'b'}]};}},
+  '@/lib/access/native-catalog':{
+   selectorCatalog:async()=>({superuser:true,brands:[],locations:[]}),
+   nativeCatalog:async value=>{permission=value;return {brands:[{id:'b',name:'Brand'}],locations:[{id:'l',name:'Location',brandId:'b'}]};},
+  },
  });
  const data=await api.getFiltersData();assert.equal(permission,'orderfly.analytics:view');
  assert.deepEqual(data.brands,[{id:'b',name:'Brand'}]);assert.deepEqual(data.locations,[{id:'l',name:'Location',brandId:'b'}]);

@@ -81,6 +81,21 @@ jobs:
       - name: Games editor browser regression
         run: node --test tests/unit/games-editor-browser.cjs
 
+      - name: Shared admin access and filter regression
+        run: node --test tests/unit/access-navigation.cjs tests/unit/admin-sales-filters.cjs tests/unit/admin-loading.cjs tests/unit/admin-mobile-header.cjs
+
+      - name: Shared admin visual regression
+        run: node --test tests/unit/admin-overview-browser.cjs
+
+      - name: Upload admin screenshots
+        if: always() && github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: admin-overview-visual-${{ github.run_attempt }}
+          path: test-results/admin-*.png
+          if-no-files-found: ignore
+          retention-days: 14
+
       - name: Build
         run: npm run build
 

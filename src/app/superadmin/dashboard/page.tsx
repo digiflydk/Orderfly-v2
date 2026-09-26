@@ -1,18 +1,16 @@
 
 import type { AsyncPageProps } from "@/types/next-async-props";
-import { resolveParams, resolveSearchParams } from "@/lib/next/resolve-props";
+import { resolveSearchParams } from "@/lib/next/resolve-props";
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
-import { getBrands } from '@/app/superadmin/brands/actions';
-import { getAllLocations } from '@/app/superadmin/locations/actions';
+import { getAnalyticsFiltersData } from '@/app/superadmin/_analytics-filters-data';
 import { FiltersBar } from '@/components/superadmin/FiltersBar';
 import type { SACommonFilters } from '@/types/superadmin';
 import { getSalesDashboardData } from '@/lib/superadmin/getSalesSummary';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { DollarSign, ShoppingCart, Users, Activity, Clock, Store, Percent, Tag, Package, BarChart3, MessageSquareQuote, Cookie, UserCheck, MapPin } from 'lucide-react';
+import { DollarSign, ShoppingCart, Activity, Clock, Tag, Package, BarChart3 } from 'lucide-react';
 import { redirect } from 'next/navigation';
-import { Button } from "@/components/ui/button";
 
 async function handleFilterChange(newFilters: SACommonFilters) {
     'use server';
@@ -25,8 +23,7 @@ async function handleFilterChange(newFilters: SACommonFilters) {
      redirect(`/superadmin/dashboard?${params.toString()}`);
 }
 
-export default async function SuperadminDashboardPage({ params, searchParams }: AsyncPageProps) {
-  const routeParams = await resolveParams(params);
+export default async function SuperadminDashboardPage({ searchParams }: AsyncPageProps) {
   const query = await resolveSearchParams(searchParams);
   
   if (!query.from || !query.to) {
@@ -38,16 +35,15 @@ export default async function SuperadminDashboardPage({ params, searchParams }: 
     dateFrom: (query.from as string),
     dateTo: (query.to as string),
     brandId: (query.brand as string) || 'all',
-    locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc as string]) : [],
+    locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc as string]).flatMap(value => value.split(',')).filter(Boolean) : [],
   };
 
-  const [{ kpis, totalActiveBrands, totalActiveLocations }, brands, locations] = await Promise.all([
-    getSalesDashboardData(filters), getBrands(), getAllLocations(),
+  const [{ kpis }, { brands, locations }] = await Promise.all([
+    getSalesDashboardData(filters), getAnalyticsFiltersData(),
   ]);
 
   const fmt = (n: number) => n.toLocaleString('da-DK');
   const kr = (n: number) => (n).toLocaleString('da-DK', { style: 'currency', currency: 'DKK' });
-  const pct = (n: number) => `${n.toFixed(2)}%`;
 
   const cardsL1 = [
     { label: 'Total Sales', value: kr(kpis.totalSales), icon: DollarSign },
@@ -62,19 +58,6 @@ export default async function SuperadminDashboardPage({ params, searchParams }: 
     { label: 'Total Combo Deals (qty)', value: fmt(kpis.totalComboDealsOrders), icon: Package },
     { label: 'Total Discount', value: kr(kpis.totalDiscounts), icon: Tag },
   ];
-
-  const cardsL3 = [
-     { label: 'Active Brands', value: fmt(totalActiveBrands), icon: Store },
-     { label: 'Total Locations', value: fmt(totalActiveLocations), icon: MapPin },
-     { label: 'Total Unique Customers', value: fmt(kpis.totalUniqueCustomers), icon: Users },
-     { label: 'Retention Rate (60d)', value: pct(kpis.totalRetentionRate), icon: UserCheck },
-  ];
-  
-  const cardsL4 = [
-     { label: 'Total Feedbacks', value: kpis.totalFeedbacks === null ? 'N/A' : fmt(kpis.totalFeedbacks), icon: MessageSquareQuote },
-     { label: 'Total Cookies Consent', value: fmt(kpis.totalCookieConsents), icon: Cookie },
-  ]
-
 
   const renderKpiCards = (cards: {label:string, value:string, icon:any}[]) => (
      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -92,18 +75,14 @@ export default async function SuperadminDashboardPage({ params, searchParams }: 
       </div>
   );
   
-  const filtersBarProps = {
-    value: filters,
-    brands,
-    locations,
-    onFilterChange: handleFilterChange as any,
-  } as any;
-
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold tracking-tight">Superadmin Dashboard</h1>
+      <div>
+        <h1 className="text-2xl font-bold tracking-tight">Sales overview</h1>
+        <p className="text-sm text-muted-foreground">Orders and revenue in the selected date, brand and locations. Current brand and location counts are on Overview; customer, feedback and consent reporting have their own pages.</p>
+      </div>
       
-      <FiltersBar {...filtersBarProps} />
+      <FiltersBar filters={filters} brands={brands} locations={locations} onChange={handleFilterChange} />
 
       {!kpis && (
         <div style={{marginBottom:12,padding:12,border:'1px solid #f0c',background:'#fff0fa',borderRadius:8}}>
@@ -113,8 +92,6 @@ export default async function SuperadminDashboardPage({ params, searchParams }: 
 
       {renderKpiCards(cardsL1)}
       {renderKpiCards(cardsL2)}
-      {renderKpiCards(cardsL3)}
-      {renderKpiCards(cardsL4)}
       
     </div>
   );

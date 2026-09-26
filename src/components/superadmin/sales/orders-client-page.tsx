@@ -14,6 +14,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { AdminDateRange } from '@/components/superadmin/admin-date-range';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 export type ClientOrderSummary = {
   id: string;
@@ -159,25 +161,7 @@ export function OrdersClientPage({
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-              <div className="grid flex-1 gap-4 sm:grid-cols-2">
-                <label className="space-y-2 text-sm font-medium">
-                  <span>From date</span>
-                  <Input
-                    type="date"
-                    value={dateFrom}
-                    onChange={event => setDateFrom(event.target.value)}
-                  />
-                </label>
-
-                <label className="space-y-2 text-sm font-medium">
-                  <span>To date</span>
-                  <Input
-                    type="date"
-                    value={dateTo}
-                    onChange={event => setDateTo(event.target.value)}
-                  />
-                </label>
-              </div>
+              <AdminDateRange className="flex-1" from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} fromLabel="From date" toLabel="To date" groupLabel="Date range" />
 
               <div className="flex gap-2">
                 <Button type="submit">Apply</Button>
@@ -291,57 +275,56 @@ export function OrdersClientPage({
               </p>
             </div>
           ) : (
-            <div className="overflow-x-auto rounded-md border">
-              <table className="w-full text-sm">
-                <thead className="bg-muted/50">
-                  <tr className="border-b text-left">
-                    <th className="px-4 py-3 font-medium">
+            <div className="admin-data-panel overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead scope="col">
                       Order ID
-                    </th>
+                    </TableHead>
 
-                    <th className="px-4 py-3 font-medium">
+                    <TableHead scope="col">
                       Date
-                    </th>
+                    </TableHead>
 
-                    <th className="px-4 py-3 font-medium">
+                    <TableHead scope="col">
                       Status
-                    </th>
+                    </TableHead>
 
-                    <th className="px-4 py-3 text-right font-medium">
+                    <TableHead scope="col" className="text-right">
                       Total
-                    </th>
+                    </TableHead>
 
-                    <th className="px-4 py-3 text-right font-medium">
-                      Action
-                    </th>
-                  </tr>
-                </thead>
+                    <TableHead scope="col" className="text-right">
+                      Handlinger
+                    </TableHead>
+                  </TableRow>
+                </TableHeader>
 
-                <tbody>
+                <TableBody>
                   {filteredOrders.map(order => (
-                    <tr
+                    <TableRow
                       key={order.id}
-                      className="border-b last:border-b-0"
                     >
-                      <td className="px-4 py-3 font-medium">
+                      <TableCell className="font-medium">
                         {order.id}
-                      </td>
+                      </TableCell>
 
-                      <td className="px-4 py-3 text-muted-foreground">
+                      <TableCell className="text-muted-foreground">
                         {formatDate(order.createdAt)}
-                      </td>
+                      </TableCell>
 
-                      <td className="px-4 py-3">
+                      <TableCell>
                         <Badge variant="secondary">
                           Received
                         </Badge>
-                      </td>
+                      </TableCell>
 
-                      <td className="px-4 py-3 text-right font-medium">
+                      <TableCell className="text-right font-medium">
                         {formatCurrency(order.total)}
-                      </td>
+                      </TableCell>
 
-                      <td className="px-4 py-3 text-right">
+                      <TableCell className="text-right">
                         <Button
                           asChild
                           variant="outline"
@@ -355,11 +338,11 @@ export function OrdersClientPage({
                             View
                           </Link>
                         </Button>
-                      </td>
-                    </tr>
+                      </TableCell>
+                    </TableRow>
                   ))}
-                </tbody>
-              </table>
+                </TableBody>
+              </Table>
             </div>
           )}
         </CardContent>

@@ -1,3 +1,4 @@
+import '@/styles/admin-ui.css';
 import { mpanelAdminEnabled } from '@/lib/mpanel-admin-cutover';
 
 import type { Metadata } from 'next';

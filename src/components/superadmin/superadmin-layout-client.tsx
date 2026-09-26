@@ -8,7 +8,6 @@ import * as S from '@/components/ui/sidebar'
 
 import { SuperAdminSidebarClient } from '@/components/superadmin/sidebar-client'
 import { MobileHeader } from './mobile-header'
-import { LogoutButton } from './logout-button'
 import { PageLoader } from './page-loader'
 import type { PlatformBrandingSettings } from '@/types'
 
@@ -32,23 +31,20 @@ function LayoutWithLoader({ children }: { children: React.ReactNode }) {
 
 export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmin, access }: Props) {
   return (
-    <S.SidebarProvider>
-      <S.Sidebar collapsible="icon" className="border-r">
-        <SuperAdminSidebarClient access={access} centralAdmin={centralAdmin}
-          brandingSettings={
-            brandingSettings ?? { platformHeading: 'Orderfly Studio' }
-          }
-        />
-      </S.Sidebar>
+    <S.SidebarProvider className="admin-shell">
+      <SuperAdminSidebarClient access={access} centralAdmin={centralAdmin}
+        brandingSettings={
+          brandingSettings ?? { platformHeading: 'Orderfly Studio' }
+        }
+      />
 
       <S.SidebarInset className="bg-background">
-        {access&&<LogoutButton/>}
         <MobileHeader
           brandingSettings={
             brandingSettings ?? { platformHeading: 'Orderfly Studio' }
           }
         />
-        <main className="p-4 md:p-6 lg:p-8">
+        <main className="mx-auto w-full max-w-[1600px] p-4 md:p-6 lg:p-8">
           <LayoutWithLoader>{children}</LayoutWithLoader>
         </main>
       </S.SidebarInset>

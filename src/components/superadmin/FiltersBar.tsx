@@ -12,6 +12,8 @@ import {
   CommandSeparator,
 } from '@/components/ui/command'
 import type { SACommonFilters } from '@/types/superadmin'
+import { AdminDateRange } from '@/components/superadmin/admin-date-range'
+import { locationsAfterBrandChange } from '@/components/superadmin/filter-selection'
 
 type Brand = { id: string; name: string }
 type Location = { id: string; name: string; brandId: string }
@@ -83,11 +85,15 @@ export function FiltersBar({
   const toggleLocation = (id: string) => {
     const current = safeFilters.locationIds ?? []
     const next = current.includes(id) ? current.filter(x => x !== id) : [...current, id]
-    emit({ locationIds: next.length ? next : undefined })
+    emit({ locationIds: next })
+  }
+
+  const selectBrand = (brandId: string) => {
+    emit({ brandId, locationIds: locationsAfterBrandChange(safeFilters.locationIds, brandId, locations) })
   }
 
   return (
-    <div className={cn('w-full rounded-md border bg-card', className)}>
+    <div className={cn('admin-filter-bar w-full', className)}>
       <Command>
         {/* Top row: søg + datoer */}
         <div className="flex flex-col gap-2 border-b p-3 md:flex-row md:items-center md:justify-between">
@@ -99,24 +105,7 @@ export function FiltersBar({
             />
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 text-sm">
-            <label className="text-muted-foreground">From</label>
-            <input
-              type="date"
-              className="h-9 rounded-md border bg-background px-2"
-              value={safeFilters.dateFrom}
-              max={safeFilters.dateTo}
-              onChange={(e) => onDateFrom(e.target.value)}
-            />
-            <label className="ml-2 text-muted-foreground">To</label>
-            <input
-              type="date"
-              className="h-9 rounded-md border bg-background px-2"
-              value={safeFilters.dateTo}
-              min={safeFilters.dateFrom}
-              onChange={(e) => onDateTo(e.target.value)}
-            />
-          </div>
+          <AdminDateRange from={safeFilters.dateFrom} to={safeFilters.dateTo} onFromChange={onDateFrom} onToChange={onDateTo} fromLabel="From date" toLabel="To date" groupLabel="Date range" />
         </div>
 
         <CommandList>
@@ -124,13 +113,13 @@ export function FiltersBar({
 
           {/* Brand */}
           <CommandGroup heading="Brand">
-            <CommandItem onSelect={() => emit({ brandId: 'all' })}>
+            <CommandItem onSelect={() => selectBrand('all')}>
               <span className={cn(safeFilters.brandId === 'all' && 'font-semibold')}>
                 All brands
               </span>
             </CommandItem>
             {visibleBrands.map((b) => (
-              <CommandItem key={b.id} onSelect={() => emit({ brandId: b.id })}>
+              <CommandItem key={b.id} onSelect={() => selectBrand(b.id)}>
                 <span className={cn(safeFilters.brandId === b.id && 'font-semibold')}>
                   {b.name ?? b.id}
                 </span>

@@ -6,8 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, ShoppingCart, Users, Activity, Percent, Ban, Truck, Store, Tags, Banknote, Clock } from "lucide-react";
 import type { OrderSummary } from "@/types";
 import { getSalesDashboardData } from "@/lib/superadmin/getSalesSummary";
-import { getBrands } from "@/app/superadmin/brands/actions";
-import { getAllLocations } from "@/app/superadmin/locations/actions";
+import { getAnalyticsFiltersData } from "@/app/superadmin/_analytics-filters-data";
 import { FiltersBar } from "@/components/superadmin/FiltersBar";
 import type { SACommonFilters } from "@/types/superadmin";
 import { redirect } from "next/navigation";
@@ -28,11 +27,11 @@ export default async function SalesDashboardPage({ params, searchParams }: Async
         dateFrom: (query.from as string),
         dateTo: (query.to as string),
         brandId: (query.brand as string) || 'all',
-        locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc as string]) : [],
+        locationIds: query.loc ? (Array.isArray(query.loc) ? query.loc : [query.loc as string]).flatMap(value => value.split(',')).filter(Boolean) : [],
     };
 
     const { kpis: kpiData } = await getSalesDashboardData(filters);
-    const [brands, locations] = await Promise.all([getBrands(), getAllLocations()]);
+    const { brands, locations } = await getAnalyticsFiltersData();
     
     const kpis = [
         // Line 1
