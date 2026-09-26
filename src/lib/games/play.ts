@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
 import { getAdminDb, admin } from '@/lib/firebase-admin';
 import { scratchCardDraftSchema, scratchCardOnPage } from './scratch-card';
-import { drawNoWinBoard } from './scratch-card-preview';
+import { drawNoWinBoard, drawWinBoard } from './scratch-card-preview';
 import { marketingConfig } from '@/lib/marketing/config';
 import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
 
@@ -66,7 +66,7 @@ export async function playScratchCard(input:PlayInput, ip:string) {
     const now=admin.firestore.FieldValue.serverTimestamp();
     tx.update(gameRef,input.test?{testPlayedCount:played+1,testWinnerCounts:counters}:{playedCount:played+1,winnerCounts:counters});
     tx.set(limiterRef,{brandId:input.brandId,day,count:(limit.data()?.count||0)+1,updatedAt:now});
-    const board=won?Array(game.cardsPerPlay).fill(prize!.name):drawNoWinBoard(game.cardsPerPlay,game.revealText);
+    const board=won?drawWinBoard(prize!.name,game.cardsPerPlay,roll,game.prizes):drawNoWinBoard(game.cardsPerPlay,game.revealText,game.prizes);
     const newsletter=!input.test&&input.newsletter===true;
     tx.create(playRef,{brandId:input.brandId,name,email,phone,newsletter,newsletterText:newsletter?game.newsletterText:null,consentAt:newsletter?now:null,mode:input.test?'test':'live',board,prizeIndex:won?index:null,createdAt:now});
     if(prize){

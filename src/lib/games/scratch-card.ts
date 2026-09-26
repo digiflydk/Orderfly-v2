@@ -11,7 +11,7 @@ export const scratchCardDraftSchema = z.object({
   fontUrl: httpsUrl.default(''),
   primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#ffbd02'),
   surfaceColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#111111'),
-  cardsPerPlay: z.number().int().min(1).max(6).default(3),
+  cardsPerPlay: z.number().int().min(1).max(9).default(3),
   totalCardLimit: z.number().int().min(1).max(1000000).default(1000),
   prizes: z.array(z.object({
     name: z.string().trim().min(3).max(100),

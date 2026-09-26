@@ -27,7 +27,9 @@ test('configured odds and winner caps cannot exceed campaign limits',()=>{
   assert.equal(validate(settings),false);
   assert.equal(validate({...settings,prizes:[{...settings.prizes[0],probabilityPercent:10,maxWinners:51}]}),false);
   assert.equal(validate({...settings,prizes:[{...settings.prizes[0],probabilityPercent:10,maxWinners:20}]}),true);
-  assert.equal(validate({...settings,cardsPerPlay:7}),false);
+  const valid={...settings,prizes:[{...settings.prizes[0],probabilityPercent:10,maxWinners:20}]};
+  assert.equal(validate({...valid,cardsPerPlay:9}),true);
+  assert.equal(validate({...valid,cardsPerPlay:10}),false);
 });
 test('Esmeralda test game draws one outcome per play with 10/25/65 boundaries',()=>{
   const board = pathToFileURL(path.resolve('src/lib/games/scratch-card-preview.ts')).href;
@@ -44,4 +46,19 @@ test('no win never displays a matching prize when winner cap is exhausted',()=>{
   const script=`import(${JSON.stringify(board)}).then(m=>process.stdout.write(JSON.stringify([m.drawNoWinBoard(3,'Intet'),m.drawNoWinBoard(1,'Intet')])))`;
   const [three,one]=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
   assert.equal(new Set(three).size,3);assert.deepEqual(one,['Intet']);
+});
+
+test('five prize products fill three tickets while exactly one ticket wins',()=>{
+  const board=pathToFileURL(path.resolve('src/lib/games/scratch-card-preview.ts')).href;
+  const script=`import(${JSON.stringify(board)}).then(m=>{const prizes=['Pizza','Tiramisu','Pommes frites','Burger','Pasta'].map(name=>({name}));process.stdout.write(JSON.stringify({won:m.drawWinBoard('Pizza',9,.42,prizes),lost:m.drawNoWinBoard(9,'Intet',prizes)}))})`;
+  const {won,lost}=JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
+  assert.equal(won.length,9);
+  assert.equal(won.filter(symbol=>symbol==='Pizza').length,3);
+  assert.equal(lost.length,9);
+  const products=new Set(['Pizza','Tiramisu','Pommes frites','Burger','Pasta']);
+  assert.ok(won.every(symbol=>products.has(symbol)));
+  assert.ok(lost.every(symbol=>products.has(symbol)));
+  const winningTickets=[0,3,6].filter(start=>new Set(won.slice(start,start+3)).size===1);
+  assert.equal(winningTickets.length,1);
+  for(const start of [0,3,6])assert.equal(new Set(lost.slice(start,start+3)).size,3);
 });
