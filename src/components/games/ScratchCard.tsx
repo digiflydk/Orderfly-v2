@@ -55,10 +55,9 @@ export function ScratchSurface({label,index,round,imageUrl='',color='#ffbd02',on
   }
   return <div className="min-w-0">
     <div className="relative flex h-36 items-center justify-center overflow-hidden rounded-xl border-2 bg-white p-3 text-center text-base font-bold text-black sm:h-44 sm:text-lg">
-      <span aria-live="polite">{revealed&&imageUrl?<img src={imageUrl} alt={label} className="mx-auto max-h-20 object-contain"/>:revealed?label:`Kort ${index+1}`}</span>
-      {!revealed&&<canvas ref={canvas} className="absolute inset-0 h-full w-full cursor-crosshair touch-none" aria-label={`Skrab kort ${index+1}`} onPointerDown={event=>{drawing.current=true;event.currentTarget.setPointerCapture(event.pointerId);erase(event);}} onPointerMove={erase} onPointerUp={finish} onPointerCancel={finish}/>}
+      <span aria-live="polite">{revealed&&imageUrl?<img src={imageUrl} alt={label} className="mx-auto max-h-20 object-contain"/>:revealed?label:'Skrab feltet'}</span>
+      {!revealed&&<canvas ref={canvas} role="button" tabIndex={0} className="absolute inset-0 h-full w-full cursor-crosshair touch-none focus-visible:outline focus-visible:outline-4 focus-visible:outline-yellow-400" aria-label={`Skrab felt ${index+1}. Brug finger eller mus, eller tryk Enter for tilgængelig afsløring.`} onKeyDown={event=>{if(event.key==='Enter'||event.key===' '){event.preventDefault();reveal();}}} onPointerDown={event=>{drawing.current=true;event.currentTarget.setPointerCapture(event.pointerId);erase(event);}} onPointerMove={erase} onPointerUp={finish} onPointerCancel={finish}/>}
     </div>
-    {!revealed&&<button type="button" onClick={reveal} className="mt-2 rounded-md border border-white/60 px-3 py-2 text-xs focus-visible:outline focus-visible:outline-2 focus-visible:outline-yellow-400">Afslør kort {index+1}</button>}
   </div>;
 }
 export function ScratchCard({brandName,logoUrl,title,instruction,noWinText,cardsPerPlay,prizes}:{brandName:string;logoUrl:string;title:string;instruction:string;noWinText:string;cardsPerPlay:number;prizes:Prize[]}) {

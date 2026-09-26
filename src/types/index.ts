@@ -419,6 +419,7 @@ export type Discount = {
   description?: string;
   discountType: 'percentage' | 'fixed_amount';
   discountValue: number;
+  gameProductId?: string;
   minOrderValue?: number;
   isActive: boolean;
   orderTypes: ('pickup' | 'delivery')[];

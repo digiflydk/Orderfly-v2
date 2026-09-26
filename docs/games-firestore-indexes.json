@@ -1,7 +1,11 @@
 {
   "indexes": [
     {"collectionGroup":"codes","queryScope":"COLLECTION","fields":[{"fieldPath":"prizeIndex","order":"ASCENDING"},{"fieldPath":"available","order":"ASCENDING"}]},
-    {"collectionGroup":"discounts","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"code","order":"ASCENDING"}]}
+    {"collectionGroup":"discounts","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"code","order":"ASCENDING"}]},
+    {"collectionGroup":"gameVouchers","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"code","order":"ASCENDING"}]},
+    {"collectionGroup":"gameEvents","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"event","order":"ASCENDING"}]},
+    {"collectionGroup":"gameConversions","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"}]},
+    {"collectionGroup":"gameMailOutbox","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"state","order":"ASCENDING"}]}
   ],
   "fieldOverrides": []
 }

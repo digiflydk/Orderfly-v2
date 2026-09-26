@@ -1,7 +1,6 @@
 'use server'
 
-import { nativeCatalog } from '@/lib/access/native-catalog'
-import type { Brand, Location } from '@/types'
+import { nativeCatalog, selectorCatalog } from '@/lib/access/native-catalog'
 import type { SACommonFilters } from '@/types/superadmin'
 
 export async function getFiltersData(): Promise<{
@@ -9,7 +8,10 @@ export async function getFiltersData(): Promise<{
   locations: { id: string; name: string; brandId: string }[]
   initial: SACommonFilters
 }> {
-  const {brands, locations} = await nativeCatalog('orderfly.analytics:view');
+  const selector = await selectorCatalog();
+  const { brands, locations } = selector.superuser
+    ? await nativeCatalog('orderfly.analytics:view')
+    : selector;
 
   const today = new Date().toISOString().slice(0, 10)
   const initial: SACommonFilters = {

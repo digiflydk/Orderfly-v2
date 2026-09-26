@@ -1,0 +1,61 @@
+/* Body-level tokens also reach Radix dialogs, menus and selects portalled outside the shell. */
+:is(.admin-shell, body:has(.admin-shell)) {
+  --admin-page: #f7f9fb;
+  --admin-surface: #ffffff;
+  --admin-text: #17232e;
+  --admin-muted: #596977;
+  --admin-border: #e0e6ea;
+  --admin-sidebar: #142634;
+  --admin-sidebar-hover: #213849;
+  --admin-sidebar-active: #1f495e;
+  --admin-primary: #0a789c;
+  --admin-focus: #0a789c;
+  --background: 210 33% 97.65%;
+  --foreground: 209 33% 13.53%;
+  --card: 0 0% 100%;
+  --card-foreground: 209 33% 13.53%;
+  --popover: 0 0% 100%;
+  --popover-foreground: 209 33% 13.53%;
+  --primary: 195 88% 32.55%;
+  --primary-foreground: 0 0% 100%;
+  --secondary: 204 26% 96.3%;
+  --secondary-foreground: 209 33% 13.53%;
+  --muted: 204 26% 96.3%;
+  --muted-foreground: 208 14.4% 40.8%;
+  --accent: 193.2 52.2% 93.7%;
+  --accent-foreground: 209 33% 13.53%;
+  --border: 204 19.2% 89.8%;
+  --input: 204 19.2% 89.8%;
+  --ring: 195 88% 32.55%;
+  --radius: .5rem;
+  color: var(--admin-text);
+  font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+:is(.admin-shell, body:has(.admin-shell)) :is(button, input, select, textarea) { font-family: inherit; }
+.admin-shell :is(h1, h2, h3, h4) { letter-spacing: -.02em; }
+:is(.admin-shell, body:has(.admin-shell)) :is(input[type="date"], select, [role="combobox"]) { min-height: 40px; }
+:is(.admin-shell, body:has(.admin-shell)) :is(input, select, textarea, [role="combobox"]):focus-visible {
+  outline: 2px solid var(--admin-focus);
+  outline-offset: 2px;
+}
+.admin-shell [data-ui-button] { border-radius: 8px; }
+.admin-shell [data-ui-button][data-ui-variant="outline"] { background: var(--admin-surface); }
+:is(.admin-shell, body:has(.admin-shell)) [data-sidebar="footer"] [data-ui-button][data-ui-variant="outline"] { background: transparent; color: #fff; border-color: rgba(255,255,255,.7); }
+:is(.admin-shell, body:has(.admin-shell)) [data-sidebar="footer"] [data-ui-button][data-ui-variant="outline"]:hover { background: rgba(255,255,255,.1); }
+:is(.admin-shell, body:has(.admin-shell)) [data-sidebar="menu-button"] { min-height: 42px; font-size: 16px; font-weight: 700; }
+:is(.admin-shell, body:has(.admin-shell)) [data-sidebar="menu-item"] > button:not([data-sidebar="menu-button"]) { min-height: 42px; font-size: 16px; font-weight: 700; }
+:is(.admin-shell, body:has(.admin-shell)) [data-sidebar="menu-button"] > svg { width: 20px; height: 20px; }
+.admin-shell [data-state="collapsed"] [data-sidebar="menu-button"] { min-height: 32px; }
+.admin-shell table { border-collapse: separate; border-spacing: 0; }
+.admin-shell table thead { background: #f3f6f8; }
+.admin-shell table th { color: var(--admin-muted); font-size: 12px; font-weight: 650; }
+.admin-shell table td { border-bottom: 1px solid var(--admin-border); }
+.admin-shell table tbody tr:hover { background: #f7fafb; }
+.admin-shell table tbody tr:last-child td { border-bottom: 0; }
+.admin-shell :is(.admin-filter-bar, .admin-data-panel) { border: 1px solid var(--admin-border); border-radius: 12px; background: var(--admin-surface); }
+
+@media (max-width: 640px) {
+  .admin-shell .admin-date-range { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .admin-shell .admin-date-range input { width: 100%; min-width: 0; }
+}
