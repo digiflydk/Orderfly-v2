@@ -139,14 +139,12 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844
     await expect(page.getByRole('heading', { name: 'Overblik' })).toBeVisible();
     await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(247, 249, 251)');
     const sidebar = page.locator('[data-sidebar="sidebar"]');
-    await expect(sidebar).toHaveCount(1);
     if (name === 'mobile') {
       await expect(page.locator('header a[href="/superadmin"]')).toBeVisible();
       await page.getByRole('button', { name: 'Toggle Sidebar' }).click();
-      await expect(sidebar).toBeVisible();
-    } else {
-      await expect(sidebar).toBeVisible();
     }
+    await expect(sidebar).toHaveCount(1);
+    await expect(sidebar).toBeVisible();
     await expect(sidebar.locator('[data-sidebar="content"]')).toHaveCSS('background-color', 'rgb(20, 38, 52)');
     await expect(sidebar.locator('a[href="/superadmin"] svg')).toHaveCSS('width', '20px');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);

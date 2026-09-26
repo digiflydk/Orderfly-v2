@@ -41,7 +41,7 @@
 }
 .admin-shell [data-ui-button] { border-radius: 8px; }
 .admin-shell [data-ui-button][data-ui-variant="outline"] { background: var(--admin-surface); }
-.admin-shell [data-sidebar="menu-button"] > svg { width: 20px; height: 20px; }
+:is(.admin-shell, body:has(.admin-shell)) [data-sidebar="menu-button"] > svg { width: 20px; height: 20px; }
 .admin-shell table { border-collapse: separate; border-spacing: 0; }
 .admin-shell table thead { background: #f3f6f8; }
 .admin-shell table th { color: var(--admin-muted); font-size: 12px; font-weight: 650; }
