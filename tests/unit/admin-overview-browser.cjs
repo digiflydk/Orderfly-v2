@@ -150,7 +150,10 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844
     await expect(sidebar.locator('a[href="/superadmin"] svg')).toHaveCSS('width', '20px');
     await expect(sidebar.locator('a[href="/superadmin"]')).toHaveCSS('font-size', '16px');
     await expect(sidebar.locator('a[href="/superadmin"]')).toHaveCSS('font-weight', '700');
-    await expect(sidebar.getByRole('button', { name: 'Log ud' })).toBeVisible();
+    const logout = sidebar.getByRole('button', { name: 'Log ud' });
+    await expect(logout).toBeVisible();
+    await expect(logout).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+    await expect(logout).toHaveCSS('color', 'rgb(255, 255, 255)');
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
     assert.ok(overflow <= 1, `${name} shell horizontal overflow: ${overflow}px`);
     assert.deepEqual(errors, []);

@@ -41,6 +41,8 @@
 }
 .admin-shell [data-ui-button] { border-radius: 8px; }
 .admin-shell [data-ui-button][data-ui-variant="outline"] { background: var(--admin-surface); }
+:is(.admin-shell, body:has(.admin-shell)) [data-sidebar="footer"] [data-ui-button][data-ui-variant="outline"] { background: transparent; color: #fff; border-color: rgba(255,255,255,.7); }
+:is(.admin-shell, body:has(.admin-shell)) [data-sidebar="footer"] [data-ui-button][data-ui-variant="outline"]:hover { background: rgba(255,255,255,.1); }
 :is(.admin-shell, body:has(.admin-shell)) [data-sidebar="menu-button"] { min-height: 42px; font-size: 16px; font-weight: 700; }
 :is(.admin-shell, body:has(.admin-shell)) [data-sidebar="menu-item"] > button:not([data-sidebar="menu-button"]) { min-height: 42px; font-size: 16px; font-weight: 700; }
 :is(.admin-shell, body:has(.admin-shell)) [data-sidebar="menu-button"] > svg { width: 20px; height: 20px; }
