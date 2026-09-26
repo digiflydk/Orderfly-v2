@@ -15,6 +15,17 @@ test('sales overview is listed only for analytics viewers',()=>{
  assert.equal(canNavigate('/superadmin/dashboard',{superuser:false,permissions:['orderfly.orders:view']}),false);
  assert.equal(canNavigate('/superadmin/dashboard',{superuser:false,permissions:['orderfly.analytics:view']}),true);
 });
+test('overview selectors work for an orders-only user without an analytics grant',async()=>{
+ const {getFiltersData}=loadTs('src/app/superadmin/_filters-data.ts',{
+  '@/lib/access/native-catalog':{
+   selectorCatalog:async()=>({superuser:false,brands:[{id:'own',name:'Own brand'}],locations:[{id:'own-location',name:'Own location',brandId:'own'}]}),
+   nativeCatalog:async()=>{throw Error('analytics catalog must not be requested');},
+  },
+ });
+ const result=await getFiltersData();
+ assert.deepEqual(result.brands,[{id:'own',name:'Own brand'}]);
+ assert.deepEqual(result.locations,[{id:'own-location',name:'Own location',brandId:'own'}]);
+});
 test('missing sessions show no private navigation and mPanel requires member or role administration',()=>{
  assert.equal(canNavigate('/superadmin'),false);
  const url='https://www.esmeraldapizza.dk/mpanel#platform';
