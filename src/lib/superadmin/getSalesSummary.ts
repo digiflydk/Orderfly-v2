@@ -2,13 +2,11 @@
 'use server';
 
 // src/lib/superadmin/getSalesSummary.ts
-import { getFeedbackReport } from '@/lib/feedback/report';
 import { listScopedDocuments } from '@/lib/access/scoped-data';
-import { nativeCatalog } from '@/lib/access/native-catalog';
 import { Timestamp } from 'firebase-admin/firestore';
-import type { OrderSummary, Customer } from '@/types';
+import type { OrderSummary } from '@/types';
 import type { SACommonFilters } from '@/types/superadmin';
-import { startOfDay, endOfDay, subDays } from 'date-fns';
+import { startOfDay, endOfDay } from 'date-fns';
 
 type SalesOrderItem = {
     itemType?: 'product' | 'combo';
@@ -26,13 +24,7 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
     ];
     if(filters.brandId && filters.brandId !== 'all')queryFilters.push(['brandId', '==', filters.brandId]);
     if(filters.locationIds?.length && filters.locationIds.length<=30)queryFilters.push(['locationId', 'in', filters.locationIds]);
-    const [orderDocs, metadata, customerDocs, feedbackReport, cookieDocs] = await Promise.all([
-      listScopedDocuments('orders','orderfly.analytics:view','location',queryFilters),
-      nativeCatalog('orderfly.analytics:view'),
-      listScopedDocuments('customers','orderfly.analytics:view','company'),
-      getFeedbackReport({ from: filters.dateFrom, to: filters.dateTo, ...(filters.brandId && filters.brandId !== 'all' ? { brandId: filters.brandId } : {}) }).catch(() => null),
-      listScopedDocuments('anonymous_cookie_consents','orderfly.analytics:view','company',[],'brand_id'),
-    ]);
+    const orderDocs = await listScopedDocuments('orders','orderfly.analytics:view','location',queryFilters);
     let orders: SalesOrder[] = orderDocs.map(doc => doc.data() as SalesOrder);
     
     if (filters.locationIds && filters.locationIds.length > 30) {
@@ -55,9 +47,6 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
     const canceledOrders = orders.filter(o => o.status === 'Canceled').length;
     const totalDiscounts = paidOrders.reduce((sum, order) => sum + (order.paymentDetails?.discountTotal ?? 0), 0);
     
-    const totalActiveBrands = metadata.brands.filter(b => b.status === 'active').length;
-    const totalActiveLocations = metadata.locations.filter(l => l.isActive).length;
-
     // New KPI Calculations
     const totalUpsellsAmount = paidOrders.reduce((sum, order) => sum + (order.paymentDetails?.upsellAmount ?? 0), 0);
     const comboOrders = paidOrders.filter(order =>
@@ -73,17 +62,6 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
     }, 0);
     const totalComboDealsOrders = comboOrders.length;
     
-    const allCustomers = customerDocs.map(doc => doc.data() as Customer);
-    const totalUniqueCustomers = allCustomers.length;
-    
-    const sixtyDaysAgo = subDays(new Date(), 60);
-    const returningCustomers = allCustomers.filter(c => c.totalOrders > 1 && c.lastOrderDate && c.lastOrderDate >= sixtyDaysAgo).length;
-    const totalRetentionRate = totalUniqueCustomers > 0 ? (returningCustomers / totalUniqueCustomers) * 100 : 0;
-    
-    const totalFeedbacks = feedbackReport ? (filters.locationIds?.length ? feedbackReport.locationSummary.filter(l => filters.locationIds!.includes(l.id)).reduce((sum, l) => sum + l.responses, 0) : feedbackReport.summary.responses) : null;
-    const totalCookieConsents = cookieDocs.length;
-
-
     return {
         kpis: {
             totalOrders,
@@ -99,12 +77,6 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
             totalUpsellsAmount,
             totalComboDealsAmount,
             totalComboDealsOrders,
-            totalUniqueCustomers,
-            totalRetentionRate,
-            totalFeedbacks,
-            totalCookieConsents,
         },
-        totalActiveBrands,
-        totalActiveLocations,
     }
 }
