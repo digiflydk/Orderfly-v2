@@ -60,14 +60,17 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844
     await page.goto(origin);
     await expect(page.getByRole('heading', { name: 'Overblik' })).toBeVisible();
     await expect(page.locator('.admin-shell')).toHaveCSS('color', 'rgb(23, 35, 46)');
-    await page.getByLabel('Brand', { exact: true }).selectOption('b');
-    await expect(page.getByText('Brands i udvalget').locator('..').locator('..')).toContainText('1');
-    await page.getByLabel('Lokation', { exact: true }).selectOption('lb');
-    assert.equal(await page.getByLabel('Lokation', { exact: true }).inputValue(), 'lb');
-    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
-    assert.ok(overflow <= 1, `${name} horizontal overflow: ${overflow}px`);
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
     await page.screenshot({ path: path.join(root, 'test-results', `admin-overview-${name}.png`), fullPage: true });
+    const brandSelect = page.locator('.admin-filter-bar select').first();
+    const locationSelect = page.locator('.admin-filter-bar select').nth(1);
+    await expect(brandSelect).toBeVisible();
+    await brandSelect.selectOption('b');
+    await expect(page.getByText('Brands i udvalget').locator('..').locator('..')).toContainText('1');
+    await locationSelect.selectOption('lb');
+    assert.equal(await locationSelect.inputValue(), 'lb');
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
+    assert.ok(overflow <= 1, `${name} horizontal overflow: ${overflow}px`);
     assert.deepEqual(errors, []);
   });
 }
