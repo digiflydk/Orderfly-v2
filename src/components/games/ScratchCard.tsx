@@ -70,8 +70,13 @@ export function ScratchCard({brandName,logoUrl,title,instruction,noWinText,cards
     <div className="text-xs font-semibold uppercase tracking-[.2em] text-yellow-400">Scratch Card · Test</div>
     <h2 className="mt-3 text-xl font-bold sm:text-2xl">{title}</h2>
     <p className="mt-2 text-sm text-gray-300">{instruction}</p>
-    <div className={`mt-6 grid gap-3 ${cardsPerPlay>=7?'grid-cols-3':cardsPerPlay>1?'grid-cols-2':'grid-cols-1'}`}>
-      {Array.from({length:cardsPerPlay},(_,index)=><ScratchSurface key={`${round}-${index}`} index={index} round={round} label={outcomes[index]||'…'}/>)}
+    <div className="mt-6 space-y-4">
+      {Array.from({length:Math.ceil(cardsPerPlay/3)},(_,ticket)=><div key={ticket} className="rounded-xl border border-white/30 p-2 sm:p-3">
+        {cardsPerPlay>3&&<p className="mb-2 text-sm font-semibold">Lod {ticket+1}</p>}
+        <div className={`grid gap-2 ${Math.min(3,cardsPerPlay-ticket*3)===1?'grid-cols-1':'grid-cols-3'}`}>
+          {Array.from({length:Math.min(3,cardsPerPlay-ticket*3)},(_,slot)=>{const index=ticket*3+slot;return <ScratchSurface key={`${round}-${index}`} index={index} round={round} label={outcomes[index]||'…'}/>;})}
+        </div>
+      </div>)}
     </div>
     <button type="button" onClick={()=>setRound(n=>n+1)} className="mt-5 rounded-md border border-white/60 px-4 py-2 text-sm">Ny test med samme sandsynligheder</button>
     <p className="mt-4 text-xs text-gray-400">Administrator-preview: Ingen præmie eller rabatkode bliver udstedt.</p>
