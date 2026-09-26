@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash, randomBytes } from 'node:crypto';
 import { getAdminDb, admin } from '@/lib/firebase-admin';
-import { scratchCardDraftSchema, scratchCardOnPage } from './scratch-card';
+import { scratchCardDraftSchema, scratchCardOnPage, prizeChannels } from './scratch-card';
 import { drawNoWinBoard, drawWinBoard } from './scratch-card-preview';
 import { gameMailConfig } from './mail-config';
 import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
@@ -59,7 +59,15 @@ export async function playScratchCard(input:PlayInput, ip:string) {
     }
     if(prize?.codeMode==='shared'&&!input.test){actualCode=prize.sharedCode!.toUpperCase();actualCodeId=hash(`${input.brandId}\n${actualCode}`);}
     const voucher=prize?.codeMode==='shared'&&!input.test?db.collection('gameVouchers').doc(hash(`${input.brandId}\n${actualCode}\n${playRef.id}`)):prize?db.collection('gameVouchers').doc(actualCodeId):voucherRef;
-    const discount=prize?.codeMode==='generated'&&prize.type!=='item'&&!input.test?db.collection('discounts').doc(`game_${actualCodeId}`):null;
+    const channels=prize?prizeChannels(prize):[];
+    const discount=prize?.codeMode==='generated'&&channels.includes('orderfly')&&!input.test?db.collection('discounts').doc(`game_${actualCodeId}`):null;
+    let productPrizeValue=0;
+    if(discount&&prize?.type==='item'){
+      const product=await tx.get(db.collection('products').doc(prize.productId!));
+      if(!product.exists||product.data()?.brandId!==input.brandId||product.data()?.isActive===false||!locationIds.some(id=>product.data()?.locationIds?.includes(id)))throw new GameError(409,'Præmieproduktet er ikke længere tilgængeligt.');
+      productPrizeValue=Math.max(Number(product.data()?.price),Number(product.data()?.priceDelivery??product.data()?.price));
+      if(!Number.isFinite(productPrizeValue)||productPrizeValue<=0)throw new GameError(409,'Præmieproduktet mangler en gyldig pris.');
+    }
     if(prize){
       const [existing, duplicate]=await Promise.all([tx.get(voucher),tx.get(db.collection('discounts').where('brandId','==',input.brandId).where('code','==',actualCode).limit(1))]);
       if(existing.exists || (prize.codeMode!=='shared'&&!duplicate.empty))throw new GameError(409,'Koden er allerede i brug. Prøv igen.');
@@ -80,9 +88,9 @@ export async function playScratchCard(input:PlayInput, ip:string) {
     if(!input.test)tx.create(db.collection('gameEvents').doc(eventId),{brandId:input.brandId,playId:playRef.id,event:'game_start',createdAt:now});
     if(prize){
       if(uploadedRef)tx.update(uploadedRef,{available:false,claimedBy:playRef.id,claimedAt:now});
-      tx.create(voucher,{brandId:input.brandId,code:actualCode,playId:playRef.id,prizeName:prize.name,prizeType:prize.type,codeMode:prize.codeMode,redemption:prize.redemption,mode:input.test?'test':'live',state:'issued',issuedAt:now,email,discountId:discount?.id||null});
-      if(discount)tx.create(discount,{id:discount.id,brandId:input.brandId,locationIds,applicationType:'code',code:actualCode,description:`Spilgevinst: ${prize.name}`,discountType:prize.type==='percent'?'percentage':'fixed_amount',discountValue:prize.value,minOrderValue:0,isActive:true,orderTypes:['pickup','delivery'],activeDays:[],activeTimeSlots:[],usageLimit:1,usedCount:0,perCustomerLimit:1,firstTimeCustomerOnly:false,allowStacking:false,createdAt:now,updatedAt:now});
-      if(mailReady)tx.create(db.collection('gameMailOutbox').doc(playRef.id),{brandId:input.brandId,playId:playRef.id,voucherId:voucher.id,code:actualCode,prizeName:prize.name,name,email,redemption:prize.redemption,mode:input.test?'test':'live',state:'pending',attempts:0,nextAttemptAt:Date.now(),createdAt:now});
+      tx.create(voucher,{brandId:input.brandId,code:actualCode,playId:playRef.id,prizeName:prize.name,prizeType:prize.type,codeMode:prize.codeMode,redemption:prize.redemption,redemptionChannels:channels,mode:input.test?'test':'live',state:'issued',issuedAt:now,email,discountId:discount?.id||null});
+      if(discount)tx.create(discount,{id:discount.id,brandId:input.brandId,locationIds,applicationType:'code',code:actualCode,description:`Spilgevinst: ${prize.name}`,discountType:prize.type==='percent'?'percentage':'fixed_amount',discountValue:prize.type==='item'?productPrizeValue:prize.value,...(prize.type==='item'?{gameProductId:prize.productId}:{}),minOrderValue:0,isActive:true,orderTypes:['pickup','delivery'],activeDays:[],activeTimeSlots:[],usageLimit:1,usedCount:0,perCustomerLimit:1,firstTimeCustomerOnly:false,allowStacking:false,createdAt:now,updatedAt:now});
+      if(mailReady)tx.create(db.collection('gameMailOutbox').doc(playRef.id),{brandId:input.brandId,playId:playRef.id,voucherId:voucher.id,code:actualCode,prizeName:prize.name,name,email,redemption:prize.redemption,redemptionChannels:channels,mode:input.test?'test':'live',state:'pending',attempts:0,nextAttemptAt:Date.now(),createdAt:now});
       if(!input.test)tx.create(db.collection('gameEvents').doc(`${eventId}_prize`),{brandId:input.brandId,playId:playRef.id,event:'prize_issued',prizeIndex:index,createdAt:now});
     }
     if(newsletter)tx.create(db.collection('gameConsentOutbox').doc(playRef.id),{brandId:input.brandId,playId:playRef.id,email,wording:game.newsletterText,version:'game-email-da-v1',capturedAt:Date.now(),state:'pending',attempts:0,nextAttemptAt:Date.now()});

@@ -22,7 +22,7 @@ function file(name, code) { const target = path.join(directory, `${name}.js`); f
 
 before(async () => {
   directory = fs.mkdtempSync(path.join(os.tmpdir(), 'games-editor-'));
-  const entry = file('entry', `import React from 'react';import{createRoot}from'react-dom/client';import{ScratchCardEditor}from ${JSON.stringify(path.join(root, 'src/components/games/ScratchCardEditor.tsx'))};createRoot(document.getElementById('root')).render(<ScratchCardEditor brands={[{id:'esmeralda',name:'Esmeralda',slug:'esmeralda',logoUrl:''}]} brandId="esmeralda" draft={${JSON.stringify(draft)}} status="test"/>);`);
+  const entry = file('entry', `import React from 'react';import{createRoot}from'react-dom/client';import{ScratchCardEditor}from ${JSON.stringify(path.join(root, 'src/components/games/ScratchCardEditor.tsx'))};import{ScratchSurface}from ${JSON.stringify(path.join(root, 'src/components/games/ScratchCard.tsx'))};createRoot(document.getElementById('root')).render(<><ScratchCardEditor brands={[{id:'esmeralda',name:'Esmeralda',slug:'esmeralda',logoUrl:''}]} products={[{id:'pizza_01',name:'Pizza 01'}]} brandId="esmeralda" draft={${JSON.stringify(draft)}} status="test"/><div id="scratch-fixture" style={{width:200}}><ScratchSurface label="Pizza" index={1} round={0} onReveal={()=>document.getElementById('scratch-result').textContent='Pizza afsløret'}/><p id="scratch-result"/></div></>);`);
   const loader = file('loader', `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   const actions = file('actions', `export async function saveScratchCardDraft(data){if(JSON.parse(data.get('prizes'))[0].probabilityPercent>100)return{ok:false,message:'Vinderchance må højst være 100 %.'};await fetch('/save',{method:'POST',body:data});return{ok:true,message:'Opsætningen er gemt.'}};export async function importGameCodes(){return{message:'OK'}};export async function sendGameTestEmail(){return{message:'OK'}};export async function setScratchCardStatus(){return{ok:true,message:'OK'}};export async function uploadGameAsset(){return{ok:false,message:'No upload'}};`);
   const schema = file('schema', `export const scratchCardDraftSchema={parse:value=>value};export const esmeraldaScratchTest=()=>(${JSON.stringify(draft)});`);
@@ -31,6 +31,7 @@ before(async () => {
   const aliases = {
     '@/app/superadmin/games/actions': actions,
     '@/lib/games/scratch-card': schema,
+    '@/lib/games/scratch-card-preview': path.join(root,'src/lib/games/scratch-card-preview.ts'),
     './ScratchGame': preview,
     'next/navigation': navigation,
     'react$': require.resolve('next/dist/compiled/react'),
@@ -86,4 +87,23 @@ test('an invalid value on another step shows a save error instead of silently bl
     await page.getByRole('status').getByText('Vinderchance må højst være 100 %.').waitFor();
     assert.equal(saved, undefined);
   } finally { await page.close(); }
+});
+
+test('scratch field reveals by gesture without a visible reveal button', async()=>{
+  const page=await browser.newPage();
+  try{
+    await page.goto(origin);
+    const field=page.locator('#scratch-fixture');
+    assert.equal(await field.getByRole('button',{name:/Afslør kort/}).count(),0);
+    const canvas=field.locator('canvas'),box=await canvas.boundingBox();
+    assert.ok(box);
+    await page.mouse.move(box.x+15,box.y+20);
+    await page.mouse.down();
+    for(const y of [20,52,84,116]){
+      await page.mouse.move(box.x+15,box.y+y);
+      await page.mouse.move(box.x+box.width-15,box.y+y,{steps:14});
+    }
+    await page.mouse.up();
+    await field.getByText('Pizza afsløret').waitFor();
+  }finally{await page.close();}
 });

@@ -23,6 +23,8 @@ export const scratchCardDraftSchema = z.object({
     codeMode: z.enum(['generated', 'shared', 'uploaded']).default('generated'),
     sharedCode: z.string().trim().regex(/^[A-Za-z0-9_-]{5,40}$/).optional(),
     redemption: z.enum(['restaurant', 'website', 'both']).default('restaurant'),
+    redemptionChannels: z.array(z.enum(['restaurant', 'orderfly', 'external'])).max(3).optional(),
+    productId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).optional(),
   })).min(1).max(12),
   placement: z.enum(['all', 'selected']),
   paths: z.array(z.string().trim().max(180).regex(/^\/(?!\/)[a-zA-Z0-9/_-]*$/)).max(30),
@@ -45,16 +47,29 @@ export const scratchCardDraftSchema = z.object({
     ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Et præmieloft kan ikke overstige kampagnens antal spil.' });
   if (draft.prizes.some(p => p.type === 'percent' && (p.value <= 0 || p.value > 100) || p.type === 'amount' && p.value <= 0 || p.type === 'item' && p.value !== 0))
     ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Ugyldig værdi for præmietypen.' });
-  if (draft.prizes.some(p => p.type === 'item' && p.redemption !== 'restaurant'))
-    ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Gratis produkter kan kun indløses i restauranten i denne version.' });
-  if (draft.prizes.some(p => p.codeMode === 'shared' && (p.type === 'item' || p.redemption !== 'website' || !p.sharedCode)))
-    ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'En fælles kode kræver en eksisterende Promotions-rabat og indløsning på hjemmesiden.' });
+  if(draft.prizes.some(p=>!prizeChannels(p).length || new Set(prizeChannels(p)).size!==prizeChannels(p).length))
+    ctx.addIssue({code:z.ZodIssueCode.custom,path:['prizes'],message:'Vælg mindst ét indløsningssted uden dubletter.'});
+  if(draft.prizes.some(p=>p.type==='item'&&prizeChannels(p).includes('orderfly')&&!p.productId))
+    ctx.addIssue({code:z.ZodIssueCode.custom,path:['prizes'],message:'Vælg det konkrete produkt, der skal være gratis i Orderfly.'});
+  if(draft.prizes.some(p=>p.codeMode==='uploaded'&&prizeChannels(p).includes('orderfly')))
+    ctx.addIssue({code:z.ZodIssueCode.custom,path:['prizes'],message:'Uploadede koder kan ikke indløses i Orderfly Promotions.'});
+  if(draft.prizes.some(p=>p.codeMode==='shared'&&(p.type==='item'||!p.sharedCode||!prizeChannels(p).includes('orderfly'))))
+    ctx.addIssue({code:z.ZodIssueCode.custom,path:['prizes'],message:'En fælles Promotions-kode kræver Orderfly-indløsning og en beløbs- eller procentrabat.'});
+  if(draft.prizes.some(p=>p.codeMode==='shared'&&prizeChannels(p).includes('restaurant')))
+    ctx.addIssue({code:z.ZodIssueCode.custom,path:['prizes'],message:'Fælles Promotions-koder kan ikke registreres enkeltvis i restauranten. Vælg unikke koder.'});
   const shared=draft.prizes.filter(p=>p.codeMode==='shared').map(p=>p.sharedCode?.toUpperCase());
   if(new Set(shared).size!==shared.length)ctx.addIssue({code:z.ZodIssueCode.custom,path:['prizes'],message:'En fælles kode må kun bruges til én præmie i kampagnen.'});
   if (new Set(draft.allowedOrigins).size !== draft.allowedOrigins.length || draft.allowedOrigins.some(value => {try{return new URL(value).origin !== value;}catch{return true;}}))
     ctx.addIssue({ code:z.ZodIssueCode.custom, path:['allowedOrigins'], message:'Angiv unikke HTTPS-domæner uden sti.' });
 });
 export type ScratchCardDraft = z.infer<typeof scratchCardDraftSchema>;
+type RedemptionPrize = {redemption:'restaurant'|'website'|'both';redemptionChannels?:Array<'restaurant'|'orderfly'|'external'>};
+export function prizeChannels(prize:RedemptionPrize):Array<'restaurant'|'orderfly'|'external'> {
+  return prize.redemptionChannels ?? (prize.redemption==='both'?['restaurant','orderfly']:prize.redemption==='website'?['orderfly']:['restaurant']);
+}
+export function redemptionText(channels:Array<'restaurant'|'orderfly'|'external'>):string {
+  return channels.map(channel=>({restaurant:'i restauranten',orderfly:'på Orderfly hjemmesiden',external:'på den eksterne hjemmeside'}[channel])).join(', ');
+}
 export type PublicScratchGame = Omit<ScratchCardDraft,'prizes'|'emailSubject'|'emailMessage'|'allowedOrigins'> & {prizes:Array<Omit<ScratchCardDraft['prizes'][number],'sharedCode'>>};
 export function publicScratchGame(game:ScratchCardDraft):PublicScratchGame {
   const {emailSubject,emailMessage,allowedOrigins,prizes,...publicFields}=game;

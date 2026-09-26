@@ -479,7 +479,8 @@ function CheckoutForm({ location }: { location: Location }) {
         location.id,
         currentDiscountableSubtotal,
         deliveryType,
-        form.getValues('email')
+        form.getValues('email'),
+        cartItems.map(item=>item.id)
       ), { success: false, message: 'Rabatten kunne ikke kontrolleres. Prøv igen.' }, 8000);
 
       if (result.success && result.discount) {

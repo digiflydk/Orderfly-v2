@@ -492,6 +492,8 @@ export type Discount = {
   description?: string;
   discountType: 'percentage' | 'fixed_amount';
   discountValue: number;
+  /** Game prize: one base unit of this catalog product is free. */
+  gameProductId?: string;
   minOrderValue?: number;
   isActive: boolean;
   orderTypes: ('pickup' | 'delivery')[];
