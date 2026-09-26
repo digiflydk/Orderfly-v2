@@ -9,6 +9,7 @@ import { usePathname } from 'next/navigation'
 import {
   Sidebar,
   SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupContent,
   SidebarMenu,
@@ -52,6 +53,7 @@ import {
   Gamepad2,
 } from 'lucide-react'
 import { getSuperadminUserContext, type SuperadminUser } from '@/lib/auth/superadmin-context'
+import { LogoutButton } from './logout-button'
 
 type MenuIcon = React.ComponentType<{ className?: string }>
 
@@ -361,6 +363,11 @@ export function SuperAdminSidebarClient({
           )
         })}
       </SidebarContent>
+      {access && (
+        <SidebarFooter className="border-t border-white/20 bg-[#142634] p-3 group-data-[collapsible=icon]:p-1">
+          <LogoutButton inSidebar />
+        </SidebarFooter>
+      )}
     </Sidebar>
   )
 }

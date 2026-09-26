@@ -141,17 +141,22 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844
     const sidebar = page.locator('[data-sidebar="sidebar"]');
     if (name === 'mobile') {
       await expect(page.locator('header a[href="/superadmin"]')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Log ud' })).toHaveCount(0);
       await page.getByRole('button', { name: 'Toggle Sidebar' }).click();
     }
     await expect(sidebar).toHaveCount(1);
     await expect(sidebar).toBeVisible();
     await expect(sidebar.locator('[data-sidebar="content"]')).toHaveCSS('background-color', 'rgb(20, 38, 52)');
     await expect(sidebar.locator('a[href="/superadmin"] svg')).toHaveCSS('width', '20px');
+    await expect(sidebar.locator('a[href="/superadmin"]')).toHaveCSS('font-size', '16px');
+    await expect(sidebar.locator('a[href="/superadmin"]')).toHaveCSS('font-weight', '700');
+    await expect(sidebar.getByRole('button', { name: 'Log ud' })).toBeVisible();
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
     assert.ok(overflow <= 1, `${name} shell horizontal overflow: ${overflow}px`);
     assert.deepEqual(errors, []);
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
     if (name === 'mobile') {
+      await expect.poll(async () => Math.round((await sidebar.boundingBox())?.x ?? -999)).toBe(0);
       await page.screenshot({ path: path.join(root, 'test-results', 'admin-shell-mobile-menu.png'), fullPage: true });
       await page.keyboard.press('Escape');
       await expect(sidebar).toHaveCount(0);

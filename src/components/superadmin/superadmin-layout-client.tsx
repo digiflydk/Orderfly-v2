@@ -8,7 +8,6 @@ import * as S from '@/components/ui/sidebar'
 
 import { SuperAdminSidebarClient } from '@/components/superadmin/sidebar-client'
 import { MobileHeader } from './mobile-header'
-import { LogoutButton } from './logout-button'
 import { PageLoader } from './page-loader'
 import type { PlatformBrandingSettings } from '@/types'
 
@@ -40,7 +39,6 @@ export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmi
       />
 
       <S.SidebarInset className="bg-background">
-        {access&&<LogoutButton/>}
         <MobileHeader
           brandingSettings={
             brandingSettings ?? { platformHeading: 'Orderfly Studio' }
