@@ -11,8 +11,8 @@ export default async function ScratchCardPage({searchParams}:{searchParams:Promi
   const draft = saved || (brandId && brands.find(b=>b.id===brandId)?.slug==='esmeralda' ? esmeraldaScratchTest(brandId) : null);
   const status=brandId?(await getAdminDb().collection('gameScratchDrafts').doc(brandId).get()).data()?.status||'draft':'draft';
   return <main className="space-y-4 p-6">
-    <h1 className="text-3xl font-semibold">Scratch Card</h1>
-    <p className="text-muted-foreground">Første version til test. Udkastet med rigtigt kundeforløb og kontrolleret aktivering.</p>
+    <h1 className="text-3xl font-semibold">Skrabelod</h1>
+    <p className="text-muted-foreground">Opsæt spillet trin for trin, se gæstens oplevelse og test, før du aktiverer det.</p>
     {brandId ? <ScratchCardEditor key={brandId} brands={brands} brandId={brandId} draft={draft} status={status} preset={!saved && !!draft}/> : <p>Du har ikke adgang til et brand med website-rettigheder.</p>}
   </main>;
 }
