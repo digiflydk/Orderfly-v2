@@ -5,8 +5,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
+const zlib = require('node:zlib');
 const { execFileSync } = require('node:child_process');
 const { chromium, expect } = require('@playwright/test');
+const sharp = require('sharp');
 const webpackModule = require('next/dist/compiled/webpack/webpack');
 webpackModule.init();
 
@@ -14,6 +16,25 @@ const root = process.cwd();
 let dir, server, browser, origin;
 const brands = [{ id: 'a', name: 'Nord' }, { id: 'b', name: 'Syd' }];
 const locations = [{ id: 'la', name: 'Nord Station', brandId: 'a' }, { id: 'lb', name: 'Syd Torv', brandId: 'b' }];
+
+async function compareApprovedVisual(name, screenshot) {
+  // Approved from the browser artifact of CI run 36242305336. Downsampling
+  // tolerates small glyph differences while detecting palette and layout drift.
+  const baseline = JSON.parse(fs.readFileSync(path.join(root, 'tests/visual-baselines', `admin-overview-${name}.json`), 'utf8'));
+  const { data, info } = await sharp(screenshot).resize({ width: 96 }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+  assert.equal(info.width, baseline.width, `${name} visual width`);
+  assert.equal(info.height, baseline.height, `${name} visual height`);
+  const approved = zlib.inflateSync(Buffer.from(baseline.rgbDeflate, 'base64'));
+  assert.equal(data.length, approved.length, `${name} visual sample length`);
+  let error = 0, changed = 0;
+  for (let i = 0; i < data.length; i += 3) {
+    const difference = (Math.abs(data[i] - approved[i]) + Math.abs(data[i + 1] - approved[i + 1]) + Math.abs(data[i + 2] - approved[i + 2])) / 3;
+    error += difference;
+    if (difference > 24) changed++;
+  }
+  const pixels = data.length / 3;
+  assert.ok(error / pixels < 6 && changed / pixels < .08, `${name} differs from approved overview: mean RGB error ${(error / pixels).toFixed(2)}, changed pixels ${(100 * changed / pixels).toFixed(1)}%`);
+}
 
 before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'orderfly-admin-visual-'));
@@ -61,7 +82,8 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844
     await expect(page.getByRole('heading', { name: 'Overblik' })).toBeVisible();
     await expect(page.locator('.admin-shell')).toHaveCSS('color', 'rgb(23, 35, 46)');
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
-    await page.screenshot({ path: path.join(root, 'test-results', `admin-overview-${name}.png`), fullPage: true });
+    const screenshot = await page.screenshot({ path: path.join(root, 'test-results', `admin-overview-${name}.png`), fullPage: true });
+    await compareApprovedVisual(name, screenshot);
     const brandSelect = page.locator('.admin-filter-bar select').first();
     const locationSelect = page.locator('.admin-filter-bar select').nth(1);
     await expect(brandSelect).toBeVisible();
