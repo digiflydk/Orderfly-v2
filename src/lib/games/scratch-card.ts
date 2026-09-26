@@ -1,0 +1,62 @@
+import { z } from 'zod';
+
+const httpsUrl = z.union([z.literal(''), z.string().url().startsWith('https://').max(1000)]);
+export const scratchCardDraftSchema = z.object({
+  brandId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+  title: z.string().trim().min(3).max(100),
+  instruction: z.string().trim().min(3).max(240),
+  revealText: z.string().trim().min(3).max(160),
+  logoUrl: httpsUrl.default(''),
+  backgroundUrl: httpsUrl.default(''),
+  fontUrl: httpsUrl.default(''),
+  primaryColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#ffbd02'),
+  surfaceColor: z.string().regex(/^#[0-9a-fA-F]{6}$/).default('#111111'),
+  cardsPerPlay: z.number().int().min(1).max(6).default(3),
+  totalCardLimit: z.number().int().min(1).max(1000000).default(1000),
+  prizes: z.array(z.object({
+    name: z.string().trim().min(3).max(100),
+    imageUrl: httpsUrl.default(''),
+    type: z.enum(['percent', 'amount', 'item']),
+    value: z.number().finite().min(0).max(10000),
+    probabilityPercent: z.number().finite().min(0).max(100),
+    maxWinners: z.number().int().min(1).max(1000000),
+    codeMode: z.enum(['generated', 'uploaded']).default('generated'),
+    redemption: z.enum(['restaurant', 'website', 'both']).default('restaurant'),
+  })).min(1).max(12),
+  placement: z.enum(['all', 'selected']),
+  paths: z.array(z.string().trim().max(180).regex(/^\/(?!\/)[a-zA-Z0-9/_-]*$/)).max(30),
+  collectPhone: z.boolean().default(false),
+  newsletterText: z.string().trim().min(10).max(320).default('Ja tak, jeg vil modtage nyheder og tilbud via e-mail. Jeg kan altid afmelde mig.'),
+}).superRefine((draft, ctx) => {
+  if (draft.placement === 'selected' && draft.paths.length === 0)
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['paths'], message: 'Vælg mindst én side.' });
+  if (new Set(draft.paths).size !== draft.paths.length)
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['paths'], message: 'En side må kun stå én gang.' });
+  if (new Set(draft.prizes.map(p=>p.name.toLowerCase())).size !== draft.prizes.length)
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['prizes'], message: 'Præmier skal have forskellige navne.' });
+  if (draft.prizes.reduce((sum,p)=>sum+p.probabilityPercent,0) > 100.000001)
+    ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Samlet vinderchance må højst være 100 % pr. spil.' });
+  if (draft.prizes.some(p=>p.maxWinners>draft.totalCardLimit))
+    ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Et præmieloft kan ikke overstige kampagnens antal spil.' });
+  if (draft.prizes.some(p => p.type === 'percent' && (p.value <= 0 || p.value > 100) || p.type === 'amount' && p.value <= 0 || p.type === 'item' && p.value !== 0))
+    ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Ugyldig værdi for præmietypen.' });
+  if (draft.prizes.some(p => p.type === 'item' && p.redemption !== 'restaurant'))
+    ctx.addIssue({ code:z.ZodIssueCode.custom, path:['prizes'], message:'Gratis produkter kan kun indløses i restauranten i denne version.' });
+});
+export type ScratchCardDraft = z.infer<typeof scratchCardDraftSchema>;
+export function esmeraldaScratchTest(brandId: string): ScratchCardDraft {
+  return scratchCardDraftSchema.parse({
+    brandId, title:'Skrab 3 felter og vind hos Esmeralda',
+    instruction:'Skrab alle tre felter. Tre ens symboler viser din præmie.',
+    revealText:'Ingen gevinst denne gang', logoUrl:'', cardsPerPlay:3,totalCardLimit:3000,
+    newsletterText:'Ja tak, jeg vil modtage nyheder og tilbud fra Esmeralda via e-mail. Jeg kan altid afmelde mig.',
+    prizes:[
+      {name:'Pizza',type:'item',value:0,probabilityPercent:10,maxWinners:1000},
+      {name:'Tiramisu',type:'item',value:0,probabilityPercent:25,maxWinners:1000},
+      {name:'Pommes frites',type:'item',value:0,probabilityPercent:65,maxWinners:1000},
+    ], placement:'selected',paths:['/'],
+  });
+}
+export function scratchCardOnPage(draft: ScratchCardDraft, pathname: string): boolean {
+  return draft.placement === 'all' || draft.paths.includes(pathname);
+}

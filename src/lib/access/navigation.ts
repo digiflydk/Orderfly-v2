@@ -17,6 +17,7 @@ const routes: Array<[string, string]> = [
   ['/superadmin/discounts', 'orderfly.discounts:view'],
   ['/superadmin/standard-discounts', 'orderfly.discounts:view'],
   ['/superadmin/loyalty', 'orderfly.loyalty:view'],
+  ['/superadmin/games', 'orderfly.website:view'],
   ['/superadmin/feedback', 'orderfly.feedback:view'],
   ['/superadmin/analytics', 'orderfly.analytics:view'],
   ['/superadmin/billing', 'orderfly.billing:view'],

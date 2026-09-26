@@ -26,6 +26,7 @@
 - **Allergens:** `src/app/superadmin/allergens/page.tsx` (List)
 
 ## Promotions
+- **Games / Scratch Card:** `src/app/superadmin/games/*`, `src/components/games/*`, `src/lib/games/scratch-card.ts`
 - **Standard Discounts:** `src/app/superadmin/standard-discounts/page.tsx`
 - **Voucher Codes:** `src/app/superadmin/discounts/page.tsx`
 - **Combo Menus:** `src/app/superadmin/combos/page.tsx`

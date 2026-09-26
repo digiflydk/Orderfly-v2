@@ -49,6 +49,7 @@ import {
   Share2,
   Activity,
   Cookie,
+  Gamepad2,
 } from 'lucide-react'
 import { getSuperadminUserContext, type SuperadminUser } from '@/lib/auth/superadmin-context'
 
@@ -126,6 +127,7 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/combos', label: 'Combos', icon: Gift },
         { href: '/superadmin/upsells', label: 'Upsells', icon: Bookmark },
         { href: '/superadmin/marketing', label: 'Newsletter & Omnisend', icon: Bookmark },
+        { href: '/superadmin/games', label: 'Games', icon: Gamepad2 },
         { href: '/superadmin/standard-discounts', label: 'Standard Discounts', icon: Percent },
         { href: '/superadmin/loyalty', label: 'Loyalty', icon: Trophy },
       ],

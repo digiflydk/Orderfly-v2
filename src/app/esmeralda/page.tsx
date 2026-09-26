@@ -3,6 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import { Template1Page, type Template1PageProps } from '@/components/public/brand-website/template-1/Template1Page';
+import { GamePlacement } from '@/components/games/GamePlacement';
 import { Skeleton } from '@/components/ui/skeleton';
 import type { WebsiteHeaderConfig } from '@/types/website';
 
@@ -76,6 +77,7 @@ export default function EsmeraldaPage() {
          Homepage sections (Hero, Menu, CTA, etc.) will be added in later tasks.
        </p>
      </section>
+      <GamePlacement brandSlug="esmeralda" />
     </Template1Page>
   );
 }
