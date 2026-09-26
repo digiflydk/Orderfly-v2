@@ -22,7 +22,11 @@ export default async function ScratchCardPage({searchParams}:{searchParams:Promi
         db.collection('gameMailOutbox').where('brandId','==',brandId).where('state','==','accepted').count().get(),
       ]);
       metrics={impressions:counts[0].data().count,opens:counts[1].data().count,starts:counts[2].data().count,completes:counts[3].data().count,prizes:counts[4].data().count,mailsAccepted:mails.data().count,orders:Number(paid.data().orders||0),revenue:Number(paid.data().revenue||0)};
-    }catch{metrics=null;}
+    }catch(error){
+      const failure = error as {code?:unknown; message?:unknown};
+      console.error('games_metrics_query_failed', {brandId, code:String(failure?.code||'unknown'), message:String(failure?.message||'unknown').slice(0,500)});
+      metrics=null;
+    }
   }
   return <main className="space-y-4 p-6">
     <h1 className="text-3xl font-semibold">Skrabelod</h1>
