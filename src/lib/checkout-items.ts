@@ -6,6 +6,7 @@ import { restoreCartItems } from './cart-restore';
 export function checkoutItems(items: CartItem[]): MinimalCartItem[] {
   return items.map(item => ({
     id: item.id, itemType: item.itemType, name: item.productName,
+    ...(item.upsellId ? {upsellId:item.upsellId} : {}),
     quantity: item.quantity, unitPrice: money(item.price),
     totalPrice: lineMoney(item.price, item.quantity, item.toppings.map(topping => topping.price)),
     toppings: item.toppings.map(topping => topping.name),

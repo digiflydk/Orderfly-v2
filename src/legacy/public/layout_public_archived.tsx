@@ -1,6 +1,6 @@
 // src/app/(public)/layout.tsx
 import { ReactNode } from "react";
-import { getGeneralSettings } from "@/services/settings";
+import { getStorefrontSettings as getGeneralSettings } from "@/services/settings";
 import { getWebsiteHeaderConfig } from "@/services/website";
 import type { Brand } from "@/types";
 import HeaderClient from "@/components/layout/HeaderClient";

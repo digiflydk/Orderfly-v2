@@ -3,7 +3,7 @@
 
 import { useEffect, useState } from 'react';
 import Cookies from 'js-cookie';
-import { optionalGet, optionalSet, optionalRemove } from '@/lib/optional-storage';
+import { optionalGet, optionalSet } from '@/lib/optional-storage';
 import { Button } from './ui/button';
 import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from './ui/card';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, DialogFooter, DialogClose } from './ui/dialog';
@@ -16,6 +16,7 @@ import { cn } from '@/lib/utils';
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from './ui/accordion';
 import { Badge } from './ui/badge';
 import type { AnonymousCookieConsent } from '@/types';
+import { saveConsentChoice, retryPendingConsent } from '@/lib/consent-sync';
 
 interface CookieConsentProps {
   brandId: string;
@@ -25,7 +26,6 @@ interface CookieConsentProps {
 
 const CONSENT_COOKIE_NAME = 'orderfly_cookie_consent';
 const ANONYMOUS_ID_COOKIE_NAME = 'orderfly_anonymous_id';
-const PENDING_CONSENT_KEY = 'pending_cookie_consent';
 const ONE_YEAR_DAYS = 365;
 
 function getOrCreateAnonId() {
@@ -73,34 +73,6 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
   const { texts, loading } = useCookieTexts({ brandId });
   const pathname = usePathname();
 
-  async function sendConsentData(payload: any) {
-    const data = JSON.stringify(payload);
-
-    // 1) sendBeacon first
-    try { if (navigator.sendBeacon) {
-      const blob = new Blob([data], { type: 'application/json' });
-      const ok = navigator.sendBeacon('/api/consent/save-anonymous', blob);
-      if (ok) { optionalRemove(PENDING_CONSENT_KEY); return; }
-    } } catch { /* Try the bounded HTTP fallback. */ }
-
-    // 2) fallback to await server action
-    try {
-      const response = await fetch('/api/consent/save-anonymous', {method: 'POST', headers: {'Content-Type': 'application/json'}, body: data, signal: AbortSignal.timeout(5000)});
-      if (!response.ok) throw new Error('Consent save unavailable');
-      optionalRemove(PENDING_CONSENT_KEY);
-      return;
-    } catch (e) {
-      // Keep the explicit choice for a later retry.
-    }
-
-    // 3) last fallback – save locally for later sending
-    try {
-      optionalSet(PENDING_CONSENT_KEY, data);
-    } catch (e) {
-      console.error('Failed to store pending consent', e);
-    }
-  }
-
   useEffect(() => {
     if (typeof window !== 'undefined' && texts.consent_version) {
         let existingConsentCookie = optionalGet(CONSENT_COOKIE_NAME);
@@ -130,16 +102,7 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
     }
   }, [texts.consent_version]);
 
-  useEffect(() => {
-    const pending = optionalGet(PENDING_CONSENT_KEY);
-    if (pending) {
-      try {
-        void sendConsentData(JSON.parse(pending));
-      } catch (e) {
-        console.error('Retry consent send failed', e);
-      }
-    }
-  }, []);
+  useEffect(() => { void retryPendingConsent(); }, []);
 
   const categories = texts?.categories ?? {};
   const compatCategories = {
@@ -201,7 +164,7 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
         shared_scope: 'orderfly',
     };
 
-    sendConsentData(dataToSend);
+    void saveConsentChoice(dataToSend);
   };
 
   const handleAcceptAll = () => {

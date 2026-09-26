@@ -19,6 +19,7 @@ function serverSlots() {
   const imports = [...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>m[1]);
   const mocks = Object.fromEntries(imports.map(name=>[name,{}]));
   mocks.zod = require('zod');
+  mocks['@/lib/public-native-records'] = loadTs('src/lib/public-native-records.ts', {'server-only':{}});
   mocks['@/lib/time-slots'] = {calculateTimeSlots};
   mocks['@/lib/firebase-admin'] = {getAdminDb:()=>({collection:()=>({doc:()=>({get:async()=>({id:'l',exists:true,data:()=>location})})})})};
   return load(path,mocks).getTimeSlots;

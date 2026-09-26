@@ -1,4 +1,5 @@
 'use server';
+import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 
 import { menuImportFromImage } from '@/ai/flows/menu-import';
 
@@ -18,6 +19,7 @@ export async function importMenuAction(
     prevState: FormState | null,
     formData: FormData
 ): Promise<FormState> {
+  await requirePlatformSuperuser();
     const imageFile = formData.get('menuImage') as File | null;
 
     if (!imageFile || imageFile.size === 0) {

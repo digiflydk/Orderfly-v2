@@ -65,7 +65,20 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
    },
   },
  };
- mocks['@/lib/server/settle-checkout']=load('src/lib/server/settle-checkout.ts',mocks);
+ const {loadTs}=require('../helpers/load-ts.cjs');
+ Object.assign(state['orders/o'],{id:'o',status:'Received',customerName:'Fixture',customerContact:'fixture@example.test',deliveryType:'Pickup',productItems:[{name:'Pizza',quantity:1,totalPrice:100,listTotalPrice:100}],paymentDetails:{subtotal:100,deliveryFee:0,bagFee:0,adminFee:0}});
+ state['brands/b']={name:'Fixture',companyName:'Fixture ApS',companyRegNo:'12345678',street:'Testvej 1',zipCode:'1000',city:'Copenhagen',country:'DK',currency:'DKK',vatPercentage:25};
+ state['locations/l']={brandId:'b',name:'Fixture',address:'Testvej 1'};
+ const ref=path=>({path,id:path.split('/').at(-1)});
+ mocks['@/lib/firebase-admin']={getAdminFieldValue:()=>({serverTimestamp:()=> 'now'}),getAdminDb:()=>({
+   collection:name=>({doc:id=>ref(name+'/'+id)}),
+   runTransaction:fn=>mocks['firebase/firestore'].runTransaction(null,tx=>fn({
+     get:async ref=>{const snap=await tx.get(ref.path);return{exists:snap.exists(),data:snap.data,id:ref.id};},
+     set:(ref,data)=>tx.set(ref.path,data),update:(ref,data)=>tx.update(ref.path,data),
+   })),
+ })};
+ mocks['@/lib/marketing/config']={paidOrderMarketingEnabled:()=>false};
+ mocks['@/lib/server/settle-checkout']=loadTs('src/lib/server/settle-checkout.ts',mocks);
  const route=load('src/app/api/stripe/webhook/route.ts',mocks);
  assert.equal((await route.POST(new Request('https://test',{method:'POST',body:'event'}))).status,500);
  assert.equal(state['orders/o'].paymentStatus,'Pending');

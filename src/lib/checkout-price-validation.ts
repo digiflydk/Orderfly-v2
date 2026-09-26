@@ -13,7 +13,7 @@ function date(value: unknown): Date | undefined {
 }
 
 // Catalog records and campaign rows are loaded by the server, never from the request.
-export function minimumCheckoutPrices(items: MinimalCartItem[], catalog: CatalogPriceLine[], discounts: StandardDiscount[], upsells: Upsell[], scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }) {
+export function minimumCheckoutPrices(items: MinimalCartItem[], catalog: CatalogPriceLine[], discounts: StandardDiscount[], upsells: Upsell[], scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }, verifiedUpsellIds?: Set<string>) {
   const now = scope.now || new Date();
   const clock = restaurantClock(now);
   const active = (d: StandardDiscount | Upsell) => {
@@ -46,14 +46,18 @@ export function minimumCheckoutPrices(items: MinimalCartItem[], catalog: Catalog
           t.type === 'combo_in_cart' ? record.isCombo && record.id === t.referenceId :
           t.type === 'product_tag_in_cart' && record.tags.includes(t.referenceId));
       });
-      if (triggered) minimum = Math.min(minimum,discountedUnit(line.price,upsell.discountType,upsell.discountValue));
+      if (triggered) {
+        minimum = Math.min(minimum,discountedUnit(line.price,upsell.discountType,upsell.discountValue));
+        if (item.upsellId === upsell.id) { verifiedUpsellIds?.add(upsell.id); }
+      }
     }
     return ore(minimum) / 100;
   });
 }
 
 export function validateCheckoutPrices(items: MinimalCartItem[], catalog: CatalogPriceLine[], discounts: StandardDiscount[], upsells: Upsell[], scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }) {
-  const minimums = minimumCheckoutPrices(items, catalog, discounts, upsells, scope);
+  const verifiedUpsellIds = new Set<string>();
+  const minimums = minimumCheckoutPrices(items, catalog, discounts, upsells, scope, verifiedUpsellIds);
   items.forEach((item, index) => {
     const minimum = minimums[index];
     // Round a unit once, before quantity. Eligibility never bypasses this floor.
@@ -62,4 +66,5 @@ export function validateCheckoutPrices(items: MinimalCartItem[], catalog: Catalo
       throw new Error('Basket prices have changed. Please refresh your basket.');
     }
   });
+  return [...verifiedUpsellIds];
 }

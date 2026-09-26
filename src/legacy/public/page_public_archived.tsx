@@ -9,7 +9,7 @@ import CasesSection from "@/components/sections/cases";
 import AboutSection from "@/components/sections/about";
 import CustomersSection from "@/components/sections/customers";
 import ContactSection from "@/components/sections/contact";
-import { getGeneralSettings } from "@/services/settings";
+import { getStorefrontSettings as getGeneralSettings } from "@/services/settings";
 
 type SectionKey =
   | "feature"

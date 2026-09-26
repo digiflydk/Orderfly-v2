@@ -573,8 +573,8 @@ function CheckoutForm({ location }: { location: Location }) {
       try { resolveFulfillmentTime(location, deliveryType!, selectedTime); }
       catch { setCheckoutError('Vælg et nyt ledigt tidspunkt.'); setIsTimeDialogOpen(true); return; }
       const finalDeliveryTime = selectedTime;
-      let anonymousId: string | undefined;
-      try { anonymousId = Cookies.get('orderfly_anonymous_id'); } catch { /* Optional consent linkage. */ }
+      // The server resolves consent ownership from its HttpOnly cookie.
+      const anonymousId = undefined;
 
       const minimalCartItems = checkoutItems(cartItems);
 

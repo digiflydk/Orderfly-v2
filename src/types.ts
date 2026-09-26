@@ -605,6 +605,7 @@ export type ComboMenu = {
  * @description A fully detailed item in the shopping cart.
  */
 export interface CartItem {
+  upsellId?: string; // Untrusted selection; validated at checkout.
   id: string; // Original product ID
   cartItemId: string; // Unique ID for this specific item instance in the cart
   itemType: 'product' | 'combo';
@@ -626,6 +627,7 @@ export interface CartItem {
  * @description A minimal representation of a cart item sent to the server.
  */
 export type MinimalCartItem = {
+    upsellId?: string;
     itemType?: 'product' | 'combo';
     toppingIds?: string[];
     comboSelections?: ComboSelection[];

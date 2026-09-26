@@ -8,8 +8,12 @@ function fixture(){
  const records=new Map([['products/p',product],['products/unsorted',{...product,id:'',productName:'QA Fries',price:45,sortOrder:undefined}],
   ['products/no-price',{...product,productName:'QA Missing price',price:undefined,sortOrder:1}]]);
  const snap=key=>({id:key.split('/')[1],exists:records.has(key),data:()=>({...records.get(key)})});
- const db={collection:name=>({get:async()=>({docs:[...records.keys()].filter(k=>k.startsWith(name+'/')).map(snap)}),doc:id=>({get:async()=>snap(name+'/'+id)})})};
- const products=loadTs('src/app/superadmin/products/actions.ts',{'server-only':{},'next/cache':{},'next/navigation':{},'@/lib/firebase-admin':{getAdminDb:()=>db}});
+ const collection=(name,filters=[])=>({where:(field,op,value)=>{if(op!=='==')throw Error('Unexpected query');return collection(name,[...filters,[field,value]]);},get:async()=>({docs:[...records.keys()].filter(k=>k.startsWith(name+'/')&&filters.every(([field,value])=>records.get(k)[field]===value)).map(snap)}),doc:id=>({get:async()=>snap(name+'/'+id)})});
+ const db={collection};
+ const session={verifiedOrderflyIdentity:async()=>({provider:'firebase',subject:'fixture'}),orderflyReadGrants:async()=>[{brandId:'b',locationIds:null}],requireOrderflyAccess:async brand=>{if(brand!=='b')throw Error('forbidden');}};
+ const accessMocks={'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},'./orderfly-session':session,'@/lib/access/orderfly-session':session};
+ const scoped=loadTs('src/lib/access/scoped-data.ts',accessMocks);
+ const products=loadTs('src/app/superadmin/products/actions.ts',{...accessMocks,'next/cache':{},'next/navigation':{},'@/lib/access/scoped-data':scoped});
  const brands=[{id:'b',name:'Esmeralda QA',currency:'DKK',createdAt:timestamp(),appearances:{updatedAt:timestamp()}},{id:'c',name:'CPH QA',currency:'DKK'}];
  const locations=[{id:'l',name:'QA Amager',brandId:'b',deliveryTypes:['pickup'],createdAt:timestamp()}];
  const categories=[{id:'pizza',categoryName:'QA Pizza category',locationIds:['l'],updatedAt:timestamp()}];
@@ -19,7 +23,7 @@ function fixture(){
   '@/app/superadmin/brands/actions':{getBrands:async()=>brands},
   '@/app/superadmin/locations/actions':{getAllLocations:async()=>locations},
   '@/app/superadmin/categories/actions':{getCategories:async()=>categories},
-  '@/app/superadmin/toppings/actions':{getToppingGroups:async()=>toppingGroups},
+  '@/app/superadmin/toppings/actions':{getToppingGroups:async()=>toppingGroups,getToppings:async()=>[{id:'t',groupId:'g',toppingName:'QA topping',updatedAt:timestamp()}]},
   '@/app/superadmin/allergens/actions':{getAllergens:async()=>allergens},
   '@/app/superadmin/products/actions':products,'./actions':products,
   '@/lib/upsell-serialization':loadTs('src/lib/upsell-serialization.ts'),
