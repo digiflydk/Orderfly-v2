@@ -150,8 +150,12 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844
     const overflow = await page.evaluate(() => document.documentElement.scrollWidth - innerWidth);
     assert.ok(overflow <= 1, `${name} shell horizontal overflow: ${overflow}px`);
     assert.deepEqual(errors, []);
-    if (name === 'mobile') await page.keyboard.press('Escape');
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+    if (name === 'mobile') {
+      await page.screenshot({ path: path.join(root, 'test-results', 'admin-shell-mobile-menu.png'), fullPage: true });
+      await page.keyboard.press('Escape');
+      await expect(sidebar).toHaveCount(0);
+    }
     await page.screenshot({ path: path.join(root, 'test-results', `admin-shell-${name}.png`), fullPage: true });
   });
 }
