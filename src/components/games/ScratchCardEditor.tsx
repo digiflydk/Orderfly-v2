@@ -83,7 +83,7 @@ export function ScratchCardEditor({ brands, brandId, draft, status = 'draft', pr
 
       <nav aria-label="Opsætning af skrabelod" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{steps.map(item => <button key={item.id} type="button" aria-current={step === item.id ? 'step' : undefined} onClick={() => setStep(item.id)} className={`rounded-lg border p-3 text-left text-sm transition-colors ${step === item.id ? 'border-gray-900 bg-gray-900 font-semibold text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-500'}`}>{item.title}</button>)}</nav>
 
-      <form onSubmit={save} className="rounded-xl border bg-white p-4 sm:p-6">
+      <form noValidate onSubmit={save} className="rounded-xl border bg-white p-4 sm:p-6">
         <input type="hidden" name="brandId" value={brandId} />
         <header className="mb-6 border-b pb-4"><h2 className="text-xl font-semibold">{steps.find(item => item.id === step)?.title}</h2><p className="mt-1 text-sm text-gray-600">{steps.find(item => item.id === step)?.description}</p></header>
 

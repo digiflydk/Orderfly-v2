@@ -23,7 +23,7 @@ before(async () => {
   directory = fs.mkdtempSync(path.join(os.tmpdir(), 'games-editor-'));
   const entry = file('entry', `import React from 'react';import{createRoot}from'react-dom/client';import{ScratchCardEditor}from ${JSON.stringify(path.join(root, 'src/components/games/ScratchCardEditor.tsx'))};createRoot(document.getElementById('root')).render(<ScratchCardEditor brands={[{id:'esmeralda',name:'Esmeralda',slug:'esmeralda',logoUrl:''}]} brandId="esmeralda" draft={${JSON.stringify(draft)}} status="test"/>);`);
   const loader = file('loader', `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
-  const actions = file('actions', `export async function saveScratchCardDraft(data){await fetch('/save',{method:'POST',body:data});return{ok:true,message:'Opsætningen er gemt.'}};export async function importGameCodes(){return{message:'OK'}};export async function redeemGameVoucher(){return{message:'OK'}};export async function setScratchCardStatus(){return{ok:true,message:'OK'}};export async function uploadGameAsset(){return{ok:false,message:'No upload'}};`);
+  const actions = file('actions', `export async function saveScratchCardDraft(data){if(JSON.parse(data.get('prizes'))[0].probabilityPercent>100)return{ok:false,message:'Vinderchance må højst være 100 %.'};await fetch('/save',{method:'POST',body:data});return{ok:true,message:'Opsætningen er gemt.'}};export async function importGameCodes(){return{message:'OK'}};export async function redeemGameVoucher(){return{message:'OK'}};export async function setScratchCardStatus(){return{ok:true,message:'OK'}};export async function uploadGameAsset(){return{ok:false,message:'No upload'}};`);
   const schema = file('schema', `export const scratchCardDraftSchema={parse:value=>value};export const esmeraldaScratchTest=()=>(${JSON.stringify(draft)});`);
   const preview = file('preview', `import React from 'react';export function ScratchGame({game}){return <div data-testid="preview">{game.title}: {game.cardsPerPlay} felter</div>}`);
   const navigation = file('navigation', `export const useRouter=()=>({push:()=>{},refresh:()=>{}});`);
@@ -70,5 +70,19 @@ test('switching steps preserves settings and saves the complete draft', async ()
     assert.equal(saved.paths, '/');
     assert.equal(JSON.parse(saved.prizes)[0].probabilityPercent, 25);
     assert.match(await page.getByTestId('preview').innerText(), /9 felter/);
+  } finally { await page.close(); }
+});
+
+test('an invalid value on another step shows a save error instead of silently blocking submission', async () => {
+  const page = await browser.newPage();
+  try {
+    saved = undefined;
+    await page.goto(origin);
+    await page.locator('nav button').nth(1).click();
+    await page.getByLabel('Vinderchance %').fill('101');
+    await page.locator('nav button').nth(2).click();
+    await page.getByRole('button', { name: 'Gem opsætning' }).click();
+    await page.getByRole('status').getByText('Vinderchance må højst være 100 %.').waitFor();
+    assert.equal(saved, undefined);
   } finally { await page.close(); }
 });
