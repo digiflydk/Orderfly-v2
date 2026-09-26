@@ -55,11 +55,12 @@ test('switching steps preserves settings and saves the complete draft', async ()
     await page.goto(origin);
     await page.getByLabel('Overskrift').fill('Vind en pizza');
     await page.getByLabel('Lodder pr. spil').selectOption('9');
-    await page.getByRole('button', { name: '2. Præmier' }).click();
+    assert.deepEqual(await page.locator('nav button').allTextContents(), ['1. Spillet', '2. Præmier', '3. Udseende', '4. Test og udgiv']);
+    await page.locator('nav button').nth(1).click();
     await page.getByLabel('Vinderchance %').fill('25');
-    await page.getByRole('button', { name: '3. Udseende' }).click();
+    await page.locator('nav button').nth(2).click();
     await page.getByLabel('Logo', { exact: true }).fill('https://example.com/logo.png');
-    await page.getByRole('button', { name: '4. Test og udgiv' }).click();
+    await page.locator('nav button').nth(3).click();
     await page.getByRole('button', { name: 'Gem opsætning' }).click();
     await page.getByRole('status').getByText('Opsætningen er gemt.').waitFor();
     assert.equal(saved.title, 'Vind en pizza');
