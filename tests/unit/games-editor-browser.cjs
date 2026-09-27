@@ -11,7 +11,7 @@ webpackModule.init();
 let directory, server, browser, origin, saved;
 const root = process.cwd();
 const draft = {
-  brandId: 'esmeralda', title: 'Skrab og vind', instruction: 'Skrab her', revealText: 'Prøv igen',
+  brandId: 'esmeralda', campaignName:'Efterårsspil', startsAt:null, endsAt:null, popupDelaySeconds:2, title: 'Skrab og vind', instruction: 'Skrab her', revealText: 'Prøv igen',
   cardsPerPlay: 3, totalCardLimit: 3000, collectPhone: false, newsletterText: 'Ja tak',
   emailSubject:'Din gevinst er klar',emailMessage:'Her er din personlige gevinstkode.',displayCooldownDays:30,allowedOrigins:[],
   logoUrl: '', backgroundUrl: '', fontUrl: '', primaryColor: '#ffbd02', surfaceColor: '#111111',
@@ -22,7 +22,7 @@ function file(name, code) { const target = path.join(directory, `${name}.js`); f
 
 before(async () => {
   directory = fs.mkdtempSync(path.join(os.tmpdir(), 'games-editor-'));
-  const entry = file('entry', `import React from 'react';import{createRoot}from'react-dom/client';import{ScratchCardEditor}from ${JSON.stringify(path.join(root, 'src/components/games/ScratchCardEditor.tsx'))};import{ScratchSurface}from ${JSON.stringify(path.join(root, 'src/components/games/ScratchCard.tsx'))};createRoot(document.getElementById('root')).render(<><ScratchCardEditor brands={[{id:'esmeralda',name:'Esmeralda',slug:'esmeralda',logoUrl:''}]} products={[{id:'pizza_01',name:'Pizza 01'}]} brandId="esmeralda" draft={${JSON.stringify(draft)}} status="test"/><div id="scratch-fixture" style={{width:200}}><ScratchSurface label="Pizza" index={1} round={0} onReveal={()=>document.getElementById('scratch-result').textContent='Pizza afsløret'}/><p id="scratch-result"/></div></>);`);
+  const entry = file('entry', `import React from 'react';import{createRoot}from'react-dom/client';import{ScratchCardEditor}from ${JSON.stringify(path.join(root, 'src/components/games/ScratchCardEditor.tsx'))};import{ScratchSurface}from ${JSON.stringify(path.join(root, 'src/components/games/ScratchCard.tsx'))};createRoot(document.getElementById('root')).render(<><ScratchCardEditor brands={[{id:'esmeralda',name:'Esmeralda',slug:'esmeralda',logoUrl:''}]} products={[{id:'pizza_01',name:'Pizza 01'}]} brandId="esmeralda" campaignId="campaign_2" draft={${JSON.stringify(draft)}} status="test"/><div id="scratch-fixture" style={{width:200}}><ScratchSurface label="Pizza" index={1} round={0} onReveal={()=>document.getElementById('scratch-result').textContent='Pizza afsløret'}/><p id="scratch-result"/></div></>);`);
   const loader = file('loader', `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   const actions = file('actions', `export async function saveScratchCardDraft(data){if(JSON.parse(data.get('prizes'))[0].probabilityPercent>100)return{ok:false,message:'Vinderchance må højst være 100 %.'};await fetch('/save',{method:'POST',body:data});return{ok:true,message:'Opsætningen er gemt.'}};export async function importGameCodes(){return{message:'OK'}};export async function sendGameTestEmail(){return{message:'OK'}};export async function setScratchCardStatus(){return{ok:true,message:'OK'}};export async function uploadGameAsset(){return{ok:false,message:'No upload'}};`);
   const schema = file('schema', `export const scratchCardDraftSchema={parse:value=>value};export const esmeraldaScratchTest=()=>(${JSON.stringify(draft)});export const prizeChannels=prize=>prize.redemptionChannels??(prize.redemption==='both'?['restaurant','orderfly']:prize.redemption==='website'?['orderfly']:['restaurant']);`);
@@ -31,6 +31,8 @@ before(async () => {
   const aliases = {
     '@/app/superadmin/games/actions': actions,
     '@/lib/games/scratch-card': schema,
+    '@/lib/games/campaign': path.join(root,'src/lib/games/campaign.ts'),
+    '@/lib/games/dates': path.join(root,'src/lib/games/dates.ts'),
     '@/lib/games/scratch-card-preview': path.join(root,'src/lib/games/scratch-card-preview.ts'),
     './ScratchGame': preview,
     'next/navigation': navigation,
@@ -70,6 +72,8 @@ test('switching steps preserves settings and saves the complete draft', async ()
     assert.equal(saved.logoUrl, 'https://example.com/logo.png');
     assert.equal(saved.placement, 'selected');
     assert.equal(saved.paths, '/');
+    assert.equal(saved.campaignId, 'campaign_2');
+    assert.equal(saved.campaignName, 'Efterårsspil');
     assert.equal(JSON.parse(saved.prizes)[0].probabilityPercent, 25);
     assert.match(await page.getByTestId('preview').innerText(), /9 felter/);
   } finally { await page.close(); }
@@ -107,3 +111,5 @@ test('scratch field reveals by gesture without a visible reveal button', async()
     await field.getByText('Pizza afsløret').waitFor();
   }finally{await page.close();}
 });
+
+test('Danish campaign dates are saved as UTC instants',async()=>{const page=await browser.newPage();try{await page.goto(origin);await page.locator('nav button').nth(3).click();await page.getByLabel('Startdato og tidspunkt').fill('2026-12-01T12:00');await page.getByLabel('Slutdato og tidspunkt').fill('2026-12-02T12:00');await page.getByRole('button',{name:'Gem opsætning'}).click();await page.getByRole('status').getByText('Opsætningen er gemt.').waitFor();assert.equal(saved.startsAt,'2026-12-01T11:00:00.000Z');assert.equal(saved.endsAt,'2026-12-02T11:00:00.000Z');}finally{await page.close()}});

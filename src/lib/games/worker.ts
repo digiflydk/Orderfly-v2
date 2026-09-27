@@ -31,7 +31,7 @@ export async function runGameOutbox(db:Firestore, now=Date.now(), providerFactor
           const voucher=(await db.collection('gameVouchers').doc(voucherId).get()).data();
           if(!voucher||voucher.playId!==job.playId||voucher.code!==job.code)throw new MarketingError('voucher_scope_mismatch',false);
           const mail=gameMailConfig(job.brandId),brand=(await db.collection('brands').doc(job.brandId).get()).data();
-          const game=scratchCardDraftSchema.safeParse((await db.collection('gameScratchDrafts').doc(job.brandId).get()).data());
+          const game=scratchCardDraftSchema.safeParse((await db.collection('gameScratchDrafts').doc(job.campaignId||job.brandId).get()).data());
           if(!mail||!brand||!game.success)throw new MarketingError('game_mail_configuration_required',false);
           await new NotificationPlatformClient().send({idempotencyKey:`game-prize-${job.playId}`,templateKey:'orderfly.games.prize',organizationId:mail.organizationId,senderProfile:mail.senderProfile,locale:'da',recipientEmail:job.email,recipientName:job.name,relatedEntity:{type:'game_play',id:job.playId},variables:{brand_id:job.brandId,brand_name:String(brand.name||''),logo_url:game.data.logoUrl||String(brand.logoUrl||''),primary_color:game.data.primaryColor,surface_color:game.data.surfaceColor,subject:game.data.emailSubject,message:game.data.emailMessage,name:job.name,prize:job.prizeName,code:job.code,redemption:Array.isArray(job.redemptionChannels)?redemptionText(job.redemptionChannels):job.redemption,mode:job.mode}});
           state='accepted';

@@ -11,6 +11,22 @@ function validate(payload) {
   return JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'}));
 }
 const base = {brandId:'brand_a',title:'Skrab her',instruction:'Afslør resultatet',revealText:'Testresultat',placement:'selected',paths:['/menu'],prizes:[{name:'Pizza',type:'item',value:0,probabilityPercent:10,maxWinners:100}]};
+test('campaign dates reject invalid order and malformed timestamps',()=>{
+  assert.equal(validate({...base,campaignName:'Efterår',startsAt:'2026-10-01T10:00:00.000Z',endsAt:'2026-10-01T10:00:00.000Z'}),false);
+  assert.equal(validate({...base,campaignName:'Efterår',startsAt:'2026-10-02T10:00:00.000Z',endsAt:'2026-10-01T10:00:00.000Z'}),false);
+  assert.equal(validate({...base,startsAt:'2026-10-01',endsAt:null}),false);
+  assert.equal(validate({...base,campaignName:'Efterår',startsAt:'2026-10-01T10:00:00.000Z',endsAt:'2026-10-02T10:00:00.000Z'}),true);
+});
+test('campaign windows open at start, close at end, and adjacent bookings do not overlap',()=>{
+  const schedule=pathToFileURL(path.resolve('src/lib/games/schedule.ts')).href;
+  const script=`import(${JSON.stringify(schedule)}).then(m=>{const a={startsAt:'2026-10-01T10:00:00Z',endsAt:'2026-10-02T10:00:00Z'},b={startsAt:'2026-10-02T10:00:00Z',endsAt:'2026-10-03T10:00:00Z'};process.stdout.write(JSON.stringify({before:m.campaignStatus('live',a,Date.parse(a.startsAt)-1),start:m.campaignStatus('live',a,Date.parse(a.startsAt)),end:m.campaignStatus('live',a,Date.parse(a.endsAt)),adjacent:m.overlaps(a,b),overlap:m.overlaps(a,{...b,startsAt:'2026-10-02T09:00:00Z'})}))})`;
+  assert.deepEqual(JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'})),{before:'scheduled',start:'live',end:'ended',adjacent:false,overlap:true});
+});
+test('Danish calendar input converts across daylight saving time',()=>{
+  const dates=pathToFileURL(path.resolve('src/lib/games/dates.ts')).href;
+  const script=`import(${JSON.stringify(dates)}).then(m=>{let gap=false;try{m.copenhagenInstant('2026-03-29T02:30')}catch{gap=true}process.stdout.write(JSON.stringify({summer:m.copenhagenInstant('2026-07-01T12:00'),winter:m.copenhagenInstant('2026-12-01T12:00'),gap}))})`;
+  assert.deepEqual(JSON.parse(execFileSync(process.execPath,['--no-warnings','--experimental-strip-types','--input-type=module','-e',script],{encoding:'utf8'})),{summer:'2026-07-01T10:00:00.000Z',winter:'2026-12-01T11:00:00.000Z',gap:true});
+});
 test('a selected placement requires at least one explicit page',()=>{
   assert.equal(validate({...base,paths:[]}),false);
   assert.equal(validate(base),true);

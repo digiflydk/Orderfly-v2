@@ -3,6 +3,9 @@ import { z } from 'zod';
 const httpsUrl = z.union([z.literal(''), z.string().url().startsWith('https://').max(1000)]);
 export const scratchCardDraftSchema = z.object({
   brandId: z.string().regex(/^[A-Za-z0-9_-]{1,128}$/),
+  campaignName: z.string().trim().min(3).max(100).default('Skrabelod'),
+  startsAt: z.string().datetime({offset:true}).nullable().default(null),
+  endsAt: z.string().datetime({offset:true}).nullable().default(null),
   title: z.string().trim().min(3).max(100),
   instruction: z.string().trim().min(3).max(240),
   revealText: z.string().trim().min(3).max(160),
@@ -36,6 +39,8 @@ export const scratchCardDraftSchema = z.object({
   popupDelaySeconds: z.number().int().min(0).max(60).default(0),
   allowedOrigins: z.array(z.string().url().startsWith('https://').max(250)).max(20).default([]),
 }).superRefine((draft, ctx) => {
+  if(draft.startsAt&&draft.endsAt&&Date.parse(draft.startsAt)>=Date.parse(draft.endsAt))
+    ctx.addIssue({code:z.ZodIssueCode.custom,path:['endsAt'],message:'Sluttidspunktet skal ligge efter starttidspunktet.'});
   if (draft.placement === 'selected' && draft.paths.length === 0)
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['paths'], message: 'Vælg mindst én side.' });
   if (new Set(draft.paths).size !== draft.paths.length)
@@ -71,7 +76,7 @@ export function prizeChannels(prize:RedemptionPrize):Array<'restaurant'|'orderfl
 export function redemptionText(channels:Array<'restaurant'|'orderfly'|'external'>):string {
   return channels.map(channel=>({restaurant:'i restauranten',orderfly:'på Orderfly hjemmesiden',external:'på den eksterne hjemmeside'}[channel])).join(', ');
 }
-export type PublicScratchGame = Omit<ScratchCardDraft,'prizes'|'emailSubject'|'emailMessage'|'allowedOrigins'> & {prizes:Array<Omit<ScratchCardDraft['prizes'][number],'sharedCode'>>};
+export type PublicScratchGame = Omit<ScratchCardDraft,'prizes'|'emailSubject'|'emailMessage'|'allowedOrigins'> & {campaignId?:string;prizes:Array<Omit<ScratchCardDraft['prizes'][number],'sharedCode'>>};
 export function publicScratchGame(game:ScratchCardDraft):PublicScratchGame {
   const {emailSubject,emailMessage,allowedOrigins,prizes,...publicFields}=game;
   return {...publicFields,prizes:prizes.map(({sharedCode,...prize})=>prize)};

@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { GameError, playScratchCard } from '@/lib/games/play';
 export const runtime='nodejs';
-const input=z.object({brandId:z.string(),name:z.string(),email:z.string(),phone:z.string().optional(),newsletter:z.boolean(),pathname:z.string(),test:z.boolean().optional()});
+const input=z.object({brandId:z.string(),campaignId:z.string().optional(),name:z.string(),email:z.string(),phone:z.string().optional(),newsletter:z.boolean(),pathname:z.string(),test:z.boolean().optional()});
 export async function POST(request:Request){
   try {
     if(Number(request.headers.get('content-length')||0)>4096)return Response.json({error:'For stor anmodning.'},{status:413});

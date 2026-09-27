@@ -5,6 +5,8 @@ import { useRouter } from 'next/navigation';
 import { importGameCodes, saveScratchCardDraft, sendGameTestEmail, setScratchCardStatus, uploadGameAsset } from '@/app/superadmin/games/actions';
 import { esmeraldaScratchTest, prizeChannels, scratchCardDraftSchema, type ScratchCardDraft } from '@/lib/games/scratch-card';
 import { ScratchGame } from './ScratchGame';
+import { campaignStatus } from '@/lib/games/campaign';
+import { copenhagenInstant, copenhagenLocal } from '@/lib/games/dates';
 
 type Prize = ScratchCardDraft['prizes'][number];
 type Step = 'game' | 'prizes' | 'design' | 'publish';
@@ -18,7 +20,7 @@ const starter: Prize = { name: 'Testpræmie', imageUrl: '', type: 'item', value:
 const recommendedFields = (prizeCount: number) => Math.min(3, Math.max(1, Math.ceil(prizeCount / 2))) * 3;
 const input = 'mt-1 w-full min-w-0 rounded-lg border border-gray-300 bg-white p-2.5 text-sm focus:border-gray-900 focus:outline-none focus:ring-1 focus:ring-gray-900';
 
-export function ScratchCardEditor({ brands, products = [], brandId, draft, status = 'draft', preset = false }: { brands: Array<{ id: string; name: string; slug: string; logoUrl: string }>; products?:Array<{id:string;name:string}>; brandId: string; draft: ScratchCardDraft | null; status?: string; preset?: boolean }) {
+export function ScratchCardEditor({ brands, products = [], brandId, campaignId, draft, status = 'draft', preset = false }: { brands: Array<{ id: string; name: string; slug: string; logoUrl: string }>; products?:Array<{id:string;name:string}>; brandId: string; campaignId:string; draft: ScratchCardDraft | null; status?: string; preset?: boolean }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [message, setMessage] = useState('');
@@ -32,6 +34,8 @@ export function ScratchCardEditor({ brands, products = [], brandId, draft, statu
   const [mobile, setMobile] = useState(true);
   const brand = brands.find(b => b.id === brandId);
   const chance = game.prizes.reduce((total, prize) => total + prize.probabilityPercent, 0);
+  const effectiveStatus=campaignStatus(status,game);
+  const setDate=(key:'startsAt'|'endsAt',value:string)=>{try{update(key,copenhagenInstant(value));setMessage('');}catch{setMessage('Vælg et gyldigt tidspunkt uden for skiftet til sommertid.');}};
 
   function update<K extends keyof ScratchCardDraft>(key: K, value: ScratchCardDraft[K]) {
     setGame(current => ({ ...current, [key]: value }));
@@ -75,7 +79,7 @@ export function ScratchCardEditor({ brands, products = [], brandId, draft, statu
       <div className="rounded-xl border bg-white p-4 sm:p-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div><p className="text-xs font-semibold uppercase tracking-wide text-gray-500">Kampagne</p><h2 className="text-lg font-semibold">{brand?.name || brandId}</h2></div>
-          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${status === 'live' ? 'bg-green-100 text-green-800' : status === 'test' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-700'}`}>{status === 'live' ? 'Live' : status === 'test' ? 'Kun test' : 'Kladde'}</span>
+          <span className={`rounded-full px-3 py-1 text-xs font-semibold ${effectiveStatus === 'live' ? 'bg-green-100 text-green-800' : effectiveStatus === 'scheduled' ? 'bg-amber-100 text-amber-800' : 'bg-gray-100 text-gray-700'}`}>{{live:'Live',scheduled:'Planlagt',ended:'Afsluttet',paused:'Pauset',test:'Kun test',draft:'Kladde'}[effectiveStatus]}</span>
         </div>
         <label className="mt-4 block text-sm font-medium">Vælg brand<select className={input} value={brandId} onChange={event => router.push(`/superadmin/games/scratch-card?brand=${encodeURIComponent(event.target.value)}`)}>{brands.map(item => <option key={item.id} value={item.id}>{item.name}</option>)}</select></label>
         {preset && <p className="mt-3 rounded-lg bg-amber-50 p-3 text-sm">Esmeralda-eksemplet er indlæst. Gem opsætningen før du tester.</p>}
@@ -85,6 +89,7 @@ export function ScratchCardEditor({ brands, products = [], brandId, draft, statu
       <nav aria-label="Opsætning af skrabelod" className="grid grid-cols-2 gap-2 sm:grid-cols-4">{steps.map(item => <button key={item.id} type="button" aria-current={step === item.id ? 'step' : undefined} onClick={() => setStep(item.id)} className={`rounded-lg border p-3 text-left text-sm transition-colors ${step === item.id ? 'border-gray-900 bg-gray-900 font-semibold text-white' : 'border-gray-200 bg-white text-gray-700 hover:border-gray-500'}`}>{item.title}</button>)}</nav>
 
       <form noValidate onSubmit={save} className="rounded-xl border bg-white p-4 sm:p-6">
+        <input type="hidden" name="campaignId" value={campaignId}/>
         <input type="hidden" name="brandId" value={brandId} />
         <header className="mb-6 border-b pb-4"><h2 className="text-xl font-semibold">{steps.find(item => item.id === step)?.title}</h2><p className="mt-1 text-sm text-gray-600">{steps.find(item => item.id === step)?.description}</p></header>
 
@@ -131,6 +136,10 @@ export function ScratchCardEditor({ brands, products = [], brandId, draft, statu
         </section>
 
         <section className={step === 'publish' ? 'space-y-5' : 'hidden'} aria-label="Test og udgiv">
+          <label className="block text-sm font-medium">Kampagnenavn<input name="campaignName" value={game.campaignName} onChange={event=>update('campaignName',event.target.value)} className={input}/></label>
+          <div className="grid gap-4 sm:grid-cols-2"><label className="block text-sm font-medium">Startdato og tidspunkt<input type="datetime-local" value={copenhagenLocal(game.startsAt)} onChange={event=>setDate('startsAt',event.target.value)} className={input}/></label><label className="block text-sm font-medium">Slutdato og tidspunkt<input type="datetime-local" value={copenhagenLocal(game.endsAt)} onChange={event=>setDate('endsAt',event.target.value)} className={input}/></label></div>
+          <input type="hidden" name="startsAt" value={game.startsAt||''}/><input type="hidden" name="endsAt" value={game.endsAt||''}/>
+          <p className="text-xs text-gray-600">Tidspunkter er dansk tid. Tom start betyder straks ved aktivering. Tom slut betyder indtil deaktivering. Planlagte spil åbner og lukker automatisk. Tidsrum for samme brand må ikke overlappe.</p>
           <label className="block text-sm font-medium">Hvor skal spillet vises?<select name="placement" value={game.placement} onChange={event => update('placement', event.target.value as ScratchCardDraft['placement'])} className={input}><option value="selected">Kun på valgte sider</option><option value="all">Hele brandsitet</option></select></label>
           {game.placement === 'selected' && <label className="block text-sm font-medium">Sidestier, én pr. linje<textarea name="paths" rows={3} value={game.paths.join('\n')} onChange={event => update('paths', event.target.value.split(/\r?\n/))} className={input} /><span className="mt-1 block text-xs font-normal text-gray-500">Eksempel: / eller /menu</span></label>}
           {game.placement === 'all' && <input type="hidden" name="paths" value={game.paths.join('\n')} />}
@@ -142,21 +151,21 @@ export function ScratchCardEditor({ brands, products = [], brandId, draft, statu
 
         <div className="mt-7 flex flex-wrap items-center justify-between gap-3 border-t pt-5">
           <span className="text-xs text-gray-500">Ændringer i forhåndsvisningen gemmes først, når du trykker her.</span>
-          <button disabled={pending} className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{pending ? 'Gemmer…' : 'Gem opsætning'}</button>
+          <button disabled={pending || effectiveStatus==='ended'} className="rounded-lg bg-gray-900 px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50">{pending ? 'Gemmer…' : 'Gem opsætning'}</button>
         </div>
       </form>
 
       {step === 'publish' && <div className="space-y-6 rounded-xl border bg-white p-4 sm:p-6">
-        <section className="space-y-3"><h3 className="font-semibold">Test og aktivering</h3><p className="text-sm text-gray-600">Test kræver en gemt opsætning. Uden mailkonfiguration sendes ingen testmail.</p><div className="flex flex-wrap gap-2">{(['draft', 'test', 'live'] as const).map(next => <button type="button" key={next} disabled={pending || status === next} className={`rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50 ${next === 'live' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`} onClick={() => startTransition(async () => { const result = await setScratchCardStatus(brandId, next); setMessage(result.message); if (result.ok) router.refresh(); })}>{next === 'draft' ? 'Deaktivér' : next === 'test' ? 'Sæt i test' : 'Aktivér live'}</button>)}</div></section>
-        <section className="space-y-3 border-t pt-5"><h3 className="font-semibold">Test gevinstmail</h3><p className="text-sm text-gray-600">Gem tekst og design først. Testkoden kan ikke indløses.</p><input aria-label="Testmail til" type="email" placeholder="test@eksempel.dk" value={testEmail} onChange={event=>setTestEmail(event.target.value)} className={input}/><button type="button" disabled={pending||!testEmail} className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" onClick={()=>startTransition(async()=>setMessage((await sendGameTestEmail(brandId,testEmail)).message))}>Send testmail</button></section>
+        <section className="space-y-3"><h3 className="font-semibold">Test og aktivering</h3><p className="text-sm text-gray-600">Gem datoer før aktivering. En fremtidig startdato planlægger spillet automatisk.</p><div className="flex flex-wrap gap-2">{(['draft', 'test', 'live', 'paused', 'ended'] as const).map(next => <button type="button" key={next} disabled={pending || status === next || effectiveStatus === 'ended' || (next === 'draft' || next === 'test') && status === 'live'} className={`rounded-lg border px-4 py-2 text-sm font-medium disabled:opacity-50 ${next === 'live' ? 'border-gray-900 bg-gray-900 text-white' : 'border-gray-300'}`} onClick={() => { if(next==='ended'&&!window.confirm('Afslut kampagnen? Den bevares i historikken og kan ikke aktiveres igen.'))return; startTransition(async () => { const result = await setScratchCardStatus(brandId, next,campaignId); setMessage(result.message); if (result.ok) router.refresh(); }); }}>{next === 'draft' ? 'Kladde' : next === 'test' ? 'Sæt i test' : next === 'live' ? 'Aktivér / planlæg' : next === 'paused' ? 'Pause' : 'Afslut'}</button>)}</div></section>
+        <section className="space-y-3 border-t pt-5"><h3 className="font-semibold">Test gevinstmail</h3><p className="text-sm text-gray-600">Gem tekst og design først. Testkoden kan ikke indløses.</p><input aria-label="Testmail til" type="email" placeholder="test@eksempel.dk" value={testEmail} onChange={event=>setTestEmail(event.target.value)} className={input}/><button type="button" disabled={pending||!testEmail} className="rounded-lg border px-4 py-2 text-sm disabled:opacity-50" onClick={()=>startTransition(async()=>setMessage((await sendGameTestEmail(brandId,testEmail,campaignId)).message))}>Send testmail</button></section>
         {brand?.slug&&<section className="space-y-3 border-t pt-5"><h3 className="font-semibold">Indsæt på ekstern hjemmeside</h3><p className="text-sm text-gray-600">Tilføj først hjemmesidens HTTPS-domæne ovenfor og gem. Indsæt derefter denne kode på siden. Spillet følger sidens placering og visningsregler.</p><button type="button" className="rounded-lg border px-4 py-2 text-sm" onClick={()=>setEmbedSnippet(`<script async src="${window.location.origin}/api/public/games/embed.js?brand=${encodeURIComponent(brand.slug)}"></script>`)}>Vis indlejringskode</button>{embedSnippet&&<textarea readOnly aria-label="Indlejringskode" rows={2} value={embedSnippet} className={input}/>}</section>}
-        <section className="space-y-3 border-t pt-5"><h3 className="font-semibold">Upload præmiekoder</h3><label className="block text-sm">Vælg præmie<select value={codePrize} onChange={event => setCodePrize(Number(event.target.value))} className={input}>{game.prizes.map((item, index) => <option key={index} value={index}>{item.name}</option>)}</select></label><label className="block text-sm">Koder, én pr. linje<input type="file" accept=".csv,.txt,text/csv,text/plain" onChange={async event => { const file = event.target.files?.[0]; if (file && file.size < 100000) setCodes(await file.text()); }} className="mt-2 block w-full text-xs" /><textarea value={codes} onChange={event => setCodes(event.target.value)} rows={3} className={input} /></label><button type="button" disabled={pending || !codes.trim()} className="rounded-lg border border-gray-300 px-4 py-2 text-sm disabled:opacity-50" onClick={() => startTransition(async () => setMessage((await importGameCodes(brandId, codePrize, codes)).message))}>Importér koder</button></section>
+        <section className="space-y-3 border-t pt-5"><h3 className="font-semibold">Upload præmiekoder</h3><label className="block text-sm">Vælg præmie<select value={codePrize} onChange={event => setCodePrize(Number(event.target.value))} className={input}>{game.prizes.map((item, index) => <option key={index} value={index}>{item.name}</option>)}</select></label><label className="block text-sm">Koder, én pr. linje<input type="file" accept=".csv,.txt,text/csv,text/plain" onChange={async event => { const file = event.target.files?.[0]; if (file && file.size < 100000) setCodes(await file.text()); }} className="mt-2 block w-full text-xs" /><textarea value={codes} onChange={event => setCodes(event.target.value)} rows={3} className={input} /></label><button type="button" disabled={pending || !codes.trim()} className="rounded-lg border border-gray-300 px-4 py-2 text-sm disabled:opacity-50" onClick={() => startTransition(async () => setMessage((await importGameCodes(brandId, codePrize, codes,campaignId)).message))}>Importér koder</button></section>
       </div>}
       <p role="status" aria-live="polite" className="text-sm font-medium text-gray-800">{message}</p>
     </div>
 
     <aside className="min-w-0 self-start xl:sticky xl:top-6"><div className="mb-3 flex items-center justify-between gap-2"><div><h2 className="text-lg font-semibold">Forhåndsvisning</h2><p className="text-xs text-gray-600">Sådan ser gæsten spillet</p></div><button type="button" onClick={() => setMobile(current => !current)} className="rounded-lg border border-gray-300 px-3 py-2 text-sm">{mobile ? 'Vis desktop' : 'Vis mobil'}</button></div>
-      <div className={`mx-auto ${mobile ? 'max-w-[390px]' : 'max-w-xl'}`}><ScratchGame game={{ ...game, logoUrl: game.logoUrl || brand?.logoUrl || '' }} brandName={brand?.name || brandId} test pathname="/" /></div>
+      <div className={`mx-auto ${mobile ? 'max-w-[390px]' : 'max-w-xl'}`}><ScratchGame game={{ ...game,campaignId, logoUrl: game.logoUrl || brand?.logoUrl || '' }} brandName={brand?.name || brandId} test pathname="/" /></div>
       <p className="mt-3 text-xs text-gray-600">Testspil gemmes særskilt. Brug en ny e-mail for hver test; testkoder kan ikke indløses.</p>
     </aside>
   </div>;
