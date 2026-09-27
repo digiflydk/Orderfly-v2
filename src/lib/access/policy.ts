@@ -32,6 +32,7 @@ export const FEATURES = [
   ['opsfly.inventory', ['view', 'create', 'edit', 'delete', 'approve']],
   ['opsfly.inventory_count', ['view', 'create', 'edit', 'approve']],
   ['opsfly.procurement', ['view', 'create', 'edit', 'delete', 'approve']],
+  ['opsfly.finance', ['view', 'create', 'edit']],
   ['platform.members', ['view', 'create', 'edit', 'delete']],
   ['platform.roles', ['view', 'create', 'edit', 'delete']],
   ['platform.companies', ['view', 'create', 'edit']],
