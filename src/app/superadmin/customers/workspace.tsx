@@ -18,7 +18,7 @@ export function CustomersWorkspace({ customers, brands, entries, brandNames, glo
       <TabsTrigger value="records">Customer records</TabsTrigger>
       <TabsTrigger value="directory">Unified directory</TabsTrigger>
     </TabsList>
-    <TabsContent value="records"><CustomersClientPage initialCustomers={customers} brands={brands} /></TabsContent>
+    <TabsContent value="records"><CustomersClientPage initialCustomers={customers} brands={brands} entries={entries} brandNames={brandNames} /></TabsContent>
     <TabsContent value="directory"><CustomersDirectory entries={entries} brandNames={brandNames} global={global} /></TabsContent>
   </Tabs>;
 }

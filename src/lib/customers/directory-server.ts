@@ -14,6 +14,15 @@ export async function customerDirectory(customerRecords?: Customer[]): Promise<{
     Promise.all(brandIds.map(brandId => getAdminDb().collection('gamePlays').where('brandId','==',brandId).get())),
     Promise.all(brandIds.map(brandId => getAdminDb().collection('gameConversions').where('brandId','==',brandId).get())),
   ]);
+  const campaignRefs = new Map<string,{brandId:string;campaignId:string}>();
+  plays.forEach((snapshot,index) => snapshot.docs.forEach(doc => {
+    const data=doc.data();
+    if(data.brandId!==brandIds[index]||data.mode!=='live')return;
+    const campaignId=typeof data.campaignId==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(data.campaignId)?data.campaignId:brandIds[index];
+    campaignRefs.set(`${brandIds[index]}:${campaignId}`,{brandId:brandIds[index],campaignId});
+  }));
+  const campaignDocs=await Promise.all([...campaignRefs.values()].map(ref=>getAdminDb().collection('gameScratchDrafts').doc(ref.campaignId).get()));
+  const campaignNames=new Map([...campaignRefs.values()].map((ref,index)=>[`${ref.brandId}:${ref.campaignId}`,campaignDocs[index].data()?.brandId===ref.brandId?String(campaignDocs[index].data()?.campaignName||'Skrabelod'):'Skrabelod']));
   const externalSales = new Map<string,{orders:number;spend:number}>();
   conversions.forEach((snapshot,index) => snapshot.docs.forEach(doc => {
     const data=doc.data(),amount=Number(data.amount);
@@ -30,7 +39,8 @@ export async function customerDirectory(customerRecords?: Customer[]): Promise<{
     const data = doc.data();
     if (data.brandId !== brandIds[index] || data.mode !== 'live') return;
     const sales=externalSales.get(`${brandIds[index]}:${doc.id}`);
-    sources.push({id:doc.id,brandId:brandIds[index],name:String(data.name||''),email:String(data.email||''),phone:String(data.phone||''),kind:'game',createdAt:data.createdAt,newsletter:data.newsletter===true,campaignId:String(data.campaignId||''),externalOrders:sales?.orders||0,externalSpend:sales?.spend||0});
+    const campaignId=typeof data.campaignId==='string'&&/^[A-Za-z0-9_-]{1,128}$/.test(data.campaignId)?data.campaignId:brandIds[index];
+    sources.push({id:doc.id,brandId:brandIds[index],name:String(data.name||''),email:String(data.email||''),phone:String(data.phone||''),kind:'game',createdAt:data.createdAt,newsletter:data.newsletter===true,campaignId,campaignName:campaignNames.get(`${brandIds[index]}:${campaignId}`)||'Skrabelod',externalOrders:sales?.orders||0,externalSpend:sales?.spend||0});
   }));
   return {entries:buildDirectory(sources, session.superuser),global:session.superuser};
 }
