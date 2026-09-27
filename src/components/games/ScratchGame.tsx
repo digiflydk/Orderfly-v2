@@ -17,9 +17,21 @@ export function ScratchGame({game,brandName,test=false,pathname,embedOrigin}:Pro
   const resultTitle=useRef<HTMLHeadingElement>(null);
   useEffect(()=>{
     if(test)return;
-    const eventId=crypto.randomUUID().replace(/-/g,'');
-    void fetch('/api/public/games/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brandId:game.brandId,event:'game_impression',eventId,pathname})});
-  },[game.brandId,pathname,test]);
+    let recorded=false;
+    function impression(){
+      if(recorded)return;
+      recorded=true;
+      const eventId=crypto.randomUUID().replace(/-/g,'');
+      void fetch('/api/public/games/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brandId:game.brandId,event:'game_impression',eventId,pathname})});
+    }
+    if(!embedOrigin){impression();return;}
+    function onVisible(event:MessageEvent){
+      if(event.origin===embedOrigin&&event.source===window.parent&&event.data?.type==='orderfly-game-visible')impression();
+    }
+    window.addEventListener('message',onVisible);
+    window.parent.postMessage({type:'orderfly-game-config',brandId:game.brandId,popupDelaySeconds:game.popupDelaySeconds},embedOrigin);
+    return ()=>window.removeEventListener('message',onVisible);
+  },[game.brandId,game.popupDelaySeconds,pathname,test,embedOrigin]);
   function track(event:'game_open'|'game_complete',eventId:string){
     if(!test)void fetch('/api/public/games/event',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({brandId:game.brandId,event,eventId,pathname})});
   }
