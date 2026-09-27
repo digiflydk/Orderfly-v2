@@ -1,7 +1,10 @@
 
 import { customerDirectory } from '@/lib/customers/directory-server';
-import { CustomersDirectory } from './directory-client';
-import { getAdminDb } from '@/lib/firebase-admin';
+import { getCustomers } from './actions';
+import { getBrands } from '@/app/superadmin/brands/actions';
+import { getAllLocations } from '../locations/actions';
+import { customerListView } from '@/lib/customers/list-view';
+import { CustomersWorkspace } from './workspace';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
 
@@ -9,11 +12,19 @@ export const revalidate = 0;
 export const dynamic = 'force-dynamic';
 
 async function CustomerPageContent() {
-    const {entries, global} = await customerDirectory();
-    const brandIds = [...new Set(entries.flatMap(entry => entry.brandIds))];
-    const brands = await Promise.all(brandIds.map(id => getAdminDb().collection('brands').doc(id).get()));
-    const brandNames = Object.fromEntries(brands.filter(doc => doc.exists).map(doc => [doc.id, String(doc.data()?.name || doc.id)]));
-    return <CustomersDirectory entries={entries} brandNames={brandNames} global={global} />;
+    const [customers, brands, locations] = await Promise.all([
+        getCustomers(), getBrands(), getAllLocations(),
+    ]);
+    const { entries, global } = await customerDirectory(customers);
+    const brandNames = new Map(brands.map(brand => [brand.id, brand.name]));
+    const locationNames = new Map(locations.map(location => [location.id, location.name]));
+    return <CustomersWorkspace
+        customers={customers.map(customer => customerListView(customer, brandNames, locationNames))}
+        brands={brands.map(brand => ({ id: brand.id, name: brand.name }))}
+        entries={entries}
+        brandNames={Object.fromEntries(brands.map(brand => [brand.id, brand.name]))}
+        global={global}
+    />;
 }
 
 

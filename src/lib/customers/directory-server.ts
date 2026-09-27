@@ -2,11 +2,12 @@ import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { orderflyReadGrants, orderflySession } from '@/lib/access/orderfly-session';
 import { getCustomers } from '@/app/superadmin/customers/actions';
+import type { Customer } from '@/types';
 import { buildDirectory, type DirectoryEntry, type DirectorySource } from './directory';
 
-export async function customerDirectory(): Promise<{ entries: DirectoryEntry[]; global: boolean }> {
+export async function customerDirectory(customerRecords?: Customer[]): Promise<{ entries: DirectoryEntry[]; global: boolean }> {
   const [session, grants, customers] = await Promise.all([
-    orderflySession(), orderflyReadGrants('orderfly.customers:view'), getCustomers(),
+    orderflySession(), orderflyReadGrants('orderfly.customers:view'), customerRecords ?? getCustomers(),
   ]);
   const brandIds = [...new Set(grants.filter(grant => grant.locationIds === null).map(grant => grant.brandId))];
   const [plays, conversions] = await Promise.all([
