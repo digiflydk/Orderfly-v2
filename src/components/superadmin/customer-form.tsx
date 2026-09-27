@@ -41,7 +41,7 @@ type CustomerFormValues = z.infer<typeof customerSchema>
 interface CustomerFormProps {
   isOpen: boolean
   setIsOpen: (isOpen: boolean) => void
-  customer: Customer | null
+  customer: Pick<Customer, 'id' | 'fullName' | 'email' | 'phone' | 'status'> | null
 }
 
 export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps) {

@@ -12,6 +12,7 @@ import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 import { getCustomerDetails } from '../actions';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { CustomerRecordActions } from './record-actions';
 
 
 function KpiCard({ title, value, icon: Icon }: { title: string; value: string | number, icon: React.ElementType }) {
@@ -79,10 +80,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                        Customer since {format(new Date(customer.createdAt), 'MMM d, yyyy')}
                     </p>
                 </div>
-                <div className="flex items-center gap-2">
-                     <Button variant="outline"><Download className="mr-2"/>Export</Button>
-                     <Button variant="destructive"><UserX className="mr-2"/>Anonymize</Button>
-                </div>
+                <CustomerRecordActions customer={{id:customer.id,fullName:customer.fullName,email:customer.email,phone:customer.phone,status:customer.status}} />
             </div>
 
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
