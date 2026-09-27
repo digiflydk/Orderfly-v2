@@ -1,5 +1,7 @@
 # Central customer directory
 
+The Customers page preserves the original customer records as its default tab, including brand and status filters, loyalty, last order, details, edit and delete. The directory is an additional tab. Both views read the same existing records; no customer records are deleted or migrated by this change.
+
 The Customers view groups existing `customers` and live `gamePlays` by normalized e-mail. A superadmin sees one candidate identity across merchants. A merchant session receives only company-wide grants from `orderfly.customers:view`, and its rows use a brand-scoped identity key. The detail route resolves the key from freshly authorized records before querying orders. A guessed identity URL cannot bypass the tenant boundary.
 
 Source documents remain in their original tenant collections. Orders, marketing consent, cookie consent, address, notes and loyalty are not copied between merchants. A Games opt-in is displayed as a fact about that play, not as permission to contact the person for another merchant. Test plays are excluded. Game-only contacts appear in the directory with zero sales unless a signed external purchase is attributed to that play. Existing checkout and booking customer records appear without a destructive migration or a backfill. The total includes paid native orders and paid external Games conversions with a unique play ID; refunded conversions and shared codes without a play ID are not assigned to a person. Native Games conversion events are excluded from the extra sum to avoid counting the same order twice.
