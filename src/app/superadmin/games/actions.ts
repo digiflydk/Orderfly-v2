@@ -44,6 +44,7 @@ export async function saveScratchCardDraft(form: FormData): Promise<{ok:boolean;
     instruction: form.get('instruction'), revealText: form.get('revealText'),
     logoUrl: form.get('logoUrl'), backgroundUrl: form.get('backgroundUrl'), fontUrl: form.get('fontUrl'), primaryColor: form.get('primaryColor'), surfaceColor: form.get('surfaceColor'), collectPhone: form.get('collectPhone') === 'on', newsletterText: form.get('newsletterText'),
     emailSubject:form.get('emailSubject'),emailMessage:form.get('emailMessage'),displayCooldownDays:Number(form.get('displayCooldownDays')),
+    popupDelaySeconds:Number(form.get('popupDelaySeconds')),
     allowedOrigins:String(form.get('allowedOrigins')||'').split(/\r?\n/).map(value=>value.trim()).filter(Boolean),
     cardsPerPlay:Number(form.get('cardsPerPlay')),
     totalCardLimit:Number(form.get('totalCardLimit')),
