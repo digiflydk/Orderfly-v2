@@ -10,6 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Search, X, MoreHorizontal, Edit, Trash2, Star, Eye } from "lucide-react";
 import type { Customer, Brand } from '@/types';
 import type { CustomerListRow } from '@/lib/customers/list-view';
+import type { DirectoryEntry } from '@/lib/customers/directory';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -42,6 +43,8 @@ type CustomerWithDetails = CustomerListRow;
 interface CustomersClientPageProps {
     initialCustomers: CustomerWithDetails[];
     brands: Pick<Brand, 'id' | 'name'>[];
+    entries: DirectoryEntry[];
+    brandNames: Record<string, string>;
 }
 
 const loyaltyVariantMap: Record<string, 'default' | 'secondary' | 'destructive'> = {
@@ -51,7 +54,7 @@ const loyaltyVariantMap: Record<string, 'default' | 'secondary' | 'destructive'>
     'New': 'secondary'
 };
 
-export function CustomersClientPage({ initialCustomers, brands }: CustomersClientPageProps) {
+export function CustomersClientPage({ initialCustomers, brands, entries, brandNames }: CustomersClientPageProps) {
   const { toast } = useToast();
   const router = useRouter();
   const [searchQuery, setSearchQuery] = useState('');
@@ -63,6 +66,8 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
   
   const [isAlertOpen, setIsAlertOpen] = useState(false);
   const [customerToDelete, setCustomerToDelete] = useState<string | null>(null);
+  const activityByCustomerId = useMemo(() => new Map(entries.flatMap(entry => entry.sources
+    .filter(source => source.kind === 'customer').map(source => [source.id, entry] as const))), [entries]);
 
 
   const filteredCustomers = useMemo(() => {
@@ -79,6 +84,11 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
       return searchMatch && brandMatch && statusMatch;
     });
   }, [initialCustomers, searchQuery, brandFilter, statusFilter]);
+  const gameOnlyContacts = useMemo(() => entries.filter(entry => entry.customerIds.length === 0
+    && statusFilter === 'all'
+    && (brandFilter === 'all' || entry.brandIds.includes(brandFilter))
+    && (!searchQuery || [entry.name, entry.email, entry.phone].some(value => value.toLowerCase().includes(searchQuery.toLowerCase())))),
+    [entries, searchQuery, brandFilter, statusFilter]);
   
   const handleRowClick = (customerId: string) => {
     router.push(`/superadmin/customers/${encodeURIComponent(customerId)}`);
@@ -181,20 +191,26 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
         </div>
 
         <Card>
-            <CardContent className="pt-6">
-            <Table>
+            <CardContent className="overflow-x-auto pt-6">
+            <Table className="min-w-[1100px]">
                 <TableHeader>
                 <TableRow>
                     <TableHead>Customer</TableHead>
                     <TableHead>Brand</TableHead>
                     <TableHead>Loyalty</TableHead>
                     <TableHead>Last Order</TableHead>
+                    <TableHead>Games</TableHead>
+                    <TableHead>Purchases by merchant</TableHead>
                     <TableHead>Status</TableHead>
                     <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
                 </TableHeader>
                 <TableBody>
-                {filteredCustomers.map((customer) => (
+                {filteredCustomers.map((customer) => {
+                  const activity=activityByCustomerId.get(customer.id);
+                  const games=activity?.sources.filter(source=>source.kind==='game')||[];
+                  const purchases=activity?.sources.filter(source=>source.kind==='customer'&&(source.totalOrders||0)>0)||[];
+                  return (
                     <TableRow key={customer.id} onClick={() => handleRowClick(customer.id)} className="cursor-pointer">
                     <TableCell>
                         <p className="font-medium">{customer.fullName}</p>
@@ -210,6 +226,8 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
                     <TableCell>
                         {formatDateSafe(customer.lastOrderDate)}
                     </TableCell>
+                    <TableCell>{games.length ? <div className="space-y-1">{games.map(game=><p key={`${game.brandId}:${game.id}`} className="text-xs">{game.campaignName||'Scratch card'} · {brandNames[game.brandId]||game.brandId}</p>)}</div> : '—'}</TableCell>
+                    <TableCell>{purchases.length ? <div className="space-y-1">{purchases.map(source=><p key={`${source.brandId}:${source.id}`} className="text-xs">{brandNames[source.brandId]||source.brandId}: {source.totalOrders} · {(source.totalSpend||0).toLocaleString('da-DK',{style:'currency',currency:'DKK'})}</p>)}</div> : '—'}</TableCell>
                     <TableCell>
                         <Badge variant={customer.status === 'active' ? 'default' : 'secondary'}>
                         {customer.status}
@@ -240,10 +258,23 @@ export function CustomersClientPage({ initialCustomers, brands }: CustomersClien
                         </DropdownMenu>
                     </TableCell>
                     </TableRow>
-                ))}
-                {filteredCustomers.length === 0 && (
+                  );
+                })}
+                {gameOnlyContacts.map(entry => {
+                  const games=entry.sources.filter(source=>source.kind==='game');
+                  return <TableRow key={entry.id} onClick={()=>router.push(`/superadmin/customers/directory/${entry.id}`)} className="cursor-pointer">
+                    <TableCell><p className="font-medium">{entry.name}</p><p className="text-sm text-muted-foreground">{entry.email}</p></TableCell>
+                    <TableCell>{entry.brandIds.map(id=>brandNames[id]||id).join(', ')}</TableCell>
+                    <TableCell>—</TableCell><TableCell>—</TableCell>
+                    <TableCell>{games.map(game=><p key={`${game.brandId}:${game.id}`} className="text-xs">{game.campaignName||'Scratch card'} · {brandNames[game.brandId]||game.brandId}</p>)}</TableCell>
+                    <TableCell>{games.filter(game=>game.externalOrders).map(game=><p key={`${game.brandId}:${game.id}`} className="text-xs">{brandNames[game.brandId]||game.brandId}: {game.externalOrders} · {(game.externalSpend||0).toLocaleString('da-DK',{style:'currency',currency:'DKK'})}</p>)}{!entry.totalOrders&&'—'}</TableCell>
+                    <TableCell><Badge variant="secondary">Game signup</Badge></TableCell>
+                    <TableCell className="text-right"><Button variant="ghost" size="sm" onClick={event=>{event.stopPropagation();router.push(`/superadmin/customers/directory/${entry.id}`);}}>View Details</Button></TableCell>
+                  </TableRow>;
+                })}
+                {filteredCustomers.length === 0 && gameOnlyContacts.length === 0 && (
                     <TableRow>
-                        <TableCell colSpan={7} className="h-24 text-center text-muted-foreground">
+                        <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
                             No customers found matching your criteria.
                         </TableCell>
                     </TableRow>

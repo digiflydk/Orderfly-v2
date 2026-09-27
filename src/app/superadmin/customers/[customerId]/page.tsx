@@ -13,6 +13,8 @@ import { Separator } from '@/components/ui/separator';
 import { getCustomerDetails } from '../actions';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { CustomerRecordActions } from './record-actions';
+import { customerDirectory } from '@/lib/customers/directory-server';
+import { CustomerActivity } from './customer-activity';
 
 
 function KpiCard({ title, value, icon: Icon }: { title: string; value: string | number, icon: React.ElementType }) {
@@ -55,6 +57,8 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
     if (!details) {
         notFound();
     }
+    const { entries } = await customerDirectory();
+    const activity = entries.find(entry => entry.sources.some(source => source.kind === 'customer' && source.id === details.customer.id && source.brandId === details.customer.brandId));
     
     const { customer, allOrders, deliveryOrdersCount, pickupOrdersCount, retentionRate, loyaltyScore, loyaltyClassification, averageFeedbackRating, orderIdsWithFeedback, feedbackEntries, feedbackAccess } = details;
 
@@ -278,6 +282,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
                 </div>
 
             </div>
+            <CustomerActivity entry={activity} />
         </div>
     );
 }

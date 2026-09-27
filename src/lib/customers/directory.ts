@@ -14,6 +14,7 @@ export type DirectorySource = {
   lastOrderDate?: unknown;
   newsletter?: boolean;
   campaignId?: string;
+  campaignName?: string;
   externalOrders?: number;
   externalSpend?: number;
 };
@@ -29,7 +30,7 @@ export type DirectoryEntry = {
   totalOrders: number;
   totalSpend: number;
   lastOrderDate: string | null;
-  sources: Array<{id:string;brandId:string;kind:'customer'|'game';name:string;phone:string;date:string|null;newsletter?:boolean;campaignId?:string;externalOrders?:number;externalSpend?:number}>;
+  sources: Array<{id:string;brandId:string;kind:'customer'|'game';name:string;phone:string;date:string|null;newsletter?:boolean;campaignId?:string;campaignName?:string;externalOrders?:number;externalSpend?:number;totalOrders?:number;totalSpend?:number}>;
 };
 
 export function directoryKey(email: string, brandId?: string): string {
@@ -65,7 +66,7 @@ export function buildDirectory(sources: DirectorySource[], global: boolean): Dir
       entry.totalOrders += source.externalOrders || 0;
       entry.totalSpend += source.externalSpend || 0;
     }
-    entry.sources.push({id:source.id,brandId:source.brandId,kind:source.kind,name:source.name,phone:source.phone || '',date:asDate(source.createdAt)?.toISOString() || null,...(source.kind==='game'?{newsletter:source.newsletter===true,campaignId:source.campaignId,externalOrders:source.externalOrders||0,externalSpend:source.externalSpend||0}: {})});
+    entry.sources.push({id:source.id,brandId:source.brandId,kind:source.kind,name:source.name,phone:source.phone || '',date:asDate(source.createdAt)?.toISOString() || null,...(source.kind==='game'?{newsletter:source.newsletter===true,campaignId:source.campaignId,campaignName:source.campaignName,externalOrders:source.externalOrders||0,externalSpend:source.externalSpend||0}:{totalOrders:Number.isFinite(source.totalOrders)?source.totalOrders:0,totalSpend:Number.isFinite(source.totalSpend)?source.totalSpend:0})});
   }
   return [...entries.values()].sort((a,b)=>(b.lastOrderDate||'').localeCompare(a.lastOrderDate||'') || a.email.localeCompare(b.email));
 }
