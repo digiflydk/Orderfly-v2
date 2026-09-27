@@ -8,7 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Search, X, MoreHorizontal, Edit, Trash2, Star, Eye } from "lucide-react";
-import type { Customer, Brand, LoyaltySettings } from '@/types';
+import type { Customer, Brand } from '@/types';
+import type { CustomerListRow } from '@/lib/customers/list-view';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -36,16 +37,11 @@ import { deleteCustomer } from './actions';
 import { useRouter } from 'next/navigation';
 
 
-type CustomerWithDetails = Omit<Customer, 'lastOrderDate' | 'createdAt'> & { 
-    lastOrderDate?: string; 
-    createdAt: string; 
-    brandName: string; 
-    locationNames: string; 
-};
+type CustomerWithDetails = CustomerListRow;
 
 interface CustomersClientPageProps {
     initialCustomers: CustomerWithDetails[];
-    brands: Brand[];
+    brands: Pick<Brand, 'id' | 'name'>[];
 }
 
 const loyaltyVariantMap: Record<string, 'default' | 'secondary' | 'destructive'> = {
