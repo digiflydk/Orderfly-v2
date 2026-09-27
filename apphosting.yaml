@@ -9,6 +9,12 @@ env:
     value: "false"
     availability:
       - RUNTIME
+  # Per-brand contact API credentials live only in Secret Manager. Provision
+  # and grant this secret before deploying a revision with this binding.
+  - variable: ORDERFLY_OMNISEND_BRANDS
+    secret: ORDERFLY_OMNISEND_BRANDS
+    availability:
+      - RUNTIME
   # Product images: PO-confirmed Orderfly v2 project, separate from hosting/Firestore (#89).
   - variable: FIREBASE_STORAGE_BUCKET
     value: studio-2819118380-ae26c.firebasestorage.app
