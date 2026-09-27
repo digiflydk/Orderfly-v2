@@ -24,8 +24,8 @@ async function CustomerPageContent() {
 
     return (
         <CustomersClientPage
-            initialCustomers={customersWithDetails as any}
-            brands={brands}
+            initialCustomers={customersWithDetails}
+            brands={brands.map(brand => ({ id: brand.id, name: brand.name }))}
         />
     );
 }

@@ -25,11 +25,18 @@ large production data or a failed Firestore request can still cause a server
 error. Production logs or the failing digest are required to determine whether
 this is the reported failure. No query error is suppressed.
 
-Separately, the list mapper assumed that every customer has an array of
-`locationIds` and a usable consent timestamp. An older/imported document could
-throw during rendering. The new converter handles those optional fields and
-normalizes Firestore, Date and JSON date representations. This is a confirmed
-code defect, but it is not yet confirmed as the cause of the reported live error.
+App Hosting logs for `/superadmin/customers` on September 27 identified the
+reported live failure: `Only plain objects ... can be passed to Client
+Components`. The logged nested value was
+`integrationSources.esmeralda.lastSyncedAt`, a Firestore Timestamp. The former
+list mapper spread the entire database document into Client Component props.
+The initial defensive date/location conversion did not handle this nested field.
+
+The list now constructs an explicit row containing only fields its UI uses, and
+passes only brand IDs and names. This excludes integration metadata, consent
+details and any future nested Firestore objects from the server-to-client
+boundary. It also handles a missing `locationIds` array and different
+top-level date formats.
 
 Both list copies use the same conversion. Missing locations display as an empty
 list and invalid optional dates display as blank. No database records change.
