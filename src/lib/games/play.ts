@@ -4,30 +4,35 @@ import { getAdminDb, admin } from '@/lib/firebase-admin';
 import { scratchCardDraftSchema, scratchCardOnPage, prizeChannels } from './scratch-card';
 import { drawNoWinBoard, drawWinBoard } from './scratch-card-preview';
 import { gameMailConfig } from './mail-config';
+import { liveCampaign, campaignStatus } from './campaign';
 import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
 
 const hash = (value:string) => createHash('sha256').update(value).digest('hex');
 const randomCode = () => `OF-${randomBytes(9).toString('hex').toUpperCase()}`;
 const emailPattern = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-export type PlayInput = {brandId:string;name:string;email:string;phone?:string;newsletter:boolean;pathname:string;test?:boolean};
+export type PlayInput = {brandId:string;campaignId?:string;name:string;email:string;phone?:string;newsletter:boolean;pathname:string;test?:boolean};
 export class GameError extends Error { constructor(public status:number, message:string){super(message);} }
 
 export async function playScratchCard(input:PlayInput, ip:string) {
   const email=input.email.trim().toLowerCase(), name=input.name.trim(), phone=input.phone?.trim()||'';
   if(!/^[A-Za-z0-9_-]{1,128}$/.test(input.brandId)||name.length<2||name.length>100||!emailPattern.test(email)||email.length>254||phone.length>30||!/^\/(?!\/)[a-zA-Z0-9/_-]*$/.test(input.pathname))
     throw new GameError(400,'Kontrollér navn, e-mail og sideadresse.');
-  const db=getAdminDb(), gameRef=db.collection('gameScratchDrafts').doc(input.brandId), gameDoc=await gameRef.get();
+  const db=getAdminDb(), live=input.test?null:await liveCampaign(db,input.brandId);
+  if(input.campaignId&&!/^[A-Za-z0-9_-]{1,128}$/.test(input.campaignId))throw new GameError(400,'Ugyldig kampagne.');
+  const gameRef=live?.ref||db.collection('gameScratchDrafts').doc(input.test?input.campaignId||input.brandId:input.brandId), gameDoc=live||await gameRef.get();
+  if(input.campaignId!==undefined&&input.campaignId!==gameRef.id)throw new GameError(409,'Kampagnen er ændret. Genindlæs siden.');
   const parsed=scratchCardDraftSchema.safeParse(gameDoc.data());
   if(!parsed.success||parsed.data.brandId!==input.brandId)throw new GameError(404,'Spillet findes ikke.');
   const game=parsed.data, status=gameDoc.data()?.status;
   if(input.test){
     await requireOrderflyAccess(input.brandId,null,'orderfly.website:view');
     if(status!=='test'&&status!=='draft')throw new GameError(403,'Testspillet er ikke aktivt.');
-  }else if(status!=='live'||!(input.pathname==='/games'||scratchCardOnPage(game,input.pathname)))throw new GameError(404,'Spillet er ikke aktivt på denne side.');
+  }else if(campaignStatus(status,game)!=='live'||!(input.pathname==='/games'||scratchCardOnPage(game,input.pathname)))throw new GameError(404,'Spillet er ikke aktivt på denne side.');
   const mailReady=!!gameMailConfig(input.brandId);
   if(!input.test&&!mailReady)throw new GameError(503,'E-mail er ikke konfigureret for dette brand.');
-  const day=new Date().toISOString().slice(0,10), ipKey=hash(`${input.brandId}\n${day}\n${ip}`);
-  const leadKey=hash(`${input.brandId}\n${input.test?'test':'live'}\n${email}`);
+  const campaignId=gameRef.id;
+  const day=new Date().toISOString().slice(0,10), ipKey=hash(`${campaignId}\n${day}\n${ip}`);
+  const leadKey=hash(`${campaignId}\n${input.test?'test':'live'}\n${email}`);
   const playRef=db.collection('gamePlays').doc(leadKey), limiterRef=db.collection('gamePlayLimits').doc(ipKey);
   const code=randomCode(), codeId=hash(`${input.brandId}\n${code}`), voucherRef=db.collection('gameVouchers').doc(codeId);
   const eventId=randomBytes(16).toString('hex');
@@ -40,7 +45,7 @@ export async function playScratchCard(input:PlayInput, ip:string) {
     if(prior.exists)throw new GameError(409,'Denne e-mail har allerede spillet kampagnen.');
     if((limit.data()?.count||0)>=20)throw new GameError(429,'For mange forsøg. Prøv igen senere.');
     const fresh=scratchCardDraftSchema.safeParse(current.data());
-    if(!fresh.success||current.data()?.status!==status || (!input.test&&!(input.pathname==='/games'||scratchCardOnPage(fresh.data,input.pathname))))throw new GameError(409,'Kampagnen blev ændret. Prøv igen.');
+    if(!fresh.success||current.data()?.status!==status || (!input.test&&(campaignStatus(current.data()?.status,fresh.data)!=='live'||!(input.pathname==='/games'||scratchCardOnPage(fresh.data,input.pathname)))))throw new GameError(409,'Kampagnen blev ændret. Prøv igen.');
     const played=(input.test?current.data()?.testPlayedCount:current.data()?.playedCount)||0;
     const previousCounts=(input.test?current.data()?.testWinnerCounts:current.data()?.winnerCounts)||[];
     if(played>=game.totalCardLimit)throw new GameError(409,'Alle spil i kampagnen er brugt.');
@@ -84,16 +89,16 @@ export async function playScratchCard(input:PlayInput, ip:string) {
     tx.set(limiterRef,{brandId:input.brandId,day,count:(limit.data()?.count||0)+1,updatedAt:now});
     const board=won?drawWinBoard(prize!.name,game.cardsPerPlay,roll,game.prizes):drawNoWinBoard(game.cardsPerPlay,game.revealText,game.prizes);
     const newsletter=!input.test&&input.newsletter===true;
-    tx.create(playRef,{brandId:input.brandId,name,email,phone,newsletter,newsletterText:newsletter?game.newsletterText:null,consentAt:newsletter?now:null,mode:input.test?'test':'live',board,prizeIndex:won?index:null,eventId,createdAt:now});
-    if(!input.test)tx.create(db.collection('gameEvents').doc(eventId),{brandId:input.brandId,playId:playRef.id,event:'game_start',createdAt:now});
+    tx.create(playRef,{brandId:input.brandId,campaignId,name,email,phone,newsletter,newsletterText:newsletter?game.newsletterText:null,consentAt:newsletter?now:null,mode:input.test?'test':'live',board,prizeIndex:won?index:null,eventId,createdAt:now});
+    if(!input.test)tx.create(db.collection('gameEvents').doc(eventId),{brandId:input.brandId,campaignId,playId:playRef.id,event:'game_start',createdAt:now});
     if(prize){
       if(uploadedRef)tx.update(uploadedRef,{available:false,claimedBy:playRef.id,claimedAt:now});
-      tx.create(voucher,{brandId:input.brandId,code:actualCode,playId:playRef.id,prizeName:prize.name,prizeType:prize.type,codeMode:prize.codeMode,redemption:prize.redemption,redemptionChannels:channels,mode:input.test?'test':'live',state:'issued',issuedAt:now,email,discountId:discount?.id||null});
+      tx.create(voucher,{brandId:input.brandId,campaignId,code:actualCode,playId:playRef.id,prizeName:prize.name,prizeType:prize.type,codeMode:prize.codeMode,redemption:prize.redemption,redemptionChannels:channels,mode:input.test?'test':'live',state:'issued',issuedAt:now,email,discountId:discount?.id||null});
       if(discount)tx.create(discount,{id:discount.id,brandId:input.brandId,locationIds,applicationType:'code',code:actualCode,description:`Spilgevinst: ${prize.name}`,discountType:prize.type==='percent'?'percentage':'fixed_amount',discountValue:prize.type==='item'?productPrizeValue:prize.value,...(prize.type==='item'?{gameProductId:prize.productId}:{}),minOrderValue:0,isActive:true,orderTypes:['pickup','delivery'],activeDays:[],activeTimeSlots:[],usageLimit:1,usedCount:0,perCustomerLimit:1,firstTimeCustomerOnly:false,allowStacking:false,createdAt:now,updatedAt:now});
-      if(mailReady)tx.create(db.collection('gameMailOutbox').doc(playRef.id),{brandId:input.brandId,playId:playRef.id,voucherId:voucher.id,code:actualCode,prizeName:prize.name,name,email,redemption:prize.redemption,redemptionChannels:channels,mode:input.test?'test':'live',state:'pending',attempts:0,nextAttemptAt:Date.now(),createdAt:now});
-      if(!input.test)tx.create(db.collection('gameEvents').doc(`${eventId}_prize`),{brandId:input.brandId,playId:playRef.id,event:'prize_issued',prizeIndex:index,createdAt:now});
+      if(mailReady)tx.create(db.collection('gameMailOutbox').doc(playRef.id),{brandId:input.brandId,campaignId,playId:playRef.id,voucherId:voucher.id,code:actualCode,prizeName:prize.name,name,email,redemption:prize.redemption,redemptionChannels:channels,mode:input.test?'test':'live',state:'pending',attempts:0,nextAttemptAt:Date.now(),createdAt:now});
+      if(!input.test)tx.create(db.collection('gameEvents').doc(`${eventId}_prize`),{brandId:input.brandId,campaignId,playId:playRef.id,event:'prize_issued',prizeIndex:index,createdAt:now});
     }
-    if(newsletter)tx.create(db.collection('gameConsentOutbox').doc(playRef.id),{brandId:input.brandId,playId:playRef.id,email,wording:game.newsletterText,version:'game-email-da-v1',capturedAt:Date.now(),state:'pending',attempts:0,nextAttemptAt:Date.now()});
+    if(newsletter)tx.create(db.collection('gameConsentOutbox').doc(playRef.id),{brandId:input.brandId,campaignId,playId:playRef.id,email,wording:game.newsletterText,version:'game-email-da-v1',capturedAt:Date.now(),state:'pending',attempts:0,nextAttemptAt:Date.now()});
     return {board,won,prizeName:prize?.name||null,mailQueued:!!prize&&mailReady,eventId:input.test?null:eventId};
   });
   return result;

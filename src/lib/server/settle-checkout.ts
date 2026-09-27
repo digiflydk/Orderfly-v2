@@ -85,9 +85,9 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     const gameVoucherRef=discountId?.startsWith('game_')?db.collection('gameVouchers').doc(discountId.slice(5)):null;
     const gameVoucher=gameVoucherRef?await transaction.get(gameVoucherRef):null;
     if(gameVoucher?.exists&&(gameVoucher.data()?.brandId!==order.brandId||gameVoucher.data()?.discountId!==discountId))throw new Error('Game voucher scope mismatch');
-    const gameDraftRef=discountSnap?.exists&&!gameVoucher?.exists?db.collection('gameScratchDrafts').doc(order.brandId):null;
-    const gameDraft=gameDraftRef?await transaction.get(gameDraftRef):null;
-    const sharedGame=gameDraft?scratchCardDraftSchema.safeParse(gameDraft.data()):null;
+    const gameDrafts=discountSnap?.exists&&!gameVoucher?.exists?await transaction.get(db.collection('gameScratchDrafts').where('brandId','==',order.brandId)):null;
+    const sharedCampaign=gameDrafts?.docs.find(doc=>{const game=scratchCardDraftSchema.safeParse(doc.data());return game.success&&game.data.prizes.some(p=>p.codeMode==='shared'&&p.sharedCode?.toUpperCase()===String(discountSnap?.data()?.code||'').toUpperCase());});
+    const sharedGame=sharedCampaign?scratchCardDraftSchema.safeParse(sharedCampaign.data()):null;
     const sharedPrize=sharedGame?.success?sharedGame.data.prizes.find(p=>p.codeMode==='shared'&&p.sharedCode?.toUpperCase()===String(discountSnap?.data()?.code||'').toUpperCase()):null;
     const upsellIds = [...new Set<string>(Array.isArray(order.verifiedUpsellIds) ? order.verifiedUpsellIds.filter((id: unknown): id is string => typeof id === 'string' && /^[^/\\?#]{1,160}$/.test(id)) : [])].slice(0,97);
     const upsellRecords = await Promise.all(upsellIds.map(async id => {
@@ -112,7 +112,7 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     }
     if(gameVoucher?.exists||sharedPrize){
       const voucher=gameVoucher?.data();
-      transaction.create(db.collection('gameConversions').doc(createHash('sha256').update(JSON.stringify(['orderfly',order.brandId,metadata.orderId])).digest('hex')),{brandId:order.brandId,channel:'orderfly',orderId:metadata.orderId,playId:voucher?.playId||null,prizeName:voucher?.prizeName||sharedPrize?.name,codeMode:voucher?.codeMode||'shared',amount:Number(order.totalAmount),discountAmount:Number(order.paymentDetails?.discountTotal||0),currency:'DKK',status:'paid',createdAt:serverTimestamp()});
+      transaction.create(db.collection('gameConversions').doc(createHash('sha256').update(JSON.stringify(['orderfly',order.brandId,metadata.orderId])).digest('hex')),{brandId:order.brandId,campaignId:voucher?.campaignId||sharedCampaign?.id||order.brandId,channel:'orderfly',orderId:metadata.orderId,playId:voucher?.playId||null,prizeName:voucher?.prizeName||sharedPrize?.name,codeMode:voucher?.codeMode||'shared',amount:Number(order.totalAmount),discountAmount:Number(order.paymentDetails?.discountTotal||0),currency:'DKK',status:'paid',createdAt:serverTimestamp()});
       if(gameVoucherRef&&voucher?.state==='issued')transaction.update(gameVoucherRef,{state:'redeemed',redeemedAt:serverTimestamp(),redeemedOrderId:metadata.orderId});
     }
     if (customerSnap.exists) transaction.update(customerRef, {

@@ -2,6 +2,7 @@ import { createHash, createHmac, timingSafeEqual } from 'node:crypto';
 import { z } from 'zod';
 import { getAdminDb, admin } from '@/lib/firebase-admin';
 import { scratchCardDraftSchema, prizeChannels } from '@/lib/games/scratch-card';
+import { brandCampaigns } from '@/lib/games/campaign';
 
 export const runtime='nodejs';
 const payload=z.object({brandId:z.string().regex(/^[\w-]{1,128}$/),orderId:z.string().min(1).max(120),code:z.string().regex(/^[A-Za-z0-9_-]{5,40}$/),amount:z.number().finite().min(0).max(1000000),currency:z.literal('DKK'),status:z.enum(['paid','refunded'])}).strict();
@@ -20,11 +21,12 @@ export async function POST(request:Request){
   const expected=createHmac('sha256',secret).update(`${timestamp}.${raw}`).digest('hex');
   if(!timingSafeEqual(Buffer.from(expected,'hex'),Buffer.from(signature.slice(7),'hex')))return Response.json({error:'Unauthorized'},{status:401});
   try{
-    const db=getAdminDb(),campaign=await db.collection('gameScratchDrafts').doc(brandId).get(),game=scratchCardDraftSchema.safeParse(campaign.data());
-    if(!game.success)return Response.json({error:'Campaign not found'},{status:404});
+    const db=getAdminDb(),campaigns=await brandCampaigns(db,brandId);
+    if(!campaigns.length)return Response.json({error:'Campaign not found'},{status:404});
     const vouchers=await db.collection('gameVouchers').where('brandId','==',brandId).where('code','==',code.toUpperCase()).limit(2).get();
     const match=vouchers.docs.filter(doc=>doc.data().mode==='live'&&(Array.isArray(doc.data().redemptionChannels)?doc.data().redemptionChannels.includes('external'):['website','both'].includes(doc.data().redemption)));
-    const shared=game.data.prizes.find(p=>p.codeMode==='shared'&&p.sharedCode?.toUpperCase()===code.toUpperCase()&&prizeChannels(p).includes('external'));
+    const sharedCampaign=campaigns.find(doc=>scratchCardDraftSchema.parse(doc.data()).prizes.some(p=>p.codeMode==='shared'&&p.sharedCode?.toUpperCase()===code.toUpperCase()&&prizeChannels(p).includes('external')));
+    const shared=sharedCampaign&&scratchCardDraftSchema.parse(sharedCampaign.data()).prizes.find(p=>p.codeMode==='shared'&&p.sharedCode?.toUpperCase()===code.toUpperCase()&&prizeChannels(p).includes('external'));
     if(!match.length&&!shared)return Response.json({error:'Code not issued'},{status:404});
     const unique=match.length===1&&match[0].data().codeMode!=='shared'?match[0]:null;
     const ref=db.collection('gameConversions').doc(createHash('sha256').update(JSON.stringify(['external',brandId,orderId])).digest('hex'));
@@ -49,7 +51,7 @@ export async function POST(request:Request){
         }
         tx.update(unique.ref,{state:'redeemed',redeemedOrderId:orderId,redeemedAt:admin.firestore.FieldValue.serverTimestamp()});
       }
-      tx.create(ref,{brandId,channel:'external',orderId,code:code.toUpperCase(),playId:unique?.data().playId||null,prizeName:unique?.data().prizeName||shared?.name||null,codeMode:unique?.data().codeMode||'shared',amount,currency,status:'paid',createdAt:admin.firestore.FieldValue.serverTimestamp()});
+      tx.create(ref,{brandId,campaignId:unique?.data().campaignId||sharedCampaign?.id||brandId,channel:'external',orderId,code:code.toUpperCase(),playId:unique?.data().playId||null,prizeName:unique?.data().prizeName||shared?.name||null,codeMode:unique?.data().codeMode||'shared',amount,currency,status:'paid',createdAt:admin.firestore.FieldValue.serverTimestamp()});
     });
     return Response.json({ok:true},{headers:{'Cache-Control':'no-store'}});
   }catch{return Response.json({error:'Conversion not accepted'},{status:409});}
