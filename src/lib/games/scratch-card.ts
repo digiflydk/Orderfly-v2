@@ -33,6 +33,7 @@ export const scratchCardDraftSchema = z.object({
   emailSubject: z.string().trim().min(3).max(140).default('Din gevinst er klar'),
   emailMessage: z.string().trim().min(10).max(1200).default('Tak fordi du spillede med! Her er din præmie og din personlige kode.'),
   displayCooldownDays: z.number().int().min(0).max(365).default(30),
+  popupDelaySeconds: z.number().int().min(0).max(60).default(0),
   allowedOrigins: z.array(z.string().url().startsWith('https://').max(250)).max(20).default([]),
 }).superRefine((draft, ctx) => {
   if (draft.placement === 'selected' && draft.paths.length === 0)
