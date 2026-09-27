@@ -97,3 +97,14 @@ test('stale records, ID reuse and principal reassignment deny',()=>{
  assert.equal(authorizeMembershipChange(s,'owner',old,{...old,principalId:'admin'}).reason,'immutable_identity');
  assert.equal(authorizeMembershipChange(s,'owner',null,old).reason,'immutable_identity');
 });
+
+test('Finance rights are explicit and scoped to the assigned company',()=>{
+ const s=fixture();
+ assert.equal(authorize(s,query({permission:'opsfly.finance:view'})).allowed,false);
+ s.roles[2].permissions=['opsfly.finance:view'];
+ assert.equal(authorize(s,query({permission:'opsfly.finance:view'})).allowed,true);
+ for(const action of ['create','edit'])assert.equal(authorize(s,query({permission:`opsfly.finance:${action}`})).allowed,false);
+ assert.equal(authorize(s,query({permission:'opsfly.finance:view',locationIds:['a2']})).allowed,false);
+ s.memberships[2].active=false;
+ assert.equal(authorize(s,query({permission:'opsfly.finance:view'})).allowed,false);
+});
