@@ -51,6 +51,7 @@ import {
   Activity,
   Cookie,
   Gamepad2,
+  TicketCheck,
 } from 'lucide-react'
 import { getSuperadminUserContext, type SuperadminUser } from '@/lib/auth/superadmin-context'
 import { LogoutButton } from './logout-button'
@@ -72,7 +73,7 @@ type Group = {
 
 function isActive(pathname: string, href?: string) {
   if (!href) return false
-  if (href === '/superadmin') return pathname === href;
+  if (href === '/superadmin' || href === '/merchant') return pathname === href;
   return pathname === href || pathname.startsWith(href + '/')
 }
 
@@ -80,10 +81,12 @@ export function SuperAdminSidebarClient({
   brandingSettings,
   centralAdmin = false,
   access,
+  merchantPortal = false,
 }: {
   brandingSettings?: PlatformBrandingSettings
   centralAdmin?: boolean
   access?: NavigationAccess | null
+  merchantPortal?: boolean
 }) {
   const pathname = usePathname()
   const [user, setUser] = React.useState<SuperadminUser | null>(null);
@@ -100,7 +103,7 @@ export function SuperAdminSidebarClient({
 
   const allGroups: Group[] = [
     { key: 'core', title: 'Overblik', items: [
-      { href: '/superadmin', label: 'Overblik', icon: Home },
+      { href: merchantPortal ? '/merchant' : '/superadmin', label: 'Overblik', icon: Home },
       { href: '/superadmin/dashboard', label: 'Salgsoverblik', icon: BarChart3 },
     ] },
     {
@@ -133,6 +136,7 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/upsells', label: 'Upsells', icon: Bookmark },
         { href: '/superadmin/marketing', label: 'Newsletter & Omnisend', icon: Bookmark },
         { href: '/superadmin/games', label: 'Games', icon: Gamepad2 },
+        { href: '/merchant/redeem', label: 'Indløs kode', icon: TicketCheck },
         { href: '/superadmin/standard-discounts', label: 'Standard Discounts', icon: Percent },
         { href: '/superadmin/loyalty', label: 'Loyalty', icon: Trophy },
       ],
@@ -218,7 +222,9 @@ export function SuperAdminSidebarClient({
     },
   ]
 
-  const candidateGroups: Group[] = centralAdmin ? allGroups.filter(g => g.key !== 'people').map(g => g.key === 'billing' ? {...g, items:g.items.filter(i => i.href !== '/superadmin/subscriptions')} : g).concat([{key:'platform', title:'Platform', items:[{label:'Brugere og roller · mPanel',href:'https://www.esmeraldapizza.dk/mpanel#platform',icon:Users}]}]) : allGroups;
+  const candidateGroups: Group[] = (centralAdmin ? allGroups.filter(g => g.key !== 'people').map(g => g.key === 'billing' ? {...g, items:g.items.filter(i => i.href !== '/superadmin/subscriptions')} : g).concat([{key:'platform', title:'Platform', items:[{label:'Brugere og roller · mPanel',href:'https://www.esmeraldapizza.dk/mpanel#platform',icon:Users}]}]) : allGroups)
+    .filter(g => !merchantPortal || !['people','billing','system','website','platform'].includes(g.key))
+    .map(g => ({...g, items:g.items.filter(i => (i.href !== '/merchant/redeem' || merchantPortal) && (!merchantPortal || i.href !== '/superadmin/loyalty'))}));
 
   const groups: Group[] = candidateGroups.map(group => ({...group, items: filterNavigation(group.items, access)})).filter(group => group.items.length > 0);
 

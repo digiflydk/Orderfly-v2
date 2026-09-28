@@ -26,6 +26,8 @@ const routes: Array<[string, string]> = [
 
 export function canNavigate(href: string, access?: NavigationAccess | null): boolean {
   if (!access) return false;
+  if (href === '/merchant/redeem') return access.superuser || access.permissions.includes('orderfly.games:view');
+  if (href === '/merchant') return access.superuser || access.permissions.some(p => p.startsWith('orderfly.') && p.endsWith(':view'));
   if (href === 'https://www.esmeraldapizza.dk/mpanel#platform') {
     return access.superuser || access.permissions.some(p => p === 'platform.members:view' || p === 'platform.roles:view');
   }

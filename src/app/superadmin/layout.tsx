@@ -42,7 +42,7 @@ export default async function SuperadminLayout({
   }
 
   return (
-    <SuperAdminLayoutClient access={session} centralAdmin={mpanelAdminEnabled()} brandingSettings={brandingSettings}>
+    <SuperAdminLayoutClient access={session} centralAdmin={mpanelAdminEnabled()} merchantPortal={!session.superuser} brandingSettings={brandingSettings}>
       {children}
     </SuperAdminLayoutClient>
   );
