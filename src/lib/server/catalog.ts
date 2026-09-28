@@ -5,6 +5,7 @@
 import "server-only";
 import { unstable_cache } from 'next/cache';
 import { storefrontMedia } from '@/lib/storefront-media';
+import { isSyntheticProduct } from '@/lib/synthetic-product';
 import { getAdminDb } from "@/lib/firebase-admin";
 import type { MenuForRender, MenuCategory, MenuProduct, Category } from "@/types/menu";
 import type { Product } from '@/types';
@@ -43,7 +44,7 @@ const cachedMenu = unstable_cache(async (brandId: string, locationId: string): P
   const categories: MenuCategory[] = catsSnap.docs.filter(d => !d.data().brandId || d.data().brandId === brandId).map(d => storefrontMedia({ ...(d.data() as any), id:d.id }, 'categories', d.id));
   
   const allLocationProducts: MenuProduct[] = prodsSnap.docs
-      .filter(d=>d.data().isTestData!==true)
+      .filter(d => !isSyntheticProduct(d.data()))
       .map(d => storefrontMedia({ ...(d.data() as any), id: d.id }, 'products', d.id))
       .filter(p => !p.locationIds || p.locationIds.length === 0 || p.locationIds.includes(locationId));
 
@@ -77,4 +78,4 @@ const cachedMenu = unstable_cache(async (brandId: string, locationId: string): P
   for(const id of Object.keys(productsByCategory)) productsByCategory[id].sort(sortByOrder);
   
   return { categories, productsByCategory, fallbackUsed:false };
-}, ['storefront-menu-v1'], {revalidate:60,tags:['storefront']});
+}, ['storefront-menu-v2'], {revalidate:60,tags:['storefront']});

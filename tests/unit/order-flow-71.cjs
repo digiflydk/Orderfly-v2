@@ -118,9 +118,9 @@ test('#71 missing required options are rejected after a menu item becomes unavai
  const result=restoreCartItems([{id:'p',cartItemId:'one',itemType:'product',quantity:1,toppings:[]}],{products:[{id:'p',brandId:'b',isActive:true,price:75,locationIds:['l'],toppingGroupIds:['required']}],combos:[],groups:[{id:'required',locationIds:['l'],minSelection:1,maxSelection:1}],toppings:[],discounts:[],upsells:[]},{brandId:'b',locationId:'l',deliveryType:'pickup'});
  assert.equal(result.items.length,0);assert.equal(result.removed,1);
 });
-test('#71 SSR menu excludes explicit test data regardless of its public-looking name',async()=>{
- const db={collection:name=>({where(){return this;},async get(){return {docs:name==='categories'?[]:[{id:'real',data:()=>({isActive:true,brandId:'b',price:75})},{id:'hidden',data:()=>({isActive:true,brandId:'b',isTestData:true,productName:'Margherita'})}]};}})};
- const {getMenuForRender}=loadTs('src/lib/server/catalog.ts',{'server-only':{},'next/cache':{unstable_cache:fn=>fn},'@/lib/firebase-admin':{getAdminDb:()=>db},'@/lib/storefront-media':{storefrontMedia:data=>data}});
+test('#71 SSR menu excludes flagged and descriptive test products',async()=>{
+ const db={collection:name=>({where(){return this;},async get(){return {docs:name==='categories'?[]:[{id:'real',data:()=>({isActive:true,brandId:'b',price:75})},{id:'hidden',data:()=>({isActive:true,brandId:'b',isTestData:true,productName:'Margherita'})},{id:'qa',data:()=>({isActive:true,brandId:'b',productName:'QA-62-20260908090721822 Product TEST'})},{id:'instruction',data:()=>({isActive:true,brandId:'b',productName:'Sample',description:'DO NOT PREPARE'})}]};}})};
+ const {getMenuForRender}=loadTs('src/lib/server/catalog.ts',{'server-only':{},'next/cache':{unstable_cache:fn=>fn},'@/lib/firebase-admin':{getAdminDb:()=>db},'@/lib/storefront-media':{storefrontMedia:data=>data},'@/lib/synthetic-product':loadTs('src/lib/synthetic-product.ts')});
  const menu=await getMenuForRender({brandId:'b',locationId:'l'});assert.deepEqual(Object.values(menu.productsByCategory).flat().map(p=>p.id),['real']);
 });
 test('#71 marketing endpoints fail closed without verified credentials',async()=>{
