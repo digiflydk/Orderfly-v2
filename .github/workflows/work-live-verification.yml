@@ -1,9 +1,7 @@
 name: Work Live Verification
 
 on:
-  pull_request_target:
-    branches: [main]
-    types: [closed]
+  workflow_dispatch:
 
 permissions:
   contents: read
