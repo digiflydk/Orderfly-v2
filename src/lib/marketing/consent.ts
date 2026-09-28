@@ -1,8 +1,12 @@
 // Shared wording is versioned. The server stores exactly the text shown with
 // the explicit email opt-in, separately from terms and cookie consent.
-export const NEWSLETTER_CONSENT_VERSION = 'checkout-email-da-2026-09-08';
-export function newsletterConsentText(brandName: string) {
-    return `Ja tak, jeg vil modtage nyheder og tilbud fra ${brandName} via e-mail. Jeg kan altid afmelde mig igen. Tilmeldingen er frivillig og sendes, når jeg går videre til betaling.`;
+export const NEWSLETTER_CONSENT_VERSION = 'checkout-email-da-2026-09-28';
+export const PREVIOUS_NEWSLETTER_CONSENT_VERSION = 'checkout-email-da-2026-09-08';
+export function newsletterConsentText(brandName: string, version = NEWSLETTER_CONSENT_VERSION) {
+    const prefix = `Ja tak, jeg vil modtage nyheder og tilbud fra ${brandName} via e-mail. Jeg kan altid afmelde mig igen.`;
+    return version === PREVIOUS_NEWSLETTER_CONSENT_VERSION
+        ? `${prefix} Tilmeldingen er frivillig og sendes, når jeg går videre til betaling.`
+        : `${prefix} Tilmeldingen er frivillig og gemmes, når jeg går videre til betaling. Den sendes til nyhedsbrevstjenesten, når forbindelsen er klar.`;
 }
 export type ConsentEvent = {
     id: string;
@@ -51,5 +55,5 @@ export function canRenewConsent(event: ConsentEvent, channel: {
     statusChangedAt?: string;
 }) {
     const changed = channel.statusChangedAt ? Date.parse(channel.statusChangedAt) : NaN;
-    return ((event.version === NEWSLETTER_CONSENT_VERSION && event.source === 'checkout') || (event.version === 'game-email-da-v1' && event.source === 'game')) && Number.isFinite(changed) && event.capturedAt > changed;
+    return (([NEWSLETTER_CONSENT_VERSION, PREVIOUS_NEWSLETTER_CONSENT_VERSION].includes(event.version) && event.source === 'checkout') || (event.version === 'game-email-da-v1' && event.source === 'game')) && Number.isFinite(changed) && event.capturedAt > changed;
 }

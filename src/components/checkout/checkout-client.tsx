@@ -24,7 +24,7 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { getNewsletterSignupDiscountAction, validateDiscountAction } from "@/app/checkout/actions";
+import { getNewsletterSignupDiscountAction, newsletterSyncAvailableAction, validateDiscountAction } from "@/app/checkout/actions";
 import type { NewsletterDiscountOffer } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, X, Tag, Truck, Store, Clock, ShoppingCart, AlertTriangle, ArrowLeft } from "lucide-react";
@@ -354,6 +354,16 @@ function CheckoutForm({ location }: { location: Location }) {
   const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
   const [discountErrorMessage, setDiscountErrorMessage] = useState('');
   const [newsletterOffer, setNewsletterOffer] = useState<NewsletterDiscountOffer | null>(null);
+  const [newsletterSyncAvailable, setNewsletterSyncAvailable] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let current = true;
+    setNewsletterSyncAvailable(null);
+    if (brand?.id) void newsletterSyncAvailableAction(brand.id)
+      .then(value => { if (current) setNewsletterSyncAvailable(value); })
+      .catch(() => { if (current) setNewsletterSyncAvailable(false); });
+    return () => { current = false; };
+  }, [brand?.id]);
 
 
 
@@ -907,6 +917,7 @@ function CheckoutForm({ location }: { location: Location }) {
                           <FormLabel className="text-base font-semibold leading-relaxed">{newsletterBenefitAvailable ? `Få ${newsletterOfferLabel} ved tilmelding` : 'Få nyheder og tilbud'}</FormLabel>
                           <FormDescription>
                             {newsletterConsentText(brand?.name || 'restauranten')}
+                            {newsletterSyncAvailable === false && <span role="status" className="block mt-2 text-amber-800">Nyhedsbrevstjenesten afventer opsætning. Dit samtykke gemmes, men tilmeldingen er endnu ikke bekræftet hos udbyderen.</span>}
                             {newsletterOffer && <span className="block mt-2">
                               {newsletterStacking
                                 ? `Nyhedsbrevsrabatten giver ${newsletterOfferLabel} på alle varer efter varerabatter, inklusive tilvalg og menuer. Pose, levering og gebyrer er ikke med.`

@@ -5,6 +5,7 @@ import { isSyntheticProduct } from '@/lib/synthetic-product';
 import {getAdminDb} from '@/lib/firebase-admin';
 import {linkCheckoutConsent} from '@/lib/server/consent-identity';
 import {recordNewsletterConsent} from '@/lib/marketing/store';
+import { marketingConfig } from '@/lib/marketing/config';
 import { ore, money, sumMoney, percentageMoney } from '@/lib/money';
 import { trackServerEvent } from '@/lib/analytics-server';
 import { checkoutRequestSchema } from '@/lib/checkout-schema';
@@ -233,6 +234,7 @@ function validateDiscountEligibility(discount: Discount, context: DiscountEligib
     if (discount.perCustomerLimit > 0 && ((context.customer?.discountUsage?.[discount.id] || 0) >= discount.perCustomerLimit)) return 'Du har brugt rabatten det maksimale antal gange.';
 
     if (applicationType === 'newsletter_signup') {
+        if (!marketingConfig(discount.brandId)) return 'Nyhedsbrevsrabatten afventer opsætning af nyhedsbrevstjenesten.';
         if (!context.newsletterConsent) return 'Tilmelding til nyhedsbrevet er påkrævet for rabatten.';
         if (!newsletterEligible(!!context.customer?.marketingConsent, context.customer?.pendingNewsletterDiscountId, discount.id, context.customer?.discountUsage?.[discount.id] || 0)) return 'Nyhedsbrevsrabatten er allerede brugt.';
     }
@@ -244,6 +246,10 @@ export type NewsletterDiscountOffer = Pick<Discount, 'id' | 'description' | 'dis
     applicationType: 'newsletter_signup';
 };
 
+export async function newsletterSyncAvailableAction(brandId: string): Promise<boolean> {
+    return /^[a-zA-Z0-9_-]{1,128}$/.test(brandId) && !!marketingConfig(brandId);
+}
+
 export async function getNewsletterSignupDiscountAction(
     brandId: string,
     locationId: string,
@@ -251,6 +257,7 @@ export async function getNewsletterSignupDiscountAction(
     deliveryType: 'delivery' | 'pickup',
     email?: string
 ): Promise<NewsletterDiscountOffer | null> {
+    if (!marketingConfig(brandId)) return null;
     if (!email || !email.includes('@')) return null;
     const resolved = await resolveCheckoutCustomerRef({ email } as CustomerInfo, brandId);
     const customer = resolved.customerDoc.exists() ? resolved.customerDoc.data() as Customer : undefined;

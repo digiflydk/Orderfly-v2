@@ -80,8 +80,11 @@ test('#71 competing workers lease one job; completed or suppressed jobs cannot b
 test('#71 missing mapping is actionable and manual retry is scoped',async()=>{
  process.env.ORDERFLY_OMNISEND_BRANDS='[]';const db=database(),id=await recordNewsletterConsent(db,consent);
  await runMarketingWorker(db,Date.now()+1,()=>{throw Error('must not contact provider');});
- assert.equal(db.rows.get('marketingOutbox/'+id).lastError,'configuration_required');
- assert.equal(await retryMarketingJob(db,'other',id),false);assert.equal(await retryMarketingJob(db,'b',id),true);
+ assert.equal(db.rows.get('marketingOutbox/'+id).lastError,'brand_not_mapped');
+ assert.equal(db.rows.get('marketingOutbox/'+id).attempts,0);
+ assert.equal(await retryMarketingJob(db,'other',id),false);assert.equal(await retryMarketingJob(db,'b',id),false);
+ process.env.ORDERFLY_OMNISEND_BRANDS=JSON.stringify([config]);
+ assert.equal(await retryMarketingJob(db,'b',id),true);
 });
 test('#71 disabled mapping reschedules reconciliation so it cannot starve configured brands',async()=>{
  process.env.ORDERFLY_OMNISEND_BRANDS='[]';const db=database(),now=Date.now();

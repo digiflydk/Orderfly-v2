@@ -8,14 +8,21 @@ export type MarketingConfig = z.infer<typeof mapping>;
 export function paidOrderMarketingEnabled(): boolean {
     return process.env.ORDERFLY_OMNISEND_PAID_ORDERS_ENABLED === 'true';
 }
-export function marketingConfig(brandId: string): MarketingConfig | null {
+export type MarketingConfigurationStatus = { config: MarketingConfig | null; reason: 'secret_unavailable' | 'invalid_mapping' | 'duplicate_mapping' | 'brand_not_mapped' | 'brand_disabled' | null };
+export function marketingConfigurationStatus(brandId: string): MarketingConfigurationStatus {
+    if (!process.env.ORDERFLY_OMNISEND_BRANDS) return { config: null, reason: 'secret_unavailable' };
     try {
-        const entries = z.array(mapping).max(100).parse(JSON.parse(process.env.ORDERFLY_OMNISEND_BRANDS || '[]'));
+        const entries = z.array(mapping).max(100).parse(JSON.parse(process.env.ORDERFLY_OMNISEND_BRANDS));
         if (new Set(entries.map(e => e.brandId)).size !== entries.length || new Set(entries.map(e => e.omnisendBrandId)).size !== entries.length)
-            return null;
-        return entries.find(entry => entry.brandId === brandId && entry.enabled) || null;
+            return { config: null, reason: 'duplicate_mapping' };
+        const entry = entries.find(item => item.brandId === brandId);
+        if (!entry) return { config: null, reason: 'brand_not_mapped' };
+        return entry.enabled ? { config: entry, reason: null } : { config: null, reason: 'brand_disabled' };
     }
     catch {
-        return null;
+        return { config: null, reason: 'invalid_mapping' };
     }
+}
+export function marketingConfig(brandId: string): MarketingConfig | null {
+    return marketingConfigurationStatus(brandId).config;
 }

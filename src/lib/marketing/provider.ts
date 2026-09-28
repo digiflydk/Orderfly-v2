@@ -45,9 +45,11 @@ export class Omnisend {
             throw new MarketingError('provider_ambiguous_contact', false);
         return rows[0];
     }
-    async sync(event: ConsentEvent): Promise<'synced' | 'suppressed'> {
+    async sync(event: ConsentEvent): Promise<'synced' | 'already_subscribed' | 'suppressed'> {
         const before = await this.contact(event.email), channel = emailChannel(before, event.email);
-        if (channel?.status === 'subscribed') return 'suppressed';
+        // A timed-out previous POST may already have subscribed this contact.
+        // The provider lookup is the idempotent confirmation of that consent.
+        if (channel?.status === 'subscribed') return 'already_subscribed';
         // A retry cannot advance the event time. Only a newly submitted, current
         // explicit consent can renew a dated opt-out under single opt-in policy.
         if (channel?.status === 'unsubscribed' && !canRenewConsent(event, channel))
