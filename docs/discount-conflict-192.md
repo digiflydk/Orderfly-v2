@@ -8,9 +8,9 @@ metadata on an ordinary code or a standard discount does not enable general
 stacking.
 
 Previously, checkout sent only the eligible amount to code validation. A cart
-with Margherita 79 kr. discounted 5% to 75.05 kr., dressing 10 kr. and two
-drinks at 20 kr. has 125.05 kr. charged merchandise but only 50 kr. eligible
-for the code. The generic “minimum 100 kr. not reached” response concealed the
+with Margherita 79 kr. discounted 5% to 75.05 kr., a 10 kr. dressing topping
+and two drinks at 20 kr. has 125.05 kr. charged merchandise but only 40 kr.
+eligible for the code. The generic “minimum 100 kr. not reached” response concealed the
 automatic item offer that excludes the pizza.
 
 Validation now reports that an existing offer or menu cannot be combined with
