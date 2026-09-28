@@ -20,6 +20,7 @@ import { resolveFulfillmentTime, fulfillmentSlots } from '@/lib/fulfillment-time
 import { calculateTimeSlots } from '@/lib/time-slots';
 import { useCart } from '@/context/cart-context';
 import { format, addDays, startOfDay, isSameDay } from 'date-fns';
+import { da } from 'date-fns/locale';
 import { Loader2 } from 'lucide-react';
 import type { TimeSlotResponse } from '@/types';
 
@@ -99,9 +100,9 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
   }
 
   const formatTimeForDisplay = (time: string, date: Date) => {
-    if (isSameDay(date, today)) return `Today at ${time}`;
-    if (isSameDay(date, addDays(today, 1))) return `Tomorrow at ${time}`;
-    return `${format(date, 'eee, MMM d')} at ${time}`;
+    if (isSameDay(date, today)) return `I dag kl. ${time}`;
+    if (isSameDay(date, addDays(today, 1))) return `I morgen kl. ${time}`;
+    return `${format(date, 'EEE d. MMM', {locale: da})} kl. ${time}`;
   }
   const canSelectAsap = isSameDay(selectedDate, today) && availableTimes.length > 0 && !!(deliveryType === 'delivery' ? timeSlots?.asap_delivery : timeSlots?.asap_pickup);
   const selectionValid = !isLoading && (internalTime === 'asap' ? canSelectAsap : availableTimes.some(time => slotValue(time) === internalTime));
@@ -112,7 +113,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
       <DialogContent className="max-w-lg p-0">
         <DialogHeader className="p-4 border-b">
           <DialogTitle>Vælg tidspunkt</DialogTitle>
-          <DialogDescription>Select your desired pickup or delivery time.</DialogDescription>
+          <DialogDescription>Vælg, hvornår du vil afhente eller have leveret din ordre.</DialogDescription>
         </DialogHeader>
 
         <div className="p-4 space-y-4">
@@ -121,6 +122,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
                 selected={selectedDate}
                 onSelect={handleDateChange}
                 disabled={(date) => date < today || date > addDays(today, 7)}
+                locale={da}
                 initialFocus
             />
 
@@ -131,7 +133,7 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
             ) : (
                  <Select onValueChange={setInternalTime} value={internalTime}>
                     <SelectTrigger>
-                        <SelectValue placeholder="Select a time" />
+                        <SelectValue placeholder="Vælg et tidspunkt" />
                     </SelectTrigger>
                     <SelectContent>
                         {canSelectAsap && <SelectItem value="asap">{asapText}</SelectItem>}

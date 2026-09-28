@@ -165,8 +165,8 @@ export async function getDiscounts(): Promise<Discount[]> {
       id: doc.id,
       startDate: data.startDate?.toDate(),
       endDate: data.endDate?.toDate(),
-      createdAt: data.createdAt.toDate(),
-      updatedAt: data.updatedAt.toDate(),
+      createdAt: data.createdAt?.toDate?.() ?? null,
+      updatedAt: data.updatedAt?.toDate?.() ?? null,
     } as Discount;
   });
 }
@@ -180,8 +180,8 @@ export async function getDiscountById(id: string): Promise<Discount | null> {
             id: docSnap.id,
             startDate: data.startDate?.toDate(),
             endDate: data.endDate?.toDate(),
-            createdAt: data.createdAt.toDate(),
-            updatedAt: data.updatedAt.toDate(),
+            createdAt: data.createdAt?.toDate?.() ?? null,
+            updatedAt: data.updatedAt?.toDate?.() ?? null,
         } as Discount;
     }
     return null;

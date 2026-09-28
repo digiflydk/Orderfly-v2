@@ -40,7 +40,7 @@ export function TimeSelector({ timeSlots: timeSlotsProp }: TimeSelectorProps) {
     const timeSlots = timeSlotsProp;
 
     const asapText = useMemo(() => {
-        if (!timeSlots) return "Loading...";
+        if (!timeSlots) return "Indlæser…";
         const text = deliveryType === 'delivery' ? timeSlots.asap_delivery : timeSlots.asap_pickup;
         return text || "Currently unavailable";
     }, [timeSlots, deliveryType]);

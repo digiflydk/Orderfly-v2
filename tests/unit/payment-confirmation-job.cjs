@@ -19,7 +19,7 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
  }
  if(job)records[jobKey]={orderId:'ORD-TEST',brandId:'b',locationId:'l',kind:'orderConfirmation',eventId:'keep',attempts:2,...job};
  let capacity=0,analytics=0,queue=Promise.resolve();
- const session={id:'cs_test_fixture_123456',payment_status:'paid',status:'complete',payment_intent:'pi',amount_total:10000,metadata:{orderId:'ORD-TEST',brandId:'b',locationId:'l'}};
+ const session={id:'cs_test_fixture_123456',payment_status:'paid',status:'complete',currency:'dkk',payment_intent:'pi',amount_total:10000,metadata:{orderId:'ORD-TEST',brandId:'b',locationId:'l'}};
  const snapshot=value=>({exists:()=>!!value,data:()=>value});
  const mocks={
   'server-only':{},'@/lib/firebase':{db:{}},
@@ -47,9 +47,9 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
  // Client permissions deny the private outbox. Settlement must use Admin SDK.
  client.runTransaction=()=>{throw Error('permission-denied: client transaction');};
  mocks['@/lib/firebase-admin']={getAdminFieldValue:()=>({serverTimestamp:()=> 'now'}),getAdminDb:()=>({
-  collection:collection=>({doc:id=>adminRef(collection+'/'+id)}),
+  collection:collection=>({doc:id=>adminRef(collection+'/'+id),where:()=>({})}),
   runTransaction:fn=>transact(null,async tx=>fn({
-   get:async ref=>{assert.ok(ref.path,'Admin settlement requires server document references');const snap=await tx.get(ref.path);return{exists:snap.exists(),data:snap.data,id:ref.id,ref};},
+   get:async ref=>{if (!ref.path) return {docs:[]};assert.ok(ref.path,'Admin settlement requires server document references'); const snap=await tx.get(ref.path);return{exists:snap.exists(),data:snap.data,id:ref.id,ref};},
    set:(ref,data,opts)=>tx.set(ref.path,data,opts),update:(ref,data)=>tx.update(ref.path,data),
   })),
  })};
@@ -67,6 +67,21 @@ test('confirmation endpoint atomically settles payment and creates job; webhook/
  assert.equal(f.records()['customers/c'].totalOrders,1);assert.equal(f.records()['customers/c'].totalSpend,100);
  assert.equal(f.records()['discounts/d'].usedCount,1);assert.deepEqual(f.counters(),{capacity:1,analytics:1});
  assert.equal(Object.keys(f.records()).filter(k=>k.startsWith('orderNotificationJobs/')).length,1);
+});
+test('#189 a newly pending order becomes Received once after verified payment',async()=>{
+ const f=fixture();f.records()['orders/ORD-TEST'].status='Pending';
+ assert.equal(f.records()['orders/ORD-TEST'].paymentStatus,'Pending');
+ await Promise.all([f.settle(),f.settle()]);
+ assert.equal(f.records()['orders/ORD-TEST'].status,'Received');
+ assert.equal(f.records()['orders/ORD-TEST'].paymentStatus,'Paid');
+ assert.equal(f.records()['customers/c'].totalOrders,1);
+});
+test('#189 wrong charged amount or currency cannot settle a checkout',async()=>{
+ const f=fixture();f.session.amount_total=9900;
+ await assert.rejects(f.settle(),/amount mismatch/);
+ f.session.amount_total=10000;f.session.currency='eur';
+ await assert.rejects(f.settle(),/amount mismatch/);
+ assert.equal(f.records()['orders/ORD-TEST'].paymentStatus,'Pending');
 });
 test('verified settlement atomically creates one consent-gated Omnisend order job',async()=>{
  const f=fixture({marketingConsent:true});await Promise.all([f.settle(),f.settle(),f.settle()]);

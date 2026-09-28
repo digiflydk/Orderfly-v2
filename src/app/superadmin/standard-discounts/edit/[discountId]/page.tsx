@@ -32,7 +32,7 @@ export default async function EditStandardDiscountPage({ params }: AsyncPageProp
     return (
         <StandardDiscountFormPage 
             key={discount.id}
-            discount={discount}
+            discount={upsellClientData(discount)}
             brands={upsellClientData(brands)}
             locations={upsellClientData(locations)}
             products={upsellClientData(products)}

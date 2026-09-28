@@ -65,6 +65,10 @@ test('ordinary payment is not blocked by another first-order reservation; hold c
  assert.equal(f.capacity().held,1);assert.equal(f.capacity().firstTimeHeld,true);
  await f.api.releaseDiscount('promo','b');
  assert.equal(f.capacity().held,0);assert.equal(f.capacity().firstTimeHeld,false);
+ assert.equal(f.records.get('orders/promo').status,'Canceled');
+ assert.equal(f.records.get('orders/promo').paymentStatus,'Failed');
+ await f.api.releaseDiscount('promo','b');
+ assert.equal(f.capacity().held,0,'a repeated expiry does not release capacity twice');
  await f.api.reserveDiscount('duplicate','first','c','b');
 });
 

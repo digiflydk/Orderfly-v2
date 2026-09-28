@@ -144,9 +144,9 @@ function BagFeeRow() {
       <AlertDialog open={isAlertOpen} onOpenChange={setIsAlertOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogTitle>Er du sikker?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to remove the bag?
+              Vil du fjerne posen fra din ordre?
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -303,7 +303,7 @@ function OrderSummaryContent() {
 
         {vatAmount > 0 && (
           <div className="flex justify-between text-xs text-muted-foreground pt-1">
-            <span>VAT Included ({brand?.vatPercentage ?? 25}%)</span>
+            <span>Moms inkluderet ({brand?.vatPercentage ?? 25}%)</span>
             <span>{formatPrice(vatAmount)}</span>
           </div>
         )}
@@ -521,7 +521,7 @@ function CheckoutForm({ location }: { location: Location }) {
   }, [form, trackEvent, location?.id]);
 
   const asapText = useMemo(() => {
-    if (!timeSlots) return "Loading...";
+    if (!timeSlots) return "Indlæser…";
     const text = deliveryType === 'delivery' ? timeSlots.asap_delivery : timeSlots.asap_pickup;
     return text || "Currently unavailable";
   }, [timeSlots, deliveryType]);

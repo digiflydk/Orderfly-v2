@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { FieldPath } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Product, ProductForMenu } from '@/types';
+import { isSyntheticProduct } from '@/lib/synthetic-product';
 
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 export function menuProduct(product: Product): ProductForMenu {
@@ -27,7 +28,7 @@ export async function publicMenuProducts(locationId: string, productIds?: string
     const result = await query.get();
     for (const doc of result.docs) {
       const value = doc.data();
-      if (value.isTestData === true || (value.locationIds?.length && !value.locationIds.includes(locationId))) continue;
+      if (isSyntheticProduct(value) || (value.locationIds?.length && !value.locationIds.includes(locationId))) continue;
       products.push({...value,id:doc.id} as Product);
     }
   }

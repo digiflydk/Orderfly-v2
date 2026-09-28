@@ -12,7 +12,7 @@ export async function updateOrderStatus(
     const db = getAdminDb();
     const orderRef = db.collection('orders').doc(orderId);
 
-    if (status === 'Delivered') {
+    if (status !== 'Canceled' && status !== 'Error') {
       const orderSnap = await orderRef.get();
 
       if (!orderSnap.exists) {
@@ -28,7 +28,7 @@ export async function updateOrderStatus(
         return {
           success: false,
           message:
-            'Cannot mark order as Delivered until payment is confirmed.',
+            'Cannot prepare or complete an order until payment is confirmed.',
         };
       }
     }

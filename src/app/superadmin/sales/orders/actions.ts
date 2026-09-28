@@ -16,7 +16,7 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
         await db.runTransaction(async tx=>{
             const saved=await tx.get(orderRef),order=saved.data();
             if(!order||order.brandId!==scope.brandId||order.locationId!==scope.locationId)throw new Error('Order changed. Refresh and try again.');
-            if(status==='Delivered'&&order.paymentStatus!=='Paid')throw new Error('Cannot mark order as Delivered until payment is confirmed.');
+            if(status!=='Canceled'&&status!=='Error'&&order.paymentStatus!=='Paid')throw new Error('Cannot prepare or complete an order until payment is confirmed.');
             tx.update(orderRef,{status});
         });
         if(status==='Completed'||status==='Delivered'){

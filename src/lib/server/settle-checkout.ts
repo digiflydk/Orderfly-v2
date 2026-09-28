@@ -27,6 +27,8 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     const order = orderSnap.data()!;
     analytics = order.analytics;
     if (order.brandId !== metadata.brandId || order.locationId !== metadata.locationId || (order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== session.id)) throw new Error('Payment scope mismatch');
+    if (session.currency?.toLowerCase() !== 'dkk' || session.amount_total !== Math.round(Number(order.totalAmount) * 100)) throw new Error('Payment amount mismatch');
+    if (order.status === 'Canceled' && order.paymentStatus !== 'Paid') throw new Error('Canceled order cannot be fulfilled');
     const confirmationRef = db.collection('orderNotificationJobs').doc(createHash('sha256').update(JSON.stringify(['order-confirmation', order.brandId, metadata.orderId])).digest('hex'));
     const marketingOrderRef = db.collection('marketingOrderOutbox').doc(createHash('sha256').update(JSON.stringify(['omnisend-paid-order', order.brandId, metadata.orderId])).digest('hex'));
     const customerRef = db.collection('customers').doc(order.customerDetails.id);
@@ -125,7 +127,7 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
       discountReservation: discountId ? 'consumed' : 'none',
       fulfillmentWarnings: [!customerSnap.exists ? 'customer_deleted' : '', discountId && !discountSnap?.exists ? 'discount_deleted' : ''].filter(Boolean),
       'psp.checkoutSessionId': session.id,
-      paymentStatus: 'Paid', paidAt: serverTimestamp(),
+      paymentStatus: 'Paid', status: order.status === 'Pending' ? 'Received' : order.status, paidAt: serverTimestamp(),
       'psp.paymentIntentId': piId || null, updatedAt: serverTimestamp(),
       invoice,
     });

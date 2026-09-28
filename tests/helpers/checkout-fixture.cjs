@@ -41,6 +41,7 @@ async function checkout({existing=false,kind='none',identityCleaner=false, fault
   'node:crypto':require('node:crypto'),
   '@/lib/firebase-admin':{getAdminDb:()=>marketingDb},
   '@/lib/marketing/store':{recordNewsletterConsent:async(...args)=>{events.push('newsletter-consent');if(fault==='newsletter-consent')throw Error('consent storage offline');return loadTs('src/lib/marketing/store.ts',{'server-only':{}}).recordNewsletterConsent(...args);}},
+  '@/lib/synthetic-product':loadTs('src/lib/synthetic-product.ts'),
   '@/lib/checkout-schema':loadTs('src/lib/checkout-schema.ts'),
   '@/lib/checkout-items':loadTs('src/lib/checkout-items.ts'),
   '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),

@@ -41,7 +41,7 @@ for(const [name,items,applied,expected] of [
 test('server rejects a newsletter minimum reached only by counting already discounted items',async()=>{
  const f=await checkout({kind:'newsletter',items:checkoutItems([line('p',100,100),line('q',75,45)]),
   seed:[product('q',75),['discounts/d',{...newsletter,minOrderValue:150}]],standardDiscounts:[itemOffer]});
- assert.equal(f.result.success,false);assert.match(f.result.error,/Minimum order value/);
+ assert.equal(f.result.success,false);assert.match(f.result.error,/Minimumsbeløbet/);
  assert.equal(f.events.includes('stripe'),false);assert.equal(f.records.has('orders/ORD-TEST'),false);
 });
 
@@ -75,7 +75,7 @@ test('stacking minimum uses the charged merchandise amount, not original prices 
  const accepted=await screenshotCheckout({...newsletter,allowStacking:true,minOrderValue:160});
  assert.equal(accepted.result.success,true,accepted.result.error);
  const rejected=await screenshotCheckout({...newsletter,allowStacking:true,minOrderValue:165});
- assert.equal(rejected.result.success,false);assert.match(rejected.result.error,/Minimum order value/);
+ assert.equal(rejected.result.success,false);assert.match(rejected.result.error,/Minimumsbeløbet/);
  assert.equal(rejected.events.includes('stripe'),false);
 });
 

@@ -26,7 +26,7 @@ export async function cancelCheckout(orderId: string, token: string): Promise<{ 
       try { session = await stripe.checkout.sessions.expire(sessionId); }
       catch { session = await stripe.checkout.sessions.retrieve(sessionId); }
     }
-    if (session.status === 'complete' || session.payment_status === 'paid') return { status: 'paid' };
+    if (session.payment_status === 'paid') return { status: 'paid' };
     if (session.status !== 'expired') return { status: 'error' };
     await releaseDiscount(orderId, order.brandId, sessionId);
     return { status: 'canceled' };
