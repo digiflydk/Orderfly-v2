@@ -69,7 +69,9 @@ export async function runGameOutbox(db:Firestore, now=Date.now(), providerFactor
       await db.runTransaction(async tx=>{
         const snap=await tx.get(doc.ref);
         if(snap.data()?.lease!==lease)return;
-        tx.update(doc.ref,{state,lease:null,lastError:error||null,attempts:(snap.data()?.attempts||0)+1,updatedAt:Date.now(),nextAttemptAt:retryAt});
+        // Polling for a missing mapping is not a provider delivery attempt.
+        const attempted=!(collection==='gameConsentOutbox'&&error==='configuration_required');
+        tx.update(doc.ref,{state,lease:null,lastError:error||null,attempts:(snap.data()?.attempts||0)+(attempted?1:0),updatedAt:Date.now(),nextAttemptAt:retryAt});
       });
       counts[state]++;
     }
@@ -83,7 +85,7 @@ export async function retryGameConsentJob(db:Firestore,brandId:string,id:string)
   return db.runTransaction(async tx=>{
     const snap=await tx.get(ref),job=snap.data();
     if(!job||job.brandId!==brandId||job.lease||!(job.state==='failed'||job.state==='pending'&&job.lastError==='configuration_required'))return false;
-    tx.update(ref,{state:'pending',nextAttemptAt:Date.now(),lastError:null});
+    tx.update(ref,{state:'pending',nextAttemptAt:Date.now(),lastError:null,attempts:0});
     return true;
   });
 }

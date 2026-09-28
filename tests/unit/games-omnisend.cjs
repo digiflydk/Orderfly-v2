@@ -25,15 +25,20 @@ test('missing configuration retains explicit consent until the brand is connecte
   configured=false;
   const {db,now,id}=fixture();let calls=0;
   const provider=()=>{calls++;throw Error('must not instantiate');};
-  assert.equal((await runGameOutbox(db,now,provider)).pending,1);
+  for(let hour=0;hour<7;hour++)assert.equal((await runGameOutbox(db,now+hour*3600000,provider)).pending,1);
   let job=db.rows.get('gameConsentOutbox/'+id);
-  assert.equal(job.state,'pending');assert.equal(job.lastError,'configuration_required');assert.equal(job.nextAttemptAt,now+3600000);assert.equal(calls,0);
+  assert.equal(job.state,'pending');assert.equal(job.lastError,'configuration_required');assert.equal(job.nextAttemptAt,now+7*3600000);assert.equal(job.attempts,0);assert.equal(calls,0);
   configured=true;
   assert.equal(await retryGameConsentJob(db,'other',id),false);
   assert.equal(await retryGameConsentJob(db,'b',id),true);
-  await runGameOutbox(db,Date.now()+1,()=>({verifyBrand:async()=>{},sync:async()=>{calls++;return 'synced';}}));
+  assert.equal(db.rows.get('gameConsentOutbox/'+id).attempts,0);
+  const retryAt=Date.now()+1;
+  await runGameOutbox(db,retryAt,()=>({verifyBrand:async()=>{},sync:async()=>{calls++;throw new MarketingError('provider_http_429',true,false);}}));
   job=db.rows.get('gameConsentOutbox/'+id);
-  assert.equal(job.state,'synced');assert.equal(calls,1);
+  assert.equal(job.state,'failed');assert.equal(job.attempts,1);assert.ok(job.nextAttemptAt>retryAt);
+  await runGameOutbox(db,job.nextAttemptAt,()=>({verifyBrand:async()=>{},sync:async()=>{calls++;return 'synced';}}));
+  job=db.rows.get('gameConsentOutbox/'+id);
+  assert.equal(job.state,'synced');assert.equal(calls,2);
 });
 
 test('already subscribed contact stays unchanged; an opted-out contact is not reported as subscribed',async()=>{
@@ -50,9 +55,14 @@ test('already subscribed contact stays unchanged; an opted-out contact is not re
 
 test('a failed or uncertain cross-brand job cannot be replayed as another brand',async()=>{
   const {db,id}=fixture();
-  db.rows.set('gameConsentOutbox/'+id,{...db.rows.get('gameConsentOutbox/'+id),state:'failed',lastError:'provider_http_400',lease:null});
+  db.rows.set('gameConsentOutbox/'+id,{...db.rows.get('gameConsentOutbox/'+id),state:'failed',lastError:'provider_http_400',attempts:5,lease:null});
   assert.equal(await retryGameConsentJob(db,'foreign',id),false);
   assert.equal(await retryGameConsentJob(db,'b',id),true);
+  assert.equal(db.rows.get('gameConsentOutbox/'+id).attempts,0);
+  configured=true;
+  const retryAt=Date.now()+1;
+  await runGameOutbox(db,retryAt,()=>({verifyBrand:async()=>{},sync:async()=>{throw new MarketingError('provider_http_429',true,false);}}));
+  assert.ok(db.rows.get('gameConsentOutbox/'+id).nextAttemptAt>retryAt);
   db.rows.set('gameConsentOutbox/'+id,{...db.rows.get('gameConsentOutbox/'+id),state:'uncertain'});
   assert.equal(await retryGameConsentJob(db,'b',id),false);
 });

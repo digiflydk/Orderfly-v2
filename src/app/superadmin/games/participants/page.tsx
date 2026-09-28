@@ -6,12 +6,13 @@ import { ArrowLeft, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { marketingConfig } from '@/lib/marketing/config';
+import { orderflySession } from '@/lib/access/orderfly-session';
 import { retryGameNewsletter } from './actions';
 
 export const dynamic='force-dynamic';
 const PAGE_SIZE=50;
 export default async function ParticipantsPage({searchParams}:{searchParams:Promise<{brand?:string;campaign?:string;page?:string}>}){
-  const query=await searchParams,brands=await gameBrands();
+  const query=await searchParams,brands=await gameBrands(),superuser=(await orderflySession()).superuser;
   const brand=brands.find(row=>row.id===query.brand),campaignId=query.campaign||'';
   if(!brand||!/^[A-Za-z0-9_-]{1,128}$/.test(campaignId))return <main className="p-6"><p>Vælg en kampagne fra <Link className="underline" href="/superadmin/games">Games</Link>.</p></main>;
   const db=getAdminDb(),campaign=await db.collection('gameScratchDrafts').doc(campaignId).get(),omnisendReady=!!marketingConfig(brand.id);
@@ -36,7 +37,7 @@ export default async function ParticipantsPage({searchParams}:{searchParams:Prom
   const href=(number:number)=>`/superadmin/games/participants?brand=${encodeURIComponent(brand.id)}&campaign=${encodeURIComponent(campaignId)}&page=${number}`;
   const entries=rows.map((row,index)=>{const item=row.data(),state=mail[index].data()?.state,voucher=vouchers[index].docs[0]?.data(),purchase=conversions[index].docs.find(doc=>doc.data().status==='paid')?.data();const consentState=consent[index]?.data()?.state;return {
     id:row.id,date:date(item.createdAt),name:String(item.name||''),email:String(item.email||''),newsletter:!item.newsletter?'Ikke tilvalgt':consentState==='synced'?'Synkroniseret':consentState==='accepted'?'Ingen ændring i Omnisend':consentState==='suppressed'?'Afmeldt i Omnisend':consentState==='uncertain'?'Kræver kontrol':consentState==='failed'?'Fejlet':'Afventer Omnisend',
-    retryNewsletter:omnisendReady&&item.newsletter===true&&(consentState==='failed'||consentState==='pending'&&consent[index]?.data()?.lastError==='configuration_required'),
+    retryNewsletter:superuser&&omnisendReady&&item.newsletter===true&&(consentState==='failed'||consentState==='pending'&&consent[index]?.data()?.lastError==='configuration_required'),
     game:completed[index].exists?'Gennemført':'Startet',prize:Number.isInteger(item.prizeIndex)?parsed.data.prizes[item.prizeIndex]?.name||'Ukendt':'Ingen gevinst',
     code:voucher?.state==='redeemed'?'Indløst':voucher?'Udstedt':'—',
     emailStatus:state==='accepted'?'Accepteret af platformen':state==='pending'||state==='dispatching'?'Afventer':state==='failed'||state==='uncertain'?'Kræver kontrol':state==='synced'?'Afsendt':'—',
