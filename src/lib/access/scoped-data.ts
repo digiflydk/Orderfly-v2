@@ -51,12 +51,33 @@ export async function listScopedDocuments(collection: string, permission: string
   return [...documents.values()];
 }
 
-export async function getScopedDocument(collection: string, id: string, permission: string, kind: DocumentScope) {
+// A deleted native location can remain on an old promotion. Only a caller with
+// a company-wide grant may see it; an existing foreign location is never valid.
+async function missingPromotionLocations(
+  data: Row,
+  load: (id: string) => Promise<{ exists: boolean; data: () => Row | undefined }>,
+): Promise<string[]> {
+  const scope = documentScope(data, 'locations');
+  const locations = scope.locationIds || [];
+  const rows = await Promise.all(locations.map(load));
+  if (rows.some(row => row.exists && row.data()?.brandId !== scope.brandId)) throw new AuthorityError('forbidden');
+  return locations.filter((_, index) => !rows[index].exists);
+}
+
+export async function getScopedDocument(collection: string, id: string, permission: string, kind: DocumentScope, allowOrphanedLocations = false) {
   validId(id);
   await verifiedOrderflyIdentity();
   const doc = await getAdminDb().collection(collection).doc(id).get();
   if (!doc.exists) return null;
   const scope = documentScope(doc.data()!, kind);
+  if (allowOrphanedLocations && kind === 'locations') {
+    const missing = await missingPromotionLocations(doc.data()!, locationId =>
+      getAdminDb().collection('locations').doc(locationId).get());
+    if (missing.length) {
+      await requireOrderflyAccess(scope.brandId, null, permission);
+      return doc;
+    }
+  }
   await requireOrderflyAccess(scope.brandId, scope.locationIds, permission);
   return doc;
 }
@@ -78,16 +99,27 @@ export async function authorizeTransaction(tx: FirebaseFirestore.Transaction, id
 // Policy, previous ownership and resulting ownership are read in the same
 // transaction as the write. Concurrent revocation or reassignment retries it.
 export async function mutateScopedDocument(collection: string, id: string, permission: string, kind: DocumentScope,
-  update: (before: Row | null, tx: FirebaseFirestore.Transaction) => Promise<Row | null> | Row | null) {
+  update: (before: Row | null, tx: FirebaseFirestore.Transaction) => Promise<Row | null> | Row | null,
+  allowOrphanedLocations = false) {
   validId(id);
   const identity = await verifiedOrderflyIdentity(), db = getAdminDb(), ref = db.collection(collection).doc(id);
   return db.runTransaction(async tx => {
     const saved = await tx.get(ref), before = saved.exists ? saved.data()! : null;
     if (permission.endsWith(':create') && before) throw new AuthorityError('record_exists', 409);
     if (!permission.endsWith(':create') && !before) throw new AuthorityError('record_missing', 404);
-    if (before) await authorizeTransaction(tx, identity, before, permission, kind);
+    const previousMissing = before && allowOrphanedLocations && kind === 'locations'
+      ? await missingPromotionLocations(before, locationId => tx.get(db.collection('locations').doc(locationId))) : [];
+    if (before) await authorizeTransaction(tx, identity,
+      previousMissing.length ? { ...before, locationIds: [] } : before, permission, kind);
     const after = await update(before, tx);
-    if (after) await authorizeTransaction(tx, identity, after, permission, kind);
+    if (after) {
+      const missing = allowOrphanedLocations && kind === 'locations'
+        ? await missingPromotionLocations(after, locationId => tx.get(db.collection('locations').doc(locationId))) : [];
+      // Only previously stored orphan IDs may survive an edit. New or foreign
+      // locations must pass the ordinary native ownership check.
+      if (missing.some(locationId => !previousMissing.includes(locationId))) throw new AuthorityError('forbidden');
+      await authorizeTransaction(tx, identity, missing.length ? { ...after, locationIds: [] } : after, permission, kind);
+    }
     if (!before && !after) throw new AuthorityError('record_missing', 404);
     if (after) tx.set(ref, after); else tx.delete(ref);
     return after;

@@ -109,7 +109,7 @@ export async function createOrUpdateStandardDiscount(
           }
         }
           return { ...before, ...dataToSave };
-        });
+        }, true);
 
 	} catch (e) {
 		const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -123,7 +123,7 @@ export async function createOrUpdateStandardDiscount(
 
 export async function deleteStandardDiscount(id: string): Promise<StandardDiscountActionResult> {
 	try {
-		await mutateScopedDocument('standard_discounts', id, 'orderfly.discounts:delete', 'locations', () => null);
+		await mutateScopedDocument('standard_discounts', id, 'orderfly.discounts:delete', 'locations', () => null, true);
 		revalidatePath("/superadmin/standard-discounts");
     revalidateTag('storefront');
 		return { success: true, message: "Discount deleted successfully." };
@@ -163,7 +163,7 @@ function optionalIsoDate(value: unknown): string | undefined {
 
 
 export async function getStandardDiscountById(id: string): Promise<SerializedStandardDiscount | null> {
-	const docSnap = await getScopedDocument('standard_discounts', id, 'orderfly.discounts:view', 'locations');
+	const docSnap = await getScopedDocument('standard_discounts', id, 'orderfly.discounts:view', 'locations', true);
 	if (docSnap) {
 		const data = docSnap.data()!;
 		return {
@@ -257,7 +257,7 @@ export async function getActiveStandardDiscounts({ brandId, locationId, delivery
 export async function updateStandardDiscountStatus(id: string, isActive: boolean): Promise<StandardDiscountActionResult> {
 	try {
 		if (typeof isActive !== 'boolean') throw new Error('Invalid activation value.');
-		await mutateScopedDocument('standard_discounts', id, 'orderfly.discounts:edit', 'locations', before => ({ ...before, isActive, updatedAt: Timestamp.now() }));
+		await mutateScopedDocument('standard_discounts', id, 'orderfly.discounts:edit', 'locations', before => ({ ...before, isActive, updatedAt: Timestamp.now() }), true);
 		revalidatePath('/superadmin/standard-discounts');
     revalidateTag('storefront');
 		return { success: true, message: 'Standard discount status updated successfully.' };

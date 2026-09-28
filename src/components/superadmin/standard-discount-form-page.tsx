@@ -89,6 +89,10 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 		if (!selectedBrandId) return [];
 		return locations.filter(l => l.brandId === selectedBrandId);
 	}, [selectedBrandId, locations]);
+	const previousLocationIds = useMemo(() =>
+		(discount ? standardDiscountFormRecord(discount as unknown as StandardDiscount).locationIds : []).filter(id =>
+			!locations.some(location => location.id === id && location.brandId === discount?.brandId)),
+		[discount, locations]);
 
 	const { brandProducts, brandCategories } = useMemo(() => {
 		if (!selectedBrandId) {
@@ -235,8 +239,23 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 									<FormItem>
 										<FormLabel>Locations</FormLabel>
 										<FormDescription>Select which locations this discount is available at.</FormDescription>
+										{previousLocationIds.length > 0 && <FormDescription>
+											Tidligere butik findes ikke længere. Den gemte tilknytning bevares ved gemning,
+											men rabatten gælder ikke i en nuværende butik, før du vælger en ny.
+										</FormDescription>}
 										<ScrollArea className="h-40 rounded-md border">
 											<div className="p-4">
+												{previousLocationIds.map(id => (
+													<FormField key={id} control={control} name="locationIds" render={({ field }) => (
+														<FormItem className="mb-2 flex flex-row items-start space-x-3 space-y-0">
+															<FormControl><Checkbox checked={(field.value || []).includes(id)}
+																onCheckedChange={checked => field.onChange(checked
+																? [...(field.value || []), id]
+																: (field.value || []).filter(value => value !== id))} /></FormControl>
+															<FormLabel className="font-normal">Tidligere butik ({id})</FormLabel>
+														</FormItem>
+													)} />
+												))}
 												{availableLocations.map((item) => (
 													<FormField key={item.id} control={control} name="locationIds"
 														render={({ field }) => (<FormItem key={item.id} className="flex flex-row items-start space-x-3 space-y-0 mb-2"><FormControl><Checkbox name={field.name} checked={field.value?.includes(item.id)} onCheckedChange={(checked) => { const currentValue = field.value || []; return checked ? field.onChange([...currentValue, item.id]) : field.onChange(currentValue?.filter((value) => value !== item.id)) }} /></FormControl><FormLabel className="font-normal">{item.name}</FormLabel></FormItem>)} />

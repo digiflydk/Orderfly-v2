@@ -191,6 +191,10 @@ export function DiscountFormPage({
     if (!selectedBrandId) return [];
     return locations.filter(l => l.brandId === selectedBrandId);
   }, [selectedBrandId, locations]);
+  const previousLocationIds = useMemo(() =>
+    (discount ? discountFormRecord(discount).locationIds : []).filter(id =>
+      !locations.some(location => location.id === id && location.brandId === discount?.brandId)),
+    [discount, locations]);
 
   const title = discount ? 'Edit Discount' : 'Create New Discount';
   const description = discount
@@ -357,8 +361,25 @@ export function DiscountFormPage({
                   render={() => (
                     <FormItem>
                       <FormLabel>Locations</FormLabel>
+                      {previousLocationIds.length > 0 && (
+                        <FormDescription>
+                          Tidligere butik findes ikke længere. Den gemte tilknytning bevares ved gemning,
+                          men rabatten gælder ikke i en nuværende butik, før du vælger en ny.
+                        </FormDescription>
+                      )}
                       <ScrollArea className="h-40 rounded-md border">
                         <div className="p-4">
+                          {previousLocationIds.map(id => (
+                            <FormField key={id} control={control as any} name="locationIds" render={({ field }) => (
+                              <FormItem className="mb-2 flex flex-row items-start space-x-3 space-y-0">
+                                <FormControl><Checkbox checked={(field.value || []).includes(id)}
+                                  onCheckedChange={checked => field.onChange(checked
+                                    ? [...(field.value || []), id]
+                                    : (field.value || []).filter((value: string) => value !== id))} /></FormControl>
+                                <FormLabel className="font-normal">Tidligere butik ({id})</FormLabel>
+                              </FormItem>
+                            )} />
+                          ))}
                           {availableLocations.map(item => (
                             <FormField
                               key={item.id}

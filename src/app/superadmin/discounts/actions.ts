@@ -101,7 +101,7 @@ export async function createOrUpdateDiscount(
     const { id: validatedId, ...discountData } = validatedFields.data;
 
     const permission = `orderfly.discounts:${validatedId ? 'edit' : 'create'}`;
-    await requireOrderflyAccess(discountData.brandId, discountData.locationIds, permission);
+    if (!validatedId) await requireOrderflyAccess(discountData.brandId, discountData.locationIds, permission);
     const db = getAdminDb();
     const docId = validatedId || db.collection('discounts').doc().id;
 
@@ -130,7 +130,7 @@ export async function createOrUpdateDiscount(
       const duplicates = await tx.get(db.collection('discounts').where('brandId', '==', discountData.brandId).where('code', '==', discountData.code));
       if (duplicates.docs.some(record => record.id !== docId)) throw new Error('This discount code already exists for this brand.');
       return { ...before, ...dataToSave, usedCount: before?.usedCount ?? 0 };
-    });
+    }, true);
 
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -147,7 +147,7 @@ export async function deleteDiscount(id: string) {
         await mutateScopedDocument('discounts', id, 'orderfly.discounts:delete', 'locations', before => {
           if (before!.usedCount > 0) throw new Error('Cannot delete a discount that has been used. Please deactivate it instead.');
           return null;
-        });
+        }, true);
         revalidatePath("/superadmin/discounts");
         return { message: "Discount deleted successfully.", error: false };
     } catch (e) {
@@ -173,7 +173,7 @@ export async function getDiscounts(): Promise<Discount[]> {
 }
 
 export async function getDiscountById(id: string): Promise<Discount | null> {
-    const docSnap = await getScopedDocument('discounts', id, 'orderfly.discounts:view', 'locations');
+    const docSnap = await getScopedDocument('discounts', id, 'orderfly.discounts:view', 'locations', true);
     if (docSnap) {
         const data = docSnap.data()!;
         return { 
