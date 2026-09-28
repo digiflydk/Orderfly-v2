@@ -2,7 +2,7 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import type { Firestore, DocumentReference } from 'firebase-admin/firestore';
 import { emailChannel, retryDelay, type ConsentEvent, type SyncState } from './consent';
-import { marketingConfig } from './config';
+import { marketingConfig, marketingConfigurationStatus } from './config';
 import { MarketingError, Omnisend } from './provider';
 const NEVER = Number.MAX_SAFE_INTEGER, LEASE = 120000;
 async function lease(db: Firestore, ref: DocumentReference, now: number) {
@@ -38,10 +38,20 @@ async function complete(db: Firestore, ref: DocumentReference, token: string, st
         }
     });
 }
+async function deferMissingConfiguration(db: Firestore, ref: DocumentReference, token: string, now: number, reason: string) {
+    await db.runTransaction(async tx => {
+        const current = await tx.get(ref);
+        if (current.data()?.lease !== token) return;
+        // No provider request was attempted. Keep the consent eligible for the
+        // configured worker after the server-side brand mapping is restored.
+        tx.update(ref, { state: 'pending', lease: null, lastError: reason,
+            nextAttemptAt: now + 3600000, updatedAt: now });
+    });
+}
 export async function runMarketingWorker(db: Firestore, now = Date.now(), makeProvider = (config: NonNullable<ReturnType<typeof marketingConfig>>) => new Omnisend(config), requestDeadline = Date.now() + 60000) {
     const deadline = Math.min(Date.now() + 45000, requestDeadline - 20000);
     const jobs = await db.collection('marketingOutbox').where('nextAttemptAt', '<=', now).orderBy('nextAttemptAt').limit(10).get();
-    const counts = { processed: 0, synced: 0, failed: 0, suppressed: 0, reconciled: 0 };
+    const counts = { processed: 0, synced: 0, failed: 0, suppressed: 0, reconciled: 0, waitingConfiguration: 0 };
     for (const snap of jobs.docs) {
         if (Date.now() > deadline)
             break;
@@ -49,9 +59,14 @@ export async function runMarketingWorker(db: Firestore, now = Date.now(), makePr
         if (!job)
             continue;
         try {
-            const config = marketingConfig(job.brandId);
-            if (!config)
-                throw new MarketingError('configuration_required', false);
+            const configuration = marketingConfigurationStatus(job.brandId);
+            const config = configuration.config;
+            if (!config) {
+                await deferMissingConfiguration(db, snap.ref, job.lease, now, configuration.reason || 'configuration_required');
+                counts.waitingConfiguration++;
+                counts.processed++;
+                continue;
+            }
             const [consent, contact] = await Promise.all([db.collection('marketingConsents').doc(job.eventId).get(), db.collection('marketingContacts').doc(job.contactKey).get()]);
             const event = consent.data() as ConsentEvent | undefined;
             if (!event || event.brandId !== job.brandId || event.customerId !== job.customerId)
@@ -113,12 +128,14 @@ export async function runMarketingWorker(db: Firestore, now = Date.now(), makePr
     return counts;
 }
 export async function retryMarketingJob(db: Firestore, brandId: string, id: string) {
+    if (!marketingConfig(brandId)) return false;
     const ref = db.collection('marketingOutbox').doc(id);
     return db.runTransaction(async (tx) => {
         const snap = await tx.get(ref), job = snap.data();
-        if (!job || job.brandId !== brandId || job.state !== 'failed' || job.lease)
+        const waiting = job?.state === 'pending' && ['secret_unavailable','invalid_mapping','duplicate_mapping','brand_not_mapped','brand_disabled','configuration_required'].includes(job.lastError);
+        if (!job || job.brandId !== brandId || !(job.state === 'failed' || waiting) || job.lease)
             return false;
-        tx.update(ref, { state: 'pending', attempts: 0, nextAttemptAt: Date.now(), lastError: null });
+        tx.update(ref, { state: 'pending', attempts: waiting ? job.attempts || 0 : 0, nextAttemptAt: Date.now(), lastError: null });
         return true;
     });
 }

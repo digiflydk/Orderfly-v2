@@ -11,8 +11,15 @@ type Job = {
     lastError: string | null;
 };
 const states: Record<string, string> = { pending: 'Afventer', dispatching: 'Sendes', synced: 'Synkroniseret', accepted: 'Accepteret', failed: 'Fejlet', uncertain: 'Ukendt leveringsstatus', suppressed: 'Afmeldt eller blokeret' };
+const configurationErrors: Record<string, string> = {
+    secret_unavailable: 'Serveren mangler ORDERFLY_OMNISEND_BRANDS. Tilføj brandets sikre nøgle og genstart den aktive revision.',
+    invalid_mapping: 'ORDERFLY_OMNISEND_BRANDS har ugyldigt format eller mangler påkrævede felter.',
+    duplicate_mapping: 'Omnisend-konfigurationen indeholder dublerede brand-ID’er.',
+    brand_not_mapped: 'Dette Orderfly-brand mangler i Omnisend-konfigurationen.',
+    brand_disabled: 'Omnisend er slået fra for dette brand i serverkonfigurationen.',
+};
 export function MarketingStatus() {
-    const [brandId, setBrandId] = useState(''), [jobs, setJobs] = useState<Job[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState(''), [configured, setConfigured] = useState<boolean | null>(null);
+    const [brandId, setBrandId] = useState(''), [jobs, setJobs] = useState<Job[]>([]), [busy, setBusy] = useState(false), [error, setError] = useState(''), [configured, setConfigured] = useState<boolean | null>(null), [configurationError, setConfigurationError] = useState<string | null>(null);
     async function load() {
         setBusy(true);
         setError('');
@@ -22,6 +29,7 @@ export function MarketingStatus() {
                 throw new Error(data.error || 'Status kunne ikke indlæses.');
             setJobs(data.jobs);
             setConfigured(data.configured);
+            setConfigurationError(data.configurationError);
         }
         catch (e) {
             setError(e instanceof Error ? e.message : 'Status kunne ikke indlæses.');
@@ -47,7 +55,7 @@ export function MarketingStatus() {
     }
     return <div className="p-6 space-y-5"><h1 className="text-2xl font-bold">Nyhedsbrev og Omnisend</h1><p>Samtykke indsamles ved checkout. Synkronisering kører separat fra betalingen.</p>
     <form onSubmit={e => { e.preventDefault(); void load(); }} className="flex gap-3 max-w-lg"><label className="flex-1">Brand-ID<Input disabled={busy} value={brandId} onChange={e => { setBrandId(e.target.value); setJobs([]); setConfigured(null); }} required/></label><Button className="self-end" disabled={busy}>Vis status</Button></form>
-    {error && <p role="alert">{error}</p>}{configured === false && <p>Omnisend er ikke aktiveret for dette brand. Samtykker afventer opsætning.</p>}
-    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th>Type</th><th>Reference</th><th>Status</th><th>Forsøg</th><th>Opdateret</th><th>Handling</th></tr></thead><tbody>{jobs.map(job => <tr key={`${job.kind}-${job.id}`} className="border-t"><td className="py-3">{job.kind === 'paid_order' ? 'Betalt ordre' : 'Samtykke'}</td><td>{job.id.slice(0, 12)}</td><td>{states[job.state] || job.state}{job.lastError && <p className="text-xs">{job.lastError}</p>}</td><td>{job.attempts}</td><td>{new Date(job.updatedAt).toLocaleString('da-DK')}</td><td>{job.state === 'failed' && <Button variant="outline" disabled={busy} onClick={() => retry(job)}>Prøv igen</Button>}</td></tr>)}</tbody></table></div>
+    {error && <p role="alert">{error}</p>}{configured === false && <p role="alert">{configurationErrors[configurationError || ''] || 'Omnisend kræver serveropsætning for dette brand.'} Samtykker er gemt og afventer synkronisering.</p>}
+    <div className="overflow-x-auto"><table className="w-full text-left text-sm"><thead><tr><th>Type</th><th>Reference</th><th>Status</th><th>Forsøg</th><th>Opdateret</th><th>Handling</th></tr></thead><tbody>{jobs.map(job => <tr key={`${job.kind}-${job.id}`} className="border-t"><td className="py-3">{job.kind === 'paid_order' ? 'Betalt ordre' : 'Samtykke'}</td><td>{job.id.slice(0, 12)}</td><td>{states[job.state] || job.state}{job.lastError && <p className="text-xs">{configurationErrors[job.lastError] || job.lastError}</p>}</td><td>{job.attempts}</td><td>{new Date(job.updatedAt).toLocaleString('da-DK')}</td><td>{configured && (job.state === 'failed' || job.state === 'pending' && !!job.lastError) && <Button variant="outline" disabled={busy} onClick={() => retry(job)}>Prøv igen</Button>}</td></tr>)}</tbody></table></div>
   </div>;
 }

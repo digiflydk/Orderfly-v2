@@ -246,7 +246,7 @@ test('#71 newsletter highlights the available benefit while explicit consent sta
  await consent.uncheck();assert.equal(await card.getByText(/trukket fra denne ordre/).count(),0);
  await page.getByRole('button',{name:/Gå til betaling.*104,00/}).first().waitFor();
  const terms=page.locator('.commerce-terms').filter({visible:true}).first(),box=await terms.boundingBox(),check=await terms.getByRole('checkbox').boundingBox();assert.ok(box.height>=48.3);assert.ok(check.y>box.y);
- await consent.check();await pay(page);await page.waitForURL('**/stripe?*');const args=requests.get('ui-newsletter')[0],customer=args[1];assert.equal(customer.subscribeToNewsletter,true);assert.match(customer.newsletterConsentId,/^[a-f0-9-]{36}$/);assert.equal(customer.newsletterConsentVersion,'checkout-email-da-2026-09-08');
+ await consent.check();await pay(page);await page.waitForURL('**/stripe?*');const args=requests.get('ui-newsletter')[0],customer=args[1];assert.equal(customer.subscribeToNewsletter,true);assert.match(customer.newsletterConsentId,/^[a-f0-9-]{36}$/);assert.equal(customer.newsletterConsentVersion,'checkout-email-da-2026-09-28');
  assert.equal(args[5].discountTotal,10);assert.equal(args[5].bagFee,4);assert.equal(args[6],'n');
 });
 test('#71 newsletter opt-out before submit sends no grant and does not add a discount',async t=>{

@@ -13,7 +13,7 @@ function strictWrite(value,path='root') {
  if(value && typeof value==='object') for(const [key,entry] of Object.entries(value)) strictWrite(entry,`${path}.${key}`);
 }
 const offer={id:'d',brandId:'b',isActive:true,locationIds:['l'],orderTypes:['pickup'],activeDays:[],activeTimeSlots:[],discountType:'percentage',discountValue:10,code:'SAVE10',usedCount:0,usageLimit:0};
-async function checkout({existing=false,kind='none',identityCleaner=false, fault, stripeError, realReservations=false, city='Hellerup', items, seed=[], locationOverrides={}, deliveryType='pickup', deliveryTime, customerOverrides={}, beforeStripe, brandOverrides={}, paymentOverrides={}, standardDiscounts, expectedCartDiscount, consentCookie, anonymousConsentId}={}) {
+async function checkout({existing=false,kind='none',identityCleaner=false, fault, stripeError, realReservations=false, marketingConfigured=true, city='Hellerup', items, seed=[], locationOverrides={}, deliveryType='pickup', deliveryTime, customerOverrides={}, beforeStripe, brandOverrides={}, paymentOverrides={}, standardDiscounts, expectedCartDiscount, consentCookie, anonymousConsentId}={}) {
  const path='src/app/checkout/actions.ts';
  const mocks=Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],{}]));
  const events=[];const writes=[];let coupon, persistenceError, sessionParams;let patchCalls=0;
@@ -38,6 +38,7 @@ async function checkout({existing=false,kind='none',identityCleaner=false, fault
  if(existing) records.set('customers/c',record);
  const snap=snapshot(firestoreRef('customers','c'));
  Object.assign(mocks,{
+  '@/lib/marketing/config':{marketingConfig:brandId=>marketingConfigured && brandId==='b'?{brandId:'b'}:null},
   'node:crypto':require('node:crypto'),
   '@/lib/firebase-admin':{getAdminDb:()=>marketingDb},
   '@/lib/marketing/store':{recordNewsletterConsent:async(...args)=>{events.push('newsletter-consent');if(fault==='newsletter-consent')throw Error('consent storage offline');return loadTs('src/lib/marketing/store.ts',{'server-only':{}}).recordNewsletterConsent(...args);}},

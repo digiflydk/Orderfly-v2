@@ -1,6 +1,6 @@
 import { getAdminDb } from '@/lib/firebase-admin';
 import { marketingAdminAuthorized } from '@/lib/marketing/auth';
-import { marketingConfig, paidOrderMarketingEnabled } from '@/lib/marketing/config';
+import { marketingConfigurationStatus, paidOrderMarketingEnabled } from '@/lib/marketing/config';
 import { retryMarketingJob } from '@/lib/marketing/worker';
 import { retryMarketingOrderJob } from '@/lib/marketing/order-worker';
 import { getOrigin } from '@/lib/url';
@@ -21,7 +21,8 @@ export async function GET(request: Request) {
         ...contacts.docs.map(doc => ({ doc, kind: 'contact' as const })),
         ...orders.docs.map(doc => ({ doc, kind: 'paid_order' as const })),
     ].sort((a, b) => Number(b.doc.data().createdAt || 0) - Number(a.doc.data().createdAt || 0)).slice(0, 50);
-    return Response.json({ configured: !!marketingConfig(brandId), paidOrdersEnabled: paidOrderMarketingEnabled(), jobs: jobs.map(({ doc, kind }) => {
+    const configuration = marketingConfigurationStatus(brandId);
+    return Response.json({ configured: !!configuration.config, configurationError: configuration.reason, paidOrdersEnabled: paidOrderMarketingEnabled(), jobs: jobs.map(({ doc, kind }) => {
             const d = doc.data();
             return { id: doc.id, kind, state: d.state, attempts: d.attempts, updatedAt: d.updatedAt, lastError: d.lastError || null };
         }) }, { headers: { 'Cache-Control': 'no-store' } });

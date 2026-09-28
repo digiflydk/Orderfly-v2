@@ -16,7 +16,7 @@ const customer = z.object({
   name: z.string().trim().min(2).max(200), email: z.string().trim().email().max(254),
   phone: z.string().trim().min(5).max(50), street: optionalText, zipCode: optionalText, city: optionalText,
   newsletterConsentId: z.string().uuid().optional(),
-  newsletterConsentVersion: z.literal('checkout-email-da-2026-09-08').optional(),
+  newsletterConsentVersion: z.enum(['checkout-email-da-2026-09-08', 'checkout-email-da-2026-09-28']).optional(),
   subscribeToNewsletter: z.boolean(), acceptTerms: z.literal(true),
 }).superRefine((value, context) => {
   if (!!value.newsletterConsentId !== !!value.newsletterConsentVersion) {
