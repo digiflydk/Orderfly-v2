@@ -15,6 +15,7 @@ import { redirect } from 'next/navigation';
 import { getProductsByIds } from '../products/actions';
 import { optionalImageUrl } from '@/lib/optional-image-url';
 import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
+import { promotionDate } from '@/lib/promotion-date';
 
 const productGroupSchema = z.object({
   id: z.string(),
@@ -236,10 +237,11 @@ export async function getCombos(): Promise<ComboMenu[]> {
     return {
       ...data,
       id: doc.id,
-      startDate: data.startDate ? (data.startDate as Timestamp).toDate().toISOString() : undefined,
-      endDate: data.endDate ? (data.endDate as Timestamp).toDate().toISOString() : undefined,
-      createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
-      updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : new Date(),
+      locationIds: Array.isArray(data.locationIds) ? data.locationIds : [],
+      startDate: promotionDate(data.startDate)?.toISOString(),
+      endDate: promotionDate(data.endDate)?.toISOString(),
+      createdAt: promotionDate(data.createdAt) ?? doc.createTime?.toDate() ?? new Date(0),
+      updatedAt: promotionDate(data.updatedAt) ?? doc.updateTime?.toDate() ?? new Date(0),
     }
   }) as ComboMenu[];
 }
@@ -251,10 +253,11 @@ export async function getComboById(comboId: string): Promise<ComboMenu | null> {
         return {
             ...data,
             id: docSnap.id,
-            startDate: data.startDate ? (data.startDate as Timestamp).toDate().toISOString() : undefined,
-            endDate: data.endDate ? (data.endDate as Timestamp).toDate().toISOString() : undefined,
-            createdAt: data.createdAt ? (data.createdAt as Timestamp).toDate() : new Date(),
-            updatedAt: data.updatedAt ? (data.updatedAt as Timestamp).toDate() : new Date(),
+            locationIds: Array.isArray(data.locationIds) ? data.locationIds : [],
+            startDate: promotionDate(data.startDate)?.toISOString(),
+            endDate: promotionDate(data.endDate)?.toISOString(),
+            createdAt: promotionDate(data.createdAt) ?? docSnap.createTime?.toDate() ?? new Date(0),
+            updatedAt: promotionDate(data.updatedAt) ?? docSnap.updateTime?.toDate() ?? new Date(0),
         } as ComboMenu;
     }
     return null;

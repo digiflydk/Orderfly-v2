@@ -9,6 +9,8 @@ import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { StandardDiscountFormPage } from '@/components/superadmin/standard-discount-form-page';
 import { getProducts } from '@/app/superadmin/products/actions';
 import { getCategories } from '@/app/superadmin/categories/actions';
+import { loadSuperadminPage } from '@/lib/access/superadmin-page';
+import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
 
 export default async function EditStandardDiscountPage({ params }: AsyncPageProps<{ discountId: string }>) {
     const { discountId } = await resolveParams(params);
@@ -17,13 +19,15 @@ export default async function EditStandardDiscountPage({ params }: AsyncPageProp
         notFound();
     }
     
-    const [discount, brands, locations, products, categories] = await Promise.all([
+    const result = await loadSuperadminPage('orderfly.discounts:view', () => Promise.all([
         getStandardDiscountById(discountId),
         getBrands(),
         getAllLocations(),
         getProducts(),
         getCategories(),
-    ]);
+    ]));
+    if (!result) return <AccessDeniedPage />;
+    const [discount, brands, locations, products, categories] = result;
 
     if (!discount) {
         notFound();
