@@ -1,5 +1,13 @@
 # Games · Scratch Card V1
 
+## Merchant restaurant redemption
+
+`/merchant` uses the existing Orderfly/Opsfly session; unauthenticated staff are sent to `/admin-login?next=/merchant`. Grant `orderfly.games:view` and `orderfly.games:redeem` to merchant staff in the platform role policy. Read and redeem checks are scoped to the assigned brand and location on every request, including inside the redemption transaction. The page lists live, unique vouchers eligible for restaurant redemption and searches their code, participant name, e-mail and phone. The operator selects their restaurant, confirms the voucher and enters the total purchase amount including VAT, or zero for a prize without a purchase. The page is mobile friendly and intentionally does not expose campaign editing.
+
+Redemption checks voucher ownership, live mode, one-use state, the originating play, and any generated Orderfly discount plus active checkout holds inside one Firestore transaction. It deactivates the online discount, marks the voucher redeemed, records the restaurant location and actor, writes an audit entry, and creates an idempotent `gameConversions` record. Positive purchases are `paid` and count toward game conversions/revenue; a zero-amount prize redemption is recorded with `redeemed` status and excluded from purchase metrics. A code enabled for both channels can be claimed once in either; an active online checkout hold blocks restaurant redemption. Uploaded codes are never treated as internal Promotions discounts. Shared codes remain ineligible for individual restaurant redemption. Existing `discounts:edit` authority is not granted by this interface.
+
+The merchant route is hosted at `orderfly.dk/merchant`. The brand website may expose `esmeraldapizza.dk/merchant` as a redirect to that route so the first-party Orderfly session cookie and existing login remain valid; an iframe cannot share that session reliably. The merchant role must be assigned to an existing verified staff account before use. Brand voucher queries currently read all issued codes for a brand (campaign cap is 3,000); paginate and index search before substantially increasing campaign volume.
+
 ## Campaigns and participants (September 2026)
 
 The Games overview separates ended campaigns from completed plays. For the selected brand and overlapping campaign dates, it shows lifetime participation, completed play events, paid orders attributed to game codes and revenue from those paid orders. Pending or canceled checkouts are not counted. Shared codes support campaign attribution, not attribution to a particular player. The original campaign includes older records without `campaignId`; other campaigns use indexed aggregate queries.

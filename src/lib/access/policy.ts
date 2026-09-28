@@ -7,6 +7,7 @@ export const FEATURES = [
   ['orderfly.orders', ['view', 'edit']],
   ['orderfly.catalog', ['view', 'create', 'edit', 'delete']],
   ['orderfly.discounts', ['view', 'create', 'edit', 'delete']],
+  ['orderfly.games', ['view', 'redeem']],
   ['orderfly.customers', ['view', 'create', 'edit', 'delete']],
   ['orderfly.feedback', ['view', 'create', 'edit', 'delete']],
   ['orderfly.loyalty', ['view', 'create', 'edit', 'delete']],

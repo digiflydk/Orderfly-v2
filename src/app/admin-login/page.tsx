@@ -1,14 +1,16 @@
 'use client';
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { useSearchParams } from 'next/navigation';
 
-export default function AdminLogin() {
+function AdminLoginForm() {
+  const merchantLogin=useSearchParams().get('next')==='/merchant';
   const [method,setMethod]=useState<'opsfly'|'firebase'>('opsfly');
   const [pending,setPending]=useState(false),[error,setError]=useState('');
   return <main className="mx-auto max-w-md space-y-5 px-5 py-16">
-    <h1 className="text-2xl font-bold">Log ind til Orderfly</h1>
+    <h1 className="text-2xl font-bold">{merchantLogin?'Log ind til restaurantens spil':'Log ind til Orderfly'}</h1>
     <p>{method==='opsfly'?'Brug din e-mail eller dit brugernavn og den samme PIN som i Opsfly.':'Brug din Orderfly-konto med e-mail og adgangskode.'}</p>
     <form className="space-y-4" onSubmit={async event=>{
       event.preventDefault();if(pending)return;
@@ -31,7 +33,7 @@ export default function AdminLogin() {
           setError(response.status===429?'For mange forsøg. Vent 10 minutter og prøv igen.':response.status===503?'Login er midlertidigt utilgængeligt. Prøv igen.':'Kunne ikke logge ind. Kontrollér dine loginoplysninger og din adgang i mPanel.');
           return;
         }
-        await clearFirebase?.();window.location.assign('/superadmin/sales/orders');
+        await clearFirebase?.();window.location.assign(merchantLogin?'/merchant':'/superadmin/sales/orders');
       } catch {setError('Kunne ikke logge ind. Prøv igen.');}
       finally {await clearFirebase?.().catch(()=>{});setPending(false);}
     }}>
@@ -43,3 +45,5 @@ export default function AdminLogin() {
     <Button type="button" variant="link" disabled={pending} onClick={()=>{setMethod(method==='opsfly'?'firebase':'opsfly');setError('');}}>{method==='opsfly'?'Log ind med en separat Orderfly-konto':'Log ind med Opsfly'}</Button>
   </main>;
 }
+
+export default function AdminLogin(){return <Suspense fallback={<main className="p-8">Indlæser login…</main>}><AdminLoginForm/></Suspense>;}
