@@ -476,12 +476,11 @@ function CheckoutForm({ location }: { location: Location }) {
 
     setIsProcessing(true);
     try {
-      const currentDiscountableSubtotal = cartItems
+      const currentDiscountableSubtotal = sumMoney(cartItems
         .filter(item => !isLockedItem(item))
-        .reduce((sum, item) => {
-          const toppingsTotal = item.toppings.reduce((tTotal, t) => tTotal + t.price, 0);
-          return sum + (item.basePrice + toppingsTotal) * item.quantity;
-        }, 0);
+        .map(item => lineMoney(item.basePrice, item.quantity, item.toppings.map(topping => topping.price))));
+      const chargedMerchandiseSubtotal = sumMoney(cartItems.map(item =>
+        lineMoney(item.price, item.quantity, item.toppings.map(topping => topping.price))));
 
       const result = await optionalCheckoutValue(() => validateDiscountAction(
         discountCode,
@@ -490,7 +489,8 @@ function CheckoutForm({ location }: { location: Location }) {
         currentDiscountableSubtotal,
         deliveryType,
         form.getValues('email'),
-        cartItems.map(item=>item.id)
+        cartItems.map(item=>item.id),
+        chargedMerchandiseSubtotal
       ), { success: false, message: 'Rabatten kunne ikke kontrolleres. Prøv igen.' }, 8000);
 
       if (result.success && result.discount) {

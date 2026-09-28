@@ -18,6 +18,17 @@ export function cartLineEligible(isCombo: boolean, catalogPrice: number, charged
   return !isCombo && !hasItemOffer && chargedUnitPrice >= catalogPrice;
 }
 
+// Manual codes count only full-price, non-combo merchandise. If the whole
+// merchandise basket reaches a minimum but the eligible part does not, explain
+// the exclusion instead of claiming the order itself is below the minimum.
+export function discountMinimumError(minimum: number | undefined, eligibleSubtotal: number, chargedSubtotal = eligibleSubtotal): string | null {
+  if (!minimum || eligibleSubtotal >= minimum) return null;
+  if (Number.isFinite(chargedSubtotal) && chargedSubtotal >= minimum && eligibleSubtotal < chargedSubtotal) {
+    return `Rabatkoden kan ikke kombineres med varer, der allerede har rabat, eller menuer. Kun ${eligibleSubtotal.toFixed(2)} kr. i varer uden andet tilbud tæller med mod minimumsbeløbet på ${minimum.toFixed(2)} kr.`;
+  }
+  return `Minimumsbeløbet på ${minimum.toFixed(2)} kr. er ikke nået.`;
+}
+
 export function assignedCustomerMatches(assignedId: string | undefined, customerId: string | undefined) {
   return !assignedId || assignedId === customerId;
 }

@@ -60,7 +60,10 @@ async function checkout({existing=false,kind='none',identityCleaner=false, fault
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
   '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b',slug:'brand',name:'Test brand',bagFee:4,adminFee:0,...brandOverrides})},
   '@/app/superadmin/locations/actions':{getLocationById:async()=>({id:'l',slug:'location',brandId:'b',city,name:'Test location',isActive:true,deliveryTypes:['pickup','delivery'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'12:00',close:'22:00'}])),...locationOverrides})},
-  '@/lib/server/checkout-discounts':{getDiscountById:async()=>records.get('discounts/d')},
+  '@/lib/server/checkout-discounts':{
+   getDiscountById:async()=>records.get('discounts/d'),
+   getDiscountByCode:async(code,brandId)=>{const d=records.get('discounts/d');return d?.code===code&&d.brandId===brandId?d:null;},
+  },
   '@/app/superadmin/standard-discounts/actions':{getActiveStandardDiscounts:async()=>standardDiscounts || (kind==='automatic'?[{...offer,discountName:'Automatic 10%',discountType:'cart',discountMethod:'percentage'}]:[])},
   stripe:{default:class Stripe {
    on(_,listener){this.listener=listener;}
@@ -100,7 +103,7 @@ async function checkout({existing=false,kind='none',identityCleaner=false, fault
  }
  const api=load(path,mocks);
  const result=await api.createStripeCheckoutSessionAction(items || [{id:'p',name:'Pizza',quantity:1,unitPrice:100,totalPrice:100,toppings:identityCleaner?[]:undefined}],{name:'Test',email:'test@example.test',phone:'12345678',subscribeToNewsletter:kind==='newsletter',acceptTerms:true,...customerOverrides,...(identityCleaner?{street:'',zipCode:'',city:''}:{})},deliveryType,'b','l',{subtotal:100,deliveryFee:0,discountTotal:0,tips:0,taxes:0,bagFee:4,cartDiscountName:undefined,...paymentOverrides},['code','newsletter'].includes(kind)?'d':null,'brand','location',deliveryTime,anonymousConsentId || (fault?.startsWith('consent-')?'anon':undefined));
- return {result,writes,events,coupon,records,patchCalls,persistenceError,sessionParams};
+ return {result,writes,events,coupon,records,patchCalls,persistenceError,sessionParams,actions:api};
 }
 
 module.exports={checkout,optional};
