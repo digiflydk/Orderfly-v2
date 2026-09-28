@@ -4,7 +4,7 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 const {memoryDb}=require('../helpers/marketing-db.cjs');
 
 let configured=false;
-const {MarketingError}=loadTs('src/lib/marketing/provider.ts',{'server-only':{}});
+const {MarketingError,Omnisend}=loadTs('src/lib/marketing/provider.ts',{'server-only':{}});
 const {runGameOutbox,retryGameConsentJob}=loadTs('src/lib/games/worker.ts',{
   'server-only':{},
   '@/lib/marketing/config':{marketingConfig:()=>configured?{brandId:'b',omnisendBrandId:'omni-b',apiKey:'synthetic-key',enabled:true,consentMode:'single_opt_in'}:null},
@@ -51,6 +51,22 @@ test('already subscribed contact stays unchanged; an opted-out contact is not re
     assert.equal(writes,1);
     assert.equal(await retryGameConsentJob(db,'b',id),false);
   }
+});
+
+test('real provider result records an existing subscriber as accepted without POST',async()=>{
+  configured=true;
+  const {db,now,id}=fixture();let reads=0,writes=0;
+  const config={brandId:'b',omnisendBrandId:'omni-b',apiKey:'synthetic-key',enabled:true,consentMode:'single_opt_in'};
+  const provider=()=>new Omnisend(config,async(url,init)=>{
+    if(init.method==='POST'){writes++;throw Error('existing subscriber must not be posted again');}
+    if(url.endsWith('brands/current'))return Response.json({brandID:'omni-b'});
+    reads++;
+    return Response.json({contacts:[{identifiers:[{type:'email',id:'buyer@example.test',channels:{email:{status:'subscribed'}}}]}]});
+  });
+  const counts=await runGameOutbox(db,now,provider);
+  assert.equal(counts.accepted,1);
+  assert.equal(db.rows.get('gameConsentOutbox/'+id).state,'accepted');
+  assert.equal(reads,1);assert.equal(writes,0);
 });
 
 test('a failed or uncertain cross-brand job cannot be replayed as another brand',async()=>{

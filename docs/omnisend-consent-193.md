@@ -28,6 +28,9 @@ version `checkout-email-da-2026-09-28`; the previous Danish version remains
 accepted for older clients and retains its original text in audit records.
 The provider contact endpoint updates by email, and a retry first reads the
 contact. Already subscribed means confirmed sync, with no second POST.
+The shared provider reports an already subscribed contact distinctly: checkout
+records the contact as confirmed, while Games records its established
+`accepted` (no provider change) outcome.
 Opt-outs remain protected by the event timestamp. The paid-order event release
 switch is separate and remains disabled.
 

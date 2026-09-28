@@ -71,8 +71,27 @@ test('#193 provider already subscribed after uncertain reply is confirmed withou
   if(init.method==='POST')writes++;
   return Response.json({contacts:[{identifiers:[{type:'email',id:consent.email,channels:{email:{status:'subscribed'}}}]}]});
  });
- assert.equal(await provider.sync({...consent,id:'synthetic-consent',source:'checkout',channel:'email',capturedAt:Date.now(),wording:'fixture'}),'synced');
+ assert.equal(await provider.sync({...consent,id:'synthetic-consent',source:'checkout',channel:'email',capturedAt:Date.now(),wording:'fixture'}),'already_subscribed');
  assert.equal(writes,0);
+});
+
+test('#193 checkout worker confirms an existing subscriber without a second provider write',async()=>{
+ const previous=process.env.ORDERFLY_OMNISEND_BRANDS;
+ process.env.ORDERFLY_OMNISEND_BRANDS=JSON.stringify([brand]);
+ try {
+  const db=memoryDb();
+  db.rows.set('customers/synthetic-customer',{brandId:brand.brandId,normalizedEmail:consent.email,marketingConsent:false});
+  const id=await recordNewsletterConsent(db,consent);
+  let writes=0;
+  const result=await runMarketingWorker(db,Date.now()+1,config=>new Omnisend(config,async(url,init)=>{
+   if(init.method==='POST'){writes++;throw Error('duplicate provider write');}
+   if(url.endsWith('brands/current'))return Response.json({brandID:brand.omnisendBrandId});
+   return Response.json({contacts:[{identifiers:[{type:'email',id:consent.email,channels:{email:{status:'subscribed'}}}]}]});
+  }));
+  assert.equal(result.synced,1);
+  assert.equal(db.rows.get('marketingOutbox/'+id).state,'synced');
+  assert.equal(writes,0);
+ } finally {if(previous===undefined)delete process.env.ORDERFLY_OMNISEND_BRANDS;else process.env.ORDERFLY_OMNISEND_BRANDS=previous;}
 });
 
 test('#193 active newsletter discount is unavailable until brand integration is configured',async()=>{

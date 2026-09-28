@@ -78,7 +78,9 @@ export async function runMarketingWorker(db: Firestore, now = Date.now(), makePr
             }
             const provider = makeProvider(config);
             await provider.verifyBrand();
-            const state = await provider.sync(event);
+            const outcome = await provider.sync(event);
+            // Existing subscribers confirm the checkout consent without a new POST.
+            const state = outcome === 'already_subscribed' ? 'synced' : outcome;
             await complete(db, snap.ref, job.lease, state, Date.now());
             counts[state]++;
         }

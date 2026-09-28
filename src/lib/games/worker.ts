@@ -44,6 +44,7 @@ export async function runGameOutbox(db:Firestore, now=Date.now(), providerFactor
           const event:ConsentEvent={id:job.playId,brandId:job.brandId,customerId:job.playId,locationId:'game',email:job.email,channel:'email',source:'game',capturedAt:job.capturedAt,version:job.version,wording:job.wording};
           const result=await provider.sync(event);
           if(result==='synced')state='synced';
+          else if(result==='already_subscribed')state='accepted';
           else{
             // "suppressed" also covers an existing subscribed contact. Read its
             // current status before reporting the outcome to the operator.
