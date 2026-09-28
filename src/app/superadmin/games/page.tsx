@@ -4,8 +4,12 @@ import { scratchCardDraftSchema } from '@/lib/games/scratch-card';
 import { brandCampaigns, campaignStatus } from '@/lib/games/campaign';
 import { GamesDashboard, type GameCampaignRow } from '@/components/games/GamesDashboard';
 import { AggregateField } from 'firebase-admin/firestore';
+import { loadSuperadminPage } from '@/lib/access/superadmin-page';
+import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
 export const dynamic='force-dynamic';
 export default async function GamesPage(){
+  const access=await loadSuperadminPage('orderfly.website:view',async()=>true);
+  if(!access)return <AccessDeniedPage/>;
   const brands=await gameBrands(),db=getAdminDb();
   const campaigns:GameCampaignRow[]=await Promise.all((await Promise.all(brands.map(async brand=>(await brandCampaigns(db,brand.id)).map(doc=>({doc,brand}))))).flat()
     .map(async ({doc,brand})=>{const game=scratchCardDraftSchema.parse(doc.data());

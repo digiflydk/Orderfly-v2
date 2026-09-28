@@ -21,7 +21,7 @@ const mockActions = {
     getScopedDocument:async (_,id)=>records[id] ? {id,data:()=>records[id]} : null,
     mutateScopedDocument:async (collection,id,permission,scope,fn)=>{
       const before=records[id];
-      const after=await fn(before,{get:async ref=>({exists:ref.id==='pizza',data:()=>({brandId:'esmeralda'}),docs:[]})});
+      const after=await fn(before,{get:async ref=>({exists:['pizza','IleYAWPP6G98KeoWrchW','up09lXPphSeEF8zNpc14','EGSRUvhJ101zoHEvso9x','L713PyNx6IZHdWSrr8BR'].includes(ref.id),data:()=>({brandId:'esmeralda'}),docs:[]})});
       records[id]=after;
     },
   },
@@ -97,6 +97,22 @@ test('singular legacy product reference survives opening and saving',async()=>{
   await assert.rejects(standard.createOrUpdateStandardDiscount(null,data({...formRecord,isActive:'on'})),/REDIRECT/);
   assert.deepEqual(records['legacy-single-reference'].referenceIds,['pizza']);
   assert.equal(records['legacy-single-reference'].referenceId,'pizza');
+});
+
+test('Pizza Pizza four product references observed in production survive an unchanged save',async()=>{
+  const id='Fk5pCg8dvTeA8jBC2jzQ',original=records[id];
+  const referenceIds=['IleYAWPP6G98KeoWrchW','up09lXPphSeEF8zNpc14','EGSRUvhJ101zoHEvso9x','L713PyNx6IZHdWSrr8BR'];
+  records[id]={...original,locationIds:['AkGaLAwyJfJ1KR12Dd79'],referenceIds,
+    startDate:timestamp('2026-09-05T22:00:00.000Z'),endDate:timestamp('2026-09-29T22:00:00.000Z')};
+  try {
+    const loaded=await standard.getStandardDiscountById(id);
+    const formRecord=forms.standardDiscountFormRecord(loaded);
+    await assert.rejects(standard.createOrUpdateStandardDiscount(null,data({...formRecord,isActive:'on'})),/REDIRECT/);
+    assert.deepEqual(records[id].referenceIds,referenceIds);
+    assert.deepEqual(records[id].locationIds,['AkGaLAwyJfJ1KR12Dd79']);
+    assert.equal(records[id].discountValue,30);
+    assert.equal(records[id].endDate.toDate().toISOString(),'2026-09-29T22:00:00.000Z');
+  } finally { records[id]=original; }
 });
 
 test('unreadable populated dates cannot activate a storefront standard discount',async()=>{

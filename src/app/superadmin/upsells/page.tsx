@@ -3,6 +3,8 @@ import { getBrands } from '@/app/superadmin/brands/actions';
 import { UpsellsClientPage } from './client-page';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
+import { loadSuperadminPage } from '@/lib/access/superadmin-page';
+import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
 
 type FirestoreTimestampLike = {
   toDate?: () => Date;
@@ -144,11 +146,12 @@ function serializeValue(
 }
 
 async function UpsellsPageContent() {
-  const [rawUpsells, rawBrands] =
-    await Promise.all([
+  const result = await loadSuperadminPage('orderfly.catalog:view', () => Promise.all([
       getUpsells(),
       getBrands(),
-    ]);
+    ]));
+  if (!result) return <AccessDeniedPage />;
+  const [rawUpsells, rawBrands] = result;
 
   const serializedBrands = serializeValue(
     rawBrands,

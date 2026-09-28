@@ -6,13 +6,17 @@ import { StandardDiscountsClientPage } from './client-page';
 import { getAllLocations } from '../locations/actions';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
+import { loadSuperadminPage } from '@/lib/access/superadmin-page';
+import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
 
 async function StandardDiscountsPageContent() {
-    const [discounts, brands, locations] = await Promise.all([
+    const result = await loadSuperadminPage('orderfly.discounts:view', () => Promise.all([
         getStandardDiscounts(),
         getBrands(),
         getAllLocations(),
-    ]);
+    ]));
+    if (!result) return <AccessDeniedPage />;
+    const [discounts, brands, locations] = result;
 
     const brandMap = new Map(brands.map(b => [b.id, b.name]));
 
