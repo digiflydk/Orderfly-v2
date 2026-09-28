@@ -1,288 +1,73 @@
-
-
-import { notFound, redirect } from 'next/navigation';
-import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import type { Customer, OrderDetail } from '@/types';
-import { ArrowLeft, Check, CheckCircle, Cookie, Download, Edit, Eye, FileText, Home, Link as LinkIcon, Mail, Phone, Repeat, ShoppingBag, Star, Truck, User, UserX, XCircle } from 'lucide-react';
-import LinkNext from '@/components/superadmin/admin-link';
+import { notFound } from 'next/navigation';
+import { ArrowLeft, CheckCircle, Cookie, FileText, Home, Mail, Phone, Star, XCircle } from 'lucide-react';
 import { format } from 'date-fns';
+import Link from '@/components/superadmin/admin-link';
+import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Separator } from '@/components/ui/separator';
-import { getCustomerDetails } from '../actions';
-import { ScrollArea } from '@/components/ui/scroll-area';
-import { CustomerRecordActions } from './record-actions';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { customerDirectory } from '@/lib/customers/directory-server';
-import { CustomerActivity } from './customer-activity';
+import { customerHistory } from '@/lib/customers/history-server';
+import { asDate } from '@/lib/loyalty/model';
+import { getCustomerDetails } from '../actions';
+import { CustomerRecordActions } from './record-actions';
+import { CustomerHistory } from './customer-history';
 
+export const dynamic = 'force-dynamic';
 
-function KpiCard({ title, value, icon: Icon }: { title: string; value: string | number, icon: React.ElementType }) {
-    return (
-        <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium">{title}</CardTitle>
-                <Icon className="h-4 w-4 text-muted-foreground" />
-            </CardHeader>
-            <CardContent>
-                <div className="text-2xl font-bold">{value}</div>
-            </CardContent>
-        </Card>
-    )
+function Kpi({ title, value, icon: Icon }: { title: string; value: string | number; icon: React.ElementType }) {
+  return <Card><CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2"><CardTitle className="text-sm font-medium">{title}</CardTitle><Icon className="h-4 w-4 text-muted-foreground" /></CardHeader><CardContent><p className="text-2xl font-bold">{value}</p></CardContent></Card>;
 }
 
-const loyaltyVariantMap: Record<string, 'default' | 'secondary' | 'destructive'> = {
-    'Loyal': 'default',
-    'Occasional': 'secondary',
-    'At Risk': 'destructive'
-};
-
-const RatingStars = ({ rating }: { rating: number }) => (
-    <div className="flex items-center">
-      {[...Array(5)].map((_, i) => (
-        <Star key={i} className={`h-4 w-4 ${i < rating ? 'text-yellow-400 fill-yellow-400' : 'text-muted-foreground'}`} />
-      ))}
-    </div>
-  );
-
 export default async function CustomerDetailPage({ params }: { params: Promise<{ customerId: string }> }) {
-    const { customerId } = await params;
-    
-    if (!customerId) {
-        return notFound();
-    }
-    
-    const details = await getCustomerDetails(customerId);
+  const { customerId } = await params;
+  if (!customerId) notFound();
+  const details = await getCustomerDetails(customerId);
+  if (!details) notFound();
+  const { customer, deliveryOrdersCount, pickupOrdersCount, retentionRate, loyaltyClassification, loyaltyScore, averageFeedbackRating, feedbackEntries, feedbackAccess, allOrders } = details;
+  const { entries } = await customerDirectory();
+  const activity = entries.find(entry => entry.sources.some(source => source.kind === 'customer' && source.id === customer.id && source.brandId === customer.brandId));
+  const history = await customerHistory(activity, customer, allOrders, feedbackEntries, feedbackAccess);
+  const address = customer.street ? `${customer.street}, ${customer.zipCode || ''} ${customer.city || ''}, ${customer.country || ''}` : 'No address on file';
+  const since = asDate(customer.createdAt);
+  const consentDate = asDate(customer.cookie_consent?.timestamp);
+  const totalOrders = activity?.totalOrders ?? customer.totalOrders;
+  const totalSpend = activity?.totalSpend ?? customer.totalSpend;
 
-    if (!details) {
-        notFound();
-    }
-    const { entries } = await customerDirectory();
-    const activity = entries.find(entry => entry.sources.some(source => source.kind === 'customer' && source.id === details.customer.id && source.brandId === details.customer.brandId));
-    
-    const { customer, allOrders, deliveryOrdersCount, pickupOrdersCount, retentionRate, loyaltyScore, loyaltyClassification, averageFeedbackRating, orderIdsWithFeedback, feedbackEntries, feedbackAccess } = details;
+  return <div className="space-y-6">
+    <div className="flex flex-col items-start justify-between gap-4 sm:flex-row sm:items-center"><div>
+      <Button variant="outline" size="sm" asChild className="mb-2"><Link href="/superadmin/customers"><ArrowLeft className="mr-2 h-4 w-4" />Back to Customers</Link></Button>
+      <h1 className="flex items-center gap-2 text-2xl font-bold tracking-tight">{customer.fullName}<Badge variant={loyaltyClassification === 'Loyal' ? 'default' : 'secondary'}>{loyaltyClassification}</Badge></h1>
+      <p className="text-muted-foreground">Customer since {since ? format(since, 'MMM d, yyyy') : 'date unknown'}</p>
+    </div><CustomerRecordActions customer={{ id: customer.id, fullName: customer.fullName, email: customer.email, phone: customer.phone, status: customer.status }} /></div>
 
-    const fullAddress = customer.street ? `${customer.street}, ${customer.zipCode} ${customer.city}, ${customer.country}` : 'No address on file';
+    <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      <Kpi title="Paid Purchases" value={totalOrders} icon={FileText} />
+      <Kpi title="Total Spend" value={totalSpend.toLocaleString('da-DK', { style: 'currency', currency: 'DKK' })} icon={FileText} />
+      <Kpi title="Loyalty Score (this record)" value={`${loyaltyScore}/100`} icon={Star} />
+      <Kpi title="Avg. Rating (this record)" value={averageFeedbackRating > 0 ? `${averageFeedbackRating.toFixed(1)}/5` : 'N/A'} icon={Star} />
+    </div>
+    {activity && activity.brandIds.length > 1 && <p className="text-sm text-muted-foreground">Records with the same email are shown together as a possible match. Verify identity before using information across merchants.</p>}
 
-    return (
-        <div className="space-y-6">
-            <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-                <div>
-                    <Button variant="outline" size="sm" asChild className="mb-2">
-                        <LinkNext href="/superadmin/customers">
-                            <ArrowLeft className="mr-2" />
-                            Back to Customers
-                        </LinkNext>
-                    </Button>
-                    <h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-                        {customer.fullName}
-                         <Badge variant={loyaltyVariantMap[loyaltyClassification] ?? 'secondary'}>
-                            {loyaltyClassification}
-                        </Badge>
-                    </h1>
-                    <p className="text-muted-foreground">
-                       Customer since {format(new Date(customer.createdAt), 'MMM d, yyyy')}
-                    </p>
-                </div>
-                <CustomerRecordActions customer={{id:customer.id,fullName:customer.fullName,email:customer.email,phone:customer.phone,status:customer.status}} />
-            </div>
+    <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
+      <Card><CardHeader><CardTitle>Contact Information</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">
+        <Badge variant={customer.status === 'active' ? 'default' : 'secondary'}>{customer.status}</Badge>
+        <p className="flex items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0 text-muted-foreground" /><a href={`mailto:${customer.email}`} className="text-primary hover:underline">{customer.email}</a></p>
+        <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /><a href={`tel:${customer.phone}`} className="text-primary hover:underline">{customer.phone}</a></p>
+        <p className="flex items-start gap-2"><Home className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />{address}</p>
+        <p className="flex items-center gap-2">{customer.marketingConsent ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-muted-foreground" />}Customer consent flag: {customer.marketingConsent ? 'Yes' : 'No'}</p>
+      </CardContent></Card>
+      <Card><CardHeader><CardTitle>Order Statistics</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">
+        <p className="flex justify-between"><span>Delivery Orders</span><strong>{deliveryOrdersCount}</strong></p>
+        <p className="flex justify-between"><span>Pickup Orders</span><strong>{pickupOrdersCount}</strong></p>
+        <p className="flex justify-between"><span>Retention Rate</span><strong>{retentionRate}%</strong></p>
+        <p className="text-xs text-muted-foreground">Statistics for this merchant record.</p>
+      </CardContent></Card>
+      <Card><CardHeader><CardTitle>Cookie Consent</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">
+        {customer.cookie_consent ? <><p>Given: Yes · {consentDate ? format(consentDate, 'MMM d, yyyy HH:mm') : 'Date unknown'}</p><p>Version: {customer.cookie_consent.consent_version || '—'}</p><p>Marketing: {customer.cookie_consent.marketing ? 'Yes' : 'No'} · Statistics: {customer.cookie_consent.statistics ? 'Yes' : 'No'} · Functional: {customer.cookie_consent.functional ? 'Yes' : 'No'}</p>{customer.cookie_consent.origin_brand && <p>Origin brand: {customer.cookie_consent.origin_brand}</p>}{customer.cookie_consent.linked_anon_id && <p>Linked ID: {customer.cookie_consent.linked_anon_id.slice(0, 8)}…</p>}</> : <p className="flex items-center gap-2 text-muted-foreground"><Cookie className="h-5 w-5" />No cookie consent recorded.</p>}
+      </CardContent></Card>
+      <Card><CardHeader><CardTitle>Newsletter Status</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">{history.newsletters.map(row => <div key={row.brandId}><p className="font-medium">{row.merchant}</p><Badge variant={row.status === 'subscribed' ? 'default' : 'secondary'}>{row.status === 'subscribed' ? 'Subscribed' : row.status === 'pending' ? 'Pending confirmation' : row.status === 'not_subscribed' ? 'Not subscribed' : 'Unknown'}</Badge><p className="mt-1 text-xs text-muted-foreground">{row.note}</p></div>)}</CardContent></Card>
+    </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-                {/* Main Content */}
-                <div className="lg:col-span-2 space-y-6">
-                     <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-                        <KpiCard title="Total Orders" value={customer.totalOrders} icon={FileText} />
-                        <KpiCard title="Total Spend" value={`kr.${customer.totalSpend.toFixed(2)}`} icon={FileText} />
-                        <KpiCard title="Loyalty Score" value={`${loyaltyScore}/100`} icon={Star} />
-                        <KpiCard title="Avg. Rating" value={averageFeedbackRating > 0 ? `${averageFeedbackRating.toFixed(1)}/5` : 'N/A'} icon={Star} />
-                    </div>
-
-                    <Card>
-                        <CardHeader>
-                            <CardTitle>Order History</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                             <ScrollArea className="h-96">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Order ID</TableHead>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead>Status</TableHead>
-                                            <TableHead>Feedback</TableHead>
-                                            <TableHead className="text-right">Amount</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {allOrders.map(order => (
-                                            <TableRow key={order.id}>
-                                                <TableCell className="font-mono text-xs">
-                                                    <LinkNext href={`/superadmin/sales/orders/${order.id}`} className="text-primary hover:underline">
-                                                    {order.id}
-                                                    </LinkNext>
-                                                </TableCell>
-                                                <TableCell>{format(new Date(order.createdAt), 'MMM d, yyyy')}</TableCell>
-                                                <TableCell>
-                                                    <Badge>{order.status}</Badge>
-                                                </TableCell>
-                                                <TableCell>
-                                                    {orderIdsWithFeedback.includes(order.id) && (
-                                                        <Badge variant="secondary"><Check className="mr-1 h-3 w-3" />Submitted</Badge>
-                                                    )}
-                                                </TableCell>
-                                                <TableCell className="text-right">kr.{order.totalAmount.toFixed(2)}</TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {allOrders.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="text-center text-muted-foreground h-24">No orders found.</TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                             </ScrollArea>
-                        </CardContent>
-                    </Card>
-
-                     <Card>
-                        <CardHeader>
-                            <CardTitle>Feedback History</CardTitle>
-                        </CardHeader>
-                        <CardContent>
-                             <ScrollArea className="h-72">
-                                <Table>
-                                    <TableHeader>
-                                        <TableRow>
-                                            <TableHead>Feedback ID</TableHead>
-                                            <TableHead>Date</TableHead>
-                                            <TableHead>Rating</TableHead>
-                                            <TableHead>Comment</TableHead>
-                                            <TableHead className="text-right">Actions</TableHead>
-                                        </TableRow>
-                                    </TableHeader>
-                                    <TableBody>
-                                        {feedbackEntries.map(feedback => (
-                                            <TableRow key={feedback.id}>
-                                                <TableCell className="font-mono text-xs">{feedback.id.substring(0, 6).toUpperCase()}</TableCell>
-                                                <TableCell>{feedback.receivedAt ? format(new Date(feedback.receivedAt), 'MMM d, yyyy') : 'Dato mangler'}</TableCell>
-                                                <TableCell>{feedback.rating === null ? 'N/A' : <RatingStars rating={feedback.rating} />}</TableCell>
-                                                <TableCell className="text-sm text-muted-foreground truncate max-w-xs">{feedback.comment || '-'}</TableCell>
-                                                <TableCell className="text-right">
-                                                    <Button variant="ghost" size="sm" asChild>
-                                                        <LinkNext href={`/superadmin/feedback/${feedback.id}`}>View</LinkNext>
-                                                    </Button>
-                                                </TableCell>
-                                            </TableRow>
-                                        ))}
-                                        {feedbackEntries.length === 0 && (
-                                            <TableRow>
-                                                <TableCell colSpan={5} className="text-center text-muted-foreground h-24">{feedbackAccess ? 'No feedback submitted.' : 'Log ind med feedbackadgang for at se historikken.'}</TableCell>
-                                            </TableRow>
-                                        )}
-                                    </TableBody>
-                                </Table>
-                             </ScrollArea>
-                        </CardContent>
-                    </Card>
-                </div>
-
-                {/* Sidebar */}
-                <div className="space-y-6">
-                     <Card>
-                        <CardHeader><CardTitle>Contact Information</CardTitle></CardHeader>
-                        <CardContent className="space-y-4 text-sm">
-                            <div className="flex items-center gap-2">
-                                <Badge variant={customer.status === 'active' ? 'default' : 'secondary'} className="w-fit">{customer.status}</Badge>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Mail className="h-4 w-4 text-muted-foreground" />
-                                <a href={`mailto:${customer.email}`} className="text-primary hover:underline">{customer.email}</a>
-                            </div>
-                            <div className="flex items-center gap-2">
-                                <Phone className="h-4 w-4 text-muted-foreground" />
-                                <a href={`tel:${customer.phone}`} className="text-primary hover:underline">{customer.phone}</a>
-                            </div>
-                            <Separator />
-                            <div className="flex items-start gap-2">
-                                <Home className="h-4 w-4 text-muted-foreground mt-1" />
-                                <span>{fullAddress}</span>
-                            </div>
-                             <div className="flex items-start gap-2">
-                                {customer.marketingConsent ? (
-                                    <CheckCircle className="h-4 w-4 text-green-500 mt-1" />
-                                ) : (
-                                    <XCircle className="h-4 w-4 text-muted-foreground mt-1" />
-                                )}
-                                <span>Marketing Consent</span>
-                            </div>
-                        </CardContent>
-                    </Card>
-                     <Card>
-                        <CardHeader><CardTitle>Order Statistics</CardTitle></CardHeader>
-                        <CardContent className="space-y-4 text-sm">
-                           <div className="flex justify-between"><span>Delivery Orders</span><span className="font-medium">{deliveryOrdersCount}</span></div>
-                           <div className="flex justify-between"><span>Pickup Orders</span><span className="font-medium">{pickupOrdersCount}</span></div>
-                           <div className="flex justify-between"><span>Retention Rate</span><span className="font-medium">{retentionRate}%</span></div>
-                        </CardContent>
-                    </Card>
-
-                    <Card>
-                        <CardHeader><CardTitle>Cookie Consent</CardTitle></CardHeader>
-                        <CardContent className="space-y-4 text-sm">
-                            {customer.cookie_consent ? (
-                                <>
-                                    <div className="flex items-center justify-between">
-                                        <span>Givet:</span>
-                                        <Badge><Check className="mr-1 h-3 w-3"/>Ja</Badge>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span>Version:</span>
-                                        <span className="font-medium">{customer.cookie_consent.consent_version}</span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                        <span>Sidst opdateret:</span>
-                                        <span className="font-medium">{format(new Date(customer.cookie_consent.timestamp), 'MMM d, yyyy HH:mm')}</span>
-                                    </div>
-                                    <Separator />
-                                     <div className="flex items-center justify-between">
-                                        <span>Marketing:</span>
-                                        <Badge variant={customer.cookie_consent.marketing ? 'default' : 'secondary'}>{customer.cookie_consent.marketing ? 'Ja' : 'Nej'}</Badge>
-                                    </div>
-                                     <div className="flex items-center justify-between">
-                                        <span>Statistik:</span>
-                                        <Badge variant={customer.cookie_consent.statistics ? 'default' : 'secondary'}>{customer.cookie_consent.statistics ? 'Ja' : 'Nej'}</Badge>
-                                    </div>
-                                     <div className="flex items-center justify-between">
-                                        <span>Funktionelle:</span>
-                                        <Badge variant={customer.cookie_consent.functional ? 'default' : 'secondary'}>{customer.cookie_consent.functional ? 'Ja' : 'Nej'}</Badge>
-                                    </div>
-                                    <Separator />
-                                    {customer.cookie_consent.origin_brand && (
-                                        <div className="flex items-center justify-between">
-                                            <span>Oprindelig brand:</span>
-                                            <span className="font-medium">{customer.cookie_consent.origin_brand}</span>
-                                        </div>
-                                    )}
-                                    {customer.cookie_consent.linked_anon_id && (
-                                        <div className="flex items-center justify-between">
-                                            <span className="flex items-center gap-1"><LinkIcon className="h-4 w-4 text-muted-foreground"/>Linket ID:</span>
-                                            <span className="font-mono text-xs">{customer.cookie_consent.linked_anon_id.substring(0,8)}...</span>
-                                        </div>
-                                    )}
-
-                                </>
-                            ) : (
-                                <div className="text-center text-muted-foreground">
-                                    <Cookie className="mx-auto h-8 w-8 mb-2"/>
-                                    <p>Intet cookie-samtykke registreret for denne kunde.</p>
-                                </div>
-                            )}
-                        </CardContent>
-                    </Card>
-                </div>
-
-            </div>
-            <CustomerActivity entry={activity} />
-        </div>
-    );
+    <CustomerHistory {...history} />
+  </div>;
 }
