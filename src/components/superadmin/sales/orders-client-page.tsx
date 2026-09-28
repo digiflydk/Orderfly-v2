@@ -21,6 +21,9 @@ export type ClientOrderSummary = {
   id: string;
   total: number;
   createdAt?: string;
+  status: string;
+  paymentStatus: string;
+  paidSale: boolean;
 };
 
 interface OrdersClientPageProps {
@@ -91,7 +94,7 @@ export function OrdersClientPage({
       data.reduce(
         (sum, order) =>
           sum +
-          (Number.isFinite(order.total)
+          (order.paidSale && Number.isFinite(order.total)
             ? order.total
             : 0),
         0,
@@ -190,7 +193,7 @@ export function OrdersClientPage({
 
           <CardContent>
             <div className="text-2xl font-bold">
-              {data.length}
+              {data.filter(order => order.paidSale).length}
             </div>
           </CardContent>
         </Card>
@@ -316,7 +319,7 @@ export function OrdersClientPage({
 
                       <TableCell>
                         <Badge variant="secondary">
-                          Received
+                          {order.paymentStatus === 'Paid' ? order.status : order.paymentStatus === 'Failed' ? 'Betaling afbrudt' : 'Afventer betaling'}
                         </Badge>
                       </TableCell>
 

@@ -44,6 +44,7 @@ test('actual checkout action rejects tampering before side effects, allows valid
  let identityCalls=0;let writes=0;
  Object.assign(mocks,{
   '@/lib/checkout-price-validation':pricing,'@/lib/promotion-rules':rules,'@/lib/automatic-discounts':automatic,
+  '@/lib/synthetic-product':loadTs('src/lib/synthetic-product.ts'),
   '@/lib/checkout-schema':loadTs('src/lib/checkout-schema.ts'),
   '@/lib/checkout-items':loadTs('src/lib/checkout-items.ts'),
   '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),

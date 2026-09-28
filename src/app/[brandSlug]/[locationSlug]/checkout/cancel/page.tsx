@@ -30,16 +30,16 @@ function CancelMessage() {
                    <XCircle className="h-8 w-8 text-red-600" />
                 </div>
                 <CardTitle className="mt-4 text-2xl">
-                    {status === 'loading' ? 'Canceling payment…' : status === 'canceled' ? 'Payment Canceled' : status === 'paid' ? 'Payment completed' : 'Cancellation not confirmed'}
+                    {status === 'loading' ? 'Annullerer betaling…' : status === 'canceled' ? 'Betalingen er annulleret' : status === 'paid' ? 'Betalingen er gennemført' : 'Annulleringen kunne ikke bekræftes'}
                 </CardTitle>
                 <CardDescription>
-                    {status === 'loading' ? 'Please wait while we confirm with the payment provider.' : status === 'canceled' ? 'The payment session is closed and any discount reservation is released. Return to checkout to review your saved basket, current prices and available times. Enter your discount code again if needed.' : status === 'paid' ? 'Your payment has completed. Do not pay again.' : 'We could not confirm cancellation. Your discount may still be reserved. Please retry.'}
+                    {status === 'loading' ? 'Vent, mens vi bekræfter hos betalingsudbyderen.' : status === 'canceled' ? 'Betalingssiden er lukket. Din kurv er gemt. Gå tilbage til kassen for at gennemgå priser og tider. Indtast eventuelt rabatkoden igen.' : status === 'paid' ? 'Din betaling er gennemført. Betal ikke igen.' : 'Vi kunne ikke bekræfte annulleringen. Prøv igen.'}
                 </CardDescription>
             </CardHeader>
             <CardContent>
-                {status === 'error' && <Button onClick={() => { setStatus('loading'); void cancelCheckout(orderId || '', token || '').then(r => setStatus(r.status)).catch(() => setStatus('error')); }}>Retry cancellation</Button>}
+                {status === 'error' && <Button onClick={() => { setStatus('loading'); void cancelCheckout(orderId || '', token || '').then(r => setStatus(r.status)).catch(() => setStatus('error')); }}>Prøv at annullere igen</Button>}
                 {status === 'canceled' && <Button asChild className="mt-6">
-                    <Link href={`/${brandSlug}/${locationSlug}/checkout`}>Return to Checkout</Link>
+                    <Link href={`/${brandSlug}/${locationSlug}/checkout`}>Tilbage til kassen</Link>
                 </Button>}
             </CardContent>
         </Card>
@@ -50,7 +50,7 @@ export default function CheckoutCancelPage() {
     return (
         <div className="flex min-h-screen flex-col">
             <main className="flex-1 flex items-center justify-center p-4">
-                <Suspense fallback={<p>Loading...</p>}>
+                <Suspense fallback={<p>Indlæser…</p>}>
                     <CancelMessage />
                 </Suspense>
             </main>

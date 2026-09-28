@@ -335,7 +335,7 @@ export type CartItemTopping = {
  * @description A summarized version of an order for list views.
  * @collection orders
  */
-export type OrderStatus = 'Received' | 'In Progress' | 'Ready' | 'Completed' | 'Delivered' | 'Canceled' | 'Error';
+export type OrderStatus = 'Pending' | 'Received' | 'In Progress' | 'Ready' | 'Completed' | 'Delivered' | 'Canceled' | 'Error';
 
 export type OrderSummary = {
     id: string;

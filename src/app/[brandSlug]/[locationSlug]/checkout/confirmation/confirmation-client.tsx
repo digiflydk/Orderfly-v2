@@ -199,7 +199,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                                         {formatDisplayTime(deliveryTime)}
                                     </InfoItem>
                                 )}
-                                <InfoItem icon={Hash} label="Ordrestatus"><Badge>{{Received:'Modtaget','In Progress':'Tilberedes',Ready:'Klar',Completed:'Afsluttet',Delivered:'Leveret',Canceled:'Annulleret',Error:'Kontakt restauranten'}[status] || 'Modtaget'}</Badge></InfoItem>
+                                <InfoItem icon={Hash} label="Ordrestatus"><Badge>{{Pending:'Afventer betaling',Received:'Modtaget','In Progress':'Tilberedes',Ready:'Klar',Completed:'Afsluttet',Delivered:'Leveret',Canceled:'Annulleret',Error:'Kontakt restauranten'}[status] || 'Afventer betaling'}</Badge></InfoItem>
                                 <InfoItem icon={CreditCard} label="Betalingsmetode">Kortbetaling</InfoItem>
                              </CardContent>
                         </Card>

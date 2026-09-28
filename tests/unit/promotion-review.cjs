@@ -37,7 +37,7 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
   'customers/c': {brandId:'b',totalOrders:0,totalSpend:0}, 'discounts/d':{brandId:'b',usedCount:0},
  };
  let fail = true;
- const session={id:'s',payment_status:'paid',payment_intent:'pi',amount_total:10000,metadata:{orderId:'o',brandId:'b',locationId:'l'}};
+ const session={id:'s',payment_status:'paid',currency:'dkk',payment_intent:'pi',amount_total:10000,metadata:{orderId:'o',brandId:'b',locationId:'l'}};
  class Stripe { webhooks = {constructEventAsync: async()=>({type:'checkout.session.completed',data:{object:session}})}; }
     const mocks={
      'server-only':{},
@@ -71,9 +71,9 @@ test('webhook atomic failure retries and duplicate delivery counts once', async 
  state['locations/l']={brandId:'b',name:'Fixture',address:'Testvej 1'};
  const ref=path=>({path,id:path.split('/').at(-1)});
  mocks['@/lib/firebase-admin']={getAdminFieldValue:()=>({serverTimestamp:()=> 'now'}),getAdminDb:()=>({
-   collection:name=>({doc:id=>ref(name+'/'+id)}),
+   collection:name=>({doc:id=>ref(name+'/'+id),where:()=>({})}),
    runTransaction:fn=>mocks['firebase/firestore'].runTransaction(null,tx=>fn({
-     get:async ref=>{const snap=await tx.get(ref.path);return{exists:snap.exists(),data:snap.data,id:ref.id};},
+     get:async ref=>{if (!ref.path) return {docs:[]}; const snap=await tx.get(ref.path);return{exists:snap.exists(),data:snap.data,id:ref.id};},
      set:(ref,data)=>tx.set(ref.path,data),update:(ref,data)=>tx.update(ref.path,data),
    })),
  })};

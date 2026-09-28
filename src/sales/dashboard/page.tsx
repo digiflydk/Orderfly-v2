@@ -4,6 +4,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { DollarSign, ShoppingCart, Users, Activity, Percent, Ban, Truck, HandCoins, Tags, Banknote } from "lucide-react";
 import type { OrderSummary } from "@/types";
 import { getAdminDb } from "@/lib/firebase-admin";
+import { isPaidSale } from '@/lib/paid-order';
 
 export const revalidate = 0; // Force dynamic rendering
 
@@ -24,7 +25,7 @@ async function getOrdersFromFirestore(): Promise<OrderSummary[]> {
 
 const getSalesDashboardData = async () => {
     const orders = await getOrdersFromFirestore();
-    const nonCancelledOrders = orders.filter(o => o.status !== 'Canceled');
+    const nonCancelledOrders = orders.filter(isPaidSale);
 
     const totalOrders = nonCancelledOrders.length;
     const totalSales = nonCancelledOrders.reduce((sum, order) => sum + order.totalAmount, 0);
@@ -36,7 +37,7 @@ const getSalesDashboardData = async () => {
         ? `${Math.round((deliveryOrdersCount / totalOrders) * 100)}% / ${Math.round((pickupOrdersCount / totalOrders) * 100)}%`
         : 'N/A';
         
-    const canceledOrders = orders.length - nonCancelledOrders.length;
+    const canceledOrders = orders.filter(o => o.status === 'Canceled').length;
 
     const totalDiscounts = nonCancelledOrders.reduce((sum, order) => sum + (order.paymentDetails?.discountTotal ?? 0), 0);
     const totalTips = nonCancelledOrders.reduce((sum, order) => sum + (order.paymentDetails?.tips ?? 0), 0);

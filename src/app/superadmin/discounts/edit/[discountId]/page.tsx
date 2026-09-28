@@ -5,6 +5,7 @@ import { getDiscountById } from '@/app/superadmin/discounts/actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import { DiscountFormPage } from '@/components/superadmin/discount-form-page';
+import { upsellClientData } from '@/lib/upsell-serialization';
 
 
 export default async function EditDiscountPage({ params }: { params: Promise<{ discountId: string }> }) {
@@ -22,9 +23,9 @@ export default async function EditDiscountPage({ params }: { params: Promise<{ d
 
     return (
         <DiscountFormPage 
-            discount={discount} 
-            brands={brands} 
-            locations={locations}
+            discount={upsellClientData(discount)}
+            brands={upsellClientData(brands)}
+            locations={upsellClientData(locations)}
 
         />
     );

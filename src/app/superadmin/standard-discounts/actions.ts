@@ -156,6 +156,14 @@ export type SerializedStandardDiscount = Omit<StandardDiscount, 'startDate' | 'e
 	updatedAt?: string;
 };
 
+function optionalIsoDate(value: unknown): string | undefined {
+  if (value == null) return undefined;
+  const raw = typeof (value as {toDate?: () => Date}).toDate === 'function'
+    ? (value as {toDate: () => Date}).toDate() : value;
+  const date = raw instanceof Date ? raw : new Date(raw as string);
+  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+}
+
 
 export async function getStandardDiscountById(id: string): Promise<SerializedStandardDiscount | null> {
 	const docSnap = await getScopedDocument('standard_discounts', id, 'orderfly.discounts:view', 'locations');
@@ -165,10 +173,10 @@ export async function getStandardDiscountById(id: string): Promise<SerializedSta
 			...(data as StandardDiscount),
 			id: docSnap.id,
 			referenceIds: data.referenceIds || [], // Ensure referenceIds is always an array
-			startDate: data.startDate?.toDate().toISOString(),
-			endDate: data.endDate?.toDate().toISOString(),
-			createdAt: data.createdAt?.toDate().toISOString(),
-			updatedAt: data.updatedAt?.toDate().toISOString(),
+			startDate: optionalIsoDate(data.startDate),
+			endDate: optionalIsoDate(data.endDate),
+			createdAt: optionalIsoDate(data.createdAt),
+			updatedAt: optionalIsoDate(data.updatedAt),
 		};
 	}
 	return null;

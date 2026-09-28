@@ -207,7 +207,7 @@ test('a slot expiring during reservation releases only that order hold and never
  global.Date=class extends RealDate{constructor(...args){super(...(args.length?args:[now]));}static now(){return new RealDate(now).getTime();}};
  try {
   const f=await checkout({realReservations:true,deliveryTime:'2026-09-08T10:25:00.000Z',beforeStripe:()=>{now='2026-09-08T10:10:00Z';}});
-  assert.equal(f.result.success,false);assert.equal(f.result.retryable,true);assert.match(f.result.error,/order time/);
+  assert.equal(f.result.success,false);assert.equal(f.result.retryable,true);assert.match(f.result.error,/Tidspunktet/);
   assert.ok(f.events.includes('reserve'));assert.ok(f.events.includes('release'));assert.ok(!f.events.includes('stripe'));
   assert.equal(f.records.get('orders/ORD-TEST').discountReservation,'released');
  }finally{global.Date=RealDate;}

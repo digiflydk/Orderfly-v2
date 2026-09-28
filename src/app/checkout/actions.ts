@@ -1,5 +1,7 @@
 'use server';
 
+import { isSyntheticProduct } from '@/lib/synthetic-product';
+
 import {getAdminDb} from '@/lib/firebase-admin';
 import {linkCheckoutConsent} from '@/lib/server/consent-identity';
 import {recordNewsletterConsent} from '@/lib/marketing/store';
@@ -207,32 +209,32 @@ function validateDiscountEligibility(discount: Discount, context: DiscountEligib
     const now = new Date();
     const applicationType = discount.applicationType ?? 'code';
 
-    if (discount.brandId !== context.brandId) return 'This discount belongs to another brand.';
-    if (!discount.isActive) return 'This discount is no longer active.';
-    if (!discount.locationIds.includes(context.locationId)) return 'This discount is not valid for this location.';
-    if (!discount.orderTypes.includes(context.deliveryType)) return 'This discount is not valid for this order type.';
-    if (discount.usageLimit > 0 && discount.usedCount >= discount.usageLimit) return 'This discount has reached its usage limit.';
-    if (discount.minOrderValue && context.subtotal < discount.minOrderValue) return `Minimum order value of kr. ${discount.minOrderValue.toFixed(2)} not met.`;
+    if (discount.brandId !== context.brandId) return 'Rabatten tilhører et andet brand.';
+    if (!discount.isActive) return 'Rabatten er ikke længere aktiv.';
+    if (!discount.locationIds.includes(context.locationId)) return 'Rabatten gælder ikke for denne restaurant.';
+    if (!discount.orderTypes.includes(context.deliveryType)) return 'Rabatten gælder ikke for denne ordretype.';
+    if (discount.usageLimit > 0 && discount.usedCount >= discount.usageLimit) return 'Rabatten har nået sin anvendelsesgrænse.';
+    if (discount.minOrderValue && context.subtotal < discount.minOrderValue) return `Minimumsbeløbet på ${discount.minOrderValue.toFixed(2)} kr. er ikke nået.`;
 
     const startDate = asDate(discount.startDate);
     const endDate = asDate(discount.endDate);
-    if (startDate && startDate > now) return 'This discount is not yet active.';
-    if (endDate && endDate < now) return 'This discount has expired.';
+    if (startDate && startDate > now) return 'Rabatten er endnu ikke aktiv.';
+    if (endDate && endDate < now) return 'Rabatten er udløbet.';
 
     const currentDay = restaurantClock(now).day;
-    if ((discount.activeDays || []).length > 0 && !discount.activeDays.includes(currentDay)) return 'This discount is not active today.';
+    if ((discount.activeDays || []).length > 0 && !discount.activeDays.includes(currentDay)) return 'Rabatten gælder ikke i dag.';
     if ((discount.activeTimeSlots || []).length > 0) {
         const currentTime = restaurantClock(now).time;
-        if (!discount.activeTimeSlots.some(slot => currentTime >= slot.start && currentTime <= slot.end)) return 'This discount is not active at this time.';
+        if (!discount.activeTimeSlots.some(slot => currentTime >= slot.start && currentTime <= slot.end)) return 'Rabatten gælder ikke på dette tidspunkt.';
     }
 
-    if (!assignedCustomerMatches(discount.assignedToCustomerId, context.customerId)) return 'This discount is assigned to another customer.';
-    if (discount.firstTimeCustomerOnly && (context.customer?.totalOrders || 0) > 0) return 'This discount is only available to first-time customers.';
-    if (discount.perCustomerLimit > 0 && ((context.customer?.discountUsage?.[discount.id] || 0) >= discount.perCustomerLimit)) return 'This discount has reached its per-customer limit.';
+    if (!assignedCustomerMatches(discount.assignedToCustomerId, context.customerId)) return 'Rabatten er knyttet til en anden kunde.';
+    if (discount.firstTimeCustomerOnly && (context.customer?.totalOrders || 0) > 0) return 'Rabatten gælder kun nye kunder.';
+    if (discount.perCustomerLimit > 0 && ((context.customer?.discountUsage?.[discount.id] || 0) >= discount.perCustomerLimit)) return 'Du har brugt rabatten det maksimale antal gange.';
 
     if (applicationType === 'newsletter_signup') {
-        if (!context.newsletterConsent) return 'Newsletter signup is required for this discount.';
-        if (!newsletterEligible(!!context.customer?.marketingConsent, context.customer?.pendingNewsletterDiscountId, discount.id, context.customer?.discountUsage?.[discount.id] || 0)) return 'This newsletter discount has already been used.';
+        if (!context.newsletterConsent) return 'Tilmelding til nyhedsbrevet er påkrævet for rabatten.';
+        if (!newsletterEligible(!!context.customer?.marketingConsent, context.customer?.pendingNewsletterDiscountId, discount.id, context.customer?.discountUsage?.[discount.id] || 0)) return 'Nyhedsbrevsrabatten er allerede brugt.';
     }
 
     return null;
@@ -316,7 +318,7 @@ export async function createStripeCheckoutSessionAction(
   let stage = 'configuration';
   try {
     const parsed = checkoutRequestSchema.safeParse([cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId]);
-    if (!parsed.success) return { success: false, retryable: true, error: 'Please check your basket and customer information, then reload checkout.' };
+    if (!parsed.success) return { success: false, retryable: true, error: 'Kontrollér din kurv og dine oplysninger, og genindlæs kassen.' };
     [cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId] = parsed.data;
     const stripeSecretKey = await getActiveStripeSecretKey();
     if (!stripeSecretKey) {
@@ -333,7 +335,7 @@ export async function createStripeCheckoutSessionAction(
     ]);
     if (!brand || !location || location.brandId !== brand.id) throw new Error("Brand or location not found in the requested tenant scope");
     
-    if (brand.slug !== brandSlug || location.slug !== locationSlug) throw new Error('Restaurant address has changed. Please reload the menu.');
+    if (brand.slug !== brandSlug || location.slug !== locationSlug) throw new Error('Restaurantens adresse er ændret. Genindlæs menuen.');
     let fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
     const resolvedCustomer = await resolveCheckoutCustomerRef(customerInfo, brand.id);
     const existingCustomer = resolvedCustomer.customerDoc.exists()
@@ -342,7 +344,7 @@ export async function createStripeCheckoutSessionAction(
 
     const chargedItemsSubtotal = cartItems.reduce((sum, item) => {
       const lineTotal = toNumber(item.totalPrice);
-      if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0 || lineTotal < 0) throw new Error('Invalid cart item quantity or total.');
+      if (!Number.isSafeInteger(item.quantity) || item.quantity <= 0 || lineTotal < 0) throw new Error('Ugyldig mængde eller pris i kurven.');
       return sumMoney([sum, lineTotal]);
     }, 0);
 
@@ -355,7 +357,7 @@ export async function createStripeCheckoutSessionAction(
     // Resolve eligibility from native catalog records; the browser cannot mark a combo as a product.
     const quantityLines: OfferLine[] = [];
     const resolvedLines = await Promise.all(cartItems.map(async item => {
-      if (!item.id) throw new Error('Please refresh your basket before checking out.');
+      if (!item.id) throw new Error('Opdater din kurv, før du går til betaling.');
       let [productSnap, comboSnap] = await Promise.all([
         getDoc(doc(db, 'products', item.id)), getDoc(doc(db, 'comboMenus', item.id)),
       ]);
@@ -365,10 +367,10 @@ export async function createStripeCheckoutSessionAction(
       const catalog = productSnap.exists() ? { ...productSnap.data(), id: productSnap.id } as Product : null;
       const combo = comboSnap.exists() ? { ...comboSnap.data(), id: comboSnap.id } as ComboMenu : null;
       const record = catalog || combo;
-      if (!record || record.brandId !== brandId || (record.locationIds?.length && !record.locationIds.includes(locationId))) throw new Error('Basket item is unavailable at this restaurant.');
+      if (!record || record.brandId !== brandId || record.isActive !== true || (catalog && isSyntheticProduct(catalog)) || (record.locationIds?.length && !record.locationIds.includes(locationId))) throw new Error('Varen kan ikke bestilles fra denne restaurant.');
       const price = combo ? (deliveryType === 'delivery' ? combo.deliveryPrice : combo.pickupPrice)
         : (deliveryType === 'delivery' ? (catalog!.priceDelivery ?? catalog!.price) : catalog!.price);
-      if (typeof price !== 'number' || !Number.isFinite(price) || price < 0) throw new Error('Basket price is unavailable. Please refresh the menu.');
+      if (typeof price !== 'number' || !Number.isFinite(price) || price < 0) throw new Error('Varen har ingen tilgængelig pris. Genindlæs menuen.');
       return { productSnap, catalog, combo, price };
     }));
     const selectedProductIds = [...new Set(cartItems.flatMap(item => item.comboSelections?.flatMap(group => group.products.map(product => product.id)) || []))];
@@ -380,7 +382,11 @@ export async function createStripeCheckoutSessionAction(
       needsOptions ? getDocs(query(collection(db, 'topping_groups'), where('locationIds', 'array-contains', locationId))) : { docs: [] },
     ]);
     const catalogProducts = new Map(resolvedLines.flatMap(line => line.catalog ? [[line.catalog.id, line.catalog] as const] : []));
-    for (const snapshot of comboProducts) if (snapshot.exists()) catalogProducts.set(snapshot.id, { ...snapshot.data(), id: snapshot.id } as Product);
+    for (const snapshot of comboProducts) if (snapshot.exists()) {
+      const product = { ...snapshot.data(), id: snapshot.id } as Product;
+      if (isSyntheticProduct(product)) throw new Error('Varen kan ikke bestilles fra denne restaurant.');
+      catalogProducts.set(snapshot.id, product);
+    }
     const validated = validateCheckoutItems(cartItems, {
       products: [...catalogProducts.values()], combos: resolvedLines.flatMap(line => line.combo ? [line.combo] : []),
       toppings: toppingRows.docs.map(row => ({ ...row.data(), id: row.id })) as Topping[],
@@ -494,7 +500,7 @@ export async function createStripeCheckoutSessionAction(
     const orderData = omitUndefinedFields({
         id: orderId,
         createdAt: serverTimestamp(),
-        status: 'Received',
+        status: 'Pending',
         paymentStatus: 'Pending',
         brandId,
         locationId,
@@ -526,7 +532,7 @@ export async function createStripeCheckoutSessionAction(
     // reuse its Stripe idempotency key; a collision must fail before payment.
     await runTransaction(db, async transaction => {
       const existing = await transaction.get(orderRef);
-      if (existing.exists()) throw new Error('Order reference already exists. Please retry.');
+      if (existing.exists()) throw new Error('Ordrenummeret er allerede i brug. Prøv igen.');
       transaction.set(orderRef, orderData);
     });
 
@@ -552,19 +558,19 @@ export async function createStripeCheckoutSessionAction(
 
     if (deliveryType === 'delivery' && serverPaymentDetails.deliveryFee > 0) {
         line_items.push({
-            price_data: { currency: 'dkk', product_data: { name: 'Delivery Fee' }, unit_amount: ore(serverPaymentDetails.deliveryFee) },
+            price_data: { currency: 'dkk', product_data: { name: 'Leveringsgebyr' }, unit_amount: ore(serverPaymentDetails.deliveryFee) },
             quantity: 1,
         });
     }
     if (serverPaymentDetails.bagFee && serverPaymentDetails.bagFee > 0) {
         line_items.push({
-            price_data: { currency: 'dkk', product_data: { name: 'Bag Fee' }, unit_amount: ore(serverPaymentDetails.bagFee) },
+            price_data: { currency: 'dkk', product_data: { name: 'Pose' }, unit_amount: ore(serverPaymentDetails.bagFee) },
             quantity: 1,
         });
     }
     if (serverPaymentDetails.adminFee && serverPaymentDetails.adminFee > 0) {
         line_items.push({
-            price_data: { currency: 'dkk', product_data: { name: 'Admin Fee' }, unit_amount: ore(serverPaymentDetails.adminFee) },
+            price_data: { currency: 'dkk', product_data: { name: 'Administrationsgebyr' }, unit_amount: ore(serverPaymentDetails.adminFee) },
             quantity: 1,
         });
     }
@@ -677,7 +683,7 @@ export async function validateDiscountAction(
     const discount = await getDiscountByCode(codeUpper, brandId);
 
     if (!discount) {
-        return { success: false, message: 'Invalid discount code.' };
+        return { success: false, message: 'Ugyldig rabatkode.' };
     }
     if(discount.gameProductId&&(!Array.isArray(cartProductIds)||!cartProductIds.includes(discount.gameProductId)))return {success:false,message:'Læg præmieproduktet i kurven, før du bruger koden.'};
     let customer: Customer | null = null;
@@ -694,7 +700,7 @@ export async function validateDiscountAction(
     }
 
     if ((discount.firstTimeCustomerOnly || discount.assignedToCustomerId || discount.perCustomerLimit > 0) && !customerId) {
-        return { success: false, message: 'Enter your email before applying this discount.' };
+        return { success: false, message: 'Indtast din e-mailadresse, før du bruger rabatten.' };
     }
 
     const eligibilityError = validateDiscountEligibility(discount, {
@@ -707,7 +713,7 @@ export async function validateDiscountAction(
     });
     if (eligibilityError) return { success: false, message: eligibilityError };
     
-    return { success: true, message: 'Discount applied!', discount };
+    return { success: true, message: 'Rabatten er tilføjet!', discount };
 }
 
 // New helper functions for confirmation page

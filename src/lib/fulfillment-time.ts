@@ -1,10 +1,11 @@
 import { addDays, differenceInCalendarDays, format, parseISO } from 'date-fns';
+import { da } from 'date-fns/locale';
 import { fromZonedTime, toZonedTime } from 'date-fns-tz';
 import { calculateTimeSlots } from './time-slots';
 import type { Location } from '@/types';
 
 const zone = 'Europe/Copenhagen';
-export const unavailableTime = 'This order time is no longer available. Please choose a new time.';
+export const unavailableTime = 'Tidspunktet er ikke længere ledigt. Vælg et nyt tidspunkt.';
 
 // Values are absolute instants. Labels are presentation only, never order input.
 export function fulfillmentSlots(location: Location, mode: 'pickup' | 'delivery', day: string, now = new Date()) {
@@ -45,5 +46,5 @@ export function resolveFulfillmentTime(location: Location, mode: 'pickup' | 'del
 
 export function displayFulfillmentTime(selection: string): string {
   if (!/^\d{4}-\d{2}-\d{2}T/.test(selection) || !Number.isFinite(Date.parse(selection))) return selection;
-  return format(toZonedTime(new Date(selection), zone), 'EEE, d MMM HH:mm');
+  return format(toZonedTime(new Date(selection), zone), 'EEE d. MMM HH:mm', {locale: da});
 }

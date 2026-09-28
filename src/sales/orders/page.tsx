@@ -6,6 +6,7 @@ import { getOrders } from "@/lib/superadmin/getOrders";
 import { OrdersClientPage, type ClientOrderSummary } from "@/components/superadmin/sales/orders-client-page";
 import { SACommonFilters } from "@/types/superadmin";
 import { redirect } from 'next/navigation';
+import { isPaidSale } from '@/lib/paid-order';
 
 export const revalidate = 0; // Force dynamic rendering
 
@@ -31,6 +32,9 @@ export default async function OrdersPage({ params, searchParams }: AsyncPageProp
         id: order.id,
         total: order.totalAmount,
         createdAt: order.createdAt.toISOString(),
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        paidSale: isPaidSale(order),
     }));
 
     return <OrdersClientPage data={serializedOrders} />;

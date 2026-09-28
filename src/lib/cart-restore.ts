@@ -4,11 +4,12 @@ import type { CartItem, ComboMenu, Product, StandardDiscount, Topping, ToppingGr
 import type { CartChoice } from './cart-snapshot';
 import { minimumCheckoutPrices } from './checkout-price-validation';
 import { comboEligible } from './combo-eligibility';
+import { isSyntheticProduct } from './synthetic-product';
 
 export type RestoreCatalog = { products: Product[]; combos: ComboMenu[]; toppings: Topping[]; groups: ToppingGroup[]; discounts: StandardDiscount[]; upsells: Upsell[] };
 export function restoreCartItems(choices: CartChoice[], catalog: RestoreCatalog, scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }) {
   const now = scope.now || new Date();
-  const scoped = (record: { brandId: string; locationIds?: string[]; isActive: boolean; isTestData?: boolean }) => record.isActive && record.isTestData !== true && record.brandId === scope.brandId && (!record.locationIds?.length || record.locationIds.includes(scope.locationId));
+  const scoped = (record: { brandId: string; locationIds?: string[]; isActive: boolean; isTestData?: boolean; productName?: string; description?: string }) => record.isActive && !isSyntheticProduct(record) && record.brandId === scope.brandId && (!record.locationIds?.length || record.locationIds.includes(scope.locationId));
   let removed = 0;
   const items: CartItem[] = [];
   for (const choice of choices) {

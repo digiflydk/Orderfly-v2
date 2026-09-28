@@ -65,9 +65,13 @@ export async function releaseDiscount(orderId: string, brandId: string, sessionI
     if (!orderSnap.exists()) return;
     const order = orderSnap.data();
     if (order.brandId !== brandId || (sessionId && order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== sessionId)) throw new Error('Reservation scope mismatch');
-    if (order.paymentStatus === 'Paid' || order.discountReservation !== 'held') return;
-    const settle = await prepareCapacitySettlement(tx, order, false);
-    settle();
-    tx.update(orderRef, { discountReservation: 'released' });
+    if (order.paymentStatus === 'Paid') return;
+    if (order.discountReservation === 'held') {
+      const settle = await prepareCapacitySettlement(tx, order, false);
+      settle();
+    }
+    // Only a verified expired Stripe session (or a definitively failed session
+    // creation without a sessionId) may close the order. Keep its audit record.
+    tx.update(orderRef, { discountReservation: 'released', status: 'Canceled', paymentStatus: 'Failed' });
   });
 }
