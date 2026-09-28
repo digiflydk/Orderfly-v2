@@ -16,7 +16,7 @@ import { isDefinitiveStripeRejection } from '@/lib/stripe-checkout-failure';
 import { validateCheckoutPrices } from '@/lib/checkout-price-validation';
 import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
 import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
-import { newsletterEligible, newsletterAllowsStacking, cartLineEligible, assignedCustomerMatches, restaurantClock } from '@/lib/promotion-rules';
+import { newsletterEligible, newsletterAllowsStacking, cartLineEligible, assignedCustomerMatches, restaurantClock, discountMinimumError } from '@/lib/promotion-rules';
 import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
 import { createHash, randomBytes } from 'node:crypto';
 import { headers } from 'next/headers';
@@ -201,6 +201,7 @@ type DiscountEligibilityContext = {
     locationId: string;
     deliveryType: 'delivery' | 'pickup';
     subtotal: number;
+    chargedSubtotal?: number;
     customerId?: string;
     customer?: Customer | null;
     newsletterConsent?: boolean;
@@ -215,7 +216,9 @@ function validateDiscountEligibility(discount: Discount, context: DiscountEligib
     if (!discount.locationIds.includes(context.locationId)) return 'Rabatten gælder ikke for denne restaurant.';
     if (!discount.orderTypes.includes(context.deliveryType)) return 'Rabatten gælder ikke for denne ordretype.';
     if (discount.usageLimit > 0 && discount.usedCount >= discount.usageLimit) return 'Rabatten har nået sin anvendelsesgrænse.';
-    if (discount.minOrderValue && context.subtotal < discount.minOrderValue) return `Minimumsbeløbet på ${discount.minOrderValue.toFixed(2)} kr. er ikke nået.`;
+    const minimumError = discountMinimumError(discount.minOrderValue, context.subtotal,
+        applicationType === 'code' ? context.chargedSubtotal : undefined);
+    if (minimumError) return minimumError;
 
     const startDate = asDate(discount.startDate);
     const endDate = asDate(discount.endDate);
@@ -446,6 +449,7 @@ export async function createStripeCheckoutSessionAction(
         locationId,
         deliveryType,
         subtotal: selectedSubtotal,
+        chargedSubtotal: selectedDiscount.gameProductId ? selectedSubtotal : chargedItemsSubtotal,
         customerId: resolvedCustomer.customerRef.id,
         customer: existingCustomer,
         newsletterConsent: customerInfo.subscribeToNewsletter,
@@ -684,7 +688,8 @@ export async function validateDiscountAction(
     subtotal: number,
     deliveryType: 'delivery' | 'pickup',
     customerEmail?: string,
-    cartProductIds?: string[]
+    cartProductIds?: string[],
+    chargedSubtotal?: number
 ): Promise<{ success: boolean; message: string; discount?: Discount; }> {
     const codeUpper = code.toUpperCase();
     const discount = await getDiscountByCode(codeUpper, brandId);
@@ -715,6 +720,7 @@ export async function validateDiscountAction(
         locationId,
         deliveryType,
         subtotal,
+        chargedSubtotal: discount.gameProductId ? subtotal : chargedSubtotal,
         customerId,
         customer,
     });
