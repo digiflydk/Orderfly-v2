@@ -16,6 +16,7 @@ type Props = {
   access?: NavigationAccess | null
   centralAdmin?: boolean
   brandingSettings?: PlatformBrandingSettings | null
+  merchantPortal?: boolean
 }
 
 function LayoutWithLoader({ children }: { children: React.ReactNode }) {
@@ -29,10 +30,10 @@ function LayoutWithLoader({ children }: { children: React.ReactNode }) {
   )
 }
 
-export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmin, access }: Props) {
+export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmin, access, merchantPortal = false }: Props) {
   return (
     <S.SidebarProvider className="admin-shell">
-      <SuperAdminSidebarClient access={access} centralAdmin={centralAdmin}
+      <SuperAdminSidebarClient access={access} centralAdmin={centralAdmin} merchantPortal={merchantPortal}
         brandingSettings={
           brandingSettings ?? { platformHeading: 'Orderfly Studio' }
         }
@@ -40,6 +41,7 @@ export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmi
 
       <S.SidebarInset className="bg-background">
         <MobileHeader
+          homeHref={merchantPortal ? '/merchant' : '/superadmin'}
           brandingSettings={
             brandingSettings ?? { platformHeading: 'Orderfly Studio' }
           }

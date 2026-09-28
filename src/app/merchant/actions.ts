@@ -42,7 +42,7 @@ export async function redeemMerchantGameCode(form:FormData):Promise<{ok:boolean;
         prizeName:data.prizeName,codeMode:data.codeMode,amount,currency:'DKK',status:amount>0?'paid':'redeemed',createdAt:now});
       tx.create(db.collection('auditLogs').doc(),{module:'games',entity:'voucher',entityId:voucherId,action:'restaurant-redeem',brandId,locationId,actorId,amount,timestamp:now});
     });
-    revalidatePath('/merchant');revalidatePath('/superadmin/games');
+    revalidatePath('/merchant/redeem');revalidatePath('/superadmin/games');
     return {ok:true,message:'Koden er indløst. Den kan ikke bruges igen online eller i restauranten.'};
   }catch{return {ok:false,message:'Koden er allerede brugt, reserveret online eller kan ikke indløses i denne restaurant. Opdater listen.'};}
 }

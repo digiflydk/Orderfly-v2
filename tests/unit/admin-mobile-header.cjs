@@ -24,4 +24,6 @@ test('mobile admin logo opens the overview for an orders-only administrator', ()
   assert.equal(href, '/superadmin');
   assert.equal(canNavigate(href, { superuser: false, permissions: ['orderfly.orders:view'] }), true);
   assert.equal(canNavigate('/superadmin/dashboard', { superuser: false, permissions: ['orderfly.orders:view'] }), false);
+  const merchantMarkup = renderToStaticMarkup(React.createElement(component.exports.MobileHeader, { brandingSettings: {}, homeHref: '/merchant' }));
+  assert.match(merchantMarkup, /<a href="\/merchant"/);
 });
