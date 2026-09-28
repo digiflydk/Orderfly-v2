@@ -169,7 +169,8 @@ export async function getStandardDiscountById(id: string): Promise<SerializedSta
 		return {
 			...(data as StandardDiscount),
 			id: docSnap.id,
-			referenceIds: data.referenceIds || [], // Ensure referenceIds is always an array
+			referenceIds: Array.isArray(data.referenceIds) && data.referenceIds.length > 0
+				? data.referenceIds : data.referenceId ? [data.referenceId] : [],
 			startDate: optionalIsoDate(data.startDate),
 			endDate: optionalIsoDate(data.endDate),
 			createdAt: optionalIsoDate(data.createdAt),
@@ -209,16 +210,21 @@ export async function getActiveStandardDiscounts({ brandId, locationId, delivery
           .where('isActive', '==', true).get();
 		if (snapshot.empty) return [];
 
-		allDiscountsForBrand = snapshot.docs.map(doc => {
+		allDiscountsForBrand = snapshot.docs.flatMap(doc => {
 			const data = doc.data();
-			return {
+			const startDate = promotionDate(data.startDate);
+			const endDate = promotionDate(data.endDate);
+			// A populated but unreadable limit must never make an offer unbounded.
+			if ((data.startDate != null && data.startDate !== '' && !startDate) ||
+			    (data.endDate != null && data.endDate !== '' && !endDate)) return [];
+			return [{
 				...data,
 				id: doc.id,
-				startDate: promotionDate(data.startDate),
-				endDate: promotionDate(data.endDate),
+				startDate,
+				endDate,
 				createdAt: promotionDate(data.createdAt),
 				updatedAt: promotionDate(data.updatedAt),
-			} as StandardDiscount
+			} as StandardDiscount];
 		});
 	}
 

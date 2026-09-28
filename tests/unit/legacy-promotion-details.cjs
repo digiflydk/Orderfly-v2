@@ -84,3 +84,34 @@ test('editing existing code and standard discount does not reset usage or legacy
   await assert.rejects(standard.createOrUpdateStandardDiscount(null,clear),/REDIRECT/);
   assert.equal(records.Fk5pCg8dvTeA8jBC2jzQ.startDate,null);
 });
+
+test('singular legacy product reference survives opening and saving',async()=>{
+  records['legacy-single-reference']={
+    ...records.Fk5pCg8dvTeA8jBC2jzQ,
+    startDate:null,referenceIds:[],referenceId:'pizza',discountName:'Legacy Pizza',
+  };
+  const loaded=await standard.getStandardDiscountById('legacy-single-reference');
+  assert.deepEqual(loaded.referenceIds,['pizza']);
+  const formRecord=forms.standardDiscountFormRecord(loaded);
+  assert.deepEqual(formRecord.referenceIds,['pizza']);
+  await assert.rejects(standard.createOrUpdateStandardDiscount(null,data({...formRecord,isActive:'on'})),/REDIRECT/);
+  assert.deepEqual(records['legacy-single-reference'].referenceIds,['pizza']);
+  assert.equal(records['legacy-single-reference'].referenceId,'pizza');
+});
+
+test('unreadable populated dates cannot activate a storefront standard discount',async()=>{
+  const base={brandId:'esmeralda',locationIds:['amager'],isActive:true,orderTypes:['pickup'],activeDays:[],activeTimeSlots:[]};
+  const rows=[
+    {id:'bad-start',...base,startDate:'not a date'},
+    {id:'bad-end',...base,endDate:{_seconds:'not a number'}},
+    {id:'valid-date',...base,startDate:timestamp('2020-01-01T00:00:00Z')},
+    {id:'no-date',...base},
+  ];
+  const active=loadTs('src/app/superadmin/standard-discounts/actions.ts',{
+    ...mockActions,
+    '@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({where:()=>({where:()=>({where:()=>({get:async()=>({empty:false,docs:rows.map(({id,...row})=>({id,data:()=>row}))})})})})})})},
+  });
+  const discounts=await active.getActiveStandardDiscounts({brandId:'esmeralda',locationId:'amager',deliveryType:'pickup'});
+  assert.deepEqual(discounts.map(discount=>discount.id),['valid-date','no-date']);
+  assert.ok(discounts[0].startDate instanceof Date);
+});

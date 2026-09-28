@@ -23,7 +23,7 @@ export function standardDiscountFormRecord(discount: StandardDiscount): Standard
   return {
     ...discount,
     locationIds: Array.isArray(discount.locationIds) ? discount.locationIds : legacy.locationId ? [legacy.locationId] : [],
-    referenceIds: Array.isArray(discount.referenceIds) ? discount.referenceIds : legacy.referenceId ? [legacy.referenceId] : [],
+    referenceIds: Array.isArray(discount.referenceIds) && discount.referenceIds.length > 0 ? discount.referenceIds : legacy.referenceId ? [legacy.referenceId] : [],
     orderTypes: Array.isArray(discount.orderTypes) ? discount.orderTypes : ['pickup', 'delivery'],
     activeDays: Array.isArray(discount.activeDays) ? discount.activeDays : [],
     activeTimeSlots: Array.isArray(discount.activeTimeSlots) ? discount.activeTimeSlots : [],

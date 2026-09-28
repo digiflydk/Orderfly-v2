@@ -67,7 +67,6 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 			discountValue: discount.discountValue ?? undefined,
 			discountHeading: discount.discountHeading ?? '',
 			discountDescription: discount.discountDescription ?? '',
-			referenceIds: discount.referenceIds || [],
 			startDate: discount.startDate ? new Date(discount.startDate) : undefined,
 			endDate: discount.endDate ? new Date(discount.endDate) : undefined,
 		} : {

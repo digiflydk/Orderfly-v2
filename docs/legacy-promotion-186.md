@@ -14,6 +14,11 @@ unrecognized stored date for explicit administrative review; a user clearing
 a visible date sends a separate clear instruction. No hidden legacy date is
 silently erased on save.
 
+An older singular `referenceId` is shown as the selected product or category
+and saved into `referenceIds` without removing the legacy field. An active
+standard discount with a populated date that cannot be parsed is excluded from
+storefront and checkout eligibility; the admin form remains readable.
+
 `node --test tests/unit/legacy-promotion-details.cjs` exercises the three
 document IDs named by QA with historical field variants, read and edit paths,
 and preservation of usage, schedule, scope and product configuration. These
