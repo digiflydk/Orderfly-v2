@@ -16,7 +16,9 @@ export async function updateOrderStatus(orderId: string, status: OrderStatus) {
         await db.runTransaction(async tx=>{
             const saved=await tx.get(orderRef),order=saved.data();
             if(!order||order.brandId!==scope.brandId||order.locationId!==scope.locationId)throw new Error('Order changed. Refresh and try again.');
-            if(status!=='Canceled'&&status!=='Error'&&order.paymentStatus!=='Paid')throw new Error('Cannot prepare or complete an order until payment is confirmed.');
+            // An operator status change cannot stand in for Stripe expiration.
+            // The customer cancel path and signed webhooks close unpaid sessions.
+            if(order.paymentStatus!=='Paid')throw new Error('Wait for verified payment or Stripe cancellation before changing this order.');
             tx.update(orderRef,{status});
         });
         if(status==='Completed'||status==='Delivered'){

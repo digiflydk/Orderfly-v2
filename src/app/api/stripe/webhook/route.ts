@@ -41,10 +41,12 @@ export async function POST(req: Request) {
 
   // Handle the event
   switch (event.type) {
-    case 'checkout.session.expired': {
-      const expired = event.data.object as Stripe.Checkout.Session;
-      if (expired.metadata?.orderId && expired.metadata?.brandId) {
-        try { await releaseDiscount(expired.metadata.orderId, expired.metadata.brandId, expired.id); }
+    case 'checkout.session.expired':
+    case 'checkout.session.async_payment_failed': {
+      const failed = event.data.object as Stripe.Checkout.Session;
+      if (failed.payment_status === 'paid') break;
+      if (failed.metadata?.orderId && failed.metadata?.brandId && failed.metadata?.locationId) {
+        try { await releaseDiscount(failed.metadata.orderId, failed.metadata.brandId, failed.id, failed.metadata.locationId); }
         catch { return new Response('Reservation release failed', { status: 500 }); }
       }
       break;

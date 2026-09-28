@@ -28,7 +28,7 @@ export async function cancelCheckout(orderId: string, token: string): Promise<{ 
     }
     if (session.payment_status === 'paid') return { status: 'paid' };
     if (session.status !== 'expired') return { status: 'error' };
-    await releaseDiscount(orderId, order.brandId, sessionId);
+    await releaseDiscount(orderId, order.brandId, sessionId, order.locationId);
     return { status: 'canceled' };
   } catch {
     return { status: 'error' };
