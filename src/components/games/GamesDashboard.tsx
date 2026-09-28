@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import Link from '@/components/superadmin/admin-link';
-import { Archive, ArrowRight, CalendarDays, Search, Ticket, Users } from 'lucide-react';
+import { Archive, ArrowRight, CalendarDays, CheckCircle2, CreditCard, Search, Ticket, Users, Wallet } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -11,7 +11,7 @@ import { campaignInDateRange, type DashboardCampaign } from '@/lib/games/dashboa
 import { CreateCampaignButton } from './CreateCampaignButton';
 
 type Status = 'live' | 'scheduled' | 'paused' | 'test' | 'draft' | 'ended';
-export type GameCampaignRow = DashboardCampaign & { id:string;brandName:string;name:string;participants:number;limit:number };
+export type GameCampaignRow = DashboardCampaign & { id:string;brandName:string;name:string;participants:number;completed:number;paidOrders:number;revenue:number;limit:number };
 type Filter = 'all' | 'live' | 'scheduled' | 'draft' | 'ended';
 const filters:{value:Filter;label:string}[]=[{value:'all',label:'Alle'},{value:'live',label:'Aktive'},{value:'scheduled',label:'Planlagte'},{value:'draft',label:'Kladder'},{value:'ended',label:'Afsluttede'}];
 const labels:Record<Status,string>={live:'Aktiv',scheduled:'Planlagt',paused:'Pauset',test:'I test',draft:'Kladde',ended:'Afsluttet'};
@@ -36,8 +36,12 @@ export function GamesDashboard({campaigns,brands}:{campaigns:GameCampaignRow[];b
     <p className="text-sm font-medium">Valgt udsnit · {scope.length.toLocaleString('da-DK')} spil</p>
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" aria-label="Kampagneoverblik">{([
       {label:'Aktive spil',value:active,icon:Ticket},{label:'Planlagte spil',value:scheduled,icon:CalendarDays},
-      {label:'Deltagelser på valgte spil',value:scope.reduce((sum,row)=>sum+row.participants,0),icon:Users},{label:'Afsluttede spil',value:ended,icon:Archive},
-    ] as const).map(item=><Card key={item.label}><CardContent className="flex items-start justify-between p-4 sm:p-5"><div><p className="text-xs font-medium text-muted-foreground sm:text-sm">{item.label}</p><p className="mt-2 text-2xl font-semibold tabular-nums">{item.value.toLocaleString('da-DK')}</p></div><item.icon className="h-5 w-5 text-muted-foreground" aria-hidden="true"/></CardContent></Card>)}</div>
+      {label:'Afsluttede kampagner',value:ended,icon:Archive},
+      {label:'Deltagelser',value:scope.reduce((sum,row)=>sum+row.participants,0),icon:Users},
+      {label:'Gennemførte spil',value:scope.reduce((sum,row)=>sum+row.completed,0),icon:CheckCircle2},
+      {label:'Betalte køb med spilkode',value:scope.reduce((sum,row)=>sum+row.paidOrders,0),icon:CreditCard},
+      {label:'Omsætning med spilkode',value:scope.reduce((sum,row)=>sum+row.revenue,0),icon:Wallet,currency:true},
+    ] as const).map(item=><Card key={item.label}><CardContent className="flex items-start justify-between p-4 sm:p-5"><div><p className="text-xs font-medium text-muted-foreground sm:text-sm">{item.label}</p><p className="mt-2 text-2xl font-semibold tabular-nums">{item.value.toLocaleString('da-DK')}{'currency' in item?' kr.':''}</p></div><item.icon className="h-5 w-5 text-muted-foreground" aria-hidden="true"/></CardContent></Card>)}</div>
     <Card><CardContent className="space-y-5 p-4 sm:p-6">
       <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between"><div><h2 className="text-lg font-semibold">Kampagner</h2><p className="text-sm text-muted-foreground">Vælg et spil for at ændre opsætning eller se deltagerne.</p></div><span className="text-sm text-muted-foreground">{rows.length} vist</span></div>
       <div className="flex flex-wrap gap-2" role="group" aria-label="Filtrér kampagner efter status">{filters.map(item=><Button key={item.value} type="button" size="sm" variant={filter===item.value?'default':'outline'} onClick={()=>setFilter(item.value)} aria-pressed={filter===item.value}>{item.label} <span className="ml-1 tabular-nums opacity-70">{counts[item.value]}</span></Button>)}</div>
@@ -47,7 +51,7 @@ export function GamesDashboard({campaigns,brands}:{campaigns:GameCampaignRow[];b
         return <article key={row.id} role="listitem" className="flex flex-col gap-4 p-4 transition-colors hover:bg-muted/30 sm:p-5 lg:flex-row lg:items-center lg:justify-between"><div className="min-w-0 flex-1"><div className="flex flex-wrap items-center gap-2"><h3 className="truncate font-semibold">{row.name}</h3><span className={`inline-flex rounded-full px-2.5 py-0.5 text-xs font-medium ring-1 ring-inset ${tones[row.status]}`}>{labels[row.status]}</span></div><p className="mt-1 text-sm text-muted-foreground">{row.brandName} · Skrabelod</p><div className="mt-3 flex flex-wrap gap-x-5 gap-y-1 text-sm text-muted-foreground"><span className="inline-flex items-center gap-1.5"><CalendarDays className="h-4 w-4" aria-hidden="true"/>{date(row.startsAt)||(row.status==='live'?'Startet uden dato':'Start ikke sat')} → {date(row.endsAt)||'Ingen slutdato'}</span><span className="inline-flex items-center gap-1.5"><Users className="h-4 w-4" aria-hidden="true"/>{row.participants.toLocaleString('da-DK')} / {row.limit.toLocaleString('da-DK')} deltagere</span></div></div><div className="flex shrink-0 flex-wrap gap-2"><Button size="sm" variant="outline" asChild><Link href={`/superadmin/games/participants?brand=${brandId}&campaign=${campaign}`}>Deltagere</Link></Button><Button size="sm" asChild><Link href={`/superadmin/games/scratch-card?brand=${brandId}&campaign=${campaign}`}>Åbn spil <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true"/></Link></Button></div></article>;
       })}</div>:<div className="rounded-lg border border-dashed px-6 py-12 text-center"><p className="font-medium">Ingen spil matcher dit valg</p><p className="mt-1 text-sm text-muted-foreground">Prøv en anden status, et andet brand, en anden periode eller en ny søgning.</p>{(filter!=='all'||search||brand!=='all'||from||to)&&<Button className="mt-4" variant="outline" onClick={()=>{setFilter('all');setSearch('');setBrand('all');setFrom('');setTo('');}}>Ryd filtre</Button>}</div>}
     </CardContent></Card>
-    <p className="text-xs text-muted-foreground">Deltagelser er summeret for hele levetiden på de valgte spil, ikke kun inden for datointervallet.</p>
+    <p className="text-xs text-muted-foreground">Deltagelser, gennemførte spil og køb gælder hele levetiden for de valgte kampagner. Køb tælles efter bekræftet betaling. Fælles koder kan tilskrives kampagnen, men ikke en bestemt deltager.</p>
     {!brands.length&&<p className="text-sm text-muted-foreground">Du har ikke adgang til et brand med website-rettigheder.</p>}
   </main>;
 }
