@@ -20,7 +20,9 @@ export async function customerHistory(entry: DirectoryEntry | undefined, custome
   ]);
   const names = new Map(brands.map(brand => [brand.id, String(brand.data()?.name || brand.id)]));
   const orders: OrderDetail[] = sources.length ? snapshots.flatMap((snapshot, index) => snapshot.docs.filter(doc => doc.data().brandId === sources[index].brandId && doc.data().customerDetails?.id === sources[index].id).map(doc => ({ ...doc.data(), id: doc.id, createdAt: asDate(doc.data().createdAt) || new Date(0) } as OrderDetail))) : originalOrders;
-  const feedbackIds = new Set(feedback.flatMap((rows, index) => rows?.flatMap(row => row.orderId ? [`${sources[index].brandId}:${row.orderId}`] : []) || []));
+  const feedbackIds = new Set(sources.length
+    ? feedback.flatMap((rows, index) => rows?.flatMap(row => row.orderId ? [`${sources[index].brandId}:${row.orderId}`] : []) || [])
+    : feedbackAccess ? originalFeedback.flatMap(row => row.orderId ? [`${customer.brandId}:${row.orderId}`] : []) : []);
   const orderRows: CustomerOrderRow[] = orders.map(order => ({ id: order.id, brandId: order.brandId, merchant: names.get(order.brandId) || order.brandId, date: asDate(order.createdAt)?.toISOString() || null, status: order.status, amount: Number.isFinite(order.totalAmount) ? order.totalAmount : 0, feedback: feedbackIds.has(`${order.brandId}:${order.id}`) })).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   const feedbackRows: CustomerFeedbackRow[] = feedback.flatMap((rows, index) => (rows || []).map(row => ({ id: row.id, brandId: sources[index].brandId, merchant: names.get(sources[index].brandId) || sources[index].brandId, date: row.receivedAt, rating: row.rating, comment: row.comment }))).sort((a, b) => (b.date || '').localeCompare(a.date || ''));
   if (!sources.length && feedbackAccess) feedbackRows.push(...originalFeedback.map(row => ({ id: row.id, brandId: customer.brandId, merchant: names.get(customer.brandId) || customer.brandId, date: row.receivedAt, rating: row.rating, comment: row.comment })));
