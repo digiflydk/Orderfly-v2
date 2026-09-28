@@ -20,6 +20,7 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import type { StandardDiscount, Brand, Product, Location, Category, ProductForMenu } from '@/types';
 import { createOrUpdateStandardDiscount, type FormState } from '@/app/superadmin/standard-discounts/actions';
+import { standardDiscountFormRecord } from '@/lib/legacy-promotion-form';
 import { useToast } from '@/hooks/use-toast';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '../ui/card';
@@ -61,7 +62,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 	const form = useForm<DiscountFormValues>({
 		resolver: zodResolver(standardDiscountSchema),
 		defaultValues: discount ? {
-			...discount,
+			...standardDiscountFormRecord(discount as unknown as StandardDiscount),
 			minOrderValue: discount.minOrderValue ?? 0,
 			discountValue: discount.discountValue ?? undefined,
 			discountHeading: discount.discountHeading ?? '',
@@ -171,6 +172,8 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 		});
 
 		formData.append('activeTimeSlots', JSON.stringify(data.activeTimeSlots));
+        if (discount?.startDate && !data.startDate) formData.set('clearStartDate', 'true');
+        if (discount?.endDate && !data.endDate) formData.set('clearEndDate', 'true');
         formData.append('quantityTiers', JSON.stringify(data.quantityTiers || []));
 
 		if (imageInput?.files?.[0]) {

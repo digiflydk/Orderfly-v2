@@ -10,6 +10,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import type { Discount } from '@/types';
 import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
+import { promotionDate } from '@/lib/promotion-date';
 
 const activeTimeSlotSchema = z.object({
   start: z.string(),
@@ -67,7 +68,7 @@ export async function createOrUpdateDiscount(
         code: formData.get('applicationType') === 'newsletter_signup'
           ? 'NEWSLETTER_SIGNUP'
           : formData.get('code'),
-        description: formData.get('description'),
+        description: formData.get('description') === null ? undefined : String(formData.get('description')),
         discountType: formData.get('discountType'),
         discountValue: formData.get('discountValue'),
         minOrderValue: formData.get('minOrderValue') || undefined,
@@ -107,8 +108,8 @@ export async function createOrUpdateDiscount(
     const dataToSave: any = {
         id: docId,
         ...discountData,
-        startDate: discountData.startDate ? Timestamp.fromDate(new Date(discountData.startDate)) : undefined,
-        endDate: discountData.endDate ? Timestamp.fromDate(new Date(discountData.endDate)) : undefined,
+        startDate: discountData.startDate ? Timestamp.fromDate(new Date(discountData.startDate)) : formData.get('clearStartDate') === 'true' ? null : undefined,
+        endDate: discountData.endDate ? Timestamp.fromDate(new Date(discountData.endDate)) : formData.get('clearEndDate') === 'true' ? null : undefined,
         updatedAt: Timestamp.now(),
         usedCount: 0,
     };
@@ -163,10 +164,10 @@ export async function getDiscounts(): Promise<Discount[]> {
     return { 
       ...data,
       id: doc.id,
-      startDate: data.startDate?.toDate(),
-      endDate: data.endDate?.toDate(),
-      createdAt: data.createdAt?.toDate?.() ?? null,
-      updatedAt: data.updatedAt?.toDate?.() ?? null,
+      startDate: promotionDate(data.startDate),
+      endDate: promotionDate(data.endDate),
+      createdAt: promotionDate(data.createdAt) ?? null,
+      updatedAt: promotionDate(data.updatedAt) ?? null,
     } as Discount;
   });
 }
@@ -178,10 +179,10 @@ export async function getDiscountById(id: string): Promise<Discount | null> {
         return { 
             ...data,
             id: docSnap.id,
-            startDate: data.startDate?.toDate(),
-            endDate: data.endDate?.toDate(),
-            createdAt: data.createdAt?.toDate?.() ?? null,
-            updatedAt: data.updatedAt?.toDate?.() ?? null,
+            startDate: promotionDate(data.startDate),
+            endDate: promotionDate(data.endDate),
+            createdAt: promotionDate(data.createdAt) ?? null,
+            updatedAt: promotionDate(data.updatedAt) ?? null,
         } as Discount;
     }
     return null;

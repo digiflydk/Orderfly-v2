@@ -13,6 +13,7 @@ import { z } from 'zod';
 import { redirect } from 'next/navigation';
 
 import { standardDiscountSchema } from '@/lib/standard-discount-schema';
+import { promotionDate } from '@/lib/promotion-date';
 
 
 
@@ -80,8 +81,8 @@ export async function createOrUpdateStandardDiscount(
 		const dataToSave: any = {
 			...discountData,
 			id: docId,
-			startDate: discountData.startDate ? Timestamp.fromDate(new Date(discountData.startDate)) : null,
-			endDate: discountData.endDate ? Timestamp.fromDate(new Date(discountData.endDate)) : null,
+			startDate: discountData.startDate ? Timestamp.fromDate(new Date(discountData.startDate)) : formData.get('clearStartDate') === 'true' ? null : undefined,
+			endDate: discountData.endDate ? Timestamp.fromDate(new Date(discountData.endDate)) : formData.get('clearEndDate') === 'true' ? null : undefined,
 			updatedAt: Timestamp.now(),
 		};
 
@@ -140,10 +141,10 @@ export async function getStandardDiscounts(): Promise<StandardDiscount[]> {
 		return {
 			...data,
 			id: doc.id,
-			startDate: data.startDate?.toDate(),
-			endDate: data.endDate?.toDate(),
-			createdAt: data.createdAt?.toDate(),
-			updatedAt: data.updatedAt?.toDate(),
+			startDate: promotionDate(data.startDate),
+			endDate: promotionDate(data.endDate),
+			createdAt: promotionDate(data.createdAt),
+			updatedAt: promotionDate(data.updatedAt),
 		} as StandardDiscount;
 	});
 }
@@ -157,11 +158,7 @@ export type SerializedStandardDiscount = Omit<StandardDiscount, 'startDate' | 'e
 };
 
 function optionalIsoDate(value: unknown): string | undefined {
-  if (value == null) return undefined;
-  const raw = typeof (value as {toDate?: () => Date}).toDate === 'function'
-    ? (value as {toDate: () => Date}).toDate() : value;
-  const date = raw instanceof Date ? raw : new Date(raw as string);
-  return Number.isNaN(date.getTime()) ? undefined : date.toISOString();
+  return promotionDate(value)?.toISOString();
 }
 
 
@@ -217,10 +214,10 @@ export async function getActiveStandardDiscounts({ brandId, locationId, delivery
 			return {
 				...data,
 				id: doc.id,
-				startDate: data.startDate?.toDate(),
-				endDate: data.endDate?.toDate(),
-				createdAt: data.createdAt?.toDate(),
-				updatedAt: data.updatedAt?.toDate(),
+				startDate: promotionDate(data.startDate),
+				endDate: promotionDate(data.endDate),
+				createdAt: promotionDate(data.createdAt),
+				updatedAt: promotionDate(data.updatedAt),
 			} as StandardDiscount
 		});
 	}

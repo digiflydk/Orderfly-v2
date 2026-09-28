@@ -36,6 +36,7 @@ import { Textarea } from '../ui/textarea';
 import { Calendar } from '../ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '../ui/popover';
 import { cn } from '@/lib/utils';
+import { discountFormRecord } from '@/lib/legacy-promotion-form';
 import { Separator } from '../ui/separator';
 import { ScrollArea } from '../ui/scroll-area';
 import { Checkbox } from '../ui/checkbox';
@@ -110,8 +111,7 @@ export function DiscountFormPage({
     resolver: zodResolver(discountSchema) as any,
     defaultValues: (discount
       ? {
-          ...discount,
-          applicationType: discount.applicationType ?? 'code',
+          ...discountFormRecord(discount),
           startDate: discount.startDate
             ? format(discount.startDate, 'yyyy-MM-dd')
             : undefined,
@@ -155,8 +155,7 @@ export function DiscountFormPage({
   useEffect(() => {
     if (discount) {
       reset({
-        ...discount,
-        applicationType: discount.applicationType ?? 'code',
+        ...discountFormRecord(discount),
         startDate: discount.startDate
           ? format(discount.startDate, 'yyyy-MM-dd')
           : undefined,
@@ -212,6 +211,8 @@ export function DiscountFormPage({
     });
 
     formData.append('activeTimeSlots', JSON.stringify(data.activeTimeSlots));
+    if (discount?.startDate && !data.startDate) formData.set('clearStartDate', 'true');
+    if (discount?.endDate && !data.endDate) formData.set('clearEndDate', 'true');
 
     startTransition(async () => {
       const result = await (createOrUpdateDiscount as any)(null, formData);
