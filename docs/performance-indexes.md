@@ -103,6 +103,20 @@ This document outlines the query patterns and required Firestore indexes for opt
 
 ---
 
+### 2.5 Customer Funnel paid orders (`/superadmin/analytics/cust-funnel`)
+
+`getPurchasesInRange` filters `orders` by `paidAt`. The scoped data layer always
+adds the authorized `brandId`, and may add `locationId` for a selected location
+or a location-limited grant. Required collection-scope indexes are:
+
+* `orders`: `brandId ASC`, `paidAt ASC`.
+* `orders`: `brandId ASC`, `locationId ASC`, `paidAt ASC`.
+
+The `createdAt` index for the order list does not cover these queries. See
+[analytics-firestore-indexes.json](analytics-firestore-indexes.json) for the
+partial manifest and [analytics-index-repair.md](analytics-index-repair.md) for
+the additive production repair and live verification. Preserve existing indexes.
+
 ## 3. Caching & Rendering Strategy
 
 | Page/Component                     | Strategy        | `revalidate`         | Reason                                                     |
