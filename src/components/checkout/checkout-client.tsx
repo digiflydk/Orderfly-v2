@@ -344,6 +344,7 @@ function CheckoutForm({ location }: { location: Location }) {
   const { toast } = useToast();
   const params = useParams();
   const [isProcessing, setIsProcessing] = useState(false);
+  const [isValidatingDiscount, setIsValidatingDiscount] = useState(false);
   const enabledPaymentMethods = useMemo(() => availableCheckoutMethods(location, deliveryType || 'pickup'), [location, deliveryType]);
   const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMethod | null>(() => enabledPaymentMethods[0] || null);
   useEffect(() => {
@@ -480,7 +481,7 @@ function CheckoutForm({ location }: { location: Location }) {
     if (!discountCode || !brand || !location || !deliveryType || requestInFlight.current || paymentUncertain || paymentUrl) return;
     requestInFlight.current = true;
 
-    setIsProcessing(true);
+    setIsValidatingDiscount(true);
     try {
       const currentDiscountableSubtotal = sumMoney(cartItems
         .filter(item => !isLockedItem(item))
@@ -509,7 +510,7 @@ function CheckoutForm({ location }: { location: Location }) {
       }
     } finally {
       requestInFlight.current = false;
-      setIsProcessing(false);
+      setIsValidatingDiscount(false);
     }
   }, [paymentUncertain, paymentUrl, form, discountCode, brand, location, deliveryType, cartItems, applyDiscount, removeDiscount, toast]);
 
@@ -694,7 +695,7 @@ function CheckoutForm({ location }: { location: Location }) {
   }
 
   const isTermsAccepted = form.watch('acceptTerms');
-  const isFormLocked = isProcessing || paymentUncertain || !!paymentUrl;
+  const isFormLocked = isProcessing || isValidatingDiscount || paymentUncertain || !!paymentUrl;
 
   const AcceptTermsAndCompleteOrder = ({ isSticky }: { isSticky?: boolean }) => (
     <div className={cn(isSticky && "container mx-auto max-w-[1140px] px-0")}>
@@ -745,7 +746,7 @@ function CheckoutForm({ location }: { location: Location }) {
           isSticky ? "h-[73.6px] rounded-none text-base" : "h-[55.2px] text-lg"
         )}
         disabled={
-          isProcessing || (!paymentUrl && (
+          isProcessing || isValidatingDiscount || (!paymentUrl && (
             paymentUncertain || !isTermsAccepted ||
             isDeliveryBelowMinOrder || !isOrderTimeValid || !paymentMethod
           ))
@@ -994,9 +995,9 @@ function CheckoutForm({ location }: { location: Location }) {
                       type="button"
                       variant="outline"
                       onClick={handleApplyDiscount}
-                      disabled={isProcessing || !discountCode}
+                      disabled={isProcessing || isValidatingDiscount || !discountCode}
                     >
-                      {isProcessing ? <Loader2 className="animate-spin" /> : 'Anvend'}
+                      {isValidatingDiscount ? <><Loader2 className="animate-spin mr-2" />Kontrollerer rabatkode…</> : 'Anvend'}
                     </Button>
                   </div>
                 )}

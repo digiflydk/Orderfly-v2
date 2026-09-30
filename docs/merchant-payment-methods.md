@@ -147,3 +147,17 @@ before/after. Use the user's authorized sandbox test card for separate real
 hosted Stripe acceptance. Preserve/restore temporary location settings and cancel
 unpaid QA orders. Local simulated Stripe transport is not a real hosted sandbox
 acceptance. Issue #189 is not automatically closed by merge.
+
+## QA display corrections, 30 September 2026
+
+The sales list now serializes the recorded cash/card method (only the method,
+not the employee audit fields). Canceled pickup orders show cancellation and
+no-payment text in the guest receipt and sales list; online failure wording is
+unchanged. Discount validation has a separate loading state and says
+“Kontrollerer rabatkode…” while preventing checkout submission until validation
+finishes. It no longer implies an order is being submitted.
+
+Regression coverage executes the actual sales page serialization for both cash
+and card, visits the guest receipt after merchant cancellation, and delays a
+promotion validation response to assert the correct loading message and blocked
+parallel checkout. Existing payment lifecycle and checkout regressions remain.

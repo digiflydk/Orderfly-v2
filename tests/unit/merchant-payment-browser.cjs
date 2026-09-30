@@ -177,11 +177,15 @@ for (const method of ['cash', 'card']) test(`promotion checkout → receipt → 
   await page.goto(receiptUrl); await expect(page.getByText(method === 'cash' ? 'Betalt kontant i restaurant' : 'Betalt med kort i restaurant', { exact: true })).toBeVisible();
 });
 test('merchant cancellation releases a promotion reservation without paid KPI or invoice', async t => {
-  const page = await pageFor(t, 'pickup-cancel'); await submitPromotion(page); await page.goto(origin + '/merchant/orders?case=pickup-cancel');
+  const page = await pageFor(t, 'pickup-cancel'); await submitPromotion(page); const receiptUrl = page.url(); await page.goto(origin + '/merchant/orders?case=pickup-cancel');
   page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Annullér ubetalt ordre', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Registrér betaling modtaget', exact: true })).toHaveCount(0);
   const f = await getCase('pickup-cancel'); assert.equal(f.order().status, 'Canceled'); assert.equal(f.order().discountReservation, 'released');
   assert.equal((await state('pickup-cancel')).kpis.totalSales, 0); assert.equal(f.records.get('discounts/d').usedCount, 0);
+  await page.goto(receiptUrl);
+  await expect(page.getByRole('heading', { name: 'Ordren er annulleret', exact: true })).toBeVisible();
+  await expect(page.getByText(/Restauranten har annulleret din afhentningsordre/)).toBeVisible();
+  await expect(page.getByText(/Betalingsvinduet/)).toHaveCount(0);
 });
 test('merchant settings prevent disabling both and update checkout availability for pickup/delivery', async t => {
   const page = await pageFor(t, 'settings', '/merchant/payments');
@@ -201,4 +205,29 @@ test('disabled pickup is hidden while existing online merchants retain hosted ch
   const session = { id: 'cs_test_mock', payment_status: 'paid', currency: 'dkk', amount_total: 10400, metadata: { orderId: f.orderId, brandId: 'b', locationId: 'l' } };
   assert.equal(await f.settlement.settlePaidCheckoutSession(session), true); assert.equal(await f.settlement.settlePaidCheckoutSession(session), false);
   assert.equal((await state('online-only')).kpis.totalSales, 104); assert.equal(f.order().status, 'Received');
+});
+
+ test('discount validation never looks like order submission and blocks parallel checkout', async t => {
+  const page = await pageFor(t, 'discount-loading');
+  let release;
+  const gate = new Promise(resolve => { release = resolve; });
+  await page.route('**/fixture/action?*', async route => {
+    if (route.request().postDataJSON()?.action === 'discount') await gate;
+    await route.continue();
+  });
+  await page.getByRole('radio', { name: /^Betal ved afhentning/ }).check();
+  await page.getByPlaceholder('John Doe', { exact: true }).fill('QA rabat');
+  await page.getByPlaceholder('john@example.com', { exact: true }).fill('qa@example.test');
+  await page.getByPlaceholder('+123456789', { exact: true }).fill('12345678');
+  await page.getByRole('checkbox', { name: /Jeg accepterer|I accept the/ }).first().check();
+  await expect(page.getByRole('button', { name: /Bestil og betal ved afhentning/ }).first()).toBeEnabled();
+  await page.getByText('Har du en rabatkode?', { exact: true }).click();
+  await page.getByPlaceholder('Indtast rabatkode').fill('SAVE10');
+  await page.getByRole('button', { name: 'Anvend', exact: true }).click();
+  try {
+    await expect(page.getByRole('button', { name: /Kontrollerer rabatkode/ })).toBeDisabled();
+    await expect(page.getByRole('button', { name: /Bestil og betal ved afhentning/ }).first()).toBeDisabled();
+    await expect(page.getByText(/Sender bestilling|Åbner betaling/)).toHaveCount(0);
+  } finally { release(); }
+  await expect(page.getByText('Rabatkode:')).toBeVisible();
 });

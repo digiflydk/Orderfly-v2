@@ -98,6 +98,7 @@ export default async function OrdersPage({
       status: order.status,
       paymentStatus: order.paymentStatus,
       paymentMethod: order.paymentMethod,
+      ...(order.paymentCollection ? { paymentCollection: { method: order.paymentCollection.method } } : {}),
       paidSale: isPaidSale(order),
     }));
 

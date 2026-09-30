@@ -136,11 +136,12 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
     }
     
     if (order.paymentStatus !== 'Paid' && !pickupAccepted) {
-        const failed = order.paymentStatus === 'Failed';
+        const pickupCanceled = order.paymentMethod === 'PayAtPickup' && order.status === 'Canceled';
+        const failed = order.paymentStatus === 'Failed' || pickupCanceled;
         return <main className="mx-auto max-w-lg p-8 text-center" aria-live="polite">
             <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-amber-600" />
-            <h1 className="text-2xl font-bold">{failed ? 'Betalingen blev ikke gennemført' : 'Afventer bekræftelse af betaling'}</h1>
-            <p className="my-4">{failed ? 'Betalingsvinduet er lukket uden betaling.' :
+            <h1 className="text-2xl font-bold">{pickupCanceled ? 'Ordren er annulleret' : failed ? 'Betalingen blev ikke gennemført' : 'Afventer bekræftelse af betaling'}</h1>
+            <p className="my-4">{pickupCanceled ? 'Restauranten har annulleret din afhentningsordre. Der er ikke registreret nogen betaling.' : failed ? 'Betalingsvinduet er lukket uden betaling.' :
               checking ? 'Vi kontrollerer din betaling. Behold siden åben.' :
               'Betalingen er endnu ikke bekræftet. Kontrollér status igen, eller kontakt restauranten, før du betaler igen.'}</p>
             <p className="mb-4">Ordrenummer: {order.id}</p>
