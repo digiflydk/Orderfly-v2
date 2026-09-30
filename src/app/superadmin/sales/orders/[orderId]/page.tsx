@@ -1,5 +1,8 @@
 import { getOrderDetails } from '@/lib/access/order-details';
 import { FeedbackRequestButton } from '@/components/superadmin/feedback-request-button';
+import { OrderPaymentActions } from '@/components/superadmin/order-payment-actions';
+import { paymentMethodLabel } from '@/lib/merchant-payment-methods';
+import { orderflySession } from '@/lib/access/orderfly-session';
 
 
 import { notFound } from 'next/navigation';
@@ -50,6 +53,7 @@ type OrderDetailPageProps = {
 export default async function OrderDetailPage({ params }: OrderDetailPageProps) {
 	const { orderId } = await params;
 	const order = await getOrderDetails(orderId);
+	const access = await orderflySession();
 	if (!order) {
 		notFound();
 	}
@@ -75,7 +79,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 				<div className="flex items-center gap-2">
                     <FeedbackRequestButton orderId={order.id} />
 					<Button variant="outline"><Download className="mr-2" />Export</Button>
-					<Button asChild><Link href="#" target="_blank"><LinkIcon className="mr-2" />View in Stripe</Link></Button>
+					{order.paymentMethod !== 'PayAtPickup' && <Button asChild><Link href="#" target="_blank"><LinkIcon className="mr-2" />View in Stripe</Link></Button>}
 				</div>
 			</div>
 
@@ -173,7 +177,9 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 						<CardHeader><CardTitle>Payment</CardTitle></CardHeader>
 						<CardContent className="space-y-4">
 							<InfoItem icon={CreditCard} label="Payment Status"><Badge variant={statusVariantMap[order.paymentStatus]}>{order.paymentStatus}</Badge></InfoItem>
-							<InfoItem icon={CreditCard} label="Payment Method">{order.paymentMethod}</InfoItem>
+							<InfoItem icon={CreditCard} label="Payment Method">{paymentMethodLabel(order)}</InfoItem>
+							{order.paymentCollection && <p>Betaling modtaget {new Date(order.paymentCollection.receivedAt).toLocaleString('da-DK', { timeZone: 'Europe/Copenhagen' })} af {order.paymentCollection.employeeName || order.paymentCollection.employeeId}.</p>}
+							<OrderPaymentActions orderId={order.id} paymentMethod={order.paymentMethod} paymentStatus={order.paymentStatus} status={order.status} canEdit={access.superuser || access.permissions.includes('orderfly.orders:edit')} />
 							<InfoItem icon={Hash} label="Payment Reference">
 								<p className="font-mono text-xs break-all">{order.psp?.paymentIntentId || order.psp?.checkoutSessionId}</p>
 							</InfoItem>

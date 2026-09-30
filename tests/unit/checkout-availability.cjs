@@ -113,6 +113,7 @@ test('newsletter offer checks actual customer and keeps canceled retry eligible'
   let discount = { brandId:'b', applicationType:'newsletter_signup', isActive:true, locationIds:['l'], orderTypes:['pickup'], activeDays:[], activeTimeSlots:[], usedCount:0, usageLimit:0, perCustomerLimit:1 };
   const imports = [...fs.readFileSync('src/app/checkout/actions.ts','utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>m[1]);
   const mocks = Object.fromEntries(imports.map(name=>[name,{}]));
+  mocks['@/lib/marketing/config'] = {marketingConfig:()=>({brandId:'b'})};
   mocks['@/lib/promotion-rules'] = load('src/lib/promotion-rules.ts');
   mocks['@/lib/checkout-customer-identity'] = {findCheckoutCustomer:async()=>({ref:{id:'c'},exists:()=>true,data:()=>customer})};
   mocks['firebase/firestore'] = {collection:()=>null,where:()=>null,query:()=>null,getDocs:async()=>({docs:[{id:'d',data:()=>discount}]})};

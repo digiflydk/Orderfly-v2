@@ -10,6 +10,7 @@ import { ore, money, sumMoney, percentageMoney } from '@/lib/money';
 import { trackServerEvent } from '@/lib/analytics-server';
 import { checkoutRequestSchema } from '@/lib/checkout-schema';
 import { resolveFulfillmentTime, displayFulfillmentTime } from '@/lib/fulfillment-time';
+import { assertCheckoutPaymentMethod } from '@/lib/merchant-payment-methods';
 import { validateCheckoutItems } from '@/lib/checkout-items';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { isDefinitiveStripeRejection } from '@/lib/stripe-checkout-failure';
@@ -330,11 +331,6 @@ export async function createStripeCheckoutSessionAction(
     const parsed = checkoutRequestSchema.safeParse([cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId]);
     if (!parsed.success) return { success: false, retryable: true, error: 'Kontrollér din kurv og dine oplysninger, og genindlæs kassen.' };
     [cartItems, customerInfo, deliveryType, brandId, locationId, paymentDetails, appliedDiscountId, brandSlug, locationSlug, deliveryTime, anonymousConsentId] = parsed.data;
-    const stripeSecretKey = await getActiveStripeSecretKey();
-    if (!stripeSecretKey) {
-        throw new Error('Stripe API key is not configured.');
-    }
-    const stripe = new Stripe(stripeSecretKey, { timeout: 15000, maxNetworkRetries: 2 });
     stage = 'validation';
 
     const origin = await getOrigin();
@@ -344,6 +340,16 @@ export async function createStripeCheckoutSessionAction(
         getLocationById(locationId),
     ]);
     if (!brand || !location || location.brandId !== brand.id) throw new Error("Brand or location not found in the requested tenant scope");
+    const paymentMethod = customerInfo.paymentMethod || 'online';
+    assertCheckoutPaymentMethod(location, deliveryType, paymentMethod);
+    let stripe: Stripe | undefined;
+    if (paymentMethod === 'online') {
+      stage = 'configuration';
+      const stripeSecretKey = await getActiveStripeSecretKey();
+      if (!stripeSecretKey) throw new Error('Stripe API key is not configured.');
+      stripe = new Stripe(stripeSecretKey, { timeout: 15000, maxNetworkRetries: 2 });
+      stage = 'validation';
+    }
     
     if (brand.slug !== brandSlug || location.slug !== locationSlug) throw new Error('Restaurantens adresse er ændret. Genindlæs menuen.');
     let fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
@@ -513,6 +519,7 @@ export async function createStripeCheckoutSessionAction(
         createdAt: serverTimestamp(),
         status: 'Pending',
         paymentStatus: 'Pending',
+        paymentMethod: paymentMethod === 'pay_at_pickup' ? 'PayAtPickup' : 'Stripe',
         brandId,
         locationId,
         productItems: cartItems,
@@ -537,7 +544,7 @@ export async function createStripeCheckoutSessionAction(
             id: customerId,
             address: deliveryType === 'delivery' ? `${customerInfo.street}, ${customerInfo.zipCode} ${customerInfo.city}` : 'For Pickup',
         },
-        psp: { provider: 'stripe' },
+        ...(paymentMethod === 'online' ? { psp: { provider: 'stripe' } } : {}),
     });
     // Six-digit order references can collide. Never overwrite another order or
     // reuse its Stripe idempotency key; a collision must fail before payment.
@@ -551,6 +558,34 @@ export async function createStripeCheckoutSessionAction(
     stage = 'reservation';
     reservedOrderId = orderId;
     await reserveDiscount(orderId, appliedDiscountIdForOrder, customerId, brandId);
+
+    if (paymentMethod === 'pay_at_pickup') {
+      // Only an order with a committed capacity hold can enter the kitchen.
+      // Re-read configuration in the acceptance transaction so concurrent
+      // disable/reassignment cannot admit a new pickup order.
+      stage = 'pickup_acceptance';
+      sessionRequestStarted = true; // A lost acceptance response is not a rejection.
+      try {
+        await runTransaction(db, async transaction => {
+          const [saved, nativeLocation] = await Promise.all([
+            transaction.get(orderRef), transaction.get(doc(db, 'locations', locationId)),
+          ]);
+          const order = saved.data();
+          const current = nativeLocation.exists() ? { ...nativeLocation.data(), id: locationId } as Location : null;
+          try {
+            if (!order || order.brandId !== brandId || order.locationId !== locationId || order.paymentMethod !== 'PayAtPickup' || order.discountReservation !== 'held' || order.status !== 'Pending' || !current || current.brandId !== brandId) throw new Error('Ordren kunne ikke godkendes. Genindlæs kassen.');
+            assertCheckoutPaymentMethod(current, deliveryType, paymentMethod);
+            fulfillmentAt = resolveFulfillmentTime(current, deliveryType, deliveryTime);
+          } catch (error) { throw Object.assign(error instanceof Error ? error : new Error('Invalid pickup order'), { code: 'pickup_order_rejected' }); }
+          transaction.update(orderRef, { status: 'Received', acceptedAt: serverTimestamp(), fulfillmentAt, deliveryTime: displayFulfillmentTime(fulfillmentAt), updatedAt: serverTimestamp() });
+        });
+      } catch (error) {
+        if ((error as { code?: string })?.code === 'pickup_order_rejected') sessionRequestStarted = false;
+        throw error;
+      }
+      return { success: true, orderId, url: `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&receipt_token=${receiptToken}` };
+    }
+    if (!stripe) throw new Error('Stripe API key is not configured.');
 
     const line_items: Stripe.Checkout.SessionCreateParams.LineItem[] = cartItems.map((item) => {
         if (item.unitPrice == null) {

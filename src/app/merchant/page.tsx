@@ -9,7 +9,8 @@ export default async function MerchantOverview() {
   const [scope,access]=await Promise.all([getFiltersData(),orderflySession()]);
   const destinations=[
     {href:'/merchant/redeem',label:'Indløs kode',description:'Find en gæsts gevinst og registrér indløsning i restauranten.'},
-    {href:'/superadmin/sales/orders',label:'Ordrer',description:'Se og håndtér dine ordrer.'},
+    {href:'/merchant/orders',label:'Ordrer',description:'Klargør dine ordrer og registrér betaling ved afhentning.'},
+    {href:'/merchant/payments',label:'Betalingsmetoder',description:'Vælg onlinebetaling og betaling ved afhentning pr. restaurant.'},
     {href:'/superadmin/products',label:'Produkter',description:'Vedligehold dit sortiment.'},
     {href:'/superadmin/discounts',label:'Rabatter',description:'Administrér rabatkoder for dit brand.'},
     {href:'/superadmin/games',label:'Spil',description:'Se dine kampagner og deltagere.'},

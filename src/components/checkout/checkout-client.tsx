@@ -58,6 +58,7 @@ import { Alert, AlertTitle, AlertDescription } from "../ui/alert";
 import Cookies from "js-cookie";
 import { useAnalytics } from '@/context/analytics-context';
 import { cn } from '@/lib/utils';
+import { availableCheckoutMethods, type CheckoutPaymentMethod } from '@/lib/merchant-payment-methods';
 
 
 import { isLockedItem } from '@/lib/cart-utils';
@@ -343,6 +344,11 @@ function CheckoutForm({ location }: { location: Location }) {
   const { toast } = useToast();
   const params = useParams();
   const [isProcessing, setIsProcessing] = useState(false);
+  const enabledPaymentMethods = useMemo(() => availableCheckoutMethods(location, deliveryType || 'pickup'), [location, deliveryType]);
+  const [paymentMethod, setPaymentMethod] = useState<CheckoutPaymentMethod | null>(() => enabledPaymentMethods[0] || null);
+  useEffect(() => {
+    if (!isProcessing && (!paymentMethod || !enabledPaymentMethods.includes(paymentMethod))) setPaymentMethod(enabledPaymentMethods[0] || null);
+  }, [enabledPaymentMethods, paymentMethod, isProcessing]);
   const requestInFlight = useRef(false);
   const [checkoutError, setCheckoutError] = useState<string | null>(null);
   const [paymentUncertain, setPaymentUncertain] = useState(false);
@@ -597,6 +603,7 @@ function CheckoutForm({ location }: { location: Location }) {
       const currentAnalyticsSession = statisticsAllowed() ? Cookies.get(`orderfly_session_id_${brand.id}`) : undefined;
       const customerInfo: CustomerInfo = {
         ...formValues,
+        paymentMethod: paymentMethod || 'online',
         subscribeToNewsletter: !!formValues.subscribeToNewsletter,
         ...(formValues.subscribeToNewsletter && consentAttempt.current ? {newsletterConsentId:consentAttempt.current.id,newsletterConsentVersion:NEWSLETTER_CONSENT_VERSION}:{}),
         ...(statisticsAllowed() && currentAnalyticsSession ? {analyticsSessionId: currentAnalyticsSession, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const, ...(analyticsAttribution ? { analyticsAttribution } : {})} : {})
@@ -638,7 +645,7 @@ function CheckoutForm({ location }: { location: Location }) {
   const submitCheckout = async (formValues: CheckoutFormValues) => {
     if (requestInFlight.current || paymentUncertain || paymentUrl) return;
     setCheckoutError(null);
-    if (!brand || !location || !deliveryType || !cartItems.length || isDeliveryBelowMinOrder || !isOrderTimeValid) {
+    if (!brand || !location || !deliveryType || !cartItems.length || isDeliveryBelowMinOrder || !isOrderTimeValid || !paymentMethod || !enabledPaymentMethods.includes(paymentMethod)) {
       setCheckoutError('Kontrollér kurven, leveringsmetoden og tidspunktet.');
       return;
     }
@@ -740,15 +747,16 @@ function CheckoutForm({ location }: { location: Location }) {
         disabled={
           isProcessing || (!paymentUrl && (
             paymentUncertain || !isTermsAccepted ||
-            isDeliveryBelowMinOrder || !isOrderTimeValid
+            isDeliveryBelowMinOrder || !isOrderTimeValid || !paymentMethod
           ))
         }
       >
         <div className="flex w-full justify-between items-center px-4">
-          <span>{isProcessing ? <><Loader2 className="inline animate-spin mr-2" />Åbner betaling…</> : 'Gå til betaling'}</span>
+          <span>{isProcessing ? <><Loader2 className="inline animate-spin mr-2" />{paymentMethod === 'pay_at_pickup' ? 'Sender bestilling…' : 'Åbner betaling…'}</> : paymentMethod === 'pay_at_pickup' ? 'Bestil og betal ved afhentning' : 'Gå til betaling'}</span>
           <span>{formatPrice(checkoutTotal)}</span>
         </div>
       </Button>
+      {paymentMethod === 'pay_at_pickup' && <p className="mt-2 text-sm">Betales ved afhentning. Din ordre sendes til restauranten, når du bestiller.</p>}
       {checkoutError && <p role="alert" className="mt-3 text-sm text-destructive">{checkoutError}</p>}
     </div>
   );
@@ -771,6 +779,18 @@ function CheckoutForm({ location }: { location: Location }) {
           <div className="grid grid-cols-1 gap-x-12 lg:grid-cols-2 lg:gap-y-12 pb-44 lg:pb-0">
             {/* Left column */}
             <fieldset className="min-w-0 space-y-10" disabled={isFormLocked}>
+              <section aria-labelledby="payment-method-heading">
+                <h2 id="payment-method-heading" className="text-2xl font-bold mb-4">Betalingsmetode</h2>
+                <div className="space-y-3">
+                  {enabledPaymentMethods.map(method => <label key={method} className="flex cursor-pointer items-start gap-3 rounded-lg border p-4">
+                    <input type="radio" name="paymentMethod" value={method} checked={paymentMethod === method} onChange={() => setPaymentMethod(method)} className="mt-1 h-5 w-5" />
+                    <span><span className="block font-semibold">{method === 'online' ? 'Online betaling' : 'Betal ved afhentning'}</span>
+                      <span className="block text-sm text-muted-foreground">{method === 'online' ? 'Betal med kort online.' : 'Betales ved afhentning med kontant eller kort i restauranten.'}</span>
+                    </span>
+                  </label>)}
+                  {!enabledPaymentMethods.length && <p role="alert" className="text-destructive">Restauranten tilbyder ikke en betalingsmetode til levering. Vælg afhentning eller kontakt restauranten.</p>}
+                </div>
+              </section>
               <section>
                 <h2 className="text-2xl font-bold mb-4">Levering og tidspunkt</h2>
                 <div className="space-y-4">

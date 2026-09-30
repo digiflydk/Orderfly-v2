@@ -69,6 +69,7 @@ test('real action persists quantity fields, retains location on edit, rejects cr
  let saved, sequence=0; const records={'brands/b':{},'locations/l':{brandId:'b'},'categories/pizza':{locationIds:['l']},'products/foreign':{brandId:'other'}};
  const api=load('src/app/superadmin/standard-discounts/actions.ts',{
   '@/lib/automatic-discounts':calc,'@/lib/standard-discount-schema':schema,'@/lib/promotion-rules':rules,
+  '@/lib/promotion-date':require('../helpers/load-ts.cjs').loadTs('src/lib/promotion-date.ts'),
   '@/lib/access/orderfly-session':{verifiedOrderflyIdentity:async()=>({provider:'firebase',subject:'actor'})},
   '@/lib/firebase-admin':{getAdminDb:()=>({collection:p=>({doc:(id=(sequence++===0?'new':'new-'+sequence))=>({id,path:p+'/'+id})})})},
   '@/lib/access/scoped-data':{mutateScopedDocument:async(collection,id,permission,scope,update)=>{

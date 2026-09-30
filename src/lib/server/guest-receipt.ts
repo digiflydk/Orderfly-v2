@@ -6,26 +6,31 @@ import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 import { settlePaidCheckoutSession } from './settle-checkout';
 import type { OrderDetail } from '@/types';
 
-export type ReceiptProof = { sessionId: string; receiptToken?: string; orderId?: string; brandId?: string; locationId?: string };
+export type ReceiptProof = { sessionId?: string; receiptToken?: string; orderId?: string; brandId?: string; locationId?: string };
 export type GuestReceipt = Pick<OrderDetail,
   'id' | 'brandId' | 'locationId' | 'customerName' | 'customerContact' | 'deliveryType' |
-  'deliveryTime' | 'status' | 'paymentStatus' | 'totalAmount' | 'productItems'> & {
+  'deliveryTime' | 'status' | 'paymentStatus' | 'paymentMethod' | 'totalAmount' | 'productItems'> & {
   createdAt: string;
   customerDetails: Pick<OrderDetail['customerDetails'], 'id' | 'address'>;
   paymentDetails: Omit<OrderDetail['paymentDetails'], 'paymentRefId'>;
   invoice?: OrderDetail['invoice'];
+  paymentCollection?: Pick<NonNullable<OrderDetail['paymentCollection']>, 'method'>;
 };
 
 // The existing random Stripe session ID is a guest capability, not a user ID.
 // Never recover or disclose it from a predictable order ID. Keep it out of logs.
 export async function readGuestReceipt(proof: ReceiptProof): Promise<GuestReceipt | null> {
-  if (!/^cs_(test_|live_)?[A-Za-z0-9_]{8,250}$/.test(proof.sessionId || '')) return null;
-  let order = proof.orderId ? await getOrderById(proof.orderId) : await getOrderByCheckoutSessionId(proof.sessionId);
-  if (!order || order.psp?.checkoutSessionId !== proof.sessionId ||
+  const validSession = /^cs_(test_|live_)?[A-Za-z0-9_]{8,250}$/.test(proof.sessionId || '');
+  if (!validSession && (proof.sessionId || !proof.orderId)) return null;
+  let order = proof.orderId ? await getOrderById(proof.orderId) : await getOrderByCheckoutSessionId(proof.sessionId!);
+  if (!order ||
       (proof.brandId && order.brandId !== proof.brandId) ||
       (proof.locationId && order.locationId !== proof.locationId)) return null;
+  const pickup = order.paymentMethod === 'PayAtPickup';
+  if (pickup ? !!proof.sessionId || order.deliveryType !== 'Pickup' || !!order.psp : !validSession || order.psp?.checkoutSessionId !== proof.sessionId) return null;
 
   const tokenHash = (order as OrderDetail & { receiptTokenHash?: string }).receiptTokenHash;
+  if (pickup && !tokenHash) return null;
   // New receipts use a dedicated capability stored only as a hash. Previously
   // issued Stripe URLs retain their session-bound proof during the migration.
   if (tokenHash) {
@@ -35,7 +40,7 @@ export async function readGuestReceipt(proof: ReceiptProof): Promise<GuestReceip
 
   // A delayed webhook must not produce either a false receipt or a second order.
   // A failed read stays Pending and can be retried; it is not payment failure.
-  if (order.paymentStatus === 'Pending' || order.paymentStatus === 'Paid') {
+  if (!pickup && proof.sessionId && (order.paymentStatus === 'Pending' || order.paymentStatus === 'Paid')) {
     try {
       const key = await getActiveStripeSecretKey();
       if (key) {
@@ -64,7 +69,8 @@ export async function readGuestReceipt(proof: ReceiptProof): Promise<GuestReceip
     customerName: order.customerName, customerContact: order.customerContact,
     customerDetails: { id: order.customerDetails.id, address: order.customerDetails.address },
     deliveryType: order.deliveryType, deliveryTime: order.deliveryTime,
-    status: order.status, paymentStatus: order.paymentStatus, totalAmount: order.totalAmount,
+    status: order.status, paymentStatus: order.paymentStatus, paymentMethod: order.paymentMethod, totalAmount: order.totalAmount,
+    ...(order.paymentCollection ? { paymentCollection: { method: order.paymentCollection.method } } : {}),
     createdAt: order.createdAt instanceof Date ? order.createdAt.toISOString() : new Date(order.createdAt).toISOString(),
     productItems: order.productItems.map(item => ({
       id: item.id, name: item.name, quantity: item.quantity, unitPrice: item.unitPrice,

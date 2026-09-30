@@ -2,6 +2,8 @@
 
 This document provides a unified overview of how the frontend, server actions, APIs, and Firestore interact in Orderfly v2.
 
+Merchant payment methods: see [configuration, pickup settlement, reservations and QA](merchant-payment-methods.md).
+
 ## System Context (Mermaid)
 ```mermaid
 flowchart LR

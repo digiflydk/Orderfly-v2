@@ -27,7 +27,7 @@ export default async function ConfirmationPage({
   const brand = await getBrandBySlug(brandSlug);
   const location = brand ? await getLocationBySlug(brand.id, locationSlug) : null;
 
-  const order = brand && location && sessionId ? await readGuestReceipt({
+  const order = brand && location && (sessionId || orderId && query.receipt_token) ? await readGuestReceipt({
     orderId, sessionId, receiptToken: query.receipt_token, brandId: brand.id, locationId: location.id,
   }).catch(() => null) : null;
 

@@ -110,7 +110,8 @@ export function SuperAdminSidebarClient({
       key: 'commerce',
       title: 'Commerce',
       items: [
-        { href: '/superadmin/sales/orders', label: 'Sales & Orders', icon: ShoppingCart },
+        { href: merchantPortal ? '/merchant/orders' : '/superadmin/sales/orders', label: 'Sales & Orders', icon: ShoppingCart },
+        { href: '/merchant/payments', label: 'Betalingsmetoder', icon: CreditCard },
         { href: '/superadmin/customers', label: 'Customers', icon: Users },
       ],
     },
@@ -224,7 +225,7 @@ export function SuperAdminSidebarClient({
 
   const candidateGroups: Group[] = (centralAdmin ? allGroups.filter(g => g.key !== 'people').map(g => g.key === 'billing' ? {...g, items:g.items.filter(i => i.href !== '/superadmin/subscriptions')} : g).concat([{key:'platform', title:'Platform', items:[{label:'Brugere og roller · mPanel',href:'https://www.esmeraldapizza.dk/mpanel#platform',icon:Users}]}]) : allGroups)
     .filter(g => !merchantPortal || !['people','billing','system','website','platform'].includes(g.key))
-    .map(g => ({...g, items:g.items.filter(i => (i.href !== '/merchant/redeem' || merchantPortal) && (!merchantPortal || i.href !== '/superadmin/loyalty'))}));
+    .map(g => ({...g, items:g.items.filter(i => (!['/merchant/redeem','/merchant/payments'].includes(i.href || '') || merchantPortal) && (!merchantPortal || i.href !== '/superadmin/loyalty'))}));
 
   const groups: Group[] = candidateGroups.map(group => ({...group, items: filterNavigation(group.items, access)})).filter(group => group.items.length > 0);
 

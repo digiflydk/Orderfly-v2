@@ -64,6 +64,7 @@ export async function releaseDiscount(orderId: string, brandId: string, sessionI
     const orderRef = doc(db, 'orders', orderId), orderSnap = await tx.get(orderRef);
     if (!orderSnap.exists()) return;
     const order = orderSnap.data();
+    if (sessionId && order.paymentMethod === 'PayAtPickup') throw new Error('Reservation scope mismatch');
     if (order.brandId !== brandId || (locationId && order.locationId !== locationId) || (sessionId && order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== sessionId)) throw new Error('Reservation scope mismatch');
     if (order.paymentStatus === 'Paid') return;
     if (order.discountReservation === 'held') {

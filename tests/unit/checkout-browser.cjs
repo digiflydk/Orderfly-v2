@@ -55,6 +55,7 @@ before(async()=>{
  `);
  const actions=fixture('actions',`
  import {scenario} from ${JSON.stringify(settings)};
+ export const newsletterSyncAvailableAction=async()=>true;
  export const getNewsletterSignupDiscountAction=async(brand,location,subtotal,method,email)=>scenario.startsWith('ui-newsletter')&&email!=='existing@example.test'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:scenario.includes('minimum')?150:0,allowStacking:scenario.includes('stacking-on')}:null;
  export async function validateDiscountAction(){throw Error('discount network failed');}
  export async function createStripeCheckoutSessionAction(...args){
@@ -138,6 +139,9 @@ async function setup(t,scenario){
  if(scenario==='telemetry')await page.addInitScript(()=>{window.telemetryUnavailable=true;});
  if(scenario==='cookie')await context.addCookies([{name:'orderfly_attribution',value:'%7Binvalid',url:origin}]);
  await page.goto(origin+'/?case='+scenario);
+ await page.getByPlaceholder('John Doe',{exact:true}).waitFor().catch(async error=>{
+  t.diagnostic(JSON.stringify({body:await page.locator('body').innerText(),errors}));throw error;
+ });
  await page.getByPlaceholder('John Doe',{exact:true}).fill('Test Customer');
  await page.getByPlaceholder('john@example.com',{exact:true}).fill('test@example.test');
  await page.getByPlaceholder('+123456789',{exact:true}).fill('12345678');

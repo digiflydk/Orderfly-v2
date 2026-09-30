@@ -66,7 +66,9 @@ export function buildOrderInvoice(input: {
     vatRate,
     vatAmount,
     totalAmount: money(order.totalAmount),
-    paymentMethod: 'Stripe',
+    paymentMethod: order.paymentMethod === 'PayAtPickup'
+      ? order.paymentCollection?.method === 'cash' ? 'Cash' : 'CardInRestaurant'
+      : 'Stripe',
     ...(input.paymentReference ? { paymentReference: input.paymentReference } : {}),
   };
 }
