@@ -8,17 +8,37 @@ import type { Brand, Location, OrderDetail } from '@/types';
 import { buildOrderInvoice, invoiceCounterId } from '@/lib/order-invoice';
 import { paidOrderMarketingEnabled } from '@/lib/marketing/config';
 import { scratchCardDraftSchema } from '@/lib/games/scratch-card';
+import { orderflySession } from '@/lib/access/orderfly-session';
+import { authorizeTransaction } from '@/lib/access/scoped-data';
+import type { RestaurantPaymentForm } from '@/lib/merchant-payment-methods';
 
 // Only call with a signed webhook or a session retrieved server-to-server from Stripe.
 export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session) {
-  const metadata = session.metadata;
-  if (!metadata?.orderId || !metadata.brandId || !metadata.locationId) throw new Error('Missing payment scope');
+  if (!session.metadata?.orderId || !session.metadata.brandId || !session.metadata.locationId) throw new Error('Missing payment scope');
+  if (session.payment_status !== 'paid') return false;
+  return settleOrder({ kind: 'stripe', session });
+}
+
+// A staff session and transaction-scoped policy replace PSP verification only
+// for native pickup orders. The browser never supplies staff identity or amount.
+export async function settlePaidPickupOrder(orderId: string, method: RestaurantPaymentForm) {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId) || !['cash', 'card'].includes(method)) throw new Error('Ugyldig betalingsregistrering.');
+  const actor = await orderflySession();
+  return settleOrder({ kind: 'pickup', orderId, method, actor });
+}
+
+type PaymentProof = { kind: 'stripe'; session: Stripe.Checkout.Session }
+  | { kind: 'pickup'; orderId: string; method: RestaurantPaymentForm; actor: Awaited<ReturnType<typeof orderflySession>> };
+async function settleOrder(proof: PaymentProof) {
+  const session = proof.kind === 'stripe' ? proof.session : null;
+  const metadata: { orderId: string; brandId: string; locationId: string } = session
+    ? { orderId: session.metadata!.orderId, brandId: session.metadata!.brandId, locationId: session.metadata!.locationId }
+    : { orderId: proof.kind === 'pickup' ? proof.orderId : '', brandId: '', locationId: '' };
   const db = getAdminDb();
   const marketingEnabled = paidOrderMarketingEnabled();
   const serverTimestamp = () => getAdminFieldValue().serverTimestamp();
   const orderRef = db.collection('orders').doc(metadata.orderId);
-  if (session.payment_status !== 'paid') return false;
-  const piId = typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id;
+  const piId = session ? typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id : undefined;
   let analytics: OrderDetail['analytics'];
   const issuedAt = new Date().toISOString();
   const fulfilled = await db.runTransaction(async transaction => {
@@ -26,8 +46,15 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     if (!orderSnap.exists) throw new Error('Order not found');
     const order = orderSnap.data()!;
     analytics = order.analytics;
-    if (order.brandId !== metadata.brandId || order.locationId !== metadata.locationId || (order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== session.id)) throw new Error('Payment scope mismatch');
-    if (session.currency?.toLowerCase() !== 'dkk' || session.amount_total !== Math.round(Number(order.totalAmount) * 100)) throw new Error('Payment amount mismatch');
+    if (proof.kind === 'pickup') {
+      await authorizeTransaction(transaction, proof.actor.identity, order, 'orderfly.orders:edit', 'location');
+      if (order.paymentMethod !== 'PayAtPickup' || order.deliveryType !== 'Pickup' || order.psp) throw new Error('Kun afhentningsordrer med betaling i restaurant kan registreres her.');
+      metadata.brandId = order.brandId; metadata.locationId = order.locationId;
+      if (order.paymentStatus !== 'Paid' && (order.paymentStatus !== 'Pending' || order.status === 'Pending' || order.discountReservation !== 'held')) throw new Error('Ordren er ikke en godkendt ubetalt afhentningsordre.');
+    } else {
+      if (order.paymentMethod === 'PayAtPickup' || order.brandId !== metadata.brandId || order.locationId !== metadata.locationId || (order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== session!.id)) throw new Error('Payment scope mismatch');
+      if (session!.currency?.toLowerCase() !== 'dkk' || session!.amount_total !== Math.round(Number(order.totalAmount) * 100)) throw new Error('Payment amount mismatch');
+    }
     if (order.status === 'Canceled' && order.paymentStatus !== 'Paid') throw new Error('Canceled order cannot be fulfilled');
     const confirmationRef = db.collection('orderNotificationJobs').doc(createHash('sha256').update(JSON.stringify(['order-confirmation', order.brandId, metadata.orderId])).digest('hex'));
     const marketingOrderRef = db.collection('marketingOrderOutbox').doc(createHash('sha256').update(JSON.stringify(['omnisend-paid-order', order.brandId, metadata.orderId])).digest('hex'));
@@ -61,7 +88,7 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     // A legacy path could mark Paid without the outbox job. Repair only this
     // verified session's missing job, without replaying financial accounting.
     if (order.paymentStatus === 'Paid') {
-      if (order.psp?.checkoutSessionId !== session.id) throw new Error('Payment scope mismatch');
+      if (session && order.psp?.checkoutSessionId !== session.id) throw new Error('Payment scope mismatch');
       ensureConfirmation();
       if (order.invoice) ensureMarketingOrder(order.invoice.issuedAt);
       return false;
@@ -78,7 +105,10 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     const location = { ...locationSnap.data(), id: order.locationId } as Location;
     if (location.brandId !== order.brandId) throw new Error('Invoice location scope mismatch');
     const sequence = Number(counterSnap.data()?.lastNumber || 0) + 1;
-    const invoice = buildOrderInvoice({ order: { ...order, id: orderSnap.id } as OrderDetail, brand, location, sequence, issuedAt, paymentReference: piId || undefined });
+    const paymentCollection = proof.kind === 'pickup' ? {
+      receivedAt: issuedAt, employeeId: proof.actor.actorId, employeeName: proof.actor.name, method: proof.method,
+    } : undefined;
+    const invoice = buildOrderInvoice({ order: { ...order, id: orderSnap.id, ...(paymentCollection ? { paymentCollection } : {}) } as OrderDetail, brand, location, sequence, issuedAt, paymentReference: piId || undefined });
     if (customerSnap.exists && customerSnap.data()?.brandId !== order.brandId) throw new Error('Customer scope mismatch');
     const discountId = order.appliedDiscountId;
     const discountRef = discountId ? db.collection('discounts').doc(discountId) : null;
@@ -126,17 +156,21 @@ export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session
     transaction.update(orderRef, {
       discountReservation: discountId ? 'consumed' : 'none',
       fulfillmentWarnings: [!customerSnap.exists ? 'customer_deleted' : '', discountId && !discountSnap?.exists ? 'discount_deleted' : ''].filter(Boolean),
-      'psp.checkoutSessionId': session.id,
+      ...(session ? { 'psp.checkoutSessionId': session.id, 'psp.paymentIntentId': piId || null } : { paymentCollection }),
       paymentStatus: 'Paid', status: order.status === 'Pending' ? 'Received' : order.status, paidAt: serverTimestamp(),
-      'psp.paymentIntentId': piId || null, updatedAt: serverTimestamp(),
+      updatedAt: serverTimestamp(),
       invoice,
+    });
+    if (proof.kind === 'pickup') transaction.create(db.collection('auditLogs').doc(createHash('sha256').update(JSON.stringify(['pickup-payment', order.brandId, metadata.orderId])).digest('hex')), {
+      action: 'pickup_payment_received', brandId: order.brandId, locationId: order.locationId, orderId: metadata.orderId,
+      actorId: proof.actor.actorId, actorName: proof.actor.name, method: proof.method, totalAmount: order.totalAmount, createdAt: serverTimestamp(),
     });
     transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true });
     ensureConfirmation();
     ensureMarketingOrder(invoice.issuedAt);
     return true;
   });
-  if (fulfilled) {
+  if (fulfilled && session) {
     // Analytics are optional after an authoritative, idempotent settlement.
     try { await trackServerEvent('payment_succeeded', {
       brandId: metadata.brandId, locationId: metadata.locationId,

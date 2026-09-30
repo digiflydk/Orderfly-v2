@@ -12,6 +12,7 @@ const analyticsAttribution = z.object({
   referrerHost: z.string().max(253).regex(/^[a-z0-9.-]+$/).optional(),
 }).strict().optional();
 const customer = z.object({
+  paymentMethod: z.enum(['online', 'pay_at_pickup']).optional(),
   analyticsSessionId: z.string().uuid().optional(), analyticsDevice: z.enum(['mobile','desktop']).optional(), analyticsConsent: z.boolean().optional(), analyticsAttribution,
   name: z.string().trim().min(2).max(200), email: z.string().trim().email().max(254),
   phone: z.string().trim().min(5).max(50), street: optionalText, zipCode: optionalText, city: optionalText,

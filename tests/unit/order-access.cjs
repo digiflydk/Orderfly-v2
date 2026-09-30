@@ -3,7 +3,7 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 function fixture({allowed=true,changed=false,paid=true}={}){
  const calls=[],writes=[];const order={brandId:'brand-a',locationId:'location-a',paymentStatus:paid?'Paid':'Unpaid'};
  const ref={get:async()=>({exists:true,data:()=>order})};
- const action=loadTs('src/app/superadmin/sales/orders/actions.ts',{'next/cache':{revalidatePath:()=>{}},'@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({doc:()=>ref}),runTransaction:async run=>run({get:async()=>({data:()=>changed?{...order,brandId:'brand-b'}:order}),update:(ref,value)=>writes.push(value)})})},'@/lib/access/orderfly-session':{requireOrderflyAccess:async(...args)=>{calls.push(args);if(!allowed)throw Error('forbidden');}},'@/lib/feedback/mail-queue':{queueOrderFeedback:async()=>{throw Error('Optional mail failure');}}});
+ const action=loadTs('src/app/superadmin/sales/orders/actions.ts',{'next/cache':{revalidatePath:()=>{}},'@/lib/access/scoped-data':{authorizeTransaction:async()=>{throw Error('Unexpected pickup mutation in legacy fixture');}},'@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({doc:()=>ref}),runTransaction:async run=>run({get:async()=>({data:()=>changed?{...order,brandId:'brand-b'}:order}),update:(ref,value)=>writes.push(value)})})},'@/lib/access/orderfly-session':{requireOrderflyAccess:async(...args)=>{calls.push(args);if(!allowed)throw Error('forbidden');}},'@/lib/feedback/mail-queue':{queueOrderFeedback:async()=>{throw Error('Optional mail failure');}}});
  return {action,calls,writes};
 }
 test('order mutations require edit access to the stored brand and location',async()=>{

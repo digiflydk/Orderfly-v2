@@ -56,6 +56,7 @@ test('#189 expired session respects location/session scope and leaves paid order
 test('#189 superadmin cannot cancel or prepare an unpaid Stripe session by changing status',async()=>{
   const f=fixture(),db={collection:()=>({doc:()=>({get:async()=>({exists:true,data:()=>f.rows.get('orders/ORD-NEW')})})}),runTransaction:async callback=>callback({get:async()=>({data:()=>f.rows.get('orders/ORD-NEW')}),update:()=>{throw Error('must not update')}})};
   const api=loadTs('src/app/superadmin/sales/orders/actions.ts',{
+    '@/lib/access/scoped-data':{authorizeTransaction:async()=>{throw Error('Unpaid Stripe cannot enter merchant authorization');}},
     '@/lib/firebase-admin':{getAdminDb:()=>db},
     '@/lib/access/orderfly-session':{requireOrderflyAccess:async()=>{}},
     '@/lib/feedback/mail-queue':{queueOrderFeedback:async()=>{}},

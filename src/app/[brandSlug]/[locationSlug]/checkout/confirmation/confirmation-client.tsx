@@ -17,6 +17,7 @@ import { Badge } from '@/components/ui/badge';
 
 import type { GuestReceipt } from '@/lib/server/guest-receipt';
 import { pushPaidPurchase } from '@/lib/analytics';
+import { paymentMethodLabel } from '@/lib/merchant-payment-methods';
 
 function InfoItem({ icon: Icon, label, children }: { icon: React.ElementType, label: string, children: React.ReactNode }) {
     return (
@@ -87,6 +88,10 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
         return () => { stopped = true; controller.abort(); clearTimeout(timer); clearTimeout(deadline); };
     }, [sessionId, receiptToken, orderId, brand?.id, location?.id, order?.paymentStatus, retry]);
     const { completeCheckout } = useCart();
+    const pickupAccepted = order?.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && !['Pending', 'Canceled'].includes(order.status);
+    useEffect(() => {
+        if (pickupAccepted && order && brand && location) completeCheckout(order.id, brand.id, location.id);
+    }, [pickupAccepted, order?.id, brand?.id, location?.id, completeCheckout]);
 
     useEffect(() => {
         if (order?.paymentStatus === 'Paid' && brand && location) {
@@ -130,7 +135,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
         )
     }
     
-    if (order.paymentStatus !== 'Paid') {
+    if (order.paymentStatus !== 'Paid' && !pickupAccepted) {
         const failed = order.paymentStatus === 'Failed';
         return <main className="mx-auto max-w-lg p-8 text-center" aria-live="polite">
             <AlertTriangle className="mx-auto mb-4 h-10 w-10 text-amber-600" />
@@ -174,6 +179,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                            <CheckCircle2 className="h-10 w-10 text-green-600" />
                         </div>
                         <h1 className="text-3xl font-bold tracking-tight">Tak for din bestilling!</h1>
+                        {pickupAccepted && <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-950">Betales ved afhentning: {formatPrice(order.totalAmount)}. Restauranten har modtaget din bestilling. Betal i restauranten ved afhentning.</p>}
                         <p className="text-muted-foreground mt-2">
                            Din ordre <span className="font-mono text-foreground bg-muted p-1 rounded-sm">{id}</span> er bekræftet.
                         </p>
@@ -200,14 +206,14 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                                     </InfoItem>
                                 )}
                                 <InfoItem icon={Hash} label="Ordrestatus"><Badge>{{Pending:'Afventer betaling',Received:'Modtaget','In Progress':'Tilberedes',Ready:'Klar',Completed:'Afsluttet',Delivered:'Leveret',Canceled:'Annulleret',Error:'Kontakt restauranten'}[status] || 'Afventer betaling'}</Badge></InfoItem>
-                                <InfoItem icon={CreditCard} label="Betalingsmetode">Kortbetaling</InfoItem>
+                                <InfoItem icon={CreditCard} label="Betalingsmetode">{paymentMethodLabel(order)}</InfoItem>
                              </CardContent>
                         </Card>
                     </div>
 
                     <Card>
                         <CardHeader>
-                            <CardTitle>Din faktura</CardTitle>
+                            <CardTitle>{pickupAccepted ? 'Din ordreoversigt' : 'Din faktura'}</CardTitle>
                             <CardDescription>
                                 {order.invoice ? `Faktura ${order.invoice.number} · ` : ''}Bestilt den {formattedCreatedAt}
                             </CardDescription>

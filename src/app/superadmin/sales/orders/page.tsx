@@ -97,6 +97,7 @@ export default async function OrdersPage({
       createdAt: serializeDate(order.createdAt as DateLike),
       status: order.status,
       paymentStatus: order.paymentStatus,
+      paymentMethod: order.paymentMethod,
       paidSale: isPaidSale(order),
     }));
 

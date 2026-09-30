@@ -14,6 +14,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { paymentMethodLabel } from '@/lib/merchant-payment-methods';
 import { AdminDateRange } from '@/components/superadmin/admin-date-range';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
@@ -23,6 +24,7 @@ export type ClientOrderSummary = {
   createdAt?: string;
   status: string;
   paymentStatus: string;
+  paymentMethod?: string;
   paidSale: boolean;
 };
 
@@ -319,8 +321,9 @@ export function OrdersClientPage({
 
                       <TableCell>
                         <Badge variant="secondary">
-                          {order.paymentStatus === 'Paid' ? order.status : order.paymentStatus === 'Failed' ? 'Betaling afbrudt' : 'Afventer betaling'}
+                          {order.paymentStatus === 'Paid' || order.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && order.status !== 'Pending' ? order.status : order.paymentStatus === 'Failed' ? 'Betaling afbrudt' : 'Afventer betaling'}
                         </Badge>
+                        <p className="mt-1 text-sm">{paymentMethodLabel(order)}</p>
                       </TableCell>
 
                       <TableCell className="text-right font-medium">

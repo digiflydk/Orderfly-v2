@@ -100,6 +100,7 @@ export type Role = {
  * @description Customer information provided during checkout.
  */
 export interface CustomerInfo {
+  paymentMethod?: 'online' | 'pay_at_pickup';
     newsletterConsentId?: string;
     newsletterConsentVersion?: string;
     analyticsSessionId?: string;
@@ -239,6 +240,7 @@ export type Location = {
   travlhed_factor: 'normal' | 'medium' | 'høj';
   manual_override?: number;
   pickupSaveTag?: string;
+  paymentMethods?: { online: boolean; payAtPickup: boolean };
 
   // Calculated fields, added in actions
   supportsDelivery?: boolean;
@@ -372,7 +374,7 @@ export type OrderSummary = {
     status: OrderStatus;
     totalAmount: number;
     paymentStatus: 'Paid' | 'Pending' | 'Failed';
-    paymentMethod: 'Stripe' | 'Cash' | 'Other';
+    paymentMethod: 'Stripe' | 'PayAtPickup' | 'Cash' | 'Other';
     paymentDetails: PaymentDetails;
 };
 
@@ -396,6 +398,7 @@ export type PaymentDetails = {
  * @description A detailed view of a single order.
  */
 export type OrderDetail = OrderSummary & {
+  paymentCollection?: { receivedAt: string; employeeId: string; employeeName: string; method: 'cash' | 'card' };
     refundedAmountOre?: number;
   brandLogoUrl?: string | null;
   productItems: MinimalCartItem[];
@@ -429,7 +432,7 @@ export type OrderInvoiceLine = {
   totalAmount: number;
 };
 
-/** Immutable fiscal snapshot created exactly once when Stripe confirms payment. */
+/** Immutable fiscal snapshot created exactly once on verified/recorded payment. */
 export type OrderInvoice = {
   number: string;
   issuedAt: string;
@@ -462,7 +465,7 @@ export type OrderInvoice = {
   vatRate: number;
   vatAmount: number;
   totalAmount: number;
-  paymentMethod: 'Stripe';
+  paymentMethod: 'Stripe' | 'Cash' | 'CardInRestaurant';
   paymentReference?: string;
 };
 

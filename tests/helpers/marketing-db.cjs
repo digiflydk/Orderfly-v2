@@ -6,7 +6,16 @@ exports.memoryDb=(rows=new Map())=>{
  const query=(name,filters=[],order=null,count=Infinity)=>({
   doc:id=>ref(name+'/'+id),where:(field,op,value)=>query(name,[...filters,{field,op,value}],order,count),
   orderBy:(field,dir)=>query(name,filters,{field,dir},count),limit:n=>query(name,filters,order,n),
-  get:async()=>{let values=[...rows].filter(([key,value])=>key.startsWith(name+'/')&&filters.every(f=>f.op==='=='?value[f.field]===f.value:value[f.field]<=f.value));
+  get:async()=>{let values=[...rows].filter(([key,value])=>key.startsWith(name+'/')&&filters.every(f=>{
+   const actual=value[f.field];
+   if(f.op==='==')return actual===f.value;
+   if(f.op==='in')return f.value.includes(actual);
+   if(f.op==='array-contains-any')return Array.isArray(actual)&&actual.some(v=>f.value.includes(v));
+   if(f.op==='>=')return actual>=f.value;
+   if(f.op==='>')return actual>f.value;
+   if(f.op==='<')return actual<f.value;
+   return actual<=f.value;
+  }));
    if(order)values.sort((a,b)=>(a[1][order.field]-b[1][order.field])*(order.dir==='desc'?-1:1));return {docs:values.slice(0,count).map(([key])=>snap(key))};},
  });
  return {rows,collection:name=>query(name),runTransaction:async fn=>{
