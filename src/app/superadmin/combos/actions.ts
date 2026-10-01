@@ -1,7 +1,8 @@
 
 
 'use server';
-import { promotionBoundary, savedPromotionDate } from '@/lib/promotion-calendar';
+import { promotionBoundary } from '@/lib/promotion-calendar';
+import { savedPromotionTimestamp } from '@/lib/server/promotion-timestamp';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { comboEligible } from '@/lib/combo-eligibility';
@@ -202,7 +203,7 @@ export async function createOrUpdateCombo(
     await mutateScopedDocument('comboMenus',comboIdToSave,id?'orderfly.catalog:edit':'orderfly.catalog:create','locations',async(before,tx)=>{
       for (const key of ['startDate', 'endDate'] as const) {
         const day = formData.get(key);
-        if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) dataToSave[key] = Timestamp.fromDate(savedPromotionDate(day, before?.[key], key === 'endDate'));
+        if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) dataToSave[key] = savedPromotionTimestamp(day, before?.[key], key === 'endDate');
       }
       for(const productId of new Set(allProductIds)) {
         const product=await tx.get(getAdminDb().collection('products').doc(productId));

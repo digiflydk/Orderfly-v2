@@ -1,6 +1,7 @@
 
 'use server';
-import { promotionBoundary, savedPromotionDate } from '@/lib/promotion-calendar';
+import { promotionBoundary } from '@/lib/promotion-calendar';
+import { savedPromotionTimestamp } from '@/lib/server/promotion-timestamp';
 
 import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
 import { getScopedDocument, listScopedDocuments, mutateScopedDocument } from '@/lib/access/scoped-data';
@@ -193,7 +194,7 @@ export async function createOrUpdateUpsell(
     await mutateScopedDocument('upsells',upsellRef.id,id?'orderfly.catalog:edit':'orderfly.catalog:create','locations',before=>{
       for (const key of ['startDate', 'endDate'] as const) {
         const day = formData.get(key);
-        if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) writeData[key] = admin.firestore.Timestamp.fromDate(savedPromotionDate(day, before?.[key], key === 'endDate'));
+        if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) writeData[key] = savedPromotionTimestamp(day, before?.[key], key === 'endDate');
       }
       return {...before,...writeData,views:before?.views??0,conversions:before?.conversions??0};
     }, true);

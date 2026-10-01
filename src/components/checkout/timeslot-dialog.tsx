@@ -1,28 +1,16 @@
-
-
 'use client';
 
-import {localizeTime} from '@/lib/storefront-format';
+import { localizeTime } from '@/lib/storefront-format';
 import { useState, useEffect, useMemo, useRef } from 'react';
-import { fromZonedTime, toZonedTime } from 'date-fns-tz';
+import { toZonedTime } from 'date-fns-tz';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogFooter,
-  DialogDescription,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Calendar } from '@/components/ui/calendar';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '../ui/select';
-import { resolveFulfillmentTime, fulfillmentSlots } from '@/lib/fulfillment-time';
-import { calculateTimeSlots } from '@/lib/time-slots';
+import { resolveFulfillmentTime, fulfillmentSlots, displayFulfillmentTime, unavailableTime } from '@/lib/fulfillment-time';
 import { useCart } from '@/context/cart-context';
 import { format, addDays, startOfDay, isSameDay } from 'date-fns';
 import { da } from 'date-fns/locale';
-import { Loader2 } from 'lucide-react';
-import type { TimeSlotResponse } from '@/types';
 
 interface TimeSlotDialogProps {
   isOpen: boolean;
@@ -32,13 +20,36 @@ interface TimeSlotDialogProps {
 
 export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialogProps) {
   const { deliveryType, selectedTime, setSelectedTime, location } = useCart();
-  const today = startOfDay(toZonedTime(new Date(), 'Europe/Copenhagen'));
+  const [clock, setClock] = useState(Date.now());
+  const today = startOfDay(toZonedTime(new Date(clock), 'Europe/Copenhagen'));
   const [selectedDate, setSelectedDate] = useState<Date>(today);
-  const [timeSlots, setTimeSlots] = useState<TimeSlotResponse | null>(null);
-  const [isLoading, setIsLoading] = useState(false);
+  const [month, setMonth] = useState<Date>(today);
   const [internalTime, setInternalTime] = useState(selectedTime);
-  const requestId = useRef(0);
-  const [clock, setClock] = useState(new Date().getTime());
+  const [saveError, setSaveError] = useState(false);
+  const openedScope = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!isOpen) { openedScope.current = null; return; }
+    if (!location || !deliveryType) return;
+    const scope = `${locationId}:${deliveryType}`;
+    if (openedScope.current === scope) return;
+    openedScope.current = scope;
+    const now = new Date();
+    let date = startOfDay(toZonedTime(now, 'Europe/Copenhagen'));
+    if (selectedTime !== 'asap' && Number.isFinite(Date.parse(selectedTime))) {
+      date = startOfDay(toZonedTime(new Date(selectedTime), 'Europe/Copenhagen'));
+      // Slots after midnight belong to the previous opening day.
+      const previous = addDays(date, -1);
+      if (!fulfillmentSlots(location, deliveryType, format(date, 'yyyy-MM-dd'), now).includes(selectedTime)
+        && fulfillmentSlots(location, deliveryType, format(previous, 'yyyy-MM-dd'), now).includes(selectedTime)) date = previous;
+    }
+    setSelectedDate(date);
+    setMonth(date);
+    setInternalTime(selectedTime);
+    setSaveError(false);
+    setClock(now.getTime());
+  }, [isOpen, locationId, deliveryType, location, selectedTime]);
+
   useEffect(() => {
     if (!isOpen) return;
     const tick = () => setClock(Date.now());
@@ -46,67 +57,36 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
     window.addEventListener('focus', tick);
     return () => { clearInterval(timer); window.removeEventListener('focus', tick); };
   }, [isOpen]);
-  const slotValue = (time: string) => {
-    const opening = location?.openingHours[format(selectedDate, 'eeee').toLowerCase()]?.open;
-    const day = opening && time < opening ? addDays(selectedDate, 1) : selectedDate;
-    return fromZonedTime(`${format(day, 'yyyy-MM-dd')}T${time}:00`, 'Europe/Copenhagen').toISOString();
-  };
-  const stillAvailable = (value: string) => {
-    try { if (!location || !deliveryType) return false; resolveFulfillmentTime(location, deliveryType, value, new Date()); return true; }
-    catch { return false; }
-  };
 
-  useEffect(() => {
-    if (isOpen) {
-      handleDateChange(today);
-    }
-    return () => { requestId.current++; };
-  }, [isOpen, locationId]);
-
-  const handleDateChange = async (date: Date | undefined) => {
-    if (!date) return;
-    const request = ++requestId.current;
-    setIsLoading(true);
-    setSelectedDate(date);
-    setTimeSlots(null);
-    setInternalTime('');
-    try {
-      // Send the selected calendar day, independent of the shopper's timezone.
-      const slots = location ? calculateTimeSlots(location, `${format(date, 'yyyy-MM-dd')}T12:00:00Z`) : null;
-      if (request === requestId.current) setTimeSlots(slots);
-    } catch {
-      if (request === requestId.current) setTimeSlots(null);
-    } finally {
-      if (request === requestId.current) setIsLoading(false);
-    }
-  };
-
-  const validInstants = useMemo(() => new Set(location && deliveryType
-    ? fulfillmentSlots(location, deliveryType, format(selectedDate, 'yyyy-MM-dd'), new Date(clock)) : []),
+  const availableTimes = useMemo(() => location && deliveryType
+    ? fulfillmentSlots(location, deliveryType, format(selectedDate, 'yyyy-MM-dd'), new Date(clock)) : [],
     [location, deliveryType, selectedDate, clock]);
-  const availableTimes = (timeSlots ? (deliveryType === 'delivery' ? timeSlots.delivery_times : timeSlots.pickup_times) : []).filter(time => validInstants.has(slotValue(time)));
+  const asapInstant = useMemo(() => {
+    try { return location && deliveryType ? resolveFulfillmentTime(location, deliveryType, 'asap', new Date(clock)) : null; }
+    catch { return null; }
+  }, [location, deliveryType, clock]);
+  const canSelectAsap = isSameDay(selectedDate, today) && !!asapInstant;
+  const selectionValid = internalTime === 'asap' ? canSelectAsap : availableTimes.includes(internalTime);
+  const unavailableSelection = !!internalTime && !selectionValid;
 
-  const asapText = useMemo(() => {
-      if (!timeSlots) return 'Indlæser…';
-      const text = deliveryType === 'delivery' ? timeSlots.asap_delivery : timeSlots.asap_pickup;
-      if (text) return text;
-      return 'Ingen ledige tider';
-  }, [timeSlots, deliveryType]);
-
+  const handleDateChange = (date: Date | undefined) => {
+    if (!date || isSameDay(date, selectedDate)) return;
+    setSelectedDate(date);
+    setInternalTime('');
+    setSaveError(false);
+    setClock(Date.now());
+  };
   const handleSave = () => {
-    if (!selectionValid || !stillAvailable(internalTime)) { setInternalTime(''); setClock(Date.now()); return; }
-    setSelectedTime(internalTime);
-    setIsOpen(false);
-  }
-
-  const formatTimeForDisplay = (time: string, date: Date) => {
-    if (isSameDay(date, today)) return `I dag kl. ${time}`;
-    if (isSameDay(date, addDays(today, 1))) return `I morgen kl. ${time}`;
-    return `${format(date, 'EEE d. MMM', {locale: da})} kl. ${time}`;
-  }
-  const canSelectAsap = isSameDay(selectedDate, today) && availableTimes.length > 0 && !!(deliveryType === 'delivery' ? timeSlots?.asap_delivery : timeSlots?.asap_pickup);
-  const selectionValid = !isLoading && (internalTime === 'asap' ? canSelectAsap : availableTimes.some(time => slotValue(time) === internalTime));
-
+    try {
+      if (!selectionValid || !location || !deliveryType) throw new Error(unavailableTime);
+      resolveFulfillmentTime(location, deliveryType, internalTime, new Date());
+      setSelectedTime(internalTime);
+      setIsOpen(false);
+    } catch {
+      setSaveError(true);
+      setClock(Date.now());
+    }
+  };
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -115,46 +95,23 @@ export function TimeSlotDialog({ isOpen, setIsOpen, locationId }: TimeSlotDialog
           <DialogTitle>Vælg tidspunkt</DialogTitle>
           <DialogDescription>Vælg, hvornår du vil afhente eller have leveret din ordre.</DialogDescription>
         </DialogHeader>
-
         <div className="p-4 space-y-4">
-            <Calendar
-                mode="single"
-                selected={selectedDate}
-                onSelect={handleDateChange}
-                disabled={(date) => date < today || date > addDays(today, 7)}
-                locale={da}
-                initialFocus
-            />
-
-            {isLoading ? (
-                <div className="flex items-center justify-center p-8">
-                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-            ) : (
-                 <Select onValueChange={setInternalTime} value={internalTime}>
-                    <SelectTrigger>
-                        <SelectValue placeholder="Vælg et tidspunkt" />
-                    </SelectTrigger>
-                    <SelectContent>
-                        {canSelectAsap && <SelectItem value="asap">{asapText}</SelectItem>}
-                        {availableTimes.map(time => {
-                            const displayValue = formatTimeForDisplay(time, selectedDate);
-                            return (
-                                <SelectItem key={slotValue(time)} value={slotValue(time)}>
-                                    {localizeTime(displayValue)}
-                                </SelectItem>
-                            )
-                        })}
-                    </SelectContent>
-                </Select>
-            )}
+          <Calendar mode="single" selected={selectedDate} onSelect={handleDateChange}
+            month={month} onMonthChange={setMonth}
+            disabled={(date) => date < today || date > addDays(today, location?.allowPreOrder ? 7 : 0)}
+            locale={da} initialFocus />
+          {(unavailableSelection || saveError) && <p role="alert" className="text-sm text-destructive">{unavailableTime} Dit gemte valg ændres først, når du gemmer et nyt tidspunkt.</p>}
+          <Select onValueChange={value => { setInternalTime(value); setSaveError(false); }} value={internalTime}>
+            <SelectTrigger aria-label="Tidspunkt"><SelectValue placeholder="Vælg et tidspunkt" /></SelectTrigger>
+            <SelectContent>
+              {unavailableSelection && <SelectItem value={internalTime} disabled>{internalTime === 'asap' ? 'Hurtigst muligt' : displayFulfillmentTime(internalTime)} (ikke længere ledigt)</SelectItem>}
+              {canSelectAsap && <SelectItem value="asap">Hurtigst muligt ({displayFulfillmentTime(asapInstant!)})</SelectItem>}
+              {availableTimes.map(value => <SelectItem key={value} value={value}>{localizeTime(displayFulfillmentTime(value))}</SelectItem>)}
+            </SelectContent>
+          </Select>
+          {availableTimes.length === 0 && !canSelectAsap && <p className="text-sm text-muted-foreground">Ingen ledige tider denne dag. Vælg en anden dato.</p>}
         </div>
-
-        <DialogFooter className="p-4 border-t">
-          <Button onClick={handleSave} disabled={!selectionValid}>
-            Gem tidspunkt
-          </Button>
-        </DialogFooter>
+        <DialogFooter className="p-4 border-t"><Button onClick={handleSave} disabled={!selectionValid}>Gem tidspunkt</Button></DialogFooter>
       </DialogContent>
     </Dialog>
   );

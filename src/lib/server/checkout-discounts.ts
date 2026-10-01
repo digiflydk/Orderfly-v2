@@ -1,14 +1,8 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { promotionDate } from '@/lib/promotion-date';
+import { discountRecord } from '@/lib/discount-record';
 import { discountApplicationType } from '@/lib/promotion-rules';
 import type { Discount } from '@/types';
-
-const serialize = (id: string, data: FirebaseFirestore.DocumentData): Discount => ({
-  ...data, id, applicationType: discountApplicationType(data),
-  startDate: promotionDate(data.startDate), endDate: promotionDate(data.endDate),
-  createdAt: promotionDate(data.createdAt), updatedAt: promotionDate(data.updatedAt),
-} as Discount);
 
 // Checkout validates eligibility, current tenant/location, customer and price
 // before charging. These internal reads grant no administration capability.
@@ -18,11 +12,11 @@ export async function getDiscountByCode(code: string, brandId: string): Promise<
   if (result.size !== 1) return null;
   const record = result.docs[0], data = record.data();
   if (discountApplicationType(data) === 'newsletter_signup') return null;
-  return serialize(record.id, data);
+  return discountRecord(record.id, data);
 }
 
 export async function getDiscountById(id: string): Promise<Discount | null> {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(id)) return null;
   const record = await getAdminDb().collection('discounts').doc(id).get();
-  return record.exists ? serialize(record.id, record.data()!) : null;
+  return record.exists ? discountRecord(record.id, record.data()!) : null;
 }

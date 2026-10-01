@@ -11,8 +11,8 @@ import type { Discount } from '@/types';
 import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
 import { marketingConfigurationStatus } from '@/lib/marketing/config';
-import { savedPromotionDate } from '@/lib/promotion-calendar';
-import { promotionDate } from '@/lib/promotion-date';
+import { savedPromotionTimestamp } from '@/lib/server/promotion-timestamp';
+import { discountRecord } from '@/lib/discount-record';
 
 const activeTimeSlotSchema = z.object({
   start: z.string(),
@@ -134,8 +134,8 @@ export async function createOrUpdateDiscount(
         const customer = await tx.get(db.collection('customers').doc(discountData.assignedToCustomerId));
         if (!customer.exists || customer.data()?.brandId !== discountData.brandId) throw new Error('Select a customer belonging to this brand.');
       }
-      if (discountData.startDate) dataToSave.startDate = Timestamp.fromDate(savedPromotionDate(discountData.startDate, before?.startDate));
-      if (discountData.endDate) dataToSave.endDate = Timestamp.fromDate(savedPromotionDate(discountData.endDate, before?.endDate, true));
+      if (discountData.startDate) dataToSave.startDate = savedPromotionTimestamp(discountData.startDate, before?.startDate);
+      if (discountData.endDate) dataToSave.endDate = savedPromotionTimestamp(discountData.endDate, before?.endDate, true);
       if (dataToSave.startDate && dataToSave.endDate && dataToSave.startDate.toDate() > dataToSave.endDate.toDate()) throw new Error('Slutdatoen skal være på eller efter startdatoen.');
       const duplicates = await tx.get(db.collection('discounts').where('brandId', '==', discountData.brandId).where('code', '==', discountData.code));
       if (discountData.applicationType === 'code' && duplicates.docs.some(record => record.id !== docId)) throw new Error('Denne rabatkode findes allerede for brandet.');
@@ -173,30 +173,14 @@ export async function deleteDiscount(id: string) {
 export async function getDiscounts(): Promise<Discount[]> {
   const documents = await listScopedDocuments('discounts', 'orderfly.discounts:view', 'locations');
   return documents.sort((a, b) => String(a.data().code).localeCompare(String(b.data().code))).map(doc => {
-    const data = doc.data();
-    return { 
-      ...data,
-      id: doc.id,
-      startDate: promotionDate(data.startDate),
-      endDate: promotionDate(data.endDate),
-      createdAt: promotionDate(data.createdAt) ?? null,
-      updatedAt: promotionDate(data.updatedAt) ?? null,
-    } as Discount;
+    return discountRecord(doc.id, doc.data());
   });
 }
 
 export async function getDiscountById(id: string): Promise<Discount | null> {
     const docSnap = await getScopedDocument('discounts', id, 'orderfly.discounts:view', 'locations', true);
     if (docSnap) {
-        const data = docSnap.data()!;
-        return { 
-            ...data,
-            id: docSnap.id,
-            startDate: promotionDate(data.startDate),
-            endDate: promotionDate(data.endDate),
-            createdAt: promotionDate(data.createdAt) ?? null,
-            updatedAt: promotionDate(data.updatedAt) ?? null,
-        } as Discount;
+        return discountRecord(docSnap.id, docSnap.data()!);
     }
     return null;
 }

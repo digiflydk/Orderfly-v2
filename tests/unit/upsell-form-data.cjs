@@ -5,7 +5,7 @@ const ts=require('typescript');
 function load(path,mocks={}) {
   const mod={exports:{}};
   const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022,jsx:ts.JsxEmit.ReactJSX}}).outputText;
-  new Function('require','module','exports',code)(name=>name in mocks ?mocks[name]:name.includes('promotion-calendar')?require('../helpers/load-ts.cjs').loadTs('src/lib/promotion-calendar.ts'):require(name),mod,mod.exports);
+  new Function('require','module','exports',code)(name=>name in mocks ?mocks[name]:name.includes('promotion-timestamp')?require('../helpers/load-ts.cjs').loadTs('src/lib/server/promotion-timestamp.ts',{'server-only':{}}):name.includes('promotion-calendar')?require('../helpers/load-ts.cjs').loadTs('src/lib/promotion-calendar.ts'):require(name),mod,mod.exports);
   return mod.exports;
 }
 const {upsellFormData}=load('src/lib/upsell-form-data.ts');
@@ -30,7 +30,7 @@ test('controlled create values satisfy the real server parser and persist native
   assert.deepEqual(saved.orderTypes,['pickup','delivery']);
   assert.deepEqual(saved.triggerConditions,values.triggerConditions);
   assert.deepEqual(saved.activeTimeSlots,values.activeTimeSlots);
-  assert.equal(saved.startDate,'2026-09-06T22:00:00.000Z'); // September 7 starts at Copenhagen midnight.
+  assert.equal(saved.startDate.toDate().toISOString(),'2026-09-06T22:00:00.000Z'); // September 7 starts at Copenhagen midnight.
   await assert.rejects(api.createOrUpdateUpsell(null,upsellFormData({...values,imageUrl:undefined,description:undefined,discountValue:undefined})),/REDIRECT/);
   assert.equal(saved.imageUrl,null);assert.equal(saved.description,null);
   assert.equal('discountValue' in saved,false);assert.equal(saved.createdAt,0);
