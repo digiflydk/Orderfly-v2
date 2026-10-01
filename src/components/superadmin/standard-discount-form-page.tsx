@@ -143,7 +143,9 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 
 	const [isPending, startTransition] = useTransition();
 
+	const [saveError, setSaveError] = useState<string | null>(null);
 	const handleFormSubmit = form.handleSubmit((data) => {
+        setSaveError(null);
 		const formData = new FormData();
 		const imageInput = document.querySelector('input[name="discountImageUrl"]') as HTMLInputElement;
 
@@ -186,6 +188,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 
 		startTransition(async () => {
 			const result = await createOrUpdateStandardDiscount(null, formData);
+			if (result?.error) setSaveError(result.message);
 			if (result?.error && result.errors) {
 				toast({ variant: 'destructive', title: 'Validation Failed', description: 'Please check the form for errors.' });
 				result.errors.forEach(error => {
@@ -195,7 +198,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 				toast({ variant: 'destructive', title: 'Error', description: result.message });
 			}
 		});
-	});
+	}, () => setSaveError('Rabatten blev ikke gemt. Ret de markerede felter.'));
 
 	if (!isClient) {
 		return <div className="space-y-6">
@@ -210,7 +213,8 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 	return (
 		<Form {...form}>
 			<form onSubmit={handleFormSubmit} className="space-y-6" key={discount?.id || 'new'}>
-				{discount?.id && <input type="hidden" name="id" value={discount.id} />}
+				{saveError && <p role="alert" className="rounded border border-destructive p-3 text-destructive">{saveError}</p>}
+                {discount?.id && <input type="hidden" name="id" value={discount.id} />}
 				<div className="flex items-center justify-between">
 					<div><h1 className="text-2xl font-bold tracking-tight">{title}</h1><p className="text-muted-foreground">{description}</p></div>
 					{isPending && <PendingFeedback label="Gemmer…" />}
