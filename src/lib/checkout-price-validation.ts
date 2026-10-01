@@ -58,8 +58,13 @@ export function minimumCheckoutPrices(items: MinimalCartItem[], catalog: Catalog
 export function validateCheckoutPrices(items: MinimalCartItem[], catalog: CatalogPriceLine[], discounts: StandardDiscount[], upsells: Upsell[], scope: { brandId: string; locationId: string; deliveryType: 'pickup' | 'delivery'; now?: Date }) {
   const verifiedUpsellIds = new Set<string>();
   const minimums = minimumCheckoutPrices(items, catalog, discounts, upsells, scope, verifiedUpsellIds);
+  const currentStandardPrices = minimumCheckoutPrices(items, catalog, discounts, [], scope);
   items.forEach((item, index) => {
     const minimum = minimums[index];
+    // A newly activated/better item offer must also invalidate an older, higher quote.
+    if (!catalog[index].isCombo && ore(item.unitPrice) > ore(currentStandardPrices[index])) {
+      throw new Error('Priser eller tilbud er ændret. Opdatér kurven, før du fortsætter.');
+    }
     // Round a unit once, before quantity. Eligibility never bypasses this floor.
     if (ore(item.unitPrice) < ore(minimum) ||
         ore(item.totalPrice) < ore(item.unitPrice) * item.quantity) {

@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import { ChevronLeft, ChevronRight } from "lucide-react"
+import { da } from "date-fns/locale"
 import { DayPicker } from "react-day-picker"
 
 import { cn } from "@/lib/utils"
@@ -17,6 +18,8 @@ function Calendar({
 }: CalendarProps) {
   return (
     <DayPicker
+      locale={da}
+      labels={{ labelPrevious: () => "Forrige måned", labelNext: () => "Næste måned" }}
       showOutsideDays={showOutsideDays}
       className={cn("p-3", className)}
       classNames={{

@@ -1,5 +1,6 @@
 
 'use server';
+import { promotionBoundary, savedPromotionDate } from '@/lib/promotion-calendar';
 
 import { isQuantityMethod } from '@/lib/automatic-discounts';
 import { restaurantClock } from '@/lib/promotion-rules';
@@ -62,7 +63,7 @@ export async function createOrUpdateStandardDiscount(
         if (rawData.discountMethod !== 'bundle_price') delete rawData.bundlePrice;
         rawData.quantityTiers = rawData.discountMethod === 'quantity_tiers' ? JSON.parse(String(formData.get('quantityTiers') || '[]')) : undefined;
 
-        for (const key of ['startDate', 'endDate']) rawData[key] = rawData[key] ? new Date(rawData[key]) : undefined;
+        for (const key of ['startDate', 'endDate']) rawData[key] = rawData[key] ? (/^\d{4}-\d{2}-\d{2}$/.test(rawData[key]) ? promotionBoundary(rawData[key], key === 'endDate') : new Date(rawData[key])) : undefined;
         if (isQuantityMethod(rawData.discountMethod)) rawData.allowStacking = false;
 		const validatedFields = standardDiscountSchema.safeParse(rawData);
 
@@ -93,6 +94,10 @@ export async function createOrUpdateStandardDiscount(
 		Object.keys(dataToSave).forEach(key => dataToSave[key] === undefined && delete dataToSave[key]);
 
 		await mutateScopedDocument('standard_discounts', docId, id ? 'orderfly.discounts:edit' : 'orderfly.discounts:create', 'locations', async (before, tx) => {
+      for (const key of ['startDate', 'endDate'] as const) {
+        const day = formData.get(key);
+        if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) dataToSave[key] = Timestamp.fromDate(savedPromotionDate(day, before?.[key], key === 'endDate'));
+      }
           if (before && before.brandId !== discountData.brandId) throw new Error('Discount not found for this brand.');
 
         if (discountData.discountType === 'product' || discountData.discountType === 'category') {

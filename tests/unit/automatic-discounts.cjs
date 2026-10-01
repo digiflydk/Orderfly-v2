@@ -5,7 +5,7 @@ const ts=require('typescript');
 function load(path,mocks={}) {
  const mod={exports:{}};
  const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
- new Function('require','module','exports',code)(name=>name in mocks ?mocks[name]:require(name),mod,mod.exports);
+ new Function('require','module','exports',code)(name=>name in mocks ?mocks[name]:name.includes('promotion-calendar')?require('../helpers/load-ts.cjs').loadTs('src/lib/promotion-calendar.ts'):require(name),mod,mod.exports);
  return mod.exports;
 }
 const calc=load('src/lib/automatic-discounts.ts',{'./money':load('src/lib/money.ts')});

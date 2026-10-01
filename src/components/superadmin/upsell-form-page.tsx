@@ -1,4 +1,6 @@
 'use client';
+import { da } from 'date-fns/locale';
+import { calendarDay, calendarDate, promotionDay } from '@/lib/promotion-calendar';
 
 import { z } from 'zod';
 import { upsellFormData } from '@/lib/upsell-form-data';
@@ -188,8 +190,8 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 			description: upsell.description ?? undefined,
 			imageUrl: upsell.imageUrl ?? undefined,
 			discountValue: upsell.discountValue ?? undefined,
-			startDate: upsell.startDate ?? undefined,
-			endDate: upsell.endDate ?? undefined,
+			startDate: calendarDate(promotionDay(upsell.startDate)),
+			endDate: calendarDate(promotionDay(upsell.endDate)),
 			offerProductIds: upsell.offerProductIds || [],
 			offerCategoryIds: upsell.offerCategoryIds || [],
 			activeTimeSlots: upsell.activeTimeSlots || [],
@@ -537,10 +539,10 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 								<Separator />
 
 								<FormField control={control} name="startDate" render={({ field }) => (
-									<FormItem className="flex flex-col"><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
+									<FormItem className="flex flex-col"><FormLabel>Startdato</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP", { locale: da }) : <span>Vælg dato</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
 								)} />
 								<FormField control={control} name="endDate" render={({ field }) => (
-									<FormItem className="flex flex-col"><FormLabel>End Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
+									<FormItem className="flex flex-col"><FormLabel>Slutdato</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP", { locale: da }) : <span>Vælg dato</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
 								)} />
 							</CardContent>
 						</Card>

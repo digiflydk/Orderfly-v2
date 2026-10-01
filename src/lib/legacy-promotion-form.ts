@@ -1,3 +1,4 @@
+import { discountApplicationType } from './promotion-rules';
 import type { Discount, StandardDiscount } from '@/types';
 
 // Older campaigns predate some form fields. Use the same unrestricted meaning
@@ -7,7 +8,7 @@ export function discountFormRecord(discount: Discount): Discount {
   return {
     ...discount,
     locationIds: Array.isArray(discount.locationIds) ? discount.locationIds : legacy.locationId ? [legacy.locationId] : [],
-    applicationType: legacy.applicationType ?? (discount.code === 'NEWSLETTER_SIGNUP' ? 'newsletter_signup' : 'code'),
+    applicationType: discountApplicationType(discount),
     orderTypes: Array.isArray(discount.orderTypes) ? discount.orderTypes : ['pickup', 'delivery'],
     activeDays: Array.isArray(discount.activeDays) ? discount.activeDays : [],
     activeTimeSlots: Array.isArray(discount.activeTimeSlots) ? discount.activeTimeSlots : [],

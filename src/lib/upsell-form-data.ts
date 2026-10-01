@@ -1,3 +1,4 @@
+import { calendarDay } from './promotion-calendar';
 /** Serialize controlled form state to the existing server-action contract. */
 export function upsellFormData(values: Record<string, unknown>, id?: string): FormData {
   const data = new FormData();
@@ -11,7 +12,7 @@ export function upsellFormData(values: Record<string, unknown>, id?: string): Fo
   for (const key of ['triggerConditions', 'activeTimeSlots']) data.set(key, JSON.stringify(values[key] ?? []));
   for (const key of ['startDate', 'endDate']) {
     const date = values[key];
-    if (date instanceof Date) data.set(key, date.toISOString());
+    if (date instanceof Date) data.set(key, calendarDay(date)!);
   }
   if (values.isActive === true) data.set('isActive', 'on');
   return data;

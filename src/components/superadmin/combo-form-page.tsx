@@ -1,4 +1,6 @@
 'use client';
+import { da } from 'date-fns/locale';
+import { calendarDay, calendarDate, promotionDay } from '@/lib/promotion-calendar';
 
 import { z } from 'zod';
 import { optionalImageUrl } from '@/lib/optional-image-url';
@@ -414,10 +416,10 @@ export function ComboFormPage({
       ? {
           ...combo,
           startDate: combo.startDate
-            ? new Date(combo.startDate)
+            ? calendarDate(promotionDay(combo.startDate))
             : undefined,
           endDate: combo.endDate
-            ? new Date(combo.endDate)
+            ? calendarDate(promotionDay(combo.endDate))
             : undefined,
           imageUrl: combo.imageUrl || '',
           pickupPrice:
@@ -478,10 +480,10 @@ export function ComboFormPage({
       reset({
         ...combo,
         startDate: combo.startDate
-          ? new Date(combo.startDate)
+          ? calendarDate(promotionDay(combo.startDate))
           : undefined,
         endDate: combo.endDate
-          ? new Date(combo.endDate)
+          ? calendarDate(promotionDay(combo.endDate))
           : undefined,
         imageUrl: combo.imageUrl || '',
         pickupPrice:
@@ -663,7 +665,7 @@ export function ComboFormPage({
             if (value) {
               formData.append(
                 key,
-                (value as Date).toISOString(),
+                calendarDay(value as Date)!,
               );
             }
             return;
@@ -1550,7 +1552,7 @@ export function ComboFormPage({
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
                       <FormLabel>
-                        Start Date
+                        Startdato
                       </FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
@@ -1567,11 +1569,11 @@ export function ComboFormPage({
                               {field.value ? (
                                 format(
                                   field.value,
-                                  'PPP',
+                                  'PPP', { locale: da },
                                 )
                               ) : (
                                 <span>
-                                  Pick a date
+                                  Vælg dato
                                 </span>
                               )}
                             </Button>
@@ -1598,7 +1600,7 @@ export function ComboFormPage({
                   name="endDate"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>End Date</FormLabel>
+                      <FormLabel>Slutdato</FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
                           <FormControl>
@@ -1614,11 +1616,11 @@ export function ComboFormPage({
                               {field.value ? (
                                 format(
                                   field.value,
-                                  'PPP',
+                                  'PPP', { locale: da },
                                 )
                               ) : (
                                 <span>
-                                  Pick a date
+                                  Vælg dato
                                 </span>
                               )}
                             </Button>

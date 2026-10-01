@@ -1,5 +1,5 @@
 'use client';
-import { getDiscountCustomers } from '@/app/superadmin/discounts/actions';
+import { getDiscountCustomers, getNewsletterSetup } from '@/app/superadmin/discounts/actions';
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -7,6 +7,8 @@ import { useForm, useFieldArray } from 'react-hook-form';
 import { useState, useEffect, useMemo, useTransition } from 'react';
 import Link from '@/components/superadmin/admin-link';
 import { format } from 'date-fns';
+import { da } from 'date-fns/locale';
+import { calendarDay, calendarDate, promotionDay } from '@/lib/promotion-calendar';
 import { CalendarIcon, Loader2, PlusCircle, Trash2, Clock } from 'lucide-react';
 
 import {
@@ -70,6 +72,9 @@ const discountSchema = z.object({
   firstTimeCustomerOnly: z.boolean().default(false),
   allowStacking: z.boolean().default(false),
 }).superRefine((data, ctx) => {
+  if (data.applicationType === 'code' && data.code === 'NEWSLETTER_SIGNUP') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['code'], message: 'Indtast en rabatkode. NEWSLETTER_SIGNUP er reserveret til nyhedsbrevsrabatter.' });
+  }
   if (data.applicationType === 'code' && data.code.length < 3) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -113,10 +118,10 @@ export function DiscountFormPage({
       ? {
           ...discountFormRecord(discount),
           startDate: discount.startDate
-            ? format(discount.startDate, 'yyyy-MM-dd')
+            ? promotionDay(discount.startDate)
             : undefined,
           endDate: discount.endDate
-            ? format(discount.endDate, 'yyyy-MM-dd')
+            ? promotionDay(discount.endDate)
             : undefined,
           minOrderValue: discount.minOrderValue ?? 0,
           assignedToCustomerId: discount.assignedToCustomerId ?? undefined,
@@ -157,10 +162,10 @@ export function DiscountFormPage({
       reset({
         ...discountFormRecord(discount),
         startDate: discount.startDate
-          ? format(discount.startDate, 'yyyy-MM-dd')
+          ? promotionDay(discount.startDate)
           : undefined,
         endDate: discount.endDate
-          ? format(discount.endDate, 'yyyy-MM-dd')
+          ? promotionDay(discount.endDate)
           : undefined,
         minOrderValue: discount.minOrderValue ?? undefined,
         assignedToCustomerId: discount.assignedToCustomerId ?? undefined,
@@ -179,11 +184,22 @@ export function DiscountFormPage({
   const assignedToCustomerId = watch('assignedToCustomerId');
   const firstTimeCustomerOnly = watch('firstTimeCustomerOnly');
   const applicationType = watch('applicationType');
+  const [newsletterSetup, setNewsletterSetup] = useState<string | null>(null);
+  useEffect(() => {
+    let current = true;
+    setNewsletterSetup(null);
+    if (applicationType === 'newsletter_signup' && selectedBrandId) {
+      void getNewsletterSetup(selectedBrandId).then(message => {
+        if (current) setNewsletterSetup(message);
+      }).catch(() => { if (current) setNewsletterSetup('Opsætningen kunne ikke kontrolleres. Prøv igen, eller kontakt en administrator.'); });
+    }
+    return () => { current = false; };
+  }, [applicationType, selectedBrandId]);
+
 
   useEffect(() => {
     if (applicationType === 'newsletter_signup') {
       setValue('code', 'NEWSLETTER_SIGNUP', { shouldValidate: true });
-      setValue('perCustomerLimit', 1, { shouldValidate: true });
     }
   }, [applicationType, setValue]);
 
@@ -201,7 +217,9 @@ export function DiscountFormPage({
     ? `Editing details for ${discount.code}.`
     : 'Fill in the details for the new discount.';
 
+  const [saveError, setSaveError] = useState<string | null>(null);
   const handleFormSubmit = form.handleSubmit(data => {
+    setSaveError(null);
     const formData = new FormData();
 
     Object.entries(data).forEach(([key, value]) => {
@@ -222,6 +240,7 @@ export function DiscountFormPage({
       const result = await (createOrUpdateDiscount as any)(null, formData);
 
       if (result?.error) {
+        setSaveError(result.message);
         toast({
           variant: 'destructive',
           title: 'Error',
@@ -242,11 +261,16 @@ export function DiscountFormPage({
         });
       }
     });
+  }, errors => {
+    const messages = Object.entries(errors).map(([field, error]) => `${field}: ${error?.message || 'Kontrollér feltet'}`);
+    setSaveError(`Rabatten blev ikke gemt. ${messages.join('. ')}`);
   });
 
   return (
     <Form {...(form as any)}>
       <form onSubmit={handleFormSubmit} className="space-y-6">
+        {newsletterSetup && <p role="status" className="rounded-md border border-amber-500 p-3">{newsletterSetup}</p>}
+        {saveError && <p role="alert" className="rounded-md border border-destructive p-3 text-destructive">{saveError}</p>}
         {discount?.id && <input type="hidden" name="id" value={discount.id} />}
 
         <div className="flex items-center justify-between">
@@ -525,7 +549,7 @@ export function DiscountFormPage({
                         />
                       </FormControl>
                       <FormDescription>
-                        The cart total must be over this amount.
+                        De rabatberettigede varer skal koste mindst dette beløb.
                       </FormDescription>
                       <FormMessage />
                     </FormItem>
@@ -844,7 +868,7 @@ export function DiscountFormPage({
                   name="startDate"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>Start Date</FormLabel>
+                      <FormLabel>Startdato</FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
                           <FormControl>
@@ -857,9 +881,9 @@ export function DiscountFormPage({
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
                               {field.value ? (
-                                format(new Date(field.value), 'PPP')
+                                format(calendarDate(field.value)!, 'PPP', { locale: da })
                               ) : (
-                                <span>Pick a date</span>
+                                <span>Vælg dato</span>
                               )}
                             </Button>
                           </FormControl>
@@ -871,11 +895,11 @@ export function DiscountFormPage({
                           <Calendar
                             mode="single"
                             selected={
-                              field.value ? new Date(field.value) : undefined
+                              field.value ? calendarDate(field.value) : undefined
                             }
                             onSelect={date =>
                               field.onChange(
-                                date?.toISOString().split('T')[0],
+                                calendarDay(date),
                               )
                             }
                           />
@@ -891,7 +915,7 @@ export function DiscountFormPage({
                   name="endDate"
                   render={({ field }) => (
                     <FormItem className="flex flex-col">
-                      <FormLabel>End Date</FormLabel>
+                      <FormLabel>Slutdato</FormLabel>
                       <Popover>
                         <PopoverTrigger asChild>
                           <FormControl>
@@ -904,9 +928,9 @@ export function DiscountFormPage({
                             >
                               <CalendarIcon className="mr-2 h-4 w-4" />
                               {field.value ? (
-                                format(new Date(field.value), 'PPP')
+                                format(calendarDate(field.value)!, 'PPP', { locale: da })
                               ) : (
-                                <span>Pick a date</span>
+                                <span>Vælg dato</span>
                               )}
                             </Button>
                           </FormControl>
@@ -918,11 +942,11 @@ export function DiscountFormPage({
                           <Calendar
                             mode="single"
                             selected={
-                              field.value ? new Date(field.value) : undefined
+                              field.value ? calendarDate(field.value) : undefined
                             }
                             onSelect={date =>
                               field.onChange(
-                                date?.toISOString().split('T')[0],
+                                calendarDay(date),
                               )
                             }
                           />

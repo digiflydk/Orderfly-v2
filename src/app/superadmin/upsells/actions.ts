@@ -1,5 +1,6 @@
 
 'use server';
+import { promotionBoundary, savedPromotionDate } from '@/lib/promotion-calendar';
 
 import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
 import { getScopedDocument, listScopedDocuments, mutateScopedDocument } from '@/lib/access/scoped-data';
@@ -124,10 +125,10 @@ export async function createOrUpdateUpsell(
     if (id) rawData.id = id;
 
     const startDateString = formData.get('startDate') as string | null;
-    if (startDateString) rawData.startDate = new Date(startDateString);
+    if (startDateString) rawData.startDate = (/^\d{4}-\d{2}-\d{2}$/.test(String(startDateString)) ? promotionBoundary(String(startDateString), false) : new Date(String(startDateString)));
     
     const endDateString = formData.get('endDate') as string | null;
-    if (endDateString) rawData.endDate = new Date(endDateString);
+    if (endDateString) rawData.endDate = (/^\d{4}-\d{2}-\d{2}$/.test(String(endDateString)) ? promotionBoundary(String(endDateString), true) : new Date(String(endDateString)));
     
     const activeTimeSlotsJSON = formData.get('activeTimeSlots');
     if (typeof activeTimeSlotsJSON === 'string' && activeTimeSlotsJSON.trim() !== '') {
@@ -189,7 +190,13 @@ export async function createOrUpdateUpsell(
     const upsellRef = id ? db.collection('upsells').doc(id) : db.collection('upsells').doc();
     
     const writeData = Object.fromEntries(Object.entries({ ...dataToSave, id: upsellRef.id }).filter(([, value]) => value !== undefined));
-    await mutateScopedDocument('upsells',upsellRef.id,id?'orderfly.catalog:edit':'orderfly.catalog:create','locations',before=>({...before,...writeData,views:before?.views??0,conversions:before?.conversions??0}));
+    await mutateScopedDocument('upsells',upsellRef.id,id?'orderfly.catalog:edit':'orderfly.catalog:create','locations',before=>{
+      for (const key of ['startDate', 'endDate'] as const) {
+        const day = formData.get(key);
+        if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) writeData[key] = admin.firestore.Timestamp.fromDate(savedPromotionDate(day, before?.[key], key === 'endDate'));
+      }
+      return {...before,...writeData,views:before?.views??0,conversions:before?.conversions??0};
+    }, true);
     
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -226,7 +233,7 @@ export async function getUpsells(): Promise<Upsell[]> {
 }
 
 export async function getUpsellById(upsellId: string): Promise<Upsell | null> {
-    const docSnap=await getScopedDocument('upsells',upsellId,'orderfly.catalog:view','locations');
+    const docSnap=await getScopedDocument('upsells',upsellId,'orderfly.catalog:view','locations', true);
     if (docSnap) {
         const data = docSnap.data() as Omit<Upsell, 'id'>;
         return upsellClientData({
