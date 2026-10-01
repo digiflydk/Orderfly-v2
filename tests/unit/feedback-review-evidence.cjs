@@ -11,9 +11,9 @@ const head='a'.repeat(40),base='b'.repeat(40),reviewer='chatgpt-codex-connector[
 async function verify(patch={}) {
  const writes=[];
  const pr={number:371,state:'open',head:{sha:head},base:{sha:base}};
- const request={id:1,html_url:'https://github.com/example/repo/pull/371#issuecomment-1',author_association:'OWNER',created_at:'2026-10-01T13:01:00Z',body:'@codex review\nReviewed-Head: '+head+'\nReview-Base: '+base,...patch.request};
+ const request={id:1,html_url:'https://github.com/example/repo/pull/371#issuecomment-1',author_association:'OWNER',created_at:'2026-10-01T13:01:00Z',updated_at:'2026-10-01T13:01:00Z',body:'@codex review\nReviewed-Head: '+head+'\nReview-Base: '+base,...patch.request};
  let reads=0;
- const api={get:async()=>({data:{...pr,...patch.pr,...(patch.lateHead&&++reads>1?{head:{sha:base}}:{})}}),comments:async()=>[request,...(patch.verdicts??[])],reactions:async()=>patch.reactions??[{user:{login:reviewer},content:'+1'}],reviews:async()=>patch.reviews??[],inline:async()=>patch.inline??[],write:async args=>writes.push(args)};
+ const api={get:async()=>({data:{...pr,...patch.pr,...(patch.lateHead&&++reads>1?{head:{sha:base}}:{})}}),comments:async()=>[request,...(patch.verdicts??[verdict])],reactions:async()=>patch.reactions??[{user:{login:reviewer},content:'+1'}],reviews:async()=>patch.reviews??[],inline:async()=>patch.inline??[],write:async args=>writes.push(args)};
  const github={rest:{repos:{getCommit:async()=>({data:{sha:patch.resolvedSha??head}})},pulls:{get:api.get,listReviews:api.reviews,listReviewComments:api.inline},issues:{listComments:api.comments,createComment:api.write},reactions:{listForIssueComment:api.reactions}},paginate:(method,args)=>method(args)};
  const env={EXPECTED_HEAD:head,EXPECTED_BASE:base,ENGINEERING_GREEN_AT:String(Date.parse('2026-10-01T13:00:00Z'))};
  const context=vm.createContext({github,context:{repo:{owner:'example',repo:'repo'},issue:{number:371},runId:123},process:{env},Date,Number,String,Error,Promise,setTimeout:fn=>fn()});
@@ -32,8 +32,10 @@ test('stale, untrusted and absent reviewer evidence cannot emit a clean verdict'
   {request:{author_association:'NONE'}},
   {request:{created_at:'2026-10-01T12:59:00Z'}},
   {request:{body:'@codex review\nReviewed-Head: '+base+'\nReview-Base: '+base}},
-  {reactions:[{user:{login:'another-bot'},content:'+1'}]},
-  {reactions:[{user:{login:reviewer},content:'eyes'}]},
+  {verdicts:[],reactions:[{user:{login:'another-bot'},content:'+1'}]},
+  {verdicts:[],reactions:[{user:{login:reviewer},content:'eyes'}]},
+  {verdicts:[],reactions:[{user:{login:reviewer},content:'+1'}]},
+  {request:{updated_at:'2026-10-01T13:03:00Z'}},
   {pr:{head:{sha:base}}},
   {lateHead:true},
   {inline:[{user:{login:reviewer},commit_id:head}]},
@@ -47,7 +49,7 @@ test('GitHub moving a corrected old comment forward does not invent a new-head f
  await f.outcome;assert.equal(f.writes.length,1);
 });
 
-const verdict={user:{login:reviewer},created_at:'2026-10-01T13:02:00Z',html_url:'https://github.com/example/repo/pull/371#issuecomment-2',body:"Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `aaaaaaaaaa`"};
+const verdict={user:{login:reviewer},created_at:'2026-10-01T13:02:00Z',updated_at:'2026-10-01T13:02:00Z',html_url:'https://github.com/example/repo/pull/371#issuecomment-2',body:"Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `aaaaaaaaaa`"};
 test('explicit configured-reviewer verdict resolves its commit to the exact head',async()=>{
  const f=await verify({reactions:[],verdicts:[verdict]});await f.outcome;assert.equal(f.writes.length,1);
  assert.match(f.writes[0].body,/Independent-Review-Evidence: https:\/\/github.com\/example\/repo\/pull\/371#issuecomment-2/);
@@ -55,6 +57,7 @@ test('explicit configured-reviewer verdict resolves its commit to the exact head
 test('untrusted, old, unresolved or finding-bearing explicit verdicts remain blocked',async()=>{
  for(const patch of [
   {verdicts:[{...verdict,user:{login:'another-bot'}}]},
+  {verdicts:[{...verdict,updated_at:'2026-10-01T13:03:00Z'}]},
   {verdicts:[{...verdict,created_at:'2026-10-01T13:00:00Z'}]},
   {verdicts:[{...verdict,body:verdict.body.replace('aaaaaaaaaa','bbbbbbbbbb')}]},
   {verdicts:[verdict],resolvedSha:base},

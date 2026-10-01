@@ -74,11 +74,9 @@ jobs:
               const {data: pr} = await github.rest.pulls.get({...args, pull_number: context.issue.number});
               if (pr.head.sha !== head || pr.base.sha !== base || pr.state !== 'open') throw new Error('Head/base changed during independent review; restart all gates.');
               const comments = await github.paginate(github.rest.issues.listComments, {...args, issue_number: pr.number, per_page: 100});
-              const requests = comments.filter(c => ['OWNER','MEMBER','COLLABORATOR'].includes(c.author_association) && c.body.startsWith('@codex review') && c.body.includes('Reviewed-Head: '+head) && c.body.includes('Review-Base: '+base) && Date.parse(c.created_at) >= Number(process.env.ENGINEERING_GREEN_AT));
+              const requests = comments.filter(c => ['OWNER','MEMBER','COLLABORATOR'].includes(c.author_association) && c.created_at === c.updated_at && c.body.startsWith('@codex review') && c.body.includes('Reviewed-Head: '+head) && c.body.includes('Review-Base: '+base) && Date.parse(c.created_at) >= Number(process.env.ENGINEERING_GREEN_AT));
               for (const request of requests) {
-                const reactions = await github.paginate(github.rest.reactions.listForIssueComment, {...args, comment_id: request.id, per_page: 100});
-                if (reactions.some(r => r.user?.login === reviewer && r.content === '+1')) approvedRequest = request;
-                const verdicts = comments.filter(c => c.user?.login === reviewer && Date.parse(c.created_at) >= Date.parse(request.created_at) && c.body.startsWith("Codex Review: Didn't find any major issues."));
+                const verdicts = comments.filter(c => c.user?.login === reviewer && c.created_at === c.updated_at && Date.parse(c.created_at) >= Date.parse(request.created_at) && c.body.startsWith("Codex Review: Didn't find any major issues."));
                 for (const verdict of verdicts) {
                   const reference = verdict.body.match(/\*\*Reviewed commit:\*\* `([0-9a-f]{7,40})`/);
                   if (!reference || !head.startsWith(reference[1])) continue;
@@ -94,15 +92,15 @@ jobs:
               }
               await new Promise(resolve => setTimeout(resolve, 20000));
             }
-            if (!approvedRequest) throw new Error('No independent reviewer clean signal for this exact head after green engineering evidence.');
+            if (!approvedRequest) throw new Error('No unedited explicit independent-review verdict resolved to the exact head after green engineering evidence.');
             const fresh = (await github.rest.pulls.get({...args, pull_number: context.issue.number})).data;
             if (fresh.head.sha !== head || fresh.base.sha !== base) throw new Error('Head/base changed before review attestation.');
             await github.rest.issues.createComment({...args, issue_number: fresh.number, body: [
               'WORK_CODE_REVIEW: CLEAN', 'Reviewed-Head: '+head,
               'Independent-Reviewer: '+reviewer,
               'Independent-Review-Request: '+approvedRequest.html_url,
-              'Independent-Review-Signal: '+(verdictComment ? 'explicit no-major-issues verdict from the configured reviewer; commit resolved to exact head' : 'thumbs-up from the configured reviewer after engineering gates; no findings on exact head'),
-              'Independent-Review-Evidence: '+(verdictComment?.html_url || approvedRequest.html_url),
+              'Independent-Review-Signal: unedited explicit no-major-issues verdict from the configured reviewer; commit resolved to exact head',
+              'Independent-Review-Evidence: '+verdictComment.html_url,
               'Review-Run: https://github.com/'+context.repo.owner+'/'+context.repo.repo+'/actions/runs/'+context.runId,
             ].join('\n')});
       - name: Remove transient context
