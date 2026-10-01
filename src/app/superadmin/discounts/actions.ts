@@ -12,7 +12,7 @@ import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
 import { marketingConfigurationStatus } from '@/lib/marketing/config';
 import { savedPromotionDate } from '@/lib/promotion-calendar';
-import { promotionDate } from '@/lib/promotion-date';
+import { discountRecord } from '@/lib/discount-record';
 
 const activeTimeSlotSchema = z.object({
   start: z.string(),
@@ -173,30 +173,14 @@ export async function deleteDiscount(id: string) {
 export async function getDiscounts(): Promise<Discount[]> {
   const documents = await listScopedDocuments('discounts', 'orderfly.discounts:view', 'locations');
   return documents.sort((a, b) => String(a.data().code).localeCompare(String(b.data().code))).map(doc => {
-    const data = doc.data();
-    return { 
-      ...data,
-      id: doc.id,
-      startDate: promotionDate(data.startDate),
-      endDate: promotionDate(data.endDate),
-      createdAt: promotionDate(data.createdAt) ?? null,
-      updatedAt: promotionDate(data.updatedAt) ?? null,
-    } as Discount;
+    return discountRecord(doc.id, doc.data());
   });
 }
 
 export async function getDiscountById(id: string): Promise<Discount | null> {
     const docSnap = await getScopedDocument('discounts', id, 'orderfly.discounts:view', 'locations', true);
     if (docSnap) {
-        const data = docSnap.data()!;
-        return { 
-            ...data,
-            id: docSnap.id,
-            startDate: promotionDate(data.startDate),
-            endDate: promotionDate(data.endDate),
-            createdAt: promotionDate(data.createdAt) ?? null,
-            updatedAt: promotionDate(data.updatedAt) ?? null,
-        } as Discount;
+        return discountRecord(docSnap.id, docSnap.data()!);
     }
     return null;
 }
