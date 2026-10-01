@@ -198,5 +198,7 @@ Verification uses the actual server actions/worker with synthetic I/O: `feedback
 
 Release regression correction: the shared calendar uses the Danish month label `september 2026`; the cookie-consent browser fixture now selects that same exact month/year case-insensitively. Existing day, date-range, asynchronous transport and retry assertions are preserved. No calendar runtime code changes.
 
+The shared-login browser fixture supplies Next's real `SearchParamsContext`, as the deployed router does. This lets the actual login component resolve its destination while preserving all login, logout, feedback-bookmark and revoked-session assertions. No login runtime or authentication rule changes.
+
 
 Review corrections: a retained admin-notification job is read before writes. Deleting/recreating feedback for the same source can save again without a duplicate-create collision or another send for an already notified source. Notification history and its event UUID are preserved. Orderfly settings/worker accept only the explicit brand-bound recipient; the recipient control shows that configured address read-only. The private bridge independently validates it against `orderfly_organization_mappings.feedback_admin_email`. Esmeralda uses `ok@esmeraldapizza.dk`; other central internal alerts retain their existing recipients. Provision both sides together before enabling a new brand.
