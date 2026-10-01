@@ -13,8 +13,8 @@ async function verify(patch={}) {
  const pr={number:371,state:'open',head:{sha:head},base:{sha:base}};
  const request={id:1,html_url:'https://github.com/example/repo/pull/371#issuecomment-1',author_association:'OWNER',created_at:'2026-10-01T13:01:00Z',body:'@codex review\nReviewed-Head: '+head+'\nReview-Base: '+base,...patch.request};
  let reads=0;
- const api={get:async()=>({data:{...pr,...patch.pr,...(patch.lateHead&&++reads>1?{head:{sha:base}}:{})}}),comments:async()=>[request],reactions:async()=>patch.reactions??[{user:{login:reviewer},content:'+1'}],reviews:async()=>patch.reviews??[],inline:async()=>patch.inline??[],write:async args=>writes.push(args)};
- const github={rest:{pulls:{get:api.get,listReviews:api.reviews,listReviewComments:api.inline},issues:{listComments:api.comments,createComment:api.write},reactions:{listForIssueComment:api.reactions}},paginate:(method,args)=>method(args)};
+ const api={get:async()=>({data:{...pr,...patch.pr,...(patch.lateHead&&++reads>1?{head:{sha:base}}:{})}}),comments:async()=>[request,...(patch.verdicts??[])],reactions:async()=>patch.reactions??[{user:{login:reviewer},content:'+1'}],reviews:async()=>patch.reviews??[],inline:async()=>patch.inline??[],write:async args=>writes.push(args)};
+ const github={rest:{repos:{getCommit:async()=>({data:{sha:patch.resolvedSha??head}})},pulls:{get:api.get,listReviews:api.reviews,listReviewComments:api.inline},issues:{listComments:api.comments,createComment:api.write},reactions:{listForIssueComment:api.reactions}},paginate:(method,args)=>method(args)};
  const env={EXPECTED_HEAD:head,EXPECTED_BASE:base,ENGINEERING_GREEN_AT:String(Date.parse('2026-10-01T13:00:00Z'))};
  const context=vm.createContext({github,context:{repo:{owner:'example',repo:'repo'},issue:{number:371},runId:123},process:{env},Date,Number,String,Error,Promise,setTimeout:fn=>fn()});
  const outcome=vm.runInContext('(async()=>{'+script+'})()',context);
@@ -45,4 +45,20 @@ test('stale, untrusted and absent reviewer evidence cannot emit a clean verdict'
 test('GitHub moving a corrected old comment forward does not invent a new-head finding',async()=>{
  const f=await verify({inline:[{user:{login:reviewer},commit_id:head,original_commit_id:base}]});
  await f.outcome;assert.equal(f.writes.length,1);
+});
+
+const verdict={user:{login:reviewer},created_at:'2026-10-01T13:02:00Z',html_url:'https://github.com/example/repo/pull/371#issuecomment-2',body:"Codex Review: Didn't find any major issues.\n\n**Reviewed commit:** `aaaaaaaaaa`"};
+test('explicit configured-reviewer verdict resolves its commit to the exact head',async()=>{
+ const f=await verify({reactions:[],verdicts:[verdict]});await f.outcome;assert.equal(f.writes.length,1);
+ assert.match(f.writes[0].body,/Independent-Review-Evidence: https:\/\/github.com\/example\/repo\/pull\/371#issuecomment-2/);
+});
+test('untrusted, old, unresolved or finding-bearing explicit verdicts remain blocked',async()=>{
+ for(const patch of [
+  {verdicts:[{...verdict,user:{login:'another-bot'}}]},
+  {verdicts:[{...verdict,created_at:'2026-10-01T13:00:00Z'}]},
+  {verdicts:[{...verdict,body:verdict.body.replace('aaaaaaaaaa','bbbbbbbbbb')}]},
+  {verdicts:[verdict],resolvedSha:base},
+  {verdicts:[verdict],inline:[{user:{login:reviewer},original_commit_id:head}]},
+  {verdicts:[{...verdict,body:'Code review completed'}]},
+ ]){const f=await verify({reactions:[],...patch});await assert.rejects(f.outcome);assert.equal(f.writes.length,0);}
 });

@@ -69,7 +69,7 @@ jobs:
             const args = {owner: context.repo.owner, repo: context.repo.repo};
             const head = process.env.EXPECTED_HEAD, base = process.env.EXPECTED_BASE;
             const reviewer = 'chatgpt-codex-connector[bot]';
-            let approvedRequest;
+            let approvedRequest, verdictComment;
             for (let attempt = 0; attempt < 60; attempt++) {
               const {data: pr} = await github.rest.pulls.get({...args, pull_number: context.issue.number});
               if (pr.head.sha !== head || pr.base.sha !== base || pr.state !== 'open') throw new Error('Head/base changed during independent review; restart all gates.');
@@ -78,6 +78,13 @@ jobs:
               for (const request of requests) {
                 const reactions = await github.paginate(github.rest.reactions.listForIssueComment, {...args, comment_id: request.id, per_page: 100});
                 if (reactions.some(r => r.user?.login === reviewer && r.content === '+1')) approvedRequest = request;
+                const verdicts = comments.filter(c => c.user?.login === reviewer && Date.parse(c.created_at) >= Date.parse(request.created_at) && c.body.startsWith("Codex Review: Didn't find any major issues."));
+                for (const verdict of verdicts) {
+                  const reference = verdict.body.match(/\*\*Reviewed commit:\*\* `([0-9a-f]{7,40})`/);
+                  if (!reference || !head.startsWith(reference[1])) continue;
+                  const resolved = (await github.rest.repos.getCommit({...args, ref: reference[1]})).data;
+                  if (resolved.sha === head) { approvedRequest = request; verdictComment = verdict; }
+                }
               }
               if (approvedRequest) {
                 const reviews = await github.paginate(github.rest.pulls.listReviews, {...args, pull_number: pr.number, per_page: 100});
@@ -94,7 +101,8 @@ jobs:
               'WORK_CODE_REVIEW: CLEAN', 'Reviewed-Head: '+head,
               'Independent-Reviewer: '+reviewer,
               'Independent-Review-Request: '+approvedRequest.html_url,
-              'Independent-Review-Signal: thumbs-up from the configured GitHub code-review service after engineering gates; no findings on the exact head.',
+              'Independent-Review-Signal: '+(verdictComment ? 'explicit no-major-issues verdict from the configured reviewer; commit resolved to exact head' : 'thumbs-up from the configured reviewer after engineering gates; no findings on exact head'),
+              'Independent-Review-Evidence: '+(verdictComment?.html_url || approvedRequest.html_url),
               'Review-Run: https://github.com/'+context.repo.owner+'/'+context.repo.repo+'/actions/runs/'+context.runId,
             ].join('\n')});
       - name: Remove transient context
