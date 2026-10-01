@@ -82,7 +82,7 @@ jobs:
               if (approvedRequest) {
                 const reviews = await github.paginate(github.rest.pulls.listReviews, {...args, pull_number: pr.number, per_page: 100});
                 const inline = await github.paginate(github.rest.pulls.listReviewComments, {...args, pull_number: pr.number, per_page: 100});
-                if (reviews.some(r => r.user?.login === reviewer && r.commit_id === head && r.state === 'CHANGES_REQUESTED') || inline.some(c => c.user?.login === reviewer && c.commit_id === head)) throw new Error('Independent reviewer has findings on this head; no CLEAN attestation is permitted.');
+                if (reviews.some(r => r.user?.login === reviewer && r.commit_id === head && r.state === 'CHANGES_REQUESTED') || inline.some(c => c.user?.login === reviewer && (c.original_commit_id || c.commit_id) === head)) throw new Error('Independent reviewer has findings on this head; no CLEAN attestation is permitted.');
                 break;
               }
               await new Promise(resolve => setTimeout(resolve, 20000));
