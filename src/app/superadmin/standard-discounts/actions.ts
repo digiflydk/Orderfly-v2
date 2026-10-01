@@ -1,6 +1,7 @@
 
 'use server';
-import { promotionBoundary, savedPromotionDate } from '@/lib/promotion-calendar';
+import { promotionBoundary } from '@/lib/promotion-calendar';
+import { savedPromotionTimestamp } from '@/lib/server/promotion-timestamp';
 
 import { isQuantityMethod } from '@/lib/automatic-discounts';
 import { restaurantClock } from '@/lib/promotion-rules';
@@ -96,7 +97,7 @@ export async function createOrUpdateStandardDiscount(
 		await mutateScopedDocument('standard_discounts', docId, id ? 'orderfly.discounts:edit' : 'orderfly.discounts:create', 'locations', async (before, tx) => {
       for (const key of ['startDate', 'endDate'] as const) {
         const day = formData.get(key);
-        if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) dataToSave[key] = Timestamp.fromDate(savedPromotionDate(day, before?.[key], key === 'endDate'));
+        if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) dataToSave[key] = savedPromotionTimestamp(day, before?.[key], key === 'endDate');
       }
           if (before && before.brandId !== discountData.brandId) throw new Error('Discount not found for this brand.');
 

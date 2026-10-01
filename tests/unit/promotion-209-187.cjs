@@ -48,3 +48,5 @@ for(const day of ['2026-10-02','2026-10-04','2026-10-24','2026-10-25','2026-10-2
  t.mock.timers.setTime(+data.startDate-1);assert.match((await f.actions.validateDiscountAction(base.code,'b','l',140,'pickup')).message,/endnu ikke aktiv/);
  assert.deepEqual(f.writes,[]);
 });
+
+test('unchanged Firestore campaign instants retain all nanoseconds',()=>{const {savedPromotionTimestamp}=loadTs('src/lib/server/promotion-timestamp.ts',{'server-only':{}});const old=new Timestamp(1790935200,123456789);assert.equal(savedPromotionTimestamp(cal.promotionDay(old),old,true),old);const changed=savedPromotionTimestamp('2026-10-26',old,true);assert.equal(changed.toDate().toISOString(),'2026-10-26T22:59:59.999Z');});

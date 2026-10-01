@@ -14,10 +14,12 @@ Shared discountRecord normalizes the entire authorized/read record recursively u
 
 Time dialog initializes its local draft from saved selection each opening. Cancel does not commit. Calendar opens on the saved month/day. Slots use the same fulfillmentSlots validation as server, refresh on clock/focus, and unavailable selections remain visible with a Danish explanation. Save revalidates against current clock, preserving the selection on failure. Overnight slots retain the correct opening day. No price/reservation/payment changes.
 
+Additional #187 precision finding: unchanged Firestore dates previously round-tripped through JavaScript Date, losing sub-millisecond nanoseconds. The four promotion save actions now retain the original Timestamp when the calendar day is unchanged; changed dates still use Copenhagen boundaries. No automatic migration. A real Timestamp with nanoseconds123456789 is covered.
+
 ## Automated evidence (not live acceptance)
 
 - Typecheck passed.
-- 101 Node tests passed: promotion-209-187, promotion-qa-209, promotion-212, commerce-p1, automatic-discounts, discount-conflict-192, newsletter-discount, native-selector-access, location-catalog-access.
+- 117 Node tests passed: promotion-209-187, promotion-qa-209, promotion-212, commerce-p1, automatic-discounts, discount-conflict-192, newsletter-discount, native-selector-access, location-catalog-access, upsell-form-data, promotion-review.
 - 5 actual React/Chromium dialog tests passed: pickup/delivery cancel-save-reopen; expired selection; controlled-clock expiration; month boundary/DST with browser timezone America/Los_Angeles.
 - Actual Flight serializer rejects old Timestamp shape and accepts list/detail/checkout results after fix.
 - Actual save transaction test preserves ID, usage 7, order reference, pre-existing history and precise unchanged date milliseconds; existing newsletter does not block conversion; empty/reserved manual codes rejected without write.
