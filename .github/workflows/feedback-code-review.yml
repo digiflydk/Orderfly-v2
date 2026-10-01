@@ -43,7 +43,9 @@ jobs:
               const {data: pr} = await github.rest.pulls.get({...args, pull_number: context.issue.number});
               if (pr.head.sha !== head || pr.base.sha !== base || pr.state !== 'open') throw new Error('Candidate or base changed; review must restart.');
               const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {...args, workflow_id: 'ui-tests.yml', event: 'pull_request', branch: pr.head.ref, per_page: 100});
-              green = runs.some(run => run.head_sha === head && run.status === 'completed' && run.conclusion === 'success' && (run.pull_requests || []).some(p => p.number === pr.number && (!p.base?.sha || p.base.sha === base)));
+              const successful = runs.find(run => run.head_sha === head && run.status === 'completed' && run.conclusion === 'success' && (run.pull_requests || []).some(p => p.number === pr.number && (!p.base?.sha || p.base.sha === base)));
+              green = Boolean(successful);
+              if (successful) core.setOutput('green_at', String(Date.parse(successful.updated_at)));
               if (green) {
                 const {data: issue} = await github.rest.issues.get({...args, issue_number: issueNumber});
                 fs.writeFileSync('.feedback-review-context.md', ['# Independent feedback review', 'Head: '+head, 'Base: '+base, '## Issue', issue.body || '', '## Pull request', pr.body || ''].join('\n\n'));
@@ -56,35 +58,45 @@ jobs:
               await new Promise(resolve => setTimeout(resolve, 20000));
             }
             if (!green) throw new Error('Green exact-head engineering evidence was not available within 35 minutes.');
-      - name: Independent read-only code review
-        id: review
-        uses: openai/codex-action@v1
-        with:
-          openai-api-key: ${{ secrets.OPENAI_API_KEY }}
-          permission-profile: ':read-only'
-          allow-bots: true
-          output-schema: |
-            {"type":"object","properties":{"verdict":{"type":"string","enum":["clean","blocking"]},"summary":{"type":"string"},"findings":{"type":"array","items":{"type":"object","properties":{"class":{"type":"string","enum":["acceptance","security","tenant-privacy","data-correctness","regression","deployability","release-evidence"]},"detail":{"type":"string"}},"required":["class","detail"],"additionalProperties":false}},"non_blocking_findings":{"type":"array","items":{"type":"string"}}},"required":["verdict","summary","findings","non_blocking_findings"],"additionalProperties":false}
-          prompt: |
-            Act as an independent senior reviewer. Read .feedback-review-context.md, AGENTS.md and canonical documentation. Review git diff ${{ steps.context.outputs.base }}...${{ steps.context.outputs.head }} against every acceptance criterion and the complete affected feedback/notification paths. Engineering gates have passed; independently assess correctness.
-            Check authorization, organization/brand boundaries, per-experience questionnaire fallback, transactional validation, duplicate notification protection, recipient configuration, queue suppression, asynchronous provider behavior, private data, tests, rollout dependencies and release evidence. Compare the actual implementation to docs. Do not modify files or send messages.
-            Critical acceptance, security, tenant/privacy, data correctness, regression, deployability or release-evidence findings are blocking. Improvements/refactoring/P3 are non-blocking. Return clean only with an empty blocking findings list. Cite concrete code paths and scenarios for findings; do not demand production deployment evidence before merge, but assess whether the documented deployment can work.
-      - name: Record exact-head verdict
+      - name: Verify independent GitHub reviewer verdict
         uses: actions/github-script@v7
         env:
-          REVIEW_JSON: ${{ steps.review.outputs.final-message }}
           EXPECTED_HEAD: ${{ steps.context.outputs.head }}
           EXPECTED_BASE: ${{ steps.context.outputs.base }}
+          ENGINEERING_GREEN_AT: ${{ steps.context.outputs.green_at }}
         with:
           script: |
             const args = {owner: context.repo.owner, repo: context.repo.repo};
-            const {data: pr} = await github.rest.pulls.get({...args, pull_number: context.issue.number});
-            if (pr.head.sha !== process.env.EXPECTED_HEAD || pr.base.sha !== process.env.EXPECTED_BASE) throw new Error('Head/base changed during review; verdict invalidated.');
-            const review = JSON.parse(process.env.REVIEW_JSON);
-            if ((review.verdict === 'clean') !== (review.findings.length === 0)) throw new Error('Inconsistent review verdict; refusing attestation.');
-            const body = ['WORK_CODE_REVIEW: '+(review.verdict === 'clean' ? 'CLEAN' : 'BLOCKING'), 'Reviewed-Head: '+pr.head.sha, ...(review.findings.length ? ['Finding-Class: '+review.findings[0].class] : []), '', review.summary, ...review.findings.map(f => '- ['+f.class+'] '+f.detail), ...(review.non_blocking_findings.length ? ['', 'Non-blocking observations:', ...review.non_blocking_findings.map(f => '- '+f)] : []), '', 'Review-Run: https://github.com/'+context.repo.owner+'/'+context.repo.repo+'/actions/runs/'+context.runId].join('\n');
-            await github.rest.issues.createComment({...args, issue_number: pr.number, body});
-            if (review.verdict === 'blocking') core.setFailed('Independent review found blocking issues.');
+            const head = process.env.EXPECTED_HEAD, base = process.env.EXPECTED_BASE;
+            const reviewer = 'chatgpt-codex-connector[bot]';
+            let approvedRequest;
+            for (let attempt = 0; attempt < 60; attempt++) {
+              const {data: pr} = await github.rest.pulls.get({...args, pull_number: context.issue.number});
+              if (pr.head.sha !== head || pr.base.sha !== base || pr.state !== 'open') throw new Error('Head/base changed during independent review; restart all gates.');
+              const comments = await github.paginate(github.rest.issues.listComments, {...args, issue_number: pr.number, per_page: 100});
+              const requests = comments.filter(c => ['OWNER','MEMBER','COLLABORATOR'].includes(c.author_association) && c.body.startsWith('@codex review') && c.body.includes('Reviewed-Head: '+head) && c.body.includes('Review-Base: '+base) && Date.parse(c.created_at) >= Number(process.env.ENGINEERING_GREEN_AT));
+              for (const request of requests) {
+                const reactions = await github.paginate(github.rest.reactions.listForIssueComment, {...args, comment_id: request.id, per_page: 100});
+                if (reactions.some(r => r.user?.login === reviewer && r.content === '+1')) approvedRequest = request;
+              }
+              if (approvedRequest) {
+                const reviews = await github.paginate(github.rest.pulls.listReviews, {...args, pull_number: pr.number, per_page: 100});
+                const inline = await github.paginate(github.rest.pulls.listReviewComments, {...args, pull_number: pr.number, per_page: 100});
+                if (reviews.some(r => r.user?.login === reviewer && r.commit_id === head && r.state === 'CHANGES_REQUESTED') || inline.some(c => c.user?.login === reviewer && c.commit_id === head)) throw new Error('Independent reviewer has findings on this head; no CLEAN attestation is permitted.');
+                break;
+              }
+              await new Promise(resolve => setTimeout(resolve, 20000));
+            }
+            if (!approvedRequest) throw new Error('No independent reviewer clean signal for this exact head after green engineering evidence.');
+            const fresh = (await github.rest.pulls.get({...args, pull_number: context.issue.number})).data;
+            if (fresh.head.sha !== head || fresh.base.sha !== base) throw new Error('Head/base changed before review attestation.');
+            await github.rest.issues.createComment({...args, issue_number: fresh.number, body: [
+              'WORK_CODE_REVIEW: CLEAN', 'Reviewed-Head: '+head,
+              'Independent-Reviewer: '+reviewer,
+              'Independent-Review-Request: '+approvedRequest.html_url,
+              'Independent-Review-Signal: thumbs-up from the configured GitHub code-review service after engineering gates; no findings on the exact head.',
+              'Review-Run: https://github.com/'+context.repo.owner+'/'+context.repo.repo+'/actions/runs/'+context.runId,
+            ].join('\n')});
       - name: Remove transient context
         if: always()
         run: rm -f .feedback-review-context.md

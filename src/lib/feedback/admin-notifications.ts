@@ -14,7 +14,7 @@ function binding(brandId: string) {
 }
 export function feedbackAdminNotificationConfig(brandId: string) {
   const platform = notificationPlatformConfig(), configured = binding(brandId);
-  return platform && configured ? { platform: { ...platform, organizationId: configured.organizationId } } : null;
+  return platform && configured ? { platform: { ...platform, organizationId: configured.organizationId }, recipientEmail: configured.email.toLowerCase() } : null;
 }
 export function feedbackAdminNotifications(brandId: string, data: unknown) {
   const defaults = binding(brandId);

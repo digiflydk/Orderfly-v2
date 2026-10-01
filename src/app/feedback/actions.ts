@@ -228,12 +228,13 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
       const settings = invitationRef && feedbackMailConfig(source.brandId)
         ? feedbackAutomation(currentSettings.data()) : null;
       const thanks = settings?.emailEnabled && settings.autoReplyEnabled ? await transaction.get(thanksRef) : null;
+      const previousNotification = await transaction.get(notificationRef);
       const legacyId = legacy?.docs.find(doc => doc.data().brandId === source.brandId && doc.data().customerId === source.customerId)?.id;
       const savedId = existing.exists ? existing.id : legacyId || feedbackId;
       if (!existing.exists && !legacyId) {
         transaction.create(feedbackRef, feedbackData);
         const notifications = feedbackAdminNotifications(source.brandId, currentSettings.data());
-        if (notifications.adminNotificationsEnabled && notifications.adminNotificationEmail) transaction.create(notificationRef,
+        if (notifications.adminNotificationsEnabled && notifications.adminNotificationEmail && !previousNotification.exists) transaction.create(notificationRef,
           pendingFeedbackAdminNotification({ feedbackId, brandId: source.brandId, locationId: source.locationId, sourceType: source.sourceType, sourceId: source.sourceId, recipientEmail: notifications.adminNotificationEmail }));
       }
       if (invitationRef) transaction.update(invitationRef, { status: 'submitted', feedbackId: savedId, submittedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });

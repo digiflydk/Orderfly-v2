@@ -27,7 +27,8 @@ export async function writeFeedbackSettings(input: unknown) {
     ]);
     if (!brand.exists) throw new Error('Brandet findes ikke.');
     const notifications = feedbackAdminNotifications(data.brandId, { ...current.data(), ...data });
-    if (notifications.adminNotificationsEnabled && (!notifications.adminNotificationEmail || !feedbackAdminNotificationConfig(data.brandId))) throw new Error('Vælg en modtager, og færdiggør mailopsætningen for brandet.');
+    const notificationConfig = feedbackAdminNotificationConfig(data.brandId);
+    if (notifications.adminNotificationsEnabled && (!notifications.adminNotificationEmail || notifications.adminNotificationEmail !== notificationConfig?.recipientEmail)) throw new Error('Modtageren skal være brandets konfigurerede superadminmail.');
     const selectedId = data.questionVersionId === undefined ? feedbackAutomation(current.data()).questionVersionId : data.questionVersionId;
     if (selectedId) {
       const version = await tx.get(db.collection('feedbackQuestionsVersion').doc(selectedId));

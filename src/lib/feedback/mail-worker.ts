@@ -29,7 +29,7 @@ async function context(job: Job) {
     ]);
     const settings = feedbackAutomation(settingsDoc.data()), notifications = feedbackAdminNotifications(job.brandId, settingsDoc.data());
     const data = feedback.data();
-    if (!notifications.adminNotificationsEnabled || !notifications.adminNotificationEmail || notifications.adminNotificationEmail !== job.recipientEmail ||
+    if (!notifications.adminNotificationsEnabled || !notifications.adminNotificationEmail || notifications.adminNotificationEmail !== job.recipientEmail || notifications.adminNotificationEmail !== feedbackAdminNotificationConfig(job.brandId)?.recipientEmail ||
       !data || data.brandId !== job.brandId || data.locationId !== job.locationId || data.sourceId !== job.sourceId || data.sourceType !== job.sourceType ||
       brand.data()?.status !== 'active' || location.data()?.brandId !== job.brandId || location.data()?.isActive === false || !/^[a-f0-9]{64}$/.test(job.feedbackId)) return null;
     return { email: notifications.adminNotificationEmail, settings, properties: {

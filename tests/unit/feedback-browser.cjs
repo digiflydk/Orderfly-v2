@@ -129,9 +129,9 @@ test('admin recipient saves independently and foreign brand versions are absent 
  const page=await setup(t,'/settings');
  f.records.set('feedbackQuestionsVersion/foreign',{scope:'brand',brandId:'other',versionLabel:'Foreign secret label',isActive:true,language:'da',orderTypes:['pickup'],questions:f.questions});
  await page.reload();assert.equal(await page.getByLabel('Aktivt feedbackskema for brandet',{exact:true}).locator('option[value="foreign"]').count(),0);
- await page.getByLabel('Modtagerens e-mail',{exact:true}).fill('owner@example.test');await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();
+ assert.equal(await page.getByLabel('Modtagerens e-mail',{exact:true}).getAttribute('readonly'),'');assert.equal(await page.getByLabel('Modtagerens e-mail',{exact:true}).inputValue(),'admin@example.test');await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();
  await page.getByRole('status').filter({hasText:'Indstillingerne er gemt.'}).waitFor();await page.reload();
- assert.equal(await page.getByLabel('Modtagerens e-mail',{exact:true}).inputValue(),'owner@example.test');assert.equal(f.records.get('feedbackSettings/b').emailEnabled,false);
+ assert.equal(await page.getByLabel('Modtagerens e-mail',{exact:true}).inputValue(),'admin@example.test');assert.equal(f.records.get('feedbackSettings/b').emailEnabled,false);
  await page.getByRole('switch',{name:'Send mail ved ny feedback',exact:true}).uncheck();await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();
  await page.getByRole('status').filter({hasText:'Indstillingerne er gemt.'}).waitFor();assert.equal(f.records.get('feedbackSettings/b').adminNotificationsEnabled,false);
 });

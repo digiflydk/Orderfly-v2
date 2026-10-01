@@ -43,10 +43,11 @@ test('uncertain dispatch is never blindly retried and admin history omits the re
  f.auth.uid='qa-editor';await f.mailAdmin.retryFeedbackMailJob(f.key+'-adminNotification',true);assert.equal(f.job().state,'pending');
 });
 test('admin recipient settings are brand-scoped and require a valid configured address',async t=>{
- const f=setup(t);f.auth.uid='qa-editor';await f.settings.writeFeedbackSettings({brandId:'b',adminNotificationsEnabled:true,adminNotificationEmail:' New@example.test '});
- assert.equal((await f.settings.readFeedbackSettings('b')).adminNotificationEmail,'new@example.test');
+ const f=setup(t);f.auth.uid='qa-editor';await f.settings.writeFeedbackSettings({brandId:'b',adminNotificationsEnabled:true,adminNotificationEmail:' Admin@example.test '});
+ assert.equal((await f.settings.readFeedbackSettings('b')).adminNotificationEmail,'admin@example.test');
  await assert.rejects(f.settings.writeFeedbackSettings({brandId:'other',adminNotificationsEnabled:true,adminNotificationEmail:'new@example.test'}));
  await assert.rejects(f.settings.writeFeedbackSettings({brandId:'b',adminNotificationEmail:'invalid'}));
+ await assert.rejects(f.settings.writeFeedbackSettings({brandId:'b',adminNotificationsEnabled:true,adminNotificationEmail:'wrong@example.test'}));
  await assert.rejects(f.settings.writeFeedbackSettings({brandId:'b',adminNotificationEmail:null,adminNotificationsEnabled:true}));
 });
 test('provider sends the received template through the brand organization with a stable event ID',async t=>{
@@ -55,4 +56,12 @@ test('provider sends the received template through the brand organization with a
  const provider=new f.mailProvider.FeedbackMailProvider(config,async(url,options)=>{payload=JSON.parse(options.body);return new Response(null,{status:202})});
  await provider.send('fixed-event','adminNotification','admin@example.test',{language:'da',brandId:'b',feedbackId:f.key,adminUrl:'https://orderfly.dk/superadmin/feedback/'+f.key});
  assert.equal(payload.template_key,'orderfly.feedback.received');assert.equal(payload.idempotency_key,'fixed-event');assert.equal(payload.organization_id,config.platform.organizationId);assert.deepEqual(payload.related_entity,{type:'feedback',id:f.key});
+});
+
+test('deletion and resubmission save feedback without colliding with retained notification history',async t=>{
+ const f=setup(t);await redirected(f.public.submitFeedbackAction(null,responseForm()));
+ await f.mailWorker.runFeedbackMailWorker(f.provider);const event=f.job().eventId;
+ assert.equal((await f.admin.deleteFeedback(f.key)).error,false);assert.equal(f.records.has('feedback/'+f.key),false);assert.ok(f.job());
+ await redirected(f.public.submitFeedbackAction(null,responseForm()));assert.equal(f.records.has('feedback/'+f.key),true);
+ assert.equal(f.job().eventId,event);await f.mailWorker.runFeedbackMailWorker(f.provider);assert.equal(f.events.length,1);
 });
