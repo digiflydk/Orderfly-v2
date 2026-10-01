@@ -29,7 +29,7 @@ before(async()=>{
  const context=React.createContext(null);
  const item={id:'pizza',cartItemId:'pizza',productName:'Pizza',quantity:1,basePrice:100,price:100,toppings:[],itemType:'product',imageUrl:'/image.png'};
  const reduced={...item,id:'offer',cartItemId:'offer',basePrice:75,price:45};
- const initialItems=scenario.includes('stacking')?[{...item,basePrice:89,price:59,toppings:[{id:'chicken',name:'Kylling',price:15},{id:'base',name:'Napolitansk',price:10}]},{...item,id:'fries',cartItemId:'fries',basePrice:45,price:45},{...item,id:'soda',cartItemId:'soda',basePrice:35,price:33.25}]
+ const initialItems=scenario.includes('combo-qa209')?[{...item,id:'combo',itemType:'combo',basePrice:105,price:105,toppings:[{id:'dressing',name:'Dressing',price:10}]}]:scenario.includes('stacking')?[{...item,basePrice:89,price:59,toppings:[{id:'chicken',name:'Kylling',price:15},{id:'base',name:'Napolitansk',price:10}]},{...item,id:'fries',cartItemId:'fries',basePrice:45,price:45},{...item,id:'soda',cartItemId:'soda',basePrice:35,price:33.25}]
   :scenario.includes('all-discounted')?[{...reduced,toppings:[{id:'extra',name:'Tilvalg',price:35}]},{...reduced,id:'second',cartItemId:'second'}]
   :scenario.includes('mixed')||scenario.includes('minimum')?[item,reduced]
   :scenario.includes('rounding')?[{...item,basePrice:0.04,price:0.04}]:[item];
@@ -47,7 +47,7 @@ before(async()=>{
   const totals=basketTotals({cartItems:items,appliedDiscount:discount,standardDiscounts,deliveryType:'pickup',location,brand,includeBagFee});
   const value={brand,location,cartReady:true,cartItems:items,subtotal:total,checkoutTotal:total+bagFee,cartTotal:total,itemCount:items.length,includeBagFee,toggleBagFee,standardDiscounts,
    deliveryType:'pickup',selectedTime:'asap',itemDiscount:0,cartDiscount:null,voucherDiscount:discount?.applicationType==='newsletter_signup'?{name:'Nyhedsbrev',amount:10}:null,deliveryFee:0,bagFee,adminFee:0,vatAmount:20,
-   applyDiscount,removeDiscount,appliedDiscount:discount,setCartContext,setSelectedTime,saveCartForCheckout,addToCart,
+   applyDiscount,removeDiscount,appliedDiscount:discount,setCartContext,setSelectedTime,saveCartForCheckout,addToCart,removeFromCart:id=>setItems(items=>items.filter(i=>i.cartItemId!==id)),
    ...(newsletter?{...totals,cartDiscount:totals.automaticCartDiscount}:{})};
   return React.createElement(context.Provider,{value},children);
  }
@@ -71,6 +71,7 @@ before(async()=>{
   if(excludedUpsellIds.includes('u'))return null;
   if(scenario==='upsell-error')throw Error('upsell unavailable');
   if(scenario==='upsell-timeout'){window.optionalActionQueueBusy=true;return new Promise(()=>{});}
+  if(scenario==='upsell-qa209')return {upsell:{id:'u',upsellName:'Andre købte også',discountType:'percentage',discountValue:10},products:[{id:'drink',productName:'Drink',price:20}]};
   if(scenario.startsWith('upsell-'))return {upsell:{id:'u',upsellName:'Extra drink',discountType:'none'},products:[{id:'drink',productName:'Drink',price:20}]};
   return null;
  }
@@ -83,9 +84,12 @@ before(async()=>{
  import {DesktopCart} from ${JSON.stringify(path.join(root,'src/components/cart/desktop-cart.tsx'))};
  import {MobileFloatingCart} from ${JSON.stringify(path.join(root,'src/components/cart/mobile-floating-cart.tsx'))};
  import {AnalyticsProvider} from ${JSON.stringify(path.join(root,'src/context/analytics-context.tsx'))};
+ import {StorefrontCatalog} from ${JSON.stringify(path.join(root,'src/context/storefront-catalog.tsx'))};
  import {FixtureCart,brand,location} from ${JSON.stringify(cart)};
  const menu=new URLSearchParams(window.location.search).get('view')==='menu';
- createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},menu?React.createElement(React.Fragment,null,React.createElement(DesktopCart),React.createElement(MobileFloatingCart)):React.createElement(CheckoutClient,{brand,location}))));
+ const surface=menu?React.createElement(React.Fragment,null,React.createElement(DesktopCart),React.createElement(MobileFloatingCart)):React.createElement(CheckoutClient,{brand,location});
+ const content=new URLSearchParams(window.location.search).get('case')==='upsell-qa209'?React.createElement(StorefrontCatalog,{products:[{id:'drink',productName:'Drink',price:20}],combos:[]},surface):surface;
+ createRoot(document.getElementById('root')).render(React.createElement(FixtureCart,null,React.createElement(AnalyticsProvider,{brand},content)));
  `);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=function(source){if(process.env.CHECKOUT_BASELINE&&this.resourcePath.startsWith(${JSON.stringify(root)}+'/src/'))source=require('node:child_process').execFileSync('git',['show',process.env.CHECKOUT_BASELINE+':'+require('node:path').relative(${JSON.stringify(root)},this.resourcePath)],{cwd:${JSON.stringify(root)},encoding:'utf8'});return ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;};`);
  const aliases={
@@ -113,6 +117,11 @@ before(async()=>{
   const url=new URL(req.url,'http://localhost');res.setHeader('Cache-Control','no-store');
   if(url.pathname==='/style.css'){res.setHeader('Content-Type','text/css');return res.end(css);}
   if(url.pathname==='/bundle.js'){res.setHeader('Content-Type','application/javascript');return res.end(fs.readFileSync(path.join(dir,'bundle.js')));}
+  if(url.pathname==='/api/public/upsell'){
+   let raw='';for await(const chunk of req)raw+=chunk;const input=JSON.parse(raw);
+   const eligible=input.cartItems.some(item=>item.id==='pizza')&&!input.excludedUpsellIds.includes('u');
+   res.setHeader('Content-Type','application/json');return res.end(JSON.stringify(eligible?{upsell:{id:'u',upsellName:'Andre købte også',discountType:'percentage',discountValue:10},products:[{id:'drink',productName:'Drink',price:20}]}:null));
+  }
   if(url.pathname==='/session'||url.pathname==='/api/checkout/session'){
    let raw='';for await(const chunk of req)raw+=chunk;
    const key=url.searchParams.get('case')||new URL(req.headers.referer).searchParams.get('case');const calls=requests.get(key)||[];const attemptKey=req.headers['idempotency-key'];const repeated=attemptKeys.has(attemptKey);if(!attemptKey||!attemptKeys.has(attemptKey)){calls.push(JSON.parse(raw));requests.set(key,calls);attemptKeys.add(attemptKey);}
@@ -132,7 +141,7 @@ before(async()=>{
  browser=await chromium.launch({headless:true,...(process.env.CART_CHROMIUM_PATH?{executablePath:process.env.CART_CHROMIUM_PATH}:{}),args:['--no-sandbox','--disable-dev-shm-usage','--no-zygote','--use-gl=angle','--use-angle=swiftshader']});
 });
 after(async()=>{await browser?.close();if(server)await new Promise(resolve=>server.close(resolve));if(dir)fs.rmSync(dir,{recursive:true,force:true});});
-async function setup(t,scenario){
+async function setup(t,scenario,email='test@example.test'){
  const context=await browser.newContext({viewport:{width:scenario.includes('mobile')?390:1280,height:900}});t.after(()=>context.close());const page=await context.newPage();page.setDefaultTimeout(5000);page.setDefaultNavigationTimeout(5000);const errors=[];
  page.on('pageerror',e=>errors.push(e.message));t.after(()=>assert.deepEqual(errors,[]));
  if(scenario==='storage')await page.addInitScript(()=>{window.storageUnavailable=true;Object.defineProperty(window,'sessionStorage',{get(){throw Error('storage denied');}});});
@@ -143,7 +152,7 @@ async function setup(t,scenario){
   t.diagnostic(JSON.stringify({body:await page.locator('body').innerText(),errors}));throw error;
  });
  await page.getByPlaceholder('John Doe',{exact:true}).fill('Test Customer');
- await page.getByPlaceholder('john@example.com',{exact:true}).fill('test@example.test');
+ await page.getByPlaceholder('john@example.com',{exact:true}).fill(email);
  await page.getByPlaceholder('+123456789',{exact:true}).fill('12345678');
  await page.getByRole('checkbox',{name:/Jeg accepterer|I accept the/}).first().check();
  return page;
@@ -380,4 +389,32 @@ test('#123 late checkout consent and payment click retain location context',asyn
  await pay(page);await page.waitForURL('**/stripe?*');
  await expect.poll(()=>events.filter(e=>e.name==='click_purchase').length).toBe(1);
  for(const e of events.filter(e=>['start_checkout','click_purchase'].includes(e.name))){assert.equal(e.params.locationId,'l');assert.equal(e.params.brandId,'b');assert.ok(e.params.sessionId);}
+});
+
+// QA209 deliberately never clicks payment or submits customer/consent data.
+for(const width of [390,1280])for(const enabled of [false,true])test(`QA209 cart-only combo newsletter ${enabled} at ${width}`,async t=>{
+ const scenario='ui-newsletter-combo-qa209-stacking-'+(enabled?'on':'off')+'-'+width;
+ const page=await setup(t,scenario,'okh2071@gmail.com');await page.setViewportSize({width,height:1000});
+ const card=page.locator('.commerce-newsletter');
+ if(enabled)await card.getByText('Få 10% ved tilmelding',{exact:true}).waitFor();
+ await card.getByRole('checkbox').check();
+ await page.getByRole('button',{name:enabled?/Gå til betaling.*107,50/:/Gå til betaling.*119,00/}).first().waitFor();
+ if(process.env.QA_OUTPUT_DIR){fs.mkdirSync(process.env.QA_OUTPUT_DIR,{recursive:true});await page.screenshot({path:path.join(process.env.QA_OUTPUT_DIR,`newsletter-combo-${enabled}-${width}.png`),fullPage:true});}
+ await card.getByRole('checkbox').uncheck();
+ await page.getByRole('button',{name:/Gå til betaling.*119,00/}).first().waitFor();
+ assert.equal(requests.get(scenario)?.length||0,0);
+});
+
+test('QA209 cart-only upsell offer price, add, remove and dismiss never start checkout',async t=>{
+ const context=await browser.newContext({viewport:{width:1280,height:900}});t.after(()=>context.close());
+ const page=await context.newPage();page.setDefaultTimeout(5000);const errors=[];page.on('pageerror',e=>errors.push(e.message));t.after(()=>assert.deepEqual(errors,[]));
+ await page.goto(origin+'/?case=upsell-qa209&view=menu');
+ const offer=page.getByRole('region',{name:'Anbefalet til din ordre'}).first();
+ await offer.getByText('18,00 kr.',{exact:true}).waitFor();
+ await offer.getByRole('button',{name:'Tilføj Drink',exact:true}).click();
+ const line=page.locator('[data-cart-line="drink"]').first();await line.waitFor();
+ assert.match(await line.innerText(),/18,00 kr/);
+ await line.getByRole('button',{name:'Fjern Drink',exact:true}).click();await line.waitFor({state:'detached'});
+ await offer.getByRole('button',{name:'Skjul anbefaling',exact:true}).click();await offer.waitFor({state:'hidden'});
+ assert.deepEqual(errors,[]);assert.equal(requests.get('upsell-qa209')?.length||0,0);
 });

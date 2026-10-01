@@ -10,6 +10,8 @@ import { Timestamp } from 'firebase-admin/firestore';
 import type { Discount } from '@/types';
 import { z, type ZodIssue } from 'zod';
 import { redirect } from 'next/navigation';
+import { marketingConfigurationStatus } from '@/lib/marketing/config';
+import { savedPromotionDate } from '@/lib/promotion-calendar';
 import { promotionDate } from '@/lib/promotion-date';
 
 const activeTimeSlotSchema = z.object({
@@ -39,6 +41,9 @@ const discountSchema = z.object({
   firstTimeCustomerOnly: z.boolean().default(false),
   allowStacking: z.boolean().default(false),
 }).superRefine((data, ctx) => {
+  if (data.applicationType === 'code' && data.code === 'NEWSLETTER_SIGNUP') {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['code'], message: 'Indtast en rabatkode. NEWSLETTER_SIGNUP er reserveret til nyhedsbrevsrabatter.' });
+  }
   if (data.applicationType === 'code' && data.code.length < 3) {
     ctx.addIssue({
       code: z.ZodIssueCode.custom,
@@ -108,8 +113,8 @@ export async function createOrUpdateDiscount(
     const dataToSave: any = {
         id: docId,
         ...discountData,
-        startDate: discountData.startDate ? Timestamp.fromDate(new Date(discountData.startDate)) : formData.get('clearStartDate') === 'true' ? null : undefined,
-        endDate: discountData.endDate ? Timestamp.fromDate(new Date(discountData.endDate)) : formData.get('clearEndDate') === 'true' ? null : undefined,
+        startDate: formData.get('clearStartDate') === 'true' ? null : undefined,
+        endDate: formData.get('clearEndDate') === 'true' ? null : undefined,
         updatedAt: Timestamp.now(),
         usedCount: 0,
     };
@@ -127,9 +132,15 @@ export async function createOrUpdateDiscount(
         const customer = await tx.get(db.collection('customers').doc(discountData.assignedToCustomerId));
         if (!customer.exists || customer.data()?.brandId !== discountData.brandId) throw new Error('Select a customer belonging to this brand.');
       }
+      if (discountData.startDate) dataToSave.startDate = Timestamp.fromDate(savedPromotionDate(discountData.startDate, before?.startDate));
+      if (discountData.endDate) dataToSave.endDate = Timestamp.fromDate(savedPromotionDate(discountData.endDate, before?.endDate, true));
+      if (dataToSave.startDate && dataToSave.endDate && dataToSave.startDate.toDate() > dataToSave.endDate.toDate()) throw new Error('Slutdatoen skal være på eller efter startdatoen.');
       const duplicates = await tx.get(db.collection('discounts').where('brandId', '==', discountData.brandId).where('code', '==', discountData.code));
-      if (duplicates.docs.some(record => record.id !== docId)) throw new Error('This discount code already exists for this brand.');
-      return { ...before, ...dataToSave, usedCount: before?.usedCount ?? 0 };
+      if (discountData.applicationType === 'code' && duplicates.docs.some(record => record.id !== docId)) throw new Error('Denne rabatkode findes allerede for brandet.');
+      const changedType = before && (before.applicationType || 'code') !== discountData.applicationType;
+      return { ...before, ...dataToSave, usedCount: before?.usedCount ?? 0,
+        ...(changedType ? { applicationHistory: [...(Array.isArray(before.applicationHistory) ? before.applicationHistory : []), { applicationType: before.applicationType || 'code', code: before.code, changedAt: dataToSave.updatedAt }] } : {}),
+      };
     }, true);
 
   } catch (e) {
@@ -193,4 +204,18 @@ export async function getDiscountCustomers(brandId: string): Promise<{id: string
   await requireOrderflyAccess(brandId, null, 'orderfly.discounts:view');
   const snapshot = await getAdminDb().collection('customers').where('brandId', '==', brandId).get();
   return snapshot.docs.map(d => ({ id: d.id, name: d.data().fullName || '', email: d.data().email || '' }));
+}
+
+/** Redacted readiness only; this never contacts the provider or records consent. */
+export async function getNewsletterSetup(brandId: string): Promise<string | null> {
+  await requireOrderflyAccess(brandId, null, 'orderfly.discounts:view');
+  const { reason } = marketingConfigurationStatus(brandId);
+  const messages = {
+    secret_unavailable: 'Nyhedsbrevstjenestens konfiguration mangler på serveren.',
+    invalid_mapping: 'Nyhedsbrevstjenestens konfiguration er ugyldig.',
+    duplicate_mapping: 'Brandet er tilknyttet flere gange i nyhedsbrevskonfigurationen.',
+    brand_not_mapped: 'Brandet er ikke tilknyttet nyhedsbrevstjenesten.',
+    brand_disabled: 'Nyhedsbrevstjenesten er deaktiveret for brandet.',
+  };
+  return reason ? `${messages[reason]} Kampagnen kan gemmes, men tilbydes ikke i checkout, før opsætningen er rettet.` : null;
 }

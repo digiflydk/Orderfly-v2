@@ -1,3 +1,5 @@
+import { loadSuperadminPage } from '@/lib/access/superadmin-page';
+import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
 
 import { getAllLocations } from './actions';
 import { getBrands } from '../brands/actions';
@@ -7,10 +9,12 @@ import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
 
 async function LocationsPageContent() {
-    const [locations, brands] = await Promise.all([
+    const result = await loadSuperadminPage('orderfly.catalog:view', () => Promise.all([
         getAllLocations(),
         getBrands()
-    ]);
+    ]));
+    if (!result) return <AccessDeniedPage />;
+    const [locations, brands] = result;
 
     const brandsMap = new Map(brands.map(b => [b.id, b.name]));
 

@@ -227,6 +227,36 @@ export function CartProvider({ children }: { children: ReactNode }) {
     if (cartReady) persist();
   }, [cartItems, includeBagFee, cartReady, persist]);
 
+  // Reprice an open basket on focus and periodically without resetting checkout fields.
+  // Discard replies if the user edits/switches restaurant while the read is in flight.
+  useEffect(() => {
+    if (!cartReady) return;
+    let disposed = false, busy = false;
+    const refresh = async () => {
+      const state = current.current;
+      if (busy || document.visibilityState === 'hidden' || checkoutOrderId.current || !readyRef.current || !state.brand || !state.location || !state.deliveryType) return;
+      const choices = cartChoices(state.cartItems), fingerprint = JSON.stringify(choices);
+      const request = generation.current;
+      busy = true;
+      try {
+        const result = await restoreCartAction({ brandId: state.brand.id, locationId: state.location.id, deliveryType: state.deliveryType, choices });
+        if (disposed || generation.current !== request || checkoutOrderId.current || fingerprint !== JSON.stringify(cartChoices(current.current.cartItems))) return;
+        if (JSON.stringify(result.items) !== JSON.stringify(current.current.cartItems)) {
+          current.current = { ...current.current, cartItems: result.items };
+          setCartItems(result.items);
+          setCartNotice('Priser eller tilbud er opdateret. Kontrollér kurven før betaling.');
+        }
+        setStandardDiscounts(result.discounts);
+      } catch {
+        // Checkout independently fails closed on stale prices before any write.
+        if (!disposed) setCartNotice('Priserne kunne ikke opdateres. De kontrolleres igen før betaling.');
+      } finally { busy = false; }
+    };
+    window.addEventListener('focus', refresh);
+    const interval = window.setInterval(refresh, 30000);
+    return () => { disposed = true; window.removeEventListener('focus', refresh); window.clearInterval(interval); };
+  }, [cartReady, contextKey]);
+
   const saveCartForCheckout = useCallback((orderId: string) => {
     checkoutOrderId.current = orderId;
     persist(); // Flush before leaving the application for Stripe.

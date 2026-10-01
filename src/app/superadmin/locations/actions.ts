@@ -1,5 +1,6 @@
 
 'use server';
+import { upsellClientData } from '@/lib/upsell-serialization';
 import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { publicLocationRecord } from '@/lib/public-native-records';
 import { selectorCatalog } from '@/lib/access/native-catalog';
@@ -195,15 +196,16 @@ export async function getAllLocations(brandId?: string): Promise<Location[]> {
     if (brandId) {
         q = q.where('brandId', '==', brandId);
     }
-    q = q.orderBy('name');
+    // Imported locations without a name must remain visible for repair.
     const querySnapshot = await q.get();
     const locations = querySnapshot.docs.map(doc => ({ ...doc.data(), id: doc.id })) as Location[];
     
-    return locations.map(location => ({
+    return locations.map(location => upsellClientData({
         ...location,
+        name: typeof location.name === 'string' && location.name.trim() ? location.name : `Restaurant (${location.id})`,
         supportsDelivery: Array.isArray(location.deliveryTypes) && location.deliveryTypes.includes('delivery'),
         supportsPickup: Array.isArray(location.deliveryTypes) && location.deliveryTypes.includes('pickup'),
-    }));
+    })).sort((a, b) => a.name.localeCompare(b.name, 'da'));
 }
 
 

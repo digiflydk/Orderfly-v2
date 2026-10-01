@@ -13,6 +13,7 @@ const records = {
   Fk5pCg8dvTeA8jBC2jzQ: { brandId:'esmeralda',locationIds:['amager'],discountName:'Pizza Pizza',discountType:'product',referenceIds:['pizza'],discountMethod:'fixed_amount',discountValue:30,isActive:true,orderTypes:['pickup','delivery'],startDate:{_seconds:1782864000,_nanoseconds:0},activeDays:[],activeTimeSlots:[],allowStacking:false },
 };
 const mockActions = {
+  'server-only': {},
   'next/cache':{revalidatePath(){},revalidateTag(){}},
   'next/navigation':{redirect(){throw Error('REDIRECT')}},
   '@/lib/firebase-admin':{getAdminDb:()=>({collection:name=>({doc:id=>({id,path:`${name}/${id}`}),where:()=>({where:()=>({})})})})},

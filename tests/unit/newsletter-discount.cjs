@@ -62,7 +62,7 @@ for(const allowStacking of [undefined,false,true])test(`persisted stacking=${all
  const discount={...newsletter,allowStacking},expected=allowStacking?150.02:161.75;
  const totals=basketTotals({cartItems:screenshotItems,appliedDiscount:discount,standardDiscounts:screenshotOffers,
   deliveryType:'pickup',location:null,brand:{bagFee:4},includeBagFee:true});
- const f=await screenshotCheckout(discount,{paymentOverrides:{discountTotal:999,cartDiscountTotal:999}});
+ const f=await screenshotCheckout(discount,{paymentOverrides:{subtotal:totals.subtotal,discountTotal:totals.finalDiscount.amount,cartDiscountTotal:totals.voucherDiscount.amount}});
  assert.equal(f.result.success,true,f.result.error);
  const order=f.records.get('orders/ORD-TEST');
  const stripeTotal=(f.sessionParams.line_items.reduce((n,item)=>n+item.price_data.unit_amount*item.quantity,0)-f.coupon.amount_off)/100;

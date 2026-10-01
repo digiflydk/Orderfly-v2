@@ -1,6 +1,7 @@
 
 
 'use server';
+import { promotionBoundary, savedPromotionDate } from '@/lib/promotion-calendar';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { comboEligible } from '@/lib/combo-eligibility';
@@ -109,9 +110,9 @@ export async function createOrUpdateCombo(
     if (id) rawData.id = id;
 
     const startDate = formData.get('startDate');
-    if (startDate) rawData.startDate = new Date(startDate as string);
+    if (startDate) rawData.startDate = (/^\d{4}-\d{2}-\d{2}$/.test(String(startDate)) ? promotionBoundary(String(startDate), false) : new Date(String(startDate)));
     const endDate = formData.get('endDate');
-    if (endDate) rawData.endDate = new Date(endDate as string);
+    if (endDate) rawData.endDate = (/^\d{4}-\d{2}-\d{2}$/.test(String(endDate)) ? promotionBoundary(String(endDate), true) : new Date(String(endDate)));
 
     const productGroupsJSON = formData.get('productGroups');
     if (typeof productGroupsJSON === 'string' && productGroupsJSON.trim() !== '') {
@@ -199,12 +200,16 @@ export async function createOrUpdateCombo(
     }
 
     await mutateScopedDocument('comboMenus',comboIdToSave,id?'orderfly.catalog:edit':'orderfly.catalog:create','locations',async(before,tx)=>{
+      for (const key of ['startDate', 'endDate'] as const) {
+        const day = formData.get(key);
+        if (typeof day === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(day)) dataToSave[key] = Timestamp.fromDate(savedPromotionDate(day, before?.[key], key === 'endDate'));
+      }
       for(const productId of new Set(allProductIds)) {
         const product=await tx.get(getAdminDb().collection('products').doc(productId));
         if(!product.exists||product.data()?.brandId!==comboData.brandId)throw new Error('All selected products must belong to the selected brand.');
       }
       return {...before,...omitUndefinedFields(dataToSave)};
-    });
+    }, true);
 
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -247,7 +252,7 @@ export async function getCombos(): Promise<ComboMenu[]> {
 }
 
 export async function getComboById(comboId: string): Promise<ComboMenu | null> {
-    const docSnap = await getScopedDocument('comboMenus',comboId,'orderfly.catalog:view','locations');
+    const docSnap = await getScopedDocument('comboMenus',comboId,'orderfly.catalog:view','locations', true);
     if (docSnap) {
         const data = docSnap.data()!;
         return {

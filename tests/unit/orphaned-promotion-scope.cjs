@@ -41,7 +41,7 @@ function fixture() {
       orderflyReadGrants: async () => [],
     },
   });
-  return { mod, records, setCompanyGrant: value => { companyGrant = value; } };
+  return { mod, records, db, setCompanyGrant: value => { companyGrant = value; } };
 }
 
 test('historical QA promotions require a company grant for a deleted location', async () => {
@@ -75,4 +75,29 @@ test('foreign existing location is rejected even with a company grant', async ()
   f.records.set('discounts/uP2DDd0J0zao4GSi5zmp', { brandId: 'esmeralda', locationIds: ['retired', 'foreign'] });
   await assert.rejects(f.mod.getScopedDocument('discounts', 'uP2DDd0J0zao4GSi5zmp', 'orderfly.discounts:view', 'locations', true), /forbidden/);
   await assert.rejects(f.mod.mutateScopedDocument('discounts', 'uP2DDd0J0zao4GSi5zmp', 'orderfly.discounts:edit', 'locations', before => before, true), /forbidden/);
+});
+
+test('actual upsell editor maps view/edit to catalogue authority and repairs retired references without widening grants',async()=>{
+ const f=fixture(),id='andre-kobte';
+ const row={brandId:'esmeralda',locationIds:['retired'],upsellName:'Andre købte også',offerType:'product',offerProductIds:['pizza'],offerCategoryIds:[],discountType:'percentage',discountValue:10,isActive:true,orderTypes:['pickup'],activeDays:[],activeTimeSlots:[],triggerConditions:[{id:'trigger',type:'product_in_cart',referenceId:'pizza'}],views:21,conversions:4};
+ f.records.set('upsells/'+id,row);
+ const actions=loadTs('src/app/superadmin/upsells/actions.ts',{
+  'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>f.db,admin:{firestore:{Timestamp:{now:()=>1}}}},
+  '@/lib/access/orderfly-session':{verifiedOrderflyIdentity:async()=>({})},
+  '@/lib/access/scoped-data':{...f.mod,
+   getScopedDocument:async(...args)=>{assert.equal(args[2],'orderfly.catalog:view');return f.mod.getScopedDocument(...args);},
+   mutateScopedDocument:async(...args)=>{assert.equal(args[2],'orderfly.catalog:edit');return f.mod.mutateScopedDocument(...args);},
+  },
+  '@/lib/access/location-catalog':{},'../products/actions':{},
+  'next/cache':{revalidatePath(){}},'next/navigation':{redirect(){throw Error('REDIRECT')}},
+ });
+ assert.equal((await actions.getUpsellById(id)).upsellName,row.upsellName);
+ const {upsellFormData}=loadTs('src/lib/upsell-form-data.ts');
+ await assert.rejects(actions.createOrUpdateUpsell(null,upsellFormData({...row,locationIds:['amager']},id)),/REDIRECT/);
+ assert.equal((await actions.getUpsellById(id)).views,21);
+ assert.deepEqual(f.records.get('upsells/'+id).locationIds,['amager']);
+ f.setCompanyGrant(false);
+ await assert.rejects(actions.getUpsellById(id),/forbidden/);
+ const denied=await actions.createOrUpdateUpsell(null,upsellFormData({...row,locationIds:['foreign']},id));
+ assert.equal(denied.error,true);assert.deepEqual(f.records.get('upsells/'+id).locationIds,['amager']);
 });

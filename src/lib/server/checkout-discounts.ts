@@ -1,11 +1,13 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { promotionDate } from '@/lib/promotion-date';
+import { discountApplicationType } from '@/lib/promotion-rules';
 import type { Discount } from '@/types';
 
 const serialize = (id: string, data: FirebaseFirestore.DocumentData): Discount => ({
-  ...data, id,
-  startDate: data.startDate?.toDate(), endDate: data.endDate?.toDate(),
-  createdAt: data.createdAt?.toDate(), updatedAt: data.updatedAt?.toDate(),
+  ...data, id, applicationType: discountApplicationType(data),
+  startDate: promotionDate(data.startDate), endDate: promotionDate(data.endDate),
+  createdAt: promotionDate(data.createdAt), updatedAt: promotionDate(data.updatedAt),
 } as Discount);
 
 // Checkout validates eligibility, current tenant/location, customer and price
@@ -15,7 +17,7 @@ export async function getDiscountByCode(code: string, brandId: string): Promise<
   const result = await getAdminDb().collection('discounts').where('code', '==', code).where('brandId', '==', brandId).limit(2).get();
   if (result.size !== 1) return null;
   const record = result.docs[0], data = record.data();
-  if (data.applicationType === 'newsletter_signup') return null;
+  if (discountApplicationType(data) === 'newsletter_signup') return null;
   return serialize(record.id, data);
 }
 

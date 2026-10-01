@@ -454,6 +454,7 @@ function CheckoutForm({ location }: { location: Location }) {
       subtotal,
       deliveryType,
       newsletterEmail,
+      { undiscounted: sumMoney(cartItems.filter(item => !isLockedItem(item)).map(item => lineMoney(item.basePrice, item.quantity, item.toppings.map(t => t.price)))), charged: sumMoney([subtotal, -itemDiscount]) },
     ).then(offer => {
       if (!cancelled) setNewsletterOffer(offer);
     }).catch(() => {
@@ -464,7 +465,7 @@ function CheckoutForm({ location }: { location: Location }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [brand, location, subtotal, deliveryType, newsletterEmail]);
+  }, [brand, location, subtotal, deliveryType, newsletterEmail, standardDiscounts, cartItems, itemDiscount]);
 
   useEffect(() => {
     if (
@@ -581,7 +582,7 @@ function CheckoutForm({ location }: { location: Location }) {
         vatAmount,
         discountTotal: totalDiscount,
         itemDiscountTotal: itemDiscount,
-        cartDiscountTotal: effectiveCartLevelDiscount?.amount,
+        cartDiscountTotal: effectiveCartLevelDiscount?.amount ?? 0,
         cartDiscountName: effectiveCartLevelDiscount?.name,
         tips: 0,
         taxes: 0
@@ -938,7 +939,7 @@ function CheckoutForm({ location }: { location: Location }) {
                           <FormLabel className="text-base font-semibold leading-relaxed">{newsletterBenefitAvailable ? `Få ${newsletterOfferLabel} ved tilmelding` : 'Få nyheder og tilbud'}</FormLabel>
                           <FormDescription>
                             {newsletterConsentText(brand?.name || 'restauranten')}
-                            {newsletterSyncAvailable === false && <span role="status" className="block mt-2 text-amber-800">Nyhedsbrevstjenesten afventer opsætning. Dit samtykke gemmes, men tilmeldingen er endnu ikke bekræftet hos udbyderen.</span>}
+                            {newsletterSyncAvailable === false && <span role="status" className="block mt-2 text-amber-800">Nyhedsbrevstjenesten afventer opsætning. Samtykket gemmes først, når du fortsætter med bestillingen. Tilmelding hos udbyderen afventer opsætning.</span>}
                             {newsletterOffer && <span className="block mt-2">
                               {newsletterStacking
                                 ? `Nyhedsbrevsrabatten giver ${newsletterOfferLabel} på alle varer efter varerabatter, inklusive tilvalg og menuer. Pose, levering og gebyrer er ikke med.`

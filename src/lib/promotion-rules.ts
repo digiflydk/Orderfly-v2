@@ -1,3 +1,7 @@
+export function discountApplicationType(discount: { applicationType?: string; code?: string }) {
+  return discount.applicationType ?? (discount.code === 'NEWSLETTER_SIGNUP' ? 'newsletter_signup' : 'code');
+}
+
 export function restaurantClock(now: Date) {
   const day = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Copenhagen', weekday: 'long' }).format(now).toLowerCase();
   const time = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', minute: '2-digit', hourCycle: 'h23' }).format(now);
@@ -24,9 +28,9 @@ export function cartLineEligible(isCombo: boolean, catalogPrice: number, charged
 export function discountMinimumError(minimum: number | undefined, eligibleSubtotal: number, chargedSubtotal = eligibleSubtotal): string | null {
   if (!minimum || eligibleSubtotal >= minimum) return null;
   if (Number.isFinite(chargedSubtotal) && chargedSubtotal >= minimum && eligibleSubtotal < chargedSubtotal) {
-    return `Rabatkoden kan ikke kombineres med varer, der allerede har rabat, eller menuer. Kun ${eligibleSubtotal.toFixed(2)} kr. i varer uden andet tilbud tæller med mod minimumsbeløbet på ${minimum.toFixed(2)} kr.`;
+    return `Rabatkoden kan ikke kombineres med varer, der allerede har rabat, eller menuer. Kun ${eligibleSubtotal.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr. i varer uden andet tilbud tæller med mod minimumsbeløbet på ${minimum.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr.`;
   }
-  return `Minimumsbeløbet på ${minimum.toFixed(2)} kr. er ikke nået.`;
+  return `Minimumsbeløbet på ${minimum.toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr. er ikke nået.`;
 }
 
 export function assignedCustomerMatches(assignedId: string | undefined, customerId: string | undefined) {

@@ -269,3 +269,16 @@ test('#71 editing a line invalidates old payment before another tab confirms it'
  await payment.goto(origin+'/checkout/confirmation?order=ORD-ONE&status=Paid');await payment.waitForFunction(()=>window.receiptProcessed);
  assert.deepEqual(await saved(payment),edited);await cart.reload();await ready(cart);await count(cart,2);
 });
+
+test('QA209 open cart reprices changed campaigns on focus without payment or reload',async t=>{
+ const page=await setup(t);await page.click('#pizza');await count(page,1);
+ assert.equal((await state(page)).total,79);
+ catalog.discounts=[structuredClone(f.discount)];
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await page.waitForFunction(()=>JSON.parse(document.querySelector('#state').textContent).total===64);
+ catalog.discounts=[];catalog.products[0].price=89;
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await page.waitForFunction(()=>JSON.parse(document.querySelector('#state').textContent).total===93);
+ assert.equal((await state(page)).items[0].quantity,1);
+ assert.equal((await saved(page)).checkoutOrderId,undefined);
+});

@@ -36,7 +36,9 @@ function fixture() {
     '@/app/superadmin/brands/actions': { getBrands: read(brands) },
     '@/app/superadmin/locations/actions': { getAllLocations: read(locations) },
     '../locations/actions': { getAllLocations: read(locations) },
+    '../brands/actions': { getBrands: read(brands) },
     './actions': {
+      getAllLocations: read(locations),
       getDiscounts: read([{id:'summer',brandId:'esmeralda',code:'SUMMER20'}]),
       getStandardDiscounts: read([{id:'pizza',brandId:'esmeralda',discountName:'Pizza Pizza'}]),
       getCombos: read([{id:'combo',brandId:'esmeralda',comboName:'Meal',locationIds:undefined}]),
@@ -51,6 +53,7 @@ function fixture() {
     '@/components/superadmin/discount-form-page': {DiscountFormPage: function DiscountFormPage() {}},
     '@/components/superadmin/standard-discount-form-page': {StandardDiscountFormPage: function StandardDiscountFormPage() {}},
     './client-page': {
+      LocationsClientPage: function LocationsClientPage() {},
       DiscountsClientPage: function DiscountsClientPage() {},
       StandardDiscountsClientPage: function StandardDiscountsClientPage() {},
       CombosClientPage: function CombosClientPage() {},
@@ -80,6 +83,7 @@ const lists = [
   ['discounts','DiscountsClientPage'],
   ['standard-discounts','StandardDiscountsClientPage'],
   ['combos','CombosClientPage'],
+  ['locations','LocationsClientPage'],
   ['upsells','UpsellsClientPage'],
   ['games','GamesDashboard'],
 ];
@@ -154,4 +158,11 @@ test('legacy combo date formats and absent locations are safe on list and detail
     assert.equal(value.createdAt.toISOString(),'2026-08-01T10:00:00.000Z');
     assert.equal(value.updatedAt.toISOString(),'2026-09-02T10:00:00.000Z');
   }
+});
+
+test('new discount route renders the real form boundary; expired sessions redirect and denied grants remain denied',async()=>{
+ const f=fixture(),page=f.page('src/app/superadmin/discounts/new/page.tsx');
+ assert.equal((await page()).type.name,'DiscountFormPage');
+ f.setAccess('expired');await assert.rejects(page(),e=>e.href==='/admin-login');
+ f.setAccess('denied');assert.equal((await page()).type.name,'AccessDeniedPage');
 });

@@ -1,6 +1,7 @@
-
-
 'use client';
+import { da } from 'date-fns/locale';
+import { calendarDay, calendarDate, promotionDay } from '@/lib/promotion-calendar';
+
 
 import { z } from 'zod';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -67,8 +68,8 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 			discountValue: discount.discountValue ?? undefined,
 			discountHeading: discount.discountHeading ?? '',
 			discountDescription: discount.discountDescription ?? '',
-			startDate: discount.startDate ? new Date(discount.startDate) : undefined,
-			endDate: discount.endDate ? new Date(discount.endDate) : undefined,
+			startDate: discount.startDate ? calendarDate(promotionDay(discount.startDate)) : undefined,
+			endDate: discount.endDate ? calendarDate(promotionDay(discount.endDate)) : undefined,
 		} : {
 			brandId: '', locationIds: [], discountName: '', discountType: 'product' as const, referenceIds: [],
 			discountMethod: 'percentage' as const, discountValue: undefined, minOrderValue: 0, isActive: true,
@@ -155,7 +156,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 
 			if (key === 'startDate' || key === 'endDate') {
 				if (value) {
-					formData.append(key, (value as Date).toISOString());
+					formData.append(key, calendarDay(value as Date)!);
 				}
 				return;
 			}
@@ -340,7 +341,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 
 								{(discountType === 'cart' || discountType === 'free_delivery') && (
 									<FormField control={control} name="minOrderValue" render={({ field }) => (
-										<FormItem><FormLabel>Minimum Order Value</FormLabel><FormControl><Input type="number" step="0.01" placeholder="e.g. 200" {...field} value={field.value ?? ''} /></FormControl><FormDescription>The cart total must be over this amount for the discount to apply.</FormDescription><FormMessage /></FormItem>
+										<FormItem><FormLabel>Minimum Order Value</FormLabel><FormControl><Input type="number" step="0.01" placeholder="e.g. 200" {...field} value={field.value ?? ''} /></FormControl><FormDescription>De rabatberettigede varer skal koste mindst dette beløb.</FormDescription><FormMessage /></FormItem>
 									)} />
 								)}
 
@@ -407,7 +408,7 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Active</FormLabel></div><FormControl><Switch name="isActive" checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
 								)} />
 								<FormField control={control} name="allowStacking" render={({ field }) => (
-									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Allow Stacking</FormLabel>{isQuantityMethod(discountMethod) && <FormDescription>Quantity offers cannot be stacked.</FormDescription>}</div><FormControl><Switch name="allowStacking" disabled={isQuantityMethod(discountMethod)} checked={isQuantityMethod(discountMethod) ? false : field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
+									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Rabatstabling er ikke understøttet</FormLabel><FormDescription>Produktrabatter kombineres ikke med almindelige rabatkoder. Kurvrabatter og koder konkurrerer om den bedste rabat. Nyhedsbrevsrabatter har et særskilt stackingvalg.</FormDescription></div><FormControl><Switch name="allowStacking" disabled checked={false} onCheckedChange={field.onChange} /></FormControl></FormItem>
 								)} />
 								<FormField control={control} name="assignToOfferCategory" render={({ field }) => (
 									<FormItem className="flex flex-row items-center justify-between rounded-lg border p-4"><div className="space-y-0.5"><FormLabel>Show in "Offers" Category</FormLabel></div><FormControl><Switch name="assignToOfferCategory" checked={field.value} onCheckedChange={field.onChange} /></FormControl></FormItem>
@@ -470,10 +471,10 @@ export function StandardDiscountFormPage({ discount, brands, locations, products
 								<Separator />
 
 								<FormField control={control} name="startDate" render={({ field }) => (
-									<FormItem className="flex flex-col"><FormLabel>Start Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
+									<FormItem className="flex flex-col"><FormLabel>Startdato</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP", { locale: da }) : <span>Vælg dato</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
 								)} />
 								<FormField control={control} name="endDate" render={({ field }) => (
-									<FormItem className="flex flex-col"><FormLabel>End Date</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP") : <span>Pick a date</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
+									<FormItem className="flex flex-col"><FormLabel>Slutdato</FormLabel><Popover><PopoverTrigger asChild><FormControl><Button variant={"outline"} className={cn("pl-3 text-left font-normal", !field.value && "text-muted-foreground")}><CalendarIcon className="mr-2 h-4 w-4" />{field.value ? format(field.value, "PPP", { locale: da }) : <span>Vælg dato</span>}</Button></FormControl></PopoverTrigger><PopoverContent className="w-auto p-0" align="start"><Calendar mode="single" selected={field.value} onSelect={field.onChange} /></PopoverContent></Popover><FormMessage /></FormItem>
 								)} />
 							</CardContent>
 						</Card>

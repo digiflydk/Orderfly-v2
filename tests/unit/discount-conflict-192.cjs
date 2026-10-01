@@ -25,7 +25,7 @@ test('a nonstackable item offer explains the actual conflict before payment (#19
   standardDiscounts:[productOffer],brandOverrides:{bagFee:0}});
  assert.equal(f.result.success,false);
  assert.match(f.result.error,/kan ikke kombineres/);
- assert.match(f.result.error,/40\.00 kr\./);
+ assert.match(f.result.error,/40,00 kr\./);
  assert.doesNotMatch(f.result.error,/^Minimumsbeløbet/);
  assert.equal(f.events.includes('stripe'),false);
  assert.equal(f.records.has('orders/ORD-TEST'),false);

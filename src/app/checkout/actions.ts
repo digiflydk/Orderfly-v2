@@ -1,4 +1,5 @@
 'use server';
+import { discountApplicationType } from '@/lib/promotion-rules';
 
 import { isSyntheticProduct } from '@/lib/synthetic-product';
 
@@ -210,7 +211,7 @@ type DiscountEligibilityContext = {
 
 function validateDiscountEligibility(discount: Discount, context: DiscountEligibilityContext): string | null {
     const now = new Date();
-    const applicationType = discount.applicationType ?? 'code';
+    const applicationType = discountApplicationType(discount);
 
     if (discount.brandId !== context.brandId) return 'Rabatten tilhører et andet brand.';
     if (!discount.isActive) return 'Rabatten er ikke længere aktiv.';
@@ -259,7 +260,8 @@ export async function getNewsletterSignupDiscountAction(
     locationId: string,
     subtotal: number,
     deliveryType: 'delivery' | 'pickup',
-    email?: string
+    email?: string,
+    bases?: { undiscounted: number; charged: number }
 ): Promise<NewsletterDiscountOffer | null> {
     if (!marketingConfig(brandId)) return null;
     if (!email || !email.includes('@')) return null;
@@ -268,27 +270,35 @@ export async function getNewsletterSignupDiscountAction(
     const discountsQuery = query(collection(db, 'discounts'), where('brandId', '==', brandId));
     const snapshot = await getDocs(discountsQuery);
 
-    for (const discountDoc of snapshot.docs) {
+    let best: NewsletterDiscountOffer | null = null;
+    let bestSaving = 0;
+    for (const discountDoc of [...snapshot.docs].sort((a, b) => a.id.localeCompare(b.id))) {
         const data = discountDoc.data();
-        if (data.applicationType !== 'newsletter_signup') continue;
+        if (discountApplicationType(data) !== 'newsletter_signup') continue;
         const discount = {
             ...data,
             id: discountDoc.id,
+            applicationType: discountApplicationType(data),
             startDate: asDate(data.startDate),
             endDate: asDate(data.endDate),
         } as Discount;
+        const base = bases ? (newsletterAllowsStacking(discount) ? bases.charged : bases.undiscounted) : subtotal;
+        if (!Number.isFinite(base) || base < 0 || base > subtotal) continue;
         const error = validateDiscountEligibility(discount, {
             brandId,
             locationId,
             deliveryType,
-            subtotal,
+            subtotal: base,
             newsletterConsent: true,
             customerId: resolved.customerRef.id,
             customer,
         });
         if (error) continue;
 
-        return {
+        const saving = discount.discountType === 'percentage' ? percentageMoney(base, Math.min(100, discount.discountValue)) : money(Math.min(base, discount.discountValue));
+        if (saving <= bestSaving) continue;
+        bestSaving = saving;
+        best = {
             id: discount.id,
             description: discount.description,
             discountType: discount.discountType,
@@ -298,7 +308,7 @@ export async function getNewsletterSignupDiscountAction(
             applicationType: 'newsletter_signup',
         };
     }
-    return null;
+    return best;
 }
 
 
@@ -413,7 +423,7 @@ export async function createStripeCheckoutSessionAction(
     // Existing store policy: delivery minimum is the catalog subtotal including
     // options, before promotions and excluding delivery/bag/admin fees.
     if (deliveryType === 'delivery' && validated.subtotal < Math.max(0, toNumber(location.minOrder))) {
-      throw new Error(`Minimum delivery order is kr. ${Number(location.minOrder).toFixed(2)} before discounts and fees.`);
+      throw new Error(`Levering kræver varer for mindst ${Number(location.minOrder).toLocaleString('da-DK', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} kr. før rabatter og gebyrer.`);
     }
     const itemDiscountTotal = money(Math.max(0, validated.subtotal - chargedItemsSubtotal));
     const upsellRows = await getDocs(query(collection(db, 'upsells'), where('brandId', '==', brandId), where('isActive', '==', true)));
@@ -497,6 +507,16 @@ export async function createStripeCheckoutSessionAction(
       adminFee: effectiveAdminFee,
       vatAmount: money(totalAmount * ((brand.vatPercentage ?? 25) / (100 + (brand.vatPercentage ?? 25)))),
     };
+
+    // Modern checkout always sends the displayed cart discount (including zero).
+    // Reject a stale quote before consent, customer/order writes, or reservations.
+    if (typeof paymentDetails.cartDiscountTotal === 'number' && (
+      ore(paymentDetails.cartDiscountTotal) !== ore(cartDiscountTotal) ||
+      ore(paymentDetails.discountTotal) !== ore(serverPaymentDetails.discountTotal) ||
+      ore(paymentDetails.subtotal) !== ore(serverPaymentDetails.subtotal) ||
+      ore(paymentDetails.deliveryFee) !== ore(effectiveDeliveryFee) ||
+      ore(paymentDetails.adminFee || 0) !== ore(effectiveAdminFee)
+    )) throw new Error('Priser eller tilbud er ændret. Opdatér kurven og kontrollér beløbet, før du fortsætter.');
 
     stage = 'customer';
     const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined);

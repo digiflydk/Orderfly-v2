@@ -1,3 +1,4 @@
+import { upsellClientData } from './upsell-serialization';
 import type { Brand } from '@/types';
 
 export function brandRecord(id: string, data: Record<string, unknown>): Brand {
@@ -5,5 +6,5 @@ export function brandRecord(id: string, data: Record<string, unknown>): Brand {
     value => typeof value === 'string' && value.trim().length > 0,
   );
   // Imported/legacy records may contain an obsolete embedded id or no name.
-  return { ...data, id, name: name || `Brand (${id})` } as Brand;
+  return upsellClientData({ ...data, id, name: name || `Brand (${id})` }) as Brand;
 }
