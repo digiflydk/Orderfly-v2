@@ -361,6 +361,7 @@ export type CartItemTopping = {
 export type OrderStatus = 'Pending' | 'Received' | 'In Progress' | 'Ready' | 'Completed' | 'Delivered' | 'Canceled' | 'Error';
 
 export type OrderSummary = {
+  paymentCollection?: { receivedAt: string; employeeId: string; employeeName: string; method: 'cash' | 'card' };
     id: string;
     createdAt: Date;
     customerName: string;
@@ -398,7 +399,6 @@ export type PaymentDetails = {
  * @description A detailed view of a single order.
  */
 export type OrderDetail = OrderSummary & {
-  paymentCollection?: { receivedAt: string; employeeId: string; employeeName: string; method: 'cash' | 'card' };
     refundedAmountOre?: number;
   brandLogoUrl?: string | null;
   productItems: MinimalCartItem[];

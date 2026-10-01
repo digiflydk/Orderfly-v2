@@ -25,6 +25,7 @@ export type ClientOrderSummary = {
   status: string;
   paymentStatus: string;
   paymentMethod?: string;
+  paymentCollection?: { method: 'cash' | 'card' };
   paidSale: boolean;
 };
 
@@ -321,9 +322,9 @@ export function OrdersClientPage({
 
                       <TableCell>
                         <Badge variant="secondary">
-                          {order.paymentStatus === 'Paid' || order.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && order.status !== 'Pending' ? order.status : order.paymentStatus === 'Failed' ? 'Betaling afbrudt' : 'Afventer betaling'}
+                          {order.status === 'Canceled' && order.paymentMethod === 'PayAtPickup' ? 'Annulleret' : order.paymentStatus === 'Paid' || order.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && order.status !== 'Pending' ? order.status : order.paymentStatus === 'Failed' ? 'Betaling afbrudt' : 'Afventer betaling'}
                         </Badge>
-                        <p className="mt-1 text-sm">{paymentMethodLabel(order)}</p>
+                        <p className="mt-1 text-sm">{order.status === 'Canceled' && order.paymentMethod === 'PayAtPickup' ? 'Ingen betaling modtaget' : paymentMethodLabel(order)}</p>
                       </TableCell>
 
                       <TableCell className="text-right font-medium">
