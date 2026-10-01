@@ -176,3 +176,35 @@ Regression: `feedback-central-access.cjs` tester begge providers, superbruger, b
 Release: PR til main → CI og uafhængigt review → PO-accept → merge → deployment → læsende livekontrol. Ingen produktionsændring eller aktivering af mails er del af den lokale rettelse.
 
 Reviewopfølgning: Den fælles identitetsverifikation anvender React `cache` inden for den enkelte server-rendering. Layout, side og brandhjælpere genbruger én verificering. Ingen identitet caches på tværs af requests; næste request kontrollerer native session eller Firebase-revokation igen.
+
+
+## Issue #126: scoped questionnaires and new-feedback notifications
+
+Question versions have `scope: default|brand` and optional `brandId`; legacy documents without scope remain default. A brand version requires a real brand ID; default versions cannot carry one. Platform administrators manage both scopes. The list labels, sorts and filters scope/brand. Brand settings only receive default and authorized brand versions; selecting another brand's version is rejected on the server.
+
+For each language and pickup/delivery/booking experience, an active version for the actual brand wins, followed by a compatible active default. A stored selection only applies if it remains compatible; choosing a booking-only form never disables pickup/delivery. Activation conflicts are checked within scope + brand + language + overlapping experience, under the shared version lock. Submission resolves again inside the feedback transaction and rejects concurrent form changes before persisting answers.
+
+Feedback view and edit grants remain separate and company-scoped. Inbox switches/deletion, detail controls and per-brand settings derive edit capability for that specific brand. A user who edits one brand and views another cannot edit the second brand. Location-only grants do not expand to a company aggregate.
+
+`feedbackSettings` additionally supports `adminNotificationsEnabled` and `adminNotificationEmail`. These settings are independent of customer invitations, reminders and thank-you automation. A new canonical feedback record atomically creates one deterministic `<feedbackId>-adminNotification` job in `feedbackMailJobs`. Resubmission and legacy duplicate detection never create another internal notification. Jobs retain recipient snapshot, source IDs and an event UUID, without customer answers/contact details.
+
+Runtime `ORDERFLY_FEEDBACK_ADMIN_NOTIFICATIONS` explicitly maps each enabled brand to its central organization UUID and default recipient. Esmeralda (`oeypKaMyYcQjIwaa1PtV`) maps to `aaa94d25-3ca6-4ebf-a673-164608db6c55` and `ok@esmeraldapizza.dk`. Missing settings inherit that binding; explicit false disables it. Other brands require their own reviewed binding, active central mapping, approved sender and template publications before activation. There is no global recipient fallback.
+
+Before dispatch, the worker rereads the actual feedback, active brand/location and current recipient setting. Deleted feedback, disabled notifications, changed recipient or mismatching source/brand/location suppress the old job. Invitation/reminder dispatch similarly rechecks that a compatible active form remains available, including after remote eligibility checks. Once the central provider accepts a message, later setting changes cannot recall it. Existing uncertainty handling, event idempotency, leases and privileged retry remain in force.
+
+The private central template is `orderfly.feedback.received`, DA/EN, related entity `feedback`. It contains brand/location and a fixed authenticated `https://orderfly.dk/superadmin/feedback/<sha256-id>` link. No invitation token, customer email, answer text or public moderation link is sent. Admin mail is queued asynchronously; saving feedback does not depend on provider delivery. Central acceptance means queued, not delivered.
+
+Verification uses the actual server actions/worker with synthetic I/O: `feedback-scopes.cjs`, `feedback-admin-notifications.cjs`, all existing feedback regressions and `feedback-browser.cjs` at mobile/desktop widths. Cases cover legacy scope, per-experience fallback, activation conflicts, unauthorized brands, stale forms, one-job creation, recipient changes, deletion/disable, provider ambiguity and mixed view/edit rights. Browser fixture changes are not production data writes.
+
+Release regression correction: the shared calendar uses the Danish month label `september 2026`; the cookie-consent browser fixture now selects that same exact month/year case-insensitively. Existing day, date-range, asynchronous transport and retry assertions are preserved. No calendar runtime code changes.
+
+The shared-login browser fixture supplies Next's real `SearchParamsContext`, as the deployed router does. This lets the actual login component resolve its destination while preserving all login, logout, feedback-bookmark and revoked-session assertions. No login runtime or authentication rule changes.
+
+
+Review corrections: a retained admin-notification job is read before writes. Deleting/recreating feedback for the same source can save again without a duplicate-create collision or another send for an already notified source. Notification history and its event UUID are preserved. Orderfly settings/worker accept only the explicit brand-bound recipient; the recipient control shows that configured address read-only. The private bridge independently validates it against `orderfly_organization_mappings.feedback_admin_email`. Esmeralda uses `ok@esmeraldapizza.dk`; other central internal alerts retain their existing recipients. Provision both sides together before enabling a new brand.
+
+The review adapter binds inline findings to `original_commit_id` (with `commit_id` only as a compatibility fallback). GitHub can update a prior comment's current `commit_id` when mapping it onto a later diff; that does not create a review of the new head. New-head originating findings still reject CLEAN, even when later remapped. Executable adapter contracts cover both directions. A post-green exact-head independent clean signal remains mandatory.
+
+The configured reviewer can also return an explicit `Codex Review: Didn't find any major issues.` comment. The adapter accepts that trusted-bot format only after the green-head request and after GitHub resolves its review commit reference to the full exact candidate SHA. Current-head findings still reject CLEAN. Evidence records the actual verdict URL; unrelated, older, unresolved and finding-bearing comments are rejected by executable contracts.
+
+Release-evidence review correction: reactions never authorize CLEAN, because their request body can be edited after the reaction. Only the configured bot's explicit verdict is accepted; its commit resolves to the exact head, and both the post-green request and verdict must be unedited (`created_at == updated_at`). Tests reject stale/edited requests, edited verdicts and a retained bot reaction with no commit-bound verdict. Current-head findings and changed head/base remain blocking.

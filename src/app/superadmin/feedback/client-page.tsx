@@ -32,6 +32,7 @@ interface FeedbackClientPageProps {
   brands: Pick<Brand, 'id' | 'name'>[];
   locations: Pick<Location, 'id' | 'name' | 'brandId'>[];
   canEdit?: boolean;
+  editableBrandIds?: string[] | null;
 }
 
 const RatingStars = ({ rating }: { rating: number }) => (
@@ -45,7 +46,8 @@ const RatingStars = ({ rating }: { rating: number }) => (
 const sourceOf = (feedback: FeedbackWithDetails) =>
   feedback.sourceType === 'booking' ? 'booking' : 'commerce_order';
 
-export function FeedbackClientPage({ initialFeedback, brands, locations, canEdit = true }: FeedbackClientPageProps) {
+export function FeedbackClientPage({ initialFeedback, brands, locations, canEdit = true, editableBrandIds = null }: FeedbackClientPageProps) {
+  const canEditBrand = (brandId: string) => canEdit && (editableBrandIds === null || editableBrandIds.includes(brandId));
   const { toast } = useToast();
   const [feedbackList, setFeedbackList] = useState(initialFeedback);
   const [searchQuery, setSearchQuery] = useState('');
@@ -67,7 +69,7 @@ export function FeedbackClientPage({ initialFeedback, brands, locations, canEdit
   }), [feedbackList, filters, searchQuery]);
 
   const toggle = async (id: string, value: boolean) => {
-    if (busy || !canEdit) return;
+    if (busy || !canEditBrand(feedbackList.find(feedback => feedback.id === id)?.brandId || '')) return;
     setBusy(true); setError(null);
     setFeedbackList((current) => current.map((feedback) => feedback.id === id ? { ...feedback, showPublicly: value } : feedback));
     const result = await updateFeedback(id, { showPublicly: value }).catch(() => ({ error: true, message: 'Kunne ikke gemme. Prøv igen.' }));
@@ -82,7 +84,7 @@ export function FeedbackClientPage({ initialFeedback, brands, locations, canEdit
   };
 
   const remove = async () => {
-    if (!feedbackToDelete || busy) return;
+    if (!feedbackToDelete || busy || !canEditBrand(feedbackList.find(feedback => feedback.id === feedbackToDelete)?.brandId || '')) return;
     setBusy(true); setError(null);
     const result = await deleteFeedback(feedbackToDelete).catch(() => ({ error: true, message: 'Kunne ikke slette. Prøv igen.' }));
     setBusy(false);
@@ -115,8 +117,8 @@ export function FeedbackClientPage({ initialFeedback, brands, locations, canEdit
               <TableCell>{feedback.customerName}</TableCell>
               <TableCell>{feedback.locationName}</TableCell>
               <TableCell>{feedbackDate(feedback.receivedAt)}</TableCell>
-              <TableCell><Switch disabled={busy || !canEdit} aria-label="Show publicly" checked={feedback.showPublicly} onCheckedChange={(value) => toggle(feedback.id, value)} /></TableCell>
-              <TableCell className="text-right"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem asChild><Link href={`/superadmin/feedback/${feedback.id}`}><Eye className="mr-2 h-4 w-4" />View</Link></DropdownMenuItem><DropdownMenuItem className="text-destructive" onSelect={(event) => { event.preventDefault(); setFeedbackToDelete(feedback.id); }}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem></DropdownMenuContent></DropdownMenu></TableCell>
+              <TableCell><Switch disabled={busy || !canEditBrand(feedback.brandId)} aria-label="Show publicly" checked={feedback.showPublicly} onCheckedChange={(value) => toggle(feedback.id, value)} /></TableCell>
+              <TableCell className="text-right"><DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" size="icon"><MoreHorizontal className="h-4 w-4" /></Button></DropdownMenuTrigger><DropdownMenuContent align="end"><DropdownMenuItem asChild><Link href={`/superadmin/feedback/${feedback.id}`}><Eye className="mr-2 h-4 w-4" />View</Link></DropdownMenuItem>{canEditBrand(feedback.brandId) && <DropdownMenuItem className="text-destructive" onSelect={(event) => { event.preventDefault(); setFeedbackToDelete(feedback.id); }}><Trash2 className="mr-2 h-4 w-4" />Delete</DropdownMenuItem>}</DropdownMenuContent></DropdownMenu></TableCell>
             </TableRow>;
           })}
           {filteredFeedback.length === 0 && <TableRow><TableCell colSpan={7} className="h-24 text-center text-muted-foreground">No feedback entries found.</TableCell></TableRow>}

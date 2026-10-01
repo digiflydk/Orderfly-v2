@@ -7,7 +7,7 @@ import { FeedbackDetailClient } from './client-page';
 
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { Customer, OrderDetail } from '@/types';
-import { requireFeedbackAccess } from '@/lib/feedback/access';
+import { requireFeedbackAccess, canEditFeedbackBrand } from '@/lib/feedback/access';
 
 async function getCustomerName(customerId: string, brandId: string): Promise<string> {
     const snap = await getAdminDb().collection('customers').doc(customerId).get();
@@ -44,6 +44,6 @@ export default async function FeedbackDetailPage({ params }: { params: Promise<{
     };
 
     return (
-        <FeedbackDetailClient initialFeedback={fullFeedback} canEdit={access.permissions.includes('feedback:edit')} />
+        <FeedbackDetailClient initialFeedback={fullFeedback} canEdit={canEditFeedbackBrand(access, feedback.brandId)} />
     );
 }

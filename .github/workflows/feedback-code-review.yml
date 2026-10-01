@@ -1,0 +1,108 @@
+name: Feedback Code Review
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened, ready_for_review, edited]
+
+permissions:
+  contents: read
+  actions: read
+  issues: write
+  pull-requests: write
+
+concurrency:
+  group: feedback-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  review:
+    if: github.event.pull_request.head.repo.full_name == github.repository && github.head_ref == 'work-issue-126-feedback' && !github.event.pull_request.draft
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Wait for green engineering evidence and build context
+        id: context
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const head = context.payload.pull_request.head.sha;
+            const base = context.payload.pull_request.base.sha;
+            const issueNumber = 126;
+            const args = {owner: context.repo.owner, repo: context.repo.repo};
+            
+            let green = false;
+            for (let attempt = 0; attempt < 105; attempt++) {
+              const {data: pr} = await github.rest.pulls.get({...args, pull_number: context.issue.number});
+              if (pr.head.sha !== head || pr.base.sha !== base || pr.state !== 'open') throw new Error('Candidate or base changed; review must restart.');
+              const runs = await github.paginate(github.rest.actions.listWorkflowRuns, {...args, workflow_id: 'ui-tests.yml', event: 'pull_request', branch: pr.head.ref, per_page: 100});
+              const successful = runs.find(run => run.head_sha === head && run.status === 'completed' && run.conclusion === 'success' && (run.pull_requests || []).some(p => p.number === pr.number && (!p.base?.sha || p.base.sha === base)));
+              green = Boolean(successful);
+              if (successful) core.setOutput('green_at', String(Date.parse(successful.updated_at)));
+              if (green) {
+                const {data: issue} = await github.rest.issues.get({...args, issue_number: issueNumber});
+                fs.writeFileSync('.feedback-review-context.md', ['# Independent feedback review', 'Head: '+head, 'Base: '+base, '## Issue', issue.body || '', '## Pull request', pr.body || ''].join('\n\n'));
+                core.setOutput('head', head);
+                core.setOutput('base', base);
+                break;
+              }
+              const latest = runs.filter(run => run.head_sha === head).sort((a,b) => b.id-a.id)[0];
+              if (latest?.status === 'completed' && latest.conclusion !== 'success') throw new Error('Engineering CI failed; no review verdict may be emitted.');
+              await new Promise(resolve => setTimeout(resolve, 20000));
+            }
+            if (!green) throw new Error('Green exact-head engineering evidence was not available within 35 minutes.');
+      - name: Verify independent GitHub reviewer verdict
+        uses: actions/github-script@v7
+        env:
+          EXPECTED_HEAD: ${{ steps.context.outputs.head }}
+          EXPECTED_BASE: ${{ steps.context.outputs.base }}
+          ENGINEERING_GREEN_AT: ${{ steps.context.outputs.green_at }}
+        with:
+          script: |
+            const args = {owner: context.repo.owner, repo: context.repo.repo};
+            const head = process.env.EXPECTED_HEAD, base = process.env.EXPECTED_BASE;
+            const reviewer = 'chatgpt-codex-connector[bot]';
+            let approvedRequest, verdictComment;
+            for (let attempt = 0; attempt < 60; attempt++) {
+              const {data: pr} = await github.rest.pulls.get({...args, pull_number: context.issue.number});
+              if (pr.head.sha !== head || pr.base.sha !== base || pr.state !== 'open') throw new Error('Head/base changed during independent review; restart all gates.');
+              const comments = await github.paginate(github.rest.issues.listComments, {...args, issue_number: pr.number, per_page: 100});
+              const requests = comments.filter(c => ['OWNER','MEMBER','COLLABORATOR'].includes(c.author_association) && c.created_at === c.updated_at && c.body.startsWith('@codex review') && c.body.includes('Reviewed-Head: '+head) && c.body.includes('Review-Base: '+base) && Date.parse(c.created_at) >= Number(process.env.ENGINEERING_GREEN_AT));
+              for (const request of requests) {
+                const verdicts = comments.filter(c => c.user?.login === reviewer && c.created_at === c.updated_at && Date.parse(c.created_at) >= Date.parse(request.created_at) && c.body.startsWith("Codex Review: Didn't find any major issues."));
+                for (const verdict of verdicts) {
+                  const reference = verdict.body.match(/\*\*Reviewed commit:\*\* `([0-9a-f]{7,40})`/);
+                  if (!reference || !head.startsWith(reference[1])) continue;
+                  const resolved = (await github.rest.repos.getCommit({...args, ref: reference[1]})).data;
+                  if (resolved.sha === head) { approvedRequest = request; verdictComment = verdict; }
+                }
+              }
+              if (approvedRequest) {
+                const reviews = await github.paginate(github.rest.pulls.listReviews, {...args, pull_number: pr.number, per_page: 100});
+                const inline = await github.paginate(github.rest.pulls.listReviewComments, {...args, pull_number: pr.number, per_page: 100});
+                if (reviews.some(r => r.user?.login === reviewer && r.commit_id === head && r.state === 'CHANGES_REQUESTED') || inline.some(c => c.user?.login === reviewer && (c.original_commit_id || c.commit_id) === head)) throw new Error('Independent reviewer has findings on this head; no CLEAN attestation is permitted.');
+                break;
+              }
+              await new Promise(resolve => setTimeout(resolve, 20000));
+            }
+            if (!approvedRequest) throw new Error('No unedited explicit independent-review verdict resolved to the exact head after green engineering evidence.');
+            const fresh = (await github.rest.pulls.get({...args, pull_number: context.issue.number})).data;
+            if (fresh.head.sha !== head || fresh.base.sha !== base) throw new Error('Head/base changed before review attestation.');
+            await github.rest.issues.createComment({...args, issue_number: fresh.number, body: [
+              'WORK_CODE_REVIEW: CLEAN', 'Reviewed-Head: '+head,
+              'Independent-Reviewer: '+reviewer,
+              'Independent-Review-Request: '+approvedRequest.html_url,
+              'Independent-Review-Signal: unedited explicit no-major-issues verdict from the configured reviewer; commit resolved to exact head',
+              'Independent-Review-Evidence: '+verdictComment.html_url,
+              'Review-Run: https://github.com/'+context.repo.owner+'/'+context.repo.repo+'/actions/runs/'+context.runId,
+            ].join('\n')});
+      - name: Remove transient context
+        if: always()
+        run: rm -f .feedback-review-context.md

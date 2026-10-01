@@ -71,7 +71,7 @@ async function setup(t) {
 const complete = (route, data = rows) => route.fulfill({json:data});
 async function selectDay(page, day, open = true) {
   if (open) await page.locator('#date').click();
-  await page.getByRole('grid', {name:'September 2026',exact:true}).locator('button[name="day"]').filter({hasText:new RegExp('^' + day + '$')}).click();
+  await page.getByRole('grid', {name:/^september 2026$/i}).locator('button[name="day"]').filter({hasText:new RegExp('^' + day + '$')}).click();
 }
 async function choose(page, name, option) {
   await page.getByRole('combobox', {name,exact:true}).click();

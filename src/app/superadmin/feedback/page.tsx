@@ -13,7 +13,7 @@ import EmptyState from '@/components/ui/empty-state';
 async function FeedbackPageContent() {
     const access = await requireFeedbackAccess();
     const [feedback, { brands, locations }, versions] = await Promise.all([
-        getFeedbackEntries(), feedbackScopeOptions(access), readQuestionVersions(),
+        getFeedbackEntries(), feedbackScopeOptions(access), readQuestionVersions(access.brandIds),
     ]);
     const brandMap = new Map(brands.map(b => [b.id, b.name]));
     const locationMap = new Map(locations.map(l => [l.id, l]));
@@ -42,6 +42,7 @@ async function FeedbackPageContent() {
             <Link href="/superadmin/feedback/report" className="inline-block underline">Åbn kvalitetsrapport</Link>
             <FeedbackClientPage 
                 canEdit={access.permissions.includes('feedback:edit')}
+                editableBrandIds={access.editableBrandIds ?? null}
                 initialFeedback={upsellClientData(feedbackWithDetails)}
                 brands={upsellClientData(brands)}
                 locations={upsellClientData(locations)}

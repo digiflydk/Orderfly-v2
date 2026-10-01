@@ -1,12 +1,13 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { FeedbackQuestionsVersionSchema } from '@/lib/schemas/feedback';
+import { questionVersionMatchesBrand, resolveActiveQuestionVersion } from './question-scope';
 import { upsellClientData } from '@/lib/upsell-serialization';
 import type { ExperienceFeedbackQuestionsVersion, FeedbackExperienceType } from './source-types';
 
-export async function readQuestionVersions(): Promise<ExperienceFeedbackQuestionsVersion[]> {
+export async function readQuestionVersions(brandIds: string[] | null = null): Promise<ExperienceFeedbackQuestionsVersion[]> {
   const snapshot = await getAdminDb().collection('feedbackQuestionsVersion').get();
   return snapshot.docs.map(doc => upsellClientData({ ...doc.data(), id: doc.id }) as ExperienceFeedbackQuestionsVersion)
+    .filter(version => brandIds === null || brandIds.some(brandId => questionVersionMatchesBrand(version, brandId)))
     .sort((a, b) => String(a.versionLabel || '').localeCompare(String(b.versionLabel || '')) || a.id.localeCompare(b.id));
 }
 
@@ -16,16 +17,12 @@ export async function readQuestionVersion(id: string): Promise<ExperienceFeedbac
 }
 
 export async function readActiveQuestions(type: FeedbackExperienceType, language = 'da') {
-  // Versions are currently platform-wide. Never choose a random language/version.
   const versions = await readQuestionVersions();
-  return versions.filter(v => FeedbackQuestionsVersionSchema.safeParse(v).success && v.isActive && v.language === language && v.orderTypes?.includes(type))
-    .sort((a, b) => a.id.localeCompare(b.id))[0] || null;
+  return resolveActiveQuestionVersion(versions, null, type, language);
 }
 
 export async function readActiveQuestionsForBrand(brandId: string, type: FeedbackExperienceType, language = 'da') {
   const selected = (await getAdminDb().collection('feedbackSettings').doc(brandId).get()).data()?.questionVersionId;
-  if (typeof selected !== 'string' || !/^[\w-]{1,160}$/.test(selected)) return readActiveQuestions(type, language);
-  const version = await readQuestionVersion(selected);
-  return version && FeedbackQuestionsVersionSchema.safeParse(version).success && version.isActive && version.language === language && version.orderTypes.includes(type)
-    ? version : null;
+  return resolveActiveQuestionVersion(await readQuestionVersions([brandId]), brandId, type, language,
+    typeof selected === 'string' ? selected : null);
 }

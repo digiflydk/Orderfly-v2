@@ -3,7 +3,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
 import { executeAuthority, type VerifiedIdentity } from '@/lib/access/authority';
 
-export type FeedbackAccess = { uid: string; permissions: string[]; brandIds: string[] | null };
+export type FeedbackAccess = { uid: string; permissions: string[]; brandIds: string[] | null; editableBrandIds?: string[] | null };
 export class FeedbackAccessError extends Error {
   constructor() { super('Log ind med en bruger, der har adgang til feedback.'); }
 }
@@ -24,8 +24,8 @@ async function feedbackAccessForIdentity(identity: VerifiedIdentity, permission:
     const session=await executeAuthority(db,identity,{action:'session'},bootstrap);
     if (!('superuser' in session)) throw new FeedbackAccessError();
     const uid = identity.provider === 'firebase' ? identity.subject : session.actorId;
-    if (session.superuser) return {uid,permissions:['feedback:view','feedback:edit','settings:view','settings:edit'],brandIds:null};
-    // Question versions are global; a company grant cannot edit them.
+    if (session.superuser) return {uid,permissions:['feedback:view','feedback:edit','settings:view','settings:edit'],brandIds:null,editableBrandIds:null};
+    // Question administration remains platform-owned, including brand versions.
     if (permission.startsWith('settings:')) throw new FeedbackAccessError();
     const result=await executeAuthority(db,identity,{action:'nativeGrants',product:'orderfly',permission:'orderfly.'+permission},bootstrap);
     if (!('grants' in result)) throw new FeedbackAccessError();
@@ -33,8 +33,15 @@ async function feedbackAccessForIdentity(identity: VerifiedIdentity, permission:
     // company-wide grant. A selected-location grant must never expand here.
     const brandIds=(result.grants as Array<{tenantId:string;locationIds:string[]|null}>).filter(g=>g.locationIds===null).map(g=>g.tenantId);
     if (!brandIds.length) throw new FeedbackAccessError();
-    return {uid,permissions:[permission],brandIds:[...new Set(brandIds)]};
+    const edits = permission === 'feedback:edit' ? result : await executeAuthority(db,identity,{action:'nativeGrants',product:'orderfly',permission:'orderfly.feedback:edit'},bootstrap);
+    const editableBrandIds = 'grants' in edits ? (edits.grants as Array<{tenantId:string;locationIds:string[]|null}>).filter(g => g.locationIds === null && brandIds.includes(g.tenantId)).map(g => g.tenantId) : [];
+    return {uid,permissions:editableBrandIds.length ? ['feedback:view','feedback:edit'] : ['feedback:view'],brandIds:[...new Set(brandIds)],editableBrandIds:[...new Set(editableBrandIds)]};
   } catch { throw new FeedbackAccessError(); }
+}
+
+export function canEditFeedbackBrand(access: FeedbackAccess, brandId: string) {
+  return access.permissions.includes('feedback:edit') &&
+    (access.brandIds === null || access.editableBrandIds?.includes(brandId) === true);
 }
 
 export async function requireFeedbackAccess(permission = 'feedback:view'): Promise<FeedbackAccess> {

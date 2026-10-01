@@ -10,13 +10,13 @@ export class FeedbackMailProvider {
     this.client = new NotificationPlatformClient(config.platform, request);
   }
   async eligible(_email: string) { return true; }
-  async send(eventId: string, kind: 'invitation' | 'reminder' | 'thankYou', email: string, properties: Record<string, unknown>) {
+  async send(eventId: string, kind: 'invitation' | 'reminder' | 'thankYou' | 'adminNotification', email: string, properties: Record<string, unknown>) {
     try {
       await this.client.send({
         idempotencyKey: eventId,
-        templateKey: `orderfly.feedback.${kind === 'thankYou' ? 'thank_you' : kind}`,
+        templateKey: `orderfly.feedback.${kind === 'thankYou' ? 'thank_you' : kind === 'adminNotification' ? 'received' : kind}`,
         locale: String(properties.language || 'da'), recipientEmail: email,
-        relatedEntity: { type: String(properties.sourceType || 'feedback'), id: String(properties.sourceId || '') },
+        relatedEntity: kind === 'adminNotification' ? { type: 'feedback', id: String(properties.feedbackId) } : { type: String(properties.sourceType || 'feedback'), id: String(properties.sourceId || '') },
         variables: properties,
       });
     } catch (error) {

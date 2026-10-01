@@ -47,6 +47,17 @@ test('workers dispatch one invitation and create at most one reminder atomically
  await f.mailWorker.runFeedbackMailWorker(f.provider,Date.now()+73*3600000);assert.equal(f.events.length,2);assert.equal(f.job('reminder').state,'accepted');
  await f.mailWorker.runFeedbackMailWorker(f.provider,Date.now()+74*3600000);assert.equal(f.events.length,2);
 });
+test('queued invitation and reminder stop when the form is deactivated, including during provider preflight',async t=>{
+ for(const race of [false,true]){
+  const f=setup(t);await f.mailQueue.queueOrderFeedback('order');
+  if(!race)f.records.get('feedbackQuestionsVersion/v1').isActive=false;
+  const provider=()=>({eligible:async()=>{if(race)f.records.get('feedbackQuestionsVersion/v1').isActive=false;return true},send:async(...args)=>f.events.push(args)});
+  assert.equal((await f.mailWorker.runFeedbackMailWorker(provider)).suppressed,1);assert.equal(f.events.length,0);
+ }
+ const f=setup(t);await f.mailQueue.queueOrderFeedback('order');await f.mailWorker.runFeedbackMailWorker(f.provider);
+ f.records.get('feedbackQuestionsVersion/v1').isActive=false;
+ assert.equal((await f.mailWorker.runFeedbackMailWorker(f.provider,Date.now()+73*3600000)).suppressed,1);assert.equal(f.events.length,1);
+});
 test('reply, cancellation, missing recipient, foreign customer and inactive location suppress pending mail',async t=>{
  for(const update of [f=>f.records.set('feedback/'+f.key,{brandId:'b'}),f=>f.records.get('orders/order').status='Canceled',f=>f.records.get('customers/c').email='',f=>f.records.get('customers/c').brandId='other',f=>f.records.get('locations/l').isActive=false]){
   const f=setup(t);await f.mailQueue.queueOrderFeedback('order');update(f);const result=await f.mailWorker.runFeedbackMailWorker(f.provider);assert.equal(result.suppressed,1);assert.equal(f.events.length,0);assert.equal(f.job('invitation').state,'suppressed');
@@ -106,14 +117,14 @@ test('provider enqueues only the scoped Orderfly template without exposing its s
  assert.equal(body.sender_profile,'orderfly');assert.equal(body.template_key,'orderfly.feedback.invitation');assert.equal(body.idempotency_key,'event-1');assert.equal(body.related_entity.id,'order');assert.equal(body.recipient.email,'private@example.test');assert.doesNotMatch(request.options.body,/synthetic-notification-secret/);
 });
 test('worker endpoint denies missing/wrong credentials before work and hides internal failures',async t=>{
- setup(t);let calls=0,gameCalls=0;const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;throw Error('private');}},'@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>{gameCalls++;return {};}}});
+ setup(t);let calls=0,gameCalls=0;const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;throw Error('private');}},'@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>{gameCalls++;return {};}}});
  for(const authorization of ['', 'Bearer wrong'])assert.equal((await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization}}))).status,401);
  assert.equal(calls,0);assert.equal(gameCalls,0);const response=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_FEEDBACK_WORKER_SECRET}}));assert.equal(response.status,503);assert.doesNotMatch(await response.text(),/private/);assert.equal(calls,1);assert.equal(gameCalls,1);
  process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='short';const integrationResponse=await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_NOTIFICATION_SECRET}}));assert.equal(integrationResponse.status,503);assert.doesNotMatch(await integrationResponse.text(),/private/);assert.equal(calls,2);
 });
 test('worker accepts the maximum shared secret length and rejects oversized headers before work',async t=>{
  setup(t);let calls=0,gameCalls=0;process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='short';
- const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;return {}; }},'@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>{gameCalls++;return {accepted:1};}}});
+ const route=loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>{calls++;return {}; }},'@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>{gameCalls++;return {accepted:1};}}});
  process.env.ORDERFLY_NOTIFICATION_SECRET='s'.repeat(512);
  assert.equal((await route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+process.env.ORDERFLY_NOTIFICATION_SECRET}}))).status,200);
  assert.equal(calls,1);
