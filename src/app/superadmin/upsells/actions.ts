@@ -54,7 +54,7 @@ const upsellSchema = z.object({
     offerCategoryIds: z.array(z.string()).optional().default([]),
 
     discountType: z.enum(['none', 'percentage', 'fixed_amount']),
-    discountValue: z.coerce.number().positive('Discount value must be positive.').optional(),
+    discountValue: z.coerce.number({ invalid_type_error: 'Indtast et gyldigt tal.' }).finite('Indtast et endeligt tal.').positive('Rabatten skal være større end 0.').optional(),
 
     triggerConditions: z.array(triggerConditionSchema).min(1, 'At least one trigger condition is required.'),
 
@@ -65,7 +65,7 @@ const upsellSchema = z.object({
     endDate: z.date().optional(),
     isActive: z.boolean().default(true),
     tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])).optional().default([]),
-  }).refine(data => {
+  }).refine(data => data.discountType !== 'percentage' || data.discountValue === undefined || data.discountValue <= 100, {message: 'Procentrabatten må højst være 100 %.', path: ['discountValue']}).refine(data => {
       return !(data.offerType === 'product' && (!data.offerProductIds || data.offerProductIds.length === 0));
   }, {
       message: "At least one product must be selected for a product-based offer.",
@@ -101,7 +101,7 @@ export async function createOrUpdateUpsell(
         if (value === null || typeof value !== 'string' || value.trim() === '') {
             return undefined;
         }
-        const num = parseFloat(value.replace(',', '.'));
+        const num = Number(value.replace(',', '.'));
         return isNaN(num) ? undefined : num;
     };
 

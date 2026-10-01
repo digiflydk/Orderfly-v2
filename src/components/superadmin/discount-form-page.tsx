@@ -56,7 +56,7 @@ const discountSchema = z.object({
   code: z.string().transform(v => v.trim().toUpperCase()),
   description: z.string().optional(),
   discountType: z.enum(['percentage', 'fixed_amount']),
-  discountValue: z.coerce.number().positive('Discount value must be positive.'),
+  discountValue: z.coerce.number({ invalid_type_error: 'Indtast et gyldigt tal.' }).finite('Indtast et endeligt tal.').positive('Rabatten skal være større end 0.'),
   minOrderValue: z.coerce.number().min(0).optional(),
   isActive: z.boolean().default(true),
   orderTypes: z
@@ -72,6 +72,7 @@ const discountSchema = z.object({
   firstTimeCustomerOnly: z.boolean().default(false),
   allowStacking: z.boolean().default(false),
 }).superRefine((data, ctx) => {
+  if (data.discountType === 'percentage' && data.discountValue > 100) ctx.addIssue({ code: 'custom', path: ['discountValue'], message: 'Procentrabatten må højst være 100 %.' });
   if (data.applicationType === 'code' && data.code === 'NEWSLETTER_SIGNUP') {
     ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['code'], message: 'Indtast en rabatkode. NEWSLETTER_SIGNUP er reserveret til nyhedsbrevsrabatter.' });
   }
@@ -570,8 +571,8 @@ export function DiscountFormPage({
                     <FormItem>
                       <FormLabel>Specific Customer (Optional)</FormLabel>
                       <Select
-                        onValueChange={field.onChange}
-                        value={field.value || ''}
+                        onValueChange={value => field.onChange(value === '__all_customers__' ? '' : value)}
+                        value={field.value || '__all_customers__'}
                         disabled={firstTimeCustomerOnly}
                       >
                         <FormControl>
@@ -580,6 +581,7 @@ export function DiscountFormPage({
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
+                          <SelectItem value="__all_customers__">Alle kunder</SelectItem>
                           {customers.map(u => (
                             <SelectItem key={u.id} value={u.id}>
                               {u.name} ({u.email})

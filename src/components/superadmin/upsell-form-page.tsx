@@ -57,7 +57,7 @@ const upsellSchema = z.object({
 	offerCategoryIds: z.array(z.string()).optional().default([]),
 
 	discountType: z.enum(['none', 'percentage', 'fixed_amount']),
-	discountValue: z.coerce.number().positive('Discount value must be positive.').optional(),
+	discountValue: z.coerce.number({ invalid_type_error: 'Indtast et gyldigt tal.' }).finite('Indtast et endeligt tal.').positive('Rabatten skal være større end 0.').optional(),
 
 	triggerConditions: z.array(triggerConditionSchema).min(1, 'At least one trigger condition is required.'),
 
@@ -68,7 +68,7 @@ const upsellSchema = z.object({
 	endDate: z.date().optional(),
 	isActive: z.boolean().default(true),
 	tags: z.array(z.enum(['Popular', 'Recommended', 'Campaign'])).optional().default([]),
-}).refine(data => {
+}).refine(data => data.discountType !== 'percentage' || data.discountValue === undefined || data.discountValue <= 100, {message: 'Procentrabatten må højst være 100 %.', path: ['discountValue']}).refine(data => {
 	return !(data.offerType === 'product' && (!data.offerProductIds || data.offerProductIds.length === 0));
 }, {
 	message: "At least one product must be selected for a product-based offer.",
@@ -286,6 +286,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 	}, [state, toast, form]);
 
 
+	const [clientValidation, setClientValidation] = useState<FormState | null>(null);
 	const title = upsell ? 'Edit Upsell' : 'Create New Upsell';
 	const description = upsell ? `Editing details for ${upsell.upsellName}.` : 'Fill in the details for the new upsell campaign.';
 
@@ -294,12 +295,19 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 			<form onSubmit={(event) => {
 				event.preventDefault();
 				if (isPending) return;
-				const data = upsellFormData(getValues(), upsell?.id);
+				const validation = upsellSchema.safeParse(getValues());
+				if (!validation.success) {
+					setClientValidation({ error: true, message: 'Ret de markerede felter før du gemmer.', errors: validation.error.issues });
+					validation.error.issues.forEach(error => form.setError(error.path.join('.') as any, { message: error.message }));
+					return;
+				}
+				setClientValidation(null);
+				const data = upsellFormData(validation.data, upsell?.id);
 				startTransition(() => formAction(data));
 			}} className="space-y-6">
 				{upsell?.id && <input type="hidden" name="id" value={upsell.id} />}
 				{isPending && <PendingFeedback label="Gemmer…" />}
-				<UpsellValidationFeedback state={state} />
+				<UpsellValidationFeedback state={clientValidation ?? state} />
 				<div className="flex items-center justify-between">
 					<div><h1 className="text-2xl font-bold tracking-tight">{title}</h1><p className="text-muted-foreground">{description}</p></div>
 					<div className="flex gap-2"><Button type="button" variant="outline" asChild><Link href="/superadmin/upsells">Cancel</Link></Button><SubmitButton isEditing={!!upsell} pending={isPending} /></div>
@@ -424,7 +432,7 @@ export function UpsellFormPage({ upsell, brands, locations, products, categories
 						<Card>
 							<CardHeader><CardTitle>Trigger Conditions</CardTitle><CardDescription>Define when this upsell offer should be shown. The offer triggers if ANY of these conditions are met.</CardDescription></CardHeader>
 							<CardContent className="space-y-4">
-								<UpsellValidationFeedback state={state} field="triggerConditions" />
+								<UpsellValidationFeedback state={clientValidation ?? state} field="triggerConditions" />
 								{triggerFields.map((field, index) => {
 									const triggerType = watch(`triggerConditions.${index}.type`);
 									return (
