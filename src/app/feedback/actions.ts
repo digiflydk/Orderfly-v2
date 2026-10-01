@@ -10,6 +10,8 @@ import { resolveOrderFeedbackInvitation, completedFeedbackOrder } from '@/lib/fe
 import { feedbackAutomation, feedbackMailConfig } from '@/lib/feedback/mail-config';
 import { feedbackThankYouHref } from '@/lib/feedback/presentation';
 import { pendingFeedbackMessage } from '@/lib/feedback/mail-queue';
+import { resolveActiveQuestionVersion } from '@/lib/feedback/question-scope';
+import { feedbackAdminNotifications, pendingFeedbackAdminNotification } from '@/lib/feedback/admin-notifications';
 
 import { admin, getAdminDb } from '@/lib/firebase-admin';
 import { getOrderById } from '@/app/checkout/order-actions';
@@ -153,14 +155,11 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
 
     thankYouHref = feedbackThankYouHref(source.brandId, parsed.data.language);
     const db = getAdminDb();
-    const [questionsSnapshot, brandSettingsSnapshot] = await Promise.all([
-      db.collection('feedbackQuestionsVersion').doc(parsed.data.questionVersionId).get(),
-      db.collection('feedbackSettings').doc(source.brandId).get(),
-    ]);
+    const questionsSnapshot = await db.collection('feedbackQuestionsVersion').doc(parsed.data.questionVersionId).get();
     if (!questionsSnapshot.exists) return { message: 'Feedback form is no longer available.', error: true };
     const questionsData = questionsSnapshot.data() ?? {};
-    const selectedVersionId = feedbackAutomation(brandSettingsSnapshot.data()).questionVersionId;
-    if (selectedVersionId && selectedVersionId !== parsed.data.questionVersionId) return { message: 'Feedback form is no longer assigned to this brand.', error: true };
+    const selectedVersion = await readActiveQuestionsForBrand(source.brandId, source.experienceType, parsed.data.language);
+    if (selectedVersion?.id !== parsed.data.questionVersionId) return { message: 'Feedback form is no longer assigned to this brand.', error: true };
     const allowedTypes = Array.isArray(questionsData.orderTypes) ? questionsData.orderTypes : [];
     if (
       questionsData.isActive !== true ||
@@ -203,6 +202,7 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
 
     const invitationRef = source.invitationId && source.invitationCollection ? db.collection(source.invitationCollection).doc(source.invitationId) : null;
     const thanksRef = db.collection('feedbackMailJobs').doc(feedbackId + '-thankYou');
+    const notificationRef = db.collection('feedbackMailJobs').doc(feedbackId + '-adminNotification');
     await db.runTransaction(async transaction => {
       const existing = await transaction.get(feedbackRef);
       const legacy = source.sourceType === 'commerce_order'
@@ -218,12 +218,24 @@ export async function submitFeedbackAction(_prevState: any, formData: FormData) 
         const current = (await transaction.get(db.collection('orders').doc(source.sourceId))).data();
         if (!current || !completedFeedbackOrder(current) || current.brandId !== source.brandId || current.locationId !== source.locationId || current.customerDetails?.id !== source.customerId) throw new Error('Order is no longer eligible for feedback.');
       }
+      // Shares the activation lock with question administration. A concurrent
+      // reassignment or edit cannot make the submitted answers use stale rules.
+      await transaction.get(db.collection('feedbackConfiguration').doc('versionLock'));
+      const currentSettings = await transaction.get(db.collection('feedbackSettings').doc(source.brandId));
+      const activeVersions = await transaction.get(db.collection('feedbackQuestionsVersion').where('isActive', '==', true));
+      const currentVersion = resolveActiveQuestionVersion(activeVersions.docs.map(doc => ({ ...doc.data(), id: doc.id }) as ExperienceFeedbackQuestionsVersion), source.brandId, source.experienceType, parsed.data.language, feedbackAutomation(currentSettings.data()).questionVersionId);
+      if (currentVersion?.id !== parsed.data.questionVersionId || JSON.stringify(currentVersion.questions) !== JSON.stringify(questionsData.questions)) throw new Error('Feedback form has changed.');
       const settings = invitationRef && feedbackMailConfig(source.brandId)
-        ? feedbackAutomation((await transaction.get(db.collection('feedbackSettings').doc(source.brandId))).data()) : null;
+        ? feedbackAutomation(currentSettings.data()) : null;
       const thanks = settings?.emailEnabled && settings.autoReplyEnabled ? await transaction.get(thanksRef) : null;
       const legacyId = legacy?.docs.find(doc => doc.data().brandId === source.brandId && doc.data().customerId === source.customerId)?.id;
       const savedId = existing.exists ? existing.id : legacyId || feedbackId;
-      if (!existing.exists && !legacyId) transaction.create(feedbackRef, feedbackData);
+      if (!existing.exists && !legacyId) {
+        transaction.create(feedbackRef, feedbackData);
+        const notifications = feedbackAdminNotifications(source.brandId, currentSettings.data());
+        if (notifications.adminNotificationsEnabled && notifications.adminNotificationEmail) transaction.create(notificationRef,
+          pendingFeedbackAdminNotification({ feedbackId, brandId: source.brandId, locationId: source.locationId, sourceType: source.sourceType, sourceId: source.sourceId, recipientEmail: notifications.adminNotificationEmail }));
+      }
       if (invitationRef) transaction.update(invitationRef, { status: 'submitted', feedbackId: savedId, submittedAt: admin.firestore.FieldValue.serverTimestamp(), updatedAt: admin.firestore.FieldValue.serverTimestamp() });
       if (thanks && !thanks.exists && source.invitationId) {
         transaction.create(thanksRef, pendingFeedbackMessage({ ...source, invitationId: source.invitationId, ...(source.sourceType === 'booking' && parsed.data.invitationToken ? { invitationToken: parsed.data.invitationToken } : {}) }, 'thankYou', Date.now()));

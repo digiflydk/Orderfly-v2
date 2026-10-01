@@ -8,6 +8,7 @@ import { moderateFeedback, type FeedbackModeration } from '@/lib/feedback/modera
 import { queueOrderFeedback } from '@/lib/feedback/mail-queue';
 import { upsellClientData } from '@/lib/upsell-serialization';
 import { FeedbackQuestionsVersionSchema } from '@/lib/schemas/feedback';
+import { questionScopeKey } from '@/lib/feedback/question-scope';
 import { readQuestionVersions, readActiveQuestions } from '@/lib/feedback/question-store';
 import type { Feedback, FeedbackQuestionsVersion } from '@/types';
 import type { FeedbackExperienceType } from '@/lib/feedback/source-types';
@@ -21,6 +22,8 @@ export async function createOrUpdateQuestionVersion(formData: FormData): Promise
       id: formData.get('id') || undefined,
       versionLabel: formData.get('versionLabel'),
       isActive: ['on', 'true'].includes(String(formData.get('isActive'))),
+      scope: formData.get('scope') || 'default',
+      brandId: formData.get('brandId') || null,
       language: formData.get('language') || 'da',
       orderTypes: [...new Set(formData.getAll('orderTypes'))],
       questions: JSON.parse(String(formData.get('questions') || '[]')),
@@ -36,8 +39,9 @@ export async function createOrUpdateQuestionVersion(formData: FormData): Promise
       await tx.get(lock);
       const existing = await tx.get(ref);
       if (id && !existing.exists) throw new Error('Question version no longer exists.');
+      if (data.scope === 'brand' && !(await tx.get(db.collection('brands').doc(data.brandId!))).exists) throw new Error('Brandet findes ikke.');
       const active = await tx.get(col.where('isActive', '==', true));
-      const conflict = active.docs.some(doc => doc.id !== ref.id && doc.data().language === data.language &&
+      const conflict = active.docs.some(doc => doc.id !== ref.id && questionScopeKey(doc.data()) === questionScopeKey(data) && doc.data().language === data.language &&
         (doc.data().orderTypes || []).some((type: string) => data.orderTypes.includes(type as FeedbackExperienceType)));
       if (data.isActive && conflict) throw new Error('Deactivate the existing version for this language and experience type first.');
       const timestamp = getAdminFieldValue().serverTimestamp();

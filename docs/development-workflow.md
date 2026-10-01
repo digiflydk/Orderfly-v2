@@ -78,3 +78,5 @@ Before `[DONE]`:
 - **Live verification failure after merge:** `[BLOCKED]`; the issue is not Done until live verification is green.
 
 Work never weakens tests or acceptance criteria to escape a failure.
+
+Issue #126 has explicit customer authorization for merge/deploy after engineering gates. Its bounded `Feedback Code Review` runs after the current `Orderfly CI` on the exact candidate head and publishes a clean/blocking verdict; changed heads require a new review. Coordinated release details are in `deployment-flow.md`.

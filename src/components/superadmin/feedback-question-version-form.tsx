@@ -34,6 +34,8 @@ type VersionDraft = {
   id?: string;
   versionLabel: string;
   isActive: boolean;
+  scope: 'default' | 'brand';
+  brandId: string | null;
   language: string;
   orderTypes: ExperienceType[];
   questions: QuestionDraft[];
@@ -45,6 +47,7 @@ export interface FeedbackQuestionVersionFormProps {
   initialData?: Record<string, any> | null;
   version?: FeedbackQuestionsVersion;
   supportedLanguages: LanguageSetting[];
+  brands?: { id: string; name: string }[];
   action?: (formData: FormData) => Promise<any>;
 }
 
@@ -81,6 +84,8 @@ function draftFrom(version?: FeedbackQuestionsVersion): VersionDraft {
     return {
       versionLabel: '',
       isActive: false,
+      scope: 'default',
+      brandId: null,
       language: 'da',
       orderTypes: ['pickup', 'delivery'],
       questions: [],
@@ -91,6 +96,8 @@ function draftFrom(version?: FeedbackQuestionsVersion): VersionDraft {
     id: version.id,
     versionLabel: String(version.versionLabel || ''),
     isActive: Boolean((version as any).isActive),
+    scope: version.scope || 'default',
+    brandId: version.brandId || null,
     language: String((version as any).language || 'da'),
     orderTypes: normalizeExperienceTypes((version as any).orderTypes),
     questions: Array.isArray((version as any).questions)
@@ -102,6 +109,7 @@ function draftFrom(version?: FeedbackQuestionsVersion): VersionDraft {
 export default function FeedbackQuestionVersionForm({
   version,
   supportedLanguages,
+  brands = [],
 }: FeedbackQuestionVersionFormProps) {
   const [isPending, startTransition] = useTransition();
   const { toast } = useToast();
@@ -147,6 +155,10 @@ export default function FeedbackQuestionVersionForm({
       toast({ title: 'Manglende navn', description: 'Version label skal udfyldes.', variant: 'destructive' });
       return;
     }
+    if (draft.scope === 'brand' && !draft.brandId) {
+      setSaveError('Vælg det brand, som spørgsmålene gælder for.');
+      return;
+    }
     if (draft.orderTypes.length === 0) {
       toast({ title: 'Manglende målgruppe', description: 'Vælg mindst én oplevelsestype.', variant: 'destructive' });
       return;
@@ -161,6 +173,8 @@ export default function FeedbackQuestionVersionForm({
     formData.append('versionLabel', draft.versionLabel.trim());
     if (draft.isActive) formData.append('isActive', 'on');
     formData.append('language', draft.language);
+    formData.append('scope', draft.scope);
+    if (draft.scope === 'brand' && draft.brandId) formData.append('brandId', draft.brandId);
     draft.orderTypes.forEach((type) => formData.append('orderTypes', type));
     formData.append('questions', JSON.stringify(draft.questions));
 
@@ -196,6 +210,13 @@ export default function FeedbackQuestionVersionForm({
         <Card className="h-fit lg:col-span-1">
           <CardHeader><CardTitle>Version Details</CardTitle></CardHeader>
           <CardContent className="space-y-5">
+            <div className="space-y-2">
+              <Label htmlFor="question-scope">Omfang</Label>
+              <select id="question-scope" className="h-10 w-full rounded-md border bg-background px-3" value={draft.scope} onChange={event => setDraft({ ...draft, scope: event.target.value as 'default' | 'brand', brandId: event.target.value === 'default' ? null : draft.brandId })}>
+                <option value="default">Standard for alle brands</option><option value="brand">Ét brand</option>
+              </select>
+            </div>
+            {draft.scope === 'brand' && <div className="space-y-2"><Label htmlFor="question-brand">Brand</Label><select id="question-brand" className="h-10 w-full rounded-md border bg-background px-3" value={draft.brandId || ''} onChange={event => setDraft({ ...draft, brandId: event.target.value || null })}><option value="">Vælg brand</option>{brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></div>}
             <div className="space-y-2">
               <Label htmlFor="version-label">Version Label</Label>
               <Input id="version-label" value={draft.versionLabel} onChange={(event) => setDraft({ ...draft, versionLabel: event.target.value })} />

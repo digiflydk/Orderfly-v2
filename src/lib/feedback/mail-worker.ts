@@ -6,8 +6,11 @@ import { FeedbackMailError, FeedbackMailProvider } from './mail-provider';
 import { completedFeedbackOrder, feedbackSourceKey, signOrderFeedbackInvitation } from './order-invitations';
 import { resolveBookingFeedbackInvitationToken } from '@/lib/integrations/esmeralda-feedback-integration';
 import { pendingFeedbackMessage, type FeedbackMailKind, type FeedbackMailSource } from './mail-queue';
+import { readActiveQuestionsForBrand } from './question-store';
+import { feedbackAdminNotificationConfig, feedbackAdminNotifications, type FeedbackAdminNotificationSource } from './admin-notifications';
 const never = Number.MAX_SAFE_INTEGER, leaseMs = 120000;
-type Job = FeedbackMailSource & { kind: FeedbackMailKind; eventId: string; lease: string; attempts: number };
+type Lease = { eventId: string; lease: string; attempts: number };
+type Job = (FeedbackMailSource & { kind: FeedbackMailKind } | FeedbackAdminNotificationSource & { kind: 'adminNotification' }) & Lease;
 function transientReadError(error: unknown) {
   const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
   return [4, 8, 10, 13, 14, 'deadline-exceeded', 'resource-exhausted', 'aborted', 'internal', 'unavailable', 'ETIMEDOUT', 'ECONNRESET'].includes(code as string | number);
@@ -19,6 +22,22 @@ function feedbackOrigin() {
 }
 async function context(job: Job) {
   const db = getAdminDb();
+  if (job.kind === 'adminNotification') {
+    const [settingsDoc, feedback, brand, location] = await Promise.all([
+      db.collection('feedbackSettings').doc(job.brandId).get(), db.collection('feedback').doc(job.feedbackId).get(),
+      db.collection('brands').doc(job.brandId).get(), db.collection('locations').doc(job.locationId).get(),
+    ]);
+    const settings = feedbackAutomation(settingsDoc.data()), notifications = feedbackAdminNotifications(job.brandId, settingsDoc.data());
+    const data = feedback.data();
+    if (!notifications.adminNotificationsEnabled || !notifications.adminNotificationEmail || notifications.adminNotificationEmail !== job.recipientEmail ||
+      !data || data.brandId !== job.brandId || data.locationId !== job.locationId || data.sourceId !== job.sourceId || data.sourceType !== job.sourceType ||
+      brand.data()?.status !== 'active' || location.data()?.brandId !== job.brandId || location.data()?.isActive === false || !/^[a-f0-9]{64}$/.test(job.feedbackId)) return null;
+    return { email: notifications.adminNotificationEmail, settings, properties: {
+      adminUrl: 'https://orderfly.dk/superadmin/feedback/' + job.feedbackId, feedbackId: job.feedbackId, brandId: job.brandId,
+      brandName: String(brand.data()?.name || ''), locationName: String(location.data()?.name || ''),
+      sourceType: job.sourceType, sourceId: job.sourceId, language: settings.language,
+    } };
+  }
   const [settingsDoc, customer, brand, location, feedback] = await Promise.all([
     db.collection('feedbackSettings').doc(job.brandId).get(), db.collection('customers').doc(job.customerId).get(),
     db.collection('brands').doc(job.brandId).get(), db.collection('locations').doc(job.locationId).get(),
@@ -29,6 +48,8 @@ async function context(job: Job) {
   if (!settings.emailEnabled || customer.data()?.brandId !== job.brandId || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || brand.data()?.status !== 'active' || location.data()?.brandId !== job.brandId || location.data()?.isActive === false) return null;
   let answered = feedback.exists;
   let url: string;
+  let language = settings.language;
+  let experienceType: 'pickup' | 'delivery' | 'booking' = 'booking';
   if (job.sourceType === 'commerce_order') {
     const [order, invite, legacy] = await Promise.all([
       db.collection('orders').doc(job.sourceId).get(), db.collection('feedbackInvitations').doc(job.invitationId).get(),
@@ -37,6 +58,8 @@ async function context(job: Job) {
     const data = order.data(), invitation = invite.data();
     if (!data || !completedFeedbackOrder(data) || data.brandId !== job.brandId || data.locationId !== job.locationId || data.customerDetails?.id !== job.customerId || !invitation || invitation.brandId !== job.brandId || invitation.customerId !== job.customerId || invitation.sourceId !== job.sourceId || invitation.expiresAt <= Date.now() || !['active', 'submitted'].includes(invitation.status)) return null;
     answered ||= legacy.docs.some(d => d.data().customerId === job.customerId) || invitation.status === 'submitted';
+    language = invitation.language || 'da';
+    experienceType = data.deliveryType === 'Delivery' ? 'delivery' : 'pickup';
     url = feedbackOrigin() + '/feedback?orderToken=' + encodeURIComponent(signOrderFeedbackInvitation(job.invitationId, invitation.expiresAt)) + '&lang=' + encodeURIComponent(invitation.language || 'da');
   } else {
     const invitation = job.invitationToken ? await resolveBookingFeedbackInvitationToken(job.invitationToken) : null;
@@ -45,8 +68,9 @@ async function context(job: Job) {
     url = feedbackOrigin() + '/feedback?token=' + encodeURIComponent(job.invitationToken!) + '&lang=' + encodeURIComponent(settings.language);
   }
   if (job.kind === 'thankYou' ? !answered || !settings.autoReplyEnabled : answered) return null;
+  if (job.kind !== 'thankYou' && !await readActiveQuestionsForBrand(job.brandId, experienceType, language)) return null;
   if (job.kind === 'reminder' && (job.sourceType === 'booking' ? settings.bookingMaxReminders : settings.maxReminders) === 0) return null;
-  return { email, url, settings, locationName: String(location.data()?.name || ''), brandName: String(brand.data()?.name || '') };
+  return { email, settings, properties: { feedbackUrl: job.kind === 'thankYou' ? undefined : url, locationName: String(location.data()?.name || ''), brandName: String(brand.data()?.name || ''), sourceType: job.sourceType, sourceId: job.sourceId, language } };
 }
 
 export async function runFeedbackMailWorker(makeProvider = (config: NonNullable<ReturnType<typeof feedbackMailConfig>>) => new FeedbackMailProvider(config), now = Date.now()) {
@@ -73,14 +97,14 @@ export async function runFeedbackMailWorker(makeProvider = (config: NonNullable<
     let dispatched = false;
     const finish = async (state: string, lastError: string | null = null, retry = false, reminderMinutes?: number) => db.runTransaction(async tx => {
       const current = (await tx.get(ref)).data(); if (current?.lease !== lease) return;
-      const reminderRef = reminderMinutes ? db.collection('feedbackMailJobs').doc(feedbackSourceKey(job.brandId, job.sourceType, job.sourceId) + '-reminder') : null;
+      const reminderRef = reminderMinutes && job.kind === 'invitation' ? db.collection('feedbackMailJobs').doc(feedbackSourceKey(job.brandId, job.sourceType, job.sourceId) + '-reminder') : null;
       const reminder = reminderRef ? await tx.get(reminderRef) : null;
       const attempts = (current.attempts || 0) + 1;
       tx.update(ref, { state: retry && attempts < 3 ? 'pending' : state, attempts, lease: null, lastError, updatedAt: Date.now(), nextAttemptAt: retry && attempts < 3 ? Date.now() + 60000 : never, ...(state === 'accepted' ? { acceptedAt: Date.now() } : {}) });
-      if (reminderRef && !reminder?.exists) tx.create(reminderRef, pendingFeedbackMessage({ ...job, reminderDelayMinutes: reminderMinutes }, 'reminder', Date.now() + reminderMinutes! * 60000));
+      if (reminderRef && !reminder?.exists && job.kind === 'invitation') tx.create(reminderRef, pendingFeedbackMessage({ ...job, reminderDelayMinutes: reminderMinutes }, 'reminder', Date.now() + reminderMinutes! * 60000));
     });
     try {
-      const config = feedbackMailConfig(job.brandId); if (!config) throw new FeedbackMailError('mail_configuration_required');
+      const config = job.kind === 'adminNotification' ? feedbackAdminNotificationConfig(job.brandId) : feedbackMailConfig(job.brandId); if (!config) throw new FeedbackMailError('mail_configuration_required');
       const prepared = await context(job);
       if (!prepared) { await finish('suppressed', 'source_replied_or_not_eligible'); counts.suppressed++; continue; }
       const provider = makeProvider(config);
@@ -95,7 +119,7 @@ export async function runFeedbackMailWorker(makeProvider = (config: NonNullable<
       });
       if (!ownsLease) continue;
       dispatched = true;
-      await provider.send(job.eventId, job.kind, current.email, { feedbackUrl: job.kind === 'thankYou' ? undefined : current.url, brandName: current.brandName, locationName: current.locationName, sourceType: job.sourceType, sourceId: job.sourceId, language: current.settings.language });
+      await provider.send(job.eventId, job.kind, current.email, current.properties);
       await finish('accepted', null, false, job.kind === 'invitation' && (job.sourceType === 'booking' ? current.settings.bookingMaxReminders : current.settings.maxReminders) > 0 ? (job.sourceType === 'booking' ? current.settings.bookingReminderAfterMinutes : current.settings.reminderAfterHours * 60) : undefined); counts.accepted++;
     } catch (error) {
       const known = error instanceof FeedbackMailError ? error : new FeedbackMailError(dispatched ? 'provider_result_unknown' : 'provider_preflight_failed', dispatched, !dispatched && transientReadError(error));

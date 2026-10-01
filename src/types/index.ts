@@ -781,8 +781,10 @@ export type FeedbackQuestionsVersion = {
   id: string;
   versionLabel: string; // e.g., "v1.0", "2025Q3"
   isActive: boolean;
+  scope?: 'default' | 'brand';
+  brandId?: string | null;
   language: string;
-  orderTypes: ('pickup' | 'delivery')[];
+  orderTypes: ('pickup' | 'delivery' | 'booking')[];
   questions: FeedbackQuestion[];
 };
 

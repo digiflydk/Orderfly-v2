@@ -7,7 +7,7 @@ export class NotificationPlatformError extends Error {
 
 export type NotificationMessage = {
   idempotencyKey: string;
-  templateKey: 'orderfly.order.confirmation' | 'orderfly.feedback.invitation' | 'orderfly.feedback.reminder' | 'orderfly.feedback.thank_you' | 'orderfly.games.prize';
+  templateKey: 'orderfly.order.confirmation' | 'orderfly.feedback.invitation' | 'orderfly.feedback.reminder' | 'orderfly.feedback.thank_you' | 'orderfly.feedback.received' | 'orderfly.games.prize';
   senderProfile?: string;
   organizationId?: string;
   locale: string;

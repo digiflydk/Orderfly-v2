@@ -1,4 +1,9 @@
 env:
+  # Brand-bound internal recipient and central-mail organization. No secrets.
+  - variable: ORDERFLY_FEEDBACK_ADMIN_NOTIFICATIONS
+    value: '{"oeypKaMyYcQjIwaa1PtV":{"organizationId":"aaa94d25-3ca6-4ebf-a673-164608db6c55","email":"ok@esmeraldapizza.dk"}}'
+    availability:
+      - RUNTIME
   # #137: operator-created secret; never put its value in source or browser config.
   - variable: MPANEL_PLATFORM_ADMIN_SECRET
     secret: MPANEL_PLATFORM_ADMIN_SECRET@1
