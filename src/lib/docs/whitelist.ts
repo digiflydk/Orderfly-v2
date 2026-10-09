@@ -16,6 +16,7 @@ export const DOC_WHITELIST = [
   "firestore-schema.md",
   "performance-indexes.md",
   "security-rbac.md",
+  "standard-takeaway-website.md",
 ] as const;
 
 export type DocName = (typeof DOC_WHITELIST)[number];

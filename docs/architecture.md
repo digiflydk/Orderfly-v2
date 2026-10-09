@@ -35,6 +35,10 @@ flowchart LR
   classDef svc fill:#f7f7f7,stroke:#aaa,rx:6,ry:6;
 ```
 
+## Brand Website consolidation (OF-221)
+
+Brand Website is the standard takeaway storefront. The old page builder and mock M3 variants are retired. See [scope, paths, compatibility and validation](standard-takeaway-website.md). Native ordering, brand appearances, games and Orderfly Website remain.
+
 ## Core Flows
 
 * **Product Flow:** UI → `createOrUpdateProduct` → Firestore → Redirect

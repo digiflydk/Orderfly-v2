@@ -1,23 +1,24 @@
 'use client';
+import type { StorefrontLinks } from '@/lib/storefront-types';
 import { useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import type { Brand, Location, ProductForMenu, StandardDiscount, BrandWebsiteConfig } from '@/types';
-import { Hero } from '@/app/m3pizza/_components/Hero';
-import { CTADeck } from '@/app/m3pizza/_components/CTADeck';
-import { MenuGrid } from '@/app/m3pizza/_components/MenuGrid';
-import { PromoBanner } from '@/app/m3pizza/_components/PromoBanner';
-import { FooterCTA } from '@/app/m3pizza/_components/FooterCTA';
-import { Template1Page } from '@/components/public/brand-website/template-1/Template1Page';
-import StickyOrderChoice from '@/app/m3/_components/StickyOrderChoice';
+import type { Brand, Location, ProductForMenu, StandardDiscount } from '@/types';
+import { Hero } from '@/components/storefront/Hero';
+import { CTADeck } from '@/components/storefront/CTADeck';
+import { MenuGrid } from '@/components/storefront/MenuGrid';
+import { PromoBanner } from '@/components/storefront/PromoBanner';
+import { FooterCTA } from '@/components/storefront/FooterCTA';
+import { StandardStorefront } from '@/components/storefront/StandardStorefront';
+import StickyOrderChoice from '@/components/storefront/StickyOrderChoice';
 import { normalizeM3PizzaDeliveryMethod, persistM3PizzaDeliveryMethod } from '@/lib/m3pizza-order-flow';
 import { promotionTile } from '@/lib/storefront-promotion';
 import { comboEligible } from '@/lib/combo-eligibility';
 import { AnalyticsProvider } from '@/context/analytics-context';
 import { CookieConsent } from '@/components/cookie-consent';
-import { OrderModal } from '@/app/m3pizza/_components/OrderModal';
+import { OrderModal } from '@/components/storefront/OrderModal';
 
 export default function LandingClient({brand, location, products, discounts, config}: {
-  brand: Brand; location: Location; products: ProductForMenu[]; discounts: StandardDiscount[]; config: BrandWebsiteConfig | null;
+  brand: Brand; location: Location; products: ProductForMenu[]; discounts: StandardDiscount[]; config: StorefrontLinks | null;
 }) {
   const [orderModalOpen, setOrderModalOpen] = useState(false);
   const [cookieModalOpen, setCookieModalOpen] = useState(false);
@@ -34,7 +35,7 @@ export default function LandingClient({brand, location, products, discounts, con
     router.push(`/${brand.slug}/${location.slug}?deliveryMethod=${mode}`);
   };
   return <AnalyticsProvider brand={brand}>
-    <Template1Page brand={brand} onOrderClick={order} config={config} onCookieSettings={() => setCookieModalOpen(true)}>
+    <StandardStorefront brand={brand} onOrderClick={order} config={config} onCookieSettings={() => setCookieModalOpen(true)}>
       <Hero onOrderClick={order} brandName={brand.name} products={products} />
       <CTADeck promotions={promotions.slice(0, 2)} onOrderClick={order} />
       <MenuGrid products={products} modes={location.deliveryTypes} onOrderClick={order} />
@@ -42,7 +43,7 @@ export default function LandingClient({brand, location, products, discounts, con
       <FooterCTA brandName={brand.name} onOrderClick={order} />
       <div className="md:hidden"><StickyOrderChoice onOrderClick={order} /></div>
       {orderModalOpen && <OrderModal open onOpenChange={setOrderModalOpen} onDeliveryMethodSelected={choose} modes={location.deliveryTypes} />}
-    </Template1Page>
+    </StandardStorefront>
     <CookieConsent brandId={brand.id} isModalOpen={cookieModalOpen} setIsModalOpen={setCookieModalOpen} />
   </AnalyticsProvider>;
 }

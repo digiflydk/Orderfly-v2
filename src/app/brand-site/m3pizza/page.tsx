@@ -2,7 +2,7 @@ import { Suspense } from 'react';
 import Link from 'next/link';
 import { getBrandAndLocation } from '@/lib/data/brand-location';
 import { getMenuForRender } from '@/lib/server/catalog';
-import { getPublicBrandWebsiteConfig } from '@/lib/public/brand-website/public-config-api';
+import { getStorefrontLinks } from '@/lib/storefront-links';
 import { getStorefrontDiscounts } from '@/app/storefront-actions';
 import { M3PIZZA_MENU_PATH } from '@/lib/m3pizza-order-flow';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
@@ -27,7 +27,7 @@ async function Content() {
     const {brand, location} = await getBrandAndLocation(brandSlug, locationSlug);
     if (!brand || !location || !location.isActive) return <Fallback />;
     const [config, menu, pickup, delivery] = await Promise.all([
-      optionalCheckoutValue(() => getPublicBrandWebsiteConfig(brand.id), null, 3000),
+      optionalCheckoutValue(() => getStorefrontLinks(brand.id), null, 3000),
       getMenuForRender({brandId: brand.id, locationId: location.id}),
       optionalCheckoutValue(() => getStorefrontDiscounts({brandId: brand.id, locationId: location.id, deliveryType: 'pickup'}), [], 3000),
       optionalCheckoutValue(() => getStorefrontDiscounts({brandId: brand.id, locationId: location.id, deliveryType: 'delivery'}), [], 3000),

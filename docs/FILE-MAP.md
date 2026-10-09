@@ -46,3 +46,9 @@
 - **Debug Endpoints:** `/api/debug/all/route.ts`
 - **OpenAPI Spec:** `src/lib/openapi/spec.ts`, `src/app/api/docs/route.ts` (UI)
 - **Firebase Admin Init:** `src/lib/firebase-admin.ts`
+
+## Standard takeaway website (OF-221)
+- Standard landing components: `src/components/storefront/*`
+- Permission-scoped overview: `src/lib/superadmin/storefront-overview.ts`
+- Public footer compatibility adapter: `src/lib/storefront-links.ts`
+- Documentation: `docs/standard-takeaway-website.md`

@@ -1,6 +1,5 @@
 
 import { test, expect } from '@playwright/test';
-import type { WebsiteHeaderConfig } from '../src/types/website';
 
 const BASE_URL = process.env.PLAYWRIGHT_BASE_URL ?? 'http://127.0.0.1:3000';
 
@@ -10,8 +9,8 @@ test.describe('Brand Website Smoke Tests', () => {
 
     await expect(page).toHaveURL(new RegExp(`${BASE_URL.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}/?$`));
 
-    const header = page.locator('[data-commerce-root]');
-    const button = page.getByRole('button', { name: 'BESTIL NU' })
+    const header = page.getByTestId('template1-header');
+    const button = header.getByRole('button', { name: 'Bestil nu', exact: true })
 
     await expect(header).toBeVisible();
     await expect(button).toBeVisible();
@@ -24,22 +23,13 @@ test.describe('Brand Website Smoke Tests', () => {
     await expect(stickyCta).toBeVisible();
   });
 
-  test('Test 3: CTA Label Matches CMS Config', async ({ page, request }) => {
-    const response = await request.get(`${BASE_URL}/api/public/brand-website/template-1/header?brandSlug=m3pizza`);
-    expect(
-      response.ok(),
-      `API returned ${response.status()}: ${await response.text()}`
-    ).toBeTruthy();
-
-    const config: { header: WebsiteHeaderConfig, ctaText: string, orderHref: string } = await response.json();
-    const expectedCtaLabel = config.ctaText || 'Bestil nu';
-
+  test('standard header opens the real delivery choice without a CMS API', async ({ page, request }) => {
+    const response = await request.get(`${BASE_URL}/api/public/brand-website/template-1/header?brandSlug=esmeralda`);
+    expect(response.status()).toBe(410);
     await page.goto('/m3pizza');
-
-    const button = page.getByTestId('template1-page').getByRole('button', { name: expectedCtaLabel });
-
-    await expect(button).toBeVisible();
-    await expect(button).toHaveText(expectedCtaLabel);
+    await page.getByTestId('template1-header').getByRole('button', {name: 'Bestil nu', exact: true}).click();
+    await expect(page.getByRole('dialog')).toBeVisible();
+    await expect(page.getByRole('button', {name: /Jeg tager med/})).toBeVisible();
   });
 
   test('Test 4: Header is sticky on scroll', async ({ page }) => {
@@ -62,20 +52,10 @@ test.describe('Brand Website Smoke Tests', () => {
     await expect(header).toHaveClass(/sticky/);
   });
 
-  test('Test 5: CMS Config pages load without runtime errors', async ({ page }) => {
-    const paths = [
-      '/superadmin/brands/esmeralda/website',
-      '/superadmin/brands/esmeralda/website/config',
-    ];
-
-    for (const path of paths) {
-      await page.goto(path);
-      const hasConsoleError = await page.evaluate(() => {
-        const bodyText = document.body.innerText;
-        return bodyText.includes("A 'use server' file can only export async functions");
-      });
-      expect(hasConsoleError).toBeFalsy();
-    }
+  test('retired mock confirmation never claims an order was received', async ({ page }) => {
+    const response = await page.goto('/m3/esmeralda/esmeralda-pizza-amager/checkout/confirmation');
+    expect(response?.status()).toBe(404);
+    await expect(page.getByText('Vi har modtaget din ordre og er i gang med at forberede den.')).toHaveCount(0);
   });
 
   test('M3Pizza delivery choice opens the shared commerce menu', async ({ page }) => {

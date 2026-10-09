@@ -1,9 +1,5 @@
+# Brand Website: standard takeaway
 
-# Brand Website Module - Logging & Audit
+The former EPIC-522 website builder has been retired by OF-221.
 
-- **Audit Logs (`auditLogs`):** Immutable records of all CMS write operations (`saveBrandWebsite*`). Captures who changed what, when, and from where.
-- **API Logs (`dadmin/developer/logs`):** Detailed debug and error logs from API routes and server actions for developer troubleshooting.
-
-**Rules:**
-*   A global toggle and per-action toggles control logging verbosity.
-*   All `saveBrandWebsite*` actions must create an audit entry.
+See the current [standard takeaway documentation](/superadmin/docs/brand-website-module) and `docs/standard-takeaway-website.md`. Historical Firestore documents have not been deleted.
