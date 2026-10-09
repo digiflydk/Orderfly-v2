@@ -1,3 +1,5 @@
+> Historical specification. Superseded by OF-221: `docs/standard-takeaway-website.md`. The separate page builder is retired; Brand Website is the standard takeaway ordering website.
+
 # EPIC 522 — Brand Website Module (Orderfly)
 
 ## Purpose

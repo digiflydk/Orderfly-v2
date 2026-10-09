@@ -1,7 +1,3 @@
-
-import type { GeneralSettings, NavLink } from '@/types/settings';
-import type { BrandWebsiteConfig } from "@/types";
-
 export function resolveLinkClass(input?: string): string {
   const v = (input || '').toLowerCase().trim();
   switch (v) {
@@ -19,26 +15,4 @@ export function resolveLinkClass(input?: string): string {
     default:
       return 'text-white hover:text-primary';
   }
-}
-
-export const VIRTUAL_CONFIG: BrandWebsiteConfig = {
-  active: false,
-  template: 'template-1',
-  domains: [],
-  defaultLocationId: null,
-  faviconUrl: '/favicon.ico',
-  designSystem: {},
-  seo: {},
-  social: {},
-  tracking: {},
-  legal: {},
-  updatedAt: null,
-};
-
-export function serializeTimestamp(value: any): string | null {
-  if (!value) return null;
-  if (typeof value.toDate === 'function') {
-    return value.toDate().toISOString();
-  }
-  return null;
 }

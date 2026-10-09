@@ -27,6 +27,7 @@ before(async()=>{
  export function useSearchParams(){const [search,setSearch]=useState(location.search);useEffect(()=>{const update=()=>setSearch(location.search);window.addEventListener('fixture-navigation',update);window.addEventListener('popstate',update);return()=>{window.removeEventListener('fixture-navigation',update);window.removeEventListener('popstate',update);};},[]);return useMemo(()=>new URLSearchParams(search),[search]);}
  export const usePathname=()=>location.pathname;export const useParams=()=>({brandSlug:'fixture',locationSlug:'restaurant'});export const useRouter=()=>({push:href=>location.assign(href)});`);
  const entry=fixture('entry',`import React,{useEffect,useState} from 'react';import{createRoot}from'react-dom/client';
+ import {StorefrontOverviewView} from '@/components/superadmin/storefront-overview';
  import LandingClient from ${JSON.stringify(path.join(root,'src/app/brand-site/m3pizza/landing-client.tsx'))};
  import {MenuClient} from ${JSON.stringify(path.join(root,'src/app/[brandSlug]/[locationSlug]/menu-client.tsx'))};
  import {AnalyticsDashboardClient} from ${JSON.stringify(path.join(root,'src/components/superadmin/analytics-dashboard-client.tsx'))};
@@ -50,7 +51,7 @@ before(async()=>{
  function ConsentFixture(){const [events,setEvents]=useState([]);useEffect(()=>{const original=window.fetch;window.fetch=(url,options)=>{if(url==='/api/analytics/collect')setEvents(previous=>[...previous,JSON.parse(options.body)]);return original(url,options);};return()=>{window.fetch=original;};},[]);const consent=statistics=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics}));window.dispatchEvent(new Event('orderfly:consent'));};return <aside><button onClick={()=>consent(true)}>Allow analytics</button><button onClick={()=>consent(false)}>Reject analytics</button><pre id="funnel-events">{JSON.stringify(events)}</pre></aside>;}
  function DashboardFixture(){const [count,setCount]=useState(1);const data={totals:{sessions:2,measuredPurchasingSessions:1,view_menu:2,view_product:1,add_to_cart:1,start_checkout:1,click_purchase:1,payment_succeeded:count,revenue_paid:count*100},daily:[],byLocation:[],attribution:[],dataQualityWarnings:[]};return <><button onClick={()=>setCount(7)}>Receive refreshed report</button><AnalyticsDashboardClient initialData={data} locations={[]} searchParams={{dateFrom:'2026-09-01',dateTo:'2026-09-11',counting:'events'}}/></>;}
  const mode=new URLSearchParams(window.location.search).get('deliveryMethod')==='delivery'?'delivery':'pickup';
- createRoot(document.getElementById('root')).render(window.location.pathname==='/dashboard-fixture'?<DashboardFixture/>:window.location.pathname==='/condition-editor'?<EditorFixture/>:window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}>{new URLSearchParams(window.location.search).has('tracking')&&<BrandTracking brand={{...brand,ga4MeasurementId:'G-FIXTURE',metaPixelId:'123456'}}/>}<ConsentFixture/><CartProvider>{window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
+ createRoot(document.getElementById('root')).render(window.location.pathname==='/website-admin-fixture'?<StorefrontOverviewView brands={[{id:'b',name:'Fixture Pizza',brandStatus:'active',href:'/fixture',canEditBrand:false,locations:[{id:'l',name:'Restaurant',active:true,href:'/fixture/restaurant'},{id:'off',name:'Closed location',active:false,href:'/fixture/closed'}]}]}/>:window.location.pathname==='/dashboard-fixture'?<DashboardFixture/>:window.location.pathname==='/condition-editor'?<EditorFixture/>:window.location.pathname==='/landing'?<LandingClient brand={brand} location={location} products={products} discounts={[]} config={null}/>:<AnalyticsProvider brand={brand}>{new URLSearchParams(window.location.search).has('tracking')&&<BrandTracking brand={{...brand,ga4MeasurementId:'G-FIXTURE',metaPixelId:'123456'}}/>}<ConsentFixture/><CartProvider>{window.location.pathname==='/conditional'?<ConditionalFixture/>:window.location.pathname==='/topping-cap'?<ToppingCapFixture/>:<><MenuClient brand={brand} location={location} initialProducts={products} initialDeliveryType={mode} initialCategories={[{id:'__virtual_menu__',categoryName:'Menu',isActive:true,brandId:'b'}]} initialActiveCombos={[combo]} initialActiveStandardDiscounts={[]}/><Debug/></>}</CartProvider></AnalyticsProvider>);`);
  const loader=fixture('ts-loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const aliases={
   '@/app/superadmin/analytics/cust-funnel/actions':fixture('funnel-actions','export const runAggregationForDates=async()=>({success:true});'),
@@ -61,7 +62,7 @@ before(async()=>{
   '@/hooks/use-toast':fixture('toast','export const useToast=()=>({toast:(message)=>{window.lastCartToast=message;}});'),
   'next/navigation':navigation,
   'next/image':fixture('image',`import React from'react';export default function Image({fill,priority,...props}){return <img {...props}/>;}`),
-  'next/link':fixture('link',`import React from'react';export default function Link(props){return <a {...props}/>;}`),
+  'next/link':fixture('link',`import React from'react';export const useLinkStatus=()=>({pending:false});export default function Link(props){return <a {...props}/>;}`),
   '@':path.join(root,'src'),
  };
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',plugins:[new webpackModule.webpack.DefinePlugin({'process.env.NEXT_PUBLIC_RELEASE_SHA':JSON.stringify('local')})],devtool:false,entry,output:{path:dir,filename:'bundle.js',publicPath:'/'},resolve:{alias:aliases,extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]},{test:/commerce-p2-browser-.*\.js$/,use:[loader]}]}}).run((err,stats)=>err?reject(err):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
@@ -413,4 +414,17 @@ test('#125 adding marketing consent sends the currently open product to the newl
  assert.equal(await current().evaluate(()=>window.fbq.queue.filter(x=>x[2]==='ViewContent').length),1);
  await page.evaluate(()=>{localStorage.setItem('orderfly_cookie_consent',JSON.stringify({statistics:false,marketing:false}));window.dispatchEvent(new Event('orderfly:consent'));});
  await expect.poll(async()=>page.frames().length).toBe(1);
+});
+
+for (const width of [1280,390])test(`#221 standard website overview shows real routes and no disconnected CMS controls (${width})`,async t=>{
+ const page=await setup(t,width,'/website-admin-fixture');
+ await expect(page.getByRole('heading',{name:'Brand Website · Takeaway'})).toBeVisible();
+ await expect(page.getByRole('link',{name:'Åbn webshop'})).toHaveAttribute('href','/fixture');
+ await expect(page.getByRole('link',{name:'Åbn menu'})).toHaveCount(1);
+ await expect(page.getByRole('link',{name:'Åbn menu'})).toHaveAttribute('href','/fixture/restaurant');
+ await expect(page.getByText('Inactive',{exact:true})).toHaveCount(0);
+ await expect(page.getByRole('link',{name:'Brandindstillinger'})).toHaveCount(0);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+ fs.mkdirSync('test-results',{recursive:true});
+ await page.screenshot({path:`test-results/brand-website-${width}.png`,fullPage:true});
 });

@@ -188,7 +188,7 @@ export function SuperAdminSidebarClient({
       key: 'brand_website',
       title: 'Brand Website',
       items: [
-        { href: '/superadmin/brands/websites', label: 'Brands web.', icon: LayoutTemplate },
+        { href: '/superadmin/brands/websites', label: 'Takeaway webshops', icon: LayoutTemplate },
       ]
     },
     {

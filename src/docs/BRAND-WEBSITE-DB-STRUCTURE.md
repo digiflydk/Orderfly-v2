@@ -1,10 +1,5 @@
-# Brand Website DB Structure
+# Brand Website: standard takeaway
 
-The Brand Website Module uses the following Firestore structure:
+The former EPIC-522 website builder has been retired by OF-221.
 
-- /brands/{brandId}/website/config
-- /brands/{brandId}/website/home
-- /brands/{brandId}/website/pages/{slug}
-- /brands/{brandId}/website/menuSettings
-
-See the "DB Structure Dump" tool for a machine-readable JSON description.
+See the current [standard takeaway documentation](/superadmin/docs/brand-website-module) and `docs/standard-takeaway-website.md`. Historical Firestore documents have not been deleted.
