@@ -36,7 +36,7 @@ The overview uses website-view grants, including native location boundaries. Bra
 
 ## Validation
 
-Brand overview authorizes before reads and queries only granted brands/locations. A foreign location is rejected from output even if a stale grant references its ID. Legacy editor bookmarks still check native website permission before redirecting to the overview. Existing server-side catalog/checkout validation remains unchanged.
+Brand overview authorizes before reads and queries only granted brands/locations. A foreign location is rejected from output even if a stale grant references its ID. Legacy editor bookmarks require a native website-view grant for the requested brand, including location-scoped grants, before redirecting to the overview. Foreign-brand bookmarks remain denied. Existing server-side catalog/checkout validation remains unchanged.
 
 The public footer adapter accepts native document IDs only and returns only known string fields, without private fields, timestamps, tracking or design-system payloads. Footer URL safety checks remain in the rendering layer. No extra public database endpoint is introduced.
 

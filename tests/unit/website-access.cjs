@@ -27,10 +27,17 @@ test('public footer projection retains existing links without exposing old CMS p
  assert.deepEqual(await getStorefrontLinks('b'),{social:{facebook:'https://example.test'},legal:{customTerms:'/terms'}});
  assert.equal(await getStorefrontLinks('../b'),null);assert.equal(reads,1);
 });
-test('old brand CMS bookmark requires native brand website permission before redirect',async()=>{
- let allowed=false;const calls=[];
- const page=loadTs('src/app/superadmin/brands/[brandId]/website/[[...section]]/page.tsx',{'next/navigation':{redirect:path=>{calls.push(path);}},'@/lib/access/orderfly-session':{requireOrderflyAccess:async(...args)=>{assert.deepEqual(args,['b',null,'orderfly.website:view']);if(!allowed)throw Error('forbidden');}}});
- await assert.rejects(page.default({params:Promise.resolve({brandId:'b'})}),/forbidden/);assert.equal(calls.length,0);allowed=true;await page.default({params:Promise.resolve({brandId:'b'})});assert.deepEqual(calls,['/superadmin/brands/websites']);
+test('old brand CMS bookmark admits matching location grants and rejects missing or foreign grants',async()=>{
+ let grants=[];const calls=[];
+ class AuthorityError extends Error {constructor(message){super(message);this.status=403;}}
+ const page=loadTs('src/app/superadmin/brands/[brandId]/website/[[...section]]/page.tsx',{'next/navigation':{redirect:path=>{calls.push(path);}},'@/lib/access/authority':{AuthorityError},'@/lib/access/orderfly-session':{orderflyReadGrants:async permission=>{assert.equal(permission,'orderfly.website:view');return grants;}}});
+ for(const denied of [[],[{brandId:'foreign',locationIds:['l']}]] ){
+  grants=denied;await assert.rejects(page.default({params:Promise.resolve({brandId:'b'})}),error=>error.status===403);assert.equal(calls.length,0);
+ }
+ for(const locationIds of [['l'],null]){
+  grants=[{brandId:'b',locationIds}];await page.default({params:Promise.resolve({brandId:'b'})});
+ }
+ assert.deepEqual(calls,['/superadmin/brands/websites','/superadmin/brands/websites']);
 });
 test('retired header API returns explicit gone response rather than virtual CMS data',async()=>{
  const route=loadTs('src/app/api/public/brand-website/template-1/header/route.ts');assert.equal((await route.GET()).status,410);

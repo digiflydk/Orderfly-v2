@@ -1,7 +1,10 @@
-import { requireOrderflyAccess } from '@/lib/access/orderfly-session';
 import { redirect } from 'next/navigation';
-export default async function StandardWebsite({params}: {params: Promise<{brandId: string}>}) {
+import { orderflyReadGrants } from '@/lib/access/orderfly-session';
+import { AuthorityError } from '@/lib/access/authority';
+
+export default async function RetiredWebsiteEditor({params}: {params: Promise<{brandId: string}>}) {
   const {brandId} = await params;
-  await requireOrderflyAccess(brandId, null, 'orderfly.website:view');
+  const grants = await orderflyReadGrants('orderfly.website:view');
+  if (!grants.some(grant => grant.brandId === brandId)) throw new AuthorityError('forbidden');
   redirect('/superadmin/brands/websites');
 }
