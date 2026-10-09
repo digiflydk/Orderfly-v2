@@ -4,7 +4,7 @@
 
 Brand Website means the brand's takeaway ordering website. The existing native menu/cart/checkout flow is the single standard. There is no separate website page builder, website activation flag, template chooser, home editor, menu-layout editor or domain router. The separate **Orderfly Website** marketing CMS is outside this change.
 
-The root landing and `/m3pizza` compatibility alias keep their existing product/promotion-driven ordering entry. Components now live under `src/components/storefront`. `/{brandSlug}` selects a restaurant; `/{brandSlug}/{locationSlug}` shows the native menu. `/esmeralda` now renders the real brand restaurant selector and retains GamePlacement, instead of a template preview. Existing brand appearances and the current commerce CSS remain unchanged in this first consolidation; no new visual theme editor is introduced.
+The root landing and `/m3pizza` compatibility alias keep their existing product/promotion-driven ordering entry. Components now live under `src/components/storefront`. `/{brandSlug}` selects a restaurant; `/{brandSlug}/{locationSlug}` shows the native menu. `/esmeralda` now renders the real brand restaurant selector and retains GamePlacement, instead of a template preview. This route is explicitly dynamic, so builds do not read live restaurant data or freeze its availability. Existing brand appearances and the current commerce CSS remain unchanged in this first consolidation; no new visual theme editor is introduced.
 
 ## DB Structure
 
