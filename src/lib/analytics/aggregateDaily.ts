@@ -4,41 +4,32 @@
 import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { AnalyticsEvent, AnalyticsDaily } from '@/types';
-import { eachDayOfInterval, startOfDay, endOfDay } from 'date-fns';
+import { analyticsDateKeys, analyticsDateRange } from '@/lib/analytics/date-range';
 import { getPurchasesInRange } from './sources/orders';
 import * as admin from 'firebase-admin';
 
 const COL_EVENTS = process.env.NEXT_PUBLIC_FS_COL_ANALYTICS_EVENTS || 'analytics_events';
 const COL_DAILY  = process.env.NEXT_PUBLIC_FS_COL_ANALYTICS_DAILY  || 'analytics_daily';
 
-function toDateKey(d: Date) {
-  return d.toISOString().slice(0,10); // YYYY-MM-DD
-}
-
 export async function aggregateDailyData(startISO: string, endISO: string) {
   await requirePlatformSuperuser();
-  const localStart = new Date(startISO);
-  const localEnd = new Date(endISO); 
-
-  const days = eachDayOfInterval({ start: localStart, end: localEnd });
+  const days = analyticsDateKeys(startISO, endISO);
   const daysProcessedCount = days.length;
 
   let eventsProcessed = 0;
   let docsWritten = 0;
 
-  for (const day of days) {
-    const d0 = startOfDay(day);
-    const d1 = endOfDay(day);
-    const dateKey = toDateKey(d0);
+  for (const dateKey of days) {
+    const { start: d0, endExclusive: d1 } = analyticsDateRange(dateKey, dateKey);
 
     const db = getAdminDb();
     const q = db.collection(COL_EVENTS)
       .where('ts', '>=', admin.firestore.Timestamp.fromDate(d0))
-      .where('ts', '<=', admin.firestore.Timestamp.fromDate(d1));
+      .where('ts', '<', admin.firestore.Timestamp.fromDate(d1));
     
     const [snap, purchasesData] = await Promise.all([
       q.get(),
-      getPurchasesInRange({ startDate: d0, endDate: d1 })
+      getPurchasesInRange({ startDate: d0, endDateExclusive: d1 })
     ]);
 
     const buckets = new Map<string, AnalyticsDaily & { __sid?: Set<string> }>();
@@ -47,8 +38,9 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
       const e = docSnap.data() as AnalyticsEvent;
       eventsProcessed++;
 
-      const brandId = (e.brandId || 'unknown');
-      const locationId = (e.locationId || 'unknown');
+      if (!e.brandId || !e.locationId) return;
+      const brandId = e.brandId;
+      const locationId = e.locationId;
       const key = `${brandId}_${locationId}`;
 
       if (!buckets.has(key)) {
@@ -71,7 +63,9 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
       const b = buckets.get(key)!;
 
       if (!b.__sid) b.__sid = new Set<string>();
-      if (e.sessionId) b.__sid.add(e.sessionId);
+      if (e.sessionId && !['web_vital', 'payment_succeeded', 'payment_session_created'].includes(e.name)) {
+        b.__sid.add(e.sessionId);
+      }
 
       switch (e.name) {
         case 'view_menu': b.view_menu++; break;
@@ -79,11 +73,10 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
         case 'add_to_cart': b.add_to_cart++; break;
         case 'start_checkout': b.start_checkout++; break;
         case 'click_purchase': b.click_purchase++; break;
+        // Paid-order totals below come from verified orders. Do not mix in
+        // payment events here, or the authoritative order totals would be
+        // counted twice.
         case 'payment_succeeded':
-          b.payment_succeeded++;
-          b.revenue_paid += Number(e.cartValue || 0);
-          b.delivery_fees_total += Number(e.deliveryFee || 0);
-          b.discounts_total += Number(e.discountTotal || 0);
           break;
         case 'payment_session_created':
           b.payment_session_created++; break;
@@ -109,8 +102,13 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
              } as AnalyticsDaily & {__sid?: Set<string>});
         }
         const b = buckets.get(key)!;
-        b.payment_succeeded = Math.max(b.payment_succeeded, p.count);
-        b.revenue_paid = Math.max(b.revenue_paid, p.revenue);
+        // Purchase rows are split by attribution and device. Sum every group
+        // into its brand/location/day bucket instead of keeping only the
+        // largest group.
+        b.payment_succeeded += p.count;
+        b.revenue_paid += p.revenue;
+        b.delivery_fees_total += p.deliveryFee;
+        b.discounts_total += p.discount;
         p.sessionIds.forEach(sid => b.__sid?.add(sid));
     }
 

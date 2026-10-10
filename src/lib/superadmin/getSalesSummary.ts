@@ -6,7 +6,7 @@ import { listScopedDocuments } from '@/lib/access/scoped-data';
 import { Timestamp } from 'firebase-admin/firestore';
 import type { OrderSummary } from '@/types';
 import type { SACommonFilters } from '@/types/superadmin';
-import { startOfDay, endOfDay } from 'date-fns';
+import { analyticsDateRange } from '@/lib/analytics/date-range';
 
 type SalesOrderItem = {
     itemType?: 'product' | 'combo';
@@ -18,9 +18,10 @@ type SalesOrder = OrderSummary & {
 };
 
 export const getSalesDashboardData = async (filters: SACommonFilters) => {
+    const { start, endExclusive } = analyticsDateRange(filters.dateFrom, filters.dateTo);
     const queryFilters: Array<[string, any, any]> = [
-      ['createdAt', '>=', Timestamp.fromDate(startOfDay(new Date(filters.dateFrom)))],
-      ['createdAt', '<=', Timestamp.fromDate(endOfDay(new Date(filters.dateTo)))],
+      ['createdAt', '>=', Timestamp.fromDate(start)],
+      ['createdAt', '<', Timestamp.fromDate(endExclusive)],
     ];
     if(filters.brandId && filters.brandId !== 'all')queryFilters.push(['brandId', '==', filters.brandId]);
     if(filters.locationIds?.length && filters.locationIds.length<=30)queryFilters.push(['locationId', 'in', filters.locationIds]);

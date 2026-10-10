@@ -8,6 +8,7 @@ import { getBrands } from '@/app/superadmin/brands/actions';
 import { getAllLocations } from '@/app/superadmin/locations/actions';
 import type { FunnelFilters } from '@/types';
 import Loading from './loading';
+import { analyticsToday, analyticsShiftDay } from '@/lib/analytics/date-range';
 
 export const revalidate = 0;
 
@@ -17,8 +18,9 @@ async function AnalyticsData({ searchParams }: { searchParams: FunnelFilters }) 
     getAllLocations()
   ]);
 
-  const dateFrom = searchParams.dateFrom || new Date(new Date().setDate(new Date().getDate() - 7)).toISOString();
-  const dateTo = searchParams.dateTo || new Date().toISOString();
+  const today = analyticsToday();
+  const dateFrom = searchParams.dateFrom || analyticsShiftDay(today, -7);
+  const dateTo = searchParams.dateTo || today;
 
   const filters = {
     ...searchParams,
