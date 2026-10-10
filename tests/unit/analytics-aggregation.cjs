@@ -70,6 +70,8 @@ test('daily aggregation sums all paid-order attribution groups and does not doub
   assert.equal(daily.delivery_fees_total, 30);
   assert.equal(daily.discounts_total, 5);
   assert.equal(daily.view_menu, 1);
-  assert.equal(daily.unique_sessions, 2);
+  // Session totals come from eligible browser events, matching the live funnel.
+  assert.equal(daily.unique_sessions, 1);
+  assert.equal(daily.sessions, 1);
   assert.equal(daily.payment_session_created, 1);
 });

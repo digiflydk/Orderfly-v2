@@ -109,7 +109,6 @@ export async function aggregateDailyData(startISO: string, endISO: string) {
         b.revenue_paid += p.revenue;
         b.delivery_fees_total += p.deliveryFee;
         b.discounts_total += p.discount;
-        p.sessionIds.forEach(sid => b.__sid?.add(sid));
     }
 
     for (const [, b] of buckets) {
