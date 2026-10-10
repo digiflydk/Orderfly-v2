@@ -94,8 +94,8 @@ export function SuperAdminSidebarClient({
     'https://i.postimg.cc/HxTMqLGV/Orderfly-Logo-white-F.png'
 
   const allGroups: Group[] = [
-    { key: 'core', title: 'Overblik', items: [
-      { href: merchantPortal ? '/merchant' : '/superadmin', label: 'Overblik', icon: Home },
+    { key: 'core', title: 'Dashboard', items: [
+      { href: merchantPortal ? '/merchant' : '/superadmin', label: 'Dashboard', icon: Home },
       { href: '/superadmin/dashboard', label: 'Salgsoverblik', icon: BarChart3 },
     ] },
     {
@@ -194,38 +194,14 @@ export function SuperAdminSidebarClient({
     },
   ]
 
-  const candidateGroups: Group[] = (centralAdmin ? allGroups.filter(g => g.key !== 'people').map(g => g.key === 'billing' ? {...g, items:g.items.filter(i => i.href !== '/superadmin/subscriptions')} : g).concat([{key:'platform', title:'Platform', items:[{label:'Brugere og roller · mPanel',href:'https://www.esmeraldapizza.dk/mpanel#platform',icon:Users}]}]) : allGroups)
+  const candidateGroups: Group[] = (centralAdmin ? allGroups.filter(g => g.key !== 'people').map(g => g.key === 'billing' ? {...g, items:g.items.filter(i => i.href !== '/superadmin/subscriptions')} : g) : allGroups)
     .filter(g => !merchantPortal || !['people','billing','system','platform'].includes(g.key))
     .map(g => ({...g, items:g.items.filter(i => (!['/merchant/redeem','/merchant/payments'].includes(i.href || '') || merchantPortal) && (!merchantPortal || i.href !== '/superadmin/loyalty'))}));
 
   const groups: Group[] = candidateGroups.map(group => ({...group, items: filterNavigation(group.items, access)})).filter(group => group.items.length > 0);
 
-  const [open, setOpen] = React.useState<Record<string, boolean>>(() => {
-    const state: Record<string, boolean> = {
-      core: true,
-      commerce: true,
-      catalog: true,
-      promotions: false,
-      people: false,
-      quality: false,
-      insights: true,
-      billing: false,
-      brand_website: true,
-      system: true,
-    }
-    groups.forEach((g) => {
-      const groupHasActive =
-        g.items.some((i) => isActive(pathname, i.href)) ||
-        g.items.some((i) => (i.children ?? []).some((c) => isActive(pathname, c.href)))
-      if (groupHasActive) state[g.key] = true
-      g.items.forEach((i) => {
-        if ((i.children ?? []).some((c) => isActive(pathname, c.href))) {
-          state[`${g.key}:${i.label}`] = true
-        }
-      })
-    })
-    return state
-  })
+  // Start compact even on deep links; opening a group is an explicit user choice.
+  const [open, setOpen] = React.useState<Record<string, boolean>>({ core: true });
 
   function toggle(key: string) {
     setOpen((s) => ({ ...s, [key]: !s[key] }))
@@ -234,7 +210,7 @@ export function SuperAdminSidebarClient({
   return (
     <Sidebar collapsible="icon" className="border-r">
       <SidebarContent className="bg-[#142634] text-white">
-        <div className="h-16 border-b border-white/10 px-3 py-2 group-data-[collapsible=icon]:px-2">
+        <div data-sidebar="brand" className="min-h-24 shrink-0 mb-2 border-b border-white/10 px-3 py-5 group-data-[collapsible=icon]:px-2">
           <div className="flex h-full items-center">
             <Image
               src={logoUrl}
@@ -242,8 +218,8 @@ export function SuperAdminSidebarClient({
               width={132}
               height={36}
               priority
-              style={{ width: 'auto', height: 'auto' }}
-              className="object-contain"
+              style={{ width: '85%', height: 'auto' }}
+              className="object-contain object-left"
             />
           </div>
         </div>
@@ -255,6 +231,7 @@ export function SuperAdminSidebarClient({
               <button
                 type="button"
                 onClick={() => toggle(group.key)}
+                aria-expanded={isOpen}
                 className="flex w-full items-center justify-between px-3 pb-2 text-[11px] font-semibold uppercase tracking-wide text-slate-300 hover:text-white group-data-[collapsible=icon]:hidden"
               >
                 <span>{group.title}</span>
@@ -297,6 +274,7 @@ export function SuperAdminSidebarClient({
                           <button
                             type="button"
                             onClick={() => toggle(key)}
+                            aria-expanded={parentOpen}
                             className="flex w-full items-center gap-2.5 rounded-md px-3 py-2 text-sm text-slate-200 hover:bg-[#213849] hover:text-white group-data-[collapsible=icon]:hidden"
                           >
                             <ParentIcon className="h-5 w-5 shrink-0 text-slate-300" />

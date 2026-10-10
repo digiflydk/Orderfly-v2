@@ -30,7 +30,7 @@ export function AdminOverview({ brands, locations, destinations }: {
     <div className="space-y-6">
       <header>
         <p className="text-sm font-semibold text-primary">Administration</p>
-        <h1 className="mt-1 text-3xl font-semibold tracking-tight">Overblik</h1>
+        <h1 className="mt-1 text-3xl font-semibold tracking-tight">Dashboard</h1>
         <p className="mt-2 text-sm text-muted-foreground">Vælg brand og lokation, og gå direkte til din opgave.</p>
       </header>
 

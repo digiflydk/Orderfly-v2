@@ -45,7 +45,7 @@ before(async () => {
     const destinations=[{href:'/superadmin/dashboard',label:'Salgsoverblik',description:'Følg ordrer og omsætning.'},{href:'/superadmin/sales/orders',label:'Ordrer',description:'Find de seneste ordrer.'},{href:'/superadmin/products',label:'Produkter',description:'Vedligehold sortimentet.'}];
     const overview=<AdminOverview brands={${JSON.stringify(brands)}} locations={${JSON.stringify(locations)}} destinations={destinations}/>;
     createRoot(document.getElementById('root')).render(location.pathname==='/shell'
-      ? <SuperAdminLayoutClient access={{superuser:new URLSearchParams(location.search).has('superuser'),permissions:['orderfly.analytics:view','orderfly.orders:view','orderfly.catalog:view']}}>{overview}</SuperAdminLayoutClient>
+      ? <SuperAdminLayoutClient centralAdmin access={{superuser:new URLSearchParams(location.search).has('superuser'),permissions:['orderfly.analytics:view','orderfly.orders:view','orderfly.catalog:view']}}>{overview}</SuperAdminLayoutClient>
       : overview);`);
   const link = path.join(dir, 'link.js');
   fs.writeFileSync(link, `import React from 'react';export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}`);
@@ -54,7 +54,7 @@ before(async () => {
   const auth = path.join(dir, 'auth.js');
   fs.writeFileSync(auth, `export async function getSuperadminUserContext(){return null}`);
   const picture = path.join(dir, 'image.js');
-  fs.writeFileSync(picture, `import React from 'react';export default function Image({alt}){return <span role="img" aria-label={alt}>Orderfly</span>}`);
+  fs.writeFileSync(picture, `import React from 'react';export default function Image({priority,src,...props}){return <img src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='232' height='54'%3E%3Crect width='232' height='54' fill='white'/%3E%3C/svg%3E" {...props}/>}`);
   const loader = path.join(dir, 'loader.js');
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   await new Promise((resolve, reject) => webpackModule.webpack({
@@ -89,7 +89,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844
     const page = await context.newPage();
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(origin);
-    await expect(page.getByRole('heading', { name: 'Overblik' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await expect(page.locator('.admin-shell')).toHaveCSS('color', 'rgb(23, 35, 46)');
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
     const screenshot = await page.screenshot({ path: path.join(root, 'test-results', `admin-overview-${name}.png`), fullPage: true });
@@ -136,7 +136,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844
     const page = await context.newPage();
     const errors = []; page.on('pageerror', error => errors.push(error.message));
     await page.goto(origin + '/shell');
-    await expect(page.getByRole('heading', { name: 'Overblik' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Dashboard' })).toBeVisible();
     await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(247, 249, 251)');
     const sidebar = page.locator('[data-sidebar="sidebar"]');
     if (name === 'mobile') {
@@ -176,8 +176,30 @@ for(const width of [1440,390])test(`#223 superuser retains canonical cookie sett
  await page.goto(origin+'/shell?superuser');
  if(width<768)await page.getByRole('button',{name:'Toggle Sidebar'}).click();
  const sidebar=page.locator('[data-sidebar="sidebar"]');
+ await expect(sidebar.getByRole('link',{name:'Dashboard',exact:true})).toBeVisible();
+ await expect(sidebar.getByRole('link',{name:'Salgsoverblik',exact:true})).toBeVisible();
+ for(const name of ['Commerce','Catalog','Promotions','Quality','Insights','Billing','Brand Website','System']) {
+  await expect(sidebar.getByRole('button',{name,exact:true})).toHaveAttribute('aria-expanded','false');
+ }
+ await expect(sidebar.getByRole('button',{name:'Platform',exact:true})).toHaveCount(0);
+ await expect(sidebar.locator('a[href*="mpanel#platform"]')).toHaveCount(0);
+ const logo=sidebar.getByRole('img',{name:'OrderFly Logo'});
+ const ratio=await logo.evaluate(img=>img.getBoundingClientRect().width/img.parentElement.getBoundingClientRect().width);
+ assert.ok(Math.abs(ratio-.85)<.01,`logo should use 85% of previous full width, got ${ratio}`);
+ const brandArea=sidebar.locator('[data-sidebar="brand"]');
+ await expect(brandArea).toHaveCSS('padding-top','20px');
+ await expect(brandArea).toHaveCSS('padding-bottom','20px');
+ await expect(sidebar.getByRole('link',{name:'Cookies',exact:true})).not.toBeVisible();
+ await sidebar.getByRole('button',{name:'System',exact:true}).click();
+ await expect(sidebar.getByRole('link',{name:'Cookies',exact:true})).toBeVisible();
  await expect(sidebar.getByRole('link',{name:'Cookies',exact:true})).toHaveAttribute('href','/superadmin/settings/cookie-texts');
  await expect(sidebar.getByRole('link',{name:'Settings',exact:true})).toHaveAttribute('href','/superadmin/settings');
  await expect(sidebar.getByText('Orderfly Website',{exact:true})).toHaveCount(0);
  await expect(sidebar.locator('a[href^="/superadmin/website"]')).toHaveCount(0);
+ await sidebar.getByRole('button',{name:'System',exact:true}).click();
+ await expect(sidebar.getByRole('link',{name:'Cookies',exact:true})).not.toBeVisible();
+ await sidebar.getByRole('button',{name:'Insights',exact:true}).click();
+ await sidebar.getByRole('button',{name:'Analytics',exact:true}).click();
+ await expect(sidebar.getByRole('link',{name:'Cookie Consents'})).toBeVisible();
+ await page.screenshot({path:path.join(root,'test-results',`admin-navigation-${width}.png`),fullPage:true});
 });
