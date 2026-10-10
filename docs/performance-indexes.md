@@ -39,7 +39,7 @@ This document outlines the query patterns and required Firestore indexes for opt
 
 ### 2.2 Orders List (`/superadmin/sales/orders`)
 
-*   **Query:** Filter by date range (`createdAt`) and optionally by `brandId` and `locationId` (if <= 30), sorted by date.
+*   **Query:** Filter by order creation date (`createdAt`) and optionally by `brandId` and `locationId` (if <= 30), sorted by date.
 *   **Pattern:** `db.collection("orders").where("createdAt", ">=", startDate).where("createdAt", "<=", endDate).where("brandId", "==", brandId).orderBy("createdAt", "desc")`
 *   **Index Required:**
 
@@ -57,6 +57,10 @@ This document outlines the query patterns and required Firestore indexes for opt
 *   **Performance Notes:**
     *   The `locationId` filter uses an `in` query, limited to 30 locations. For more complex filtering, data would need to be exported to a dedicated analytics database (e.g., BigQuery).
     *   The page is dynamically rendered (`revalidate = 0`) to ensure data is always fresh.
+
+#### Sales Dashboard (`/superadmin/sales/dashboard`)
+
+Sales and paid-order KPIs use the selected Copenhagen calendar range on `paidAt`, matching Analytics. Pending orders have no payment date, so the dashboard counts currently pending orders separately within the selected brand/location scope, without applying the date range. Ensure the Firestore composite indexes for `brandId` + `paidAt` and `brandId` + `paymentStatus` are available; location-filtered queries may need the corresponding `locationId` field as well.
 
 ### 2.3 Customer List (`/superadmin/customers`)
 

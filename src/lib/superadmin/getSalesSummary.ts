@@ -20,12 +20,20 @@ type SalesOrder = OrderSummary & {
 export const getSalesDashboardData = async (filters: SACommonFilters) => {
     const { start, endExclusive } = analyticsDateRange(filters.dateFrom, filters.dateTo);
     const queryFilters: Array<[string, any, any]> = [
-      ['createdAt', '>=', Timestamp.fromDate(start)],
-      ['createdAt', '<', Timestamp.fromDate(endExclusive)],
+      ['paidAt', '>=', Timestamp.fromDate(start)],
+      ['paidAt', '<', Timestamp.fromDate(endExclusive)],
     ];
     if(filters.brandId && filters.brandId !== 'all')queryFilters.push(['brandId', '==', filters.brandId]);
     if(filters.locationIds?.length && filters.locationIds.length<=30)queryFilters.push(['locationId', 'in', filters.locationIds]);
-    const orderDocs = await listScopedDocuments('orders','orderfly.analytics:view','location',queryFilters);
+    // Pending orders have no payment date. Keep the operational KPI useful by
+    // counting currently pending orders within the selected brand/location scope.
+    const pendingFilters: Array<[string, any, any]> = [['paymentStatus', '==', 'Pending']];
+    if(filters.brandId && filters.brandId !== 'all')pendingFilters.push(['brandId', '==', filters.brandId]);
+    if(filters.locationIds?.length && filters.locationIds.length<=30)pendingFilters.push(['locationId', 'in', filters.locationIds]);
+    const [orderDocs, pendingDocs] = await Promise.all([
+        listScopedDocuments('orders','orderfly.analytics:view','location',queryFilters),
+        listScopedDocuments('orders','orderfly.analytics:view','location',pendingFilters),
+    ]);
     let orders: SalesOrder[] = orderDocs.map(doc => doc.data() as SalesOrder);
     
     if (filters.locationIds && filters.locationIds.length > 30) {
@@ -34,7 +42,12 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
     }
 
     const paidOrders = orders.filter(o => o.paymentStatus === 'Paid' && o.status !== 'Canceled');
-    const pendingOrdersCount = orders.filter(o => o.paymentStatus === 'Pending' && o.status !== 'Canceled').length;
+    const pendingOrdersCount = pendingDocs.filter(doc => {
+        const order = doc.data() as SalesOrder;
+        return order.paymentStatus === 'Pending' && order.status !== 'Canceled'
+            && (!filters.brandId || filters.brandId === 'all' || order.brandId === filters.brandId)
+            && (!filters.locationIds?.length || filters.locationIds.includes(order.locationId));
+    }).length;
     const totalOrders = paidOrders.length;
     const totalSales = paidOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
     const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;

@@ -42,7 +42,7 @@ export default async function SalesDashboardPage({ params, searchParams }: Async
         
         // Line 2
         { title: "Total Paid Orders", value: kpiData.totalOrders.toLocaleString(), icon: ShoppingCart },
-        { title: "Pending Orders", value: kpiData.pendingOrders.toLocaleString(), icon: Clock },
+        { title: "Pending Orders (current)", value: kpiData.pendingOrders.toLocaleString(), icon: Clock },
         { title: "Canceled Orders", value: kpiData.canceledOrders.toLocaleString(), icon: Ban },
 
         // Line 3
