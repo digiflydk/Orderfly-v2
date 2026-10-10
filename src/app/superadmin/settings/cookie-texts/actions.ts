@@ -155,7 +155,8 @@ export async function createOrUpdateCookieTexts(
       if (conflict) return { error: 'Cookie texts already exist for this language and scope. Edit the existing text set instead.' };
       if (brandId && !(await transaction.get(nativeDb.collection('brands').doc(brandId))).exists) return { error: 'The selected brand no longer exists.' };
       transaction.set(nativeDb.collection('cookie_texts').doc(docId), {
-        ...dataToSave, brand_id: brandId || deleteField(), last_updated: Timestamp.now(),
+        ...dataToSave, brand_id: brandId || deleteField(),
+        global_locale_key: brandId ? deleteField() : language.toLowerCase(), last_updated: Timestamp.now(),
       }, { merge: true });
       return null;
     });

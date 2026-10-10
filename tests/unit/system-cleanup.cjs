@@ -29,7 +29,7 @@ test('cookie administration reads and writes require superuser before IO',async(
 });
 test('changing brand text to global clears the stored brand and invalidates storefront cache',async()=>{
  const f=fixture();await assert.rejects(f.api.createOrUpdateCookieTexts(f.form()),/redirect/);
- const saved=f.records.get('cookie_texts/text');assert.equal(saved.brand_id,undefined);assert.equal(saved.extra,'preserved');assert.equal(saved.categories.statistics.title,'Text');assert.equal(saved.categories.marketing.title,'Text');assert.ok(f.calls.includes('storefront'));
+ const saved=f.records.get('cookie_texts/text');assert.equal(saved.brand_id,undefined);assert.equal(saved.global_locale_key,'da');assert.equal(saved.extra,'preserved');assert.equal(saved.categories.statistics.title,'Text');assert.equal(saved.categories.marketing.title,'Text');assert.ok(f.calls.includes('storefront'));
 });
 test('invalid version, fields, language and scope cannot write; storage errors return feedback',async()=>{
  for(const [key,value] of [['consent_version','old'],['banner_title',' '],['cat_marketing_desc',''],['language','invalid'],['id','a/b'],['brand_id','missing']]){
@@ -87,5 +87,25 @@ test('brand query is scoped and legacy global locale lookup is shared across bra
   'next/cache':{unstable_cache:fn=>{const cache=new Map();return(...args)=>{const key=JSON.stringify(args);if(!cache.has(key))cache.set(key,fn(...args));return cache.get(key);};}}});
  for(const brand of ['first','second'])await api.GET(new Request('https://fixture.test/?brandId='+brand+'&language=en-US'));
  assert.deepEqual(calls.filter(x=>x.field==='brand_id').map(x=>x.value),['first','second']);
- const globals=calls.filter(x=>x.field==='language');assert.equal(globals.length,1);assert.equal(globals[0].op,'in');assert.ok(globals[0].value.includes('en-US'));assert.ok(globals[0].value.includes('en'));assert.ok(globals[0].value.length<=20);
+ const globals=calls.filter(x=>x.field==='global_locale_key');assert.equal(globals.length,1);assert.equal(globals[0].op,'in');assert.ok(globals[0].value.includes('en-us'));assert.ok(globals[0].value.includes('en'));assert.ok(globals[0].value.length<=20);
+});
+
+test('moving global text to brand scope removes the public global index key',async()=>{
+ const f=fixture(),form=f.form();f.records.set('cookie_texts/text',{global_locale_key:'da'});form.set('brand_id','brand');
+ await assert.rejects(f.api.createOrUpdateCookieTexts(form),/redirect/);assert.equal(f.records.get('cookie_texts/text').global_locale_key,undefined);
+});
+test('global metadata backfill is preview-first, preserves all text and is idempotent',async()=>{
+ const {backfill}=require('../../scripts/backfill-global-cookie-index.cjs');
+ const rows=new Map([['global',{language:'da-DK',banner_title:'Keep custom text',consent_version:'old'}],['brand',{brand_id:'b',language:'da',banner_title:'Brand'}]]);
+ const snap=id=>({id,exists:rows.has(id),data:()=>({...rows.get(id)})});
+ const db={collection:()=>({get:async()=>({docs:[...rows.keys()].map(snap)}),doc:id=>id}),runTransaction:async run=>run({get:async id=>snap(id),update:(id,value)=>rows.set(id,{...rows.get(id),...value})})};
+ const before=structuredClone(rows);assert.equal((await backfill(db)).pending,1);assert.deepEqual(rows,before);
+ assert.deepEqual((await backfill(db,true)).recordIds,['global']);assert.deepEqual(rows.get('global'),{...before.get('global'),global_locale_key:'da-dk'});assert.deepEqual(rows.get('brand'),before.get('brand'));
+ assert.equal((await backfill(db)).pending,0);
+});
+test('backfill aborts before writes for invalid locales and rechecks concurrent scope changes',async()=>{
+ const {backfill}=require('../../scripts/backfill-global-cookie-index.cjs');let writes=0;
+ const db={collection:()=>({get:async()=>({docs:[{id:'global',data:()=>({language:'da'})}]}),doc:id=>id}),runTransaction:async run=>run({get:async()=>({exists:true,data:()=>({brand_id:'now-brand',language:'da'})}),update:()=>writes++})};
+ await assert.rejects(backfill(db,true),/scope changed/);assert.equal(writes,0);
+ const invalid={collection:()=>({get:async()=>({docs:[{id:'bad',data:()=>({language:'invalid'})}]})})};await assert.rejects(backfill(invalid,true),/invalid language/);
 });
