@@ -45,7 +45,7 @@ before(async () => {
     const destinations=[{href:'/superadmin/dashboard',label:'Salgsoverblik',description:'Følg ordrer og omsætning.'},{href:'/superadmin/sales/orders',label:'Ordrer',description:'Find de seneste ordrer.'},{href:'/superadmin/products',label:'Produkter',description:'Vedligehold sortimentet.'}];
     const overview=<AdminOverview brands={${JSON.stringify(brands)}} locations={${JSON.stringify(locations)}} destinations={destinations}/>;
     createRoot(document.getElementById('root')).render(location.pathname==='/shell'
-      ? <SuperAdminLayoutClient access={{superuser:false,permissions:['orderfly.analytics:view','orderfly.orders:view','orderfly.catalog:view']}}>{overview}</SuperAdminLayoutClient>
+      ? <SuperAdminLayoutClient access={{superuser:new URLSearchParams(location.search).has('superuser'),permissions:['orderfly.analytics:view','orderfly.orders:view','orderfly.catalog:view']}}>{overview}</SuperAdminLayoutClient>
       : overview);`);
   const link = path.join(dir, 'link.js');
   fs.writeFileSync(link, `import React from 'react';export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}`);
@@ -69,11 +69,11 @@ before(async () => {
     if (req.url === '/bundle.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(dir, 'bundle.js'))); }
     if (req.url === '/styles.css') { res.setHeader('content-type', 'text/css'); return res.end(styles); }
     res.setHeader('content-type', 'text/html; charset=utf-8');
-    res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body>' + (req.url === '/shell' ? '<div id="root"></div>' : '<main class="admin-shell min-h-screen bg-background p-4 md:p-8"><div id="root" class="mx-auto max-w-6xl"></div></main>') + '<script src="/bundle.js"></script></body></html>');
+    res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body>' + (req.url.split('?')[0] === '/shell' ? '<div id="root"></div>' : '<main class="admin-shell min-h-screen bg-background p-4 md:p-8"><div id="root" class="mx-auto max-w-6xl"></div></main>') + '<script src="/bundle.js"></script></body></html>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = 'http://127.0.0.1:' + server.address().port;
-  browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+  browser = await chromium.launch({ headless: true, executablePath: process.env.CART_CHROMIUM_PATH, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 });
 
 after(async () => {
@@ -146,6 +146,9 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844
     }
     await expect(sidebar).toHaveCount(1);
     await expect(sidebar).toBeVisible();
+    await expect(sidebar.getByRole('link',{name:'Cookies',exact:true})).toHaveCount(0);
+    await expect(sidebar.getByText('Orderfly Website',{exact:true})).toHaveCount(0);
+    await expect(sidebar.locator('a[href^="/superadmin/website"]')).toHaveCount(0);
     await expect(sidebar.locator('[data-sidebar="content"]')).toHaveCSS('background-color', 'rgb(20, 38, 52)');
     await expect(sidebar.locator('a[href="/superadmin"] svg')).toHaveCSS('width', '20px');
     await expect(sidebar.locator('a[href="/superadmin"]')).toHaveCSS('font-size', '16px');
@@ -167,3 +170,14 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 390, 844
     await page.screenshot({ path: path.join(root, 'test-results', `admin-shell-${name}.png`), fullPage: true });
   });
 }
+
+for(const width of [1440,390])test(`#223 superuser retains canonical cookie settings without marketing CMS (${width})`,async t=>{
+ const context=await browser.newContext({viewport:{width,height:900}});t.after(()=>context.close());const page=await context.newPage();
+ await page.goto(origin+'/shell?superuser');
+ if(width<768)await page.getByRole('button',{name:'Toggle Sidebar'}).click();
+ const sidebar=page.locator('[data-sidebar="sidebar"]');
+ await expect(sidebar.getByRole('link',{name:'Cookies',exact:true})).toHaveAttribute('href','/superadmin/settings/cookie-texts');
+ await expect(sidebar.getByRole('link',{name:'Settings',exact:true})).toHaveAttribute('href','/superadmin/settings');
+ await expect(sidebar.getByText('Orderfly Website',{exact:true})).toHaveCount(0);
+ await expect(sidebar.locator('a[href^="/superadmin/website"]')).toHaveCount(0);
+});

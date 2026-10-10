@@ -56,18 +56,6 @@ export async function buildAllDebugPayload() {
   const startedAt = new Date().toISOString();
   const metaErrors: string[] = [];
 
-  // Global CMS/settings
-  const [settingsGeneral, cmsHeader, cmsFooter, cmsHome] = await Promise.all([
-    safeGet<any>("settings/general"),
-    safeGet<any>("cms/pages/header/header"),
-    safeGet<any>("cms/pages/footer/footer"),
-    safeGet<any>("cms/pages/home/home"),
-  ]);
-
-  [settingsGeneral, cmsHeader, cmsFooter, cmsHome].forEach((d) => {
-    if (!d.ok && d.error) metaErrors.push(`${d.path}: ${d.error}`);
-  });
-
   // Brands
   const brandsList = await listBrands();
   if ((brandsList as any).__error__) {
@@ -158,12 +146,6 @@ export async function buildAllDebugPayload() {
 
   return {
     startedAt,
-    globals: {
-      settingsGeneral,
-      cmsHeader,
-      cmsFooter,
-      cmsHome,
-    },
     brands,
     feedback,
     meta: {

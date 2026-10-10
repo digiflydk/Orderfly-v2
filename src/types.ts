@@ -14,7 +14,6 @@
 
 import { z } from 'zod';
 import type * as FirebaseFirestore from 'firebase-admin/firestore';
-export type { GeneralSettings } from './types/settings';
 
 /**
  * @description Contains master data for each brand/company on the platform.
@@ -1093,25 +1092,3 @@ const MenuItemSchema = z.object({
 });
 export const MenuImportOutputSchema = z.array(MenuItemSchema).describe('An array of menu items extracted from the image.');
 export type MenuImportOutput = z.infer<typeof MenuImportOutputSchema>;
-
-
-export const AIProjectQualificationInputSchema = z.object({
-  conversationHistory: z.array(z.object({
-    role: z.enum(['user', 'assistant']),
-    content: z.string(),
-  })),
-});
-export type AIProjectQualificationInput = z.infer<typeof AIProjectQualificationInputSchema>;
-
-export const AIProjectQualificationOutputSchema = z.object({
-  qualified: z.boolean().describe("Whether the user's project is a good fit for Digifly."),
-  shouldBookMeeting: z.boolean().describe("Whether the user should be prompted to book a meeting."),
-  nextQuestion: z.string().describe("The next question to ask the user to continue the qualification process."),
-  collectedInfo: z.object({
-    name: z.string().optional().describe("The user's full name."),
-    email: z.string().optional().describe("The user's email address."),
-    phone: z.string().optional().describe("The user's phone number."),
-    projectIdea: z.string().optional().describe("A summary of the user's project idea."),
-  }).describe("The information collected from the user so far."),
-});
-export type AIProjectQualificationOutput = z.infer<typeof AIProjectQualificationOutputSchema>;

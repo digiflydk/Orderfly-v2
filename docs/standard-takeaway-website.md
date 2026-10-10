@@ -2,7 +2,7 @@
 
 ## Overview
 
-Brand Website means the brand's takeaway ordering website. The existing native menu/cart/checkout flow is the single standard. There is no separate website page builder, website activation flag, template chooser, home editor, menu-layout editor or domain router. The separate **Orderfly Website** marketing CMS is outside this change.
+Brand Website means the brand's takeaway ordering website. The existing native menu/cart/checkout flow is the single standard. There is no separate website page builder, website activation flag, template chooser, home editor, menu-layout editor or domain router. The separate **Orderfly Website** marketing CMS is retired in #223; see [marketing cleanup](orderfly-website-cleanup.md).
 
 The root landing and `/m3pizza` compatibility alias keep their existing product/promotion-driven ordering entry. Components now live under `src/components/storefront`. `/{brandSlug}` selects a restaurant; `/{brandSlug}/{locationSlug}` shows the native menu. `/esmeralda` now renders the real brand restaurant selector and retains GamePlacement, instead of a template preview. This route is explicitly dynamic, so builds do not read live restaurant data or freeze its availability. Existing brand appearances and the current commerce CSS remain unchanged in this first consolidation; no new visual theme editor is introduced.
 
@@ -50,7 +50,7 @@ Authenticated schema/path metadata endpoints remain and describe the standard na
 
 ## Backlog
 
-Deferred: a deliberate unified brand-colour configuration across all storefront surfaces and body-mounted dialogs, removal of the separate Orderfly Website marketing CMS, unrelated duplicate files, traffic-based CMS data retention review, CI workflow-name repair and the pre-existing order-flow-71 test harness error. Do not delete the `orderfly.website` permission: game administration also relies on it.
+Deferred: a deliberate unified brand-colour configuration across all storefront surfaces and body-mounted dialogs, unrelated duplicate files, traffic-based CMS data retention review, CI workflow-name repair and the pre-existing order-flow-71 test harness error. Do not delete the `orderfly.website` permission: game administration also relies on it.
 
 ## Tests
 

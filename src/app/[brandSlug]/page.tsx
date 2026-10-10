@@ -12,7 +12,6 @@ import { productsForCategory } from "@/lib/menu-helpers";
 import { getBrandBySlug } from "@/lib/data/brand-location";
 import { getLocationsForBrand } from "@/lib/data/brand-location";
 import type { Brand, Location } from "@/types";
-import { BrandLayoutClient } from "@/components/layout/BrandLayoutClient";
 import { LocationCard } from "@/components/location-card";
 import { notFound } from "next/navigation";
 
