@@ -178,9 +178,11 @@ for(const width of [1440,390])test(`#223 superuser retains canonical cookie sett
  const sidebar=page.locator('[data-sidebar="sidebar"]');
  await expect(sidebar.getByRole('link',{name:'Dashboard',exact:true})).toBeVisible();
  await expect(sidebar.getByRole('link',{name:'Salgsoverblik',exact:true})).toBeVisible();
- for(const name of ['Commerce','Catalog','Promotions','Quality','Insights','Billing','Brand Website','System']) {
+ for(const name of ['Commerce','Catalog','Promotions','Quality','Insights','Brand Website','System']) {
   await expect(sidebar.getByRole('button',{name,exact:true})).toHaveAttribute('aria-expanded','false');
  }
+ await expect(sidebar.getByRole('button',{name:'Billing',exact:true})).toHaveCount(0);
+ await expect(sidebar.locator('a[href^="/superadmin/billing"], a[href^="/superadmin/subscriptions"]')).toHaveCount(0);
  await expect(sidebar.getByRole('button',{name:'Platform',exact:true})).toHaveCount(0);
  await expect(sidebar.locator('a[href*="mpanel#platform"]')).toHaveCount(0);
  const logo=sidebar.getByRole('img',{name:'OrderFly Logo'});

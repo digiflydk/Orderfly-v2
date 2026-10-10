@@ -23,7 +23,6 @@ const routes: Array<[string, string]> = [
   ['/superadmin/games', 'orderfly.website:view'],
   ['/superadmin/feedback', 'orderfly.feedback:view'],
   ['/superadmin/analytics', 'orderfly.analytics:view'],
-  ['/superadmin/billing', 'orderfly.billing:view'],
 ];
 
 export function canNavigate(href: string, access?: NavigationAccess | null): boolean {

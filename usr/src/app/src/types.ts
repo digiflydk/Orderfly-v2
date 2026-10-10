@@ -142,20 +142,6 @@ export type Customer = {
     };
 };
 
-/**
- * @description Tracks a brand's subscription status, synced from Stripe.
- * @collection subscriptions
- */
-export type Subscription = {
-  id: string;
-  brandId: string;
-  planId: string;
-  status: 'active' | 'trialing' | 'past_due' | 'canceled' | 'unpaid' | 'inactive';
-  currentPeriodStart: Date;
-  currentPeriodEnd: Date;
-  paymentProviderCustomerId: string;
-  paymentProviderSubscriptionId: string;
-};
 
 /**
  * @description Defines the different subscription packages available.
@@ -172,17 +158,6 @@ export type SubscriptionPlan = {
   featureIds?: string[];
 };
 
-/**
-* @description Represents an invoice for a brand's subscription.
-* @collection brands/{brandId}/invoices
-*/
-export type Invoice = {
-    id: string;
-    brandId: string;
-    date: string;
-    status: 'paid' | 'open' | 'void';
-    amount: number;
-};
 
 
 /**

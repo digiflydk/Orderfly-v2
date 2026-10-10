@@ -169,14 +169,6 @@ export function SuperAdminSidebarClient({
       ],
     },
     {
-      key: 'billing',
-      title: 'Billing',
-      items: [
-        { href: '/superadmin/billing', label: 'Billing', icon: CreditCard },
-        { href: '/superadmin/subscriptions', label: 'Subscriptions', icon: Bookmark },
-      ],
-    },
-    {
       key: 'brand_website',
       title: 'Brand Website',
       items: [
@@ -194,8 +186,8 @@ export function SuperAdminSidebarClient({
     },
   ]
 
-  const candidateGroups: Group[] = (centralAdmin ? allGroups.filter(g => g.key !== 'people').map(g => g.key === 'billing' ? {...g, items:g.items.filter(i => i.href !== '/superadmin/subscriptions')} : g) : allGroups)
-    .filter(g => !merchantPortal || !['people','billing','system','platform'].includes(g.key))
+  const candidateGroups: Group[] = (centralAdmin ? allGroups.filter(g => g.key !== 'people') : allGroups)
+    .filter(g => !merchantPortal || !['people','system','platform'].includes(g.key))
     .map(g => ({...g, items:g.items.filter(i => (!['/merchant/redeem','/merchant/payments'].includes(i.href || '') || merchantPortal) && (!merchantPortal || i.href !== '/superadmin/loyalty'))}));
 
   const groups: Group[] = candidateGroups.map(group => ({...group, items: filterNavigation(group.items, access)})).filter(group => group.items.length > 0);
