@@ -194,6 +194,7 @@ for(const width of [1440,390])test(`#223 superuser retains canonical cookie sett
  await expect(sidebar.getByRole('link',{name:'Cookies',exact:true})).not.toBeVisible();
  await sidebar.getByRole('button',{name:'System',exact:true}).click();
  await expect(sidebar.getByRole('link',{name:'Cookies',exact:true})).toBeVisible();
+ await expect(sidebar.getByRole('link',{name:'Documentation',exact:true})).toHaveCount(0);
  await expect(sidebar.getByRole('link',{name:'Cookies',exact:true})).toHaveAttribute('href','/superadmin/settings/cookie-texts');
  await expect(sidebar.getByRole('link',{name:'Settings',exact:true})).toHaveAttribute('href','/superadmin/settings');
  await expect(sidebar.getByText('Orderfly Website',{exact:true})).toHaveCount(0);

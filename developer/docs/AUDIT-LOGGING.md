@@ -10,4 +10,4 @@ Examples:
 
 Audit logs are visible in the superadmin under `/superadmin/logs`.
 
-Technical settings and the list of actions can be downloaded as JSON from `/api/superadmin/docs/audit-settings`.
+The former `/api/superadmin/docs/audit-settings` export is retired (410 after authorization). Audit infrastructure is retained; consult `docs/security-rbac.md` and the current server action implementations for authorization and audit behavior.

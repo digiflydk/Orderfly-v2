@@ -35,7 +35,7 @@ export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmi
     <S.SidebarProvider className="admin-shell">
       <SuperAdminSidebarClient access={access} centralAdmin={centralAdmin} merchantPortal={merchantPortal}
         brandingSettings={
-          brandingSettings ?? { platformHeading: 'Orderfly Studio' }
+          brandingSettings ?? {}
         }
       />
 
@@ -43,7 +43,7 @@ export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmi
         <MobileHeader
           homeHref={merchantPortal ? '/merchant' : '/superadmin'}
           brandingSettings={
-            brandingSettings ?? { platformHeading: 'Orderfly Studio' }
+            brandingSettings ?? {}
           }
         />
         <main className="mx-auto w-full max-w-[1600px] p-4 md:p-6 lg:p-8">

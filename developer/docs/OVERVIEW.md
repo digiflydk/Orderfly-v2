@@ -10,4 +10,4 @@ This document gives a high level overview of the system:
 - Customer webshop flows (browse menu, add to cart, pay)
 - Restaurant admin flows (order management, basic reporting)
 
-Use the other docs under `/superadmin/docs` for details on API, database structure and auditing.
+Developer documentation now lives in the repository under `docs/` and `developer/docs/`. The retired `/superadmin/docs` UI redirects authorized users to Settings. Start with `docs/architecture.md`, `docs/api-overview.md` and `docs/firestore-schema.md`.
