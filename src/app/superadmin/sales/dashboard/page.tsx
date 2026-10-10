@@ -10,6 +10,7 @@ import { getAnalyticsFiltersData } from "@/app/superadmin/_analytics-filters-dat
 import { FiltersBar } from "@/components/superadmin/FiltersBar";
 import type { SACommonFilters } from "@/types/superadmin";
 import { redirect } from "next/navigation";
+import { analyticsToday } from '@/lib/analytics/date-range';
 import { Button } from "@/components/ui/button";
 
 export const revalidate = 0; // Force dynamic rendering
@@ -19,7 +20,7 @@ export default async function SalesDashboardPage({ params, searchParams }: Async
     const query = await resolveSearchParams(searchParams);
     
     if (!query.from || !query.to) {
-        const today = new Date().toISOString().slice(0, 10);
+        const today = analyticsToday();
         redirect(`/superadmin/sales/dashboard?from=${today}&to=${today}`);
     }
 
@@ -41,7 +42,7 @@ export default async function SalesDashboardPage({ params, searchParams }: Async
         
         // Line 2
         { title: "Total Paid Orders", value: kpiData.totalOrders.toLocaleString(), icon: ShoppingCart },
-        { title: "Pending Orders", value: kpiData.pendingOrders.toLocaleString(), icon: Clock },
+        { title: "Pending Orders (current)", value: kpiData.pendingOrders.toLocaleString(), icon: Clock },
         { title: "Canceled Orders", value: kpiData.canceledOrders.toLocaleString(), icon: Ban },
 
         // Line 3

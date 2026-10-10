@@ -11,6 +11,7 @@ import { getSalesDashboardData } from '@/lib/superadmin/getSalesSummary';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { DollarSign, ShoppingCart, Activity, Clock, Tag, Package, BarChart3 } from 'lucide-react';
 import { redirect } from 'next/navigation';
+import { analyticsToday } from '@/lib/analytics/date-range';
 
 async function handleFilterChange(newFilters: SACommonFilters) {
     'use server';
@@ -27,7 +28,7 @@ export default async function SuperadminDashboardPage({ searchParams }: AsyncPag
   const query = await resolveSearchParams(searchParams);
   
   if (!query.from || !query.to) {
-    const today = new Date().toISOString().slice(0, 10);
+    const today = analyticsToday();
     redirect(`/superadmin/dashboard?from=${today}&to=${today}`);
   }
 

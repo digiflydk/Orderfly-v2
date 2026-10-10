@@ -14,6 +14,7 @@ import {
 import type { SACommonFilters } from '@/types/superadmin'
 import { AdminDateRange } from '@/components/superadmin/admin-date-range'
 import { locationsAfterBrandChange } from '@/components/superadmin/filter-selection'
+import { analyticsToday } from '@/lib/analytics/date-range'
 
 type Brand = { id: string; name: string }
 type Location = { id: string; name: string; brandId: string }
@@ -27,7 +28,7 @@ type FiltersBarProps = {
   hideLocations?: boolean
 }
 
-const todayStr = () => new Date().toISOString().slice(0, 10)
+const todayStr = () => analyticsToday()
 
 export function FiltersBar({
   className,

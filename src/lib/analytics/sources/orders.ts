@@ -4,11 +4,12 @@
 import { listScopedDocuments } from '@/lib/access/scoped-data';
 import type { OrderDetail } from '@/types';
 import * as admin from 'firebase-admin';
+import { analyticsCalendarDay } from '@/lib/analytics/date-range';
 
 const COL_ORDERS = process.env.FS_COL_ORDERS || 'orders';
 interface PurchaseParams {
     startDate: Date;
-    endDate: Date;
+    endDateExclusive: Date;
     brandId?: string;
     locationId?: string;
     device?: 'all' | 'desktop' | 'mobile';
@@ -34,7 +35,7 @@ export interface PurchaseResult {
 export async function getPurchasesInRange(params: PurchaseParams): Promise<PurchaseResult[]> {
     const filters: Array<[string, any, any]> = [
       ['paidAt', '>=', admin.firestore.Timestamp.fromDate(params.startDate)],
-      ['paidAt', '<=', admin.firestore.Timestamp.fromDate(params.endDate)],
+      ['paidAt', '<', admin.firestore.Timestamp.fromDate(params.endDateExclusive)],
     ];
     if (params.brandId && params.brandId !== 'all') filters.push(['brandId', '==', params.brandId]);
     if (params.locationId && params.locationId !== 'all') filters.push(['locationId', '==', params.locationId]);
@@ -63,7 +64,7 @@ export async function getPurchasesInRange(params: PurchaseParams): Promise<Purch
         const device = order.analytics?.deviceType || 'unknown';
         const paid = order.paidAt as unknown as { toDate?: () => Date } | Date | string;
         const paidDate = typeof (paid as { toDate?: () => Date })?.toDate === 'function' ? (paid as { toDate: () => Date }).toDate() : new Date(paid as Date | string);
-        const date = Number.isFinite(paidDate.getTime()) ? paidDate.toISOString().slice(0, 10) : params.endDate.toISOString().slice(0, 10);
+        const date = Number.isFinite(paidDate.getTime()) ? analyticsCalendarDay(paidDate) : analyticsCalendarDay(new Date(params.endDateExclusive.getTime() - 1));
         if (params.device && params.device !== 'all' && device !== params.device) return;
         if (params.utmSource && source.toLowerCase() !== params.utmSource.toLowerCase()) return;
 
