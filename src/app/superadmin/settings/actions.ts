@@ -4,7 +4,7 @@
 
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
-import type { AnalyticsSettings, PaymentGatewaySettings, LanguageSettings, Brand, PlatformBrandingSettings } from '@/types';
+import type { PaymentGatewaySettings, LanguageSettings, PlatformBrandingSettings } from '@/types';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getActiveStripePublishableKey } from '@/lib/server/payment-settings';
@@ -17,7 +17,6 @@ const toNull = (v: unknown) => {
 	if (typeof v === 'string' && v.trim() === '') return null;
 	return v;
 };
-const trim = (v: unknown) => (typeof v === 'string' ? v.trim() : v);
 
 const UrlOrNull = z.preprocess(
 	toNull,
@@ -26,13 +25,6 @@ const UrlOrNull = z.preprocess(
 
 const brandingSchema = z.object({
 	platformLogoUrl: UrlOrNull,
-	platformFaviconUrl: UrlOrNull,
-	platformHeading: z.preprocess(trim, z.string().min(1, 'Browser heading is required')),
-});
-
-const analyticsSettingsSchema = z.object({
-	ga4TrackingId: z.string().regex(/^G-[A-Z0-9]{10}$/, { message: 'Invalid GA4 Tracking ID format (must be G-XXXXXXXXXX)' }).or(z.literal('')),
-	gtmContainerId: z.string().regex(/^GTM-[A-Z0-9]{7}$/, { message: 'Invalid GTM ID format (must be GTM-XXXXXXX)' }).optional().or(z.literal('')),
 });
 
 const paymentGatewaySettingsSchema = z.object({
@@ -92,46 +84,10 @@ const defaultLanguageSettings: LanguageSettings = {
 	supportedLanguages: [{ code: 'en', name: 'English' }, { code: 'da', name: 'Dansk' }],
 };
 
-const defaultAnalyticsSettings: AnalyticsSettings = { ga4TrackingId: '', gtmContainerId: '' };
 
 async function saveBranding(data: PlatformBrandingSettings) {
 	const settingsRef = getAdminDb().collection('platform_settings').doc('branding');
 	await settingsRef.set(data, { merge: true });
-}
-
-// Function to update analytics settings
-export async function updateAnalyticsSettings(
-	prevState: FormState | null,
-	formData: FormData
-): Promise<FormState> {
-	await requirePlatformSuperuser();
-	const rawData = {
-		ga4TrackingId: formData.get('ga4TrackingId'),
-		gtmContainerId: formData.get('gtmContainerId'),
-	};
-
-	const validatedFields = analyticsSettingsSchema.safeParse(rawData);
-
-	if (!validatedFields.success) {
-		const errorMessages = Object.entries(validatedFields.error.flatten().fieldErrors)
-			.map(([field, errors]) => `${field}: ${errors.join(', ')}`)
-			.join('; ');
-		return {
-			message: 'Validation failed: ' + errorMessages,
-			error: true,
-		};
-	}
-
-	try {
-		const settingsRef = getAdminDb().collection('platform_settings').doc('analytics');
-		await settingsRef.set(validatedFields.data);
-		revalidatePath('/superadmin/settings');
-		return { message: 'Analytics settings updated successfully.', error: false };
-	} catch (e) {
-		console.error(e);
-		const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
-		return { message: `Failed to update settings: ${errorMessage}`, error: true };
-	}
 }
 
 // Function to update payment gateway settings
@@ -213,8 +169,6 @@ export async function updateBrandingSettings(
 	await requirePlatformSuperuser();
 	const rawData = {
 		platformLogoUrl: formData.get('platformLogoUrl'),
-		platformFaviconUrl: formData.get('platformFaviconUrl'),
-		platformHeading: formData.get('platformHeading'),
 	};
 
 	const parsed = brandingSchema.safeParse(rawData);
@@ -230,7 +184,8 @@ export async function updateBrandingSettings(
 		await saveBranding(parsed.data);
 
 		revalidatePath('/superadmin/settings');
-		revalidatePath('/'); // Revalidate root layout for favicon/title changes
+		revalidatePath('/superadmin', 'layout');
+		revalidatePath('/merchant', 'layout');
 		return { message: 'Branding settings updated.', error: false };
 	} catch (e) {
 		const errorMessage = e instanceof Error ? e.message : 'An unknown error occurred.';
@@ -241,20 +196,15 @@ export async function updateBrandingSettings(
 
 // Function to get all settings
 export async function getPlatformSettings(): Promise<{
-	analyticsSettings: AnalyticsSettings;
 	paymentGatewaySettings: PaymentGatewaySettings;
 	languageSettings: LanguageSettings;
 	brandingSettings: PlatformBrandingSettings | null;
 }> {
 	await requirePlatformSuperuser();
-	const analyticsDoc = await getAdminDb().collection('platform_settings').doc('analytics').get();
 	const paymentDoc = await getAdminDb().collection('platform_settings').doc('payment_gateway').get();
 	const languagesDoc = await getAdminDb().collection('platform_settings').doc('languages').get();
 	const brandingSettings = await getPlatformBrandingSettings();
 
-	const analyticsSettings: AnalyticsSettings = analyticsDoc.exists
-		? (analyticsDoc.data() as AnalyticsSettings)
-		: defaultAnalyticsSettings;
 
 	const paymentGatewaySettings: PaymentGatewaySettings = paymentDoc.exists
 		? (paymentDoc.data() as PaymentGatewaySettings)
@@ -265,7 +215,6 @@ export async function getPlatformSettings(): Promise<{
 		: defaultLanguageSettings;
 
 	return {
-		analyticsSettings,
 		paymentGatewaySettings,
 		languageSettings,
 		brandingSettings,

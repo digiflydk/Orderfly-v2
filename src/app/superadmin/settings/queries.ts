@@ -18,11 +18,7 @@ export async function getPlatformBrandingSettings(): Promise<PlatformBrandingSet
 
     return {
       platformLogoUrl: raw?.platformLogoUrl ?? null,
-      platformFaviconUrl: raw?.platformFaviconUrl ?? null,
-      platformHeading:
-        typeof raw?.platformHeading === 'string' && raw.platformHeading.trim()
-          ? raw.platformHeading.trim()
-          : 'OrderFly',
+
     }
   } catch (err) {
     console.error('🔥 Error fetching branding settings:', err)

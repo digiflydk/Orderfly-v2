@@ -40,7 +40,6 @@ import {
   Settings as SettingsIcon,
   LayoutTemplate,
   ChevronDown,
-  FileText,
   Cookie,
   Gamepad2,
   TicketCheck,
@@ -180,7 +179,6 @@ export function SuperAdminSidebarClient({
       title: 'System',
       items: [
         { href: '/superadmin/settings/cookie-texts', label: 'Cookies', icon: Cookie },
-        { href: '/superadmin/docs', label: 'Documentation', icon: FileText },
         { href: '/superadmin/settings', label: 'Settings', icon: SettingsIcon },
       ],
     },

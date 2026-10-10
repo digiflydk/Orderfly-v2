@@ -45,7 +45,7 @@ function getOrCreateAnonId() {
   return id;
 }
 
-function CookieCategory({ title, description, checked, onCheckedChange, disabled = false }: { title: string, description: string, checked: boolean, onCheckedChange?: (checked: boolean) => void, disabled?: boolean }) {
+function CookieCategory({ title, description, checked, onCheckedChange, disabled = false, alwaysActive = 'Altid aktiv' }: { alwaysActive?: string; title: string, description: string, checked: boolean, onCheckedChange?: (checked: boolean) => void, disabled?: boolean }) {
     return (
         <div className="space-y-2">
             <div className="flex items-start justify-between">
@@ -53,7 +53,7 @@ function CookieCategory({ title, description, checked, onCheckedChange, disabled
                     <h4 className="font-semibold text-base">{title}</h4>
                 </div>
                 {disabled ? (
-                     <Badge variant="outline" className="text-green-600 border-green-600">Altid Aktiv</Badge>
+                     <Badge variant="outline" className="text-green-600 border-green-600">{alwaysActive}</Badge>
                 ) : (
                     <Switch
                         checked={checked}
@@ -196,7 +196,7 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
             <CardDescription>{texts.banner_description}</CardDescription>
           </CardHeader>
           <CardFooter className="flex-col sm:flex-row gap-2">
-            <Button className="w-full sm:w-auto" variant="outline" onClick={() => saveConsent({ necessary: true, functional: false, statistics: false, marketing: false, consent_version: texts.consent_version })}>Afvis valgfrie</Button>
+            <Button className="w-full sm:w-auto" variant="outline" onClick={() => saveConsent({ necessary: true, functional: false, statistics: false, marketing: false, consent_version: texts.consent_version })}>{texts.language === 'da' ? 'Afvis valgfrie' : 'Reject optional'}</Button>
             <Button className="w-full sm:w-auto" onClick={handleAcceptAll}>{texts.accept_all_button}</Button>
             <Button className="w-full sm:w-auto" variant="outline" onClick={handleCustomize}>{texts.customize_button}</Button>
           </CardFooter>
@@ -216,6 +216,7 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
                 description={compatCategories.necessary.description}
                 checked={true}
                 disabled
+                alwaysActive={texts.language === 'da' ? 'Altid aktiv' : 'Always active'}
              />
               <Separator />
                <CookieCategory

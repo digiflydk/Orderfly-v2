@@ -1,17 +1,12 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {loadTs}=require('../helpers/load-ts.cjs');
 class Reply extends Response {cookies={set:(name,value,options)=>{this.cookie={name,value,options};}};static json(value,init){return new Reply(JSON.stringify(value),init);}}
-for(const name of ['list','download','bundle'])test(`internal docs ${name} authorizes before file IO`,async()=>{
- let allowed=false,reads=0;
- const route=loadTs(`src/app/api/docs/${name}/route.ts`,{'server-only':{},'next/server':{NextResponse:Reply},'node:path':{default:require('node:path')},
+for(const suffix of ['docs/list','docs/download','docs/bundle','superadmin/docs/api-map','superadmin/docs/audit-settings','superadmin/docs/db-paths','superadmin/docs/db-structure','superadmin/docs/superadmin-dump'])test(`retired ${suffix} export denies unauthorized access and returns 410 without IO`,async()=>{
+ let allowed=false;
+ const route=loadTs(`src/app/api/${suffix}/route.ts`,{'next/server':{NextResponse:Reply},
   '@/lib/auth/superadmin-api':{requireSuperadminApi:async()=>allowed?null:Reply.json({error:'forbidden'},{status:403})},
-  '@/lib/docs/whitelist':{DOC_WHITELIST:['security.md'],DOCS_DIR:'docs',isAllowedDoc:name=>name==='security.md'},
-  'node:fs/promises':{readFile:async()=>{reads++;return 'private fixture';}},
  });
- const req=()=>new Request('https://fixture.test/?name=security.md');
- assert.equal((await route.GET(req())).status,403);assert.equal(reads,0);
- allowed=true;assert.equal((await route.GET(req())).status,200);assert.equal(reads,name==='list'?0:1);
- if(name==='download')assert.equal((await route.GET(new Request('https://fixture.test/?name=../secret'))).status,400);
+ assert.equal((await route.GET()).status,403);allowed=true;assert.equal((await route.GET()).status,410);
 });
 function consentFixture(){
  let cookie;const records=new Map([['brands/b',{isActive:true}],['anonymous_cookie_consents/11111111-1111-4111-8111-111111111111',{marketing:false,linked_to_customer:true}]]);

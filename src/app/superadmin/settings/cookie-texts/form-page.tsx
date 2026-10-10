@@ -3,6 +3,7 @@
 'use client';
 
 import { z } from 'zod';
+import { APP_VERSION, mergeCookieTexts } from '@/lib/cookie-texts';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { useEffect, useTransition } from 'react';
@@ -35,10 +36,10 @@ const textsSchema = z.object({
   cat_necessary_desc: z.string().min(1),
   cat_functional_title: z.string().min(1),
   cat_functional_desc: z.string().min(1),
-  cat_analytics_title: z.string().min(1),
-  cat_analytics_desc: z.string().min(1),
-  cat_performance_title: z.string().min(1),
-  cat_performance_desc: z.string().min(1),
+  cat_statistics_title: z.string().min(1),
+  cat_statistics_desc: z.string().min(1),
+  cat_marketing_title: z.string().min(1),
+  cat_marketing_desc: z.string().min(1),
 });
 
 type TextsFormValues = z.infer<typeof textsSchema>;
@@ -57,18 +58,19 @@ export function CookieTextsFormPage({ textSet, brands, supportedLanguages }: Coo
     resolver: zodResolver(textsSchema),
     defaultValues: {
       language: 'da',
-      brand_id: '',
+      brand_id: 'global',
       banner_title: '', banner_description: '', accept_all_button: '', customize_button: '',
       modal_title: '', modal_description: '', save_preferences_button: '', modal_accept_all_button: '',
       cat_necessary_title: '', cat_necessary_desc: '',
       cat_functional_title: '', cat_functional_desc: '',
-      cat_analytics_title: '', cat_analytics_desc: '',
-      cat_performance_title: '', cat_performance_desc: '',
+      cat_statistics_title: '', cat_statistics_desc: '',
+      cat_marketing_title: '', cat_marketing_desc: '',
     },
   });
 
   useEffect(() => {
     if (textSet) {
+      const texts = mergeCookieTexts(textSet, textSet.language);
       form.reset({
         language: textSet.language,
         brand_id: textSet.brand_id || 'global',
@@ -80,14 +82,14 @@ export function CookieTextsFormPage({ textSet, brands, supportedLanguages }: Coo
         modal_description: textSet.modal_description,
         save_preferences_button: textSet.save_preferences_button,
         modal_accept_all_button: textSet.modal_accept_all_button,
-        cat_necessary_title: textSet.categories.necessary.title,
-        cat_necessary_desc: textSet.categories.necessary.description,
-        cat_functional_title: textSet.categories.functional.title,
-        cat_functional_desc: textSet.categories.functional.description,
-        cat_analytics_title: textSet.categories.analytics.title,
-        cat_analytics_desc: textSet.categories.analytics.description,
-        cat_performance_title: textSet.categories.performance?.title || '',
-        cat_performance_desc: textSet.categories.performance?.description || '',
+        cat_necessary_title: texts.categories.necessary.title,
+        cat_necessary_desc: texts.categories.necessary.description,
+        cat_functional_title: texts.categories.functional.title,
+        cat_functional_desc: texts.categories.functional.description,
+        cat_statistics_title: texts.categories.statistics.title,
+        cat_statistics_desc: texts.categories.statistics.description,
+        cat_marketing_title: texts.categories.marketing?.title || '',
+        cat_marketing_desc: texts.categories.marketing?.description || '',
       });
     }
   }, [textSet, form]);
@@ -96,7 +98,7 @@ export function CookieTextsFormPage({ textSet, brands, supportedLanguages }: Coo
     const formData = new FormData();
     if(textSet?.id) formData.append('id', textSet.id);
     
-    formData.append('consent_version', "1.0.59");
+    formData.append('consent_version', APP_VERSION);
 
     // Flatten the data for FormData
     formData.append('language', data.language);
@@ -115,18 +117,19 @@ export function CookieTextsFormPage({ textSet, brands, supportedLanguages }: Coo
     formData.append('cat_necessary_desc', data.cat_necessary_desc);
     formData.append('cat_functional_title', data.cat_functional_title);
     formData.append('cat_functional_desc', data.cat_functional_desc);
-    formData.append('cat_analytics_title', data.cat_analytics_title);
-    formData.append('cat_analytics_desc', data.cat_analytics_desc);
-    formData.append('cat_performance_title', data.cat_performance_title);
-    formData.append('cat_performance_desc', data.cat_performance_desc);
+    formData.append('cat_statistics_title', data.cat_statistics_title);
+    formData.append('cat_statistics_desc', data.cat_statistics_desc);
+    formData.append('cat_marketing_title', data.cat_marketing_title);
+    formData.append('cat_marketing_desc', data.cat_marketing_desc);
     
     startTransition(async () => {
-        await createOrUpdateCookieTexts(formData);
+        const result = await createOrUpdateCookieTexts(formData);
+        if (result && 'error' in result) toast({ variant: 'destructive', title: 'Could not save', description: result.error });
     });
   });
 
   const title = textSet ? 'Edit Cookie Texts' : 'Create New Cookie Texts';
-  const description = textSet ? `Editing texts for version ${textSet.consent_version}` : `Creating new texts for version 1.0.59`;
+  const description = `Texts will be saved for the active consent version ${APP_VERSION}.`;
 
 
   return (
@@ -168,39 +171,39 @@ export function CookieTextsFormPage({ textSet, brands, supportedLanguages }: Coo
             <Separator />
             <h3 className="text-lg font-semibold">Banner Texts</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={form.control} name="banner_title" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-                <FormField control={form.control} name="banner_description" render={({ field }) => (<FormItem><FormLabel>Description</FormLabel><FormControl><Textarea {...field} /></FormControl></FormItem>)} />
-                <FormField control={form.control} name="accept_all_button" render={({ field }) => (<FormItem><FormLabel>Accept All Button</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-                <FormField control={form.control} name="customize_button" render={({ field }) => (<FormItem><FormLabel>Customize Button</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+                <FormField control={form.control} name="banner_title" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="banner_description" render={({ field }) => (<FormItem><FormLabel>Description</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="accept_all_button" render={({ field }) => (<FormItem><FormLabel>Accept All Button</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="customize_button" render={({ field }) => (<FormItem><FormLabel>Customize Button</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             </div>
 
             <Separator />
             <h3 className="text-lg font-semibold">Modal Texts</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <FormField control={form.control} name="modal_title" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-                <FormField control={form.control} name="modal_description" render={({ field }) => (<FormItem><FormLabel>Description</FormLabel><FormControl><Textarea {...field} /></FormControl></FormItem>)} />
-                <FormField control={form.control} name="save_preferences_button" render={({ field }) => (<FormItem><FormLabel>Save Button</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-                <FormField control={form.control} name="modal_accept_all_button" render={({ field }) => (<FormItem><FormLabel>Accept All Button</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
+                <FormField control={form.control} name="modal_title" render={({ field }) => (<FormItem><FormLabel>Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="modal_description" render={({ field }) => (<FormItem><FormLabel>Description</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="save_preferences_button" render={({ field }) => (<FormItem><FormLabel>Save Button</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                <FormField control={form.control} name="modal_accept_all_button" render={({ field }) => (<FormItem><FormLabel>Accept All Button</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
             </div>
             
             <Separator />
             <h3 className="text-lg font-semibold">Category Texts</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <div className="space-y-4 p-4 border rounded-md">
-                    <FormField control={form.control} name="cat_necessary_title" render={({ field }) => (<FormItem><FormLabel>Necessary: Title</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-                    <FormField control={form.control} name="cat_necessary_desc" render={({ field }) => (<FormItem><FormLabel>Necessary: Description</FormLabel><FormControl><Textarea {...field} /></FormControl></FormItem>)} />
+                    <FormField control={form.control} name="cat_necessary_title" render={({ field }) => (<FormItem><FormLabel>Necessary: Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="cat_necessary_desc" render={({ field }) => (<FormItem><FormLabel>Necessary: Description</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
                  <div className="space-y-4 p-4 border rounded-md">
-                    <FormField control={form.control} name="cat_functional_title" render={({ field }) => (<FormItem><FormLabel>Functional: Title</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-                    <FormField control={form.control} name="cat_functional_desc" render={({ field }) => (<FormItem><FormLabel>Functional: Description</FormLabel><FormControl><Textarea {...field} /></FormControl></FormItem>)} />
+                    <FormField control={form.control} name="cat_functional_title" render={({ field }) => (<FormItem><FormLabel>Functional: Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="cat_functional_desc" render={({ field }) => (<FormItem><FormLabel>Functional: Description</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
                  <div className="space-y-4 p-4 border rounded-md">
-                    <FormField control={form.control} name="cat_analytics_title" render={({ field }) => (<FormItem><FormLabel>Analytics: Title</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-                    <FormField control={form.control} name="cat_analytics_desc" render={({ field }) => (<FormItem><FormLabel>Analytics: Description</FormLabel><FormControl><Textarea {...field} /></FormControl></FormItem>)} />
+                    <FormField control={form.control} name="cat_statistics_title" render={({ field }) => (<FormItem><FormLabel>Statistics: Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="cat_statistics_desc" render={({ field }) => (<FormItem><FormLabel>Statistics: Description</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
                  <div className="space-y-4 p-4 border rounded-md">
-                    <FormField control={form.control} name="cat_performance_title" render={({ field }) => (<FormItem><FormLabel>Performance: Title</FormLabel><FormControl><Input {...field} /></FormControl></FormItem>)} />
-                    <FormField control={form.control} name="cat_performance_desc" render={({ field }) => (<FormItem><FormLabel>Performance: Description</FormLabel><FormControl><Textarea {...field} /></FormControl></FormItem>)} />
+                    <FormField control={form.control} name="cat_marketing_title" render={({ field }) => (<FormItem><FormLabel>Marketing: Title</FormLabel><FormControl><Input {...field} /></FormControl><FormMessage /></FormItem>)} />
+                    <FormField control={form.control} name="cat_marketing_desc" render={({ field }) => (<FormItem><FormLabel>Marketing: Description</FormLabel><FormControl><Textarea {...field} /></FormControl><FormMessage /></FormItem>)} />
                 </div>
             </div>
           </form>

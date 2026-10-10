@@ -570,10 +570,6 @@ export type Upsell = {
  * @description Platform-wide Google Analytics settings.
  * @collection platform_settings/analytics
  */
-export type AnalyticsSettings = {
-  ga4TrackingId: string;
-  gtmContainerId: string;
-};
 
 /**
  * @description Platform-wide payment gateway (Stripe) settings.
@@ -611,8 +607,6 @@ export type LanguageSettings = {
  */
 export type PlatformBrandingSettings = {
   platformLogoUrl?: string | null;
-  platformFaviconUrl?: string | null;
-  platformHeading: string;
 };
 
 
@@ -779,7 +773,7 @@ export type CookieTexts = {
     functional: { title: string; description: string };
     analytics: { title: string; description: string };
     statistics: { title: string; description: string };
-    performance: { title: string; description: string };
+    performance?: { title: string; description: string };
     marketing: { title: string; description: string };
   };
   last_updated: Date;
