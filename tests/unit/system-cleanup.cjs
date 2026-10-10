@@ -99,13 +99,29 @@ test('global metadata backfill is preview-first, preserves all text and is idemp
  const rows=new Map([['global',{language:'da-DK',banner_title:'Keep custom text',consent_version:'old'}],['brand',{brand_id:'b',language:'da',banner_title:'Brand'}]]);
  const snap=id=>({id,exists:rows.has(id),data:()=>({...rows.get(id)})});
  const db={collection:()=>({get:async()=>({docs:[...rows.keys()].map(snap)}),doc:id=>id}),runTransaction:async run=>run({get:async id=>snap(id),update:(id,value)=>rows.set(id,{...rows.get(id),...value})})};
- const before=structuredClone(rows);assert.equal((await backfill(db)).pending,1);assert.deepEqual(rows,before);
- assert.deepEqual((await backfill(db,true)).recordIds,['global']);assert.deepEqual(rows.get('global'),{...before.get('global'),global_locale_key:'da-dk'});assert.deepEqual(rows.get('brand'),before.get('brand'));
+ const before=structuredClone(rows),preview=await backfill(db);assert.equal(preview.pending,1);assert.deepEqual(rows,before);
+ assert.deepEqual((await backfill(db,true,preview.manifest)).recordIds,['global']);assert.deepEqual(rows.get('global'),{...before.get('global'),global_locale_key:'da-dk'});assert.deepEqual(rows.get('brand'),before.get('brand'));
  assert.equal((await backfill(db)).pending,0);
 });
 test('backfill aborts before writes for invalid locales and rechecks concurrent scope changes',async()=>{
  const {backfill}=require('../../scripts/backfill-global-cookie-index.cjs');let writes=0;
  const db={collection:()=>({get:async()=>({docs:[{id:'global',data:()=>({language:'da'})}]}),doc:id=>id}),runTransaction:async run=>run({get:async()=>({exists:true,data:()=>({brand_id:'now-brand',language:'da'})}),update:()=>writes++})};
- await assert.rejects(backfill(db,true),/scope changed/);assert.equal(writes,0);
+ await assert.rejects(backfill(db,true,(await backfill(db)).manifest),/scope changed/);assert.equal(writes,0);
  const invalid={collection:()=>({get:async()=>({docs:[{id:'bad',data:()=>({language:'invalid'})}]})})};await assert.rejects(backfill(invalid,true),/invalid language/);
+});
+
+test('backfill requires the exact reviewed set before writing',async()=>{
+ const {backfill}=require('../../scripts/backfill-global-cookie-index.cjs');
+ for(const change of ['added','removed','changed','version','missing']){
+  const rows=new Map([['global',{language:'da',banner_title:'Reviewed'}]]);let writes=0,version=1;
+  const snap=id=>({id,exists:rows.has(id),data:()=>({...rows.get(id)}),...(change==='version'?{updateTime:{seconds:version,nanoseconds:0}}:{})});
+  const db={collection:()=>({get:async()=>({docs:[...rows.keys()].map(snap)}),doc:id=>id}),runTransaction:async()=>{writes++;}};
+  const preview=await backfill(db);
+  if(change==='added')rows.set('new',{language:'en'});
+  if(change==='removed')rows.delete('global');
+  if(change==='changed')rows.get('global').banner_title='Unreviewed';
+  if(change==='version')version++;
+  await assert.rejects(backfill(db,true,change==='missing'?undefined:preview.manifest),/manifest missing or records changed/);
+  assert.equal(writes,0);
+ }
 });

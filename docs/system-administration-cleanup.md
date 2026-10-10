@@ -2,7 +2,7 @@
 
 ## Scope and retained behavior
 
-System contains Cookies and Settings. Settings retains the administrator logo, Stripe payment gateway, languages and a link to cookie text administration. Brand tracking remains configured on each brand and consent continues to control optional tracking. No Firestore records or payment credentials are migrated or deleted by this release.
+System contains Cookies and Settings. Settings retains the administrator logo, Stripe payment gateway, languages and a link to cookie text administration. Brand tracking remains configured on each brand and consent continues to control optional tracking. No Firestore records are deleted and no payment credentials are changed. The required pre-release metadata backfill is described below.
 
 Removed: the developer Documentation UI, dedicated documentation exports, unused platform Analytics action/form/read, inactive favicon/browser-heading fields and duplicate Settings/cookie forms. Repository documentation under `docs/` and `developer/docs/` remains available. The checked-in favicon and route metadata continue to define the favicon and page titles. Logo writes merge only the logo field, preserving legacy stored fields.
 
@@ -27,9 +27,9 @@ Unit tests exercise forbidden reads/writes before IO, global scope transitions, 
 Do not merge or deploy this version until existing global text records have been indexed. In a trusted operator environment with the existing Firebase service account, run:
 
 ```sh
-node scripts/backfill-global-cookie-index.cjs --project orderfly-39325
-node scripts/backfill-global-cookie-index.cjs --project orderfly-39325 --apply
+node scripts/backfill-global-cookie-index.cjs --project orderfly-39325 --manifest /tmp/orderfly-cookie-index.json
+node scripts/backfill-global-cookie-index.cjs --project orderfly-39325 --apply --manifest /tmp/orderfly-cookie-index.json
 node scripts/backfill-global-cookie-index.cjs --project orderfly-39325
 ```
 
-The first and last commands are read-only previews. Review the proposed record IDs and require the final preview to report zero pending updates. The script only adds `global_locale_key` to records without a brand, never changes text/version/language/consent data and rechecks scope in a transaction before each update. Invalid languages fail the preview; a concurrently changed record aborts apply and requires another preview. Existing live code ignores this new metadata, so the backfill is compatible before merge. No service credentials belong in git or chat. This migration has not been executed from the development workspace, which has no Firebase Admin credentials.
+The first and last commands are read-only previews. Review the proposed record IDs and the saved manifest before running apply with that same file. The manifest contains only record IDs, locale keys and version fingerprints, not text or credentials. Preview refuses to overwrite an existing manifest; use a new filename for a new review. Apply rejects added, removed or changed pending records before any writes, and checks each reviewed record again inside its transaction. Require the final preview to report zero pending updates. The script only adds `global_locale_key` to records without a brand, never changes text/version/language/consent data and rechecks scope in a transaction before each update. Invalid languages fail the preview; a concurrently changed record aborts apply and requires another preview. If a later record changes during apply, earlier metadata updates may already have completed; rerun preview with a new manifest filename and review the remaining updates. Existing live code ignores this new metadata, so the backfill is compatible before merge. No service credentials belong in git or chat. This migration has not been executed from the development workspace, which has no Firebase Admin credentials.
