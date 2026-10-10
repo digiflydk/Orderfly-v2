@@ -219,7 +219,7 @@ export function SuperAdminSidebarClient({
               height={36}
               priority
               style={{ width: '85%', height: 'auto' }}
-              className="max-h-14 object-contain object-left"
+              className="object-contain object-left"
             />
           </div>
         </div>
