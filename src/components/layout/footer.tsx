@@ -11,7 +11,6 @@ interface FooterProps {
   location?: Location;
   onOpenCookieSettings?: () => void;
   version?: string;
-  theme?: any;
 }
 
 export function Footer({ brand, location, onOpenCookieSettings, version }: FooterProps) {

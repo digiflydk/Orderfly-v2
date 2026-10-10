@@ -37,18 +37,10 @@ import {
   BarChart3,
   CreditCard,
   Bookmark,
-  Globe,
   Settings as SettingsIcon,
   LayoutTemplate,
   ChevronDown,
   FileText,
-  Palette,
-  UserPlus,
-  SlidersHorizontal,
-  Sparkles,
-  Search,
-  Share2,
-  Activity,
   Cookie,
   Gamepad2,
   TicketCheck,
@@ -192,39 +184,18 @@ export function SuperAdminSidebarClient({
       ]
     },
     {
-      key: 'website',
-      title: 'Orderfly Website',
-      items: [
-        { href: '/superadmin/website/pages', label: 'Pages', icon: FileText },
-        { href: '/superadmin/website/design', label: 'Design', icon: Palette },
-        { href: '/superadmin/website/leads', label: 'Customer Leads', icon: UserPlus },
-        { href: '/superadmin/website/customers', label: 'Customers', icon: Users },
-        { 
-            label: 'Settings', 
-            icon: SettingsIcon, 
-            children: [
-                { href: '/superadmin/website/settings/general', label: 'General', icon: SlidersHorizontal },
-                { href: '/superadmin/website/settings/ai', label: 'AI Prompt', icon: Sparkles },
-                { href: '/superadmin/website/settings/seo', label: 'SEO', icon: Search },
-                { href: '/superadmin/website/settings/social', label: 'Social Share', icon: Share2 },
-                { href: '/superadmin/website/settings/tracking', label: 'Tracking', icon: Activity },
-                { href: '/superadmin/website/settings/cookie-texts', label: 'Cookies', icon: Cookie },
-            ]
-        },
-      ],
-    },
-    {
       key: 'system',
       title: 'System',
       items: [
-        { href: '/superadmin/settings', label: 'Settings', icon: SettingsIcon },
+        { href: '/superadmin/settings/cookie-texts', label: 'Cookies', icon: Cookie },
         { href: '/superadmin/docs', label: 'Documentation', icon: FileText },
+        { href: '/superadmin/settings', label: 'Settings', icon: SettingsIcon },
       ],
     },
   ]
 
   const candidateGroups: Group[] = (centralAdmin ? allGroups.filter(g => g.key !== 'people').map(g => g.key === 'billing' ? {...g, items:g.items.filter(i => i.href !== '/superadmin/subscriptions')} : g).concat([{key:'platform', title:'Platform', items:[{label:'Brugere og roller · mPanel',href:'https://www.esmeraldapizza.dk/mpanel#platform',icon:Users}]}]) : allGroups)
-    .filter(g => !merchantPortal || !['people','billing','system','website','platform'].includes(g.key))
+    .filter(g => !merchantPortal || !['people','billing','system','platform'].includes(g.key))
     .map(g => ({...g, items:g.items.filter(i => (!['/merchant/redeem','/merchant/payments'].includes(i.href || '') || merchantPortal) && (!merchantPortal || i.href !== '/superadmin/loyalty'))}));
 
   const groups: Group[] = candidateGroups.map(group => ({...group, items: filterNavigation(group.items, access)})).filter(group => group.items.length > 0);
@@ -240,7 +211,6 @@ export function SuperAdminSidebarClient({
       insights: true,
       billing: false,
       brand_website: true,
-      website: true,
       system: true,
     }
     groups.forEach((g) => {

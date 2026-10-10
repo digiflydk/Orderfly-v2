@@ -37,7 +37,7 @@ flowchart LR
 
 ## Brand Website consolidation (OF-221)
 
-Brand Website is the standard takeaway storefront. The old page builder and mock M3 variants are retired. See [scope, paths, compatibility and validation](standard-takeaway-website.md). Native ordering, brand appearances, games and Orderfly Website remain.
+Brand Website is the standard takeaway storefront. The old page builder and mock M3 variants are retired. See [scope, paths, compatibility and validation](standard-takeaway-website.md). Native ordering, brand appearances and games remain. The separate Orderfly Website marketing CMS is retired; see [cleanup and compatibility](orderfly-website-cleanup.md).
 
 ## Core Flows
 

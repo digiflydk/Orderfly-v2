@@ -2,12 +2,9 @@
 'use client';
 
 import { usePathname } from 'next/navigation';
-import type { Brand, Location, GeneralSettings } from '@/types';
+import type { Brand, Location } from '@/types';
 import { CookieConsent } from '@/components/cookie-consent';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { useEffect } from 'react';
-import { useCart } from '@/context/cart-context';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { MenuHeader } from '@/components/layout/menu-header';
@@ -16,12 +13,10 @@ export function BrandLayoutClient({
   children,
   brand,
   location,
-  settings,
 }: {
   children: React.ReactNode;
   brand: Brand | null;
   location?: Location | null;
-  settings?: GeneralSettings | null;
 }) {
   const pathname = usePathname();
   const [isCookieModalOpen, setIsCookieModalOpen] = useState(false);
@@ -46,7 +41,7 @@ export function BrandLayoutClient({
       <div
         className="flex flex-col min-h-screen"
       >
-        {showGlobalHeader && <Header brand={brand} settings={settings || null} />}
+        {showGlobalHeader && <Header brand={brand} />}
         {showMenuHeader && <MenuHeader brand={brand} />}
         <Content className="flex-1 w-full">
             {children}

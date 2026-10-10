@@ -21,7 +21,7 @@ All functions are commercially available during freemium. Subscription plans and
 | Orderfly order list | Queries are restricted to granted brands and native-owned locations. |
 | Orderfly order detail | Checks `orderfly.orders:view` for the stored brand/location before returning the detail. |
 | Orderfly order status | Checks `orderfly.orders:edit`; transaction rejects changed ownership and preserves payment requirements. |
-| Orderfly brand website CMS | Config, home, menu and page operations use explicit `orderfly.website` view/create/edit/delete permissions for the brand. Internal audit/storage helpers are no longer exposed Server Actions. |
+| Orderfly websites | Legacy Brand Website and Orderfly Website marketing editors are retired. Native storefront overview requires scoped `orderfly.website:view`; games still use website permissions. Marketing compatibility redirects and platform cookie settings require platform-superuser access. |
 | Orderfly existing global permission checks/API helpers | Require verified central superuser instead of an always-allow placeholder. |
 | Opsfly shared customer API | Uses current company-wide `opsfly.customers:view`, or `edit` for backfill, after native session and active organization verification. Native admin role alone is insufficient. |
 | Orderfly products | Scoped create/edit/delete/copy/reorder and list/detail. Writes recheck current policy, old ownership and resulting ownership in the same transaction. Legacy product mutations delegate to these actions. |

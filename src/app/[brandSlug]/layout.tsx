@@ -6,7 +6,6 @@ import { AnalyticsProvider } from '@/context/analytics-context';
 import DeliveryModalHost from './deliverymodalhost';
 import { resolveParams } from '@/lib/next/resolve-props';
 import { BrandLayoutClient } from './layout-client';
-import { getStorefrontSettings as getGeneralSettings } from '@/services/settings';
 import { isAdminReady } from '@/lib/runtime';
 import { BrandTracking } from '@/components/brand-tracking';
 
@@ -28,7 +27,7 @@ export default async function BrandLayout({
   }
   
   // Fetch data on the server. The client component will handle nulls gracefully.
-  const [brand, settings] = await Promise.all([getBrandBySlug(brandSlug), getGeneralSettings()]);
+  const brand = await getBrandBySlug(brandSlug);
   
   if (!brand) {
     notFound();
@@ -51,7 +50,7 @@ export default async function BrandLayout({
             } as React.CSSProperties
           }
         >
-          <BrandLayoutClient brand={brand} settings={settings}>
+          <BrandLayoutClient brand={brand}>
             {children}
           </BrandLayoutClient>
         </div>

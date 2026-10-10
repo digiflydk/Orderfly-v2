@@ -39,7 +39,7 @@ test('consent rejects cross-origin, unknown brand and invalid shape without writ
  assert.deepEqual(f.records,before);
 });
 test('stale browser upsell action cannot touch Admin SDK',async()=>{
- const api=loadTs('src/app/superadmin/upsells/actions.ts',{'@/lib/access/orderfly-session':{},'@/lib/access/scoped-data':{},'@/lib/access/location-catalog':{},'@/lib/promotion-rules':{},'@/lib/upsell-serialization':{},'next/cache':{},'next/navigation':{},'../products/actions':{},'@/lib/firebase-admin':{getAdminDb:()=>{throw Error('unexpected write');}}});
+ const api=loadTs('src/app/superadmin/upsells/actions.ts',{'server-only':{},'@/lib/access/orderfly-session':{},'@/lib/access/scoped-data':{},'@/lib/access/location-catalog':{},'@/lib/promotion-rules':{},'@/lib/upsell-serialization':{},'next/cache':{},'next/navigation':{},'../products/actions':{},'@/lib/firebase-admin':{getAdminDb:()=>{throw Error('unexpected write');}}});
  assert.deepEqual(await api.incrementUpsellConversion('foreign'),{success:false});
 });
 test('claimed upsell is accepted only when native offer scope, product and trigger match',()=>{
@@ -52,9 +52,22 @@ test('claimed upsell is accepted only when native offer scope, product and trigg
  for(const change of [{brandId:'foreign'},{locationIds:['foreign']},{offerProductIds:['foreign']},{triggerConditions:[]},{isActive:false}])assert.deepEqual(validateCheckoutPrices(items,catalog,[],[{...offer,...change}],scope),[]);
  assert.deepEqual(validateCheckoutPrices(items,catalog,[],[],scope),[]);
 });
-test('public website projection excludes internal AI prompts and future private fields',()=>{
- const {publicGeneralSettings}=loadTs('src/lib/public-general-settings.ts');
- assert.deepEqual(publicGeneralSettings({websiteTitle:'Fixture',logoUrl:'/logo.png',aiSystemPrompt:'private',aiSystemPromptOpenAI:'private',aiProvider:'openai',aiModel:'private',futureSecret:'private'}),{websiteTitle:'Fixture',logoUrl:'/logo.png'});
+test('retired marketing editor authorizes before redirecting, including cookie compatibility',async()=>{
+ let allowed=false;const redirects=[];
+ const page=loadTs('src/app/superadmin/website/[[...section]]/page.tsx',{
+  '@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>{if(!allowed)throw Error('forbidden');}},
+  'next/navigation':{redirect:href=>{redirects.push(href);throw Error('redirect');}},
+ }).default;
+ await assert.rejects(page({params:Promise.resolve({section:['settings','cookie-texts']})}),/forbidden/);
+ assert.deepEqual(redirects,[]);allowed=true;
+ for(const section of [undefined,['pages','home'],['settings','cookie-texts'],['settings','cookie-texts','unknown']]) {
+  await assert.rejects(page({params:Promise.resolve({section})}),/redirect/);
+ }
+ assert.deepEqual(redirects,['/superadmin/settings','/superadmin/settings','/superadmin/settings/cookie-texts','/superadmin/settings']);
+});
+for(const route of ['features','pricing','contact'])test(`retired ${route} marketing page redirects without reading CMS data`,()=>{
+ const page=loadTs(`src/app/(public)/${route}/page.tsx`,{'next/navigation':{redirect:href=>{assert.equal(href,'/');throw Error('redirect');}}}).default;
+ assert.throws(()=>page(),/redirect/);
 });
 
 test('older consent request cannot reverse a newer withdrawal at the database',async()=>{

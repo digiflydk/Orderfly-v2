@@ -1,9 +1,6 @@
+import { redirect } from 'next/navigation';
 
-import FeaturesClient from './FeaturesClient';
-
-export const dynamic = 'force-dynamic';
-export const revalidate = 0;
-
-export default function FeaturesPage() {
-  return <FeaturesClient />;
+// The retired marketing site is replaced by the standard takeaway entry point.
+export default function RetiredMarketingPage() {
+  redirect('/');
 }

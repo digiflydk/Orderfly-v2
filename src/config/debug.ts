@@ -8,11 +8,7 @@ export const DEBUG_COLLECTIONS = [
   "orders",
   "customers",
   "feedback",
-  "settings",
-  "settings/general",
-  "website/header",
-  "website/footer",
-  "website/sections"
+  "settings"
 ];
 export const DEBUG_MASK_FIELDS = [
   "email","phone","address","token","payment","card","password","secret","apiKey","session"
