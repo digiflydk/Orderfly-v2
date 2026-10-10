@@ -8,4 +8,4 @@ Example categories:
 - Restaurant admin API
 - Superadmin API
 
-For the exact list and methods, see the JSON response from `/api/superadmin/docs/api-map`.
+The former `/api/superadmin/docs/api-map` export is retired (410 after authorization). Consult `docs/api-overview.md`, `src/app/api/` and the maintained OpenAPI specification in `src/lib/openapi/spec.ts`.

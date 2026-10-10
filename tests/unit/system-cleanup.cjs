@@ -50,7 +50,7 @@ test('old documentation bookmark requires authorization before redirecting',asyn
 });
 test('public cookie API prefers brand text, falls back to global and localizes absent rows',async()=>{
  let rows=[];
- const query={where:()=>query,get:async()=>({docs:rows.map(row=>({data:()=>row}))})};
+ const query={where:()=>query,get:async()=>({docs:rows.map(row=>({data:()=>({consent_version:texts.APP_VERSION,...row})}))})};
  const api=loadTs('src/app/api/public/cookie-texts/route.ts',{'@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>query})},'next/cache':{unstable_cache:fn=>fn}});
  const read=async(language='da')=>(await api.GET(new Request('https://fixture.test/?brandId=brand&language='+language))).json();
  rows=[{language:'da',banner_title:'Global'},{language:'da',brand_id:'brand',banner_title:'Brand'}];assert.equal((await read()).banner_title,'Brand');
@@ -74,8 +74,18 @@ test('regional language codes save and duplicate target scope is rejected withou
 });
 test('regional public locale selects existing regional text before base-language fallback',async()=>{
  let rows=[{language:'en',banner_title:'Base'},{language:'en-US',banner_title:'Regional'}];
- const query={where:()=>query,get:async()=>({docs:rows.map(row=>({data:()=>row}))})};
+ const query={where:()=>query,get:async()=>({docs:rows.map(row=>({data:()=>({consent_version:texts.APP_VERSION,...row})}))})};
  const api=loadTs('src/app/api/public/cookie-texts/route.ts',{'@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>query})},'next/cache':{unstable_cache:fn=>fn}});
  const read=async()=>(await api.GET(new Request('https://fixture.test/?brandId=brand&language=en-US'))).json();
  assert.equal((await read()).banner_title,'Regional');rows=rows.slice(0,1);assert.equal((await read()).banner_title,'Base');
+});
+
+test('brand query is scoped and legacy global locale lookup is shared across brands',async()=>{
+ const calls=[];
+ const query={where:(field,op,value)=>{calls.push({field,op,value});return{get:async()=>({docs:[]})};}};
+ const api=loadTs('src/app/api/public/cookie-texts/route.ts',{'@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>query})},
+  'next/cache':{unstable_cache:fn=>{const cache=new Map();return(...args)=>{const key=JSON.stringify(args);if(!cache.has(key))cache.set(key,fn(...args));return cache.get(key);};}}});
+ for(const brand of ['first','second'])await api.GET(new Request('https://fixture.test/?brandId='+brand+'&language=en-US'));
+ assert.deepEqual(calls.filter(x=>x.field==='brand_id').map(x=>x.value),['first','second']);
+ const globals=calls.filter(x=>x.field==='language');assert.equal(globals.length,1);assert.equal(globals[0].op,'in');assert.ok(globals[0].value.includes('en-US'));assert.ok(globals[0].value.includes('en'));assert.ok(globals[0].value.length<=20);
 });

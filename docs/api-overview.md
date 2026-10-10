@@ -6,7 +6,7 @@
 | /superadmin/products/edit/:id | POST (Action) | ProductFormPage | createOrUpdateProduct | products | Redirect |
 | /superadmin/feedback/questions/new | POST (Action) | FeedbackQuestionVersionForm | createOrUpdateQuestionVersion | feedbackQuestionsVersion | Redirect |
 | /api/debug/all | GET | Manual/ops | route.ts | settings/*, cms/*, etc. | { ok, data, timestamp } |
-| /api/docs/download | GET | Manual/ops | route.ts | - | File download |
+| /api/docs/download | GET | Retired | route.ts | Superadmin | 410; use repository docs |
 
 **Server Actions**
 - `createOrUpdateProduct(formData)` → Redirects on success, throws on error.

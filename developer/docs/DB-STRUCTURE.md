@@ -9,4 +9,4 @@ Top level collection:
 - `products` (global)
 - `orders` (global)
 
-For the full schema, see `/api/superadmin/docs/db-structure`.
+The former `/api/superadmin/docs/db-structure` export is retired (410 after authorization). Consult `docs/firestore-schema.md` and `docs/firestore-collections-overview.md` in the repository.
