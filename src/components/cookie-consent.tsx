@@ -196,7 +196,7 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
             <CardDescription>{texts.banner_description}</CardDescription>
           </CardHeader>
           <CardFooter className="flex-col sm:flex-row gap-2">
-            <Button className="w-full sm:w-auto" variant="outline" onClick={() => saveConsent({ necessary: true, functional: false, statistics: false, marketing: false, consent_version: texts.consent_version })}>{texts.language === 'da' ? 'Afvis valgfrie' : 'Reject optional'}</Button>
+            <Button className="w-full sm:w-auto" variant="outline" onClick={() => saveConsent({ necessary: true, functional: false, statistics: false, marketing: false, consent_version: texts.consent_version })}>{texts.language.toLowerCase().split('-')[0] === 'da' ? 'Afvis valgfrie' : 'Reject optional'}</Button>
             <Button className="w-full sm:w-auto" onClick={handleAcceptAll}>{texts.accept_all_button}</Button>
             <Button className="w-full sm:w-auto" variant="outline" onClick={handleCustomize}>{texts.customize_button}</Button>
           </CardFooter>
@@ -216,7 +216,7 @@ export function CookieConsent({ brandId, isModalOpen, setIsModalOpen }: CookieCo
                 description={compatCategories.necessary.description}
                 checked={true}
                 disabled
-                alwaysActive={texts.language === 'da' ? 'Altid aktiv' : 'Always active'}
+                alwaysActive={texts.language.toLowerCase().split('-')[0] === 'da' ? 'Altid aktiv' : 'Always active'}
              />
               <Separator />
                <CookieCategory

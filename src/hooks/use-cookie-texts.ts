@@ -6,7 +6,7 @@ export function useCookieTexts({ brandId }: {brandId: string}) {
   const [texts, setTexts] = useState(defaultTexts);
   useEffect(() => {
     let cancelled = false;
-    const language = navigator.language.split('-')[0];
+    const language = navigator.language;
     const query = new URLSearchParams({brandId, language});
     setTexts(getDefaultCookieTexts(language));
     publicRead<typeof defaultTexts>(`/api/public/cookie-texts?${query}`).then(result => {

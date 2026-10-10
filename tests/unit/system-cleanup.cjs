@@ -10,6 +10,13 @@ function fixture(allowed=true){
   '@/lib/server/firestore-compat':{db,doc,collection:doc,query:ref=>ref,orderBy:()=>{},deleteField:()=>deleted,Timestamp:{now:()=>({toDate:()=>new Date()})},
    getDocs:async()=>{calls.push('read');return{docs:[]};},getDoc:async ref=>{calls.push('read');return{exists:()=>records.has(ref.path),data:()=>records.get(ref.path)};},
    setDoc:async(ref,value)=>{if(fail)throw Error('offline');calls.push('write');const saved={...records.get(ref.path),...value};for(const k of Object.keys(saved))if(saved[k]===deleted)delete saved[k];records.set(ref.path,saved);}},
+  '@/lib/firebase-admin':{getAdminDb:()=>({
+   collection:name=>({doc:id=>({path:name+'/'+id}),where:(field,operator,value)=>({collection:name,field,value})}),
+   runTransaction:async run=>{const writes=[];const result=await run({
+    get:async ref=>{calls.push('read');if(ref.collection)return {docs:[...records].filter(([path,data])=>path.startsWith(ref.collection+'/')&&data[ref.field]===ref.value).map(([path,data])=>({id:path.split('/')[1],data:()=>data}))};return {exists:records.has(ref.path)};},
+    set:(ref,value)=>writes.push([ref,value]),
+   });if(fail)throw Error('offline');for(const [ref,value]of writes){calls.push('write');const saved={...records.get(ref.path),...value};for(const k of Object.keys(saved))if(saved[k]===deleted)delete saved[k];records.set(ref.path,saved);}return result;},
+  })},
   'next/cache':{revalidatePath:()=>{},revalidateTag:tag=>calls.push(tag)},'next/navigation':{redirect:()=>{throw Error('redirect');}},
  });
  const form=()=>{const f=new FormData();f.set('id','text');f.set('language','da');f.set('consent_version',texts.APP_VERSION);
@@ -25,7 +32,7 @@ test('changing brand text to global clears the stored brand and invalidates stor
  const saved=f.records.get('cookie_texts/text');assert.equal(saved.brand_id,undefined);assert.equal(saved.extra,'preserved');assert.equal(saved.categories.statistics.title,'Text');assert.equal(saved.categories.marketing.title,'Text');assert.ok(f.calls.includes('storefront'));
 });
 test('invalid version, fields, language and scope cannot write; storage errors return feedback',async()=>{
- for(const [key,value] of [['consent_version','old'],['banner_title',' '],['cat_marketing_desc',''],['language','en-GB'],['id','a/b'],['brand_id','missing']]){
+ for(const [key,value] of [['consent_version','old'],['banner_title',' '],['cat_marketing_desc',''],['language','invalid'],['id','a/b'],['brand_id','missing']]){
   const f=fixture(),form=f.form();form.set(key,value);assert.ok((await f.api.createOrUpdateCookieTexts(form)).error);assert.ok(!f.calls.includes('write'));
  }
  const f=fixture();f.fail();assert.match((await f.api.createOrUpdateCookieTexts(f.form())).error,/could not be saved/);
@@ -46,7 +53,29 @@ test('public cookie API prefers brand text, falls back to global and localizes a
  const query={where:()=>query,get:async()=>({docs:rows.map(row=>({data:()=>row}))})};
  const api=loadTs('src/app/api/public/cookie-texts/route.ts',{'@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>query})},'next/cache':{unstable_cache:fn=>fn}});
  const read=async(language='da')=>(await api.GET(new Request('https://fixture.test/?brandId=brand&language='+language))).json();
- rows=[{banner_title:'Global'},{brand_id:'brand',banner_title:'Brand'}];assert.equal((await read()).banner_title,'Brand');
- rows=[{banner_title:'Global'}];assert.equal((await read()).banner_title,'Global');
+ rows=[{language:'da',banner_title:'Global'},{language:'da',brand_id:'brand',banner_title:'Brand'}];assert.equal((await read()).banner_title,'Brand');
+ rows=[{language:'da',banner_title:'Global'}];assert.equal((await read()).banner_title,'Global');
  rows=[];assert.equal((await read()).banner_title,'Vi bruger cookies');assert.equal((await read('en')).modal_title,'Cookie preferences');
+});
+
+test('blank or partial Statistics preserves each customized legacy Analytics field',()=>{
+ const result=texts.mergeCookieTexts({categories:{statistics:{title:' ',description:'Current description'},analytics:{title:'Custom legacy title',description:'Custom legacy description'}}});
+ assert.equal(result.categories.statistics.title,'Custom legacy title');assert.equal(result.categories.statistics.description,'Current description');
+ const empty=texts.mergeCookieTexts({categories:{statistics:{title:'',description:''},analytics:{title:'Custom title',description:'Custom description'}}});
+ assert.deepEqual(empty.categories.statistics,{title:'Custom title',description:'Custom description'});
+});
+test('regional language codes save and duplicate target scope is rejected without writes',async()=>{
+ for(const language of ['en-US','da-DK']){const f=fixture(),form=f.form();form.set('language',language);await assert.rejects(f.api.createOrUpdateCookieTexts(form),/redirect/);assert.equal(f.records.get('cookie_texts/text').language,language);}
+ for(const brand_id of [undefined,'brand']){
+  const f=fixture(),form=f.form();form.set('language','en-US');if(brand_id)form.set('brand_id',brand_id);
+  f.records.set('cookie_texts/other',{consent_version:texts.APP_VERSION,language:'en-us',...(brand_id?{brand_id}:{})});
+  assert.match((await f.api.createOrUpdateCookieTexts(form)).error,/already exist/);assert.ok(!f.calls.includes('write'));assert.equal(f.records.get('cookie_texts/text').brand_id,'brand');
+ }
+});
+test('regional public locale selects existing regional text before base-language fallback',async()=>{
+ let rows=[{language:'en',banner_title:'Base'},{language:'en-US',banner_title:'Regional'}];
+ const query={where:()=>query,get:async()=>({docs:rows.map(row=>({data:()=>row}))})};
+ const api=loadTs('src/app/api/public/cookie-texts/route.ts',{'@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>query})},'next/cache':{unstable_cache:fn=>fn}});
+ const read=async()=>(await api.GET(new Request('https://fixture.test/?brandId=brand&language=en-US'))).json();
+ assert.equal((await read()).banner_title,'Regional');rows=rows.slice(0,1);assert.equal((await read()).banner_title,'Base');
 });

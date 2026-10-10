@@ -2,7 +2,8 @@
 'use server';
 
 import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
-import { APP_VERSION } from '@/lib/cookie-texts';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { APP_VERSION, COOKIE_LANGUAGE_PATTERN } from '@/lib/cookie-texts';
 import { z } from 'zod';
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { db } from '@/lib/server/firestore-compat';
@@ -10,7 +11,6 @@ import {
 	collection,
 	deleteField,
 	doc,
-	setDoc,
 	getDocs,
 	query,
 	orderBy,
@@ -72,13 +72,13 @@ export async function createOrUpdateCookieTexts(
     ...['necessary', 'functional', 'statistics', 'marketing'].flatMap(category => [`cat_${category}_title`, `cat_${category}_desc`])];
   const requiredText = z.string().trim().min(1).max(5000);
   const valid = fieldNames.every(name => requiredText.safeParse(formData.get(name)).success);
-  const languageResult = z.string().trim().regex(/^[a-z]{2,3}$/i).safeParse(formData.get('language'));
+  const languageResult = z.string().trim().regex(COOKIE_LANGUAGE_PATTERN).safeParse(formData.get('language'));
   if (!valid || !languageResult.success) return { error: 'Complete all text fields and select a valid language.' };
   if (formData.get('consent_version') !== APP_VERSION) return { error: 'This consent version is no longer active. Reload the form and try again.' };
   const normalize = (value: FormDataEntryValue | null): string => typeof value === 'string' ? value.trim() : '';
   const idEntry = formData.get('id');
   const consentVersion = APP_VERSION;
-  const language = languageResult.data.toLowerCase();
+  const language = languageResult.data;
   const brandIdEntry = formData.get('brand_id');
   const bannerTitle = formData.get('banner_title');
   if ((idEntry && (typeof idEntry !== 'string' || !/^[^/]{1,160}$/.test(idEntry))) ||
@@ -144,12 +144,22 @@ export async function createOrUpdateCookieTexts(
 	}
 
 	try {
-    if (brandId && !(await getDoc(doc(db, 'brands', brandId))).exists()) return { error: 'The selected brand no longer exists.' };
-    await setDoc(doc(db, 'cookie_texts', docId), {
-      ...dataToSave,
-      brand_id: brandId || deleteField(),
-      last_updated: Timestamp.now(),
-    }, { merge: true });
+    const nativeDb = getAdminDb();
+    const result = await nativeDb.runTransaction(async transaction => {
+      const candidates = await transaction.get(nativeDb.collection('cookie_texts').where('consent_version', '==', APP_VERSION));
+      const conflict = candidates.docs.some(candidate => {
+        const data = candidate.data();
+        return candidate.id !== docId && String(data.language || '').toLowerCase() === language.toLowerCase() &&
+          (data.brand_id || '') === (brandId || '');
+      });
+      if (conflict) return { error: 'Cookie texts already exist for this language and scope. Edit the existing text set instead.' };
+      if (brandId && !(await transaction.get(nativeDb.collection('brands').doc(brandId))).exists) return { error: 'The selected brand no longer exists.' };
+      transaction.set(nativeDb.collection('cookie_texts').doc(docId), {
+        ...dataToSave, brand_id: brandId || deleteField(), last_updated: Timestamp.now(),
+      }, { merge: true });
+      return null;
+    });
+    if (result) return result;
   } catch {
     return { error: 'Cookie texts could not be saved. Please try again.' };
   }

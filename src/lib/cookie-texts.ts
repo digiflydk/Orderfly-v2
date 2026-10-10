@@ -1,4 +1,5 @@
 import type { CookieTexts } from '@/types';
+export const COOKIE_LANGUAGE_PATTERN = /^(?:[a-z]{2}(?:-[a-z]{2})?|[a-z]{3})$/i;
 export const APP_VERSION = "1.0.59";
 
 type PublicCookieTexts = Omit<CookieTexts, 'id' | 'last_updated'>;
@@ -48,9 +49,13 @@ export function mergeCookieTexts(raw: Partial<CookieTexts>, language = raw.langu
     if (key !== 'categories' && typeof value === 'string' && value.trim()) (out as any)[key] = value;
   }
   for (const key of Object.keys(defaultTexts.categories)) {
-    const value = (raw.categories as any)?.[key] || (key === 'statistics' ? raw.categories?.analytics : undefined), fallback = (defaultTexts.categories as any)[key];
-    (out.categories as any)[key] = { title: typeof value?.title === 'string' && value.title.trim() ? value.title : fallback.title,
-      description: typeof value?.description === 'string' && value.description.trim() ? value.description : fallback.description };
+    const value = (raw.categories as any)?.[key], fallback = (defaultTexts.categories as any)[key];
+    const legacy = key === 'statistics' ? raw.categories?.analytics : undefined;
+    const nonblank = (text: unknown): text is string => typeof text === 'string' && !!text.trim();
+    (out.categories as any)[key] = {
+      title: nonblank(value?.title) ? value.title : nonblank(legacy?.title) ? legacy.title : fallback.title,
+      description: nonblank(value?.description) ? value.description : nonblank(legacy?.description) ? legacy.description : fallback.description,
+    };
   }
   return out;
 }
