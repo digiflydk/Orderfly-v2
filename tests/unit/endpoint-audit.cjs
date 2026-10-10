@@ -75,3 +75,13 @@ test('older consent request cannot reverse a newer withdrawal at the database',a
  await f.post({...f.input,marketing:false,choice_revision:3});await f.post({...f.input,marketing:true,choice_revision:2});
  assert.equal(f.records.get('anonymous_cookie_consents/'+id).marketing,false);
 });
+
+test('retired billing bookmark authorizes before redirecting to Dashboard',async()=>{
+ let allowed=false;const redirects=[];
+ const page=loadTs('src/app/superadmin/billing/page.tsx',{
+  '@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>{if(!allowed)throw Error('forbidden');}},
+  'next/navigation':{redirect:href=>{redirects.push(href);throw Error('redirect');}},
+ }).default;
+ await assert.rejects(page(),/forbidden/);assert.deepEqual(redirects,[]);
+ allowed=true;await assert.rejects(page(),/redirect/);assert.deepEqual(redirects,['/superadmin']);
+});

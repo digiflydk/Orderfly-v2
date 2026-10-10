@@ -18,7 +18,7 @@ The platform defines several key roles. The "Superadmin" role has unrestricted a
 
 | Role | Description | Key Responsibilities |
 | :--- | :--- | :--- |
-| **Superadmin** | Full platform access. Can manage all brands, users, and system settings. | System configuration, billing, user management, brand onboarding. |
+| **Superadmin** | Full platform access. Can manage all brands, users, and system settings. | System configuration and brand onboarding; central user administration is handled in mPanel. |
 | **Brand Manager** | Full access to one or more assigned brands. | Manages locations, menus, products, and discounts for their brand. |
 | **Location Manager** | Access to manage specific, assigned locations. | Manages orders, staff, and daily operations for a single restaurant. |
 | **Viewer** | Read-only access to dashboards and reports. | Views sales data and performance metrics without modification rights. |
@@ -70,7 +70,7 @@ This ensures that even if a user bypasses client-side UI restrictions, the serve
 
 *   **New Users:** New users created in the Superadmin panel default to the most restrictive role (e.g., "Viewer" or no role). Permissions must be explicitly granted.
 *   **Brand Data:** A `Brand Manager` can only modify data associated with their assigned `brandId`. Server actions must include `where('brandId', '==', user.brandId)` clauses in all queries.
-*   **Subscription Changes:** Only a `Superadmin` can change a brand's subscription plan (`subscriptionPlanId`) or manage billing details via Stripe.
+*   **Subscription Changes:** Only a `Superadmin` can change a brand's subscription plan (`subscriptionPlanId`). Subscription billing and its Stripe portal action have been retired from Orderfly (see `orderfly-billing-retirement.md`).
 
 ---
 

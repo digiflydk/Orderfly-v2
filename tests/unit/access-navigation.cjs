@@ -33,3 +33,7 @@ test('missing sessions show no private navigation and mPanel requires member or 
  assert.equal(canNavigate(url,{superuser:false,permissions:['platform.members:view']}),true);
  assert.equal(canNavigate('/superadmin/settings',{superuser:true,permissions:[]}),true);
 });
+
+test('retired billing permission does not expose a billing destination',()=>{
+ assert.equal(canNavigate('/superadmin/billing',{superuser:false,permissions:['orderfly.billing:view']}),false);
+});

@@ -28,7 +28,6 @@ const backlog: Phase[] = [
       { id: "1.1", name: "Initial Setup & Core UI", details: "Configure project, styling, and basic page layouts for all portals.", status: "Completed" },
       { id: "1.2", name: "Core Data Models & Types", details: "Define all TypeScript types in `src/types` to ensure data consistency.", status: "Completed"},
       { id: "1.3", name: "User & Brand Management", details: "Implement full CRUD (Create, Read, Update, Delete) for Users and Brands.", status: "Completed"},
-      { id: "1.4", name: "Subscription & Billing Management", details: "Implement CRUD for Subscription Plans and build the billing overview dashboard.", status: "Completed" },
       { id: "1.5", name: "Global Location Management", details: "Build the UI and server actions for managing all restaurant locations across brands.", status: "Completed" },
       { id: "1.6", name: "Global Product Catalog Management", details: "Implement full CRUD for Products, Categories, Toppings, and Allergens.", status: "In Progress", dependencies: "Task 1.5" },
       { id: "1.7", name: "Platform Settings", details: "Implement UI and actions for managing global settings like Analytics and Payment Gateways.", status: "Completed" },
