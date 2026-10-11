@@ -15,7 +15,7 @@ function AdminLoginForm() {
         <p className="mb-2 text-2xl font-bold tracking-tight text-[#087f9f]">Orderfly</p>
         <p className="text-xs font-semibold uppercase tracking-[0.24em] text-[#087f9f]">ORDER MANAGEMENT</p>
       </header>
-      <h1 id="admin-login-heading" className="text-4xl font-bold leading-none tracking-tight text-[#19232d]">{merchantLogin?'RESTAURANT LOGIN':'ADMINISTRATION'}</h1>
+      <h1 id="admin-login-heading" className="text-[28px] font-bold leading-tight tracking-tight text-[#19232d] sm:text-4xl">{merchantLogin?'RESTAURANT LOGIN':'ADMINISTRATION'}</h1>
       <p className="mt-3 text-sm leading-5 text-[#5b6d7d]">{method==='opsfly'?'Ét login til Orderflys administrationsmodul.':'Log ind med din Orderfly-konto.'}</p>
       <form className="mt-5 space-y-4" onSubmit={async event=>{
       event.preventDefault();if(pending)return;
