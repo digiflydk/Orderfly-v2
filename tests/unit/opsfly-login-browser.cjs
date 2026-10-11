@@ -44,23 +44,23 @@ afterEach(async()=>{await browser?.close();});
 after(async()=>{await new Promise(resolve=>server?server.close(resolve):resolve());fs.rmSync(dir,{recursive:true,force:true});});
 for(const width of [390,1440])test('Opsfly login and logout complete at '+width+'px',async()=>{
  const page=await browser.newPage({viewport:{width,height:900}});await page.goto(origin+'/admin-login');
- await page.getByLabel('E-mail eller brugernavn').fill('Fixture');await page.getByLabel('PIN (6 cifre)').fill('123456');
- assert.equal(await page.getByLabel('PIN (6 cifre)').getAttribute('type'),'password');await page.getByRole('button',{name:'Log ind',exact:true}).click();
+ await page.getByLabel('Navn / E-mail').fill('Fixture');await page.getByLabel('6-cifret PIN').fill('123456');
+ assert.equal(await page.getByLabel('6-cifret PIN').getAttribute('type'),'password');await page.getByRole('button',{name:'LOG IND',exact:true}).click();
  await page.waitForURL('**/superadmin/sales/orders');assert.equal(await page.getByRole('heading',{name:'Administration'}).count(),1);
  assert.equal(await page.evaluate(()=>window.firebaseLoaded||0),0);await page.getByRole('button',{name:'Log ud',exact:true}).click();await page.waitForURL('**/admin-login');
- await page.goto(origin+'/superadmin/sales/orders');await page.waitForURL('**/admin-login');assert.equal(await page.getByLabel('E-mail eller brugernavn').count(),1);await page.close();
+ await page.goto(origin+'/superadmin/sales/orders');await page.waitForURL('**/admin-login');assert.equal(await page.getByLabel('Navn / E-mail').count(),1);await page.close();
 });
 for(const [name,pin] of [['Fixture','000000'],['No access','123456'],['Throttled','123456']])test('denied login stays on form for '+name,async()=>{
- const page=await browser.newPage();await page.goto(origin+'/admin-login');await page.getByLabel('E-mail eller brugernavn').fill(name);await page.getByLabel('PIN (6 cifre)').fill(pin);await page.getByRole('button',{name:'Log ind',exact:true}).click();await page.getByRole('alert').waitFor();assert.equal(new URL(page.url()).pathname,'/admin-login');assert.equal(await page.getByRole('button',{name:'Log ind',exact:true}).isEnabled(),true);await page.close();
+ const page=await browser.newPage();await page.goto(origin+'/admin-login');await page.getByLabel('Navn / E-mail').fill(name);await page.getByLabel('6-cifret PIN').fill(pin);await page.getByRole('button',{name:'LOG IND',exact:true}).click();await page.getByRole('alert').waitFor();assert.equal(new URL(page.url()).pathname,'/admin-login');assert.equal(await page.getByRole('button',{name:'LOG IND',exact:true}).isEnabled(),true);await page.close();
 });
 test('method switch clears credentials and preserves the separate Firebase option',async()=>{
- const page=await browser.newPage();await page.goto(origin+'/admin-login');await page.getByLabel('E-mail eller brugernavn').fill('Fixture');await page.getByLabel('PIN (6 cifre)').fill('123456');await page.getByRole('button',{name:'Log ind med en separat Orderfly-konto'}).click();assert.equal(await page.getByLabel('Adgangskode',{exact:true}).inputValue(),'');assert.equal(await page.getByLabel('E-mail',{exact:true}).getAttribute('type'),'email');await page.getByRole('button',{name:'Log ind med Opsfly',exact:true}).click();assert.equal(await page.getByLabel('PIN (6 cifre)').inputValue(),'');assert.ok(revocations>=3);await page.close();
+ const page=await browser.newPage();await page.goto(origin+'/admin-login');await page.getByLabel('Navn / E-mail').fill('Fixture');await page.getByLabel('6-cifret PIN').fill('123456');await page.getByRole('button',{name:'Log ind med en separat Orderfly-konto'}).click();assert.equal(await page.getByLabel('Adgangskode',{exact:true}).inputValue(),'');assert.equal(await page.getByLabel('E-mail',{exact:true}).getAttribute('type'),'email');await page.getByRole('button',{name:'Log ind med Opsfly',exact:true}).click();assert.equal(await page.getByLabel('6-cifret PIN').inputValue(),'');assert.ok(revocations>=3);await page.close();
 });
 
 for(const width of [390,1440])test('one Opsfly login opens feedback and old login bookmarks at '+width+'px',async()=>{
  const page=await browser.newPage({viewport:{width,height:900}});await page.goto(origin+'/admin-login');
- await page.getByLabel('E-mail eller brugernavn').fill('Fixture');await page.getByLabel('PIN (6 cifre)').fill('123456');
- await page.getByRole('button',{name:'Log ind',exact:true}).click();await page.waitForURL('**/superadmin/sales/orders');
+ await page.getByLabel('Navn / E-mail').fill('Fixture');await page.getByLabel('6-cifret PIN').fill('123456');
+ await page.getByRole('button',{name:'LOG IND',exact:true}).click();await page.waitForURL('**/superadmin/sales/orders');
  const logins=attempts.length;await page.getByRole('link',{name:'Feedback',exact:true}).click();
  await page.getByRole('heading',{name:'Feedback',exact:true}).waitFor();assert.equal(attempts.length,logins);
  await page.goto(origin+'/feedback-admin/login');await page.waitForURL('**/superadmin/feedback');
@@ -69,5 +69,5 @@ for(const width of [390,1440])test('one Opsfly login opens feedback and old logi
 });
 test('feedback bookmark sends an unauthenticated visitor to the shared login',async()=>{
  const page=await browser.newPage();await page.goto(origin+'/feedback-admin/login');await page.waitForURL('**/admin-login');
- await page.getByRole('heading',{name:'Log ind til Orderfly'}).waitFor();await page.close();
+ await page.getByRole('heading',{name:'ADMINISTRATION'}).waitFor();await page.close();
 });
