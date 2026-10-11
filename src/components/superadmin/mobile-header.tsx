@@ -23,7 +23,7 @@ export function MobileHeader({ brandingSettings, homeHref = '/superadmin' }: Mob
                 src={brandingSettings.platformLogoUrl}
                 alt="Platform Logo"
                 fill
-                className="object-contain"
+                className="object-contain brightness-0"
                 data-ai-hint="logo"
               />
             </div>
