@@ -51,8 +51,8 @@ test('collected events reach filtered funnel; sales remain authoritative and con
  db.rows.set('analytics_events/vital',{name:'web_vital',brandId:'b',locationId:'l',sessionId:'vitals-only',ts:now});
  db.rows.set('analytics_events/other',{name:'view_menu',brandId:'other',locationId:'other',sessionId:'other',ts:now});
  db.rows.set('locations/l',{name:'Fixture'});
- for(const [id,session,status,amount] of [['o1','measured','Paid',100],['o2','measured','Paid',50],['o3','unmeasured','Paid',75],['pending','measured','Pending',999]]){
-  db.rows.set(`orders/${id}`,{id,brandId:'b',locationId:'l',paidAt:admin.firestore.Timestamp.fromDate(now),paymentStatus:status,totalAmount:amount,analytics:{sessionId:session,deviceType:'mobile',attribution:{source:'google'}}});
+ for(const [id,session,status,amount,extra] of [['o1','measured','Paid',100,{}],['o2','measured','Paid',50,{}],['o3','unmeasured','Paid',75,{}],['o4','measured','Paid',50,{refundedAmountOre:2000}],['o5','measured','Paid',40,{refundedAmountOre:4000}],['o6','measured','Paid',25,{status:'Canceled'}],['pending','measured','Pending',999,{}]]){
+  db.rows.set(`orders/${id}`,{id,brandId:'b',locationId:'l',paidAt:admin.firestore.Timestamp.fromDate(now),paymentStatus:status,totalAmount:amount,...extra,analytics:{sessionId:session,deviceType:'mobile',attribution:{source:'google'}}});
  }
  const {getFunnelData}=loadTs('src/lib/analytics/getFunnelData.ts',io);
  const filters={dateFrom:now.toISOString(),dateTo:now.toISOString(),brandId:'b',locationId:'l',counting:'events',device:'mobile',utmSource:'google'};
@@ -60,8 +60,8 @@ test('collected events reach filtered funnel; sales remain authoritative and con
  assert.equal(result.totals.sessions,1);
  assert.equal(result.totals.payment_session_created,1,'server metric remains visible without creating a browser session');
  for(const step of ['view_menu','view_product','add_to_cart','start_checkout','click_purchase'])assert.equal(result.totals[step],1);
- assert.equal(result.totals.payment_succeeded,3);assert.equal(result.totals.revenue_paid,225);
- assert.equal(result.totals.paidOrders,3);assert.equal(result.totals.measuredPaidOrders,2);
+ assert.equal(result.totals.payment_succeeded,4);assert.equal(result.totals.revenue_paid,255);
+ assert.equal(result.totals.paidOrders,4);assert.equal(result.totals.measuredPaidOrders,3);
  assert.equal(result.totals.measuredPurchasingSessions,1);assert.equal(result.byLocation[0].convSessionsToPurchase,100);
  assert.equal(result.daily[0].sessions,1);
  assert.equal((await getFunnelData({...filters,utmSource:'meta'})).totals.sessions,0);
