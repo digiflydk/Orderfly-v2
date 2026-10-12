@@ -16,7 +16,8 @@ export function OrderPaymentActions({ orderId, paymentMethod, paymentStatus, sta
   const router = useRouter(), inFlight = useRef(false);
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [method, setMethod] = useState<RestaurantPaymentForm>('cash');
   const [cancelMode, setCancelMode] = useState<'paid' | 'pickup' | null>(null), [cancellationComment, setCancellationComment] = useState('');
-  const pickupPending = paymentMethod === 'PayAtPickup' && paymentStatus === 'Pending' && !['Pending', 'Canceled'].includes(status);
+  const cancelablePickup = paymentMethod === 'PayAtPickup' && paymentStatus === 'Pending' && status !== 'Canceled';
+  const pickupPending = cancelablePickup && status !== 'Pending';
   const canPrepare = status !== 'Canceled' && (paymentStatus === 'Paid' || pickupPending);
   async function run(action: () => Promise<{ success: boolean; message: string }>) {
     if (inFlight.current) return false; inFlight.current = true; setBusy(true); setMessage('');
@@ -33,12 +34,14 @@ export function OrderPaymentActions({ orderId, paymentMethod, paymentStatus, sta
   }
   if (!canEdit) return null;
   return <div className="space-y-3">
-    {pickupPending && <div className="flex flex-wrap items-center gap-2">
+    {(pickupPending || cancelablePickup) && <div className="flex flex-wrap items-center gap-2">
+      {pickupPending && <>
       <label className="flex items-center gap-2">Betalingsform<select aria-label="Betalingsform" value={method} disabled={busy} onChange={event => setMethod(event.target.value as RestaurantPaymentForm)} className="h-11 rounded-md border bg-background px-3">
         <option value="cash">Kontant</option><option value="card">Kort i restaurant</option>
       </select></label>
       <Button disabled={busy} onClick={() => void run(() => registerPickupPayment(orderId, method))}>Registrér betaling modtaget</Button>
-      <Button variant="outline" disabled={busy} onClick={() => setCancelMode('pickup')}>Annullér ubetalt ordre</Button>
+      </>}
+      {cancelablePickup && <Button variant="outline" disabled={busy} onClick={() => setCancelMode('pickup')}>Annullér ubetalt ordre</Button>}
     </div>}
     {paymentStatus === 'Paid' && status !== 'Canceled' && <Button variant="destructive" disabled={busy} onClick={() => setCancelMode('paid')}>Annullér betalt ordre</Button>}
     <Dialog open={cancelMode !== null} onOpenChange={open => { if (!open && !busy) { setCancelMode(null); setCancellationComment(''); } }}>
