@@ -9,6 +9,7 @@ const http = require('node:http');
 const { chromium, expect } = require('@playwright/test');
 const { loadTs } = require('../helpers/load-ts.cjs');
 const { paymentFixture } = require('../helpers/merchant-payment-fixture.cjs');
+const { isPaidSale, paidSaleAmount } = loadTs('src/lib/paid-order.ts');
 const webpackModule = require('next/dist/compiled/webpack/webpack');
 webpackModule.init();
 const root = process.cwd(), cases = new Map();
@@ -25,7 +26,8 @@ async function state(name, receiptProof) {
   const f = await getCase(name), location = f.records.get('locations/l'), brand = f.records.get('brands/b');
   const orders = [...f.records].filter(([key]) => key.startsWith('orders/')).map(([key, order]) => ({
     id: key.slice(7), customerName: order.customerName, locationName: location.name, createdAt: order.createdAt.toISOString(),
-    totalAmount: order.totalAmount, status: order.status, paymentStatus: order.paymentStatus, paymentMethod: order.paymentMethod,
+    totalAmount: order.totalAmount, paidSale: isPaidSale(order), netTotal: paidSaleAmount(order), refundedAmountOre: order.refundedAmountOre ?? 0,
+    status: order.status, paymentStatus: order.paymentStatus, paymentMethod: order.paymentMethod,
     ...(order.paymentCollection ? { paymentCollection: order.paymentCollection } : {}),
   }));
   return { brand, location, orders, receipt: receiptProof ? await f.receipts.readGuestReceipt({ ...receiptProof, brandId: 'b', locationId: 'l' }) : null,
