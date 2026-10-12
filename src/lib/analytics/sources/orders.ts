@@ -5,6 +5,7 @@ import { listScopedDocuments } from '@/lib/access/scoped-data';
 import type { OrderDetail } from '@/types';
 import * as admin from 'firebase-admin';
 import { analyticsCalendarDay } from '@/lib/analytics/date-range';
+import { isPaidSale, paidSaleAmount } from '@/lib/paid-order';
 
 const COL_ORDERS = process.env.FS_COL_ORDERS || 'orders';
 interface PurchaseParams {
@@ -46,7 +47,7 @@ export async function getPurchasesInRange(params: PurchaseParams): Promise<Purch
         const order = doc.data() as OrderDetail;
         
         // Filter for paid orders in code to avoid composite index
-        if (order.paymentStatus !== 'Paid') {
+        if (!isPaidSale(order)) {
             return;
         }
 
@@ -74,7 +75,7 @@ export async function getPurchasesInRange(params: PurchaseParams): Promise<Purch
         }
         const bucket = ordersByLocation.get(key)!;
         bucket.count++;
-        bucket.revenue += order.totalAmount || 0;
+        bucket.revenue += paidSaleAmount(order);
         bucket.deliveryFee += order.paymentDetails?.deliveryFee ?? 0;
         bucket.discount += order.paymentDetails?.discountTotal ?? 0;
         const sessionId = order.analytics?.sessionId || order.id;
