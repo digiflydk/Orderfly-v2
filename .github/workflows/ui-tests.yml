@@ -75,8 +75,8 @@ jobs:
       - name: Install Chromium for brand-owner regression
         run: npx playwright install --with-deps chromium
 
-      - name: Brand form browser regression
-        run: node --test tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs
+      - name: Core browser regression
+        run: node --test tests/unit/merchant-payment-browser.cjs tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs
 
       - name: Games editor browser regression
         run: node --test tests/unit/games-editor-browser.cjs
