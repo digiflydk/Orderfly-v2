@@ -5,17 +5,23 @@ import { orderflyReadGrants } from '@/lib/access/orderfly-session';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { OrderSummary } from '@/types';
 import type { SACommonFilters } from '@/types/superadmin';
-import { startOfDay, endOfDay } from 'date-fns';
+import { analyticsDateRange } from '@/lib/analytics/date-range';
 import * as admin from 'firebase-admin';
 
-export async function getOrders(filters?: Partial<SACommonFilters>): Promise<OrderSummary[]> {
+function firestoreDate(value: unknown): Date | undefined {
+  const date = value instanceof Date ? value : value && typeof value === 'object' && 'toDate' in value && typeof value.toDate === 'function' ? value.toDate() : undefined;
+  return date instanceof Date && Number.isFinite(date.getTime()) ? date : undefined;
+}
+
+export async function getOrders(filters?: Partial<SACommonFilters>, sortBy: 'paidAt' | 'createdAt' = 'paidAt'): Promise<OrderSummary[]> {
   const db = getAdminDb();
-  let q: admin.firestore.Query = db.collection('orders').orderBy('createdAt', 'desc');
+  let q: admin.firestore.Query = db.collection('orders');
 
   if (filters?.dateFrom && filters?.dateTo) {
+      const { start, endExclusive } = analyticsDateRange(filters.dateFrom, filters.dateTo);
       q = q
-          .where('createdAt', '>=', admin.firestore.Timestamp.fromDate(startOfDay(new Date(filters.dateFrom))))
-          .where('createdAt', '<=', admin.firestore.Timestamp.fromDate(endOfDay(new Date(filters.dateTo))));
+          .where('paidAt', '>=', admin.firestore.Timestamp.fromDate(start))
+          .where('paidAt', '<', admin.firestore.Timestamp.fromDate(endExclusive));
   }
 
   const grants=await orderflyReadGrants('orderfly.orders:view');
@@ -29,14 +35,16 @@ export async function getOrders(filters?: Partial<SACommonFilters>): Promise<Ord
   const documents=[...new Map(snapshots.flatMap(snapshot=>snapshot.docs).map(doc=>[doc.id,doc])).values()];
   const orders = documents.map((doc): OrderSummary => {
       const data = doc.data() as Omit<OrderSummary, 'id' | 'createdAt'> & {
-          createdAt: admin.firestore.Timestamp;
+          createdAt?: admin.firestore.Timestamp | Date;
+          paidAt?: admin.firestore.Timestamp | Date;
       };
 
       return {
           ...data,
           id: doc.id,
-          createdAt: data.createdAt.toDate(),
+          createdAt: firestoreDate(data.createdAt) || new Date(0),
+          ...(firestoreDate(data.paidAt) ? { paidAt: firestoreDate(data.paidAt) } : {}),
       };
   });
-  return orders.sort((a,b)=>new Date(b.createdAt).getTime()-new Date(a.createdAt).getTime());
+  return orders.sort((a,b)=>((sortBy === 'paidAt' ? b.paidAt?.getTime() : b.createdAt.getTime()) ?? -Infinity)-((sortBy === 'paidAt' ? a.paidAt?.getTime() : a.createdAt.getTime()) ?? -Infinity));
 }

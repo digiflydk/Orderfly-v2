@@ -19,6 +19,14 @@ test('sales choices use the analytics grant instead of unrelated feature scopes'
   assert.deepEqual(result.locations.map(location => location.id), ['la']);
 });
 
+test('revenue card totals net values and canceled pickup labels preserve payment state', () => {
+  const { sumNetPaidSales } = loadTs('src/lib/paid-order.ts');
+  const { canceledPickupPaymentLabel } = loadTs('src/lib/orders/presentation.ts');
+  assert.equal(sumNetPaidSales([{ paidSale: true, total: 100, netTotal: 75 }, { paidSale: false, total: 40, netTotal: 0 }]), 75);
+  assert.equal(canceledPickupPaymentLabel({ status: 'Canceled', paymentMethod: 'PayAtPickup', paymentStatus: 'Paid' }), 'Betaling modtaget · refundering håndteres separat');
+  assert.equal(canceledPickupPaymentLabel({ status: 'Canceled', paymentMethod: 'PayAtPickup', paymentStatus: 'Pending' }), 'Ingen betaling modtaget');
+});
+
 test('brand changes remove incompatible locations but preserve valid choices', () => {
   const { locationsAfterBrandChange } = loadTs('src/components/superadmin/filter-selection.ts');
   const locations = [{ id: 'la', brandId: 'a' }, { id: 'lb', brandId: 'b' }];
@@ -31,7 +39,9 @@ test('sales use the selected paidAt period while current pending orders stay sep
   let reads = [];
   const orders = [
     // Created outside the selected range, but paid within it: must be included.
-    { brandId: 'a', locationId: 'la', paymentStatus: 'Paid', status: 'Completed', createdAt: new Date('2026-09-06T12:00:00Z'), paidAt: new Date('2026-09-02T12:00:00Z'), totalAmount: 100, deliveryType: 'Pickup', paymentDetails: { discountTotal: 10, upsellAmount: 5 }, productItems: [] },
+    { brandId: 'a', locationId: 'la', paymentStatus: 'Paid', status: 'Completed', createdAt: new Date('2026-09-06T12:00:00Z'), paidAt: new Date('2026-09-02T12:00:00Z'), totalAmount: 100, refundedAmountOre: 2500, deliveryType: 'Pickup', paymentDetails: { discountTotal: 10, upsellAmount: 5 }, productItems: [] },
+    { brandId: 'a', locationId: 'la', paymentStatus: 'Paid', status: 'Completed', createdAt: new Date('2026-09-02T12:00:00Z'), paidAt: new Date('2026-09-03T12:00:00Z'), totalAmount: 40, refundedAmountOre: 4000, deliveryType: 'Pickup', paymentDetails: { discountTotal: 0 }, productItems: [] },
+    { brandId: 'a', locationId: 'la', paymentStatus: 'Paid', status: 'Canceled', createdAt: new Date('2026-09-02T12:00:00Z'), paidAt: new Date('2026-09-04T12:00:00Z'), totalAmount: 70, deliveryType: 'Pickup', paymentDetails: { discountTotal: 0 }, productItems: [] },
     // Created within the range, but paid after it: must be excluded.
     { brandId: 'a', locationId: 'la', paymentStatus: 'Paid', status: 'Completed', createdAt: new Date('2026-09-02T12:00:00Z'), paidAt: new Date('2026-09-06T12:00:00Z'), totalAmount: 800, deliveryType: 'Delivery', paymentDetails: { discountTotal: 0 }, productItems: [] },
     // No payment date; current pending count is scoped independently of dates.
@@ -65,7 +75,9 @@ test('sales use the selected paidAt period while current pending orders stay sep
     assert.equal(read.permission, 'orderfly.analytics:view');
     assert.equal(read.scope, 'location');
   }
-  assert.equal(result.kpis.totalSales, 100);
+  assert.equal(result.kpis.totalSales, 75, 'partial refunds reduce sales and fully refunded orders do not count');
+  assert.equal(result.kpis.totalOrders, 1);
+  assert.equal(result.kpis.canceledOrders, 1, 'a paid order canceled after payment remains visible in cancellation counts but no longer contributes to sales');
   assert.equal(result.kpis.pendingOrders, 1);
   assert.equal('totalCookieConsents' in result.kpis, false);
   assert.equal('totalActiveBrands' in result, false);

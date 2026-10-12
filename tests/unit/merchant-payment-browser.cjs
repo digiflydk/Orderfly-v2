@@ -9,6 +9,7 @@ const http = require('node:http');
 const { chromium, expect } = require('@playwright/test');
 const { loadTs } = require('../helpers/load-ts.cjs');
 const { paymentFixture } = require('../helpers/merchant-payment-fixture.cjs');
+const { isPaidSale, paidSaleAmount } = loadTs('src/lib/paid-order.ts');
 const webpackModule = require('next/dist/compiled/webpack/webpack');
 webpackModule.init();
 const root = process.cwd(), cases = new Map();
@@ -25,7 +26,8 @@ async function state(name, receiptProof) {
   const f = await getCase(name), location = f.records.get('locations/l'), brand = f.records.get('brands/b');
   const orders = [...f.records].filter(([key]) => key.startsWith('orders/')).map(([key, order]) => ({
     id: key.slice(7), customerName: order.customerName, locationName: location.name, createdAt: order.createdAt.toISOString(),
-    totalAmount: order.totalAmount, status: order.status, paymentStatus: order.paymentStatus, paymentMethod: order.paymentMethod,
+    totalAmount: order.totalAmount, paidSale: isPaidSale(order), netTotal: paidSaleAmount(order), refundedAmountOre: order.refundedAmountOre ?? 0,
+    status: order.status, paymentStatus: order.paymentStatus, paymentMethod: order.paymentMethod,
     ...(order.paymentCollection ? { paymentCollection: order.paymentCollection } : {}),
   }));
   return { brand, location, orders, receipt: receiptProof ? await f.receipts.readGuestReceipt({ ...receiptProof, brandId: 'b', locationId: 'l' }) : null,
@@ -178,9 +180,11 @@ for (const method of ['cash', 'card']) test(`promotion checkout → receipt → 
 });
 test('merchant cancellation releases a promotion reservation without paid KPI or invoice', async t => {
   const page = await pageFor(t, 'pickup-cancel'); await submitPromotion(page); const receiptUrl = page.url(); await page.goto(origin + '/merchant/orders?case=pickup-cancel');
-  page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Annullér ubetalt ordre', exact: true }).click();
+  await page.getByRole('button', { name: 'Annullér ubetalt ordre', exact: true }).click();
+  await page.getByLabel('Kommentar (påkrævet)', { exact: true }).fill('Kunden bad om annullering');
+  await page.getByRole('button', { name: 'Bekræft annullering', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Registrér betaling modtaget', exact: true })).toHaveCount(0);
-  const f = await getCase('pickup-cancel'); assert.equal(f.order().status, 'Canceled'); assert.equal(f.order().discountReservation, 'released');
+  const f = await getCase('pickup-cancel'); assert.equal(f.order().status, 'Canceled'); assert.equal(f.order().cancellationComment, 'Kunden bad om annullering'); assert.equal(f.order().discountReservation, 'released');
   assert.equal((await state('pickup-cancel')).kpis.totalSales, 0); assert.equal(f.records.get('discounts/d').usedCount, 0);
   await page.goto(receiptUrl);
   await expect(page.getByRole('heading', { name: 'Ordren er annulleret', exact: true })).toBeVisible();

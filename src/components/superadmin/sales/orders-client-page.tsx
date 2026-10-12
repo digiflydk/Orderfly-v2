@@ -15,13 +15,17 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { paymentMethodLabel } from '@/lib/merchant-payment-methods';
+import { sumNetPaidSales } from '@/lib/paid-order';
+import { canceledPickupPaymentLabel } from '@/lib/orders/presentation';
 import { AdminDateRange } from '@/components/superadmin/admin-date-range';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
 export type ClientOrderSummary = {
   id: string;
   total: number;
-  createdAt?: string;
+  paidAt?: string;
+  netTotal?: number;
+  refundedAmountOre?: number;
   status: string;
   paymentStatus: string;
   paymentMethod?: string;
@@ -92,18 +96,7 @@ export function OrdersClientPage({
     );
   }, [data, search]);
 
-  const totalRevenue = React.useMemo(
-    () =>
-      data.reduce(
-        (sum, order) =>
-          sum +
-          (order.paidSale && Number.isFinite(order.total)
-            ? order.total
-            : 0),
-        0,
-      ),
-    [data],
-  );
+  const totalRevenue = React.useMemo(() => sumNetPaidSales(data), [data]);
 
   const latestOrder = data[0];
 
@@ -167,7 +160,7 @@ export function OrdersClientPage({
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-              <AdminDateRange className="flex-1" from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} fromLabel="From date" toLabel="To date" groupLabel="Date range" />
+              <AdminDateRange className="flex-1" from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} fromLabel="Payment date from" toLabel="Payment date to" groupLabel="Payment date range" />
 
               <div className="flex gap-2">
                 <Button type="submit">Apply</Button>
@@ -220,7 +213,7 @@ export function OrdersClientPage({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Latest Order
+              Latest Payment
             </CardTitle>
 
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
@@ -229,7 +222,7 @@ export function OrdersClientPage({
           <CardContent>
             <div className="text-sm font-medium">
               {latestOrder
-                ? formatDate(latestOrder.createdAt)
+                ? formatDate(latestOrder.paidAt)
                 : 'No orders yet'}
             </div>
           </CardContent>
@@ -290,7 +283,7 @@ export function OrdersClientPage({
                     </TableHead>
 
                     <TableHead scope="col">
-                      Date
+                      Payment date
                     </TableHead>
 
                     <TableHead scope="col">
@@ -317,18 +310,19 @@ export function OrdersClientPage({
                       </TableCell>
 
                       <TableCell className="text-muted-foreground">
-                        {formatDate(order.createdAt)}
+                        {formatDate(order.paidAt)}
                       </TableCell>
 
                       <TableCell>
                         <Badge variant="secondary">
                           {order.status === 'Canceled' && order.paymentMethod === 'PayAtPickup' ? 'Annulleret' : order.paymentStatus === 'Paid' || order.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && order.status !== 'Pending' ? order.status : order.paymentStatus === 'Failed' ? 'Betaling afbrudt' : 'Afventer betaling'}
                         </Badge>
-                        <p className="mt-1 text-sm">{order.status === 'Canceled' && order.paymentMethod === 'PayAtPickup' ? 'Ingen betaling modtaget' : paymentMethodLabel(order)}</p>
+                        <p className="mt-1 text-sm">{canceledPickupPaymentLabel(order) ?? paymentMethodLabel(order)}</p>
                       </TableCell>
 
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(order.total)}
+                        {formatCurrency(order.netTotal ?? (order.paidSale ? order.total : 0))}
+                        {(order.refundedAmountOre ?? 0) > 0 && <p className="text-xs font-normal text-muted-foreground">Refund: −{formatCurrency((order.refundedAmountOre ?? 0) / 100)}</p>}
                       </TableCell>
 
                       <TableCell className="text-right">

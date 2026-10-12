@@ -11,11 +11,11 @@ function load(path, mocks = {}) {
   new Function('require', 'module', 'exports', code)(name => name === '@/lib/server/firestore-compat' && mocks['firebase/firestore'] ? {...mocks['firebase/firestore'],db:mocks['@/lib/firebase']?.db} : name in mocks ? mocks[name] : require(name), mod, mod.exports);
   return mod.exports;
 }
-const model = load('src/lib/loyalty/model.ts');
+const model = load('src/lib/loyalty/model.ts', { '@/lib/paid-order': load('src/lib/paid-order.ts') });
 const now = new Date('2026-09-07T12:00:00Z');
 const order = (days, extra = {}) => ({
   brandId: 'b', customerDetails: { id: 'c' }, totalAmount: 300,
-  paymentStatus: 'Paid', deliveryType: 'Pickup', createdAt: new Date(+now - days * 86400000), ...extra,
+  paymentStatus: 'Paid', deliveryType: 'Pickup', createdAt: new Date(+now - days * 86400000), paidAt: new Date(+now - days * 86400000), ...extra,
 });
 function fixture() {
   const rows = new Map(), writes = [], clone = value => structuredClone(value);
@@ -119,8 +119,9 @@ test('malformed amounts and missing dates cannot crash reads or create synthetic
   assert.deepEqual(model.customerMetrics(bad, settings, now), model.customerMetrics([], settings, now));
   assert.equal(model.customerMetrics([order(0, { refundedAmountOre: -1 })], settings, now).totalOrders, 0);
   const weighted = { ...settings, weights: { totalOrders: 0, averageOrderValue: 0, recency: 50, frequency: 50, deliveryMethodBonus: 0 } };
-  const result = model.customerMetrics([order(0, { createdAt: 'bad' }), order(0, { createdAt: null })], weighted, now);
+  const result = model.customerMetrics([order(0, { paidAt: 'bad' }), order(0, { paidAt: null })], weighted, now);
   assert.equal(result.totalOrders, 2); assert.equal(result.lastOrderDate, undefined); assert.equal(result.loyaltyScore, 0);
+  assert.equal(model.customerMetrics([order(0, { paidAt: undefined })], weighted, now).lastOrderDate, undefined, 'createdAt never substitutes for a missing paidAt');
   assert.equal(model.asDate({ seconds: 0 }).getTime(), 0); assert.equal(model.asDate({ toDate: () => now }), now);
 });
 
@@ -165,7 +166,7 @@ test('list/details/integration agree across all orders, retain new customers and
   f.rows.set('orders/c', order(0, { brandId: 'other', totalAmount: 9999 }));
   f.rows.set('orders/d', order(0, { paymentStatus: 'Pending', deliveryType: 'Delivery' }));
   f.rows.set('orders/e', order(1, { customerDetails: { id: 'recent' } }));
-  f.rows.set('orders/f', order(0, { createdAt: 'malformed' }));
+  f.rows.set('orders/f', order(0, { paidAt: 'malformed' }));
   f.rows.set('orders/no-customer', order(0, { customerDetails: undefined }));
   const list = await f.customers.getCustomers(), detail = await f.customers.getCustomerDetails('c');
   const history = await f.integration.getEsmeraldaConsumerCustomerHistory({ customer_id: 'c', organization_id: 'b', limit: 1 });

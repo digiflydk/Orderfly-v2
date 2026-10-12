@@ -314,6 +314,9 @@ export type OrderStatus = 'Pending' | 'Received' | 'In Progress' | 'Ready' | 'Co
 export type OrderSummary = {
     id: string;
     createdAt: Date;
+    paidAt?: Date;
+    refundedAmountOre?: number;
+    cancellationComment?: string;
     customerName: string;
     customerContact: string;
     brandId: string;

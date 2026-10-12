@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { db, doc, runTransaction, type Transaction } from '@/lib/server/firestore-compat';
+import { db, doc, runTransaction, serverTimestamp, type Transaction } from '@/lib/server/firestore-compat';
 
 function refs(brandId: string, customerId: string, discountId: string | null) {
   const key = (parts: string[]) => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
@@ -73,6 +73,10 @@ export async function releaseDiscount(orderId: string, brandId: string, sessionI
     }
     // Called after verified expiration, signed asynchronous payment failure, or
     // definitively failed session creation. Preserve the attempt for audit.
-    tx.update(orderRef, { discountReservation: 'released', status: 'Canceled', paymentStatus: 'Failed' });
+    tx.update(orderRef, {
+      discountReservation: 'released', status: 'Canceled', paymentStatus: 'Failed',
+      cancellationComment: order.cancellationComment || 'Betalingen blev ikke gennemført, og checkout-sessionen blev lukket.',
+      canceledAt: order.canceledAt || serverTimestamp(),
+    });
   });
 }

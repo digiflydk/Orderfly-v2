@@ -7,6 +7,7 @@ import { Timestamp } from 'firebase-admin/firestore';
 import type { OrderSummary } from '@/types';
 import type { SACommonFilters } from '@/types/superadmin';
 import { analyticsDateRange } from '@/lib/analytics/date-range';
+import { isPaidSale, paidSaleAmount } from '@/lib/paid-order';
 
 type SalesOrderItem = {
     itemType?: 'product' | 'combo';
@@ -41,7 +42,7 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
         orders = orders.filter(o => locationSet.has(o.locationId));
     }
 
-    const paidOrders = orders.filter(o => o.paymentStatus === 'Paid' && o.status !== 'Canceled');
+    const paidOrders = orders.filter(isPaidSale);
     const pendingOrdersCount = pendingDocs.filter(doc => {
         const order = doc.data() as SalesOrder;
         return order.paymentStatus === 'Pending' && order.status !== 'Canceled'
@@ -49,7 +50,7 @@ export const getSalesDashboardData = async (filters: SACommonFilters) => {
             && (!filters.locationIds?.length || filters.locationIds.includes(order.locationId));
     }).length;
     const totalOrders = paidOrders.length;
-    const totalSales = paidOrders.reduce((sum, order) => sum + (order.totalAmount || 0), 0);
+    const totalSales = paidOrders.reduce((sum, order) => sum + paidSaleAmount(order), 0);
     const avgOrderValue = totalOrders > 0 ? totalSales / totalOrders : 0;
     const deliveryOrdersCount = paidOrders.filter(o => o.deliveryType === 'Delivery').length;
     const pickupOrdersCount = paidOrders.filter(o => o.deliveryType === 'Pickup').length;

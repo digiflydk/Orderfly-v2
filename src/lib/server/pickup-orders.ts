@@ -5,8 +5,10 @@ import { orderflySession } from '@/lib/access/orderfly-session';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { prepareAdminCapacitySettlement } from './discount-capacity';
 
-export async function cancelUnpaidPickupOrder(orderId: string) {
+export async function cancelUnpaidPickupOrder(orderId: string, cancellationComment: string) {
   if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId)) throw new Error('Ugyldigt ordrenummer.');
+  const comment = typeof cancellationComment === 'string' ? cancellationComment.trim() : '';
+  if (comment.length < 3 || comment.length > 500) throw new Error('Skriv en kommentar på 3–500 tegn for at annullere ordren.');
   const actor = await orderflySession(), db = getAdminDb();
   const ref = db.collection('orders').doc(orderId);
   return db.runTransaction(async tx => {
@@ -19,9 +21,9 @@ export async function cancelUnpaidPickupOrder(orderId: string) {
     const release = order.discountReservation === 'held' ? await prepareAdminCapacitySettlement(db, tx, order, false) : null;
     release?.();
     const now = getAdminFieldValue().serverTimestamp();
-    tx.update(ref, { status: 'Canceled', paymentStatus: 'Failed', discountReservation: 'released', canceledAt: now, canceledBy: actor.actorId, updatedAt: now });
+    tx.update(ref, { status: 'Canceled', paymentStatus: 'Failed', discountReservation: 'released', cancellationComment: comment, canceledAt: now, canceledBy: actor.actorId, updatedAt: now });
     tx.create(db.collection('auditLogs').doc(createHash('sha256').update(JSON.stringify(['pickup-cancel', order.brandId, orderId])).digest('hex')), {
-      action: 'pickup_order_canceled', orderId, brandId: order.brandId, locationId: order.locationId, actorId: actor.actorId, actorName: actor.name, createdAt: now,
+      action: 'pickup_order_canceled', orderId, brandId: order.brandId, locationId: order.locationId, actorId: actor.actorId, actorName: actor.name, cancellationComment: comment, createdAt: now,
     });
     return true;
   });

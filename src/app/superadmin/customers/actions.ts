@@ -194,7 +194,7 @@ export async function getCustomerDetails(customerId: string): Promise<{
             ...data,
             createdAt: asDate(data.createdAt) || new Date(0),
         } as OrderDetail;
-    }).sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime()); // Sort in-memory
+    }).sort((a, b) => (asDate(b.paidAt)?.getTime() ?? -Infinity) - (asDate(a.paidAt)?.getTime() ?? -Infinity)); // Sort by payment date only.
         
     const paidOrders = qualifyingOrders(allOrders);
     const deliveryOrdersCount = paidOrders.filter(o => o.deliveryType === 'Delivery').length;
