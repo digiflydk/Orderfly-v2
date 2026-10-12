@@ -1,8 +1,9 @@
 # Order sales accounting
 
-Orderfly sales periods and displayed payment dates use `paidAt`. Order creation
-time does not assign revenue to a period or substitute for a missing payment
-date. Date ranges use the Europe/Copenhagen calendar day boundaries.
+Orderfly sales periods and displayed payment dates use `paidAt`, including the
+sales dashboard, the customer funnel and sales order views. Order creation time
+does not assign revenue to a period or substitute for a missing payment date.
+Date ranges use the Europe/Copenhagen calendar day boundaries.
 
 For a paid order, net sales are calculated in integer øre:
 
