@@ -13,9 +13,9 @@ export async function registerPickupPayment(orderId: string, method: RestaurantP
     return { success: true, message: changed ? 'Betalingen er registreret.' : 'Betalingen er allerede registreret.' };
   } catch (error) { return { success: false, message: error instanceof Error ? error.message : 'Betalingen kunne ikke registreres.' }; }
 }
-export async function cancelPickupOrder(orderId: string) {
+export async function cancelPickupOrder(orderId: string, cancellationComment: string) {
   try {
-    const changed = await cancelUnpaidPickupOrder(orderId); refresh(orderId);
+    const changed = await cancelUnpaidPickupOrder(orderId, cancellationComment); refresh(orderId);
     return { success: true, message: changed ? 'Ordren er annulleret. Rabatreservationen er frigivet.' : 'Ordren er allerede annulleret.' };
   } catch (error) { return { success: false, message: error instanceof Error ? error.message : 'Ordren kunne ikke annulleres.' }; }
 }
