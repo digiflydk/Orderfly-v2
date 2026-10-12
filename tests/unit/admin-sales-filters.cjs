@@ -19,6 +19,14 @@ test('sales choices use the analytics grant instead of unrelated feature scopes'
   assert.deepEqual(result.locations.map(location => location.id), ['la']);
 });
 
+test('revenue card totals net values and canceled pickup labels preserve payment state', () => {
+  const { sumNetPaidSales } = loadTs('src/lib/paid-order.ts');
+  const { canceledPickupPaymentLabel } = loadTs('src/lib/orders/presentation.ts');
+  assert.equal(sumNetPaidSales([{ paidSale: true, total: 100, netTotal: 75 }, { paidSale: false, total: 40, netTotal: 0 }]), 75);
+  assert.equal(canceledPickupPaymentLabel({ status: 'Canceled', paymentMethod: 'PayAtPickup', paymentStatus: 'Paid' }), 'Betaling modtaget · refundering håndteres separat');
+  assert.equal(canceledPickupPaymentLabel({ status: 'Canceled', paymentMethod: 'PayAtPickup', paymentStatus: 'Pending' }), 'Ingen betaling modtaget');
+});
+
 test('brand changes remove incompatible locations but preserve valid choices', () => {
   const { locationsAfterBrandChange } = loadTs('src/components/superadmin/filter-selection.ts');
   const locations = [{ id: 'la', brandId: 'a' }, { id: 'lb', brandId: 'b' }];
