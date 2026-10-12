@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import type { LoyaltySettings } from '@/types';
+import { paidSaleAmount } from '@/lib/paid-order';
 
 const requiredNumber = z.union([z.number(), z.string().trim().min(1)]).pipe(z.coerce.number().finite());
 const percent = requiredNumber.pipe(z.number().min(0).max(100));
@@ -22,21 +23,14 @@ export function asDate(value:any):Date|null {
     return d instanceof Date && Number.isFinite(d.getTime()) ? d : null;
   } catch { return null; }
 }
-type ScoreOrder = {paymentStatus?:unknown;status?:unknown;totalAmount?:unknown;refundedAmountOre?:unknown;paidAt?:unknown;createdAt?:unknown;deliveryType?:unknown};
-function netOrderOre(order:ScoreOrder):number {
-  if(order.paymentStatus!=='Paid'||order.status==='Canceled')return 0;
-  if(typeof order.totalAmount!=='number'||!Number.isFinite(order.totalAmount)||order.totalAmount<0)return 0;
-  const gross=Math.round(order.totalAmount*100),refund=order.refundedAmountOre??0;
-  if(!Number.isSafeInteger(gross)||!Number.isSafeInteger(refund)||(refund as number)<0)return 0;
-  return Math.max(0,gross-(refund as number));
-}
+type ScoreOrder = {paymentStatus?:unknown;status?:unknown;totalAmount?:unknown;refundedAmountOre?:unknown;paidAt?:unknown;deliveryType?:unknown};
 export function qualifyingOrders<T extends ScoreOrder>(orders:T[]):T[] {
-  return orders.filter(order=>netOrderOre(order)>0);
+  return orders.filter(order=>paidSaleAmount(order)>0);
 }
 export function customerMetrics(orders:ScoreOrder[],settings:LoyaltySettings,now=new Date()) {
   const paid=qualifyingOrders(orders);
-  const dates=paid.map(o=>asDate(o.paidAt)||asDate(o.createdAt)).filter((d):d is Date=>!!d).sort((a,b)=>a.getTime()-b.getTime());
-  const totalOrders=paid.length,totalSpend=paid.reduce((sum,o)=>sum+netOrderOre(o),0)/100;
+  const dates=paid.map(o=>asDate(o.paidAt)).filter((d):d is Date=>!!d).sort((a,b)=>a.getTime()-b.getTime());
+  const totalOrders=paid.length,totalSpend=paid.reduce((sum,o)=>sum+paidSaleAmount(o),0);
   const lastOrderDate=dates.at(-1),days=lastOrderDate?Math.max(0,(now.getTime()-lastOrderDate.getTime())/86400000):Infinity;
   const scoreFor=(value:number,list:{value:number;points:number}[])=>[...list].sort((a,b)=>b.value-a.value).find(t=>value>=t.value)?.points??0;
   const frequency=dates.length>1?(dates.at(-1)!.getTime()-dates[0].getTime())/86400000/(dates.length-1):Infinity;
