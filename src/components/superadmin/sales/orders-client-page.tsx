@@ -21,7 +21,9 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 export type ClientOrderSummary = {
   id: string;
   total: number;
-  createdAt?: string;
+  paidAt?: string;
+  netTotal?: number;
+  refundedAmountOre?: number;
   status: string;
   paymentStatus: string;
   paymentMethod?: string;
@@ -167,7 +169,7 @@ export function OrdersClientPage({
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-              <AdminDateRange className="flex-1" from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} fromLabel="From date" toLabel="To date" groupLabel="Date range" />
+              <AdminDateRange className="flex-1" from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} fromLabel="Payment date from" toLabel="Payment date to" groupLabel="Payment date range" />
 
               <div className="flex gap-2">
                 <Button type="submit">Apply</Button>
@@ -220,7 +222,7 @@ export function OrdersClientPage({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Latest Order
+              Latest Payment
             </CardTitle>
 
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
@@ -229,7 +231,7 @@ export function OrdersClientPage({
           <CardContent>
             <div className="text-sm font-medium">
               {latestOrder
-                ? formatDate(latestOrder.createdAt)
+                ? formatDate(latestOrder.paidAt)
                 : 'No orders yet'}
             </div>
           </CardContent>
@@ -290,7 +292,7 @@ export function OrdersClientPage({
                     </TableHead>
 
                     <TableHead scope="col">
-                      Date
+                      Payment date
                     </TableHead>
 
                     <TableHead scope="col">
@@ -317,7 +319,7 @@ export function OrdersClientPage({
                       </TableCell>
 
                       <TableCell className="text-muted-foreground">
-                        {formatDate(order.createdAt)}
+                        {formatDate(order.paidAt)}
                       </TableCell>
 
                       <TableCell>
@@ -328,7 +330,8 @@ export function OrdersClientPage({
                       </TableCell>
 
                       <TableCell className="text-right font-medium">
-                        {formatCurrency(order.total)}
+                        {formatCurrency(order.netTotal ?? (order.paidSale ? order.total : 0))}
+                        {(order.refundedAmountOre ?? 0) > 0 && <p className="text-xs font-normal text-muted-foreground">Refund: −{formatCurrency((order.refundedAmountOre ?? 0) / 100)}</p>}
                       </TableCell>
 
                       <TableCell className="text-right">
