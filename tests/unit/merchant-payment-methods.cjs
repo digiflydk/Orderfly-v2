@@ -63,7 +63,7 @@ test('cancel is idempotent, releases a reserved code and never increments paid s
   const key = 'checkout_discount_capacity/' + capacityKey(['b', 'd']);
   assert.deepEqual(f.records.get(key), { paid: 0, held: 1 });
   await assert.rejects(f.cancellation.cancelUnpaidPickupOrder(f.orderId), /kommentar/);
-  assert.equal(f.order().status, 'Pending', 'missing cancellation comments leave the order untouched');
+  assert.equal(f.order().status, 'Received', 'missing cancellation comments leave the order untouched');
   assert.deepEqual(await Promise.all([f.cancel(), f.cancel()]), [true, false]);
   assert.deepEqual(f.records.get(key), { paid: 0, held: 0 });
   assert.deepEqual(f.kpis(), { count: 0, amount: 0 });
@@ -148,7 +148,7 @@ test('production sales dashboard excludes accepted unpaid pickup and increases c
   assert.equal(after.totalOrders, 1); assert.equal(after.totalSales, 94); assert.equal(after.pendingOrders, 0); assert.equal(after.totalDiscounts, 10);
   const canceled = await paymentFixture({ kind: 'code' }); await canceled.cancel();
   const final = (await canceled.sales.getSalesDashboardData({ dateFrom: '2026-01-01', dateTo: '2026-12-31' })).kpis;
-  assert.equal(final.totalOrders, 0); assert.equal(final.totalSales, 0); assert.equal(final.canceledOrders, 1);
+  assert.equal(final.totalOrders, 0); assert.equal(final.totalSales, 0); assert.equal(final.canceledOrders, 0, 'unpaid cancellations have no paidAt and do not enter a payment-date period');
 });
 
 test('pickup receipt requires its scoped random capability and never discloses staff or connects to Stripe', async () => {
