@@ -62,6 +62,8 @@ test('cancel is idempotent, releases a reserved code and never increments paid s
   const f = await paymentFixture({ kind: 'code' });
   const key = 'checkout_discount_capacity/' + capacityKey(['b', 'd']);
   assert.deepEqual(f.records.get(key), { paid: 0, held: 1 });
+  await assert.rejects(f.cancellation.cancelUnpaidPickupOrder(f.orderId), /kommentar/);
+  assert.equal(f.order().status, 'Pending', 'missing cancellation comments leave the order untouched');
   assert.deepEqual(await Promise.all([f.cancel(), f.cancel()]), [true, false]);
   assert.deepEqual(f.records.get(key), { paid: 0, held: 0 });
   assert.deepEqual(f.kpis(), { count: 0, amount: 0 });
