@@ -39,9 +39,9 @@ This document outlines the query patterns and required Firestore indexes for opt
 
 ### 2.2 Orders List (`/superadmin/sales/orders`)
 
-*   **Query:** Filter by order creation date (`createdAt`) and optionally by `brandId` and `locationId` (if <= 30), sorted by date.
-*   **Pattern:** `db.collection("orders").where("createdAt", ">=", startDate).where("createdAt", "<=", endDate).where("brandId", "==", brandId).orderBy("createdAt", "desc")`
-*   **Index Required:**
+*   **Query:** Filter the sales list by payment date (`paidAt`) and by the authorized `brandId`; optionally filter by up to 30 authorized `locationId` values. Orders are sorted in memory by `paidAt`, with missing dates last.
+*   **Pattern:** `db.collection("orders").where("paidAt", ">=", start).where("paidAt", "<", endExclusive).where("brandId", "==", brandId)`
+*   **Indexes Required:**
 
     ```json
     {
@@ -49,13 +49,18 @@ This document outlines the query patterns and required Firestore indexes for opt
       "queryScope": "COLLECTION",
       "fields": [
         { "fieldPath": "brandId", "order": "ASCENDING" },
-        { "fieldPath": "createdAt", "order": "DESCENDING" }
+        { "fieldPath": "paidAt", "order": "ASCENDING" }
       ]
     }
     ```
 
+    For the optional location-filtered query, add a composite index with
+    `brandId` ascending, `locationId` ascending and `paidAt` ascending. The exact
+    index configuration must match the query accepted by the production
+    Firestore database.
+
 *   **Performance Notes:**
-    *   The `locationId` filter uses an `in` query, limited to 30 locations. For more complex filtering, data would need to be exported to a dedicated analytics database (e.g., BigQuery).
+*   The `locationId` filter uses an `in` query, limited to 30 locations. Date boundaries use the Europe/Copenhagen calendar and are based only on `paidAt`; `createdAt` does not assign a sale to a period. For more complex filtering, data would need to be exported to a dedicated analytics database (e.g., BigQuery).
     *   The page is dynamically rendered (`revalidate = 0`) to ensure data is always fresh.
 
 #### Sales Dashboard (`/superadmin/sales/dashboard`)
