@@ -37,4 +37,6 @@ test('sales order date filtering queries paidAt and sorts by payment date',async
  const {getOrders}=loadTs('src/lib/superadmin/getOrders.ts',{'@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>q([])})},'@/lib/access/orderfly-session':{orderflyReadGrants:async()=>[{brandId:'brand-a',locationIds:null}]},'@/lib/analytics/date-range':{analyticsDateRange:()=>({start:new Date('2026-09-01'),endExclusive:new Date('2026-09-06')})},'firebase-admin':{firestore:{Timestamp:{fromDate:value=>value}}}});
  const orders=await getOrders({dateFrom:'2026-09-01',dateTo:'2026-09-05'});
  assert.deepEqual(reads[0].map(([field])=>field),['paidAt','paidAt','brandId']);assert.deepEqual(orders.map(order=>order.id),['newer','older']);
+ const operational=await getOrders(undefined,'createdAt');
+ assert.deepEqual(operational.map(order=>order.id),['older','newer'],'merchant queues stay in creation-time order');
 });
