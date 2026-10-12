@@ -178,9 +178,11 @@ for (const method of ['cash', 'card']) test(`promotion checkout → receipt → 
 });
 test('merchant cancellation releases a promotion reservation without paid KPI or invoice', async t => {
   const page = await pageFor(t, 'pickup-cancel'); await submitPromotion(page); const receiptUrl = page.url(); await page.goto(origin + '/merchant/orders?case=pickup-cancel');
-  page.once('dialog', dialog => dialog.accept()); await page.getByRole('button', { name: 'Annullér ubetalt ordre', exact: true }).click();
+  await page.getByRole('button', { name: 'Annullér ubetalt ordre', exact: true }).click();
+  await page.getByLabel('Kommentar (påkrævet)', { exact: true }).fill('Kunden bad om annullering');
+  await page.getByRole('button', { name: 'Bekræft annullering', exact: true }).click();
   await expect(page.getByRole('button', { name: 'Registrér betaling modtaget', exact: true })).toHaveCount(0);
-  const f = await getCase('pickup-cancel'); assert.equal(f.order().status, 'Canceled'); assert.equal(f.order().discountReservation, 'released');
+  const f = await getCase('pickup-cancel'); assert.equal(f.order().status, 'Canceled'); assert.equal(f.order().cancellationComment, 'Kunden bad om annullering'); assert.equal(f.order().discountReservation, 'released');
   assert.equal((await state('pickup-cancel')).kpis.totalSales, 0); assert.equal(f.records.get('discounts/d').usedCount, 0);
   await page.goto(receiptUrl);
   await expect(page.getByRole('heading', { name: 'Ordren er annulleret', exact: true })).toBeVisible();
