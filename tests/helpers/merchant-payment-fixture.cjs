@@ -83,7 +83,7 @@ async function paymentFixture(options = {}) {
   return { ...created, db, mocks, actorId, orderId, settlement, cancellation, settings, scoped, compat, receipts, sales, statuses,
     order: () => records.get('orders/' + orderId),
     pay: method => settlement.settlePaidPickupOrder(orderId, method || 'cash'),
-    cancel: () => cancellation.cancelUnpaidPickupOrder(orderId),
+    cancel: (cancellationComment = 'Fixture cancellation') => cancellation.cancelUnpaidPickupOrder(orderId, cancellationComment),
     kpis: () => ({ count: kpis().length, amount: kpis().reduce((sum, order) => sum + order.totalAmount, 0) }),
   };
 }
