@@ -15,6 +15,8 @@ import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { paymentMethodLabel } from '@/lib/merchant-payment-methods';
+import { sumNetPaidSales } from '@/lib/paid-order';
+import { canceledPickupPaymentLabel } from '@/lib/orders/presentation';
 import { AdminDateRange } from '@/components/superadmin/admin-date-range';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
@@ -94,18 +96,7 @@ export function OrdersClientPage({
     );
   }, [data, search]);
 
-  const totalRevenue = React.useMemo(
-    () =>
-      data.reduce(
-        (sum, order) =>
-          sum +
-          (order.paidSale && Number.isFinite(order.total)
-            ? order.total
-            : 0),
-        0,
-      ),
-    [data],
-  );
+  const totalRevenue = React.useMemo(() => sumNetPaidSales(data), [data]);
 
   const latestOrder = data[0];
 
@@ -326,7 +317,7 @@ export function OrdersClientPage({
                         <Badge variant="secondary">
                           {order.status === 'Canceled' && order.paymentMethod === 'PayAtPickup' ? 'Annulleret' : order.paymentStatus === 'Paid' || order.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && order.status !== 'Pending' ? order.status : order.paymentStatus === 'Failed' ? 'Betaling afbrudt' : 'Afventer betaling'}
                         </Badge>
-                        <p className="mt-1 text-sm">{order.status === 'Canceled' && order.paymentMethod === 'PayAtPickup' ? 'Ingen betaling modtaget' : paymentMethodLabel(order)}</p>
+                        <p className="mt-1 text-sm">{canceledPickupPaymentLabel(order) ?? paymentMethodLabel(order)}</p>
                       </TableCell>
 
                       <TableCell className="text-right font-medium">
