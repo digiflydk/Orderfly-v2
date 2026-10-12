@@ -11,10 +11,11 @@ data. It does not grant financial points or create customer accounts.
   customer's native brand. Customer metrics use the complete matching order set,
   not the integration's paginated history response.
 - Order count, spend and latest purchase are derived on read from paid orders
-  with positive remaining value. Pending, cancelled and fully refunded orders
-  are excluded. Recorded partial refunds reduce spend in integer ore. Invalid
+  with positive remaining value. `paidAt` is the only purchase date; `createdAt`
+  is never used as a fallback. Pending, cancelled and fully refunded orders are
+  excluded. Recorded partial refunds reduce spend in integer ore. Invalid
   monetary records are excluded from the calculation rather than crashing the
-  entire customer list. Missing dates receive no recency/frequency credit.
+  entire customer list. Missing payment dates receive no recency/frequency credit.
 - New customers are visible even without `lastOrderDate`. The list sorts by
   computed latest purchase descending, then stable native customer ID; undated
   customers come last. Customer details show the same score, classification and
