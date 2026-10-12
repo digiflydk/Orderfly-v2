@@ -19,3 +19,7 @@ export function paidSaleAmount(order: {
 export function isPaidSale(order: Parameters<typeof paidSaleAmount>[0]): boolean {
   return paidSaleAmount(order) > 0;
 }
+
+export function sumNetPaidSales(orders: Array<{ paidSale?: unknown; netTotal?: unknown }>): number {
+  return orders.reduce((sum, order) => sum + (order.paidSale === true && typeof order.netTotal === 'number' && Number.isFinite(order.netTotal) ? Math.max(0, order.netTotal) : 0), 0);
+}
