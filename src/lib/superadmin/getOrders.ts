@@ -13,7 +13,7 @@ function firestoreDate(value: unknown): Date | undefined {
   return date instanceof Date && Number.isFinite(date.getTime()) ? date : undefined;
 }
 
-export async function getOrders(filters?: Partial<SACommonFilters>): Promise<OrderSummary[]> {
+export async function getOrders(filters?: Partial<SACommonFilters>, sortBy: 'paidAt' | 'createdAt' = 'paidAt'): Promise<OrderSummary[]> {
   const db = getAdminDb();
   let q: admin.firestore.Query = db.collection('orders');
 
@@ -46,5 +46,5 @@ export async function getOrders(filters?: Partial<SACommonFilters>): Promise<Ord
           ...(firestoreDate(data.paidAt) ? { paidAt: firestoreDate(data.paidAt) } : {}),
       };
   });
-  return orders.sort((a,b)=>(b.paidAt?.getTime() ?? -Infinity)-(a.paidAt?.getTime() ?? -Infinity));
+  return orders.sort((a,b)=>((sortBy === 'paidAt' ? b.paidAt?.getTime() : b.createdAt.getTime()) ?? -Infinity)-((sortBy === 'paidAt' ? a.paidAt?.getTime() : a.createdAt.getTime()) ?? -Infinity));
 }
