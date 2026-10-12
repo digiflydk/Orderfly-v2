@@ -20,7 +20,7 @@ export default async function DirectoryDetail({params}:{params:Promise<{identity
     Promise.all(entry.sources.filter(source=>source.kind==='customer').map(source=>db.collection('orders').where('brandId','==',source.brandId).where('customerDetails.id','==',source.id).get())),
   ]);
   const names=new Map(brands.map(brand=>[brand.id,String(brand.data()?.name||brand.id)]));
-  const orders=orderSnapshots.flatMap(snapshot=>snapshot.docs.map(doc=>({id:doc.id,brandId:String(doc.data().brandId),status:String(doc.data().status||''),amount:Number(doc.data().totalAmount||0),date:asDate(doc.data().createdAt)?.toISOString()||''}))).sort((a,b)=>b.date.localeCompare(a.date));
+  const orders=orderSnapshots.flatMap(snapshot=>snapshot.docs.map(doc=>({id:doc.id,brandId:String(doc.data().brandId),status:String(doc.data().status||''),amount:Math.max(0,Number(doc.data().totalAmount||0)-Number(doc.data().refundedAmountOre||0)/100),date:asDate(doc.data().paidAt)?.toISOString()||''}))).sort((a,b)=>b.date.localeCompare(a.date));
   return <main className="space-y-6 p-4 sm:p-6">
     <Link href="/superadmin/customers" className="text-sm underline">Tilbage til kunder</Link>
     <div><h1 className="text-2xl font-semibold">{entry.name}</h1><p className="break-all text-muted-foreground">{entry.email}</p><p className="text-sm text-muted-foreground">Match på e-mail. Kontroller identiteten før personlige oplysninger bruges på tværs af merchants.</p></div>
