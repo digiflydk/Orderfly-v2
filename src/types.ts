@@ -338,6 +338,9 @@ export type OrderSummary = {
   paymentCollection?: { receivedAt: string; employeeId: string; employeeName: string; method: 'cash' | 'card' };
     id: string;
     createdAt: Date;
+    paidAt?: Date;
+    refundedAmountOre?: number;
+    cancellationComment?: string;
     customerName: string;
     customerContact: string;
     brandId: string;
