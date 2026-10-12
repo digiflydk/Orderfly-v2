@@ -73,7 +73,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 						Order <span className="font-mono text-xl bg-muted px-2 py-1 rounded-md">{order.id}</span>
 					</h1>
 					<p className="text-muted-foreground">
-						{order.createdAt ? format(new Date(order.createdAt), 'MMMM d, yyyy HH:mm') : 'Date not available'}
+						{order.paidAt ? `Paid ${format(new Date(order.paidAt), 'MMMM d, yyyy HH:mm')}` : 'Payment date not available'}
 					</p>
 				</div>
 				<div className="flex items-center gap-2">
@@ -157,6 +157,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 						<CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
 						<CardContent className="space-y-4">
 							<InfoItem icon={Hash} label="Order Status"><Badge variant={statusVariantMap[order.status]}>{order.status}</Badge></InfoItem>
+							{order.status === 'Canceled' && order.cancellationComment && <InfoItem icon={MessageSquare} label="Cancellation comment"><p className="whitespace-pre-wrap">{order.cancellationComment}</p></InfoItem>}
 							<InfoItem icon={order.deliveryType === 'Delivery' ? Truck : ShoppingCart} label="Order Type">{order.deliveryType}</InfoItem>
 							<InfoItem icon={MapPin} label="Location">{order.brandName} - {order.locationName}</InfoItem>
 						</CardContent>
