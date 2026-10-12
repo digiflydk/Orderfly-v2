@@ -7,7 +7,7 @@ import {
 } from '@/components/superadmin/sales/orders-client-page';
 import type { OrderSummary } from '@/types';
 import type { SACommonFilters } from '@/types/superadmin';
-import { isPaidSale } from '@/lib/paid-order';
+import { isPaidSale, paidSaleAmount } from '@/lib/paid-order';
 
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
@@ -94,12 +94,14 @@ export default async function OrdersPage({
         typeof order.totalAmount === 'number'
           ? order.totalAmount
           : Number(order.totalAmount ?? 0),
-      createdAt: serializeDate(order.createdAt as DateLike),
+      paidAt: serializeDate(order.paidAt as DateLike),
       status: order.status,
       paymentStatus: order.paymentStatus,
       paymentMethod: order.paymentMethod,
       ...(order.paymentCollection ? { paymentCollection: { method: order.paymentCollection.method } } : {}),
       paidSale: isPaidSale(order),
+      netTotal: paidSaleAmount(order),
+      refundedAmountOre: order.refundedAmountOre ?? 0,
     }));
 
     return (
