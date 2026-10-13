@@ -46,27 +46,26 @@ A mismatched location is rejected rather than allowing a cross-brand customer mu
 
 ## Identity resolution
 
-Email is normalized with trim + lowercase and is the primary identity signal inside the requested brand.
+Email is normalized with trim + lowercase, and phone is normalized to digits with a leading international prefix preserved. Either value can locate a customer, always within the requested brand.
 
 Resolution rules:
 
-1. Exactly one normalized email match: resolve that customer.
-2. More than one normalized email match: return `409 ambiguous_email_identity`.
-3. No email match and a normalized phone is available: phone may be used as a secondary signal.
-4. More than one phone match: return `409 ambiguous_phone_identity`.
-5. One phone match with a different existing email: return `409 phone_identity_conflict`.
-6. No safe match: create a new customer.
-7. Never match by name alone.
+1. A unique email match or unique phone match resolves the existing customer.
+2. If both values match the same profile, that profile is resolved.
+3. More than one match for an email returns `409 ambiguous_email_identity`; more than one match for a phone returns `409 ambiguous_phone_identity`.
+4. If the email and phone point to two different profiles, return `409 customer_identity_conflict`. Do not create a third profile or merge the two existing profiles automatically.
+5. When one value matches a profile and the other is new, keep the profile's primary email and phone and add the new value to `emailAliases` or `phoneAliases`.
+6. No safe match creates a new customer. Names are never used as identity signals.
 
-The implementation compares normalized values after a brand-scoped customer query. This preserves compatibility with older customer documents whose stored email case or formatting predates normalized helper fields.
+The resolver checks the existing brand's customers, including normalized alias values, so older profiles with inconsistent formatting remain eligible for safe matches.
 
 ### Concurrent duplicate prevention
 
-The normalized `(brand, email)` identity is hashed with SHA-256 and reserved in the server-side `integrationConsumerCustomerIdentities` collection. Customer creation/resolution and the identity reservation are committed in one Firestore transaction.
+The normalized `(brand, email)` identity is hashed with SHA-256 and reserved in `integrationConsumerCustomerIdentities`. The normalized `(brand, phone)` identity is reserved separately in `integrationConsumerCustomerPhoneIdentities`. Profile creation/resolution and both reservations are committed in one Firestore transaction.
 
-Two concurrent Esmeralda requests for the same previously unseen brand/email therefore contend on the same reservation document instead of independently creating two customers. If the reservation points to a missing, wrong-brand or conflicting customer, Orderfly returns `409 identity_index_conflict` rather than silently remapping the identity.
+Concurrent booking, checkout and Omnisend requests using the same email or phone therefore contend on the same identity reservation rather than independently creating profiles. If the two reservations point at different customers, or an index points to a missing or wrong-brand profile, Orderfly returns a conflict instead of remapping the identity.
 
-The reservation stores the hash, brand id and native customer id. It does not put the plain email address in the Firestore document id.
+The reservation documents store hashes, brand id and native customer id. They do not put plain email addresses or phone numbers in their document ids.
 
 ## Existing-customer update safety
 
@@ -77,7 +76,7 @@ When an existing customer resolves, the integration may update profile identity 
 - `lastOrderDate`
 - calculated loyalty history
 
-An absent incoming phone does not clear an existing customer's phone or `normalizedPhone`. Likewise, the booking placeholder name `Ikke oplyst`/`Not provided` does not replace an already populated customer name.
+An absent incoming phone does not clear an existing customer's phone or `normalizedPhone`. A new email or phone is recorded in the matching alias array rather than replacing the primary value. Likewise, the booking placeholder name `Ikke oplyst`/`Not provided` does not replace an already populated customer name.
 
 A newly created consumer customer receives the existing new-customer defaults only because no prior commerce history exists.
 
@@ -101,7 +100,7 @@ Expected error classes:
 - `400 invalid_json` / `invalid_payload`
 - `401 unauthorized`
 - `404 organization_not_found` / `location_not_found` / `location_organization_mismatch`
-- `409 ambiguous_email_identity` / `ambiguous_phone_identity` / `phone_identity_conflict` / `identity_index_conflict`
+- `409 ambiguous_email_identity` / `ambiguous_phone_identity` / `customer_identity_conflict` / `identity_index_conflict`
 - `500 integration_failure`
 
 ## Idempotency model
