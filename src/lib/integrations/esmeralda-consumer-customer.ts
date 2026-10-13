@@ -15,6 +15,7 @@ import {
   customerHasPhone,
   mergeCustomerIdentity,
   selectCustomerByIdentity,
+  type CustomerIdentityFields,
 } from '@/lib/customer-identity';
 
 export type ConsumerCustomerResolution = {
@@ -76,7 +77,7 @@ type CustomerRecord = Record<string, unknown> & {
   integrationSources?: unknown;
 };
 
-type SelectedCustomer = {
+type SelectedCustomer = CustomerIdentityFields & {
   snapshot: FirebaseFirestore.QueryDocumentSnapshot;
   record: CustomerRecord;
 };
@@ -210,10 +211,10 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
     .where('brandId', '==', parsed.organization_id)
     .get();
 
-  const customers: SelectedCustomer[] = brandCustomers.docs.map((snapshot) => ({
-    snapshot,
-    record: snapshot.data() as CustomerRecord,
-  }));
+  const customers: SelectedCustomer[] = brandCustomers.docs.map((snapshot) => {
+    const record = snapshot.data() as CustomerRecord;
+    return { ...record, id: snapshot.id, snapshot, record };
+  });
   const selectedBeforeTransaction = selectExistingCustomer(
     customers,
     normalizedEmail,
