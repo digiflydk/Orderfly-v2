@@ -12,6 +12,7 @@ export type DirectorySource = {
   totalOrders?: number;
   totalSpend?: number;
   lastOrderDate?: unknown;
+  loyaltyClassification?: string;
   newsletter?: boolean;
   campaignId?: string;
   campaignName?: string;
@@ -30,7 +31,9 @@ export type DirectoryEntry = {
   totalOrders: number;
   totalSpend: number;
   lastOrderDate: string | null;
-  sources: Array<{id:string;brandId:string;kind:'customer'|'game';name:string;phone:string;date:string|null;newsletter?:boolean;campaignId?:string;campaignName?:string;externalOrders?:number;externalSpend?:number;totalOrders?:number;totalSpend?:number}>;
+  createdAt: string | null;
+  loyaltyClassifications: string[];
+  sources: Array<{id:string;brandId:string;kind:'customer'|'game';name:string;phone:string;date:string|null;newsletter?:boolean;campaignId?:string;campaignName?:string;externalOrders?:number;externalSpend?:number;totalOrders?:number;totalSpend?:number;loyaltyClassification?:string}>;
 };
 
 export function directoryKey(email: string, brandId?: string): string {
@@ -49,11 +52,14 @@ export function buildDirectory(sources: DirectorySource[], global: boolean): Dir
     if (!key || !source.brandId || !source.id) continue;
     let entry = entries.get(key);
     if (!entry) {
-      entry = {id:key,name:source.name || email,email,phone:source.phone || '',brandIds:[],customerIds:[],gameCount:0,totalOrders:0,totalSpend:0,lastOrderDate:null,sources:[]};
+      entry = {id:key,name:source.name || email,email,phone:source.phone || '',brandIds:[],customerIds:[],gameCount:0,totalOrders:0,totalSpend:0,lastOrderDate:null,createdAt:null,loyaltyClassifications:[],sources:[]};
       entries.set(key, entry);
     }
     if (!entry.brandIds.includes(source.brandId)) entry.brandIds.push(source.brandId);
+    const sourceDate=asDate(source.createdAt)?.toISOString() || null;
+    if(sourceDate&&(!entry.createdAt||sourceDate<entry.createdAt))entry.createdAt=sourceDate;
     if (source.kind === 'customer') {
+      if (source.loyaltyClassification && !entry.loyaltyClassifications.includes(source.loyaltyClassification)) entry.loyaltyClassifications.push(source.loyaltyClassification);
       entry.customerIds.push(source.id);
       entry.name = source.name || entry.name;
       entry.phone = source.phone || entry.phone;
@@ -66,7 +72,7 @@ export function buildDirectory(sources: DirectorySource[], global: boolean): Dir
       entry.totalOrders += source.externalOrders || 0;
       entry.totalSpend += source.externalSpend || 0;
     }
-    entry.sources.push({id:source.id,brandId:source.brandId,kind:source.kind,name:source.name,phone:source.phone || '',date:asDate(source.createdAt)?.toISOString() || null,...(source.kind==='game'?{newsletter:source.newsletter===true,campaignId:source.campaignId,campaignName:source.campaignName,externalOrders:source.externalOrders||0,externalSpend:source.externalSpend||0}:{totalOrders:Number.isFinite(source.totalOrders)?source.totalOrders:0,totalSpend:Number.isFinite(source.totalSpend)?source.totalSpend:0})});
+    entry.sources.push({id:source.id,brandId:source.brandId,kind:source.kind,name:source.name,phone:source.phone || '',date:sourceDate,...(source.kind==='customer'&&source.loyaltyClassification?{loyaltyClassification:source.loyaltyClassification}:{}),...(source.kind==='game'?{newsletter:source.newsletter===true,campaignId:source.campaignId,campaignName:source.campaignName,externalOrders:source.externalOrders||0,externalSpend:source.externalSpend||0}:{totalOrders:Number.isFinite(source.totalOrders)?source.totalOrders:0,totalSpend:Number.isFinite(source.totalSpend)?source.totalSpend:0})});
   }
   return [...entries.values()].sort((a,b)=>(b.lastOrderDate||'').localeCompare(a.lastOrderDate||'') || a.email.localeCompare(b.email));
 }
