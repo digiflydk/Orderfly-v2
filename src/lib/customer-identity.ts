@@ -121,7 +121,7 @@ export function mergeCustomerIdentity(
     normalizedEmail: primaryEmail,
     emailAliases,
     ...(primaryPhone ? {
-      phone: existingPhone ? existingPhoneValue : (phone || '').trim(),
+      phone: existingPhone ? (existingPhoneValue || existingPhone) : (phone || '').trim(),
       normalizedPhone: primaryPhone,
       phoneAliases,
     } : {}),
