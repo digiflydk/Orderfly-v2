@@ -90,7 +90,9 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
   const gameOnlyContacts = useMemo(() => entries.filter(entry => {
     const gameSources = entry.sources.filter(source => source.kind === 'game'
       && (brandFilter === 'all' || source.brandId === brandFilter));
-    return entry.customerIds.length === 0
+    const scopedCustomerExists = entry.sources.some(source => source.kind === 'customer'
+      && (brandFilter === 'all' || source.brandId === brandFilter));
+    return !scopedCustomerExists
       && gameSources.length > 0
       && statusFilter === 'all'
       && loyaltyFilter === 'all'
@@ -234,8 +236,9 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
                 <TableBody>
                 {filteredCustomers.map((customer) => {
                   const activity=activityByCustomerId.get(customer.id);
-                  const games=activity?.sources.filter(source=>source.kind==='game')||[];
-                  const purchases=activity?.sources.filter(source=>source.kind==='customer'&&(source.totalOrders||0)>0)||[];
+                  const visibleSources=activity?.sources.filter(source=>brandFilter==='all'||source.brandId===brandFilter)||[];
+                  const games=visibleSources.filter(source=>source.kind==='game');
+                  const purchases=visibleSources.filter(source=>source.kind==='customer'&&(source.totalOrders||0)>0);
                   return (
                     <TableRow key={customer.id} onClick={() => handleRowClick(customer.id)} className="cursor-pointer">
                     <TableCell>
@@ -287,10 +290,11 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
                   );
                 })}
                 {gameOnlyContacts.map(entry => {
-                  const games=entry.sources.filter(source=>source.kind==='game');
+                  const games=entry.sources.filter(source=>source.kind==='game'&&(brandFilter==='all'||source.brandId===brandFilter));
+                  const visibleBrands=brandFilter==='all'?entry.brandIds:[brandFilter];
                   return <TableRow key={entry.id} onClick={()=>router.push(`/superadmin/customers/directory/${entry.id}`)} className="cursor-pointer">
                     <TableCell><p className="font-medium">{entry.name}</p><p className="text-sm text-muted-foreground">{entry.email}</p></TableCell>
-                    <TableCell>{entry.brandIds.map(id=>brandNames[id]||id).join(', ')}</TableCell>
+                    <TableCell>{visibleBrands.map(id=>brandNames[id]||id).join(', ')}</TableCell>
                     <TableCell>—</TableCell><TableCell>—</TableCell>
                     <TableCell>{games.map(game=><p key={`${game.brandId}:${game.id}`} className="text-xs">{game.campaignName||'Scratch card'} · {brandNames[game.brandId]||game.brandId}</p>)}</TableCell>
                     <TableCell>{games.filter(game=>game.externalOrders).map(game=><p key={`${game.brandId}:${game.id}`} className="text-xs">{brandNames[game.brandId]||game.brandId}: {game.externalOrders} · {(game.externalSpend||0).toLocaleString('da-DK',{style:'currency',currency:'DKK'})}</p>)}{!entry.totalOrders&&'—'}</TableCell>
