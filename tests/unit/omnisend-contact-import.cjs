@@ -374,7 +374,10 @@ test('booking imports resolve an existing profile by phone and retain its primar
       totalOrders: 2,
       totalSpend: 180,
       locationIds: [],
-      integrationSources: { esmeralda: { lastBookingId: 'booking-1' } },
+      integrationSources: {
+        esmeralda: { lastBookingId: 'booking-1' },
+        omnisend: { contactId: 'omni-contact-1' },
+      },
     }],
   ]);
   const db = memoryDb(rows);
@@ -406,6 +409,7 @@ test('booking imports resolve an existing profile by phone and retain its primar
   assert.equal(second.customer_id, 'booking-customer');
   assert.equal(first.operation, 'updated');
   assert.deepEqual(db.rows.get('customers/booking-customer').emailAliases, ['online@example.test']);
+  assert.equal(db.rows.get('customers/booking-customer').integrationSources.omnisend.contactId, 'omni-contact-1');
   assert.equal([...db.rows.keys()].filter(key => key.startsWith('customers/')).length, 1);
 });
 
