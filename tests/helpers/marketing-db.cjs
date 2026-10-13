@@ -2,7 +2,7 @@
 exports.memoryDb=(rows=new Map())=>{
  let tail=Promise.resolve();
  const ref=path=>({path,id:path.split('/').at(-1),get:async()=>snap(path),update:async data=>rows.set(path,{...rows.get(path),...data})});
- const snap=path=>({exists:rows.has(path),id:path.split('/').at(-1),ref:ref(path),data:()=>rows.has(path)?structuredClone(rows.get(path)):undefined});
+ const snap=path=>({exists:rows.has(path),id:path.split('/').at(-1),ref:ref(path),get:field=>rows.has(path)?structuredClone(rows.get(path)?.[field]):undefined,data:()=>rows.has(path)?structuredClone(rows.get(path)):undefined});
  const query=(name,filters=[],order=null,count=Infinity)=>({
   doc:id=>ref(name+'/'+id),where:(field,op,value)=>query(name,[...filters,{field,op,value}],order,count),
   orderBy:(field,dir)=>query(name,filters,{field,dir},count),limit:n=>query(name,filters,order,n),

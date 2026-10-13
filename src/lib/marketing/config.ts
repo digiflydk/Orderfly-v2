@@ -26,3 +26,18 @@ export function marketingConfigurationStatus(brandId: string): MarketingConfigur
 export function marketingConfig(brandId: string): MarketingConfig | null {
     return marketingConfigurationStatus(brandId).config;
 }
+
+
+/** All enabled, uniquely mapped provider accounts for the scheduled contact import. */
+export function configuredMarketingBrands(): MarketingConfig[] {
+    if (!process.env.ORDERFLY_OMNISEND_BRANDS) return [];
+    try {
+        const entries = z.array(mapping).max(100).parse(JSON.parse(process.env.ORDERFLY_OMNISEND_BRANDS));
+        if (new Set(entries.map(entry => entry.brandId)).size !== entries.length
+            || new Set(entries.map(entry => entry.omnisendBrandId)).size !== entries.length) return [];
+        return entries.filter(entry => entry.enabled);
+    }
+    catch {
+        return [];
+    }
+}

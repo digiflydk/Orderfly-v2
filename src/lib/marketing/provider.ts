@@ -34,6 +34,30 @@ export class Omnisend {
         if ((brand.brandID || brand.id) !== this.config.omnisendBrandId)
             throw new MarketingError('brand_mapping_mismatch', false);
     }
+    async listContacts(options: {
+        after?: string;
+        updatedAtFrom?: string;
+        limit?: number;
+    } = {}): Promise<{ contacts: ProviderContact[]; after: string | null }> {
+        const limit = Math.min(250, Math.max(1, Math.trunc(options.limit || 50)));
+        const params = new URLSearchParams({
+            limit: String(limit),
+            sort: options.updatedAtFrom ? 'updatedAt' : 'createdAt',
+            direction: 'asc',
+        });
+        if (options.after) params.set('after', options.after);
+        if (options.updatedAtFrom) params.set('updatedAtFrom', options.updatedAtFrom);
+        const result = await this.api('contacts?' + params.toString()) as {
+            contacts?: unknown;
+            paging?: { cursors?: { after?: unknown } };
+        };
+        if (!result || !Array.isArray(result.contacts))
+            throw new MarketingError('provider_invalid_response');
+        const cursor = result.paging?.cursors?.after;
+        if (cursor !== undefined && cursor !== null && (typeof cursor !== 'string' || !cursor))
+            throw new MarketingError('provider_invalid_response');
+        return { contacts: result.contacts as ProviderContact[], after: typeof cursor === 'string' ? cursor : null };
+    }
     async contact(email: string): Promise<ProviderContact | null> {
         const result = await this.api(`contacts?${new URLSearchParams({ email, limit: '2' })}`);
         const rows = Array.isArray(result.contacts) ? result.contacts : result.data;
