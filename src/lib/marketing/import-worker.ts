@@ -4,6 +4,13 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { DocumentReference, Firestore } from 'firebase-admin/firestore';
 
 import { normalizeEmail, normalizePhone } from '@/lib/integrations/esmeralda-customer-contract';
+import {
+    CustomerIdentityConflict,
+    customerHasEmail,
+    customerHasPhone,
+    mergeCustomerIdentity,
+    selectCustomerByIdentity,
+} from '@/lib/customer-identity';
 import { configuredMarketingBrands, type MarketingConfig } from './config';
 import { emailChannel, type ProviderContact } from './consent';
 import { MarketingError, Omnisend } from './provider';
@@ -30,6 +37,8 @@ type CustomerRecord = Record<string, unknown> & {
     fullName?: unknown;
     phone?: unknown;
     normalizedPhone?: unknown;
+    emailAliases?: unknown;
+    phoneAliases?: unknown;
     marketingConsent?: unknown;
     integrationSources?: unknown;
 };
@@ -42,7 +51,9 @@ type CachedCustomer = {
 
 type CustomerIndex = {
     byEmail: Map<string, CachedCustomer>;
-    ambiguous: Set<string>;
+    ambiguousEmails: Set<string>;
+    byPhone: Map<string, CachedCustomer>;
+    ambiguousPhones: Set<string>;
 };
 
 class ContactImportConflict extends Error {
@@ -85,33 +96,75 @@ function normalizedCustomerEmail(record: CustomerRecord): string {
     return typeof primary === 'string' ? normalizeEmail(primary) : '';
 }
 
-async function loadCustomerIndex(db: Firestore, brandId: string, emails: string[]): Promise<CustomerIndex> {
-    const byEmail = new Map<string, CachedCustomer>();
-    const ambiguous = new Set<string>();
-    if (!emails.length) return { byEmail, ambiguous };
-
-    // Read only profiles matching this provider page. normalizedEmail is the
-    // canonical lookup; email also covers older profiles without that field.
-    const [normalizedSnapshot, legacySnapshot] = await Promise.all([
-        db.collection('customers').where('normalizedEmail', 'in', emails).get(),
-        db.collection('customers').where('email', 'in', emails).get(),
-    ]);
-    const seen = new Set<string>();
-    for (const doc of [...normalizedSnapshot.docs, ...legacySnapshot.docs]) {
-        if (seen.has(doc.id)) continue;
-        seen.add(doc.id);
-        const data = doc.data() as CustomerRecord;
-        if (data.brandId !== brandId) continue;
-        const email = normalizedCustomerEmail(data);
-        if (!isEmail(email) || !emails.includes(email)) continue;
-        if (byEmail.has(email)) {
-            byEmail.delete(email);
-            ambiguous.add(email);
-            continue;
-        }
-        if (!ambiguous.has(email)) byEmail.set(email, { id: doc.id, ref: doc.ref, data });
+async function loadCustomerIndex(
+    db: Firestore,
+    brandId: string,
+    emails: string[],
+    phones: string[],
+    rawPhones: string[],
+): Promise<CustomerIndex> {
+    const index: CustomerIndex = {
+        byEmail: new Map(),
+        ambiguousEmails: new Set(),
+        byPhone: new Map(),
+        ambiguousPhones: new Set(),
+    };
+    const queries: Array<Promise<{ docs: Array<{ id: string; ref: DocumentReference; data(): Record<string, unknown> }> }>> = [];
+    const customerCollection = db.collection('customers');
+    if (emails.length) {
+        queries.push(
+            customerCollection.where('brandId', '==', brandId).where('normalizedEmail', 'in', emails).get(),
+            customerCollection.where('brandId', '==', brandId).where('email', 'in', emails).get(),
+            customerCollection.where('brandId', '==', brandId).where('emailAliases', 'array-contains-any', emails).get(),
+        );
     }
-    return { byEmail, ambiguous };
+    if (phones.length) {
+        queries.push(
+            customerCollection.where('brandId', '==', brandId).where('normalizedPhone', 'in', phones).get(),
+            customerCollection.where('brandId', '==', brandId).where('phoneAliases', 'array-contains-any', phones).get(),
+        );
+    }
+    const exactRawPhones = [...new Set(rawPhones.filter(Boolean))].slice(0, 25);
+    if (exactRawPhones.length) {
+        queries.push(
+            customerCollection.where('brandId', '==', brandId).where('phone', 'in', exactRawPhones).get(),
+        );
+    }
+    if (!queries.length) return index;
+
+    const snapshots = await Promise.all(queries);
+    const seen = new Set<string>();
+    const add = (
+        map: Map<string, CachedCustomer>,
+        ambiguous: Set<string>,
+        key: string,
+        customer: CachedCustomer,
+    ) => {
+        const current = map.get(key);
+        if (current && current.id !== customer.id) {
+            map.delete(key);
+            ambiguous.add(key);
+        } else if (!ambiguous.has(key)) {
+            map.set(key, customer);
+        }
+    };
+
+    for (const snapshot of snapshots) {
+        for (const doc of snapshot.docs) {
+            if (seen.has(doc.id)) continue;
+            seen.add(doc.id);
+            const data = doc.data() as CustomerRecord;
+            if (data.brandId !== brandId) continue;
+            const customer = { id: doc.id, ref: doc.ref, data };
+            for (const email of emails) {
+                if (customerHasEmail(data, email)) add(index.byEmail, index.ambiguousEmails, email, customer);
+            }
+            for (const phone of phones) {
+                if (customerHasPhone(data, phone)) add(index.byPhone, index.ambiguousPhones, phone, customer);
+            }
+        }
+    }
+    return index;
 }
 
 function providerIdentity(contact: ProviderContact) {
