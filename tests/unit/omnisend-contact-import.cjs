@@ -102,11 +102,13 @@ test('shared customer identity matches either normalized email or phone and keep
 });
 
 test('conflicting email and phone identities are rejected instead of selecting a third customer', () => {
-  const error = assert.throws(() => customerIdentity.selectCustomerByIdentity([
-    { id: 'email-customer', normalizedEmail: 'same@example.test', normalizedPhone: '1111' },
-    { id: 'phone-customer', normalizedEmail: 'other@example.test', normalizedPhone: '2222' },
-  ], 'same@example.test', '2222'));
-  assert.equal(error.code, 'customer_identity_conflict');
+  assert.throws(
+    () => customerIdentity.selectCustomerByIdentity([
+      { id: 'email-customer', normalizedEmail: 'same@example.test', normalizedPhone: '1111' },
+      { id: 'phone-customer', normalizedEmail: 'other@example.test', normalizedPhone: '2222' },
+    ], 'same@example.test', '2222'),
+    error => error.code === 'customer_identity_conflict',
+  );
 });
 
 test('Omnisend contact pagination uses the dated API version and incremental cursor', async () => {
