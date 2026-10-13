@@ -17,6 +17,7 @@ import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { isDefinitiveStripeRejection } from '@/lib/stripe-checkout-failure';
 import { validateCheckoutPrices } from '@/lib/checkout-price-validation';
 import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
+import { mergeCustomerIdentity } from '@/lib/customer-identity';
 import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
 import { newsletterEligible, newsletterAllowsStacking, cartLineEligible, assignedCustomerMatches, restaurantClock, discountMinimumError } from '@/lib/promotion-rules';
 import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
@@ -65,7 +66,7 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     const normalizedEmail = normalizeCustomerEmail(customerInfo.email);
     if (!normalizedEmail) throw new Error('Customer email is required.');
 
-    const integrated = await findCheckoutCustomer(brandId, normalizedEmail);
+    const integrated = await findCheckoutCustomer(brandId, normalizedEmail, customerInfo.phone);
     if (integrated) return { customerRef: integrated.ref, customerDoc: integrated, normalizedEmail };
 
     const scopedRef = doc(db, 'customers', scopedCustomerId(brandId, normalizedEmail));
@@ -104,11 +105,9 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
             if (customerData.brandId !== brandId) {
                 throw new Error('Customer identity scope conflict.');
             }
-            const updatedData: Partial<Customer> & { normalizedEmail?: string } = {
+            const updatedData: Partial<Customer> = {
                 fullName: customerInfo.name,
-                email: normalizedEmail,
-                normalizedEmail,
-                phone: customerInfo.phone,
+                ...mergeCustomerIdentity(customerData, normalizedEmail, customerInfo.phone),
                 street: customerInfo.street,
                 zipCode: customerInfo.zipCode,
                 city: customerInfo.city,
@@ -128,13 +127,17 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
             if (newsletterDiscountId && !customerData.marketingConsent) updatedData.pendingNewsletterDiscountId = newsletterDiscountId;
             await updateDoc(customerRef, omitUndefinedFields(updatedData));
         } else {
-            const newCustomer: Customer & { normalizedEmail: string } = {
+            const identityData = mergeCustomerIdentity({}, normalizedEmail, customerInfo.phone);
+            const newCustomer: Customer = {
                 id: customerId,
                 brandId: brandId,
                 fullName: customerInfo.name,
-                email: normalizedEmail,
-                normalizedEmail,
-                phone: customerInfo.phone,
+                email: typeof identityData.email === 'string' ? identityData.email : normalizedEmail,
+                normalizedEmail: typeof identityData.normalizedEmail === 'string' ? identityData.normalizedEmail : normalizedEmail,
+                emailAliases: Array.isArray(identityData.emailAliases) ? identityData.emailAliases : [],
+                phone: typeof identityData.phone === 'string' ? identityData.phone : customerInfo.phone,
+                ...(typeof identityData.normalizedPhone === 'string' ? { normalizedPhone: identityData.normalizedPhone } : {}),
+                phoneAliases: Array.isArray(identityData.phoneAliases) ? identityData.phoneAliases : [],
                 street: customerInfo.street,
                 zipCode: customerInfo.zipCode,
                 city: customerInfo.city,
