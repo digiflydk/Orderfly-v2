@@ -75,17 +75,14 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
     .filter(source => source.kind === 'customer').map(source => [source.id, entry] as const))), [entries]);
 
 
-  const filteredCustomers = useMemo(() => initialCustomers.filter(customer => {
-    const source = activityByCustomerId.get(customer.id)?.sources.find(
-      item => item.kind === 'customer' && item.id === customer.id && item.brandId === customer.brandId
-    );
-    return matchesCustomerSearch(searchQuery, [customer.fullName, customer.email, customer.phone])
+  const filteredCustomers = useMemo(() => initialCustomers.filter(customer =>
+    matchesCustomerSearch(searchQuery, [customer.fullName, customer.email, customer.phone])
       && (brandFilter === 'all' || customer.brandId === brandFilter)
       && (statusFilter === 'all' || customer.status === statusFilter)
       && (loyaltyFilter === 'all' || customer.loyaltyClassification === loyaltyFilter)
       && matchesDateRange(customer.createdAt, createdFrom, createdTo)
-      && matchesCustomerType(customerTypeFilter, source ? [source] : []);
-  }), [initialCustomers, searchQuery, brandFilter, statusFilter, loyaltyFilter, createdFrom, createdTo, customerTypeFilter, activityByCustomerId]);
+      && matchesCustomerType(customerTypeFilter, [{kind: 'customer', totalOrders: customer.totalOrders}])
+  ), [initialCustomers, searchQuery, brandFilter, statusFilter, loyaltyFilter, createdFrom, createdTo, customerTypeFilter]);
 
   const gameOnlyContacts = useMemo(() => entries.filter(entry => {
     const gameSources = entry.sources.filter(source => source.kind === 'game'
