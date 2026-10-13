@@ -11,6 +11,7 @@ import { Search, X, MoreHorizontal, Edit, Trash2, Star, Eye } from "lucide-react
 import type { Customer, Brand } from '@/types';
 import type { CustomerListRow } from '@/lib/customers/list-view';
 import type { DirectoryEntry } from '@/lib/customers/directory';
+import { matchesCustomerSearch, matchesCustomerType, matchesDateRange, type CustomerTypeFilter } from '@/lib/customers/filtering';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -60,6 +61,10 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
   const [searchQuery, setSearchQuery] = useState('');
   const [brandFilter, setBrandFilter] = useState('all');
   const [statusFilter, setStatusFilter] = useState('all');
+  const [customerTypeFilter, setCustomerTypeFilter] = useState<CustomerTypeFilter>('all');
+  const [loyaltyFilter, setLoyaltyFilter] = useState('all');
+  const [createdFrom, setCreatedFrom] = useState('');
+  const [createdTo, setCreatedTo] = useState('');
 
   const [isFormOpen, setIsFormOpen] = useState(false);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
@@ -70,25 +75,29 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
     .filter(source => source.kind === 'customer').map(source => [source.id, entry] as const))), [entries]);
 
 
-  const filteredCustomers = useMemo(() => {
-    return initialCustomers.filter(customer => {
-      const searchLower = searchQuery.toLowerCase();
-      const searchMatch = searchQuery === '' || 
-        customer.fullName.toLowerCase().includes(searchLower) ||
-        customer.email.toLowerCase().includes(searchLower) ||
-        customer.phone.includes(searchQuery);
-      
-      const brandMatch = brandFilter === 'all' || customer.brandId === brandFilter;
-      const statusMatch = statusFilter === 'all' || customer.status === statusFilter;
-      
-      return searchMatch && brandMatch && statusMatch;
-    });
-  }, [initialCustomers, searchQuery, brandFilter, statusFilter]);
-  const gameOnlyContacts = useMemo(() => entries.filter(entry => entry.customerIds.length === 0
-    && statusFilter === 'all'
-    && (brandFilter === 'all' || entry.brandIds.includes(brandFilter))
-    && (!searchQuery || [entry.name, entry.email, entry.phone].some(value => value.toLowerCase().includes(searchQuery.toLowerCase())))),
-    [entries, searchQuery, brandFilter, statusFilter]);
+  const filteredCustomers = useMemo(() => initialCustomers.filter(customer => {
+    const source = activityByCustomerId.get(customer.id)?.sources.find(
+      item => item.kind === 'customer' && item.id === customer.id && item.brandId === customer.brandId
+    );
+    return matchesCustomerSearch(searchQuery, [customer.fullName, customer.email, customer.phone])
+      && (brandFilter === 'all' || customer.brandId === brandFilter)
+      && (statusFilter === 'all' || customer.status === statusFilter)
+      && (loyaltyFilter === 'all' || customer.loyaltyClassification === loyaltyFilter)
+      && matchesDateRange(customer.createdAt, createdFrom, createdTo)
+      && matchesCustomerType(customerTypeFilter, source ? [source] : []);
+  }), [initialCustomers, searchQuery, brandFilter, statusFilter, loyaltyFilter, createdFrom, createdTo, customerTypeFilter, activityByCustomerId]);
+
+  const gameOnlyContacts = useMemo(() => entries.filter(entry => {
+    const gameSources = entry.sources.filter(source => source.kind === 'game'
+      && (brandFilter === 'all' || source.brandId === brandFilter));
+    return entry.customerIds.length === 0
+      && gameSources.length > 0
+      && statusFilter === 'all'
+      && loyaltyFilter === 'all'
+      && (customerTypeFilter === 'all' || customerTypeFilter === 'game-only')
+      && matchesCustomerSearch(searchQuery, [entry.name, entry.email, entry.phone, ...gameSources.flatMap(source => [source.name, source.phone])])
+      && gameSources.some(source => matchesDateRange(source.date, createdFrom, createdTo));
+  }), [entries, searchQuery, brandFilter, statusFilter, loyaltyFilter, createdFrom, createdTo, customerTypeFilter]);
   
   const handleRowClick = (customerId: string) => {
     router.push(`/superadmin/customers/${encodeURIComponent(customerId)}`);
@@ -122,6 +131,10 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
     setSearchQuery('');
     setBrandFilter('all');
     setStatusFilter('all');
+    setCustomerTypeFilter('all');
+    setLoyaltyFilter('all');
+    setCreatedFrom('');
+    setCreatedTo('');
   }
   
   const formatDateSafe = (dateString?: string) => {
@@ -135,7 +148,7 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
     }
   };
 
-  const isFiltered = searchQuery !== '' || brandFilter !== 'all' || statusFilter !== 'all';
+  const isFiltered = searchQuery !== '' || brandFilter !== 'all' || statusFilter !== 'all' || customerTypeFilter !== 'all' || loyaltyFilter !== 'all' || createdFrom !== '' || createdTo !== '';
 
   return (
     <>
@@ -144,51 +157,64 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
             <div>
             <h1 className="text-2xl font-bold tracking-tight">Customer Management</h1>
             <p className="text-muted-foreground">
-                Search, filter, and view all customers across the platform.
+                Search customers and filter by type, brand, creation date, loyalty, or status.
             </p>
             </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div className="relative lg:col-span-2">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-                placeholder="Search by name, email, or phone..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-10"
-            />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
+            <div className="relative xl:col-span-2">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input aria-label="Search customers" placeholder="Search by name, email, or phone" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="pl-10" />
             </div>
             <Select value={brandFilter} onValueChange={setBrandFilter}>
-            <SelectTrigger>
-                <SelectValue placeholder="Filter by brand..." />
-            </SelectTrigger>
-            <SelectContent>
-                <SelectItem value="all">All Brands</SelectItem>
-                {brands.map(brand => (
-                <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>
-                ))}
-            </SelectContent>
+              <SelectTrigger aria-label="Filter by brand"><SelectValue placeholder="All brands" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All brands</SelectItem>
+                {brands.map(brand => <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>)}
+              </SelectContent>
             </Select>
-            <div className="flex items-center gap-2">
+            <Select value={customerTypeFilter} onValueChange={value => setCustomerTypeFilter(value as CustomerTypeFilter)}>
+              <SelectTrigger aria-label="Filter by customer type"><SelectValue placeholder="All customer types" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All customer types</SelectItem>
+                <SelectItem value="no-orders">No orders yet</SelectItem>
+                <SelectItem value="first-order">First-time buyer (1 paid order)</SelectItem>
+                <SelectItem value="returning">Returning customer (2+ paid orders)</SelectItem>
+                <SelectItem value="game-only">Games signup only</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={loyaltyFilter} onValueChange={setLoyaltyFilter}>
+              <SelectTrigger aria-label="Filter by loyalty"><SelectValue placeholder="All loyalty levels" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All loyalty levels</SelectItem>
+                <SelectItem value="Loyal">Loyal</SelectItem>
+                <SelectItem value="Occasional">Occasional</SelectItem>
+                <SelectItem value="At Risk">At risk</SelectItem>
+                <SelectItem value="New">New</SelectItem>
+              </SelectContent>
+            </Select>
+            <div className="grid grid-cols-2 gap-2 xl:col-span-2">
+              <div className="space-y-1">
+                <label htmlFor="customer-created-from" className="text-xs text-muted-foreground">Created from</label>
+                <Input id="customer-created-from" aria-label="Created from" type="date" value={createdFrom} onChange={event => setCreatedFrom(event.target.value)} />
+              </div>
+              <div className="space-y-1">
+                <label htmlFor="customer-created-to" className="text-xs text-muted-foreground">Created to</label>
+                <Input id="customer-created-to" aria-label="Created to" type="date" value={createdTo} onChange={event => setCreatedTo(event.target.value)} />
+              </div>
+            </div>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-                <SelectTrigger>
-                <SelectValue placeholder="Filter by status..." />
-                </SelectTrigger>
-                <SelectContent>
-                <SelectItem value="all">All Statuses</SelectItem>
+              <SelectTrigger aria-label="Filter by status"><SelectValue placeholder="All statuses" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
-                </SelectContent>
+              </SelectContent>
             </Select>
-            {isFiltered && (
-                <Button variant="ghost" onClick={clearFilters} size="icon">
-                    <X className="h-4 w-4" />
-                    <span className="sr-only">Clear filters</span>
-                </Button>
-            )}
-            </div>
+            {isFiltered && <Button variant="ghost" onClick={clearFilters} className="justify-start" aria-label="Clear all filters"><X className="mr-2 h-4 w-4" />Clear filters</Button>}
         </div>
+        <p className="text-sm text-muted-foreground">{filteredCustomers.length} customer records · {gameOnlyContacts.length} Games signups without an Orderfly profile</p>
 
         <Card>
             <CardContent className="overflow-x-auto pt-6">
