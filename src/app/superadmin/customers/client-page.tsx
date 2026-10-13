@@ -148,6 +148,7 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
   };
 
   const isFiltered = searchQuery !== '' || brandFilter !== 'all' || statusFilter !== 'all' || customerTypeFilter !== 'all' || loyaltyFilter !== 'all' || createdFrom !== '' || createdTo !== '';
+  const invalidDateRange = !!createdFrom && !!createdTo && createdFrom > createdTo;
 
   return (
     <>
@@ -213,6 +214,7 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
             </Select>
             {isFiltered && <Button variant="ghost" onClick={clearFilters} className="justify-start" aria-label="Clear all filters"><X className="mr-2 h-4 w-4" />Clear filters</Button>}
         </div>
+        {invalidDateRange && <p role="alert" className="text-sm text-destructive">Created from date must be on or before created to date.</p>}
         <p className="text-sm text-muted-foreground">{filteredCustomers.length} customer records · {gameOnlyContacts.length} Games signups without an Orderfly profile</p>
 
         <Card>
