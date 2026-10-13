@@ -34,7 +34,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
  records.set('products/p',{brandId:'b',locationIds:['l'],categoryId:'pizza',price:100,isActive:true,productName:'Pizza'});
  records.set('discounts/d',{...offer,id:'d',orderTypes:discountOrderTypes,applicationType:kind==='newsletter'?'newsletter_signup':'code',perCustomerLimit:1,usageLimit:1});
  if(fault==='collision')records.set('orders/ORD-TEST',{paymentStatus:'Paid',brandId:'other',totalAmount:900});
- const record={id:'c',brandId:'b',locationIds:['l'],marketingConsent:false};
+ const record={id:'c',brandId:'b',email:'test@example.test',normalizedEmail:'test@example.test',phone:'12345678',normalizedPhone:'12345678',locationIds:['l'],marketingConsent:false};
  for (const [key, data] of seed) records.set(key,data);
  if(fault?.startsWith('consent-')) {
   const id='22222222-2222-4222-8222-222222222222',secret='b'.repeat(64);consentCookie=id+'.'+secret;
