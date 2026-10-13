@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { buildDirectory, directoryKey } from '../src/lib/customers/directory';
+import { matchesCustomerType } from '../src/lib/customers/filtering';
 
 const sources = [
   {id:'a',brandId:'pizza',name:'Guest',email:' Guest@Example.com ',kind:'customer' as const,totalOrders:2,totalSpend:250,lastOrderDate:'2026-09-20'},
@@ -30,4 +31,29 @@ test('merchant identities remain brand scoped even with matching email', () => {
   expect(rows.find(row=>row.brandIds[0]==='pizza')?.totalSpend).toBe(250);
   expect(rows.find(row=>row.brandIds[0]==='cafe')?.totalSpend).toBe(210);
   expect(rows.find(row=>row.brandIds[0]==='pizza')?.sources.some(source=>source.campaignName==='Brunch scratch card')).toBe(false);
+});
+
+test('booking, Omnisend and Games sources with different emails merge by the same brand phone', () => {
+  const rows = buildDirectory([
+    {id:'booking',brandId:'pizza',name:'Anna Jensen',email:'booking@example.com',phone:'+45 12 34 56 78',kind:'customer',hasBookingSource:true,totalOrders:0},
+    {id:'omnisend',brandId:'pizza',name:'Anna',email:'newsletter@example.com',emailAliases:['booking@example.com'],phone:'0045 12 34 56 78',kind:'customer',hasOmnisendSource:true,totalOrders:0},
+    {id:'game',brandId:'pizza',name:'Anna J',email:'games@example.com',phone:'+4512345678',kind:'game',newsletter:false},
+  ], false);
+  expect(rows).toHaveLength(1);
+  expect(rows[0].customerIds).toEqual(['booking','omnisend']);
+  expect(rows[0].brandIds).toEqual(['pizza']);
+  expect(rows[0].emails).toEqual(expect.arrayContaining(['booking@example.com','newsletter@example.com','games@example.com']));
+  expect(rows[0].phones).toEqual(['+45 12 34 56 78']);
+  expect(rows[0].sources.filter(source=>source.kind==='customer').map(source=>source.hasBookingSource||source.hasOmnisendSource)).toEqual([true,true]);
+  expect(matchesCustomerType('booking', rows[0].sources)).toBe(true);
+  expect(matchesCustomerType('omnisend', rows[0].sources)).toBe(true);
+});
+
+test('phone-only directory identities stay brand scoped for merchants', () => {
+  const sources = [
+    {id:'a',brandId:'pizza',name:'Guest',email:'a@example.com',phone:'+45 12 34 56 78',kind:'customer' as const},
+    {id:'b',brandId:'cafe',name:'Guest',email:'b@example.com',phone:'0045 12 34 56 78',kind:'customer' as const},
+  ];
+  expect(buildDirectory(sources,false)).toHaveLength(2);
+  expect(buildDirectory(sources,true)).toHaveLength(1);
 });
