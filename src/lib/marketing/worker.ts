@@ -127,7 +127,14 @@ export async function runMarketingWorker(db: Firestore, now = Date.now(), makePr
                 const suppressed = channel?.status !== 'subscribed';
                 if (suppressed && job.exists && job.data()?.brandId === state.brandId) tx.update(jobRef, {state:'suppressed', lastError:'provider_suppression', updatedAt:now, nextAttemptAt:NEVER});
                 tx.update(snap.ref, { providerStatus: channel?.status || 'missing', providerStatusChangedAt: channel?.statusChangedAt || null, state: suppressed ? 'suppressed' : state.state, nextReconcileAt: suppressed ? NEVER : now + 3600000, updatedAt: now });
-                if (suppressed && customer.exists && customer.data()?.brandId === state.brandId)
+                const customerData = customer.data();
+                const primaryEmail = typeof customerData?.normalizedEmail === 'string'
+                    ? customerData.normalizedEmail
+                    : typeof customerData?.email === 'string' ? customerData.email : '';
+                const isPrimaryEmailContact = customer.exists
+                    && customerData?.brandId === state.brandId
+                    && contactKey(state.brandId, primaryEmail) === snap.id;
+                if (suppressed && isPrimaryEmailContact)
                     tx.update(customerRef, { marketingConsent: false });
             });
             counts.reconciled++;
