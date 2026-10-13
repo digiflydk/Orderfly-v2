@@ -18,6 +18,15 @@ export type CustomerIdentityConflictCode =
   | 'ambiguous_phone_identity'
   | 'customer_identity_conflict';
 
+export type MergedCustomerIdentity = {
+  email: string;
+  normalizedEmail: string;
+  emailAliases: string[];
+  phone?: string;
+  normalizedPhone?: string;
+  phoneAliases?: string[];
+};
+
 export class CustomerIdentityConflict extends Error {
   constructor(readonly code: CustomerIdentityConflictCode) {
     super(code);
@@ -90,7 +99,7 @@ export function mergeCustomerIdentity(
   existing: CustomerIdentityFields,
   email: string,
   phone?: string | null,
-): Pick<CustomerIdentityFields, 'email' | 'normalizedEmail' | 'emailAliases' | 'phone' | 'normalizedPhone' | 'phoneAliases'> {
+): MergedCustomerIdentity {
   const incomingEmail = normalizeEmail(email);
   const existingEmail = normalizeEmail(
     typeof existing.normalizedEmail === 'string'
