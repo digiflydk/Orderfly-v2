@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
 const { loadTs } = require('../helpers/load-ts.cjs');
 const { memoryDb } = require('../helpers/marketing-db.cjs');
+const { checkout } = require('../helpers/checkout-fixture.cjs');
 
 const config = {
   brandId: 'brand-import-test',
@@ -132,6 +133,61 @@ test('Omnisend contact pagination uses the dated API version and incremental cur
   assert.equal(requestOptions.headers['Omnisend-Version'], '2026-03-15');
   assert.equal(requestOptions.headers['Authorization'], 'Omnisend-API-Key synthetic-restricted-key');
   assert.equal(result.after, 'next-page');
+});
+
+
+test('online checkout reuses a booking customer matched by phone and reserves both aliases', async () => {
+  const bookingCustomer = {
+    id: 'booking-customer', brandId: 'b',
+    email: 'booking@example.test', normalizedEmail: 'booking@example.test',
+    phone: '12345678', normalizedPhone: '12345678',
+    fullName: 'Anna Jensen', locationIds: ['l'], totalOrders: 1, totalSpend: 90,
+    marketingConsent: false,
+  };
+  const result = await checkout({
+    seed: [['customers/booking-customer', bookingCustomer]],
+    customerOverrides: { email: 'online@example.test', phone: '12345678' },
+  });
+  assert.equal(result.result.success, true, result.result.error);
+  const customer = result.records.get('customers/booking-customer');
+  assert.equal(customer.normalizedEmail, 'booking@example.test');
+  assert.deepEqual(customer.emailAliases, ['online@example.test']);
+  assert.equal(customer.normalizedPhone, '12345678');
+  assert.equal([...result.records.keys()].filter(key => key.startsWith('customers/')).length, 1);
+  const emailHashForCheckout = createHash('sha256')
+    .update('b\nonline@example.test').digest('hex');
+  const phoneHashForCheckout = createHash('sha256')
+    .update('b\n12345678').digest('hex');
+  assert.equal(
+    result.records.get('integrationConsumerCustomerIdentities/' + emailHashForCheckout).customerId,
+    'booking-customer',
+  );
+  assert.equal(
+    result.records.get('integrationConsumerCustomerPhoneIdentities/' + phoneHashForCheckout).customerId,
+    'booking-customer',
+  );
+  assert.equal(result.writes.find(write => write.ref.collection === 'orders').data.customerId, 'booking-customer');
+});
+
+test('checkout does not create a duplicate when email and phone belong to different customers', async () => {
+  const result = await checkout({
+    seed: [
+      ['customers/email-customer', {
+        id: 'email-customer', brandId: 'b',
+        email: 'primary@example.test', normalizedEmail: 'primary@example.test',
+        emailAliases: ['same@example.test'], phone: '1111', normalizedPhone: '1111',
+      }],
+      ['customers/phone-customer', {
+        id: 'phone-customer', brandId: 'b',
+        email: 'other@example.test', normalizedEmail: 'other@example.test',
+        phone: '2222', normalizedPhone: '2222',
+      }],
+    ],
+    customerOverrides: { email: 'same@example.test', phone: '2222' },
+  });
+  assert.equal(result.result.success, false);
+  assert.equal(result.events.includes('stripe'), false);
+  assert.equal([...result.records.keys()].filter(key => key.startsWith('customers/')).length, 2);
 });
 
 test('imports a subscribed Omnisend contact into the brand customer and records explicit consent provenance', async () => {
