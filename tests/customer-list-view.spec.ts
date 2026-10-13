@@ -38,7 +38,7 @@ test('preserves valid locations, loyalty data and mixed timestamp formats', () =
   expect(view).not.toHaveProperty('integrationSources');
   expect(Object.keys(view).sort()).toEqual([
     'brandId', 'brandName', 'createdAt', 'email', 'fullName', 'id', 'lastOrderDate',
-    'totalOrders', 'totalSpend',
     'locationIds', 'locationNames', 'loyaltyClassification', 'loyaltyScore', 'phone', 'status',
+    'totalOrders', 'totalSpend',
   ]);
 });
