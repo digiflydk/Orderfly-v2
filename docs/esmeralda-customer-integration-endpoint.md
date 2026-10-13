@@ -30,7 +30,7 @@ Orderfly reads the expected value from `ORDERFLY_ESMERALDA_INTEGRATION_SECRET`. 
 }
 ```
 
-`marketing_consent` is optional. Esmeralda phase 1 omits it for ordinary table bookings because booking consent is not marketing consent.
+`email` and `phone` are optional individually, but at least one valid identity is required. `marketing_consent` is optional. Esmeralda phase 1 omits it for ordinary table bookings because booking consent is not marketing consent.
 
 The canonical boundary uses snake_case. Firestore documents keep the existing Orderfly camelCase field names.
 
@@ -54,8 +54,10 @@ Resolution rules:
 2. If both values match the same profile, that profile is resolved.
 3. More than one match for an email returns `409 ambiguous_email_identity`; more than one match for a phone returns `409 ambiguous_phone_identity`.
 4. If the email and phone point to two different profiles, return `409 customer_identity_conflict`. Do not create a third profile or merge the two existing profiles automatically.
-5. When one value matches a profile and the other is new, keep the profile's primary email and phone and add the new value to `emailAliases` or `phoneAliases`.
+5. When one value matches a profile and the other is new, keep an existing primary value; fill an empty primary field first and store further values in `emailAliases` or `phoneAliases`.
 6. No safe match creates a new customer. Names are never used as identity signals.
+
+A phone-only booking creates a profile with no newsletter consent. If that guest later uses the same phone online or supplies an email through Omnisend, the new identity is attached to the same brand-scoped customer when it resolves uniquely.
 
 The resolver checks the existing brand's customers, including normalized alias values, so older profiles with inconsistent formatting remain eligible for safe matches.
 
@@ -92,6 +94,8 @@ Successful requests return HTTP 200:
   "normalized_phone": "+4512345678"
 }
 ```
+
+For a phone-only booking, `normalized_email` is `null`; `normalized_phone` contains the normalized phone identity. The manual booking action is documented in `docs/central-customer-directory.md`; it uses a private Supabase function and the existing shared integration secret, never a browser-side Supabase service key.
 
 `operation` is one of `created`, `resolved`, or `updated`.
 

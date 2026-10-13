@@ -53,6 +53,23 @@ test.describe('Esmeralda customer integration contract', () => {
       expect(valid.data.booking_id).toBe('booking-123');
     }
 
+    const phoneOnly = esmeraldaConsumerCustomerSchema.safeParse({
+      organization_id: 'brand-esmeralda',
+      location_id: 'location-amager',
+      booking_id: 'booking-phone-only',
+      full_name: 'Guest Name',
+      phone: '+45 12 34 56 78',
+    });
+    expect(phoneOnly.success).toBe(true);
+
+    const noIdentity = esmeraldaConsumerCustomerSchema.safeParse({
+      organization_id: 'brand-esmeralda',
+      location_id: 'location-amager',
+      booking_id: 'booking-without-contact',
+      full_name: 'Guest Name',
+    });
+    expect(noIdentity.success).toBe(false);
+
     const invalid = esmeraldaConsumerCustomerSchema.safeParse({
       organization_id: 'brand-esmeralda',
       location_id: 'location-amager',

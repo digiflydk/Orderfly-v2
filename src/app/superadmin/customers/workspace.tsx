@@ -5,20 +5,25 @@ import type { CustomerListRow } from '@/lib/customers/list-view';
 import type { DirectoryEntry } from '@/lib/customers/directory';
 import { CustomersClientPage } from './client-page';
 import { CustomersDirectory } from './directory-client';
+import { CustomerSyncActions } from './customer-sync-actions';
 
-export function CustomersWorkspace({ customers, brands, entries, brandNames, global }: {
+export function CustomersWorkspace({ customers, brands, entries, brandNames, global, canManuallySync }: {
   customers: CustomerListRow[];
   brands: Array<{ id: string; name: string }>;
   entries: DirectoryEntry[];
   brandNames: Record<string, string>;
   global: boolean;
+  canManuallySync: boolean;
 }) {
-  return <Tabs defaultValue="records" className="space-y-4">
+  return <div className="space-y-4">
+    {canManuallySync && <CustomerSyncActions brands={brands} />}
+    <Tabs defaultValue="records" className="space-y-4">
     <TabsList aria-label="Customer view">
       <TabsTrigger value="records">Customer records</TabsTrigger>
       <TabsTrigger value="directory">Unified directory</TabsTrigger>
     </TabsList>
     <TabsContent value="records"><CustomersClientPage initialCustomers={customers} brands={brands} entries={entries} brandNames={brandNames} /></TabsContent>
     <TabsContent value="directory"><CustomersDirectory entries={entries} brandNames={brandNames} global={global} /></TabsContent>
-  </Tabs>;
+    </Tabs>
+  </div>;
 }

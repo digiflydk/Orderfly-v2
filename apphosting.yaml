@@ -35,6 +35,10 @@ env:
     secret: FIREBASE_SERVICE_ACCOUNT_JSON
   - variable: ORDERFLY_ESMERALDA_INTEGRATION_SECRET
     secret: ORDERFLY_ESMERALDA_INTEGRATION_SECRET
+  - variable: ORDERFLY_ESMERALDA_CUSTOMER_SYNC_ENDPOINT
+    value: https://bdemvarwpfcxyczunchx.supabase.co/functions/v1/orderfly-customer-sync-trigger
+    availability:
+      - RUNTIME
   # Temporary, explicit dummy-data access switch for the feedback module (#102).
   # The secret value must be exactly "enabled-for-dummy-data" while testing and
   # must be removed when the shared platform authentication is introduced.

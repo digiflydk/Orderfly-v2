@@ -6,9 +6,12 @@ export const esmeraldaConsumerCustomerSchema = z.object({
   location_id: z.string().trim().min(1).max(200),
   booking_id: z.string().trim().min(1).max(200),
   full_name: z.string().trim().min(1).max(200),
-  email: z.string().trim().email().max(320),
+  email: z.string().trim().email().max(320).optional().nullable(),
   phone: z.string().trim().max(80).optional().nullable(),
   marketing_consent: z.boolean().optional(),
+}).refine(value => Boolean(value.email?.trim() || normalizePhone(value.phone)), {
+  message: 'A valid email address or phone number is required.',
+  path: ['email'],
 });
 
 export type EsmeraldaConsumerCustomerInput = z.infer<

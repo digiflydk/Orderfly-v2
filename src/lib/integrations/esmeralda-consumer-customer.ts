@@ -21,7 +21,7 @@ import {
 export type ConsumerCustomerResolution = {
   customer_id: string;
   operation: 'created' | 'resolved' | 'updated';
-  normalized_email: string;
+  normalized_email: string | null;
   normalized_phone: string | null;
 };
 
@@ -119,7 +119,7 @@ function buildExistingPatch(
     },
   };
 
-  let wouldUpdate = !customerHasEmail(existing, normalizedEmail);
+  let wouldUpdate = Boolean(normalizedEmail && !customerHasEmail(existing, normalizedEmail));
   const incomingName = parsed.full_name.trim();
   const existingName = typeof existing.fullName === 'string' ? existing.fullName.trim() : '';
 
@@ -197,7 +197,7 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
   input: EsmeraldaConsumerCustomerInput,
 ): Promise<ConsumerCustomerResolution> {
   const parsed = esmeraldaConsumerCustomerSchema.parse(input);
-  const normalizedEmail = normalizeEmail(parsed.email);
+  const normalizedEmail = parsed.email ? normalizeEmail(parsed.email) : '';
   const normalizedPhone = normalizePhone(parsed.phone);
 
   await assertBrandAndLocationBoundary(
@@ -221,9 +221,10 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
     normalizedPhone,
   );
 
-  const emailIdentityRef = db
-    .collection('integrationConsumerCustomerIdentities')
-    .doc(identityKey(parsed.organization_id, normalizedEmail));
+  const emailIdentityRef = normalizedEmail
+    ? db.collection('integrationConsumerCustomerIdentities')
+        .doc(identityKey(parsed.organization_id, normalizedEmail))
+    : null;
   const phoneIdentityRef = normalizedPhone
     ? db.collection('integrationConsumerCustomerPhoneIdentities')
         .doc(identityKey(parsed.organization_id, normalizedPhone))
@@ -231,7 +232,7 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
 
   return db.runTransaction(async (transaction) => {
     const [emailIdentitySnapshot, phoneIdentitySnapshot] = await Promise.all([
-      transaction.get(emailIdentityRef),
+      emailIdentityRef ? transaction.get(emailIdentityRef) : Promise.resolve(null),
       phoneIdentityRef ? transaction.get(phoneIdentityRef) : Promise.resolve(null),
     ]);
     const indexedCustomerIds = [emailIdentitySnapshot, phoneIdentitySnapshot]
@@ -303,7 +304,7 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
         );
       }
       if (
-        emailIdentitySnapshot.exists &&
+        emailIdentitySnapshot?.exists &&
         !customerHasEmail(existing, normalizedEmail)
       ) {
         throw new IntegrationConflictError(
@@ -362,18 +363,20 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
       transaction.set(customerRef, patch, { merge: true });
     }
 
-    transaction.set(
-      emailIdentityRef,
-      {
-        brandId: parsed.organization_id,
-        customerId: customerRef.id,
-        emailHash: identityKey(parsed.organization_id, normalizedEmail),
-        source: 'esmeralda',
-        updatedAt: now,
-        ...(emailIdentitySnapshot.exists ? {} : { createdAt: now }),
-      },
-      { merge: true },
-    );
+    if (emailIdentityRef) {
+      transaction.set(
+        emailIdentityRef,
+        {
+          brandId: parsed.organization_id,
+          customerId: customerRef.id,
+          emailHash: identityKey(parsed.organization_id, normalizedEmail),
+          source: 'esmeralda',
+          updatedAt: now,
+          ...(emailIdentitySnapshot?.exists ? {} : { createdAt: now }),
+        },
+        { merge: true },
+      );
+    }
     if (phoneIdentityRef) {
       transaction.set(
         phoneIdentityRef,
@@ -404,7 +407,7 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
     return {
       customer_id: customerRef.id,
       operation,
-      normalized_email: normalizedEmail,
+      normalized_email: normalizedEmail || null,
       normalized_phone: normalizedPhone,
     };
   });

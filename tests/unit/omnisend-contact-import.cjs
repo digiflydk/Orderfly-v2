@@ -325,6 +325,41 @@ test('imports a subscribed Omnisend contact into the brand customer and records 
   }
 });
 
+test('manual Omnisend import scopes to one brand and can bypass the scheduled interval', async () => {
+  const other = { ...config, brandId: 'brand-import-other', omnisendBrandId: 'omnisend-other' };
+  const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
+  process.env.ORDERFLY_OMNISEND_BRANDS = JSON.stringify([config, other]);
+  try {
+    const now = Date.now();
+    const db = memoryDb(new Map([
+      ['omnisendContactImportState/' + config.brandId, {
+        backfillComplete: true,
+        after: null,
+        importedThrough: new Date(now).toISOString(),
+        nextAttemptAt: now + 60_000,
+      }],
+    ]));
+    const requestedBrands = [];
+    const counts = await runOmnisendContactImportWorker(db, now, brand => {
+      requestedBrands.push(brand.brandId);
+      return providerFor([])();
+    }, now + 45_000, { brandId: config.brandId, allowEarly: true });
+    assert.deepEqual(requestedBrands, [config.brandId]);
+    assert.equal(counts.pages, 1);
+    assert.deepEqual(counts.results, [{
+      brandId: config.brandId,
+      status: 'imported',
+      backfillComplete: true,
+      hasMore: false,
+      imported: 0,
+    }]);
+    assert.equal(db.rows.has('omnisendContactImportState/' + other.brandId), false);
+  } finally {
+    if (previous === undefined) delete process.env.ORDERFLY_OMNISEND_BRANDS;
+    else process.env.ORDERFLY_OMNISEND_BRANDS = previous;
+  }
+});
+
 
 test('resolves an Omnisend contact by phone and preserves the booking customer primary identity', async () => {
   const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
@@ -486,6 +521,48 @@ test('booking resolver rejects email and phone identities that point to differen
     error => error.code === 'customer_identity_conflict',
   );
   assert.equal([...db.rows.keys()].filter(key => key.startsWith('customers/')).length, 2);
+});
+
+test('phone-only booking creates one customer and a later email resolves to that same profile', async () => {
+  const rows = new Map([
+    ['brands/brand-import-test', { id: 'brand-import-test' }],
+    ['locations/location-import-test', { id: 'location-import-test', brandId: config.brandId }],
+  ]);
+  const db = memoryDb(rows);
+  const admin = { firestore: { FieldValue: {
+    serverTimestamp: () => new Date('2026-10-13T12:00:00.000Z'),
+    arrayUnion: (...values) => values,
+  } } };
+  const resolver = loadTs('src/lib/integrations/esmeralda-consumer-customer.ts', {
+    'server-only': {},
+    '@/lib/firebase-admin': { admin, getAdminDb: () => db },
+  });
+  const booking = await resolver.resolveOrUpsertEsmeraldaConsumerCustomer({
+    organization_id: config.brandId,
+    location_id: 'location-import-test',
+    booking_id: 'booking-phone-only',
+    full_name: 'Phone Guest',
+    email: null,
+    phone: '+45 12 34 56 78',
+  });
+  const emailThenBooking = await resolver.resolveOrUpsertEsmeraldaConsumerCustomer({
+    organization_id: config.brandId,
+    location_id: 'location-import-test',
+    booking_id: 'booking-with-email',
+    full_name: 'Phone Guest',
+    email: 'guest@example.test',
+    phone: '0045 12 34 56 78',
+  });
+  assert.equal(booking.operation, 'created');
+  assert.equal(booking.normalized_email, null);
+  assert.equal(emailThenBooking.customer_id, booking.customer_id);
+  assert.equal(emailThenBooking.operation, 'updated');
+  const customer = db.rows.get('customers/' + booking.customer_id);
+  assert.equal(customer.normalizedPhone, '+4512345678');
+  assert.equal(customer.normalizedEmail, 'guest@example.test');
+  assert.equal([...db.rows.keys()].filter(key => key.startsWith('customers/')).length, 1);
+  assert.equal([...db.rows.keys()].filter(key => key.startsWith('integrationConsumerCustomerIdentities/')).length, 1);
+  assert.equal([...db.rows.keys()].filter(key => key.startsWith('integrationConsumerCustomerPhoneIdentities/')).length, 1);
 });
 
 test('checkout customer lookup resolves email aliases and phone aliases within one brand', async () => {
