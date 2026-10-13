@@ -77,7 +77,9 @@ test.describe('Esmeralda customer integration contract', () => {
     expect(resolver).toContain('db.runTransaction');
     expect(resolver).toContain("createHash('sha256')");
     expect(resolver).toContain("'identity_index_conflict'");
-    expect(resolver).toContain('if (incomingPhone && normalizedPhone)');
+    expect(resolver).toContain('mergeCustomerIdentity(existing, normalizedEmail, parsed.phone)');
+    expect(resolver).toContain('customerHasPhone(existing, normalizedPhone)');
+    expect(resolver).toContain('integrationConsumerCustomerPhoneIdentities');
     expect(resolver).not.toContain('normalizedPhone,\n    locationIds');
   });
 });
