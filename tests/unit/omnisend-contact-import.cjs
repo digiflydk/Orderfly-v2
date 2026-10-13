@@ -101,6 +101,41 @@ test('shared customer identity matches either normalized email or phone and keep
   assert.deepEqual(merged.phoneAliases, []);
 });
 
+test('one customer profile accepts multiple email and phone aliases in either direction', () => {
+  const customer = {
+    id: 'single-customer',
+    email: 'primary@example.test',
+    normalizedEmail: 'primary@example.test',
+    emailAliases: ['second@example.test', 'third@example.test'],
+    phone: '+45 12 34 56 78',
+    normalizedPhone: '+4512345678',
+    phoneAliases: ['+4555555555'],
+  };
+
+  assert.equal(
+    customerIdentity.selectCustomerByIdentity([customer], 'second@example.test', null)?.id,
+    'single-customer',
+  );
+  assert.equal(
+    customerIdentity.selectCustomerByIdentity([customer], 'new@example.test', '+45 55 55 55 55')?.id,
+    'single-customer',
+  );
+  assert.equal(
+    customerIdentity.selectCustomerByIdentity([customer], 'another@example.test', '+45 12 34 56 78')?.id,
+    'single-customer',
+  );
+
+  const merged = customerIdentity.mergeCustomerIdentity(
+    customer, 'fourth@example.test', '+45 66 66 66 66',
+  );
+  assert.equal(merged.normalizedEmail, 'primary@example.test');
+  assert.deepEqual(merged.emailAliases, [
+    'second@example.test', 'third@example.test', 'fourth@example.test',
+  ]);
+  assert.equal(merged.normalizedPhone, '+4512345678');
+  assert.deepEqual(merged.phoneAliases, ['+4555555555', '+4566666666']);
+});
+
 test('conflicting email and phone identities are rejected instead of selecting a third customer', () => {
   assert.throws(
     () => customerIdentity.selectCustomerByIdentity([
