@@ -8,6 +8,7 @@ function load(path,mocks={}) {
  new Function('require','module','exports',code)(name=>['./money','@/lib/money'].includes(name)?require('../helpers/load-ts.cjs').loadTs('src/lib/money.ts'):name === '@/lib/server/firestore-compat' && mocks['firebase/firestore'] ? {...mocks['firebase/firestore'],db:mocks['@/lib/firebase']?.db} : name in mocks ?mocks[name]:require(name),mod,mod.exports);return mod.exports;
 }
 const optional=load('src/lib/firestore-optional-fields.ts');
+const customerIdentity=loadTs('src/lib/customer-identity.ts');
 function strictWrite(value,path='root') {
  assert.notEqual(value,undefined,`Firestore rejects undefined at ${path}`);
  if(value && typeof value==='object') for(const [key,entry] of Object.entries(value)) strictWrite(entry,`${path}.${key}`);
@@ -59,7 +60,13 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   '@/lib/promotion-rules':load('src/lib/promotion-rules.ts'),
   '@/lib/automatic-discounts':load('src/lib/automatic-discounts.ts'),
   '@/lib/checkout-price-validation':load('src/lib/checkout-price-validation.ts',{'./promotion-rules':load('src/lib/promotion-rules.ts')}),
-  '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>existing?snap:null},
+  '@/lib/checkout-customer-identity':{findCheckoutCustomer:async(brandId,email,phone)=>{
+   const matches=[...records].filter(([key,data])=>key.startsWith('customers/')&&data.brandId===brandId&&(
+    customerIdentity.customerHasEmail(data,email)||customerIdentity.customerHasPhone(data,phone)
+   )).map(([key,data])=>({...data,id:data.id||key.slice('customers/'.length)}));
+   const selected=customerIdentity.selectCustomerByIdentity(matches,email,phone);
+   return selected?snapshot(firestoreRef('customers',selected.id)):existing?snap:null;
+  }},
   '@/lib/discount-reservations':{reserveDiscount:async()=>{events.push('reserve');if(fault==='reserve')throw Error('Discount capacity reached');},releaseDiscount:async()=>{events.push('release');if(fault==='release')throw Error('cleanup offline');}},
   '@/lib/order-id':{generateOrderId:()=> orderId},'@/lib/firebase':{db:{}},
   '@/lib/url':{getOrigin:async()=> origin},
@@ -87,7 +94,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
     }
     return snapshot(ref);
    },
-   runTransaction:async(_,callback)=>callback({get:async ref=>snapshot(ref),set:(ref,data)=>{save(ref,data);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)}),
+   runTransaction:async(_,callback)=>callback({get:async ref=>snapshot(ref),set:(ref,data,options)=>{save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)}),
    serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),
    setDoc:async(ref,data)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data);writes.push({ref,data});events.push(ref.collection);},
    updateDoc:async(ref,data)=>{
