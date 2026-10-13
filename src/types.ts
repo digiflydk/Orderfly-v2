@@ -108,11 +108,7 @@ export interface CustomerInfo {
     analyticsAttribution?: AnalyticsAttribution;
     name: string;
     email: string;
-    normalizedEmail?: string;
-    emailAliases?: string[];
     phone: string;
-    normalizedPhone?: string | null;
-    phoneAliases?: string[];
     street?: string;
     zipCode?: string;
     city?: string;
@@ -143,7 +139,11 @@ export type Customer = {
     brandId: string;
     fullName: string;
     email: string;
+    normalizedEmail?: string;
+    emailAliases?: string[];
     phone: string;
+    normalizedPhone?: string | null;
+    phoneAliases?: string[];
     street?: string;
     zipCode?: string;
     city?: string;
