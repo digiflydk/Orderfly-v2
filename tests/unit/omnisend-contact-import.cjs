@@ -190,6 +190,77 @@ test('checkout does not create a duplicate when email and phone belong to differ
   assert.equal([...result.records.keys()].filter(key => key.startsWith('customers/')).length, 2);
 });
 
+
+test('newsletter signup accepts a customer email alias without granting the primary address consent', async () => {
+  const db = memoryDb();
+  const customerId = 'booking-customer';
+  const aliasEmail = 'online@example.test';
+  db.rows.set('customers/' + customerId, {
+    id: customerId,
+    brandId: config.brandId,
+    email: 'booking@example.test',
+    normalizedEmail: 'booking@example.test',
+    emailAliases: [aliasEmail],
+    marketingConsent: false,
+  });
+  const { recordNewsletterConsent } = loadTs('src/lib/marketing/store.ts', {
+    'server-only': {},
+  });
+  const eventId = await recordNewsletterConsent(db, {
+    brandId: config.brandId,
+    brandName: 'Test brand',
+    locationId: 'location-test',
+    customerId,
+    email: aliasEmail,
+  });
+  assert.ok(eventId);
+  assert.equal(db.rows.get('customers/' + customerId).marketingConsent, false);
+  assert.equal(db.rows.get('marketingContacts/' + emailHash(aliasEmail)).customerId, customerId);
+});
+
+test('unsubscribe for a secondary email does not clear primary-email consent', async () => {
+  const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
+  process.env.ORDERFLY_OMNISEND_BRANDS = JSON.stringify([config]);
+  try {
+    const db = memoryDb();
+    const aliasEmail = 'online@example.test';
+    const contactHash = emailHash(aliasEmail);
+    const customerId = 'booking-customer';
+    const eventId = 'alias-consent-event';
+    db.rows.set('customers/' + customerId, {
+      id: customerId,
+      brandId: config.brandId,
+      email: 'booking@example.test',
+      normalizedEmail: 'booking@example.test',
+      emailAliases: [aliasEmail],
+      marketingConsent: true,
+    });
+    db.rows.set('marketingOutbox/' + eventId, {
+      brandId: config.brandId, customerId, eventId, contactKey: contactHash,
+      state: 'pending', attempts: 0, nextAttemptAt: Date.now() - 1,
+    });
+    db.rows.set('marketingConsents/' + eventId, {
+      id: eventId, brandId: config.brandId, customerId, email: aliasEmail,
+      channel: 'email', source: 'checkout', capturedAt: Date.now(),
+    });
+    db.rows.set('marketingContacts/' + contactHash, {
+      brandId: config.brandId, customerId, latestEventId: eventId,
+      state: 'pending', nextReconcileAt: Number.MAX_SAFE_INTEGER,
+    });
+    const provider = () => ({
+      verifyBrand: async () => {},
+      sync: async () => 'suppressed',
+      listContacts: async () => ({ contacts: [], after: null }),
+    });
+    await runMarketingWorker(db, Date.now(), provider);
+    assert.equal(db.rows.get('customers/' + customerId).marketingConsent, true);
+    assert.equal(db.rows.get('marketingContacts/' + contactHash).state, 'suppressed');
+  } finally {
+    if (previous === undefined) delete process.env.ORDERFLY_OMNISEND_BRANDS;
+    else process.env.ORDERFLY_OMNISEND_BRANDS = previous;
+  }
+});
+
 test('imports a subscribed Omnisend contact into the brand customer and records explicit consent provenance', async () => {
   const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
   process.env.ORDERFLY_OMNISEND_BRANDS = JSON.stringify([config]);
