@@ -95,7 +95,7 @@ export function CustomersDirectory({entries,brandNames,global}:{entries:Director
           const loyaltyLabels=[...new Set(customerSources.filter(source=>source.loyaltyClassification).map(source=>source.loyaltyClassification))];
           const typeLabel=customerSources.length
             ? (matchesCustomerType('returning',customerSources)?'Tilbagevendende kunde':matchesCustomerType('first-order',customerSources)?'Førstegangskøber':matchesCustomerType('no-orders',customerSources)?'Ingen køb endnu':'Orderfly-kunde')+(games.length?' + Games':'')
-            : 'Games-tilmelding';
+            : 'Games uden Orderfly-profil';
           return <tr key={entry.id} className="border-b last:border-0 hover:bg-muted/30">
             <td className="p-3"><Link href={'/superadmin/customers/directory/'+entry.id} className="font-medium underline-offset-2 hover:underline">{entry.name}</Link><div className="break-all text-muted-foreground">{entry.email}</div></td>
             <td className="p-3">{brands.map(id=>brandNames[id]||id).join(', ')}</td>
