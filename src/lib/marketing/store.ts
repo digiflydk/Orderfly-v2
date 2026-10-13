@@ -1,5 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
+import { customerHasEmail } from '@/lib/customer-identity';
+import { normalizeEmail } from '@/lib/integrations/esmeralda-customer-contract';
 import type { Firestore } from 'firebase-admin/firestore';
 import { NEWSLETTER_CONSENT_VERSION, PREVIOUS_NEWSLETTER_CONSENT_VERSION, newsletterConsentText, type ConsentEvent } from './consent';
 export const contactKey = (brandId: string, email: string) => createHash('sha256').update(`${brandId}\n${email.trim().toLowerCase()}`).digest('hex');
@@ -26,7 +28,7 @@ export async function recordNewsletterConsent(db: Firestore, input: {
         const [existing, state, customer] = await Promise.all([tx.get(eventRef), tx.get(stateRef), tx.get(customerRef)]);
         if (existing.exists)
             return;
-        if (!customer.exists || customer.data()?.brandId !== input.brandId || (customer.data()?.normalizedEmail || customer.data()?.email || '').trim().toLowerCase() !== email)
+        if (!customer.exists || customer.data()?.brandId !== input.brandId || !customerHasEmail(customer.data() || {}, email))
             throw new Error('Consent customer scope mismatch');
         const suppressed = state.data()?.state === 'suppressed' && legacy;
         tx.create(eventRef, event);
@@ -34,7 +36,13 @@ export async function recordNewsletterConsent(db: Firestore, input: {
             nextAttemptAt: suppressed ? Number.MAX_SAFE_INTEGER : event.capturedAt, createdAt: event.capturedAt, updatedAt: event.capturedAt });
         tx.set(stateRef, { brandId: input.brandId, customerId: input.customerId, latestEventId: id, updatedAt: event.capturedAt,
             state: suppressed ? 'suppressed' : 'pending', nextReconcileAt: Number.MAX_SAFE_INTEGER }, { merge: true });
-        if (!suppressed)
+        const customerData = customer.data() || {};
+        const primaryEmail = normalizeEmail(
+            typeof customerData.normalizedEmail === 'string'
+                ? customerData.normalizedEmail
+                : typeof customerData.email === 'string' ? customerData.email : '',
+        );
+        if (!suppressed && primaryEmail === email)
             tx.update(customerRef, { marketingConsent: true });
     });
     return id;
