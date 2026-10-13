@@ -43,6 +43,17 @@ const makeContact = (
 function compatFor(db) {
   return {
     collection: (_parent, path) => ({ path }),
+    doc: (_parent, ...segments) => ({ path: segments.join('/') }),
+    getDoc: async reference => {
+      const [name, ...segments] = reference.path.split('/');
+      const saved = await db.collection(name).doc(segments.join('/')).get();
+      return {
+        id: saved.id,
+        ref: saved.ref,
+        exists: () => saved.exists,
+        data: saved.data,
+      };
+    },
     where: (field, op, value) => ({ field, op, value }),
     limit: count => ({ limit: count }),
     query: (reference, ...constraints) => ({ ...reference, constraints }),
