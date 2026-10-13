@@ -73,6 +73,7 @@ type CustomerRecord = Record<string, unknown> & {
   emailAliases?: unknown;
   phoneAliases?: unknown;
   fullName?: unknown;
+  integrationSources?: unknown;
 };
 
 type SelectedCustomer = {
@@ -98,11 +99,19 @@ function buildExistingPatch(
   normalizedPhone: string | null,
   now: FirebaseFirestore.FieldValue,
 ): { patch: Record<string, unknown>; wouldUpdate: boolean } {
+  const currentSources = existing.integrationSources && typeof existing.integrationSources === 'object'
+    ? existing.integrationSources as Record<string, unknown>
+    : {};
+  const currentEsmeraldaSource = currentSources.esmeralda && typeof currentSources.esmeralda === 'object'
+    ? currentSources.esmeralda as Record<string, unknown>
+    : {};
   const patch: Record<string, unknown> = {
     ...mergeCustomerIdentity(existing, normalizedEmail, parsed.phone),
     locationIds: admin.firestore.FieldValue.arrayUnion(parsed.location_id),
     integrationSources: {
+      ...currentSources,
       esmeralda: {
+        ...currentEsmeraldaSource,
         lastBookingId: parsed.booking_id,
         lastSyncedAt: now,
       },
