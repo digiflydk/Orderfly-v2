@@ -8,9 +8,10 @@ import {
   customerHasEmail,
   customerHasPhone,
   selectCustomerByIdentity,
+  type CustomerIdentityFields,
 } from '@/lib/customer-identity';
 
-type CustomerMatch = {
+type CustomerMatch = CustomerIdentityFields & {
   id: string;
   ref: { id: string };
   data: Record<string, unknown>;
@@ -62,10 +63,12 @@ export async function findCheckoutCustomer(
   for (const snapshot of snapshots) {
     for (const customerDoc of snapshot.docs) {
       if (matches.has(customerDoc.id)) continue;
+      const data = customerDoc.data() as Record<string, unknown>;
       matches.set(customerDoc.id, {
+        ...data,
         id: customerDoc.id,
         ref: customerDoc.ref,
-        data: { ...customerDoc.data(), id: customerDoc.id },
+        data: { ...data, id: customerDoc.id },
         doc: customerDoc,
       });
     }
@@ -90,6 +93,7 @@ export async function findCheckoutCustomer(
     }
     if (!matches.has(customerDoc.id)) {
       matches.set(customerDoc.id, {
+        ...data,
         id: customerDoc.id,
         ref: customerDoc.ref,
         data,
