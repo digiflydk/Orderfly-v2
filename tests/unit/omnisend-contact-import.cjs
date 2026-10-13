@@ -168,7 +168,7 @@ test('online checkout reuses a booking customer matched by phone and reserves bo
     result.records.get('integrationConsumerCustomerPhoneIdentities/' + phoneHashForCheckout).customerId,
     'booking-customer',
   );
-  assert.equal(result.writes.find(write => write.ref.collection === 'orders').data.customerId, 'booking-customer');
+  assert.equal(result.writes.find(write => write.ref.collection === 'orders').data.customerDetails.id, 'booking-customer');
 });
 
 test('checkout does not create a duplicate when email and phone belong to different customers', async () => {
