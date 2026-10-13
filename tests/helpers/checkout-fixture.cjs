@@ -60,6 +60,8 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   '@/lib/promotion-rules':load('src/lib/promotion-rules.ts'),
   '@/lib/automatic-discounts':load('src/lib/automatic-discounts.ts'),
   '@/lib/checkout-price-validation':load('src/lib/checkout-price-validation.ts',{'./promotion-rules':load('src/lib/promotion-rules.ts')}),
+  '@/lib/customer-identity':customerIdentity,
+  '@/lib/integrations/esmeralda-customer-contract':loadTs('src/lib/integrations/esmeralda-customer-contract.ts'),
   '@/lib/checkout-customer-identity':{findCheckoutCustomer:async(brandId,email,phone)=>{
    const matches=[...records].filter(([key,data])=>key.startsWith('customers/')&&data.brandId===brandId&&(
     customerIdentity.customerHasEmail(data,email)||customerIdentity.customerHasPhone(data,phone)
