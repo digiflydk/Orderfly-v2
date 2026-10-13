@@ -4,6 +4,11 @@ import { createHash, randomUUID } from 'node:crypto';
 import type { DocumentReference, Firestore } from 'firebase-admin/firestore';
 
 import { normalizeEmail, normalizePhone } from '@/lib/integrations/esmeralda-customer-contract';
+import {
+    customerHasEmail,
+    customerHasPhone,
+    mergeCustomerIdentity,
+} from '@/lib/customer-identity';
 import { configuredMarketingBrands, type MarketingConfig } from './config';
 import { emailChannel, type ProviderContact } from './consent';
 import { MarketingError, Omnisend } from './provider';
@@ -30,6 +35,8 @@ type CustomerRecord = Record<string, unknown> & {
     fullName?: unknown;
     phone?: unknown;
     normalizedPhone?: unknown;
+    emailAliases?: unknown;
+    phoneAliases?: unknown;
     marketingConsent?: unknown;
     integrationSources?: unknown;
 };
@@ -42,7 +49,9 @@ type CachedCustomer = {
 
 type CustomerIndex = {
     byEmail: Map<string, CachedCustomer>;
-    ambiguous: Set<string>;
+    ambiguousEmails: Set<string>;
+    byPhone: Map<string, CachedCustomer>;
+    ambiguousPhones: Set<string>;
 };
 
 class ContactImportConflict extends Error {
@@ -85,33 +94,75 @@ function normalizedCustomerEmail(record: CustomerRecord): string {
     return typeof primary === 'string' ? normalizeEmail(primary) : '';
 }
 
-async function loadCustomerIndex(db: Firestore, brandId: string, emails: string[]): Promise<CustomerIndex> {
-    const byEmail = new Map<string, CachedCustomer>();
-    const ambiguous = new Set<string>();
-    if (!emails.length) return { byEmail, ambiguous };
-
-    // Read only profiles matching this provider page. normalizedEmail is the
-    // canonical lookup; email also covers older profiles without that field.
-    const [normalizedSnapshot, legacySnapshot] = await Promise.all([
-        db.collection('customers').where('normalizedEmail', 'in', emails).get(),
-        db.collection('customers').where('email', 'in', emails).get(),
-    ]);
-    const seen = new Set<string>();
-    for (const doc of [...normalizedSnapshot.docs, ...legacySnapshot.docs]) {
-        if (seen.has(doc.id)) continue;
-        seen.add(doc.id);
-        const data = doc.data() as CustomerRecord;
-        if (data.brandId !== brandId) continue;
-        const email = normalizedCustomerEmail(data);
-        if (!isEmail(email) || !emails.includes(email)) continue;
-        if (byEmail.has(email)) {
-            byEmail.delete(email);
-            ambiguous.add(email);
-            continue;
-        }
-        if (!ambiguous.has(email)) byEmail.set(email, { id: doc.id, ref: doc.ref, data });
+async function loadCustomerIndex(
+    db: Firestore,
+    brandId: string,
+    emails: string[],
+    phones: string[],
+    rawPhones: string[],
+): Promise<CustomerIndex> {
+    const index: CustomerIndex = {
+        byEmail: new Map(),
+        ambiguousEmails: new Set(),
+        byPhone: new Map(),
+        ambiguousPhones: new Set(),
+    };
+    const queries: Array<Promise<{ docs: Array<{ id: string; ref: DocumentReference; data(): Record<string, unknown> }> }>> = [];
+    const customerCollection = db.collection('customers');
+    if (emails.length) {
+        queries.push(
+            customerCollection.where('brandId', '==', brandId).where('normalizedEmail', 'in', emails).get(),
+            customerCollection.where('brandId', '==', brandId).where('email', 'in', emails).get(),
+            customerCollection.where('brandId', '==', brandId).where('emailAliases', 'array-contains-any', emails).get(),
+        );
     }
-    return { byEmail, ambiguous };
+    if (phones.length) {
+        queries.push(
+            customerCollection.where('brandId', '==', brandId).where('normalizedPhone', 'in', phones).get(),
+            customerCollection.where('brandId', '==', brandId).where('phoneAliases', 'array-contains-any', phones).get(),
+        );
+    }
+    const exactRawPhones = [...new Set(rawPhones.filter(Boolean))].slice(0, 25);
+    if (exactRawPhones.length) {
+        queries.push(
+            customerCollection.where('brandId', '==', brandId).where('phone', 'in', exactRawPhones).get(),
+        );
+    }
+    if (!queries.length) return index;
+
+    const snapshots = await Promise.all(queries);
+    const seen = new Set<string>();
+    const add = (
+        map: Map<string, CachedCustomer>,
+        ambiguous: Set<string>,
+        key: string,
+        customer: CachedCustomer,
+    ) => {
+        const current = map.get(key);
+        if (current && current.id !== customer.id) {
+            map.delete(key);
+            ambiguous.add(key);
+        } else if (!ambiguous.has(key)) {
+            map.set(key, customer);
+        }
+    };
+
+    for (const snapshot of snapshots) {
+        for (const doc of snapshot.docs) {
+            if (seen.has(doc.id)) continue;
+            seen.add(doc.id);
+            const data = doc.data() as CustomerRecord;
+            if (data.brandId !== brandId) continue;
+            const customer = { id: doc.id, ref: doc.ref, data };
+            for (const email of emails) {
+                if (customerHasEmail(data, email)) add(index.byEmail, index.ambiguousEmails, email, customer);
+            }
+            for (const phone of phones) {
+                if (customerHasPhone(data, phone)) add(index.byPhone, index.ambiguousPhones, phone, customer);
+            }
+        }
+    }
+    return index;
 }
 
 function providerIdentity(contact: ProviderContact) {
@@ -193,17 +244,27 @@ async function importContact(
         providerUpdatedAt, providerCreatedAt, phone, normalizedPhone,
         name, providerContactId,
     } = identity;
-    if (index.ambiguous.has(email)) throw new ContactImportConflict('ambiguous_email_identity');
+    if (index.ambiguousEmails.has(email)) throw new ContactImportConflict('ambiguous_email_identity');
+    if (normalizedPhone && index.ambiguousPhones.has(normalizedPhone))
+        throw new ContactImportConflict('ambiguous_phone_identity');
+    const emailMatch = index.byEmail.get(email) || null;
+    const phoneMatch = normalizedPhone ? index.byPhone.get(normalizedPhone) || null : null;
+    if (emailMatch && phoneMatch && emailMatch.id !== phoneMatch.id)
+        throw new ContactImportConflict('customer_identity_conflict');
+    const selected = emailMatch || phoneMatch;
 
     const emailHash = hash(config.brandId + '\n' + email);
     const identityRef = db.collection('integrationConsumerCustomerIdentities').doc(emailHash);
+    const phoneHash = normalizedPhone ? hash(config.brandId + '\n' + normalizedPhone) : null;
+    const phoneIdentityRef = phoneHash
+        ? db.collection('integrationConsumerCustomerPhoneIdentities').doc(phoneHash)
+        : null;
     const contactRef = db.collection('marketingContacts').doc(emailHash);
     const snapshotEventId = hash([
         config.brandId, emailHash, status, providerStatusChangedAt || '', providerUpdatedAt || '',
         consentSource, consentGrantedAt || '',
     ].join('\n'));
     const snapshotEventRef = db.collection('marketingConsentImports').doc(snapshotEventId);
-    const selected = index.byEmail.get(email);
     const deterministicCustomerId = 'cust-v2-' + emailHash.slice(0, 32);
     const deterministicRef = db.collection('customers').doc(deterministicCustomerId);
     const identityTime = now;
@@ -211,44 +272,64 @@ async function importContact(
 
     try {
         result = await db.runTransaction(async tx => {
-            const identitySnapshot = await tx.get(identityRef);
+            const [identitySnapshot, phoneIdentitySnapshot] = await Promise.all([
+                tx.get(identityRef),
+                phoneIdentityRef ? tx.get(phoneIdentityRef) : Promise.resolve(null),
+            ]);
+            const indexedIds = [identitySnapshot, phoneIdentitySnapshot]
+                .filter(snapshot => !!snapshot?.exists)
+                .map(snapshot => {
+                    const indexedBrandId = snapshot!.get('brandId');
+                    const indexedCustomerId = snapshot!.get('customerId');
+                    if (indexedBrandId !== config.brandId || typeof indexedCustomerId !== 'string' || !indexedCustomerId)
+                        throw new ContactImportConflict('identity_index_conflict');
+                    return indexedCustomerId;
+                });
+            const uniqueIndexedIds = [...new Set(indexedIds)];
+            if (uniqueIndexedIds.length > 1)
+                throw new ContactImportConflict('customer_identity_conflict');
+            const indexedCustomerId = uniqueIndexedIds[0] || null;
+            if (selected && indexedCustomerId && selected.id !== indexedCustomerId)
+                throw new ContactImportConflict('identity_index_conflict');
+
             let customerRef: DocumentReference;
             let customerSnapshot: FirebaseFirestore.DocumentSnapshot | null = null;
             let customerData: CustomerRecord = {};
             let created = false;
 
-            if (identitySnapshot.exists) {
-                const indexedBrandId = identitySnapshot.get('brandId');
-                const indexedCustomerId = identitySnapshot.get('customerId');
-                if (indexedBrandId !== config.brandId || typeof indexedCustomerId !== 'string' || !indexedCustomerId)
-                    throw new ContactImportConflict('identity_index_conflict');
-                if (selected && selected.id !== indexedCustomerId)
-                    throw new ContactImportConflict('identity_index_conflict');
+            if (indexedCustomerId) {
                 customerRef = db.collection('customers').doc(indexedCustomerId);
                 customerSnapshot = await tx.get(customerRef);
                 if (!customerSnapshot.exists)
                     throw new ContactImportConflict('identity_index_conflict');
                 customerData = customerSnapshot.data() as CustomerRecord;
-                if (customerData.brandId !== config.brandId || normalizedCustomerEmail(customerData) !== email)
-                    throw new ContactImportConflict('identity_index_conflict');
             } else if (selected) {
                 customerRef = selected.ref;
                 customerSnapshot = await tx.get(customerRef);
                 if (!customerSnapshot.exists)
                     throw new ContactImportConflict('identity_index_conflict');
                 customerData = customerSnapshot.data() as CustomerRecord;
-                if (customerData.brandId !== config.brandId || normalizedCustomerEmail(customerData) !== email)
-                    throw new ContactImportConflict('identity_index_conflict');
             } else {
                 customerRef = deterministicRef;
                 customerSnapshot = await tx.get(customerRef);
                 if (customerSnapshot.exists) {
                     customerData = customerSnapshot.data() as CustomerRecord;
-                    if (customerData.brandId !== config.brandId || normalizedCustomerEmail(customerData) !== email)
-                        throw new ContactImportConflict('identity_index_conflict');
                 } else {
                     created = true;
                 }
+            }
+
+            if (!created) {
+                if (
+                    customerData.brandId !== config.brandId ||
+                    (!customerHasEmail(customerData, email) && !customerHasPhone(customerData, normalizedPhone))
+                ) {
+                    throw new ContactImportConflict('identity_index_conflict');
+                }
+                if (identitySnapshot.exists && !customerHasEmail(customerData, email))
+                    throw new ContactImportConflict('identity_index_conflict');
+                if (phoneIdentitySnapshot?.exists && !customerHasPhone(customerData, normalizedPhone))
+                    throw new ContactImportConflict('identity_index_conflict');
             }
 
             const stateSnapshot = await tx.get(contactRef);
@@ -271,9 +352,11 @@ async function importContact(
             );
 
             const currentName = typeof customerData.fullName === 'string' ? customerData.fullName.trim() : '';
-            const currentPhone = typeof customerData.phone === 'string' ? customerData.phone.trim() : '';
-            const profileUpdated = !created && (customerEmail(customerData) !== email
-                || !!(name && isPlaceholderName(currentName)) || !!(phone && !currentPhone));
+            const profileUpdated = !created && (
+                !customerHasEmail(customerData, email) ||
+                !!(name && isPlaceholderName(currentName)) ||
+                !!(normalizedPhone && !customerHasPhone(customerData, normalizedPhone))
+            );
             const currentSources = customerData.integrationSources && typeof customerData.integrationSources === 'object'
                 ? customerData.integrationSources as Record<string, unknown>
                 : {};
@@ -289,28 +372,30 @@ async function importContact(
                 ...(providerUpdatedAt ? { providerUpdatedAt: new Date(providerUpdatedAt) } : {}),
             };
             const customerPatch: CustomerRecord = {
+                ...mergeCustomerIdentity(customerData, email, phone),
                 id: customerRef.id,
                 brandId: config.brandId,
-                email,
-                normalizedEmail: email,
                 integrationSources: { ...currentSources, omnisend: sourceData },
                 ...(name && isPlaceholderName(currentName) ? { fullName: name } : {}),
-                ...(phone && !currentPhone ? { phone, normalizedPhone } : {}),
             };
             const incomingStatusIsSubscribed = status === 'subscribed';
             const canApplyProviderState = !localConsentIsNewer;
+            const consentMatchesPrimaryEmail = created || customerEmail(customerData) === email;
             let nextMarketingState = typeof state?.state === 'string' ? state.state : 'suppressed';
             let nextMarketingConsent: boolean | undefined;
             if (canApplyProviderState) {
                 if (status === 'unsubscribed') {
                     nextMarketingState = 'suppressed';
-                    nextMarketingConsent = false;
-                } else if (incomingStatusIsSubscribed && (consentEvidence || customerData.marketingConsent === true)) {
+                    if (consentMatchesPrimaryEmail) nextMarketingConsent = false;
+                } else if (incomingStatusIsSubscribed && (
+                    consentEvidence || (consentMatchesPrimaryEmail && customerData.marketingConsent === true)
+                )) {
                     nextMarketingState = 'synced';
-                    if (consentEvidence) nextMarketingConsent = true;
+                    if (consentEvidence && consentMatchesPrimaryEmail) nextMarketingConsent = true;
                 } else {
                     nextMarketingState = 'suppressed';
-                    if (customerData.marketingConsent !== true) nextMarketingConsent = false;
+                    if (consentMatchesPrimaryEmail && customerData.marketingConsent !== true)
+                        nextMarketingConsent = false;
                 }
             }
             if (nextMarketingConsent !== undefined) customerPatch.marketingConsent = nextMarketingConsent;
@@ -365,6 +450,16 @@ async function importContact(
                 updatedAt: identityTime,
                 ...(identitySnapshot.exists ? {} : { createdAt: identityTime }),
             }, { merge: true });
+            if (phoneIdentityRef && phoneHash) {
+                tx.set(phoneIdentityRef, {
+                    brandId: config.brandId,
+                    customerId: customerRef.id,
+                    phoneHash,
+                    source: 'omnisend',
+                    updatedAt: identityTime,
+                    ...(phoneIdentitySnapshot?.exists ? {} : { createdAt: identityTime }),
+                }, { merge: true });
+            }
             tx.set(contactRef, {
                 brandId: config.brandId,
                 customerId: customerRef.id,
@@ -402,8 +497,13 @@ async function importContact(
         throw error;
     }
 
-    index.ambiguous.delete(email);
-    index.byEmail.set(email, { id: result.id, ref: db.collection('customers').doc(result.id), data: result.data });
+    const cached = { id: result.id, ref: db.collection('customers').doc(result.id), data: result.data };
+    index.ambiguousEmails.delete(email);
+    index.byEmail.set(email, cached);
+    if (normalizedPhone) {
+        index.ambiguousPhones.delete(normalizedPhone);
+        index.byPhone.set(normalizedPhone, cached);
+    }
     return result.created ? 'created' : result.updated ? 'updated' : 'resolved';
 }
 
@@ -479,11 +579,22 @@ export async function runOmnisendContactImportWorker(
                 limit: CONTACTS_PER_PAGE,
             });
             const pageEmails = new Set<string>();
+            const pagePhones = new Set<string>();
+            const pageRawPhones = new Set<string>();
             for (const contact of page.contacts) {
                 const identity = providerIdentity(contact);
-                if (identity) pageEmails.add(identity.email);
+                if (!identity) continue;
+                pageEmails.add(identity.email);
+                if (identity.normalizedPhone) pagePhones.add(identity.normalizedPhone);
+                if (identity.phone) pageRawPhones.add(identity.phone);
             }
-            const index = await loadCustomerIndex(db, config.brandId, [...pageEmails]);
+            const index = await loadCustomerIndex(
+                db,
+                config.brandId,
+                [...pageEmails],
+                [...pagePhones],
+                [...pageRawPhones],
+            );
             for (const contact of page.contacts) {
                 if (Date.now() >= deadline) throw new MarketingError('import_deadline', true);
                 try {

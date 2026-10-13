@@ -17,6 +17,8 @@ import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { isDefinitiveStripeRejection } from '@/lib/stripe-checkout-failure';
 import { validateCheckoutPrices } from '@/lib/checkout-price-validation';
 import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
+import { customerHasEmail, customerHasPhone, mergeCustomerIdentity } from '@/lib/customer-identity';
+import { normalizePhone } from '@/lib/integrations/esmeralda-customer-contract';
 import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
 import { newsletterEligible, newsletterAllowsStacking, cartLineEligible, assignedCustomerMatches, restaurantClock, discountMinimumError } from '@/lib/promotion-rules';
 import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
@@ -65,7 +67,7 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     const normalizedEmail = normalizeCustomerEmail(customerInfo.email);
     if (!normalizedEmail) throw new Error('Customer email is required.');
 
-    const integrated = await findCheckoutCustomer(brandId, normalizedEmail);
+    const integrated = await findCheckoutCustomer(brandId, normalizedEmail, customerInfo.phone);
     if (integrated) return { customerRef: integrated.ref, customerDoc: integrated, normalizedEmail };
 
     const scopedRef = doc(db, 'customers', scopedCustomerId(brandId, normalizedEmail));
@@ -94,66 +96,144 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
 
 async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: string, locationId: string, newOrderTotal: number, newsletterDiscountId?: string): Promise<string> {
     try {
-        const { customerRef, customerDoc, normalizedEmail } = await resolveCheckoutCustomerRef(customerInfo, brandId);
-        const customerId = customerRef.id;
+        const { customerRef, normalizedEmail } = await resolveCheckoutCustomerRef(customerInfo, brandId);
+        const normalizedPhone = normalizePhone(customerInfo.phone);
+        const emailHash = createHash('sha256')
+            .update(`${brandId}\n${normalizedEmail}`, 'utf8')
+            .digest('hex');
+        const phoneHash = normalizedPhone
+            ? createHash('sha256').update(`${brandId}\n${normalizedPhone}`, 'utf8').digest('hex')
+            : null;
+        const emailIdentityRef = doc(db, 'integrationConsumerCustomerIdentities', emailHash);
+        const phoneIdentityRef = phoneHash
+            ? doc(db, 'integrationConsumerCustomerPhoneIdentities', phoneHash)
+            : null;
         // Request UUIDs are untrusted; only the server cookie capability can link consent.
         const cookieConsentData = await optionalCheckoutValue(() => linkCheckoutConsent(brandId), undefined);
+        const now = Date.now();
 
-        if (customerDoc.exists()) {
-            const customerData = customerDoc.data() as Customer;
-            if (customerData.brandId !== brandId) {
+        return await runTransaction(db, async tx => {
+            const emailIdentitySnapshot = await tx.get(emailIdentityRef);
+            const phoneIdentitySnapshot = phoneIdentityRef ? await tx.get(phoneIdentityRef) : null;
+            const identitySnapshots = [
+                { snapshot: emailIdentitySnapshot, identity: 'email' as const },
+                ...(phoneIdentitySnapshot ? [{ snapshot: phoneIdentitySnapshot, identity: 'phone' as const }] : []),
+            ];
+            const indexedCustomerIds = identitySnapshots
+                .filter(({ snapshot }) => snapshot.exists())
+                .map(({ snapshot }) => {
+                    const data = snapshot.data();
+                    if (data?.brandId !== brandId || typeof data?.customerId !== 'string' || !data.customerId)
+                        throw new Error('Customer identity scope conflict.');
+                    return data.customerId as string;
+                });
+            const uniqueIndexedCustomerIds = [...new Set(indexedCustomerIds)];
+            if (uniqueIndexedCustomerIds.length > 1)
+                throw new Error('Customer email and phone point to different profiles.');
+
+            const indexedCustomerId = uniqueIndexedCustomerIds[0] || null;
+            let targetRef = customerRef;
+            const initialCustomerSnapshot = await tx.get(customerRef);
+            if (indexedCustomerId && indexedCustomerId !== customerRef.id) {
+                if (initialCustomerSnapshot.exists())
+                    throw new Error('Customer email and phone point to different profiles.');
+                targetRef = doc(db, 'customers', indexedCustomerId);
+            }
+            const customerSnapshot = targetRef.id === customerRef.id
+                ? initialCustomerSnapshot
+                : await tx.get(targetRef);
+            const customerData = customerSnapshot.exists()
+                ? customerSnapshot.data() as Customer
+                : null;
+
+            if (customerData && customerData.brandId !== brandId)
+                throw new Error('Customer identity scope conflict.');
+            if (customerData
+                && !customerHasEmail(customerData, normalizedEmail)
+                && !customerHasPhone(customerData, normalizedPhone)) {
                 throw new Error('Customer identity scope conflict.');
             }
-            const updatedData: Partial<Customer> & { normalizedEmail?: string } = {
-                fullName: customerInfo.name,
-                email: normalizedEmail,
-                normalizedEmail,
-                phone: customerInfo.phone,
-                street: customerInfo.street,
-                zipCode: customerInfo.zipCode,
-                city: customerInfo.city,
-                // These will be updated by the webhook to prevent race conditions
-                // totalOrders: (customerData.totalOrders || 0) + 1,
-                // totalSpend: (customerData.totalSpend || 0) + newOrderTotal,
-                // lastOrderDate: new Date(),
-                locationIds: Array.from(new Set([...(customerData.locationIds || []), locationId])),
-                // Marketing consent is changed only with the durable consent/outbox transaction.
-            };
-            
-            // Only update cookie consent if new data is available and not already set
-            if (cookieConsentData && !customerData.cookie_consent?.linked_anon_id) {
-                updatedData.cookie_consent = cookieConsentData;
+            if (emailIdentitySnapshot.exists()
+                && (!customerData || !customerHasEmail(customerData, normalizedEmail))) {
+                throw new Error('Customer email identity scope conflict.');
+            }
+            if (phoneIdentitySnapshot?.exists()
+                && (!customerData || !customerHasPhone(customerData, normalizedPhone))) {
+                throw new Error('Customer phone identity scope conflict.');
             }
 
-            if (newsletterDiscountId && !customerData.marketingConsent) updatedData.pendingNewsletterDiscountId = newsletterDiscountId;
-            await updateDoc(customerRef, omitUndefinedFields(updatedData));
-        } else {
-            const newCustomer: Customer & { normalizedEmail: string } = {
-                id: customerId,
-                brandId: brandId,
-                fullName: customerInfo.name,
-                email: normalizedEmail,
-                normalizedEmail,
-                phone: customerInfo.phone,
-                street: customerInfo.street,
-                zipCode: customerInfo.zipCode,
-                city: customerInfo.city,
-                country: 'DK',
-                marketingConsent: false,
-                status: 'active',
-                createdAt: new Date(),
-                totalOrders: 0, // Initial creation, will be updated by webhook
-                totalSpend: 0,  // Initial creation
-                locationIds: [locationId],
-                loyaltyScore: 0,
-                loyaltyClassification: 'New',
-                cookie_consent: cookieConsentData,
-            };
-            if (newsletterDiscountId) newCustomer.pendingNewsletterDiscountId = newsletterDiscountId;
-            await setDoc(customerRef, omitUndefinedFields(newCustomer));
-        }
-        
-        return customerId;
+            if (customerData) {
+                const updatedData: Partial<Customer> = {
+                    fullName: customerInfo.name,
+                    ...mergeCustomerIdentity(customerData, normalizedEmail, customerInfo.phone),
+                    street: customerInfo.street,
+                    zipCode: customerInfo.zipCode,
+                    city: customerInfo.city,
+                    // These will be updated by the webhook to prevent race conditions
+                    // totalOrders: (customerData.totalOrders || 0) + 1,
+                    // totalSpend: (customerData.totalSpend || 0) + newOrderTotal,
+                    // lastOrderDate: new Date(),
+                    locationIds: Array.from(new Set([...(customerData.locationIds || []), locationId])),
+                    // Marketing consent is changed only with the durable consent/outbox transaction.
+                };
+
+                if (cookieConsentData && !customerData.cookie_consent?.linked_anon_id) {
+                    updatedData.cookie_consent = cookieConsentData;
+                }
+
+                if (newsletterDiscountId && !customerData.marketingConsent)
+                    updatedData.pendingNewsletterDiscountId = newsletterDiscountId;
+                tx.set(targetRef, omitUndefinedFields(updatedData), { merge: true });
+            } else {
+                const identityData = mergeCustomerIdentity({}, normalizedEmail, customerInfo.phone);
+                const newCustomer: Customer = {
+                    id: targetRef.id,
+                    brandId,
+                    fullName: customerInfo.name,
+                    email: typeof identityData.email === 'string' ? identityData.email : normalizedEmail,
+                    normalizedEmail: typeof identityData.normalizedEmail === 'string' ? identityData.normalizedEmail : normalizedEmail,
+                    emailAliases: Array.isArray(identityData.emailAliases) ? identityData.emailAliases : [],
+                    phone: typeof identityData.phone === 'string' ? identityData.phone : customerInfo.phone,
+                    ...(typeof identityData.normalizedPhone === 'string' ? { normalizedPhone: identityData.normalizedPhone } : {}),
+                    phoneAliases: Array.isArray(identityData.phoneAliases) ? identityData.phoneAliases : [],
+                    street: customerInfo.street,
+                    zipCode: customerInfo.zipCode,
+                    city: customerInfo.city,
+                    country: 'DK',
+                    marketingConsent: false,
+                    status: 'active',
+                    createdAt: new Date(),
+                    totalOrders: 0,
+                    totalSpend: 0,
+                    locationIds: [locationId],
+                    loyaltyScore: 0,
+                    loyaltyClassification: 'New',
+                    cookie_consent: cookieConsentData,
+                };
+                if (newsletterDiscountId) newCustomer.pendingNewsletterDiscountId = newsletterDiscountId;
+                tx.set(targetRef, omitUndefinedFields(newCustomer));
+            }
+
+            tx.set(emailIdentityRef, {
+                brandId,
+                customerId: targetRef.id,
+                emailHash,
+                source: emailIdentitySnapshot.data()?.source || 'checkout',
+                updatedAt: now,
+                ...(emailIdentitySnapshot.exists() ? {} : { createdAt: now }),
+            }, { merge: true });
+            if (phoneIdentityRef && phoneHash) {
+                tx.set(phoneIdentityRef, {
+                    brandId,
+                    customerId: targetRef.id,
+                    phoneHash,
+                    source: phoneIdentitySnapshot?.data()?.source || 'checkout',
+                    updatedAt: now,
+                    ...(phoneIdentitySnapshot?.exists() ? {} : { createdAt: now }),
+                }, { merge: true });
+            }
+            return targetRef.id;
+        });
     } catch (e: any) {
         console.error('checkout_customer_failed', { code: e?.code || 'unknown' });
         throw new Error(`Could not create or update customer profile: ${e.message}`);

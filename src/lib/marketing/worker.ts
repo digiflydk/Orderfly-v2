@@ -5,6 +5,7 @@ import { emailChannel, retryDelay, type ConsentEvent, type SyncState } from './c
 import { marketingConfig, marketingConfigurationStatus } from './config';
 import { MarketingError, Omnisend } from './provider';
 import { runOmnisendContactImportWorker } from './import-worker';
+import { contactKey } from './store';
 const NEVER = Number.MAX_SAFE_INTEGER, LEASE = 120000;
 async function lease(db: Firestore, ref: DocumentReference, now: number) {
     const token = randomUUID();
@@ -34,7 +35,14 @@ async function complete(db: Firestore, ref: DocumentReference, token: string, st
             nextAttemptAt: state === 'failed' && retryable && attempts < 8 ? now + retryDelay(attempts) : NEVER });
         if (contact.data()?.latestEventId === job.eventId) {
             tx.set(stateRef, { state, updatedAt: now, nextReconcileAt: state === 'synced' ? now + 3600000 : NEVER }, { merge: true });
-            if (state === 'suppressed' && customer.exists && customer.data()?.brandId === job.brandId)
+            const customerData = customer.data();
+            const primaryEmail = typeof customerData?.normalizedEmail === 'string'
+                ? customerData.normalizedEmail
+                : typeof customerData?.email === 'string' ? customerData.email : '';
+            const isPrimaryEmailContact = customer.exists
+                && customerData?.brandId === job.brandId
+                && contactKey(job.brandId, primaryEmail) === job.contactKey;
+            if (state === 'suppressed' && isPrimaryEmailContact)
                 tx.update(customerRef, { marketingConsent: false });
         }
     });
@@ -119,7 +127,14 @@ export async function runMarketingWorker(db: Firestore, now = Date.now(), makePr
                 const suppressed = channel?.status !== 'subscribed';
                 if (suppressed && job.exists && job.data()?.brandId === state.brandId) tx.update(jobRef, {state:'suppressed', lastError:'provider_suppression', updatedAt:now, nextAttemptAt:NEVER});
                 tx.update(snap.ref, { providerStatus: channel?.status || 'missing', providerStatusChangedAt: channel?.statusChangedAt || null, state: suppressed ? 'suppressed' : state.state, nextReconcileAt: suppressed ? NEVER : now + 3600000, updatedAt: now });
-                if (suppressed && customer.exists && customer.data()?.brandId === state.brandId)
+                const customerData = customer.data();
+                const primaryEmail = typeof customerData?.normalizedEmail === 'string'
+                    ? customerData.normalizedEmail
+                    : typeof customerData?.email === 'string' ? customerData.email : '';
+                const isPrimaryEmailContact = customer.exists
+                    && customerData?.brandId === state.brandId
+                    && contactKey(state.brandId, primaryEmail) === snap.id;
+                if (suppressed && isPrimaryEmailContact)
                     tx.update(customerRef, { marketingConsent: false });
             });
             counts.reconciled++;

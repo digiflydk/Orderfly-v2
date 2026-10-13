@@ -9,6 +9,14 @@ import {
   normalizePhone,
   type EsmeraldaConsumerCustomerInput,
 } from '@/lib/integrations/esmeralda-customer-contract';
+import {
+  CustomerIdentityConflict,
+  customerHasEmail,
+  customerHasPhone,
+  mergeCustomerIdentity,
+  selectCustomerByIdentity,
+  type CustomerIdentityFields,
+} from '@/lib/customer-identity';
 
 export type ConsumerCustomerResolution = {
   customer_id: string;
@@ -21,14 +29,14 @@ export class IntegrationConflictError extends Error {
   readonly code:
     | 'ambiguous_email_identity'
     | 'ambiguous_phone_identity'
-    | 'phone_identity_conflict'
+    | 'customer_identity_conflict'
     | 'identity_index_conflict';
 
   constructor(
     code:
       | 'ambiguous_email_identity'
       | 'ambiguous_phone_identity'
-      | 'phone_identity_conflict'
+      | 'customer_identity_conflict'
       | 'identity_index_conflict',
     message: string,
   ) {
@@ -63,39 +71,20 @@ type CustomerRecord = Record<string, unknown> & {
   normalizedEmail?: unknown;
   phone?: unknown;
   normalizedPhone?: unknown;
+  emailAliases?: unknown;
+  phoneAliases?: unknown;
   fullName?: unknown;
+  integrationSources?: unknown;
 };
 
-type SelectedCustomer = {
+type SelectedCustomer = CustomerIdentityFields & {
   snapshot: FirebaseFirestore.QueryDocumentSnapshot;
   record: CustomerRecord;
 };
 
-function recordEmail(record: CustomerRecord): string | null {
-  const candidate =
-    typeof record.normalizedEmail === 'string'
-      ? record.normalizedEmail
-      : typeof record.email === 'string'
-        ? record.email
-        : null;
-
-  return candidate ? normalizeEmail(candidate) : null;
-}
-
-function recordPhone(record: CustomerRecord): string | null {
-  const candidate =
-    typeof record.normalizedPhone === 'string'
-      ? record.normalizedPhone
-      : typeof record.phone === 'string'
-        ? record.phone
-        : null;
-
-  return normalizePhone(candidate);
-}
-
-function identityKey(brandId: string, normalizedEmail: string): string {
+function identityKey(brandId: string, normalizedIdentity: string): string {
   return createHash('sha256')
-    .update(`${brandId}\n${normalizedEmail}`, 'utf8')
+    .update(`${brandId}\n${normalizedIdentity}`, 'utf8')
     .digest('hex');
 }
 
@@ -111,19 +100,26 @@ function buildExistingPatch(
   normalizedPhone: string | null,
   now: FirebaseFirestore.FieldValue,
 ): { patch: Record<string, unknown>; wouldUpdate: boolean } {
+  const currentSources = existing.integrationSources && typeof existing.integrationSources === 'object'
+    ? existing.integrationSources as Record<string, unknown>
+    : {};
+  const currentEsmeraldaSource = currentSources.esmeralda && typeof currentSources.esmeralda === 'object'
+    ? currentSources.esmeralda as Record<string, unknown>
+    : {};
   const patch: Record<string, unknown> = {
-    email: normalizedEmail,
-    normalizedEmail,
+    ...mergeCustomerIdentity(existing, normalizedEmail, parsed.phone),
     locationIds: admin.firestore.FieldValue.arrayUnion(parsed.location_id),
     integrationSources: {
+      ...currentSources,
       esmeralda: {
+        ...currentEsmeraldaSource,
         lastBookingId: parsed.booking_id,
         lastSyncedAt: now,
       },
     },
   };
 
-  let wouldUpdate = recordEmail(existing) !== normalizedEmail;
+  let wouldUpdate = !customerHasEmail(existing, normalizedEmail);
   const incomingName = parsed.full_name.trim();
   const existingName = typeof existing.fullName === 'string' ? existing.fullName.trim() : '';
 
@@ -132,12 +128,8 @@ function buildExistingPatch(
     wouldUpdate ||= existingName !== incomingName;
   }
 
-  const incomingPhone = parsed.phone?.trim() || '';
-  if (incomingPhone && normalizedPhone) {
-    patch.phone = incomingPhone;
-    patch.normalizedPhone = normalizedPhone;
-    wouldUpdate ||=
-      recordPhone(existing) !== normalizedPhone || existing.phone !== incomingPhone;
+  if (parsed.phone?.trim() && normalizedPhone) {
+    wouldUpdate ||= !customerHasPhone(existing, normalizedPhone);
   }
 
   if (typeof parsed.marketing_consent === 'boolean') {
@@ -186,42 +178,19 @@ function selectExistingCustomer(
   normalizedEmail: string,
   normalizedPhone: string | null,
 ): SelectedCustomer | null {
-  const emailMatches = customers.filter(
-    ({ record }) => recordEmail(record) === normalizedEmail,
-  );
-
-  if (emailMatches.length > 1) {
-    throw new IntegrationConflictError(
-      'ambiguous_email_identity',
-      'More than one customer in the same brand has this normalized email.',
+  try {
+    return selectCustomerByIdentity(
+      customers,
+      normalizedEmail,
+      normalizedPhone,
+      customer => customer.snapshot.id,
     );
+  } catch (error) {
+    if (error instanceof CustomerIdentityConflict) {
+      throw new IntegrationConflictError(error.code, error.message);
+    }
+    throw error;
   }
-
-  if (emailMatches.length === 1) return emailMatches[0];
-  if (!normalizedPhone) return null;
-
-  const phoneMatches = customers.filter(
-    ({ record }) => recordPhone(record) === normalizedPhone,
-  );
-
-  if (phoneMatches.length > 1) {
-    throw new IntegrationConflictError(
-      'ambiguous_phone_identity',
-      'More than one customer in the same brand has this normalized phone.',
-    );
-  }
-
-  if (phoneMatches.length === 0) return null;
-
-  const matchedEmail = recordEmail(phoneMatches[0].record);
-  if (matchedEmail && matchedEmail !== normalizedEmail) {
-    throw new IntegrationConflictError(
-      'phone_identity_conflict',
-      'Phone matches an existing customer with a different email.',
-    );
-  }
-
-  return phoneMatches[0];
 }
 
 export async function resolveOrUpsertEsmeraldaConsumerCustomer(
@@ -242,71 +211,78 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
     .where('brandId', '==', parsed.organization_id)
     .get();
 
-  const customers: SelectedCustomer[] = brandCustomers.docs.map((snapshot) => ({
-    snapshot,
-    record: snapshot.data() as CustomerRecord,
-  }));
+  const customers: SelectedCustomer[] = brandCustomers.docs.map((snapshot) => {
+    const record = snapshot.data() as CustomerRecord;
+    return { ...record, id: snapshot.id, snapshot, record };
+  });
   const selectedBeforeTransaction = selectExistingCustomer(
     customers,
     normalizedEmail,
     normalizedPhone,
   );
 
-  const identityRef = db
+  const emailIdentityRef = db
     .collection('integrationConsumerCustomerIdentities')
     .doc(identityKey(parsed.organization_id, normalizedEmail));
+  const phoneIdentityRef = normalizedPhone
+    ? db.collection('integrationConsumerCustomerPhoneIdentities')
+        .doc(identityKey(parsed.organization_id, normalizedPhone))
+    : null;
 
   return db.runTransaction(async (transaction) => {
-    const identitySnapshot = await transaction.get(identityRef);
+    const [emailIdentitySnapshot, phoneIdentitySnapshot] = await Promise.all([
+      transaction.get(emailIdentityRef),
+      phoneIdentityRef ? transaction.get(phoneIdentityRef) : Promise.resolve(null),
+    ]);
+    const indexedCustomerIds = [emailIdentitySnapshot, phoneIdentitySnapshot]
+      .filter((snapshot): snapshot is FirebaseFirestore.DocumentSnapshot => !!snapshot?.exists)
+      .map((snapshot) => {
+        const indexedBrandId = snapshot.get('brandId');
+        const indexedCustomerId = snapshot.get('customerId');
+        if (
+          indexedBrandId !== parsed.organization_id ||
+          typeof indexedCustomerId !== 'string' ||
+          !indexedCustomerId
+        ) {
+          throw new IntegrationConflictError(
+            'identity_index_conflict',
+            'Consumer customer identity reservation is inconsistent.',
+          );
+        }
+        return indexedCustomerId;
+      });
+    const uniqueIndexedIds = [...new Set(indexedCustomerIds)];
+    if (uniqueIndexedIds.length > 1) {
+      throw new IntegrationConflictError(
+        'customer_identity_conflict',
+        'Email and phone identity reservations point to different customers.',
+      );
+    }
+    const indexedCustomerId = uniqueIndexedIds[0] || null;
+    if (
+      selectedBeforeTransaction &&
+      indexedCustomerId &&
+      selectedBeforeTransaction.snapshot.id !== indexedCustomerId
+    ) {
+      throw new IntegrationConflictError(
+        'identity_index_conflict',
+        'Consumer customer identity reservation conflicts with an existing customer.',
+      );
+    }
+
     let customerRef: FirebaseFirestore.DocumentReference;
     let existing: CustomerRecord | null = null;
     let created = false;
-
-    if (identitySnapshot.exists) {
-      const indexedBrandId = identitySnapshot.get('brandId');
-      const indexedCustomerId = identitySnapshot.get('customerId');
-      if (
-        indexedBrandId !== parsed.organization_id ||
-        typeof indexedCustomerId !== 'string' ||
-        !indexedCustomerId
-      ) {
-        throw new IntegrationConflictError(
-          'identity_index_conflict',
-          'Consumer customer identity reservation is inconsistent.',
-        );
-      }
-
-      if (
-        selectedBeforeTransaction &&
-        selectedBeforeTransaction.snapshot.id !== indexedCustomerId
-      ) {
-        throw new IntegrationConflictError(
-          'identity_index_conflict',
-          'Consumer customer identity reservation conflicts with an existing customer.',
-        );
-      }
-
+    if (indexedCustomerId) {
       customerRef = db.collection('customers').doc(indexedCustomerId);
-      const customerSnapshot = await transaction.get(customerRef);
-      if (!customerSnapshot.exists) {
-        throw new IntegrationConflictError(
-          'identity_index_conflict',
-          'Consumer customer identity reservation points to a missing customer.',
-        );
-      }
-
-      existing = customerSnapshot.data() as CustomerRecord;
-      if (
-        existing.brandId !== parsed.organization_id ||
-        recordEmail(existing) !== normalizedEmail
-      ) {
-        throw new IntegrationConflictError(
-          'identity_index_conflict',
-          'Consumer customer identity reservation points outside the requested identity scope.',
-        );
-      }
     } else if (selectedBeforeTransaction) {
       customerRef = selectedBeforeTransaction.snapshot.ref;
+    } else {
+      customerRef = db.collection('customers').doc();
+      created = true;
+    }
+
+    if (!created) {
       const customerSnapshot = await transaction.get(customerRef);
       if (!customerSnapshot.exists) {
         throw new IntegrationConflictError(
@@ -318,16 +294,32 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
       existing = customerSnapshot.data() as CustomerRecord;
       if (
         existing.brandId !== parsed.organization_id ||
-        (recordEmail(existing) && recordEmail(existing) !== normalizedEmail)
+        (!customerHasEmail(existing, normalizedEmail) &&
+          !customerHasPhone(existing, normalizedPhone))
       ) {
         throw new IntegrationConflictError(
           'identity_index_conflict',
           'Selected consumer customer changed identity scope during resolution.',
         );
       }
-    } else {
-      customerRef = db.collection('customers').doc();
-      created = true;
+      if (
+        emailIdentitySnapshot.exists &&
+        !customerHasEmail(existing, normalizedEmail)
+      ) {
+        throw new IntegrationConflictError(
+          'identity_index_conflict',
+          'Email identity reservation does not match the customer profile.',
+        );
+      }
+      if (
+        phoneIdentitySnapshot?.exists &&
+        !customerHasPhone(existing, normalizedPhone)
+      ) {
+        throw new IntegrationConflictError(
+          'identity_index_conflict',
+          'Phone identity reservation does not match the customer profile.',
+        );
+      }
     }
 
     const now = admin.firestore.FieldValue.serverTimestamp();
@@ -337,10 +329,7 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
         id: customerRef.id,
         brandId: parsed.organization_id,
         fullName: parsed.full_name,
-        email: normalizedEmail,
-        normalizedEmail,
-        phone: parsed.phone?.trim() || '',
-        normalizedPhone,
+        ...mergeCustomerIdentity({}, normalizedEmail, parsed.phone),
         status: 'active',
         createdAt: now,
         totalOrders: 0,
@@ -374,17 +363,31 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
     }
 
     transaction.set(
-      identityRef,
+      emailIdentityRef,
       {
         brandId: parsed.organization_id,
         customerId: customerRef.id,
         emailHash: identityKey(parsed.organization_id, normalizedEmail),
         source: 'esmeralda',
         updatedAt: now,
-        ...(identitySnapshot.exists ? {} : { createdAt: now }),
+        ...(emailIdentitySnapshot.exists ? {} : { createdAt: now }),
       },
       { merge: true },
     );
+    if (phoneIdentityRef) {
+      transaction.set(
+        phoneIdentityRef,
+        {
+          brandId: parsed.organization_id,
+          customerId: customerRef.id,
+          phoneHash: identityKey(parsed.organization_id, normalizedPhone!),
+          source: 'esmeralda',
+          updatedAt: now,
+          ...(phoneIdentitySnapshot?.exists ? {} : { createdAt: now }),
+        },
+        { merge: true },
+      );
+    }
 
     const operation = created
       ? 'created'
