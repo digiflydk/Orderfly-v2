@@ -40,6 +40,7 @@ export function CustomersDirectory({entries,brandNames,global}:{entries:Director
     setCreatedTo('');
   };
   const isFiltered=search!==''||brand!=='all'||customerType!=='all'||loyalty!=='all'||createdFrom!==''||createdTo!=='';
+  const invalidDateRange=!!createdFrom&&!!createdTo&&createdFrom>createdTo;
 
   return <main className="space-y-5 p-4 sm:p-6">
     <div className="flex items-start justify-between gap-3">
@@ -80,6 +81,7 @@ export function CustomersDirectory({entries,brandNames,global}:{entries:Director
       {isFiltered&&<Button variant="ghost" onClick={clearFilters} className="justify-start" aria-label="Nulstil filtre"><X className="mr-2 h-4 w-4"/>Nulstil filtre</Button>}
     </div>
 
+    {invalidDateRange&&<p role="alert" className="text-sm text-destructive">Datoen “fra” skal ligge før eller på datoen “til”.</p>}
     <p className="text-sm text-muted-foreground">{rows.length.toLocaleString('da-DK')} kunder</p>
     <div className="overflow-x-auto rounded-lg border bg-card">
       <table className="w-full min-w-[900px] text-left text-sm">
@@ -89,7 +91,7 @@ export function CustomersDirectory({entries,brandNames,global}:{entries:Director
           const customerSources=sources.filter(source=>source.kind==='customer');
           const games=sources.filter(source=>source.kind==='game');
           const brands=[...new Set(sources.map(source=>source.brandId))];
-          const dates=sources.map(source=>source.date).filter((value):value is string=>!!value).sort();
+          const dates=sources.map(source=>source.date).filter((value):value is string=>!!value&&matchesDateRange(value,createdFrom,createdTo)).sort();
           const orders=sources.reduce((total,source)=>total+(source.kind==='customer'?source.totalOrders||0:source.externalOrders||0),0);
           const spend=sources.reduce((total,source)=>total+(source.kind==='customer'?source.totalSpend||0:source.externalSpend||0),0);
           const loyaltyLabels=[...new Set(customerSources.filter(source=>source.loyaltyClassification).map(source=>source.loyaltyClassification))];
