@@ -72,6 +72,9 @@ jobs:
       - name: Booking feedback and mail regression
         run: node --test tests/unit/booking-feedback-timing.cjs tests/unit/feedback-mail.cjs tests/unit/feedback-readiness.cjs tests/unit/feedback-central-access.cjs tests/unit/feedback-scopes.cjs tests/unit/feedback-admin-notifications.cjs tests/unit/feedback-report-public.cjs tests/unit/feedback-page-access.cjs tests/unit/feedback-presentation.cjs tests/unit/feedback-review-evidence.cjs
 
+      - name: Omnisend contact import and consent regression
+        run: node --test tests/unit/omnisend-contact-import.cjs tests/unit/omnisend-193.cjs
+
       - name: Install Chromium for brand-owner regression
         run: npx playwright install --with-deps chromium
 
