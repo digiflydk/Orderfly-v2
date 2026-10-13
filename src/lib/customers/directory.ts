@@ -31,8 +31,6 @@ export type DirectoryEntry = {
   totalOrders: number;
   totalSpend: number;
   lastOrderDate: string | null;
-  createdAt: string | null;
-  loyaltyClassifications: string[];
   sources: Array<{id:string;brandId:string;kind:'customer'|'game';name:string;phone:string;date:string|null;newsletter?:boolean;campaignId?:string;campaignName?:string;externalOrders?:number;externalSpend?:number;totalOrders?:number;totalSpend?:number;loyaltyClassification?:string}>;
 };
 
@@ -52,14 +50,12 @@ export function buildDirectory(sources: DirectorySource[], global: boolean): Dir
     if (!key || !source.brandId || !source.id) continue;
     let entry = entries.get(key);
     if (!entry) {
-      entry = {id:key,name:source.name || email,email,phone:source.phone || '',brandIds:[],customerIds:[],gameCount:0,totalOrders:0,totalSpend:0,lastOrderDate:null,createdAt:null,loyaltyClassifications:[],sources:[]};
+      entry = {id:key,name:source.name || email,email,phone:source.phone || '',brandIds:[],customerIds:[],gameCount:0,totalOrders:0,totalSpend:0,lastOrderDate:null,sources:[]};
       entries.set(key, entry);
     }
     if (!entry.brandIds.includes(source.brandId)) entry.brandIds.push(source.brandId);
     const sourceDate=asDate(source.createdAt)?.toISOString() || null;
-    if(sourceDate&&(!entry.createdAt||sourceDate<entry.createdAt))entry.createdAt=sourceDate;
     if (source.kind === 'customer') {
-      if (source.loyaltyClassification && !entry.loyaltyClassifications.includes(source.loyaltyClassification)) entry.loyaltyClassifications.push(source.loyaltyClassification);
       entry.customerIds.push(source.id);
       entry.name = source.name || entry.name;
       entry.phone = source.phone || entry.phone;
