@@ -4,6 +4,7 @@ import type { Firestore, DocumentReference } from 'firebase-admin/firestore';
 import { emailChannel, retryDelay, type ConsentEvent, type SyncState } from './consent';
 import { marketingConfig, marketingConfigurationStatus } from './config';
 import { MarketingError, Omnisend } from './provider';
+import { runOmnisendContactImportWorker } from './import-worker';
 const NEVER = Number.MAX_SAFE_INTEGER, LEASE = 120000;
 async function lease(db: Firestore, ref: DocumentReference, now: number) {
     const token = randomUUID();
@@ -127,7 +128,8 @@ export async function runMarketingWorker(db: Firestore, now = Date.now(), makePr
             await snap.ref.update({ nextReconcileAt: now + 900000 });
         }
     }
-    return counts;
+    const importedContacts = await runOmnisendContactImportWorker(db, now, makeProvider, requestDeadline);
+    return { ...counts, importedContacts };
 }
 export async function retryMarketingJob(db: Firestore, brandId: string, id: string) {
     if (!marketingConfig(brandId)) return false;

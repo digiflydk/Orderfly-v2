@@ -25,6 +25,10 @@ export const retryDelay = (attempt: number) => Math.min(6 * 60 * 60 * 1000, 3000
 export type ProviderContact = {
     id?: string;
     contactID?: string;
+    firstName?: string;
+    lastName?: string;
+    createdAt?: string;
+    updatedAt?: string;
     identifiers?: {
         type: string;
         id: string;
@@ -34,10 +38,21 @@ export type ProviderContact = {
                 statusChangedAt?: string;
             };
         };
+        consent?: {
+            source?: string;
+            createdAt?: string;
+            ip?: string;
+            userAgent?: string;
+        };
     }[];
 };
+export function emailIdentifier(contact: ProviderContact | null, email: string) {
+    return contact?.identifiers?.find(identifier =>
+        identifier.type === 'email' && identifier.id.trim().toLowerCase() === email
+    ) ?? null;
+}
 export function emailChannel(contact: ProviderContact | null, email: string) {
-    return contact?.identifiers?.find(identifier => identifier.type === 'email' && identifier.id.trim().toLowerCase() === email)?.channels?.email;
+    return emailIdentifier(contact, email)?.channels?.email;
 }
 export function consentPayload(event: ConsentEvent) {
     return {
