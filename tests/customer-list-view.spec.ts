@@ -14,6 +14,7 @@ test('renders a legacy customer without locations or consent timestamp', () => {
 
   const view = customerListView(customer, brands, locations);
   expect(view.locationIds).toEqual([]);
+  expect([view.totalOrders, view.totalSpend]).toEqual([0, 0]);
   expect(view.locationNames).toBe('');
   expect(view.createdAt).toBe('2023-11-14');
   expect(view).not.toHaveProperty('cookie_consent');
@@ -38,5 +39,6 @@ test('preserves valid locations, loyalty data and mixed timestamp formats', () =
   expect(Object.keys(view).sort()).toEqual([
     'brandId', 'brandName', 'createdAt', 'email', 'fullName', 'id', 'lastOrderDate',
     'locationIds', 'locationNames', 'loyaltyClassification', 'loyaltyScore', 'phone', 'status',
+    'totalOrders', 'totalSpend',
   ]);
 });

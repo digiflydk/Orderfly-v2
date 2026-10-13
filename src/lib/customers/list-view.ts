@@ -2,7 +2,7 @@ import { format } from 'date-fns';
 import type { Customer } from '@/types';
 import { asDate } from '@/lib/loyalty/model';
 
-export type CustomerListRow = Pick<Customer, 'id' | 'brandId' | 'fullName' | 'email' | 'phone' | 'status' | 'loyaltyScore' | 'loyaltyClassification'> & {
+export type CustomerListRow = Pick<Customer, 'id' | 'brandId' | 'fullName' | 'email' | 'phone' | 'status' | 'loyaltyScore' | 'loyaltyClassification' | 'totalOrders' | 'totalSpend'> & {
   createdAt: string;
   lastOrderDate?: string;
   locationIds: string[];
@@ -26,6 +26,8 @@ export function customerListView(customer: Customer, brandNames: Map<string, str
     phone: typeof customer.phone === 'string' ? customer.phone : '',
     status: customer.status === 'active' ? 'active' : 'inactive',
     loyaltyScore: Number.isFinite(customer.loyaltyScore) ? customer.loyaltyScore : 0,
+    totalOrders: Number.isFinite(customer.totalOrders) ? customer.totalOrders : 0,
+    totalSpend: Number.isFinite(customer.totalSpend) ? customer.totalSpend : 0,
     loyaltyClassification: typeof customer.loyaltyClassification === 'string' ? customer.loyaltyClassification : 'New',
     locationIds,
     createdAt: createdAt ? format(createdAt, 'yyyy-MM-dd') : '',

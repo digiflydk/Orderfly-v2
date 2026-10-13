@@ -33,7 +33,7 @@ export async function customerDirectory(customerRecords?: Customer[]): Promise<{
   const sources: DirectorySource[] = customers.map(customer => ({
     id:customer.id,brandId:customer.brandId,name:customer.fullName,email:customer.email,
     phone:customer.phone,kind:'customer',createdAt:customer.createdAt,totalOrders:customer.totalOrders,
-    totalSpend:customer.totalSpend,lastOrderDate:customer.lastOrderDate,
+    totalSpend:customer.totalSpend,lastOrderDate:customer.lastOrderDate,loyaltyClassification:customer.loyaltyClassification,
   }));
   plays.forEach((snapshot, index) => snapshot.docs.forEach(doc => {
     const data = doc.data();
