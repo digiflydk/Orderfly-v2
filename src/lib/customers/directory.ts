@@ -1,4 +1,6 @@
 import { createHash } from 'node:crypto';
+import { format } from 'date-fns';
+import { toZonedTime } from 'date-fns-tz';
 import { asDate } from '@/lib/loyalty/model';
 
 export type DirectorySource = {
@@ -85,6 +87,11 @@ function phoneValues(source: DirectorySource): string[] {
     .filter(value => typeof value === 'string')
     .map(normalizePhone)
     .filter(Boolean))];
+}
+
+function copenhagenDate(value: unknown): string | null {
+  const date = asDate(value);
+  return date ? format(toZonedTime(date, 'Europe/Copenhagen'), 'yyyy-MM-dd') : null;
 }
 
 function displayValues(sources: DirectorySource[], field: 'email' | 'phone'): string[] {
@@ -191,7 +198,9 @@ export function buildDirectory(sources: DirectorySource[], global: boolean): Dir
 
     for (const source of groupedSources) {
       if (!entry.brandIds.includes(source.brandId)) entry.brandIds.push(source.brandId);
-      const sourceDate = asDate(source.createdAt)?.toISOString() || null;
+      // Keep directory filters on the same Copenhagen calendar day as the
+      // customer-records view, including source timestamps close to midnight UTC.
+      const sourceDate = copenhagenDate(source.createdAt);
       const sourceEmails = displayValues([source], 'email');
       const sourcePhones = displayValues([source], 'phone');
       if (source.kind === 'customer') {

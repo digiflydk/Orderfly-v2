@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { buildDirectory, directoryKey } from '../src/lib/customers/directory';
-import { matchesCustomerType } from '../src/lib/customers/filtering';
+import { matchesCustomerType, matchesDateRange } from '../src/lib/customers/filtering';
 
 const sources = [
   {id:'a',brandId:'pizza',name:'Guest',email:' Guest@Example.com ',kind:'customer' as const,totalOrders:2,totalSpend:250,lastOrderDate:'2026-09-20'},
@@ -56,4 +56,15 @@ test('phone-only directory identities stay brand scoped for merchants', () => {
   ];
   expect(buildDirectory(sources,false)).toHaveLength(2);
   expect(buildDirectory(sources,true)).toHaveLength(1);
+});
+
+test('directory source dates use the same Copenhagen day as customer records', () => {
+  const [entry] = buildDirectory([
+    {id:'late-utc',brandId:'pizza',name:'Guest',email:'guest@example.com',kind:'customer',createdAt:'2026-01-01T23:30:00Z'},
+  ], false);
+  const sourceDate = entry.sources[0].date;
+
+  expect(sourceDate).toBe('2026-01-02');
+  expect(matchesDateRange(sourceDate, '2026-01-02', '2026-01-02')).toBe(true);
+  expect(matchesDateRange(sourceDate, '2026-01-01', '2026-01-01')).toBe(false);
 });
