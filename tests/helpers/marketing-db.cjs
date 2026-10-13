@@ -10,6 +10,7 @@ exports.memoryDb=(rows=new Map())=>{
    const actual=value[f.field];
    if(f.op==='==')return actual===f.value;
    if(f.op==='in')return f.value.includes(actual);
+   if(f.op==='array-contains')return Array.isArray(actual)&&actual.includes(f.value);
    if(f.op==='array-contains-any')return Array.isArray(actual)&&actual.some(v=>f.value.includes(v));
    if(f.op==='>=')return actual>=f.value;
    if(f.op==='>')return actual>f.value;
