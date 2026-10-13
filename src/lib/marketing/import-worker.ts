@@ -85,14 +85,25 @@ function normalizedCustomerEmail(record: CustomerRecord): string {
     return typeof primary === 'string' ? normalizeEmail(primary) : '';
 }
 
-async function loadCustomerIndex(db: Firestore, brandId: string): Promise<CustomerIndex> {
-    const snapshot = await db.collection('customers').where('brandId', '==', brandId).get();
+async function loadCustomerIndex(db: Firestore, brandId: string, emails: string[]): Promise<CustomerIndex> {
     const byEmail = new Map<string, CachedCustomer>();
     const ambiguous = new Set<string>();
-    for (const doc of snapshot.docs) {
+    if (!emails.length) return { byEmail, ambiguous };
+
+    // Read only profiles matching this provider page. normalizedEmail is the
+    // canonical lookup; email also covers older profiles without that field.
+    const [normalizedSnapshot, legacySnapshot] = await Promise.all([
+        db.collection('customers').where('normalizedEmail', 'in', emails).get(),
+        db.collection('customers').where('email', 'in', emails).get(),
+    ]);
+    const seen = new Set<string>();
+    for (const doc of [...normalizedSnapshot.docs, ...legacySnapshot.docs]) {
+        if (seen.has(doc.id)) continue;
+        seen.add(doc.id);
         const data = doc.data() as CustomerRecord;
+        if (data.brandId !== brandId) continue;
         const email = normalizedCustomerEmail(data);
-        if (!isEmail(email)) continue;
+        if (!isEmail(email) || !emails.includes(email)) continue;
         if (byEmail.has(email)) {
             byEmail.delete(email);
             ambiguous.add(email);
@@ -467,7 +478,12 @@ export async function runOmnisendContactImportWorker(
                 updatedAtFrom,
                 limit: CONTACTS_PER_PAGE,
             });
-            const index = await loadCustomerIndex(db, config.brandId);
+            const pageEmails = new Set<string>();
+            for (const contact of page.contacts) {
+                const identity = providerIdentity(contact);
+                if (identity) pageEmails.add(identity.email);
+            }
+            const index = await loadCustomerIndex(db, config.brandId, [...pageEmails]);
             for (const contact of page.contacts) {
                 if (Date.now() >= deadline) throw new MarketingError('import_deadline', true);
                 try {
