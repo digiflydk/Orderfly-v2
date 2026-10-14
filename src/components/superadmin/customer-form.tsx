@@ -25,15 +25,22 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import type { Customer } from '@/types'
+import { normalizeCustomerPhone } from '@/lib/customer-phone'
 import { createOrUpdateCustomer, getCustomerFormBrands } from '@/app/superadmin/customers/actions'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2 } from 'lucide-react'
 
 const customerSchema = z.object({
   fullName: z.string().min(2, { message: 'Full name must be at least 2 characters.' }),
-  email: z.string().email({ message: 'Please enter a valid email.' }),
-  phone: z.string().min(1, { message: 'Phone number is required.' }),
+  email: z.string().trim().refine(value => !value || z.string().email().safeParse(value).success, { message: 'Please enter a valid email.' }),
+  phone: z.string().trim().refine(value => !value || !!normalizeCustomerPhone(value), { message: 'Please enter a valid phone number.' }),
   status: z.boolean(),
+}).superRefine((value, context) => {
+  if (!value.email && !value.phone) context.addIssue({
+    code: z.ZodIssueCode.custom,
+    path: ['email'],
+    message: 'Enter an email or phone number.',
+  });
 })
 
 type CustomerFormValues = z.infer<typeof customerSchema>
@@ -98,8 +105,8 @@ export function CustomerForm({ isOpen, setIsOpen, customer }: CustomerFormProps)
 
   const title = customer ? 'Edit Customer' : 'Create New Customer'
   const description = customer
-    ? `Editing details for ${customer.fullName}.`
-    : 'Fill in the details for the new customer.'
+    ? `Editing details for ${customer.fullName}. Provide at least an email address or phone number.`
+    : 'Fill in the details for the new customer. Provide at least an email address or phone number.'
   const isEditing = !!customer
   const {
     formState: { isSubmitting },

@@ -5,7 +5,7 @@ export type CustomerOrderRow = { id: string; brandId: string; merchant: string; 
 export type CustomerFeedbackRow = { id: string; brandId: string; merchant: string; date: string | null; rating: number | null; comment: string };
 export type CustomerGameRow = { id: string; brandId: string; merchant: string; campaign: string; date: string | null; optedIn: boolean; externalOrders: number; externalSpend: number };
 export type CustomerProductRow = { key: string; name: string; merchant: string; quantity: number };
-export type NewsletterRow = { brandId: string; merchant: string; status: 'subscribed' | 'pending' | 'not_subscribed' | 'unknown'; note: string };
+export type NewsletterRow = { brandId: string; merchant: string; email: string; status: 'subscribed' | 'pending' | 'not_subscribed' | 'unknown'; note: string };
 
 // Only settled, non-cancelled orders count. Keep identical dish IDs separate by merchant.
 export function topCustomerProducts(orders: OrderDetail[], names: Map<string, string>): CustomerProductRow[] {

@@ -76,12 +76,12 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
 
 
   const filteredCustomers = useMemo(() => initialCustomers.filter(customer =>
-    matchesCustomerSearch(searchQuery, [customer.fullName, customer.email, customer.phone])
+    matchesCustomerSearch(searchQuery, [customer.fullName, customer.email, ...customer.emailAliases, customer.phone, ...customer.phoneAliases])
       && (brandFilter === 'all' || customer.brandId === brandFilter)
       && (statusFilter === 'all' || customer.status === statusFilter)
       && (loyaltyFilter === 'all' || customer.loyaltyClassification === loyaltyFilter)
       && matchesDateRange(customer.createdAt, createdFrom, createdTo)
-      && matchesCustomerType(customerTypeFilter, [{kind: 'customer', totalOrders: customer.totalOrders}])
+      && matchesCustomerType(customerTypeFilter, [{kind: 'customer', totalOrders: customer.totalOrders, hasBookingSource: customer.hasBookingSource, hasOmnisendSource: customer.hasOmnisendSource}])
   ), [initialCustomers, searchQuery, brandFilter, statusFilter, loyaltyFilter, createdFrom, createdTo, customerTypeFilter]);
 
   const gameOnlyContacts = useMemo(() => entries.filter(entry => {
@@ -94,7 +94,7 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
       && statusFilter === 'all'
       && loyaltyFilter === 'all'
       && (customerTypeFilter === 'all' || customerTypeFilter === 'game-only')
-      && matchesCustomerSearch(searchQuery, [entry.name, entry.email, entry.phone, ...gameSources.flatMap(source => [source.name, source.phone])])
+      && matchesCustomerSearch(searchQuery, [entry.name, ...entry.emails, ...entry.phones, ...gameSources.flatMap(source => [source.name, ...source.emails, ...source.phones])])
       && gameSources.some(source => matchesDateRange(source.date, createdFrom, createdTo));
   }), [entries, searchQuery, brandFilter, statusFilter, loyaltyFilter, createdFrom, createdTo, customerTypeFilter]);
   
@@ -163,29 +163,42 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 xl:grid-cols-6">
-            <div className="relative xl:col-span-2">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input aria-label="Search customers" placeholder="Search by name, email, or phone" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="pl-10" />
+            <div className="space-y-1 xl:col-span-2">
+              <label htmlFor="customer-search" className="text-xs font-medium text-muted-foreground">Search customers</label>
+              <div className="relative">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input id="customer-search" aria-label="Search customers" placeholder="Name, email, or phone" value={searchQuery} onChange={event => setSearchQuery(event.target.value)} className="pl-10" />
+              </div>
             </div>
+            <div className="space-y-1">
+            <label id="customer-brand-label" className="text-xs font-medium text-muted-foreground">Brand</label>
             <Select value={brandFilter} onValueChange={setBrandFilter}>
-              <SelectTrigger aria-label="Filter by brand"><SelectValue placeholder="All brands" /></SelectTrigger>
+              <SelectTrigger aria-label="Filter by brand" aria-labelledby="customer-brand-label"><SelectValue placeholder="All brands" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All brands</SelectItem>
                 {brands.map(brand => <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>)}
               </SelectContent>
             </Select>
+            </div>
+            <div className="space-y-1">
+            <label id="customer-type-label" className="text-xs font-medium text-muted-foreground">Customer type</label>
             <Select value={customerTypeFilter} onValueChange={value => setCustomerTypeFilter(value as CustomerTypeFilter)}>
-              <SelectTrigger aria-label="Filter by customer type"><SelectValue placeholder="All customer types" /></SelectTrigger>
+              <SelectTrigger aria-label="Filter by customer type" aria-labelledby="customer-type-label"><SelectValue placeholder="All customer types" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All customer types</SelectItem>
                 <SelectItem value="no-orders">No orders yet</SelectItem>
                 <SelectItem value="first-order">First-time buyer (1 paid order)</SelectItem>
                 <SelectItem value="returning">Returning customer (2+ paid orders)</SelectItem>
+                <SelectItem value="booking">Table booking guest</SelectItem>
+                <SelectItem value="omnisend">Omnisend contact</SelectItem>
                 <SelectItem value="game-only">Games signup only</SelectItem>
               </SelectContent>
             </Select>
+            </div>
+            <div className="space-y-1">
+            <label id="customer-loyalty-label" className="text-xs font-medium text-muted-foreground">Loyalty</label>
             <Select value={loyaltyFilter} onValueChange={setLoyaltyFilter}>
-              <SelectTrigger aria-label="Filter by loyalty"><SelectValue placeholder="All loyalty levels" /></SelectTrigger>
+              <SelectTrigger aria-label="Filter by loyalty" aria-labelledby="customer-loyalty-label"><SelectValue placeholder="All loyalty levels" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All loyalty levels</SelectItem>
                 <SelectItem value="Loyal">Loyal</SelectItem>
@@ -194,36 +207,39 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
                 <SelectItem value="New">New</SelectItem>
               </SelectContent>
             </Select>
-            <div className="grid grid-cols-2 gap-2 xl:col-span-2">
-              <div className="space-y-1">
-                <label htmlFor="customer-created-from" className="text-xs text-muted-foreground">Created from</label>
-                <Input id="customer-created-from" aria-label="Created from" type="date" value={createdFrom} onChange={event => setCreatedFrom(event.target.value)} />
-              </div>
-              <div className="space-y-1">
-                <label htmlFor="customer-created-to" className="text-xs text-muted-foreground">Created to</label>
-                <Input id="customer-created-to" aria-label="Created to" type="date" value={createdTo} onChange={event => setCreatedTo(event.target.value)} />
-              </div>
             </div>
+            <div className="space-y-1">
+            <label id="customer-status-label" className="text-xs font-medium text-muted-foreground">Status</label>
             <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger aria-label="Filter by status"><SelectValue placeholder="All statuses" /></SelectTrigger>
+              <SelectTrigger aria-label="Filter by status" aria-labelledby="customer-status-label"><SelectValue placeholder="All statuses" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="all">All statuses</SelectItem>
                 <SelectItem value="active">Active</SelectItem>
                 <SelectItem value="inactive">Inactive</SelectItem>
               </SelectContent>
             </Select>
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="customer-created-from" className="text-xs font-medium text-muted-foreground">Created from</label>
+              <Input id="customer-created-from" aria-label="Created from" type="date" value={createdFrom} onChange={event => setCreatedFrom(event.target.value)} />
+            </div>
+            <div className="space-y-1">
+              <label htmlFor="customer-created-to" className="text-xs font-medium text-muted-foreground">Created to</label>
+              <Input id="customer-created-to" aria-label="Created to" type="date" value={createdTo} onChange={event => setCreatedTo(event.target.value)} />
+            </div>
             {isFiltered && <Button variant="ghost" onClick={clearFilters} className="justify-start" aria-label="Clear all filters"><X className="mr-2 h-4 w-4" />Clear filters</Button>}
         </div>
         {invalidDateRange && <p role="alert" className="text-sm text-destructive">Created from date must be on or before created to date.</p>}
-        <p className="text-sm text-muted-foreground">{filteredCustomers.length} customer records · {gameOnlyContacts.length} Games signups without an Orderfly profile</p>
+        <p className="text-sm text-muted-foreground">{filteredCustomers.length} customer records · {filteredCustomers.filter(customer => customer.hasBookingSource).length} table booking profiles · {filteredCustomers.filter(customer => customer.hasOmnisendSource).length} Omnisend contacts · {gameOnlyContacts.length} Games signups without an Orderfly profile</p>
 
         <Card>
             <CardContent className="overflow-x-auto pt-6">
-            <Table className="min-w-[1100px]">
+            <Table className="min-w-[1240px]">
                 <TableHeader>
                 <TableRow>
                     <TableHead>Customer</TableHead>
                     <TableHead>Brand</TableHead>
+                    <TableHead>Sources</TableHead>
                     <TableHead>Loyalty</TableHead>
                     <TableHead>Last Order</TableHead>
                     <TableHead>Games</TableHead>
@@ -238,13 +254,19 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
                   const visibleSources=activity?.sources.filter(source=>brandFilter==='all'||source.brandId===brandFilter)||[];
                   const games=visibleSources.filter(source=>source.kind==='game');
                   const purchases=visibleSources.filter(source=>source.kind==='customer'&&(source.totalOrders||0)>0);
+                  const sourceLabels = [
+                    ...(customer.hasBookingSource ? ['Table booking'] : []),
+                    ...(customer.hasOmnisendSource ? ['Omnisend'] : []),
+                  ];
                   return (
                     <TableRow key={customer.id} onClick={() => handleRowClick(customer.id)} className="cursor-pointer">
                     <TableCell>
                         <p className="font-medium">{customer.fullName}</p>
                         <p className="text-sm text-muted-foreground">{customer.email}</p>
+                        {(customer.emailAliases.length > 0 || customer.phoneAliases.length > 0) && <p className="text-xs text-muted-foreground">{customer.emailAliases.length + customer.phoneAliases.length} additional contact details</p>}
                     </TableCell>
                     <TableCell>{customer.brandName}</TableCell>
+                    <TableCell><div className="flex flex-wrap gap-1">{(sourceLabels.length ? sourceLabels : ['Orderfly']).map(source => <Badge key={source} variant="outline">{source}</Badge>)}</div></TableCell>
                     <TableCell>
                         <Badge variant={loyaltyVariantMap[customer.loyaltyClassification] ?? 'secondary'}>
                             <Star className="mr-1 h-3 w-3" />
@@ -292,8 +314,9 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
                   const games=entry.sources.filter(source=>source.kind==='game'&&(brandFilter==='all'||source.brandId===brandFilter));
                   const visibleBrands=brandFilter==='all'?entry.brandIds:[brandFilter];
                   return <TableRow key={entry.id} onClick={()=>router.push(`/superadmin/customers/directory/${entry.id}`)} className="cursor-pointer">
-                    <TableCell><p className="font-medium">{entry.name}</p><p className="text-sm text-muted-foreground">{entry.email}</p></TableCell>
+                    <TableCell><p className="font-medium">{entry.name}</p><p className="text-sm text-muted-foreground">{entry.email || entry.phone}</p></TableCell>
                     <TableCell>{visibleBrands.map(id=>brandNames[id]||id).join(', ')}</TableCell>
+                    <TableCell><Badge variant="outline">Games</Badge></TableCell>
                     <TableCell>—</TableCell><TableCell>—</TableCell>
                     <TableCell>{games.map(game=><p key={`${game.brandId}:${game.id}`} className="text-xs">{game.campaignName||'Scratch card'} · {brandNames[game.brandId]||game.brandId}</p>)}</TableCell>
                     <TableCell>{games.filter(game=>game.externalOrders).map(game=><p key={`${game.brandId}:${game.id}`} className="text-xs">{brandNames[game.brandId]||game.brandId}: {game.externalOrders} · {(game.externalSpend||0).toLocaleString('da-DK',{style:'currency',currency:'DKK'})}</p>)}{!entry.totalOrders&&'—'}</TableCell>
@@ -303,7 +326,7 @@ export function CustomersClientPage({ initialCustomers, brands, entries, brandNa
                 })}
                 {filteredCustomers.length === 0 && gameOnlyContacts.length === 0 && (
                     <TableRow>
-                        <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                        <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                             No customers found matching your criteria.
                         </TableCell>
                     </TableRow>

@@ -139,9 +139,9 @@ test('one customer profile accepts multiple email and phone aliases in either di
 test('conflicting email and phone identities are rejected instead of selecting a third customer', () => {
   assert.throws(
     () => customerIdentity.selectCustomerByIdentity([
-      { id: 'email-customer', normalizedEmail: 'same@example.test', normalizedPhone: '1111' },
-      { id: 'phone-customer', normalizedEmail: 'other@example.test', normalizedPhone: '2222' },
-    ], 'same@example.test', '2222'),
+      { id: 'email-customer', normalizedEmail: 'same@example.test', normalizedPhone: '+4511111111' },
+      { id: 'phone-customer', normalizedEmail: 'other@example.test', normalizedPhone: '+4522222222' },
+    ], 'same@example.test', '+4522222222'),
     error => error.code === 'customer_identity_conflict',
   );
 });
@@ -212,15 +212,15 @@ test('checkout does not create a duplicate when email and phone belong to differ
       ['customers/email-customer', {
         id: 'email-customer', brandId: 'b',
         email: 'primary@example.test', normalizedEmail: 'primary@example.test',
-        emailAliases: ['same@example.test'], phone: '1111', normalizedPhone: '1111',
+        emailAliases: ['same@example.test'], phone: '+4511111111', normalizedPhone: '+4511111111',
       }],
       ['customers/phone-customer', {
         id: 'phone-customer', brandId: 'b',
         email: 'other@example.test', normalizedEmail: 'other@example.test',
-        phone: '2222', normalizedPhone: '2222',
+        phone: '+4522222222', normalizedPhone: '+4522222222',
       }],
     ],
-    customerOverrides: { email: 'same@example.test', phone: '2222' },
+    customerOverrides: { email: 'same@example.test', phone: '+4522222222' },
   });
   assert.equal(result.result.success, false);
   assert.equal(result.events.includes('stripe'), false);
@@ -325,6 +325,41 @@ test('imports a subscribed Omnisend contact into the brand customer and records 
   }
 });
 
+test('manual Omnisend import scopes to one brand and can bypass the scheduled interval', async () => {
+  const other = { ...config, brandId: 'brand-import-other', omnisendBrandId: 'omnisend-other' };
+  const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
+  process.env.ORDERFLY_OMNISEND_BRANDS = JSON.stringify([config, other]);
+  try {
+    const now = Date.now();
+    const db = memoryDb(new Map([
+      ['omnisendContactImportState/' + config.brandId, {
+        backfillComplete: true,
+        after: null,
+        importedThrough: new Date(now).toISOString(),
+        nextAttemptAt: now + 60_000,
+      }],
+    ]));
+    const requestedBrands = [];
+    const counts = await runOmnisendContactImportWorker(db, now, brand => {
+      requestedBrands.push(brand.brandId);
+      return providerFor([])();
+    }, now + 45_000, { brandId: config.brandId, allowEarly: true });
+    assert.deepEqual(requestedBrands, [config.brandId]);
+    assert.equal(counts.pages, 1);
+    assert.deepEqual(counts.results, [{
+      brandId: config.brandId,
+      status: 'imported',
+      backfillComplete: true,
+      hasMore: false,
+      imported: 0,
+    }]);
+    assert.equal(db.rows.has('omnisendContactImportState/' + other.brandId), false);
+  } finally {
+    if (previous === undefined) delete process.env.ORDERFLY_OMNISEND_BRANDS;
+    else process.env.ORDERFLY_OMNISEND_BRANDS = previous;
+  }
+});
+
 
 test('resolves an Omnisend contact by phone and preserves the booking customer primary identity', async () => {
   const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
@@ -367,6 +402,44 @@ test('resolves an Omnisend contact by phone and preserves the booking customer p
   }
 });
 
+test('explicit Omnisend consent applies when the contact adds the first email to a phone-only booking profile', async () => {
+  const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
+  process.env.ORDERFLY_OMNISEND_BRANDS = JSON.stringify([config]);
+  try {
+    const db = memoryDb();
+    db.rows.set('customers/phone-only-booking', {
+      id: 'phone-only-booking',
+      brandId: config.brandId,
+      email: '',
+      normalizedEmail: '',
+      phone: '+45 12 34 56 78',
+      normalizedPhone: '+4512345678',
+      fullName: 'Anna Jensen',
+      marketingConsent: false,
+      totalOrders: 0,
+      totalSpend: 0,
+      integrationSources: { esmeralda: { lastBookingId: 'booking-phone-only' } },
+    });
+    const email = 'anna@example.test';
+    await runOmnisendContactImportWorker(db, Date.now(), providerFor([
+      makeContact(email, 'subscribed', {
+        source: 'omnisend-form',
+        createdAt: '2026-10-10T09:00:00.000Z',
+      }, undefined, '0045 12 34 56 78'),
+    ]));
+
+    const customer = db.rows.get('customers/phone-only-booking');
+    assert.equal(customer.normalizedEmail, email);
+    assert.equal(customer.email, email);
+    assert.equal(customer.marketingConsent, true);
+    assert.equal(db.rows.get('marketingContacts/' + emailHash(email)).state, 'synced');
+    assert.equal([...db.rows.keys()].filter(key => key.startsWith('customers/')).length, 1);
+  } finally {
+    if (previous === undefined) delete process.env.ORDERFLY_OMNISEND_BRANDS;
+    else process.env.ORDERFLY_OMNISEND_BRANDS = previous;
+  }
+});
+
 test('Omnisend reports conflicting email and phone matches without creating another customer', async () => {
   const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
   process.env.ORDERFLY_OMNISEND_BRANDS = JSON.stringify([config]);
@@ -375,15 +448,15 @@ test('Omnisend reports conflicting email and phone matches without creating anot
     db.rows.set('customers/email-customer', {
       id: 'email-customer', brandId: config.brandId,
       email: 'same@example.test', normalizedEmail: 'same@example.test',
-      phone: '1111', normalizedPhone: '1111',
+      phone: '+4511111111', normalizedPhone: '+4511111111',
     });
     db.rows.set('customers/phone-customer', {
       id: 'phone-customer', brandId: config.brandId,
       email: 'other@example.test', normalizedEmail: 'other@example.test',
-      phone: '2222', normalizedPhone: '2222',
+      phone: '+4522222222', normalizedPhone: '+4522222222',
     });
     const counts = await runOmnisendContactImportWorker(db, Date.now(), providerFor([
-      makeContact('same@example.test', 'subscribed', null, undefined, '2222'),
+      makeContact('same@example.test', 'subscribed', null, undefined, '+4522222222'),
     ]));
     assert.equal(counts.conflicts, 1);
     assert.equal([...db.rows.keys()].filter(key => key.startsWith('customers/')).length, 2);
@@ -457,12 +530,12 @@ test('booking resolver rejects email and phone identities that point to differen
     ['customers/email-customer', {
       id: 'email-customer', brandId: config.brandId,
       email: 'same@example.test', normalizedEmail: 'same@example.test',
-      phone: '1111', normalizedPhone: '1111',
+      phone: '+4511111111', normalizedPhone: '+4511111111',
     }],
     ['customers/phone-customer', {
       id: 'phone-customer', brandId: config.brandId,
       email: 'other@example.test', normalizedEmail: 'other@example.test',
-      phone: '2222', normalizedPhone: '2222',
+      phone: '+4522222222', normalizedPhone: '+4522222222',
     }],
   ]);
   const db = memoryDb(rows);
@@ -481,11 +554,53 @@ test('booking resolver rejects email and phone identities that point to differen
       booking_id: 'booking-conflict',
       full_name: 'Anna Jensen',
       email: 'same@example.test',
-      phone: '2222',
+      phone: '+4522222222',
     }),
     error => error.code === 'customer_identity_conflict',
   );
   assert.equal([...db.rows.keys()].filter(key => key.startsWith('customers/')).length, 2);
+});
+
+test('phone-only booking creates one customer and a later email resolves to that same profile', async () => {
+  const rows = new Map([
+    ['brands/brand-import-test', { id: 'brand-import-test' }],
+    ['locations/location-import-test', { id: 'location-import-test', brandId: config.brandId }],
+  ]);
+  const db = memoryDb(rows);
+  const admin = { firestore: { FieldValue: {
+    serverTimestamp: () => new Date('2026-10-13T12:00:00.000Z'),
+    arrayUnion: (...values) => values,
+  } } };
+  const resolver = loadTs('src/lib/integrations/esmeralda-consumer-customer.ts', {
+    'server-only': {},
+    '@/lib/firebase-admin': { admin, getAdminDb: () => db },
+  });
+  const booking = await resolver.resolveOrUpsertEsmeraldaConsumerCustomer({
+    organization_id: config.brandId,
+    location_id: 'location-import-test',
+    booking_id: 'booking-phone-only',
+    full_name: 'Phone Guest',
+    email: null,
+    phone: '+45 12 34 56 78',
+  });
+  const emailThenBooking = await resolver.resolveOrUpsertEsmeraldaConsumerCustomer({
+    organization_id: config.brandId,
+    location_id: 'location-import-test',
+    booking_id: 'booking-with-email',
+    full_name: 'Phone Guest',
+    email: 'guest@example.test',
+    phone: '0045 12 34 56 78',
+  });
+  assert.equal(booking.operation, 'created');
+  assert.equal(booking.normalized_email, null);
+  assert.equal(emailThenBooking.customer_id, booking.customer_id);
+  assert.equal(emailThenBooking.operation, 'updated');
+  const customer = db.rows.get('customers/' + booking.customer_id);
+  assert.equal(customer.normalizedPhone, '+4512345678');
+  assert.equal(customer.normalizedEmail, 'guest@example.test');
+  assert.equal([...db.rows.keys()].filter(key => key.startsWith('customers/')).length, 1);
+  assert.equal([...db.rows.keys()].filter(key => key.startsWith('integrationConsumerCustomerIdentities/')).length, 1);
+  assert.equal([...db.rows.keys()].filter(key => key.startsWith('integrationConsumerCustomerPhoneIdentities/')).length, 1);
 });
 
 test('checkout customer lookup resolves email aliases and phone aliases within one brand', async () => {
@@ -514,14 +629,14 @@ test('checkout lookup rejects email and phone matches to different customer reco
     }],
     ['customers/phone-customer', {
       id: 'phone-customer', brandId: config.brandId,
-      normalizedEmail: 'other@example.test', normalizedPhone: '2222',
+      normalizedEmail: 'other@example.test', normalizedPhone: '+4522222222',
     }],
   ]));
   const lookup = loadTs('src/lib/checkout-customer-identity.ts', {
     '@/lib/server/firestore-compat': compatFor(db),
   });
   await assert.rejects(
-    lookup.findCheckoutCustomer(config.brandId, 'same@example.test', '2222'),
+    lookup.findCheckoutCustomer(config.brandId, 'same@example.test', '+4522222222'),
     error => error.code === 'customer_identity_conflict',
   );
 });

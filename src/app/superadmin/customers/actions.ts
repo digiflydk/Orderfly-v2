@@ -11,21 +11,123 @@ import { z } from 'zod';
 import { revalidatePath } from 'next/cache';
 import { customerMetrics,asDate,qualifyingOrders } from '@/lib/loyalty/model';
 import { customerFeedbackHistory } from '@/lib/feedback/customer-history';
+import { customerIdentityKey } from '@/lib/customer-identity';
+import { normalizeEmail, normalizePhone } from '@/lib/integrations/esmeralda-customer-contract';
 import { getLoyaltySettings } from '../loyalty/actions';
 
-
-const customerSchema = z.object({
-  id: z.string().optional(),
-  fullName: z.string().min(2, { message: 'Full name must be at least 2 characters.' }),
-  email: z.string().email({ message: 'Please enter a valid email.' }),
-  phone: z.string().min(1, { message: 'Phone number is required.' }),
-  status: z.preprocess((val) => val === 'on' || val === true, z.boolean()),
-});
 
 export type FormState = {
   message: string;
   error: boolean;
 };
+
+function stringValues(value: unknown): string[] {
+  if (typeof value === 'string') return [value];
+  return Array.isArray(value) ? value.filter((item): item is string => typeof item === 'string') : [];
+}
+
+function mergeDirectoryIdentity(before: Record<string, unknown> | null, emailInput: string, phoneInput: string) {
+  const email = emailInput.trim();
+  const phone = phoneInput.trim();
+  const normalizedEmail = normalizeEmail(email);
+  const normalizedPhone = normalizePhone(phone) || '';
+  const previousEmails = [
+    ...stringValues(before?.normalizedEmail),
+    ...stringValues(before?.email),
+    ...stringValues(before?.emailAliases),
+  ].map(normalizeEmail).filter(Boolean);
+  const previousPhones = [
+    ...stringValues(before?.normalizedPhone),
+    ...stringValues(before?.phone),
+    ...stringValues(before?.phoneAliases),
+  ].map(value => normalizePhone(value)).filter((value): value is string => !!value);
+
+  return {
+    email,
+    normalizedEmail,
+    emailAliases: [...new Set([...previousEmails, ...(normalizedEmail ? [normalizedEmail] : [])])]
+      .filter(value => value !== normalizedEmail),
+    phone,
+    normalizedPhone,
+    phoneAliases: [...new Set([...previousPhones, ...(normalizedPhone ? [normalizedPhone] : [])])]
+      .filter(value => value !== normalizedPhone),
+  };
+}
+
+function identityReservations(record: Record<string, unknown>, brandId: string) {
+  const emails = [...new Set([
+    ...stringValues(record.normalizedEmail),
+    ...stringValues(record.email),
+    ...stringValues(record.emailAliases),
+  ].map(normalizeEmail).filter(Boolean))];
+  const phones = [...new Set([
+    ...stringValues(record.normalizedPhone),
+    ...stringValues(record.phone),
+    ...stringValues(record.phoneAliases),
+  ].map(value => normalizePhone(value)).filter((value): value is string => !!value))];
+  return [
+    ...emails.map(identity => ({
+      collection: 'integrationConsumerCustomerIdentities',
+      hashField: 'emailHash',
+      identity,
+      key: customerIdentityKey(brandId, identity),
+    })),
+    ...phones.map(identity => ({
+      collection: 'integrationConsumerCustomerPhoneIdentities',
+      hashField: 'phoneHash',
+      identity,
+      key: customerIdentityKey(brandId, identity),
+    })),
+  ];
+}
+
+async function reserveCustomerIdentities(
+  tx: FirebaseFirestore.Transaction,
+  customerId: string,
+  record: Record<string, unknown>,
+): Promise<void> {
+  const brandId = typeof record.brandId === 'string' ? record.brandId : '';
+  if (!brandId) throw new Error('Customer brand is required for identity reservation.');
+  const db = getAdminDb();
+  const entries = identityReservations(record, brandId);
+  const refs = entries.map(entry => db.collection(entry.collection).doc(entry.key));
+  const snapshots = await Promise.all(refs.map(ref => tx.get(ref)));
+  for (const snapshot of snapshots) {
+    if (snapshot.exists && (snapshot.get('brandId') !== brandId || snapshot.get('customerId') !== customerId)) {
+      throw new Error('This email or phone is already assigned to another customer in this brand.');
+    }
+  }
+  const now = Timestamp.now();
+  entries.forEach((entry, index) => {
+    const existing = snapshots[index]?.data();
+    tx.set(refs[index], {
+      brandId,
+      customerId,
+      [entry.hashField]: entry.key,
+      source: typeof existing?.source === 'string' ? existing.source : 'orderfly_admin',
+      updatedAt: now,
+      ...(existing?.createdAt ? {} : { createdAt: now }),
+    }, { merge: true });
+  });
+}
+
+async function removeCustomerIdentityReservations(
+  tx: FirebaseFirestore.Transaction,
+  customerId: string,
+  record: Record<string, unknown>,
+): Promise<void> {
+  const brandId = typeof record.brandId === 'string' ? record.brandId : '';
+  if (!brandId) return;
+  const db = getAdminDb();
+  const entries = identityReservations(record, brandId);
+  const refs = entries.map(entry => db.collection(entry.collection).doc(entry.key));
+  const snapshots = await Promise.all(refs.map(ref => tx.get(ref)));
+  snapshots.forEach((snapshot, index) => {
+    if (snapshot.exists && snapshot.get('brandId') === brandId && snapshot.get('customerId') === customerId) {
+      tx.delete(refs[index]);
+    }
+  });
+}
 
 export async function getCustomerFormBrands(): Promise<Array<{id:string;name:string}>> {
   const grants = await orderflyReadGrants('orderfly.customers:create');
@@ -54,9 +156,15 @@ export async function createOrUpdateCustomer(
     const validationSchema = z.object({
         id: z.string().optional(),
         fullName: z.string().min(2, 'Name is required'),
-        email: z.string().email(),
-        phone: z.string().min(1, 'Phone is required'),
+        email: z.string().trim().refine(value => !value || z.string().email().safeParse(value).success, 'Please enter a valid email.'),
+        phone: z.string().trim().refine(value => !value || !!normalizePhone(value), 'Please enter a valid phone number.'),
         status: z.enum(['active', 'inactive']),
+    }).superRefine((value, context) => {
+      if (!value.email && !value.phone) context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['email'],
+        message: 'A valid email or phone number is required.',
+      });
     });
 
     const validatedFields = validationSchema.safeParse(mappedData);
@@ -76,8 +184,11 @@ export async function createOrUpdateCustomer(
         const brandId = id ? null : z.string().regex(/^[A-Za-z0-9_-]{1,128}$/).parse(formData.get('brandId'));
         if (brandId) await requireOrderflyAccess(brandId, null, 'orderfly.customers:create');
         await mutateScopedDocument('customers', docId, `orderfly.customers:${id ? 'edit' : 'create'}`, 'company', before => {
-          if (before) return { ...before, ...customerData };
-          return { ...customerData, id: docId, brandId, createdAt: Timestamp.now(), totalOrders: 0, totalSpend: 0, locationIds: [], loyaltyScore: 0, loyaltyClassification: 'New' };
+          const identity = mergeDirectoryIdentity(before, customerData.email, customerData.phone);
+          if (before) return { ...before, ...customerData, ...identity };
+          return { ...customerData, ...identity, id: docId, brandId, createdAt: Timestamp.now(), totalOrders: 0, totalSpend: 0, locationIds: [], loyaltyScore: 0, loyaltyClassification: 'New' };
+        }, false, async (_before, after, tx) => {
+          if (after) await reserveCustomerIdentities(tx, docId, after);
         });
 
         return { message: `Customer ${id ? 'updated' : 'created'} successfully.`, error: false };
@@ -89,7 +200,9 @@ export async function createOrUpdateCustomer(
 
 export async function deleteCustomer(customerId: string) {
     try {
-        await mutateScopedDocument('customers', customerId, 'orderfly.customers:delete', 'company', () => null);
+        await mutateScopedDocument('customers', customerId, 'orderfly.customers:delete', 'company', () => null, false, async (before, _after, tx) => {
+          if (before) await removeCustomerIdentityReservations(tx, customerId, before);
+        });
         revalidatePath("/superadmin/customers");
         return { message: "Customer deleted successfully.", error: false };
     } catch (e) {

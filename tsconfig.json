@@ -30,6 +30,7 @@
 	  "workspace",
 	  "src/workspace",
 	  "src/legacy",
-	  "tests"
+	  "tests",
+	  "supabase/functions"
 	]
 }

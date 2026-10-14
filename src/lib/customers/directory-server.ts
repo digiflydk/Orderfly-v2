@@ -5,6 +5,17 @@ import { getCustomers } from '@/app/superadmin/customers/actions';
 import type { Customer } from '@/types';
 import { buildDirectory, type DirectoryEntry, type DirectorySource } from './directory';
 
+function stringValues(value: unknown): string[] {
+  if (!Array.isArray(value)) return [];
+  return [...new Set(value.filter((item): item is string => typeof item === 'string').map(item => item.trim()).filter(Boolean))].slice(0, 50);
+}
+
+function record(value: unknown): Record<string, unknown> {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? value as Record<string, unknown>
+    : {};
+}
+
 export async function customerDirectory(customerRecords?: Customer[]): Promise<{ entries: DirectoryEntry[]; global: boolean }> {
   const [session, grants, customers] = await Promise.all([
     orderflySession(), orderflyReadGrants('orderfly.customers:view'), customerRecords ?? getCustomers(),
@@ -30,11 +41,22 @@ export async function customerDirectory(customerRecords?: Customer[]): Promise<{
     const key=`${brandIds[index]}:${data.playId}`,current=externalSales.get(key)||{orders:0,spend:0};
     externalSales.set(key,{orders:current.orders+1,spend:current.spend+amount});
   }));
-  const sources: DirectorySource[] = customers.map(customer => ({
-    id:customer.id,brandId:customer.brandId,name:customer.fullName,email:customer.email,
-    phone:customer.phone,kind:'customer',createdAt:customer.createdAt,totalOrders:customer.totalOrders,
-    totalSpend:customer.totalSpend,lastOrderDate:customer.lastOrderDate,loyaltyClassification:customer.loyaltyClassification,
-  }));
+  const sources: DirectorySource[] = customers.map(customer => {
+    const extended = customer as Customer & {
+      emailAliases?: unknown;
+      phoneAliases?: unknown;
+      integrationSources?: unknown;
+    };
+    const integrations = record(extended.integrationSources);
+    return {
+      id:customer.id,brandId:customer.brandId,name:customer.fullName,email:customer.email,
+      emailAliases:stringValues(extended.emailAliases),
+      phone:customer.phone,phoneAliases:stringValues(extended.phoneAliases),kind:'customer',createdAt:customer.createdAt,totalOrders:customer.totalOrders,
+      totalSpend:customer.totalSpend,lastOrderDate:customer.lastOrderDate,loyaltyClassification:customer.loyaltyClassification,
+      hasBookingSource:Object.keys(record(integrations.esmeralda)).length > 0,
+      hasOmnisendSource:Object.keys(record(integrations.omnisend)).length > 0,
+    };
+  });
   plays.forEach((snapshot, index) => snapshot.docs.forEach(doc => {
     const data = doc.data();
     if (data.brandId !== brandIds[index] || data.mode !== 'live') return;

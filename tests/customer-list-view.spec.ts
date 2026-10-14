@@ -17,6 +17,9 @@ test('renders a legacy customer without locations or consent timestamp', () => {
   expect([view.totalOrders, view.totalSpend]).toEqual([0, 0]);
   expect(view.locationNames).toBe('');
   expect(view.createdAt).toBe('2023-11-14');
+  expect(view.emailAliases).toEqual([]);
+  expect(view.phoneAliases).toEqual([]);
+  expect([view.hasBookingSource, view.hasOmnisendSource]).toEqual([false, false]);
   expect(view).not.toHaveProperty('cookie_consent');
 });
 
@@ -27,18 +30,23 @@ test('preserves valid locations, loyalty data and mixed timestamp formats', () =
     phone: '12345678', status: 'active', createdAt: new Date('2026-09-01T10:00:00Z'),
     lastOrderDate: '2026-09-26T10:00:00Z', locationIds: ['location-1', 'retired'],
     loyaltyScore: 80, cookie_consent: { timestamp: { seconds: 1_700_000_000 } },
-    integrationSources: { esmeralda: { lastSyncedAt: new FirestoreTimestamp() } },
+    emailAliases: ['second@example.com'],
+    phoneAliases: ['+4512345678'],
+    integrationSources: { esmeralda: { lastSyncedAt: new FirestoreTimestamp() }, omnisend: { contactId: 'hashed-provider-id' } },
   } as unknown as Customer;
 
   const view = customerListView(customer, brands, locations);
   expect(view.locationNames).toBe('Amager, Unknown');
   expect(view.lastOrderDate).toBe('2026-09-26');
   expect(view.loyaltyScore).toBe(80);
+  expect(view.emailAliases).toEqual(['second@example.com']);
+  expect(view.phoneAliases).toEqual(['+4512345678']);
+  expect([view.hasBookingSource, view.hasOmnisendSource]).toEqual([true, true]);
   expect(view).not.toHaveProperty('cookie_consent');
   expect(view).not.toHaveProperty('integrationSources');
   expect(Object.keys(view).sort()).toEqual([
-    'brandId', 'brandName', 'createdAt', 'email', 'fullName', 'id', 'lastOrderDate',
-    'locationIds', 'locationNames', 'loyaltyClassification', 'loyaltyScore', 'phone', 'status',
+    'brandId', 'brandName', 'createdAt', 'email', 'emailAliases', 'fullName', 'hasBookingSource', 'hasOmnisendSource', 'id', 'lastOrderDate',
+    'locationIds', 'locationNames', 'loyaltyClassification', 'loyaltyScore', 'phone', 'phoneAliases', 'status',
     'totalOrders', 'totalSpend',
   ]);
 });

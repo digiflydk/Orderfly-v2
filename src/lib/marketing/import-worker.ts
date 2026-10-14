@@ -380,7 +380,8 @@ async function importContact(
             };
             const incomingStatusIsSubscribed = status === 'subscribed';
             const canApplyProviderState = !localConsentIsNewer;
-            const consentMatchesPrimaryEmail = created || customerEmail(customerData) === email;
+            const currentPrimaryEmail = customerEmail(customerData);
+            const consentMatchesPrimaryEmail = created || !currentPrimaryEmail || currentPrimaryEmail === email;
             let nextMarketingState = typeof state?.state === 'string' ? state.state : 'suppressed';
             let nextMarketingConsent: boolean | undefined;
             if (canApplyProviderState) {
@@ -513,12 +514,12 @@ function customerEmail(record: CustomerRecord): string {
         : typeof record.email === 'string' ? normalizeEmail(record.email) : '';
 }
 
-async function claimState(ref: DocumentReference, db: Firestore, now: number) {
+async function claimState(ref: DocumentReference, db: Firestore, now: number, allowEarly: boolean) {
     const lease = randomUUID();
     return db.runTransaction(async tx => {
         const snapshot = await tx.get(ref);
         const current = snapshot.data() as ImportState | undefined;
-        if ((current?.leaseUntil || 0) > now || (current?.nextAttemptAt || 0) > now) return null;
+        if ((current?.leaseUntil || 0) > now || (!allowEarly && (current?.nextAttemptAt || 0) > now)) return null;
         tx.set(ref, {
             lease,
             leaseUntil: now + LEASE_MS,
@@ -556,14 +557,21 @@ export async function runOmnisendContactImportWorker(
     now = Date.now(),
     makeProvider: (config: MarketingConfig) => Omnisend = config => new Omnisend(config),
     requestDeadline = Date.now() + 45_000,
+    options: { brandId?: string; allowEarly?: boolean } = {},
 ) {
     const deadline = Math.min(Date.now() + 25_000, requestDeadline - 5_000);
-    const counts = { brands: 0, pages: 0, imported: 0, created: 0, updated: 0, resolved: 0, skipped: 0, conflicts: 0, failed: 0 };
-    for (const config of configuredMarketingBrands()) {
+    const counts = { brands: 0, pages: 0, imported: 0, created: 0, updated: 0, resolved: 0, skipped: 0, conflicts: 0, failed: 0, busy: 0 };
+    const results: Array<{ brandId: string; status: 'imported' | 'busy' | 'failed'; backfillComplete?: boolean; hasMore?: boolean; imported?: number; error?: string }> = [];
+    const configs = configuredMarketingBrands().filter(config => !options.brandId || config.brandId === options.brandId);
+    for (const config of configs) {
         if (Date.now() >= deadline) break;
         const stateRef = db.collection('omnisendContactImportState').doc(config.brandId);
-        const state = await claimState(stateRef, db, now);
-        if (!state) continue;
+        const state = await claimState(stateRef, db, now, options.allowEarly === true);
+        if (!state) {
+            counts.busy++;
+            results.push({ brandId: config.brandId, status: 'busy' });
+            continue;
+        }
         counts.brands++;
         try {
             const provider = makeProvider(config);
@@ -622,13 +630,16 @@ export async function runOmnisendContactImportWorker(
                 lastError: null,
             }, now);
             counts.pages++;
+            results.push({ brandId: config.brandId, status: 'imported', backfillComplete: backfillComplete || complete, hasMore: !!page.after, imported: counts.imported });
         } catch (error) {
+            const code = errorCode(error);
             await releaseState(db, stateRef, state.lease, {
                 nextAttemptAt: now + IMPORT_INTERVAL_MS,
-                lastError: errorCode(error),
+                lastError: code,
             }, now);
             counts.failed++;
+            results.push({ brandId: config.brandId, status: 'failed', error: code });
         }
     }
-    return counts;
+    return { ...counts, results };
 }

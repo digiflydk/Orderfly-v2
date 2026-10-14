@@ -15,9 +15,12 @@ Email subscription status and consent evidence are stored separately from the pr
 
 The importer runs inside the existing authenticated notification/marketing heartbeat. It does not create campaigns or send newsletters. Runtime setup reuses `ORDERFLY_OMNISEND_BRANDS`; each enabled mapping needs the correct Omnisend brand ID and an API key with the `contacts.read` scope. The existing contact sync also reads Omnisend contacts to reconcile local signups. No secret or key is stored in source control.
 
+Platform superusers can also start a manual import from Customers by selecting one brand and pressing **Synk Omnisend**. This runs one page for that brand immediately, even if the scheduled five-minute interval has not elapsed, while retaining the import lease to prevent overlapping runs. During the first historical backfill, the interface reports when another page remains; click the button again to continue. Each run imports at most 25 contacts. After backfill, a click imports the current incremental page. The action is contact import only and does not send a newsletter or campaign.
+
 Verification:
 ```sh
 node --test tests/unit/omnisend-contact-import.cjs tests/unit/omnisend-193.cjs
+node --test tests/unit/customer-manual-sync.cjs tests/unit/customer-sync-actions-browser.cjs
 npm run typecheck
 ```
 

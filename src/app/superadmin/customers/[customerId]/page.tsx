@@ -27,6 +27,16 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
   const { entries } = await customerDirectory();
   const activity = entries.find(entry => entry.sources.some(source => source.kind === 'customer' && source.id === customer.id && source.brandId === customer.brandId));
   const history = await customerHistory(activity, customer, allOrders, feedbackEntries, feedbackAccess);
+  const extendedCustomer = customer as typeof customer & {
+    emailAliases?: unknown;
+    phoneAliases?: unknown;
+    integrationSources?: unknown;
+  };
+  const emailAliases = Array.isArray(extendedCustomer.emailAliases) ? extendedCustomer.emailAliases.filter((value): value is string => typeof value === 'string' && !!value.trim()) : [];
+  const phoneAliases = Array.isArray(extendedCustomer.phoneAliases) ? extendedCustomer.phoneAliases.filter((value): value is string => typeof value === 'string' && !!value.trim()) : [];
+  const integrationSources = extendedCustomer.integrationSources && typeof extendedCustomer.integrationSources === 'object' ? extendedCustomer.integrationSources as Record<string, unknown> : {};
+  const hasBookingSource = Boolean(integrationSources.esmeralda);
+  const hasOmnisendSource = Boolean(integrationSources.omnisend);
   const address = customer.street ? `${customer.street}, ${customer.zipCode || ''} ${customer.city || ''}, ${customer.country || ''}` : 'No address on file';
   const since = asDate(customer.createdAt);
   const consentDate = asDate(customer.cookie_consent?.timestamp);
@@ -46,13 +56,16 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       <Kpi title="Loyalty Score (this record)" value={`${loyaltyScore}/100`} icon={Star} />
       <Kpi title="Avg. Rating (this record)" value={averageFeedbackRating > 0 ? `${averageFeedbackRating.toFixed(1)}/5` : 'N/A'} icon={Star} />
     </div>
-    {activity && activity.brandIds.length > 1 && <p className="text-sm text-muted-foreground">Records with the same email are shown together as a possible match. Verify identity before using information across merchants.</p>}
+    {activity && activity.brandIds.length > 1 && <p className="text-sm text-muted-foreground">Records sharing an email address or phone number are shown together as a possible match. Verify identity before using information across merchants.</p>}
 
     <div className="grid gap-4 lg:grid-cols-2 xl:grid-cols-4">
       <Card><CardHeader><CardTitle>Contact Information</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">
         <Badge variant={customer.status === 'active' ? 'default' : 'secondary'}>{customer.status}</Badge>
+        <div className="flex flex-wrap gap-1">{hasBookingSource && <Badge variant="outline">Bordbooking</Badge>}{hasOmnisendSource && <Badge variant="outline">Omnisend-kontakt</Badge>}{!hasBookingSource && !hasOmnisendSource && <Badge variant="outline">Orderfly</Badge>}</div>
         <p className="flex items-center gap-2 break-all"><Mail className="h-4 w-4 shrink-0 text-muted-foreground" /><a href={`mailto:${customer.email}`} className="text-primary hover:underline">{customer.email}</a></p>
+        {emailAliases.map(email => <p key={email} className="ml-6 break-all text-xs text-muted-foreground"><a href={`mailto:${email}`} className="hover:text-primary hover:underline">{email}</a> · additional email</p>)}
         <p className="flex items-center gap-2"><Phone className="h-4 w-4 text-muted-foreground" /><a href={`tel:${customer.phone}`} className="text-primary hover:underline">{customer.phone}</a></p>
+        {phoneAliases.map(phone => <p key={phone} className="ml-6 text-xs text-muted-foreground"><a href={`tel:${phone}`} className="hover:text-primary hover:underline">{phone}</a> · additional phone</p>)}
         <p className="flex items-start gap-2"><Home className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />{address}</p>
         <p className="flex items-center gap-2">{customer.marketingConsent ? <CheckCircle className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-muted-foreground" />}Customer consent flag: {customer.marketingConsent ? 'Yes' : 'No'}</p>
       </CardContent></Card>
@@ -65,7 +78,7 @@ export default async function CustomerDetailPage({ params }: { params: Promise<{
       <Card><CardHeader><CardTitle>Cookie Consent</CardTitle></CardHeader><CardContent className="space-y-2 text-sm">
         {customer.cookie_consent ? <><p>Given: Yes · {consentDate ? format(consentDate, 'MMM d, yyyy HH:mm') : 'Date unknown'}</p><p>Version: {customer.cookie_consent.consent_version || '—'}</p><p>Marketing: {customer.cookie_consent.marketing ? 'Yes' : 'No'} · Statistics: {customer.cookie_consent.statistics ? 'Yes' : 'No'} · Functional: {customer.cookie_consent.functional ? 'Yes' : 'No'}</p>{customer.cookie_consent.origin_brand && <p>Origin brand: {customer.cookie_consent.origin_brand}</p>}{customer.cookie_consent.linked_anon_id && <p>Linked ID: {customer.cookie_consent.linked_anon_id.slice(0, 8)}…</p>}</> : <p className="flex items-center gap-2 text-muted-foreground"><Cookie className="h-5 w-5" />No cookie consent recorded.</p>}
       </CardContent></Card>
-      <Card><CardHeader><CardTitle>Newsletter Status</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">{history.newsletters.map(row => <div key={row.brandId}><p className="font-medium">{row.merchant}</p><Badge variant={row.status === 'subscribed' ? 'default' : 'secondary'}>{row.status === 'subscribed' ? 'Subscribed' : row.status === 'pending' ? 'Pending confirmation' : row.status === 'not_subscribed' ? 'Not subscribed' : 'Unknown'}</Badge><p className="mt-1 text-xs text-muted-foreground">{row.note}</p></div>)}</CardContent></Card>
+      <Card><CardHeader><CardTitle>Newsletter Status</CardTitle></CardHeader><CardContent className="space-y-3 text-sm">{history.newsletters.map(row => <div key={`${row.brandId}:${row.email}`}><p className="font-medium">{row.merchant}</p>{row.email&&<p className="break-all text-xs text-muted-foreground">{row.email}</p>}<Badge variant={row.status === 'subscribed' ? 'default' : 'secondary'}>{row.status === 'subscribed' ? 'Subscribed' : row.status === 'pending' ? 'Pending confirmation' : row.status === 'not_subscribed' ? 'Not subscribed' : 'Unknown'}</Badge><p className="mt-1 text-xs text-muted-foreground">{row.note}</p></div>)}</CardContent></Card>
     </div>
 
     <CustomerHistory {...history} />

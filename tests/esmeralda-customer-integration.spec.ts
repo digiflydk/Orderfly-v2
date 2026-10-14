@@ -21,6 +21,11 @@ test.describe('Esmeralda customer integration contract', () => {
     expect(normalizePhone('+45 12 34 56 78')).toBe('+4512345678');
     expect(normalizePhone('0045 12-34-56-78')).toBe('+4512345678');
     expect(normalizePhone('12 34 56 78')).toBe('12345678');
+    expect(normalizePhone('1234567')).toBe('1234567');
+    expect(normalizePhone('0')).toBeNull();
+    expect(normalizePhone('table 4')).toBeNull();
+    expect(normalizePhone('123456')).toBeNull();
+    expect(normalizePhone('1234567890123456')).toBeNull();
     expect(normalizePhone('   ')).toBeNull();
   });
 
@@ -52,6 +57,42 @@ test.describe('Esmeralda customer integration contract', () => {
       expect(valid.data.location_id).toBe('location-amager');
       expect(valid.data.booking_id).toBe('booking-123');
     }
+
+    const phoneOnly = esmeraldaConsumerCustomerSchema.safeParse({
+      organization_id: 'brand-esmeralda',
+      location_id: 'location-amager',
+      booking_id: 'booking-phone-only',
+      full_name: 'Guest Name',
+      phone: '+45 12 34 56 78',
+    });
+    expect(phoneOnly.success).toBe(true);
+
+    const placeholderPhoneOnly = esmeraldaConsumerCustomerSchema.safeParse({
+      organization_id: 'brand-esmeralda',
+      location_id: 'location-amager',
+      booking_id: 'booking-placeholder-phone',
+      full_name: 'Guest Name',
+      phone: 'table 4',
+    });
+    expect(placeholderPhoneOnly.success).toBe(false);
+
+    const emailWithPlaceholderPhone = esmeraldaConsumerCustomerSchema.safeParse({
+      organization_id: 'brand-esmeralda',
+      location_id: 'location-amager',
+      booking_id: 'booking-placeholder-with-email',
+      full_name: 'Guest Name',
+      email: 'guest@example.com',
+      phone: 'table 4',
+    });
+    expect(emailWithPlaceholderPhone.success).toBe(false);
+
+    const noIdentity = esmeraldaConsumerCustomerSchema.safeParse({
+      organization_id: 'brand-esmeralda',
+      location_id: 'location-amager',
+      booking_id: 'booking-without-contact',
+      full_name: 'Guest Name',
+    });
+    expect(noIdentity.success).toBe(false);
 
     const invalid = esmeraldaConsumerCustomerSchema.safeParse({
       organization_id: 'brand-esmeralda',
