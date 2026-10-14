@@ -1,6 +1,6 @@
 # Manual customer sync
 
-The Customers page exposes separate Omnisend and table-booking sync actions. Both require a platform superuser and one selected brand. The browser sends only the selected brand ID and source to Orderfly's same-origin route.
+The Customers page exposes separate Omnisend and table-booking sync actions. Both require a platform superuser and one selected brand. The browser sends only the selected brand ID and source to Orderfly's same-origin route. The page shows a live spinner and status text with the source and brand while a request is running.
 
 ## Omnisend
 
