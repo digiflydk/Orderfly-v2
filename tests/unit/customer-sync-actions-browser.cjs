@@ -87,9 +87,9 @@ test('manual sync requires one chosen brand and starts the matching source witho
   await expect(bookings).toBeEnabled();
 
   await omnisend.click();
-  await expect(page.getByRole('status')).toContainText('25 kontakter blev importeret');
+  await expect(page.getByRole('status').filter({ hasText: '25 kontakter blev importeret' })).toBeVisible();
   await bookings.click();
-  await expect(page.getByRole('status')).toContainText('12 bookinger lagt i kø');
+  await expect(page.getByRole('status').filter({ hasText: '12 bookinger lagt i kø' })).toBeVisible();
   assert.deepEqual(calls, [
     { brandId: 'brand-a', source: 'omnisend' },
     { brandId: 'brand-a', source: 'bookings' },
