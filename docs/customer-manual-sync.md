@@ -20,7 +20,7 @@ The booking resolver accepts either email or phone. Email remains optional for b
 
 These files span Orderfly and the Supabase booking runtime. Deploy in this order after independent review and PO acceptance:
 
-1. Apply `supabase/migrations/20261014004726_orderfly_customer_manual_sync.sql` to the Esmeralda Supabase project. It updates the existing backfill RPC and restricts its execution to `service_role`.
+1. Apply `supabase/migrations/20261014010301_orderfly_customer_manual_sync.sql` to the Esmeralda Supabase project. It updates the existing backfill RPC and restricts its execution to `service_role`.
 2. Deploy the updated `supabase/functions/_shared/orderfly-customer-identity.ts` and `orderfly-customer-sync.ts` alongside the existing `notification-worker`. The existing scheduled worker must use the phone-aware helper so a later cron run does not mark phone-only jobs as skipped.
 3. Deploy `supabase/functions/orderfly-customer-sync-trigger/index.ts` with `verify_jwt=false`; the function has its own high-entropy shared-secret check. Keep the existing `ORDERFLY_ESMERALDA_INTEGRATION_SECRET` configured in Supabase and Orderfly. Do not add a service-role key to Orderfly or the browser.
 4. Deploy the reviewed Orderfly revision. `apphosting.yaml` provides the nonsecret function URL as `ORDERFLY_ESMERALDA_CUSTOMER_SYNC_ENDPOINT`; the server reads the shared secret from Secret Manager.
