@@ -15,7 +15,7 @@ test('booking customer sync accepts either a valid email or a phone with digits'
 });
 
 test('booking backfill is scoped to active mappings and does not retry terminal identity conflicts', () => {
-  const migration = fs.readFileSync('supabase/migrations/20261014004726_orderfly_customer_manual_sync.sql', 'utf8');
+  const migration = fs.readFileSync('supabase/migrations/20261014010301_orderfly_customer_manual_sync.sql', 'utf8');
   assert.match(migration, /orderfly_organization_mappings[\s\S]+om\.is_active = true/);
   assert.match(migration, /orderfly_location_mappings[\s\S]+lm\.is_active = true/);
   assert.match(migration, /booking_consumer_customer_links[\s\S]+l\.booking_id is null/);
