@@ -1,6 +1,3 @@
-Warning: truncated output (original token count: 8033)
-Total output lines: 756
-
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
@@ -371,7 +368,52 @@ test('resolves an Omnisend contact by phone and preserves the booking customer p
     const db = memoryDb();
     db.rows.set('customers/booking-customer', {
       id: 'booking-customer',
-  …533 tokens truncated…12345678',
+      brandId: config.brandId,
+      email: 'booking@example.test',
+      normalizedEmail: 'booking@example.test',
+      phone: '+45 12 34 56 78',
+      normalizedPhone: '+4512345678',
+      fullName: 'Anna Jensen',
+      marketingConsent: false,
+      totalOrders: 2,
+      totalSpend: 180,
+      integrationSources: { esmeralda: { lastBookingId: 'booking-1' } },
+    });
+    const counts = await runOmnisendContactImportWorker(db, Date.now(), providerFor([
+      makeContact('online@example.test', 'subscribed', {
+        source: 'omnisend-form',
+        createdAt: '2026-10-10T09:00:00.000Z',
+      }, undefined, '0045 12 34 56 78'),
+    ]));
+    const customer = db.rows.get('customers/booking-customer');
+    assert.equal(counts.updated, 1);
+    assert.equal([...db.rows.keys()].filter(key => key.startsWith('customers/')).length, 1);
+    assert.equal(customer.normalizedEmail, 'booking@example.test');
+    assert.deepEqual(customer.emailAliases, ['online@example.test']);
+    assert.equal(customer.normalizedPhone, '+4512345678');
+    assert.equal(customer.totalOrders, 2);
+    assert.equal(customer.marketingConsent, false);
+    assert.equal(customer.integrationSources.esmeralda.lastBookingId, 'booking-1');
+    assert.equal(db.rows.get('marketingContacts/' + emailHash('online@example.test')).customerId, 'booking-customer');
+    assert.equal(db.rows.get('integrationConsumerCustomerIdentities/' + emailHash('online@example.test')).customerId, 'booking-customer');
+  } finally {
+    if (previous === undefined) delete process.env.ORDERFLY_OMNISEND_BRANDS;
+    else process.env.ORDERFLY_OMNISEND_BRANDS = previous;
+  }
+});
+
+test('explicit Omnisend consent applies when the contact adds the first email to a phone-only booking profile', async () => {
+  const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
+  process.env.ORDERFLY_OMNISEND_BRANDS = JSON.stringify([config]);
+  try {
+    const db = memoryDb();
+    db.rows.set('customers/phone-only-booking', {
+      id: 'phone-only-booking',
+      brandId: config.brandId,
+      email: '',
+      normalizedEmail: '',
+      phone: '+45 12 34 56 78',
+      normalizedPhone: '+4512345678',
       fullName: 'Anna Jensen',
       marketingConsent: false,
       totalOrders: 0,
