@@ -4,7 +4,7 @@ The Customers page exposes separate Omnisend and table-booking sync actions. Bot
 
 ## Omnisend
 
-`POST /api/superadmin/customers/sync` checks `ORDERFLY_OMNISEND_BRANDS` for the selected enabled brand, then invokes only `runOmnisendContactImportWorker`. It bypasses the scheduled `nextAttemptAt` window but still honors the Firestore lease, so a manual click cannot overlap an active importer. One click imports a maximum of 25 contacts. The UI indicates whether another backfill page remains. This endpoint never processes the consent outbox, creates campaigns or sends messages.
+`POST /api/superadmin/customers/sync` checks `ORDERFLY_OMNISEND_BRANDS` for the selected enabled brand, then invokes only `runOmnisendContactImportWorker`. It bypasses the scheduled `nextAttemptAt` window but still honors the Firestore lease, so a manual click cannot overlap an active importer. One click imports a maximum of 25 contacts. Manual runs can use up to 40 seconds inside the route's 45-second request budget; scheduled runs keep the 25-second worker budget. The next-page cursor is saved only after a page completes, and the UI indicates whether another backfill page remains. This endpoint never processes the consent outbox, creates campaigns or sends messages.
 
 ## Table bookings
 
