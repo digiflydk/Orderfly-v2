@@ -20,13 +20,13 @@ The booking resolver accepts either email or phone. Email remains optional for b
 
 These files span Orderfly and the Supabase booking runtime. Deploy in this order after independent review and PO acceptance:
 
-1. Apply `supabase/migrations/20261013000000_orderfly_customer_manual_sync.sql` to the Esmeralda Supabase project. It updates the existing backfill RPC and restricts its execution to `service_role`.
+1. Apply `supabase/migrations/20261014004726_orderfly_customer_manual_sync.sql` to the Esmeralda Supabase project. It updates the existing backfill RPC and restricts its execution to `service_role`.
 2. Deploy the updated `supabase/functions/_shared/orderfly-customer-identity.ts` and `orderfly-customer-sync.ts` alongside the existing `notification-worker`. The existing scheduled worker must use the phone-aware helper so a later cron run does not mark phone-only jobs as skipped.
 3. Deploy `supabase/functions/orderfly-customer-sync-trigger/index.ts` with `verify_jwt=false`; the function has its own high-entropy shared-secret check. Keep the existing `ORDERFLY_ESMERALDA_INTEGRATION_SECRET` configured in Supabase and Orderfly. Do not add a service-role key to Orderfly or the browser.
 4. Deploy the reviewed Orderfly revision. `apphosting.yaml` provides the nonsecret function URL as `ORDERFLY_ESMERALDA_CUSTOMER_SYNC_ENDPOINT`; the server reads the shared secret from Secret Manager.
-5. Verify a controlled booking for one mapped brand, confirm the returned aggregate counts and customer source, and confirm the queue settles. Do not use a real newsletter send as a sync check.
+5. When you're ready to validate a production import, explicitly run a controlled booking sync for one mapped brand, confirm the returned aggregate counts and customer source, and confirm the queue settles. The deployment itself does not start a sync. Do not use a real newsletter send as a sync check.
 
-The source repository for this Orderfly PR contains the migration and Edge Function sources so the coordinated change is reviewable. This Work implementation does not apply the migration, deploy Supabase functions, merge the PR or deploy Orderfly.
+The source repository for this Orderfly PR contains the migration and Edge Function sources so the coordinated change is reviewable. A deployment only makes the manual controls available; it does not import customer data automatically. Run a source sync from the Customers page only when you're ready to import that brand's data.
 
 ## Local checks
 
