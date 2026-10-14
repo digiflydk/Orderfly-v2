@@ -51,7 +51,10 @@ begin
         last_error = null,
         updated_at = now()
     where current_job.status = 'skipped'
-      and current_job.last_error = 'Booking has no valid guest email for consumer identity resolution.';
+      and current_job.last_error in (
+        'Booking has no valid guest email for consumer identity resolution.',
+        'Booking has no valid email or phone for consumer identity resolution.'
+      );
 
   get diagnostics inserted_count = row_count;
   return inserted_count;

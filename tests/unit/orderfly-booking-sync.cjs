@@ -20,7 +20,8 @@ test('booking backfill is scoped to active mappings and does not retry terminal 
   assert.match(migration, /orderfly_location_mappings[\s\S]+lm\.is_active = true/);
   assert.match(migration, /booking_consumer_customer_links[\s\S]+l\.booking_id is null/);
   assert.match(migration, /guest_email[\s\S]+guest_phone/);
-  assert.match(migration, /on conflict \(booking_id\) do update[\s\S]+status = 'skipped'[\s\S]+no valid guest email/);
+  assert.match(migration, /on conflict \(booking_id\) do update[\s\S]+current_job\.status = 'skipped'/);
+  assert.match(migration, /current_job\.last_error in \([\s\S]+no valid guest email[\s\S]+no valid email or phone/);
   assert.match(migration, /revoke all[\s\S]+from public, anon, authenticated/);
 });
 
