@@ -78,7 +78,9 @@ export async function POST(request: Request) {
     return Response.json({ error: 'Bordbooking-synkroniseringen er ikke konfigureret.' }, { status: 503 });
   }
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), 20_000);
+  // Five sequential worker jobs may each spend up to five seconds on the
+  // Orderfly request, with queue/database work around those calls.
+  const timeout = setTimeout(() => controller.abort(), 45_000);
   try {
     const response = await fetch(endpoint, {
       method: 'POST',

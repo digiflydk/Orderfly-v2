@@ -99,6 +99,36 @@ test('manual booking sync forwards only the selected brand through the private s
   }
 });
 
+test('manual booking bridge timeout allows all five bounded worker requests to finish', async () => {
+  const previous = {
+    endpoint: process.env.ORDERFLY_ESMERALDA_CUSTOMER_SYNC_ENDPOINT,
+    secret: process.env.ORDERFLY_ESMERALDA_INTEGRATION_SECRET,
+    setTimeout: global.setTimeout,
+    clearTimeout: global.clearTimeout,
+  };
+  process.env.ORDERFLY_ESMERALDA_CUSTOMER_SYNC_ENDPOINT = endpoint;
+  process.env.ORDERFLY_ESMERALDA_INTEGRATION_SECRET = secret;
+  const scheduled = [];
+  global.setTimeout = (callback, delay, ...args) => {
+    scheduled.push(delay);
+    return previous.setTimeout(callback, delay, ...args);
+  };
+  global.clearTimeout = timer => previous.clearTimeout(timer);
+  const f = loadRoute();
+  try {
+    const response = await f.route.POST(request({ brandId: 'brand-a', source: 'bookings' }));
+    assert.equal(response.status, 200);
+    assert.ok(scheduled.includes(45_000));
+    assert.ok(scheduled.find(delay => delay >= 45_000) > 5 * 5_000);
+  } finally {
+    f.restore();
+    global.setTimeout = previous.setTimeout;
+    global.clearTimeout = previous.clearTimeout;
+    previous.endpoint === undefined ? delete process.env.ORDERFLY_ESMERALDA_CUSTOMER_SYNC_ENDPOINT : process.env.ORDERFLY_ESMERALDA_CUSTOMER_SYNC_ENDPOINT = previous.endpoint;
+    previous.secret === undefined ? delete process.env.ORDERFLY_ESMERALDA_INTEGRATION_SECRET : process.env.ORDERFLY_ESMERALDA_INTEGRATION_SECRET = previous.secret;
+  }
+});
+
 test('manual sync rejects invalid brands and disabled Omnisend mappings', async () => {
   const f = loadRoute();
   try {

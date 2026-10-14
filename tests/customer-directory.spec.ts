@@ -1,5 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { buildDirectory, directoryKey } from '../src/lib/customers/directory';
+import { formatDirectoryDate } from '../src/lib/customers/date-format';
 import { matchesCustomerType, matchesDateRange } from '../src/lib/customers/filtering';
 
 const sources = [
@@ -65,6 +66,7 @@ test('directory source dates use the same Copenhagen day as customer records', (
   const sourceDate = entry.sources[0].date;
 
   expect(sourceDate).toBe('2026-01-02');
+  expect(formatDirectoryDate(sourceDate)).toBe('2.1.2026');
   expect(matchesDateRange(sourceDate, '2026-01-02', '2026-01-02')).toBe(true);
   expect(matchesDateRange(sourceDate, '2026-01-01', '2026-01-01')).toBe(false);
 });

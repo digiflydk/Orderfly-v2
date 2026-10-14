@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import Link from '@/components/superadmin/admin-link';
 import type { DirectoryEntry } from '@/lib/customers/directory';
+import { formatDirectoryDate } from '@/lib/customers/date-format';
 import { matchesCustomerSearch, matchesCustomerType, matchesDateRange, type CustomerTypeFilter } from '@/lib/customers/filtering';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -116,7 +117,7 @@ export function CustomersDirectory({entries,brandNames,global}:{entries:Director
             <td className="p-3">{typeLabel}</td>
             <td className="p-3"><div className="flex flex-wrap gap-1">{sourceLabels.map(label=><span key={label} className="rounded-full border px-2 py-0.5 text-xs">{label}</span>)}</div></td>
             <td className="p-3">{loyaltyLabels.length?loyaltyLabels.join(', '):'—'}</td>
-            <td className="p-3">{dates[0]?new Date(dates[0]).toLocaleDateString('da-DK'):'—'}</td>
+            <td className="p-3">{formatDirectoryDate(dates[0])||'—'}</td>
             <td className="p-3 text-right tabular-nums">{orders}</td>
             <td className="p-3 text-right tabular-nums">{spend.toLocaleString('da-DK',{style:'currency',currency:'DKK'})}</td>
             <td className="p-3 text-right tabular-nums">{games.length}</td>
