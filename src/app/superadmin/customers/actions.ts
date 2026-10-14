@@ -157,7 +157,7 @@ export async function createOrUpdateCustomer(
         id: z.string().optional(),
         fullName: z.string().min(2, 'Name is required'),
         email: z.string().trim().refine(value => !value || z.string().email().safeParse(value).success, 'Please enter a valid email.'),
-        phone: z.string().trim().refine(value => !value || /\d/.test(value), 'Please enter a valid phone number.'),
+        phone: z.string().trim().refine(value => !value || !!normalizePhone(value), 'Please enter a valid phone number.'),
         status: z.enum(['active', 'inactive']),
     }).superRefine((value, context) => {
       if (!value.email && !value.phone) context.addIssue({

@@ -51,3 +51,13 @@ test('phone-only customer profile can be edited without an email',async t=>{
  await expect(page.getByRole('dialog')).toHaveCount(0);
  assert.equal(saved.get('id'),'phone-only');assert.equal(saved.get('email'),'');assert.equal(saved.get('phone'),'+4512345678');assert.equal(saved.get('fullName'),'Updated Phone Guest');
 });
+
+test('placeholder phone text cannot be saved as a customer identity',async t=>{
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();let saveCalled=false;
+ await page.route('**/save',route=>{saveCalled=true;return route.fulfill({json:{error:false,message:'Saved'}});});
+ await page.goto(origin);await page.getByLabel('Full Name',{exact:true}).fill('Placeholder Guest');
+ await page.getByLabel('Phone',{exact:true}).fill('table 4');
+ await page.getByRole('button',{name:'Create Customer',exact:true}).click();
+ await expect(page.getByText('Please enter a valid phone number.')).toBeVisible();
+ assert.equal(saveCalled,false);
+});

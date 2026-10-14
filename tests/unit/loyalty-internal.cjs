@@ -72,7 +72,8 @@ function fixture() {
     'next/cache':{revalidatePath(){}},'@/lib/firebase-admin':nativeMocks['@/lib/firebase-admin'],
     '@/lib/access/orderfly-session':session,'@/lib/loyalty/model':model,
   });
-  const customerContract=load('src/lib/integrations/esmeralda-customer-contract.ts');
+  const customerPhone=load('src/lib/customer-phone.ts');
+  const customerContract=load('src/lib/integrations/esmeralda-customer-contract.ts',{'@/lib/customer-phone':customerPhone});
   const customerIdentity=load('src/lib/customer-identity.ts',{'@/lib/integrations/esmeralda-customer-contract':customerContract});
   const customers=loadTs('src/app/superadmin/customers/actions.ts',{
     ...nativeMocks,'next/cache':{revalidatePath(){}},'firebase-admin/firestore':{Timestamp:{now:()=>now}},
@@ -252,6 +253,23 @@ test('email-only customer profiles can be created without a phone number', async
   assert.equal(saved.email, 'email@example.test');
   assert.equal(saved.phone, '');
   assert.equal(saved.normalizedEmail, 'email@example.test');
+});
+
+test('customer profile rejects a placeholder as its only phone identity', async () => {
+  const f = fixture();
+  const previousError = console.error;
+  console.error = () => {};
+  let result;
+  try {
+    result = await f.customers.createOrUpdateCustomer(null, formValues({
+      brandId: 'b', fullName: 'Placeholder Guest', email: '', phone: 'table 4', status: 'active',
+    }));
+  } finally {
+    console.error = previousError;
+  }
+  assert.equal(result.error, true);
+  assert.match(result.message, /valid phone number/);
+  assert.equal([...f.rows.keys()].filter(path => path.startsWith('customers/')).length, 0);
 });
 
 test('phone-only customer saves reserve normalized identities and preserve them across edits', async () => {

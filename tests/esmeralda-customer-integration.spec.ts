@@ -21,6 +21,11 @@ test.describe('Esmeralda customer integration contract', () => {
     expect(normalizePhone('+45 12 34 56 78')).toBe('+4512345678');
     expect(normalizePhone('0045 12-34-56-78')).toBe('+4512345678');
     expect(normalizePhone('12 34 56 78')).toBe('12345678');
+    expect(normalizePhone('1234567')).toBe('1234567');
+    expect(normalizePhone('0')).toBeNull();
+    expect(normalizePhone('table 4')).toBeNull();
+    expect(normalizePhone('123456')).toBeNull();
+    expect(normalizePhone('1234567890123456')).toBeNull();
     expect(normalizePhone('   ')).toBeNull();
   });
 
@@ -61,6 +66,25 @@ test.describe('Esmeralda customer integration contract', () => {
       phone: '+45 12 34 56 78',
     });
     expect(phoneOnly.success).toBe(true);
+
+    const placeholderPhoneOnly = esmeraldaConsumerCustomerSchema.safeParse({
+      organization_id: 'brand-esmeralda',
+      location_id: 'location-amager',
+      booking_id: 'booking-placeholder-phone',
+      full_name: 'Guest Name',
+      phone: 'table 4',
+    });
+    expect(placeholderPhoneOnly.success).toBe(false);
+
+    const emailWithPlaceholderPhone = esmeraldaConsumerCustomerSchema.safeParse({
+      organization_id: 'brand-esmeralda',
+      location_id: 'location-amager',
+      booking_id: 'booking-placeholder-with-email',
+      full_name: 'Guest Name',
+      email: 'guest@example.com',
+      phone: 'table 4',
+    });
+    expect(emailWithPlaceholderPhone.success).toBe(false);
 
     const noIdentity = esmeraldaConsumerCustomerSchema.safeParse({
       organization_id: 'brand-esmeralda',

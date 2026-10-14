@@ -25,6 +25,7 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Switch } from '@/components/ui/switch'
 import type { Customer } from '@/types'
+import { normalizeCustomerPhone } from '@/lib/customer-phone'
 import { createOrUpdateCustomer, getCustomerFormBrands } from '@/app/superadmin/customers/actions'
 import { useToast } from '@/hooks/use-toast'
 import { Loader2 } from 'lucide-react'
@@ -32,7 +33,7 @@ import { Loader2 } from 'lucide-react'
 const customerSchema = z.object({
   fullName: z.string().min(2, { message: 'Full name must be at least 2 characters.' }),
   email: z.string().trim().refine(value => !value || z.string().email().safeParse(value).success, { message: 'Please enter a valid email.' }),
-  phone: z.string().trim().refine(value => !value || /\d/.test(value), { message: 'Please enter a valid phone number.' }),
+  phone: z.string().trim().refine(value => !value || !!normalizeCustomerPhone(value), { message: 'Please enter a valid phone number.' }),
   status: z.boolean(),
 }).superRefine((value, context) => {
   if (!value.email && !value.phone) context.addIssue({

@@ -139,9 +139,9 @@ test('one customer profile accepts multiple email and phone aliases in either di
 test('conflicting email and phone identities are rejected instead of selecting a third customer', () => {
   assert.throws(
     () => customerIdentity.selectCustomerByIdentity([
-      { id: 'email-customer', normalizedEmail: 'same@example.test', normalizedPhone: '1111' },
-      { id: 'phone-customer', normalizedEmail: 'other@example.test', normalizedPhone: '2222' },
-    ], 'same@example.test', '2222'),
+      { id: 'email-customer', normalizedEmail: 'same@example.test', normalizedPhone: '+4511111111' },
+      { id: 'phone-customer', normalizedEmail: 'other@example.test', normalizedPhone: '+4522222222' },
+    ], 'same@example.test', '+4522222222'),
     error => error.code === 'customer_identity_conflict',
   );
 });
@@ -212,15 +212,15 @@ test('checkout does not create a duplicate when email and phone belong to differ
       ['customers/email-customer', {
         id: 'email-customer', brandId: 'b',
         email: 'primary@example.test', normalizedEmail: 'primary@example.test',
-        emailAliases: ['same@example.test'], phone: '1111', normalizedPhone: '1111',
+        emailAliases: ['same@example.test'], phone: '+4511111111', normalizedPhone: '+4511111111',
       }],
       ['customers/phone-customer', {
         id: 'phone-customer', brandId: 'b',
         email: 'other@example.test', normalizedEmail: 'other@example.test',
-        phone: '2222', normalizedPhone: '2222',
+        phone: '+4522222222', normalizedPhone: '+4522222222',
       }],
     ],
-    customerOverrides: { email: 'same@example.test', phone: '2222' },
+    customerOverrides: { email: 'same@example.test', phone: '+4522222222' },
   });
   assert.equal(result.result.success, false);
   assert.equal(result.events.includes('stripe'), false);
@@ -448,15 +448,15 @@ test('Omnisend reports conflicting email and phone matches without creating anot
     db.rows.set('customers/email-customer', {
       id: 'email-customer', brandId: config.brandId,
       email: 'same@example.test', normalizedEmail: 'same@example.test',
-      phone: '1111', normalizedPhone: '1111',
+      phone: '+4511111111', normalizedPhone: '+4511111111',
     });
     db.rows.set('customers/phone-customer', {
       id: 'phone-customer', brandId: config.brandId,
       email: 'other@example.test', normalizedEmail: 'other@example.test',
-      phone: '2222', normalizedPhone: '2222',
+      phone: '+4522222222', normalizedPhone: '+4522222222',
     });
     const counts = await runOmnisendContactImportWorker(db, Date.now(), providerFor([
-      makeContact('same@example.test', 'subscribed', null, undefined, '2222'),
+      makeContact('same@example.test', 'subscribed', null, undefined, '+4522222222'),
     ]));
     assert.equal(counts.conflicts, 1);
     assert.equal([...db.rows.keys()].filter(key => key.startsWith('customers/')).length, 2);
@@ -530,12 +530,12 @@ test('booking resolver rejects email and phone identities that point to differen
     ['customers/email-customer', {
       id: 'email-customer', brandId: config.brandId,
       email: 'same@example.test', normalizedEmail: 'same@example.test',
-      phone: '1111', normalizedPhone: '1111',
+      phone: '+4511111111', normalizedPhone: '+4511111111',
     }],
     ['customers/phone-customer', {
       id: 'phone-customer', brandId: config.brandId,
       email: 'other@example.test', normalizedEmail: 'other@example.test',
-      phone: '2222', normalizedPhone: '2222',
+      phone: '+4522222222', normalizedPhone: '+4522222222',
     }],
   ]);
   const db = memoryDb(rows);
@@ -554,7 +554,7 @@ test('booking resolver rejects email and phone identities that point to differen
       booking_id: 'booking-conflict',
       full_name: 'Anna Jensen',
       email: 'same@example.test',
-      phone: '2222',
+      phone: '+4522222222',
     }),
     error => error.code === 'customer_identity_conflict',
   );
@@ -629,14 +629,14 @@ test('checkout lookup rejects email and phone matches to different customer reco
     }],
     ['customers/phone-customer', {
       id: 'phone-customer', brandId: config.brandId,
-      normalizedEmail: 'other@example.test', normalizedPhone: '2222',
+      normalizedEmail: 'other@example.test', normalizedPhone: '+4522222222',
     }],
   ]));
   const lookup = loadTs('src/lib/checkout-customer-identity.ts', {
     '@/lib/server/firestore-compat': compatFor(db),
   });
   await assert.rejects(
-    lookup.findCheckoutCustomer(config.brandId, 'same@example.test', '2222'),
+    lookup.findCheckoutCustomer(config.brandId, 'same@example.test', '+4522222222'),
     error => error.code === 'customer_identity_conflict',
   );
 });

@@ -5,22 +5,51 @@ const ts = require('typescript');
 const { loadTs } = require('../helpers/load-ts.cjs');
 
 const sync = loadTs('supabase/functions/_shared/orderfly-customer-identity.ts', {});
+const customerPhone = loadTs('src/lib/customer-phone.ts');
+const customerContract = loadTs('src/lib/integrations/esmeralda-customer-contract.ts', {
+  '@/lib/customer-phone': customerPhone,
+});
 
-test('booking customer sync accepts either a valid email or a phone with digits', () => {
+test('Orderfly identity contract normalizes plausible numbers and rejects placeholders', () => {
+  assert.equal(customerContract.normalizePhone('+45 (12) 34-56.78'), '+4512345678');
+  assert.equal(customerContract.normalizePhone('0045 12345678'), '+4512345678');
+  assert.equal(customerContract.normalizePhone('0'), null);
+  assert.equal(customerContract.normalizePhone('table 4'), null);
+  assert.equal(customerContract.normalizePhone('123456'), null);
+  assert.equal(customerContract.normalizePhone('1234567890123456'), null);
+  assert.equal(customerContract.esmeraldaConsumerCustomerSchema.safeParse({
+    organization_id: 'brand', location_id: 'location', booking_id: 'booking',
+    full_name: 'Guest', phone: 'table 4',
+  }).success, false);
+});
+
+test('booking customer sync accepts email or a plausible phone, not placeholder values', () => {
   assert.equal(sync.hasBookingCustomerIdentity('guest@example.test', ''), true);
   assert.equal(sync.hasBookingCustomerIdentity('', '+45 12 34 56 78'), true);
   assert.equal(sync.hasBookingCustomerIdentity('not-an-email', '0045 12345678'), true);
+  assert.equal(sync.normalizeBookingPhone('+45 (12) 34-56.78'), '+4512345678');
+  assert.equal(sync.hasBookingCustomerIdentity('', '0'), false);
+  assert.equal(sync.hasBookingCustomerIdentity('', 'table 4'), false);
+  assert.equal(sync.hasBookingCustomerIdentity('', '123456'), false);
+  assert.equal(sync.hasBookingCustomerIdentity('', '1234567890123456'), false);
+  assert.equal(sync.hasBookingCustomerIdentity('guest@example.test', 'table 4'), true);
   assert.equal(sync.hasBookingCustomerIdentity('', '---'), false);
   assert.equal(sync.hasBookingCustomerIdentity('not-an-email', '---'), false);
 });
 
 test('booking backfill is scoped to active mappings and does not retry terminal identity conflicts', () => {
-  const migration = fs.readFileSync('supabase/migrations/20261014010301_orderfly_customer_manual_sync.sql', 'utf8');
+  const migrationFile = fs.readdirSync('supabase/migrations')
+    .find(file => file.endsWith('_orderfly_customer_manual_sync_phone_validation.sql'));
+  assert.ok(migrationFile, 'phone validation migration must be present');
+  const migration = fs.readFileSync(`supabase/migrations/${migrationFile}`, 'utf8');
   assert.match(migration, /orderfly_organization_mappings[\s\S]+om\.is_active = true/);
   assert.match(migration, /orderfly_location_mappings[\s\S]+lm\.is_active = true/);
   assert.match(migration, /booking_consumer_customer_links[\s\S]+l\.booking_id is null/);
   assert.match(migration, /btrim\(coalesce\(b\.guest_email, ''\)\) ~/);
   assert.match(migration, /guest_phone/);
+  assert.match(migration, /char_length\(btrim\(coalesce\(b\.guest_phone, ''\)\)\) <= 80/);
+  assert.match(migration, /between 7 and 15/);
+  assert.ok(migration.includes("btrim(coalesce(b.guest_phone, '')) ~ '^\\+?[0-9[:space:]()./-]+$'"));
   const candidateFilter = migration.slice(migration.indexOf('where b.organization_id'), migration.indexOf('on conflict (booking_id)'));
   assert.ok(candidateFilter.indexOf("existing_job.status = 'skipped'") < candidateFilter.indexOf('limit greatest'));
   assert.match(migration, /on conflict \(booking_id\) do update[\s\S]+current_job\.status = 'skipped'/);
@@ -45,9 +74,10 @@ test('booking request timeout stays active until the provider response body is c
     id: 'sync-job', booking_id: 'booking-1', organization_id: organizationId,
     location_id: 'location-1', status: 'pending', attempt_count: 0,
   };
+  let postedBody;
   let timeoutHandle, timeoutCleared = false;
   const rowFor = table => {
-    if (table === 'bookings') return { id: job.booking_id, organization_id: organizationId, location_id: 'location-1', guest_name: 'Guest', guest_email: 'guest@example.test', guest_phone: '' };
+    if (table === 'bookings') return { id: job.booking_id, organization_id: organizationId, location_id: 'location-1', guest_name: 'Guest', guest_email: 'guest@example.test', guest_phone: 'table 4' };
     if (table === 'orderfly_organization_mappings') return { orderfly_brand_id: 'brand-1', is_active: true };
     if (table === 'orderfly_location_mappings') return { orderfly_location_id: 'location-1', organization_id: organizationId, is_active: true };
     return null;
@@ -91,20 +121,25 @@ test('booking request timeout stays active until the provider response body is c
     if (handle === timeoutHandle) timeoutCleared = true;
     else original.clearTimeout(handle);
   };
-  global.fetch = async (_url, init) => ({
-    ok: true,
-    status: 200,
-    text: async () => {
+  global.fetch = async (_url, init) => {
+    postedBody = JSON.parse(init.body);
+    return {
+      ok: true,
+      status: 200,
+      text: async () => {
       assert.equal(init.signal.aborted, false);
       assert.equal(timeoutCleared, false, 'provider timeout must remain armed while response.text() is pending');
       return JSON.stringify({ customer_id: 'customer-1' });
-    },
-  });
+      },
+    };
+  };
 
   try {
     const result = await processOrderflyCustomerSyncJobs(db, organizationId, 5);
     assert.equal(result.processed, 1);
     assert.equal(result.results[0].status, 'succeeded');
+    assert.equal(postedBody.email, 'guest@example.test');
+    assert.equal(postedBody.phone, null);
     assert.equal(timeoutCleared, true, 'provider timeout is cleared after reading the complete body');
   } finally {
     global.Deno = original.Deno;

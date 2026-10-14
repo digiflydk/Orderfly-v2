@@ -1,4 +1,4 @@
-import { hasBookingCustomerIdentity } from "./orderfly-customer-identity.ts";
+import { hasBookingCustomerIdentity, normalizeBookingPhone } from "./orderfly-customer-identity.ts";
 
 const emailOk=(value:string)=>/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 const cleanError=(value:unknown)=>String(value instanceof Error?value.message:value||"Ukendt fejl").replace(/[\r\n]+/g," ").slice(0,500);
@@ -114,7 +114,8 @@ async function processOne(db:any,job:any){
     }
 
     const email=asEmail(booking.guest_email);
-    const phone=asText(booking.guest_phone,80);
+    const phone=String(booking.guest_phone||"").trim();
+    const normalizedPhone=normalizeBookingPhone(phone);
     const validEmail=emailOk(email);
     if(!hasBookingCustomerIdentity(validEmail?email:"",phone)){
       await markJob(db,job.organization_id,job.id,{status:"skipped",attempt_count:attempt,next_attempt_at:new Date().toISOString(),last_error:"Booking has no valid email or phone for consumer identity resolution.",last_http_status:null});
@@ -147,7 +148,7 @@ async function processOne(db:any,job:any){
           booking_id:String(booking.id),
           full_name:asText(booking.guest_name,200)||"Ikke oplyst",
           email:validEmail?email:null,
-          phone:phone||null
+          phone:normalizedPhone?phone:null
         }),
         signal:controller.signal
       });
