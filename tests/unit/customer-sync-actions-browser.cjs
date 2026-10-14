@@ -46,7 +46,7 @@ before(async () => {
       return response.end(fs.readFileSync(path.join(dir, 'bundle.js')));
     }
     response.setHeader('content-type', 'text/html');
-    response.end('<!doctype html><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script src="/bundle.js"></script>');
+    response.end('<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><div id="root"></div><script src="/bundle.js"></script>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = 'http://127.0.0.1:' + server.address().port;
@@ -67,13 +67,19 @@ test('manual sync requires one chosen brand and starts the matching source witho
   await page.route('**/api/superadmin/customers/sync', async route => {
     const body = route.request().postDataJSON();
     calls.push(body);
-    await route.fulfill({ json: {
+    await route.fulfill({ json: body.source === 'omnisend' ? {
       success: true,
-      source: body.source,
-      imported: 25,
-      hasMore: true,
-      backfillComplete: false,
-      message: body.source === 'omnisend' ? '25 kontakter blev importeret. Klik igen for at hente næste side.' : '12 bookinger lagt i kø.',
+      source: 'omnisend',
+      fetched: 25,
+      imported: 24,
+      skipped: 1,
+      conflicts: 0,
+      hasMore: false,
+      backfillComplete: true,
+    } : {
+      success: true,
+      source: 'bookings',
+      message: '12 bookinger lagt i kø.',
     } });
   });
   await page.goto(origin);
@@ -87,7 +93,7 @@ test('manual sync requires one chosen brand and starts the matching source witho
   await expect(bookings).toBeEnabled();
 
   await omnisend.click();
-  await expect(page.getByRole('status').filter({ hasText: '25 kontakter blev importeret' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: '25 kontakter læst, 24 importeret eller opdateret, 1 udeladt' })).toBeVisible();
   await bookings.click();
   await expect(page.getByRole('status').filter({ hasText: '12 bookinger lagt i kø' })).toBeVisible();
   assert.deepEqual(calls, [
@@ -96,6 +102,58 @@ test('manual sync requires one chosen brand and starts the matching source witho
   ]);
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
   assert.deepEqual(await page.evaluate(() => window.__refreshes), 2);
+});
+
+test('one manual Omnisend click continues through every page and aggregates the result', async t => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 820 } });
+  t.after(() => context.close());
+  const page = await context.newPage();
+  const calls = [];
+  let omnisendRequests = 0;
+  let finishSecondPage;
+  const secondPage = new Promise(resolve => { finishSecondPage = resolve; });
+  await page.route('**/api/superadmin/customers/sync', async route => {
+    const body = route.request().postDataJSON();
+    calls.push(body);
+    if (body.source !== 'omnisend') {
+      await route.fulfill({ json: { success: true, source: 'bookings', message: '12 bookinger lagt i kø.' } });
+      return;
+    }
+    omnisendRequests++;
+    if (omnisendRequests === 1) {
+      await route.fulfill({ json: {
+        success: true, source: 'omnisend', fetched: 25, imported: 24, skipped: 1, conflicts: 0,
+        hasMore: true, backfillComplete: false,
+      } });
+      return;
+    }
+    await secondPage;
+    await route.fulfill({ json: {
+      success: true, source: 'omnisend', fetched: 10, imported: 9, skipped: 0, conflicts: 1,
+      hasMore: false, backfillComplete: true,
+    } });
+  });
+
+  await page.goto(origin);
+  await page.getByRole('combobox', { name: 'Brand til synkronisering' }).click();
+  await page.getByRole('option', { name: 'Brand A', exact: true }).click();
+  const omnisend = page.getByRole('button', { name: 'Synk Omnisend', exact: true });
+  await omnisend.click();
+
+  const progress = page.getByRole('status').filter({ hasText: '1 sider hentet, 25 kontakter læst' });
+  await expect(progress).toBeVisible();
+  await expect(omnisend).toBeDisabled();
+  await expect.poll(() => omnisendRequests).toBe(2);
+  finishSecondPage();
+
+  await expect(page.getByRole('status').filter({
+    hasText: 'Import færdig: 35 kontakter læst, 33 importeret eller opdateret, 1 udeladt, 1 identitetskonflikter.',
+  })).toBeVisible();
+  assert.deepEqual(calls, [
+    { brandId: 'brand-a', source: 'omnisend' },
+    { brandId: 'brand-a', source: 'omnisend' },
+  ]);
+  assert.deepEqual(await page.evaluate(() => window.__refreshes), 1);
 });
 
 test('shows the source and brand while a sync request is pending', async t => {
@@ -109,7 +167,10 @@ test('shows the source and brand while a sync request is pending', async t => {
     await route.fulfill({ json: {
       success: true,
       source: 'omnisend',
+      fetched: 25,
       imported: 25,
+      skipped: 0,
+      conflicts: 0,
       hasMore: false,
       backfillComplete: true,
       message: '25 kontakter blev importeret.',
@@ -128,5 +189,5 @@ test('shows the source and brand while a sync request is pending', async t => {
   await expect(omnisend).toHaveAttribute('aria-busy', 'true');
 
   finishRequest();
-  await expect(page.getByRole('status').filter({ hasText: '25 kontakter blev importeret.' })).toBeVisible();
+  await expect(page.getByRole('status').filter({ hasText: 'Import færdig: 25 kontakter læst' })).toBeVisible();
 });
