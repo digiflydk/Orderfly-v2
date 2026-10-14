@@ -97,3 +97,36 @@ test('manual sync requires one chosen brand and starts the matching source witho
   assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1), true);
   assert.deepEqual(await page.evaluate(() => window.__refreshes), 2);
 });
+
+test('shows the source and brand while a sync request is pending', async t => {
+  const context = await browser.newContext({ viewport: { width: 390, height: 820 } });
+  t.after(() => context.close());
+  const page = await context.newPage();
+  let finishRequest;
+  const responseGate = new Promise(resolve => { finishRequest = resolve; });
+  await page.route('**/api/superadmin/customers/sync', async route => {
+    await responseGate;
+    await route.fulfill({ json: {
+      success: true,
+      source: 'omnisend',
+      imported: 25,
+      hasMore: false,
+      backfillComplete: true,
+      message: '25 kontakter blev importeret.',
+    } });
+  });
+
+  await page.goto(origin);
+  await page.getByRole('combobox', { name: 'Brand til synkronisering' }).click();
+  await page.getByRole('option', { name: 'Brand A', exact: true }).click();
+  const omnisend = page.getByRole('button', { name: 'Synk Omnisend', exact: true });
+  await omnisend.click();
+
+  const status = page.getByRole('status').filter({ hasText: 'Synkroniserer Omnisend-kontakter for Brand A' });
+  await expect(status).toBeVisible();
+  await expect(status.locator('svg.animate-spin')).toHaveCount(1);
+  await expect(omnisend).toHaveAttribute('aria-busy', 'true');
+
+  finishRequest();
+  await expect(page.getByRole('status').filter({ hasText: '25 kontakter blev importeret.' })).toBeVisible();
+});

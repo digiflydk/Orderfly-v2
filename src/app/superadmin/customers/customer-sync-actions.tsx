@@ -15,6 +15,7 @@ export function CustomerSyncActions({ brands }: { brands: Array<{ id: string; na
   const [busy, setBusy] = useState<SyncSource | null>(null);
   const { toast } = useToast();
   const router = useRouter();
+  const selectedBrandName = brands.find(brand => brand.id === brandId)?.name;
 
   const sync = async (source: SyncSource) => {
     if (!brandId || busy) return;
@@ -44,26 +45,37 @@ export function CustomerSyncActions({ brands }: { brands: Array<{ id: string; na
       <h2 className="text-sm font-semibold">Manuel synkronisering</h2>
       <p className="text-sm text-muted-foreground">Vælg ét brand. Synkronisering importerer kundedata, men sender ikke kampagner.</p>
     </div>
-    <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
-      <div className="space-y-1">
-        <label htmlFor="customer-sync-brand" className="text-xs font-medium text-muted-foreground">Brand til synkronisering</label>
-        <Select value={brandId} onValueChange={setBrandId} disabled={!!busy}>
-          <SelectTrigger id="customer-sync-brand" aria-label="Brand til synkronisering" className="w-full sm:w-56">
-            <SelectValue placeholder="Vælg brand" />
-          </SelectTrigger>
-          <SelectContent>
-            {brands.map(brand => <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>)}
-          </SelectContent>
-        </Select>
+    <div className="flex flex-col gap-2 sm:items-end">
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-end">
+        <div className="space-y-1">
+          <label htmlFor="customer-sync-brand" className="text-xs font-medium text-muted-foreground">Brand til synkronisering</label>
+          <Select value={brandId} onValueChange={setBrandId} disabled={!!busy}>
+            <SelectTrigger id="customer-sync-brand" aria-label="Brand til synkronisering" className="w-full sm:w-56">
+              <SelectValue placeholder="Vælg brand" />
+            </SelectTrigger>
+            <SelectContent>
+              {brands.map(brand => <SelectItem key={brand.id} value={brand.id}>{brand.name}</SelectItem>)}
+            </SelectContent>
+          </Select>
+        </div>
+        <Button variant="outline" disabled={!brandId || !!busy} aria-busy={busy === 'omnisend'} onClick={() => void sync('omnisend')}>
+          {busy === 'omnisend' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+          Synk Omnisend
+        </Button>
+        <Button variant="outline" disabled={!brandId || !!busy} aria-busy={busy === 'bookings'} onClick={() => void sync('bookings')}>
+          {busy === 'bookings' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+          Synk bordbookinger
+        </Button>
       </div>
-      <Button variant="outline" disabled={!brandId || !!busy} aria-busy={busy === 'omnisend'} onClick={() => void sync('omnisend')}>
-        {busy === 'omnisend' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-        Synk Omnisend
-      </Button>
-      <Button variant="outline" disabled={!brandId || !!busy} aria-busy={busy === 'bookings'} onClick={() => void sync('bookings')}>
-        {busy === 'bookings' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
-        Synk bordbookinger
-      </Button>
+      {busy && (
+        <div role="status" aria-live="polite" aria-atomic="true" className="flex items-center gap-2 text-sm text-muted-foreground sm:self-end">
+          <Loader2 aria-hidden="true" className="h-4 w-4 shrink-0 animate-spin" />
+          <span>
+            Synkroniserer {busy === 'omnisend' ? 'Omnisend-kontakter' : 'bordbookinger'}
+            {selectedBrandName ? ` for ${selectedBrandName}` : ''}…
+          </span>
+        </div>
+      )}
     </div>
   </section>;
 }

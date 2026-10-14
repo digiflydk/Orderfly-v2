@@ -16,6 +16,9 @@ import { MarketingError, Omnisend } from './provider';
 const NEVER = Number.MAX_SAFE_INTEGER;
 const LEASE_MS = 60_000;
 const CONTACTS_PER_PAGE = 25;
+const SCHEDULED_IMPORT_BUDGET_MS = 25_000;
+const MANUAL_IMPORT_BUDGET_MS = 40_000;
+const IMPORT_RESPONSE_BUFFER_MS = 5_000;
 const IMPORT_INTERVAL_MS = 5 * 60_000;
 const WATERMARK_OVERLAP_MS = 5 * 60_000;
 
@@ -559,7 +562,10 @@ export async function runOmnisendContactImportWorker(
     requestDeadline = Date.now() + 45_000,
     options: { brandId?: string; allowEarly?: boolean } = {},
 ) {
-    const deadline = Math.min(Date.now() + 25_000, requestDeadline - 5_000);
+    const importBudget = options.allowEarly === true
+        ? MANUAL_IMPORT_BUDGET_MS
+        : SCHEDULED_IMPORT_BUDGET_MS;
+    const deadline = Math.min(Date.now() + importBudget, requestDeadline - IMPORT_RESPONSE_BUFFER_MS);
     const counts = { brands: 0, pages: 0, imported: 0, created: 0, updated: 0, resolved: 0, skipped: 0, conflicts: 0, failed: 0, busy: 0 };
     const results: Array<{ brandId: string; status: 'imported' | 'busy' | 'failed'; backfillComplete?: boolean; hasMore?: boolean; imported?: number; error?: string }> = [];
     const configs = configuredMarketingBrands().filter(config => !options.brandId || config.brandId === options.brandId);
