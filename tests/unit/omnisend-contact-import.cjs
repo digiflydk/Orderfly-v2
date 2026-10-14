@@ -754,3 +754,55 @@ test('provider unsubscribe blocks older Orderfly consent and writes do not cross
     else process.env.ORDERFLY_OMNISEND_BRANDS = previous;
   }
 });
+
+test('manual Omnisend sync has enough budget to finish a page and persist its cursor', async () => {
+  const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
+  const originalDateNow = Date.now;
+  process.env.ORDERFLY_OMNISEND_BRANDS = JSON.stringify([config]);
+  const contacts = Array.from({ length: 25 }, (_value, index) =>
+    makeContact('page-' + index + '@example.test', 'unsubscribed'),
+  );
+  const makeProvider = () => ({
+    verifyBrand: async () => {},
+    listContacts: async () => ({ contacts, after: 'cursor-page-2' }),
+  });
+
+  async function runWithBudget(allowEarly) {
+    let clock = 0;
+    Date.now = () => {
+      clock += 1_000;
+      return clock;
+    };
+    try {
+      const db = memoryDb();
+      const result = await runOmnisendContactImportWorker(
+        db,
+        1_000,
+        makeProvider,
+        45_000,
+        { brandId: config.brandId, ...(allowEarly ? { allowEarly: true } : {}) },
+      );
+      return { result, state: db.rows.get('omnisendContactImportState/' + config.brandId) };
+    } finally {
+      Date.now = originalDateNow;
+    }
+  }
+
+  try {
+    const scheduled = await runWithBudget(false);
+    assert.equal(scheduled.result.results[0].status, 'failed');
+    assert.equal(scheduled.result.results[0].error, 'import_deadline');
+    assert.equal(scheduled.state.after, null);
+
+    const manual = await runWithBudget(true);
+    assert.equal(manual.result.results[0].status, 'imported');
+    assert.equal(manual.result.results[0].imported, 25);
+    assert.equal(manual.result.results[0].hasMore, true);
+    assert.equal(manual.state.after, 'cursor-page-2');
+    assert.equal(manual.state.backfillComplete, false);
+  } finally {
+    Date.now = originalDateNow;
+    if (previous === undefined) delete process.env.ORDERFLY_OMNISEND_BRANDS;
+    else process.env.ORDERFLY_OMNISEND_BRANDS = previous;
+  }
+});
