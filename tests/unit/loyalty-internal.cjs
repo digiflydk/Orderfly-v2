@@ -54,14 +54,16 @@ function fixture() {
     };
   }
   const nativeDb = {collection:nativeCollection,runTransaction:async run=>{
-    const staged=[];
-    const result=await run({get:async ref=>snapshot(ref.path,true),set:(ref,data)=>staged.push([ref.path,data])});
-    for(const [path,data]of staged){writes.push(path);rows.set(path,clone(data));}return result;
+    const staged=[], deleted=[];
+    const result=await run({get:async ref=>snapshot(ref.path,true),set:(ref,data)=>staged.push([ref.path,data]),delete:ref=>deleted.push(ref.path)});
+    for(const [path,data]of staged){writes.push(path);rows.set(path,clone(data));}
+    for(const path of deleted){writes.push(path);rows.delete(path);}
+    return result;
   }};
   const {loadTs}=require('../helpers/load-ts.cjs');
   const identity={provider:'firebase',subject:'loyalty-fixture'};
   const {principalKey}=loadTs('src/lib/access/authority.ts',{'server-only':{}});
-  rows.set('platformAdminControl/access-v1',{principals:[{id:principalKey(identity),active:true}],companies:[{id:'company',active:true,orderflyBrandIds:['b'],locationIds:[]}],roles:[{id:'role',name:'Fixture',companyId:'company',kind:'company_user',active:true,permissions:['orderfly.customers:view','orderfly.customers:create','orderfly.customers:edit']}],memberships:[{id:'member',principalId:principalKey(identity),companyId:'company',locationIds:null,roleIds:['role'],active:true}]});
+  rows.set('platformAdminControl/access-v1',{principals:[{id:principalKey(identity),active:true}],companies:[{id:'company',active:true,orderflyBrandIds:['b'],locationIds:[]}],roles:[{id:'role',name:'Fixture',companyId:'company',kind:'company_user',active:true,permissions:['orderfly.customers:view','orderfly.customers:create','orderfly.customers:edit','orderfly.customers:delete']}],memberships:[{id:'member',principalId:principalKey(identity),companyId:'company',locationIds:null,roleIds:['role'],active:true}]});
   rows.set('brands/b',{name:'Brand'});
   const session={verifiedOrderflyIdentity:async()=>identity,orderflyReadGrants:async()=>[{brandId:'b',locationIds:null}],requireOrderflyAccess:async brand=>{if(brand!=='b'||!rows.has('brands/'+brand))throw Error('forbidden');},requirePlatformSuperuser:async()=>{}};
   const nativeMocks={'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>nativeDb},'./orderfly-session':session,'@/lib/access/orderfly-session':session};
@@ -70,9 +72,13 @@ function fixture() {
     'next/cache':{revalidatePath(){}},'@/lib/firebase-admin':nativeMocks['@/lib/firebase-admin'],
     '@/lib/access/orderfly-session':session,'@/lib/loyalty/model':model,
   });
+  const customerContract=load('src/lib/integrations/esmeralda-customer-contract.ts');
+  const customerIdentity=load('src/lib/customer-identity.ts',{'@/lib/integrations/esmeralda-customer-contract':customerContract});
   const customers=loadTs('src/app/superadmin/customers/actions.ts',{
-    ...nativeMocks,'next/cache':{},'firebase-admin/firestore':{Timestamp:{now:()=>now}},
+    ...nativeMocks,'next/cache':{revalidatePath(){}},'firebase-admin/firestore':{Timestamp:{now:()=>now}},
     '@/lib/access/scoped-data':scoped,'@/lib/loyalty/model':model,'../loyalty/actions':settings,
+    '@/lib/customer-identity':customerIdentity,
+    '@/lib/integrations/esmeralda-customer-contract':customerContract,
   });
   const integration = load('src/lib/integrations/esmeralda-feedback-integration.ts', {
     'server-only': {}, '@/lib/loyalty/model': model, '@/app/superadmin/loyalty/actions': settings,
@@ -80,7 +86,7 @@ function fixture() {
     '@/lib/integrations/esmeralda-feedback-contract': load('src/lib/integrations/esmeralda-feedback-contract.ts'),
     '@/lib/integrations/esmeralda-consumer-customer': { IntegrationBoundaryError: class extends Error {} },
   });
-  return { rows, writes, settings, customers, integration };
+  return { rows, writes, settings, customers, integration, identity: customerIdentity };
 }
 function formValues(value, prefix = '', form = new FormData()) {
   for (const [key, item] of Object.entries(value)) {
@@ -190,7 +196,8 @@ test('new customers need a native brand; updates retain counters and cannot recr
   }
   assert.equal(f.writes.length, 0);
   assert.equal((await f.customers.createOrUpdateCustomer(null, formValues({ ...data, brandId: 'b' }))).error, false);
-  const path = f.writes[0], saved = f.rows.get(path);
+  const path = [...f.rows.keys()].find(key => key.startsWith('customers/'));
+  const saved = f.rows.get(path);
   assert.equal(saved.brandId, 'b'); assert.equal(saved.status, 'inactive'); assert.equal(saved.totalOrders, 0);
   f.rows.set(path, { ...saved, totalOrders: 12, totalSpend: 1500 });
   assert.equal((await f.customers.createOrUpdateCustomer(null, formValues({ ...data, id: saved.id }))).error, false);
@@ -241,7 +248,73 @@ test('email-only customer profiles can be created without a phone number', async
     brandId: 'b', fullName: 'Email Guest', email: 'email@example.test', phone: '', status: 'active',
   }));
   assert.equal(result.error, false, result.message);
-  const saved = f.rows.get(f.writes[0]);
+  const saved = [...f.rows.entries()].find(([path]) => path.startsWith('customers/'))?.[1];
   assert.equal(saved.email, 'email@example.test');
   assert.equal(saved.phone, '');
+  assert.equal(saved.normalizedEmail, 'email@example.test');
+});
+
+test('phone-only customer saves reserve normalized identities and preserve them across edits', async () => {
+  const f = fixture();
+  const created = await f.customers.createOrUpdateCustomer(null, formValues({
+    brandId: 'b', fullName: 'Phone Guest', email: '', phone: '+45 12 34 56 78', status: 'active',
+  }));
+  assert.equal(created.error, false, created.message);
+  const customerPath = [...f.rows.keys()].find(path => path.startsWith('customers/'));
+  const customer = f.rows.get(customerPath);
+  const identityKey = f.identity.customerIdentityKey;
+  const oldIdentityPath = `integrationConsumerCustomerPhoneIdentities/${identityKey('b', '+4512345678')}`;
+  assert.equal(customer.normalizedPhone, '+4512345678');
+  assert.equal(f.rows.get(oldIdentityPath).customerId, customer.id);
+
+  const updated = await f.customers.createOrUpdateCustomer(null, formValues({
+    id: customer.id, fullName: 'Phone Guest', email: '', phone: '0045 12 34 56 79', status: 'active',
+  }));
+  assert.equal(updated.error, false, updated.message);
+  const saved = f.rows.get(customerPath);
+  const newIdentityPath = `integrationConsumerCustomerPhoneIdentities/${identityKey('b', '+4512345679')}`;
+  assert.equal(saved.normalizedPhone, '+4512345679');
+  assert.ok(saved.phoneAliases.includes('+4512345678'));
+  assert.equal(f.rows.get(oldIdentityPath).customerId, customer.id);
+  assert.equal(f.rows.get(newIdentityPath).customerId, customer.id);
+});
+
+test('a phone reservation conflict cannot create a duplicate customer', async () => {
+  const f = fixture();
+  const first = await f.customers.createOrUpdateCustomer(null, formValues({
+    brandId: 'b', fullName: 'First Guest', email: '', phone: '+45 12 34 56 78', status: 'active',
+  }));
+  assert.equal(first.error, false, first.message);
+  const customerCount = [...f.rows.keys()].filter(path => path.startsWith('customers/')).length;
+  const previousError = console.error;
+  console.error = () => {};
+  let second;
+  try {
+    second = await f.customers.createOrUpdateCustomer(null, formValues({
+      brandId: 'b', fullName: 'Duplicate Guest', email: '', phone: '0045 12 34 56 78', status: 'active',
+    }));
+  } finally {
+    console.error = previousError;
+  }
+  assert.equal(second.error, true);
+  assert.match(second.message, /already assigned to another customer/);
+  assert.equal([...f.rows.keys()].filter(path => path.startsWith('customers/')).length, customerCount);
+});
+
+test('deleting a customer removes only its identity reservations', async () => {
+  const f = fixture();
+  const created = await f.customers.createOrUpdateCustomer(null, formValues({
+    brandId: 'b', fullName: 'Phone Guest', email: 'phone@example.test', phone: '+45 12 34 56 78', status: 'active',
+  }));
+  assert.equal(created.error, false, created.message);
+  const customerPath = [...f.rows.keys()].find(path => path.startsWith('customers/'));
+  const customer = f.rows.get(customerPath);
+  const identityKey = f.identity.customerIdentityKey;
+  const emailPath = `integrationConsumerCustomerIdentities/${identityKey('b', 'phone@example.test')}`;
+  const phonePath = `integrationConsumerCustomerPhoneIdentities/${identityKey('b', '+4512345678')}`;
+  const removed = await f.customers.deleteCustomer(customer.id);
+  assert.equal(removed.error, false, removed.message);
+  assert.equal(f.rows.has(customerPath), false);
+  assert.equal(f.rows.has(emailPath), false);
+  assert.equal(f.rows.has(phonePath), false);
 });

@@ -1,7 +1,14 @@
+import { createHash } from 'node:crypto';
 import {
   normalizeEmail,
   normalizePhone,
 } from '@/lib/integrations/esmeralda-customer-contract';
+
+export function customerIdentityKey(brandId: string, normalizedIdentity: string): string {
+  return createHash('sha256')
+    .update(`${brandId}\n${normalizedIdentity}`, 'utf8')
+    .digest('hex');
+}
 
 export type CustomerIdentityFields = {
   id?: unknown;

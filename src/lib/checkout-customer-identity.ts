@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto';
 import { collection, doc, getDoc, getDocs, limit, query, where } from '@/lib/server/firestore-compat';
 import {
   normalizeEmail,
@@ -7,6 +6,7 @@ import {
 import {
   customerHasEmail,
   customerHasPhone,
+  customerIdentityKey,
   selectCustomerByIdentity,
   type CustomerIdentityFields,
 } from '@/lib/customer-identity';
@@ -43,11 +43,9 @@ export async function findCheckoutCustomer(
     }
   }
 
-  const emailHash = createHash('sha256')
-    .update(`${brandId}\n${normalizedEmail}`, 'utf8')
-    .digest('hex');
+  const emailHash = customerIdentityKey(brandId, normalizedEmail);
   const phoneHash = normalizedPhone
-    ? createHash('sha256').update(`${brandId}\n${normalizedPhone}`, 'utf8').digest('hex')
+    ? customerIdentityKey(brandId, normalizedPhone)
     : null;
   const identityRefs = [
     getDoc(doc({ path: '' }, 'integrationConsumerCustomerIdentities', emailHash)),

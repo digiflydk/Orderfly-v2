@@ -100,7 +100,8 @@ export async function authorizeTransaction(tx: FirebaseFirestore.Transaction, id
 // transaction as the write. Concurrent revocation or reassignment retries it.
 export async function mutateScopedDocument(collection: string, id: string, permission: string, kind: DocumentScope,
   update: (before: Row | null, tx: FirebaseFirestore.Transaction) => Promise<Row | null> | Row | null,
-  allowOrphanedLocations = false) {
+  allowOrphanedLocations = false,
+  beforeCommit?: (before: Row | null, after: Row | null, tx: FirebaseFirestore.Transaction) => Promise<void> | void) {
   validId(id);
   const identity = await verifiedOrderflyIdentity(), db = getAdminDb(), ref = db.collection(collection).doc(id);
   return db.runTransaction(async tx => {
@@ -121,6 +122,7 @@ export async function mutateScopedDocument(collection: string, id: string, permi
       await authorizeTransaction(tx, identity, missing.length ? { ...after, locationIds: [] } : after, permission, kind);
     }
     if (!before && !after) throw new AuthorityError('record_missing', 404);
+    if (beforeCommit) await beforeCommit(before, after, tx);
     if (after) tx.set(ref, after); else tx.delete(ref);
     return after;
   });

@@ -1,7 +1,5 @@
 import 'server-only';
 
-import { createHash } from 'node:crypto';
-
 import { admin, getAdminDb } from '@/lib/firebase-admin';
 import {
   esmeraldaConsumerCustomerSchema,
@@ -11,6 +9,7 @@ import {
 } from '@/lib/integrations/esmeralda-customer-contract';
 import {
   CustomerIdentityConflict,
+  customerIdentityKey,
   customerHasEmail,
   customerHasPhone,
   mergeCustomerIdentity,
@@ -81,12 +80,6 @@ type SelectedCustomer = CustomerIdentityFields & {
   snapshot: FirebaseFirestore.QueryDocumentSnapshot;
   record: CustomerRecord;
 };
-
-function identityKey(brandId: string, normalizedIdentity: string): string {
-  return createHash('sha256')
-    .update(`${brandId}\n${normalizedIdentity}`, 'utf8')
-    .digest('hex');
-}
 
 function isPlaceholderName(value: string): boolean {
   const normalized = value.trim().toLowerCase();
@@ -223,11 +216,11 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
 
   const emailIdentityRef = normalizedEmail
     ? db.collection('integrationConsumerCustomerIdentities')
-        .doc(identityKey(parsed.organization_id, normalizedEmail))
+        .doc(customerIdentityKey(parsed.organization_id, normalizedEmail))
     : null;
   const phoneIdentityRef = normalizedPhone
     ? db.collection('integrationConsumerCustomerPhoneIdentities')
-        .doc(identityKey(parsed.organization_id, normalizedPhone))
+        .doc(customerIdentityKey(parsed.organization_id, normalizedPhone))
     : null;
 
   return db.runTransaction(async (transaction) => {
@@ -369,7 +362,7 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
         {
           brandId: parsed.organization_id,
           customerId: customerRef.id,
-          emailHash: identityKey(parsed.organization_id, normalizedEmail),
+          emailHash: customerIdentityKey(parsed.organization_id, normalizedEmail),
           source: 'esmeralda',
           updatedAt: now,
           ...(emailIdentitySnapshot?.exists ? {} : { createdAt: now }),
@@ -383,7 +376,7 @@ export async function resolveOrUpsertEsmeraldaConsumerCustomer(
         {
           brandId: parsed.organization_id,
           customerId: customerRef.id,
-          phoneHash: identityKey(parsed.organization_id, normalizedPhone!),
+          phoneHash: customerIdentityKey(parsed.organization_id, normalizedPhone!),
           source: 'esmeralda',
           updatedAt: now,
           ...(phoneIdentitySnapshot?.exists ? {} : { createdAt: now }),
