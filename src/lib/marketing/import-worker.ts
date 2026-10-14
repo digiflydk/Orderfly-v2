@@ -566,8 +566,8 @@ export async function runOmnisendContactImportWorker(
         ? MANUAL_IMPORT_BUDGET_MS
         : SCHEDULED_IMPORT_BUDGET_MS;
     const deadline = Math.min(Date.now() + importBudget, requestDeadline - IMPORT_RESPONSE_BUFFER_MS);
-    const counts = { brands: 0, pages: 0, imported: 0, created: 0, updated: 0, resolved: 0, skipped: 0, conflicts: 0, failed: 0, busy: 0 };
-    const results: Array<{ brandId: string; status: 'imported' | 'busy' | 'failed'; backfillComplete?: boolean; hasMore?: boolean; imported?: number; error?: string }> = [];
+    const counts = { brands: 0, pages: 0, fetched: 0, imported: 0, created: 0, updated: 0, resolved: 0, skipped: 0, conflicts: 0, failed: 0, busy: 0 };
+    const results: Array<{ brandId: string; status: 'imported' | 'busy' | 'failed'; backfillComplete?: boolean; hasMore?: boolean; fetched?: number; imported?: number; skipped?: number; conflicts?: number; error?: string }> = [];
     const configs = configuredMarketingBrands().filter(config => !options.brandId || config.brandId === options.brandId);
     for (const config of configs) {
         if (Date.now() >= deadline) break;
@@ -592,6 +592,10 @@ export async function runOmnisendContactImportWorker(
                 updatedAtFrom,
                 limit: CONTACTS_PER_PAGE,
             });
+            if (page.after && page.after === state.after)
+                throw new MarketingError('provider_pagination_stalled', false);
+            const pageCounts = { fetched: page.contacts.length, imported: 0, skipped: 0, conflicts: 0 };
+            counts.fetched += pageCounts.fetched;
             const pageEmails = new Set<string>();
             const pagePhones = new Set<string>();
             const pageRawPhones = new Set<string>();
@@ -614,15 +618,22 @@ export async function runOmnisendContactImportWorker(
                 try {
                     const result = await importContact(db, config, contact, index, now);
                     counts[result]++;
-                    if (result !== 'skipped') counts.imported++;
+                    if (result !== 'skipped') {
+                        counts.imported++;
+                        pageCounts.imported++;
+                    } else {
+                        pageCounts.skipped++;
+                    }
                 } catch (error) {
                     if (!(error instanceof ContactImportConflict)) throw error;
                     const identity = providerIdentity(contact);
                     if (identity) {
                         await recordConflict(db, config.brandId, identity.email, identity.providerContactId, error.code, now);
                         counts.conflicts++;
+                        pageCounts.conflicts++;
                     } else {
                         counts.skipped++;
+                        pageCounts.skipped++;
                     }
                 }
             }
@@ -636,7 +647,7 @@ export async function runOmnisendContactImportWorker(
                 lastError: null,
             }, now);
             counts.pages++;
-            results.push({ brandId: config.brandId, status: 'imported', backfillComplete: backfillComplete || complete, hasMore: !!page.after, imported: counts.imported });
+            results.push({ brandId: config.brandId, status: 'imported', backfillComplete: backfillComplete || complete, hasMore: !!page.after, ...pageCounts });
         } catch (error) {
             const code = errorCode(error);
             await releaseState(db, stateRef, state.lease, {

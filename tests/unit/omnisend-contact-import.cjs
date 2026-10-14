@@ -351,7 +351,10 @@ test('manual Omnisend import scopes to one brand and can bypass the scheduled in
       status: 'imported',
       backfillComplete: true,
       hasMore: false,
+      fetched: 0,
       imported: 0,
+      skipped: 0,
+      conflicts: 0,
     }]);
     assert.equal(db.rows.has('omnisendContactImportState/' + other.brandId), false);
   } finally {
@@ -755,6 +758,27 @@ test('provider unsubscribe blocks older Orderfly consent and writes do not cross
   }
 });
 
+test('manual Omnisend import stops if the provider cursor does not advance', async () => {
+  const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
+  process.env.ORDERFLY_OMNISEND_BRANDS = JSON.stringify([config]);
+  try {
+    const now = Date.now();
+    const db = memoryDb(new Map([
+      ['omnisendContactImportState/' + config.brandId, { backfillComplete: false, after: 'same-cursor', nextAttemptAt: now + 60_000 }],
+    ]));
+    const result = await runOmnisendContactImportWorker(db, now, () => ({
+      verifyBrand: async () => {},
+      listContacts: async () => ({ contacts: [], after: 'same-cursor' }),
+    }), now + 45_000, { brandId: config.brandId, allowEarly: true });
+    assert.equal(result.results[0].status, 'failed');
+    assert.equal(result.results[0].error, 'provider_pagination_stalled');
+    assert.equal(db.rows.get('omnisendContactImportState/' + config.brandId).after, 'same-cursor');
+  } finally {
+    if (previous === undefined) delete process.env.ORDERFLY_OMNISEND_BRANDS;
+    else process.env.ORDERFLY_OMNISEND_BRANDS = previous;
+  }
+});
+
 test('manual Omnisend sync has enough budget to finish a page and persist its cursor', async () => {
   const previous = process.env.ORDERFLY_OMNISEND_BRANDS;
   const originalDateNow = Date.now;
@@ -796,7 +820,10 @@ test('manual Omnisend sync has enough budget to finish a page and persist its cu
 
     const manual = await runWithBudget(true);
     assert.equal(manual.result.results[0].status, 'imported');
+    assert.equal(manual.result.results[0].fetched, 25);
     assert.equal(manual.result.results[0].imported, 25);
+    assert.equal(manual.result.results[0].skipped, 0);
+    assert.equal(manual.result.results[0].conflicts, 0);
     assert.equal(manual.result.results[0].hasMore, true);
     assert.equal(manual.state.after, 'cursor-page-2');
     assert.equal(manual.state.backfillComplete, false);

@@ -58,17 +58,23 @@ export async function POST(request: Request) {
       return Response.json({ error: 'En anden Omnisend-synkronisering kører allerede for dette brand.' }, { status: 409 });
     }
     if (result.status === 'failed') {
-      return Response.json({ error: 'Omnisend kunne ikke synkroniseres. Kontrollér forbindelsen og prøv igen.' }, { status: 502 });
+      return Response.json({
+        error: 'Omnisend kunne ikke synkroniseres. Kontrollér forbindelsen og prøv igen.',
+        code: result.error || 'import_failed',
+      }, { status: 502 });
     }
     return Response.json({
       success: true,
       source: 'omnisend',
+      fetched: result.fetched || 0,
       imported: result.imported || 0,
+      skipped: result.skipped || 0,
+      conflicts: result.conflicts || 0,
       hasMore: result.hasMore === true,
       backfillComplete: result.backfillComplete === true,
       message: result.hasMore
-        ? `${result.imported || 0} kontakter blev importeret. Klik igen for at hente næste side.`
-        : `${result.imported || 0} kontakter blev importeret eller opdateret.`,
+        ? 'Siden er hentet. Næste side følger automatisk.'
+        : 'Alle tilgængelige Omnisend-sider er hentet.',
     }, { headers: { 'Cache-Control': 'no-store' } });
   }
 

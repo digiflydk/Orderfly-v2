@@ -23,7 +23,7 @@ function loadRoute(overrides = {}) {
     '@/lib/marketing/import-worker': {
       runOmnisendContactImportWorker: async (...args) => {
         calls.push({ importerArgs: args });
-        return { results: [{ brandId: 'brand-a', status: 'imported', imported: 25, hasMore: true, backfillComplete: false }] };
+        return overrides.importResult || { results: [{ brandId: 'brand-a', status: 'imported', fetched: 25, imported: 24, skipped: 1, conflicts: 0, hasMore: true, backfillComplete: false }] };
       },
     },
   });
@@ -65,10 +65,24 @@ test('manual Omnisend sync is brand-scoped, bypasses the schedule and reports an
     const response = await f.route.POST(request({ brandId: 'brand-a', source: 'omnisend' }));
     const body = await response.json();
     assert.equal(response.status, 200);
-    assert.equal(body.imported, 25);
+    assert.equal(body.fetched, 25);
+    assert.equal(body.imported, 24);
+    assert.equal(body.skipped, 1);
+    assert.equal(body.conflicts, 0);
     assert.equal(body.hasMore, true);
     assert.deepEqual(f.calls[0].importerArgs[4], { brandId: 'brand-a', allowEarly: true });
     assert.equal(f.calls.some(call => call.url), false);
+  } finally { f.restore(); }
+});
+
+test('manual Omnisend sync exposes a machine-readable provider failure code', async () => {
+  const f = loadRoute({ importResult: { results: [{ brandId: 'brand-a', status: 'failed', error: 'provider_http_429' }] } });
+  try {
+    const response = await f.route.POST(request({ brandId: 'brand-a', source: 'omnisend' }));
+    const body = await response.json();
+    assert.equal(response.status, 502);
+    assert.equal(body.code, 'provider_http_429');
+    assert.match(body.error, /Omnisend kunne ikke synkroniseres/);
   } finally { f.restore(); }
 });
 
