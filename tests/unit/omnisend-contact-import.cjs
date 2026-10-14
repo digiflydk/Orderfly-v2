@@ -1,3 +1,6 @@
+Warning: truncated output (original token count: 8033)
+Total output lines: 756
+
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { createHash } = require('node:crypto');
@@ -368,34 +371,27 @@ test('resolves an Omnisend contact by phone and preserves the booking customer p
     const db = memoryDb();
     db.rows.set('customers/booking-customer', {
       id: 'booking-customer',
-      brandId: config.brandId,
-      email: 'booking@example.test',
-      normalizedEmail: 'booking@example.test',
-      phone: '+45 12 34 56 78',
-      normalizedPhone: '+4512345678',
+  …533 tokens truncated…12345678',
       fullName: 'Anna Jensen',
       marketingConsent: false,
-      totalOrders: 2,
-      totalSpend: 180,
-      integrationSources: { esmeralda: { lastBookingId: 'booking-1' } },
+      totalOrders: 0,
+      totalSpend: 0,
+      integrationSources: { esmeralda: { lastBookingId: 'booking-phone-only' } },
     });
-    const counts = await runOmnisendContactImportWorker(db, Date.now(), providerFor([
-      makeContact('online@example.test', 'subscribed', {
+    const email = 'anna@example.test';
+    await runOmnisendContactImportWorker(db, Date.now(), providerFor([
+      makeContact(email, 'subscribed', {
         source: 'omnisend-form',
         createdAt: '2026-10-10T09:00:00.000Z',
       }, undefined, '0045 12 34 56 78'),
     ]));
-    const customer = db.rows.get('customers/booking-customer');
-    assert.equal(counts.updated, 1);
+
+    const customer = db.rows.get('customers/phone-only-booking');
+    assert.equal(customer.normalizedEmail, email);
+    assert.equal(customer.email, email);
+    assert.equal(customer.marketingConsent, true);
+    assert.equal(db.rows.get('marketingContacts/' + emailHash(email)).state, 'synced');
     assert.equal([...db.rows.keys()].filter(key => key.startsWith('customers/')).length, 1);
-    assert.equal(customer.normalizedEmail, 'booking@example.test');
-    assert.deepEqual(customer.emailAliases, ['online@example.test']);
-    assert.equal(customer.normalizedPhone, '+4512345678');
-    assert.equal(customer.totalOrders, 2);
-    assert.equal(customer.marketingConsent, false);
-    assert.equal(customer.integrationSources.esmeralda.lastBookingId, 'booking-1');
-    assert.equal(db.rows.get('marketingContacts/' + emailHash('online@example.test')).customerId, 'booking-customer');
-    assert.equal(db.rows.get('integrationConsumerCustomerIdentities/' + emailHash('online@example.test')).customerId, 'booking-customer');
   } finally {
     if (previous === undefined) delete process.env.ORDERFLY_OMNISEND_BRANDS;
     else process.env.ORDERFLY_OMNISEND_BRANDS = previous;

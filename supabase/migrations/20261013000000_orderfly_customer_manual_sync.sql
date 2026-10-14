@@ -34,11 +34,25 @@ begin
    and lm.is_active = true
   left join public.booking_consumer_customer_links l
     on l.booking_id = b.id
+  left join public.orderfly_customer_sync_jobs existing_job
+    on existing_job.booking_id = b.id
   where b.organization_id = p_organization_id
     and l.booking_id is null
     and (
-      nullif(btrim(b.guest_email), '') is not null
+      coalesce(btrim(coalesce(b.guest_email, '')) ~ '^[^[:space:]@]+@[^[:space:]@]+\.[^[:space:]@]+$', false)
       or nullif(regexp_replace(coalesce(b.guest_phone, ''), '[^0-9]', '', 'g'), '') is not null
+    )
+    and (
+      existing_job.booking_id is null
+      or (
+        existing_job.organization_id = b.organization_id
+        and existing_job.location_id = b.location_id
+        and existing_job.status = 'skipped'
+        and existing_job.last_error in (
+          'Booking has no valid guest email for consumer identity resolution.',
+          'Booking has no valid email or phone for consumer identity resolution.'
+        )
+      )
     )
     and (p_since is null or b.created_at >= p_since)
   order by b.created_at asc
@@ -51,6 +65,8 @@ begin
         last_error = null,
         updated_at = now()
     where current_job.status = 'skipped'
+      and current_job.organization_id = excluded.organization_id
+      and current_job.location_id = excluded.location_id
       and current_job.last_error in (
         'Booking has no valid guest email for consumer identity resolution.',
         'Booking has no valid email or phone for consumer identity resolution.'

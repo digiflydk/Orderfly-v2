@@ -199,3 +199,49 @@ test('new customers need a native brand; updates retain counters and cannot recr
   assert.equal((await f.customers.createOrUpdateCustomer(null, formValues({ ...data, id: saved.id }))).error, true);
   assert.equal(f.rows.has(path), false);
 });
+
+test('phone-only customer profiles can be edited without adding an email', async () => {
+  const f = fixture();
+  const path = 'customers/phone-only';
+  f.rows.set(path, {
+    id: 'phone-only', brandId: 'b', fullName: 'Phone Guest', email: '',
+    phone: '+4512345678', status: 'active', totalOrders: 2, totalSpend: 180,
+  });
+
+  const saved = await f.customers.createOrUpdateCustomer(null, formValues({
+    id: 'phone-only', fullName: 'Updated Phone Guest', email: '',
+    phone: '+45 12 34 56 78', status: 'inactive',
+  }));
+  assert.equal(saved.error, false, saved.message);
+  assert.equal(f.rows.get(path).email, '');
+  assert.equal(f.rows.get(path).phone, '+45 12 34 56 78');
+  assert.equal(f.rows.get(path).fullName, 'Updated Phone Guest');
+  assert.equal(f.rows.get(path).status, 'inactive');
+  assert.equal(f.rows.get(path).totalOrders, 2);
+  assert.equal(f.rows.get(path).totalSpend, 180);
+
+  const previousError = console.error;
+  console.error = () => {};
+  let invalid;
+  try {
+    invalid = await f.customers.createOrUpdateCustomer(null, formValues({
+      id: 'phone-only', fullName: 'Updated Phone Guest', email: '', phone: '---', status: 'active',
+    }));
+  } finally {
+    console.error = previousError;
+  }
+  assert.equal(invalid.error, true);
+  assert.equal(f.rows.get(path).status, 'inactive');
+});
+
+test('email-only customer profiles can be created without a phone number', async () => {
+  const f = fixture();
+  f.rows.set('brands/b', { name: 'Brand' });
+  const result = await f.customers.createOrUpdateCustomer(null, formValues({
+    brandId: 'b', fullName: 'Email Guest', email: 'email@example.test', phone: '', status: 'active',
+  }));
+  assert.equal(result.error, false, result.message);
+  const saved = f.rows.get(f.writes[0]);
+  assert.equal(saved.email, 'email@example.test');
+  assert.equal(saved.phone, '');
+});

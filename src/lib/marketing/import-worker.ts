@@ -380,7 +380,8 @@ async function importContact(
             };
             const incomingStatusIsSubscribed = status === 'subscribed';
             const canApplyProviderState = !localConsentIsNewer;
-            const consentMatchesPrimaryEmail = created || customerEmail(customerData) === email;
+            const currentPrimaryEmail = customerEmail(customerData);
+            const consentMatchesPrimaryEmail = created || !currentPrimaryEmail || currentPrimaryEmail === email;
             let nextMarketingState = typeof state?.state === 'string' ? state.state : 'suppressed';
             let nextMarketingConsent: boolean | undefined;
             if (canApplyProviderState) {

@@ -136,6 +136,7 @@ async function processOne(db:any,job:any){
     const controller=new AbortController();
     const timer=setTimeout(()=>controller.abort(),5000);
     let response:Response;
+    let raw:string;
     try{
       response=await fetch(`${baseUrl}/api/integrations/esmeralda/customers/resolve`,{
         method:"POST",
@@ -150,11 +151,11 @@ async function processOne(db:any,job:any){
         }),
         signal:controller.signal
       });
+      raw=await response.text();
     }catch(error){
       return await retryOrFail(db,job,attempt,`Orderfly request failed: ${cleanError(error)}`);
     }finally{clearTimeout(timer)}
 
-    const raw=await response.text();
     let body:any={};
     try{body=raw?JSON.parse(raw):{}}catch{body={}};
 

@@ -14,14 +14,6 @@ import { customerFeedbackHistory } from '@/lib/feedback/customer-history';
 import { getLoyaltySettings } from '../loyalty/actions';
 
 
-const customerSchema = z.object({
-  id: z.string().optional(),
-  fullName: z.string().min(2, { message: 'Full name must be at least 2 characters.' }),
-  email: z.string().email({ message: 'Please enter a valid email.' }),
-  phone: z.string().min(1, { message: 'Phone number is required.' }),
-  status: z.preprocess((val) => val === 'on' || val === true, z.boolean()),
-});
-
 export type FormState = {
   message: string;
   error: boolean;
@@ -54,9 +46,15 @@ export async function createOrUpdateCustomer(
     const validationSchema = z.object({
         id: z.string().optional(),
         fullName: z.string().min(2, 'Name is required'),
-        email: z.string().email(),
-        phone: z.string().min(1, 'Phone is required'),
+        email: z.string().trim().refine(value => !value || z.string().email().safeParse(value).success, 'Please enter a valid email.'),
+        phone: z.string().trim().refine(value => !value || /\d/.test(value), 'Please enter a valid phone number.'),
         status: z.enum(['active', 'inactive']),
+    }).superRefine((value, context) => {
+      if (!value.email && !value.phone) context.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ['email'],
+        message: 'A valid email or phone number is required.',
+      });
     });
 
     const validatedFields = validationSchema.safeParse(mappedData);

@@ -7,7 +7,7 @@ const root=process.cwd();let dir,server,browser,origin;
 before(async()=>{
  dir=fs.mkdtempSync(path.join(os.tmpdir(),'customer-access-browser-'));
  const file=(name,source)=>{const target=path.join(dir,name+'.js');fs.writeFileSync(target,source);return target;};
- const entry=file('entry',`import React from 'react';import {createRoot} from 'react-dom/client';import {CustomerForm} from ${JSON.stringify(path.join(root,'src/components/superadmin/customer-form.tsx'))};function App(){const[open,setOpen]=React.useState(true);return <CustomerForm isOpen={open} setIsOpen={setOpen} customer={null}/>;}createRoot(document.getElementById('root')).render(<App/>);`);
+ const entry=file('entry',`import React from 'react';import {createRoot} from 'react-dom/client';import {CustomerForm} from ${JSON.stringify(path.join(root,'src/components/superadmin/customer-form.tsx'))};function App(){const[open,setOpen]=React.useState(true);const customer=window.location.search.includes('phone-only')?{id:'phone-only',fullName:'Phone Guest',email:'',phone:'+4512345678',status:'active'}:null;return <CustomerForm isOpen={open} setIsOpen={setOpen} customer={customer}/>;}createRoot(document.getElementById('root')).render(<App/>);`);
  const actions=file('actions',`export async function getCustomerFormBrands(){const r=await fetch('/brands');if(!r.ok)throw Error('unavailable');return r.json();}export async function createOrUpdateCustomer(_,form){const r=await fetch('/save',{method:'POST',body:form});if(!r.ok)throw Error('unavailable');return r.json();}`);
  const loader=file('loader',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  const alias={'@/app/superadmin/customers/actions':actions,'@/hooks/use-toast':file('toast','export const useToast=()=>({toast:()=>{}});'),'@':path.join(root,'src')};
@@ -39,4 +39,15 @@ test('a failed brand lookup is visible and prevents customer creation',async t=>
  const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();
  await page.route('**/brands',route=>route.fulfill({status:503,body:'unavailable'}));await page.goto(origin);
  await expect(page.getByRole('alert')).toContainText('Brands could not be loaded');await expect(page.getByRole('button',{name:'Create Customer',exact:true})).toBeDisabled();
+});
+
+test('phone-only customer profile can be edited without an email',async t=>{
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();let saved;
+ await page.route('**/save',async route=>{saved=await new Request('http://fixture/save',{method:'POST',headers:{'content-type':route.request().headers()['content-type']},body:route.request().postDataBuffer()}).formData();await route.fulfill({json:{error:false,message:'Saved'}});});
+ await page.goto(origin+'/?phone-only');
+ await expect(page.getByLabel('Email',{exact:true})).toHaveValue('');
+ await page.getByLabel('Full Name',{exact:true}).fill('Updated Phone Guest');
+ await page.getByRole('button',{name:'Save Changes',exact:true}).click();
+ await expect(page.getByRole('dialog')).toHaveCount(0);
+ assert.equal(saved.get('id'),'phone-only');assert.equal(saved.get('email'),'');assert.equal(saved.get('phone'),'+4512345678');assert.equal(saved.get('fullName'),'Updated Phone Guest');
 });
