@@ -4,7 +4,7 @@
 import { createContext, useContext, useState, ReactNode, useCallback, useEffect, useRef, useMemo } from 'react';
 import type { Product, CartItemTopping, Brand, Location, ComboMenu, ComboSelection, Discount, StandardDiscount, CartItem, ProductForMenu } from '@/types';
 import { restoreCartAction } from '@/app/cart-actions';
-import { CART_STORAGE_KEY, cartChoices, readCartSnapshot, requestedDelivery, type CartSnapshot } from '@/lib/cart-snapshot';
+import { CART_STORAGE_KEY, cartChoices, cartSnapshotSchema, readCartSnapshot, requestedDelivery, type CartSnapshot, restorableSelectedTime } from '@/lib/cart-snapshot';
 import Cookies from 'js-cookie';
 import { putCartItem } from '@/lib/cart-edit';
 import { useSearchParams } from 'next/navigation';
@@ -81,8 +81,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
   const [retry, setRetry] = useState(0);
   const contextKey = brand && location && deliveryType ? `${brand.id}/${location.id}/${deliveryType}` : '';
   const cartReady = !!contextKey && readyKey === contextKey;
-  const current = useRef({ cartItems, brand, location, deliveryType, includeBagFee });
-  current.current = { cartItems, brand, location, deliveryType, includeBagFee };
+  const current = useRef({ cartItems, brand, location, deliveryType, includeBagFee, selectedTime });
+  current.current = { cartItems, brand, location, deliveryType, includeBagFee, selectedTime };
 
   const persist = useCallback(() => {
     if (!readyRef.current) return;
@@ -93,6 +93,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
       deliveryType: state.deliveryType, includeBagFee: state.includeBagFee,
       choices: cartChoices(state.cartItems), savedAt: Date.now(),
       ...(checkoutOrderId.current ? { checkoutOrderId: checkoutOrderId.current } : {}),
+      ...(state.selectedTime !== 'asap' && cartSnapshotSchema.shape.selectedTime.safeParse(state.selectedTime).success ? { selectedTime: state.selectedTime } : {}),
     };
     snapshotRef.current = snapshot;
     try {
@@ -213,6 +214,8 @@ export function CartProvider({ children }: { children: ReactNode }) {
         setCartItems(result.items);
         setStandardDiscounts(result.discounts);
         setIncludeBagFee(matching?.includeBagFee ?? true);
+        const savedTime = restorableSelectedTime(matching, deliveryType);
+        if (savedTime) setSelectedTime(savedTime);
         checkoutOrderId.current = matching?.checkoutOrderId;
         setCartNotice(result.removed ? 'Nogle varer eller tilvalg er ikke længere tilgængelige og er fjernet. Kontrollér kurven før betaling.' : '');
         readyRef.current = true;
@@ -225,7 +228,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (cartReady) persist();
-  }, [cartItems, includeBagFee, cartReady, persist]);
+  }, [cartItems, includeBagFee, selectedTime, cartReady, persist]);
 
   // Reprice an open basket on focus and periodically without resetting checkout fields.
   // Discard replies if the user edits/switches restaurant while the read is in flight.

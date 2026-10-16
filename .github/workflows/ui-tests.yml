@@ -79,7 +79,7 @@ jobs:
         run: node --test tests/unit/stripe-lifecycle-189.cjs tests/unit/cart-cancel.cjs tests/unit/payment-display.cjs tests/unit/takeaway-qa-regressions.cjs
 
       - name: Promotion and reservation regression (#206, #210, #219)
-        run: node --test tests/unit/stale-discount-holds-210.cjs tests/unit/promotion-qa-206-219.cjs
+        run: node --test tests/unit/stale-discount-holds-210.cjs tests/unit/promotion-qa-206-219.cjs tests/unit/qa-218-187.cjs
 
       - name: Install Chromium for brand-owner regression
         run: npx playwright install --with-deps chromium

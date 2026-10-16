@@ -58,3 +58,13 @@ The product dialog hides topping groups unavailable at the current location and 
 New selections persist optional stable topping IDs alongside the legacy names. This distinguishes identically named toppings in different groups and restores current names/prices after a rename. IDs must be unique and match the names-array length. Restored IDs are scoped to the product's offered location groups. Old snapshots remain compatible when names resolve unambiguously; ambiguous legacy choices still require reselection rather than guessing. Cart row matching also uses IDs when available. No personal details or prices were added to browser storage.
 
 Persistence across a closed tab and a new tab in the same browser is intentional: one restaurant's basket is retained for up to 24 hours since the last save. Completing a matching server-confirmed paid checkout clears it; cancellation does not. Other restaurants, expired snapshots and invalid catalog selections retain the established boundaries. The screenshot's exact removed line was not available; the two invalid-removal cases above were reproduced against production code with synthetic fixtures and fixed.
+
+## #187 / #218: reload keeps the chosen time, Danish delivery choice, free-delivery label
+
+The cart snapshot (`orderfly.cart.v1`) now also stores the chosen fulfillment slot (`selectedTime`, an exact ISO instant). After a full reload, the slot is restored only for the same brand, location and order type, and only while it is still in the future. Otherwise the cart falls back to "Hurtigst muligt". Checkout still revalidates the slot against opening hours before any order is written. Older snapshots without the field remain valid.
+
+The initial delivery-method dialog on the storefront is Danish ("Afhentning eller levering", "Afhentning", "Levering").
+
+Standard Discounts shows the value for the rule's current type: a rule switched to free delivery is listed as "Free Delivery", even when it still stores a historical amount from its previous type. The stored fields are not changed.
+
+Regression: `node --test tests/unit/qa-218-187.cjs`.

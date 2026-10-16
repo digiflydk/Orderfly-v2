@@ -86,3 +86,12 @@ export function bestAutomaticDiscount(discounts: StandardDiscount[], eligibleSub
   }
   return best;
 }
+
+// The list shows the value for the rule's current type only. A rule switched to
+// free delivery keeps its historical value/method fields untouched (#218).
+export function standardDiscountValueLabel(d: StandardDiscount): string {
+  if (d.discountType === 'free_delivery') return 'Free Delivery';
+  if (isQuantityMethod(d.discountMethod)) return quantityOfferLabel(d);
+  if (!d.discountValue) return 'Free Delivery';
+  return d.discountMethod === 'percentage' ? `${d.discountValue}%` : `kr. ${d.discountValue.toFixed(2)}`;
+}

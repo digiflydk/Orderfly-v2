@@ -3,7 +3,7 @@
 
 import { useState, useMemo } from 'react';
 import Link from '@/components/superadmin/admin-link';
-import { isQuantityMethod, quantityOfferLabel } from '@/lib/automatic-discounts';
+import { standardDiscountValueLabel } from '@/lib/automatic-discounts';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { toZonedTime } from 'date-fns-tz';
@@ -195,7 +195,7 @@ export function StandardDiscountsClientPage({ initialDiscounts, brands, location
                   <TableCell>{d.brandName}</TableCell>
                   <TableCell className="capitalize">{d.discountType}</TableCell>
                   <TableCell>
-                    {isQuantityMethod(d.discountMethod) ? quantityOfferLabel(d) : d.discountValue ? (d.discountMethod === 'percentage' ? `${d.discountValue}%` : `kr. ${d.discountValue.toFixed(2)}`) : 'Free Delivery'}
+                    {standardDiscountValueLabel(d)}
                   </TableCell>
                   <TableCell>
                     <Badge variant={d.allowStacking ? 'default' : 'secondary'}>{d.allowStacking ? 'Allowed' : 'Not Allowed'}</Badge>
