@@ -10,6 +10,7 @@ import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getActiveStripePublishableKey } from '@/lib/server/payment-settings';
 
 import { getPlatformBrandingSettings } from './queries';
+import { mergeStoredPaymentSecrets, redactPaymentGatewaySettings, type PaymentGatewaySettingsView } from '@/lib/payment-gateway-secrets';
 
 
 const toNull = (v: unknown) => {
@@ -112,7 +113,19 @@ export async function updatePaymentGatewaySettings(
 		}
 	};
 
-	const validatedFields = paymentGatewaySettingsSchema.safeParse(rawData);
+	// Secret fields are write-only (#57): an empty field keeps the stored secret.
+	const settingsRef = getAdminDb().collection('platform_settings').doc('payment_gateway');
+	let stored: PaymentGatewaySettings | undefined;
+	try {
+		stored = (await settingsRef.get()).data() as PaymentGatewaySettings | undefined;
+	} catch (e) {
+		console.error(e);
+		return { message: 'Failed to update settings: the current payment settings could not be read.', error: true };
+	}
+	const validatedFields = paymentGatewaySettingsSchema.safeParse(mergeStoredPaymentSecrets(rawData as PaymentGatewaySettings, stored, {
+		test: formData.get('test.clearWebhookSecret') === 'on',
+		live: formData.get('live.clearWebhookSecret') === 'on',
+	}));
 
 	if (!validatedFields.success) {
 		const errorMessages = Object.entries(validatedFields.error.flatten().fieldErrors)
@@ -125,7 +138,6 @@ export async function updatePaymentGatewaySettings(
 	}
 
 	try {
-		const settingsRef = getAdminDb().collection('platform_settings').doc('payment_gateway');
 		await settingsRef.set(validatedFields.data);
 		revalidatePath('/superadmin/settings');
 		return { message: 'Payment gateway settings updated successfully.', error: false };
@@ -196,7 +208,7 @@ export async function updateBrandingSettings(
 
 // Function to get all settings
 export async function getPlatformSettings(): Promise<{
-	paymentGatewaySettings: PaymentGatewaySettings;
+	paymentGatewaySettings: PaymentGatewaySettingsView;
 	languageSettings: LanguageSettings;
 	brandingSettings: PlatformBrandingSettings | null;
 }> {
@@ -215,7 +227,8 @@ export async function getPlatformSettings(): Promise<{
 		: defaultLanguageSettings;
 
 	return {
-		paymentGatewaySettings,
+		// Never return Stripe secret or webhook keys to the browser (#57).
+		paymentGatewaySettings: redactPaymentGatewaySettings(paymentGatewaySettings),
 		languageSettings,
 		brandingSettings,
 	};

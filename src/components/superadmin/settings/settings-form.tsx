@@ -11,7 +11,8 @@ import { Label } from '@/components/ui/label';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { updatePaymentGatewaySettings, updateLanguageSettings, updateBrandingSettings, type FormState } from '@/app/superadmin/settings/actions';
-import type { PaymentGatewaySettings, LanguageSettings, PlatformBrandingSettings } from '@/types';
+import type { LanguageSettings, PlatformBrandingSettings } from '@/types';
+import type { PaymentGatewaySettingsView } from '@/lib/payment-gateway-secrets';
 import { Loader2, Copy, Trash2, Cookie } from 'lucide-react';
 import { Separator } from '@/components/ui/separator';
 import { useFieldArray, useForm, FormProvider } from 'react-hook-form';
@@ -20,7 +21,7 @@ import Image from 'next/image';
 
 
 interface SettingsFormProps {
-  initialPaymentGatewaySettings: PaymentGatewaySettings;
+  initialPaymentGatewaySettings: PaymentGatewaySettingsView;
   initialLanguageSettings: LanguageSettings;
   initialBrandingSettings: PlatformBrandingSettings | null;
 }
@@ -208,11 +209,16 @@ export function SettingsForm({ initialPaymentGatewaySettings, initialLanguageSet
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="test_secretKey">Secret Key</Label>
-                            <Input id="test_secretKey" name="test.secretKey" type="password" defaultValue={initialPaymentGatewaySettings.test.secretKey} />
+                            <Input id="test_secretKey" name="test.secretKey" type="password" autoComplete="off" placeholder={initialPaymentGatewaySettings.test.secretKeySet ? 'Gemt – udfyld kun for at erstatte' : ''} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="test_webhookSecret">Webhook Signing Secret (Optional)</Label>
-                            <Input id="test_webhookSecret" name="test.webhookSecret" type="password" defaultValue={initialPaymentGatewaySettings.test.webhookSecret} />
+                            <Input id="test_webhookSecret" name="test.webhookSecret" type="password" autoComplete="off" placeholder={initialPaymentGatewaySettings.test.webhookSecretSet ? 'Gemt – udfyld kun for at erstatte' : ''} />
+                            {initialPaymentGatewaySettings.test.webhookSecretSet && (
+                                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <input type="checkbox" name="test.clearWebhookSecret" /> Fjern gemt webhook secret
+                                </label>
+                            )}
                             {origin && (
                                 <div className="mt-2 flex items-center justify-between rounded-md bg-muted p-2">
                                     <code className="break-all text-sm text-muted-foreground">{webhookUrl}</code>
@@ -230,11 +236,16 @@ export function SettingsForm({ initialPaymentGatewaySettings, initialLanguageSet
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="live_secretKey">Secret Key</Label>
-                            <Input id="live_secretKey" name="live.secretKey" type="password" defaultValue={initialPaymentGatewaySettings.live.secretKey} />
+                            <Input id="live_secretKey" name="live.secretKey" type="password" autoComplete="off" placeholder={initialPaymentGatewaySettings.live.secretKeySet ? 'Gemt – udfyld kun for at erstatte' : ''} />
                         </div>
                         <div className="space-y-2">
                             <Label htmlFor="live_webhookSecret">Webhook Signing Secret (Optional)</Label>
-                            <Input id="live_webhookSecret" name="live.webhookSecret" type="password" defaultValue={initialPaymentGatewaySettings.live.webhookSecret} />
+                            <Input id="live_webhookSecret" name="live.webhookSecret" type="password" autoComplete="off" placeholder={initialPaymentGatewaySettings.live.webhookSecretSet ? 'Gemt – udfyld kun for at erstatte' : ''} />
+                            {initialPaymentGatewaySettings.live.webhookSecretSet && (
+                                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <input type="checkbox" name="live.clearWebhookSecret" /> Fjern gemt webhook secret
+                                </label>
+                            )}
                             {origin && (
                                 <div className="mt-2 flex items-center justify-between rounded-md bg-muted p-2">
                                     <code className="break-all text-sm text-muted-foreground">{webhookUrl}</code>
