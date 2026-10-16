@@ -5,6 +5,7 @@ import { esmeraldaBookingFeedbackInvitationSchema } from '@/lib/integrations/esm
 import { createBookingFeedbackInvitation } from '@/lib/integrations/esmeralda-feedback-integration';
 import { IntegrationBoundaryError } from '@/lib/integrations/esmeralda-consumer-customer';
 import { queueBookingFeedback } from '@/lib/feedback/mail-queue';
+import { ensureBookingFeedbackQuestions } from '@/lib/feedback/esmeralda-booking-setup';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -36,7 +37,9 @@ export async function POST(request: Request) {
 
   try {
     const { invitation, token } = await createBookingFeedbackInvitation(parsed.data);
-    const mailJob = invitation.status === 'active' ? await queueBookingFeedback({ brandId: invitation.organization_id, locationId: invitation.location_id, customerId: invitation.customer_id, sourceId: invitation.booking_id, sourceType: 'booking', invitationId: invitation.invitation_id, invitationToken: token }, invitation.ends_at) : null;
+    // Never invite a guest to a booking form that does not exist (#144).
+    const formReady = invitation.status === 'active' && await ensureBookingFeedbackQuestions(invitation.organization_id);
+    const mailJob = formReady ? await queueBookingFeedback({ brandId: invitation.organization_id, locationId: invitation.location_id, customerId: invitation.customer_id, sourceId: invitation.booking_id, sourceType: 'booking', invitationId: invitation.invitation_id, invitationToken: token }, invitation.ends_at) : null;
     const origin = new URL(request.url).origin;
     const feedbackPath = `/feedback?token=${encodeURIComponent(token)}`;
     return NextResponse.json(
