@@ -8,7 +8,7 @@ Every brand gets a public address under the production domain: `https://{slug}.o
 - **Slug rules** (`src/lib/brand-subdomain.ts`, enforced in the brand form and again on the server):
   - 2–40 characters: `a–z`, `0–9` and hyphen; starts and ends with a letter or digit.
   - Unique across all brands. A taken slug is rejected with free alternatives (`esmeralda-2`, …).
-  - Reserved names are rejected: `www`, `api`, `admin`, `app`, `staging`, `mail`, `support`, plus first-level app routes such as `superadmin`, `merchant`, `feedback` and `games`.
+  - Reserved names are rejected: `www`, `api`, `admin`, `app`, `staging`, `mail`, `support`, plus first-level app routes and middleware aliases such as `superadmin`, `merchant`, `feedback`, `games` and `m3pizza`.
   - New brands get a suggestion from the name. Danish letters are spelled out (`æ`→`ae`, `ø`→`oe`, `å`→`aa`); `Pizza & Pasta` → `pizza-pasta`.
 - **Administration.** The brand form shows the resulting public URL. Changing the slug of an existing brand requires an explicit confirmation, because the old subdomain and `/{old-slug}` stop working. The change is written to `auditLogs` with `action: brand_slug_changed`, `brandId`, `oldSlug`, `newSlug`, `actorId` and `createdAt`.
 - **Routing** (`src/middleware.ts`):
@@ -22,7 +22,7 @@ Every brand gets a public address under the production domain: `https://{slug}.o
   - An unknown subdomain resolves to `/{unknown}`, which has no brand and returns the neutral 404. There is no fallback brand.
   - A brand with `status: suspended` shows a neutral "Siden er midlertidigt lukket" page on its subdomain and on `/{slug}`, without brand data.
   - Other statuses keep today's behavior.
-- **Isolation.** Pages, server actions and APIs keep their existing brand/location scoping. Checkout origin checks and Stripe return URLs use the request host, so checkout works on a subdomain and returns there.
+- **Isolation.** Pages, server actions and APIs keep their existing brand/location scoping. Checkout origin checks and Stripe return URLs use the request host, so checkout works on a subdomain and returns there. The analytics collector (`src/lib/analytics-origin.ts`) accepts `https://{slug}.orderfly.dk` origins with a valid, unreserved label, so storefront events from a subdomain are recorded. Look-alike hosts are still rejected.
 - **Unchanged.** `orderfly.dk` and `www.orderfly.dk` (308 to the apex) keep their behavior.
 
 ## Production setup (one time)

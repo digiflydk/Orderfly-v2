@@ -16,7 +16,7 @@ test('#12 slugs are suggested from brand names with Danish letters spelled out',
 test('#12 invalid, too short/long and reserved slugs are rejected with a reason', () => {
   assert.equal(lib.brandSlugError('esmeralda'), null);
   for (const bad of ['E', 'Esmeralda', '-esmeralda', 'esmeralda-', 'esme_ralda', 'esmé', 'a'.repeat(41)]) assert.ok(lib.brandSlugError(bad), bad);
-  for (const reserved of ['www', 'api', 'admin', 'app', 'staging', 'mail', 'support', 'superadmin', 'merchant']) assert.match(lib.brandSlugError(reserved), /reserveret/);
+  for (const reserved of ['www', 'api', 'admin', 'app', 'staging', 'mail', 'support', 'superadmin', 'merchant', 'm3pizza']) assert.match(lib.brandSlugError(reserved), /reserveret/);
 });
 
 test('#12 duplicate slugs get free alternatives', () => {
@@ -121,4 +121,20 @@ test('#12 a suspended brand renders the neutral status page, never its storefron
   assert.doesNotMatch(suspended, /STOREFRONT|Esmeralda/);
   assert.match(html(await render('active')), /STOREFRONT/);
   await assert.rejects(render(null), /NOT_FOUND/);
+});
+
+test('#12 the analytics collector accepts brand subdomain origins and still rejects look-alikes', () => {
+  const { analyticsOriginAllowed } = loadTs('src/lib/analytics-origin.ts');
+  const env = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    const allowed = origin => analyticsOriginAllowed(new Request('http://0.0.0.0:8080/api/analytics/collect', { method: 'POST', headers: { origin } }));
+    assert.equal(allowed('https://esmeralda.orderfly.dk'), true);
+    assert.equal(allowed('https://orderfly.dk'), true);
+    for (const origin of ['http://esmeralda.orderfly.dk', 'https://esmeralda.orderfly.dk:8443', 'https://a.b.orderfly.dk', 'https://admin.orderfly.dk',
+      'https://esmeralda.orderfly.dk.evil.test', 'https://evilorderfly.dk', 'https://esmeralda.localhost', 'null'])
+      assert.equal(allowed(origin), false, origin);
+  } finally {
+    process.env.NODE_ENV = env;
+  }
 });

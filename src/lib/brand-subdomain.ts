@@ -6,12 +6,13 @@ export const ROOT_DOMAIN = 'orderfly.dk';
 export const BRAND_SLUG_MIN = 2;
 export const BRAND_SLUG_MAX = 40;
 
-// Infrastructure names from #12, plus first-level app routes, which a brand
+// Infrastructure names from #12, plus first-level app routes and middleware
+// aliases (`/m3pizza`), which a brand
 // slug must never shadow on the apex domain (/{slug}) or as a subdomain.
 export const RESERVED_BRAND_SLUGS = new Set([
   'www', 'api', 'admin', 'app', 'staging', 'mail', 'support',
   'superadmin', 'superadmin-safe', 'merchant', 'admin-login', 'feedback', 'feedback-admin',
-  'games', 'tracking', 'checkout', 'verify', 'brand-safe', 'brand-site', 'm3', 'env-debug',
+  'games', 'tracking', 'checkout', 'verify', 'brand-safe', 'brand-site', 'm3', 'm3pizza', 'env-debug',
   'features', 'pricing', 'contact', 'ok', 'health', 'static', 'assets', 'cdn',
 ]);
 
