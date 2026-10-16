@@ -89,3 +89,11 @@ Rollout is coordinated: deploy Orderfly's new contract and delivery check with b
 
 
 Reschedule hardening: new booking links use a v2 signed immutable scope with expiry checked on the server record. Initial expiry is 30 days after the later of now/planned end; an authorized active reschedule may extend it. V1 links retain their signed expiry deadline. Pending jobs receive the current token on handoff. Central delivery waits for the rescheduled version-1 handoff to complete, so an old queued URL is not suppressed before the server expiry refresh. Future visits remain pending in mPanel until planned end even during disabled rollout; enabling never backfills visits that ended while disabled. Tests cover long-lead links, reschedules, revocation/tampering/expiry and no premature future handoff.
+
+## Esmeralda restaurant-visit questionnaire (#144)
+
+Booking feedback for Esmeralda uses a dedicated Danish form, `esmeralda-booking-da-v1` ("Esmeralda · Restaurantbesøg · Dansk v1"). It asks about the overall experience, food and service (required), plus waiting time, atmosphere, value, recommendation (NPS) and an optional comment. The form is brand-scoped (`scope: brand`) and limited to `orderTypes: ['booking']`, so takeaway/delivery forms and other brands are unaffected. The existing brand-first resolution in `resolveActiveQuestionVersion` selects it for booking feedback.
+
+`ensureBookingFeedbackQuestions` (`src/lib/feedback/esmeralda-booking-setup.ts`) runs in the verified booking-invitation endpoint before an invitation email is queued. It creates the form once if it is missing and never overwrites an existing version, so operator edits and a deliberate deactivation survive retries. If the brand has no active Danish booking form, the invitation is still recorded but no email is queued (`email_queue: not_queued`), so guests are never sent to a missing form. Sending continues to follow the automatic booking feedback from #153.
+
+Regression: `node --test tests/unit/booking-feedback-setup-144.cjs`.
