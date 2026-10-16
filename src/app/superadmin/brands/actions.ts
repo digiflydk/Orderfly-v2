@@ -15,6 +15,8 @@ import { publicBrandRecord } from '@/lib/public-native-records';
 import { selectorCatalog } from '@/lib/access/native-catalog';
 import { brandRecord } from '@/lib/brand-record';
 import { hasPermission } from '@/lib/auth/permissions';
+import { orderflySession } from '@/lib/access/orderfly-session';
+import { brandSlugAlternatives, brandSlugError } from '@/lib/brand-subdomain';
 
 const appearancesSchema = z.object({
   colors: z.object({
@@ -41,7 +43,8 @@ const brandSchema = z.object({
   // Step 2: Brand Info
   companyName: z.string().min(2, 'Company name is required.'),
   name: z.string().min(2, 'Brand name must be at least 2 characters.'),
-  slug: z.string().min(2, 'Brand slug is required.').regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug can only contain lowercase letters, numbers, and hyphens.'),
+  // The slug is also the brand subdomain (#12): {slug}.orderfly.dk.
+  slug: z.string().trim().superRefine((value, ctx) => { const error = brandSlugError(value); if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error }); }),
   street: z.string().min(2, 'Street name is required.'),
   zipCode: z.string().min(2, 'PO Box / ZIP Code is required.'),
   city: z.string().min(2, 'City is required.'),
@@ -136,12 +139,26 @@ export async function createOrUpdateBrand(
     if (!slugQuerySnapshot.empty) {
         const existingBrandDoc = slugQuerySnapshot.docs[0];
         if (existingBrandDoc.id !== id) {
+            const taken = new Set((await db.collection('brands').where('slug', '>=', slug).where('slug', '<', `${slug}.`).get()).docs.map(doc => doc.data().slug));
+            const alternatives = brandSlugAlternatives(slug, candidate => taken.has(candidate));
             return {
-                message: 'This brand slug is already in use. Please choose another.',
+                message: `Slug "${slug}" er allerede i brug.${alternatives.length ? ` Ledige forslag: ${alternatives.join(', ')}.` : ''}`,
                 error: true
             };
         }
     }
+
+    // Changing an existing brand's slug moves its public URL and subdomain (#12):
+    // it needs explicit confirmation and is recorded in the audit log.
+    const previousSlug = id ? (await db.collection('brands').doc(id).get()).data()?.slug : undefined;
+    const slugChanged = !!id && typeof previousSlug === 'string' && previousSlug !== slug;
+    if (slugChanged && formData.get('confirmSlugChange') !== 'on') {
+        return { message: `Bekræft ændringen af slug fra "${previousSlug}" til "${slug}". Den nuværende adresse holder op med at virke.`, error: true };
+    }
+    const slugAudit = slugChanged ? {
+        action: 'brand_slug_changed', brandId: id, oldSlug: previousSlug, newSlug: slug,
+        actorId: (await orderflySession()).actorId, createdAt: getAdminFieldValue().serverTimestamp(),
+    } : null;
 
     let ownerId: string;
 
@@ -159,6 +176,7 @@ export async function createOrUpdateBrand(
         if (brandData.subscriptionPlanId && !(await tx.get(db.collection('subscription_plans').doc(brandData.subscriptionPlanId))).exists) throw new Error('Abonnementsplanen findes ikke længere.');
         tx.set(brandRef, {...brandData, companyRegNo, slug, id:brandRef.id, ownerId:selectedOwnerId}, {merge:true});
         tx.set(lock, {lastBrandId:brandRef.id});
+        if (slugAudit) tx.create(db.collection('auditLogs').doc(), slugAudit);
       });
     } else if (id) {
       // For updates, we assume the owner doesn't change via this form.
@@ -170,7 +188,14 @@ export async function createOrUpdateBrand(
       ownerId = existingBrand.ownerId;
       
       const brandRef = db.collection('brands').doc(id);
-      await brandRef.update({ ...brandData, companyRegNo, slug });
+      if (slugAudit) {
+        const batch = db.batch();
+        batch.update(brandRef, { ...brandData, companyRegNo, slug });
+        batch.create(db.collection('auditLogs').doc(), slugAudit);
+        await batch.commit();
+      } else {
+        await brandRef.update({ ...brandData, companyRegNo, slug });
+      }
 
     } else {
       // Create new user first
