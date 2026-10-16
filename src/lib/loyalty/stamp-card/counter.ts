@@ -102,9 +102,17 @@ async function consumeLookupLimit(tx: Transaction, db: Firestore, principalId: s
 }
 
 export async function lookupMember(db: Firestore, actor: CounterActor, input: z.infer<typeof lookupSchema>, now: number) {
-  return db.runTransaction(async tx => {
+  const outcome = await db.runTransaction(async tx => {
     const { principalId, can } = await authorizeAt(db, tx, actor, input.brandId, input.locationId, PERMISSION.counter);
     const recordLookup = await consumeLookupLimit(tx, db, principalId, now);
+    // A miss counts against the limit as well, so staff cannot enumerate e-mails or tokens.
+    try { return { view: await resolveLookup(tx, principalId, can, recordLookup) }; }
+    catch (error) { if (error instanceof LoyaltyError) { recordLookup(); return { error }; } throw error; }
+  });
+  if ('error' in outcome) throw outcome.error;
+  return outcome.view;
+
+  async function resolveLookup(tx: Transaction, principalId: string, can: (p: string) => boolean, recordLookup: () => void) {
     let memberId: string, via: 'qr' | 'search', consumeToken: (() => void) | null = null;
     if ('qrToken' in input) {
       const ref = db.collection(COLLECTIONS.qrTokens).doc(hashKey('qr', input.qrToken));
@@ -135,7 +143,7 @@ export async function lookupMember(db: Firestore, actor: CounterActor, input: z.
       program: { active: s.active, name: s.name, counterChannels: s.counterChannels, minimumAmountOre: s.minimumAmountOre, discountedOrdersQualify: s.discountedOrdersQualify },
       permissions: { redeem: can(PERMISSION.redeem), correct: can(PERMISSION.correct) },
     };
-  });
+  }
 }
 
 type StampOutcome = { stamps: number; stampsRequired: number; rewardsEarned: number; cardId: string };
