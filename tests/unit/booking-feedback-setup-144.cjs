@@ -7,9 +7,11 @@ function fixture(initial = {}) {
   const docs = new Map(Object.entries({ [`brands/${ESMERALDA}`]: { name: 'Esmeralda' }, ...initial }));
   const ref = path => ({ path });
   const db = {
-    collection: c => ({ doc: id => ref(`${c}/${id}`) }),
+    collection: c => ({ doc: id => ref(`${c}/${id}`), where: (field, op, value) => ({ query: c, field, value }) }),
     runTransaction: async fn => fn({
-      get: async r => ({ exists: docs.has(r.path), data: () => docs.get(r.path) }),
+      get: async r => r.query
+        ? { docs: [...docs].filter(([k, v]) => k.startsWith(`${r.query}/`) && v[r.field] === r.value).map(([k, v]) => ({ id: k.split('/')[1], data: () => v })) }
+        : { exists: docs.has(r.path), data: () => docs.get(r.path) },
       create: (r, v) => { if (docs.has(r.path)) throw Error('exists'); docs.set(r.path, v); },
       set: (r, v) => docs.set(r.path, { ...docs.get(r.path), ...v }),
     }),
@@ -18,6 +20,7 @@ function fixture(initial = {}) {
   const mod = loadTs('src/lib/feedback/esmeralda-booking-setup.ts', {
     'server-only': {},
     '@/lib/firebase-admin': { getAdminDb: () => db, getAdminFieldValue: () => ({ serverTimestamp: () => 'now' }) },
+    './question-scope': loadTs('src/lib/feedback/question-scope.ts'),
     './question-store': { readActiveQuestionsForBrand: async (brandId, type, language) => activeForm && type === 'booking' && language === 'da' ? { id: 'x' } : null },
   });
   return { docs, db, mod, setActive: value => { activeForm = value; } };
@@ -52,4 +55,24 @@ test('#144 other brands are not given the Esmeralda form, and a missing brand is
   missing.docs.delete(`brands/${ESMERALDA}`);
   await missing.mod.ensureBookingFeedbackQuestions(ESMERALDA, { db: missing.db });
   assert.equal(missing.docs.has('feedbackQuestionsVersion/esmeralda-booking-da-v1'), false);
+});
+
+test('#144 a deactivated Esmeralda form stops invitations instead of falling back to the default form', async () => {
+  const f = fixture({ 'feedbackQuestionsVersion/esmeralda-booking-da-v1': { versionLabel: 'Off', isActive: false, scope: 'brand', brandId: ESMERALDA, language: 'da', orderTypes: ['booking'], questions: [] } });
+  // The resolver would still find an active default Danish booking form.
+  assert.equal(await f.mod.ensureBookingFeedbackQuestions(ESMERALDA, { db: f.db }), false);
+});
+
+test('#144 an existing active Esmeralda Danish booking form is used instead of seeding an overlapping one', async () => {
+  const existing = { versionLabel: 'Own form', isActive: true, scope: 'brand', brandId: ESMERALDA, language: 'da', orderTypes: ['booking', 'pickup'], questions: [] };
+  const f = fixture({ 'feedbackQuestionsVersion/own-form': existing });
+  assert.equal(await f.mod.ensureBookingFeedbackQuestions(ESMERALDA, { db: f.db }), true);
+  assert.equal(f.docs.has('feedbackQuestionsVersion/esmeralda-booking-da-v1'), false);
+  // An active default form or another brand's form does not block seeding.
+  const g = fixture({
+    'feedbackQuestionsVersion/default': { ...existing, scope: 'default', brandId: null },
+    'feedbackQuestionsVersion/other': { ...existing, brandId: 'other-brand' },
+  });
+  await g.mod.ensureBookingFeedbackQuestions(ESMERALDA, { db: g.db });
+  assert.equal(g.docs.has('feedbackQuestionsVersion/esmeralda-booking-da-v1'), true);
 });

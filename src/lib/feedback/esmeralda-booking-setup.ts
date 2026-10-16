@@ -2,6 +2,7 @@ import 'server-only';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import { FeedbackQuestionsVersionSchema } from '@/lib/schemas/feedback';
 import { readActiveQuestionsForBrand } from './question-store';
+import { questionScopeKey } from './question-scope';
 
 export const ESMERALDA_FEEDBACK_BRAND = 'oeypKaMyYcQjIwaa1PtV';
 export const ESMERALDA_BOOKING_VERSION = 'esmeralda-booking-da-v1';
@@ -29,22 +30,33 @@ export const ESMERALDA_BOOKING_QUESTIONS = FeedbackQuestionsVersionSchema.parse(
 
 // Called by the verified booking integration before an invitation is queued.
 // Creates the Esmeralda form once; an existing version, including operator edits
-// or a deliberate deactivation, is never overwritten. Returns whether the brand
-// has an active Danish booking form, so no invitation links to a missing form.
+// or a deliberate deactivation, is never overwritten. It is also not created
+// when the brand already has another active Danish booking form, the same
+// overlap the question admin rejects. Returns whether an invitation may be sent:
+// a deactivated Esmeralda form stops invitations instead of falling back to the
+// generic form, and otherwise the brand needs an active Danish booking form.
 export async function ensureBookingFeedbackQuestions(brandId: string, deps: { db?: FirebaseFirestore.Firestore } = {}) {
   const db = deps.db ?? getAdminDb();
   if (brandId === ESMERALDA_FEEDBACK_BRAND) {
-    const versionRef = db.collection('feedbackQuestionsVersion').doc(ESMERALDA_BOOKING_VERSION);
+    const col = db.collection('feedbackQuestionsVersion');
+    const versionRef = col.doc(ESMERALDA_BOOKING_VERSION);
     const lock = db.collection('feedbackConfiguration').doc('versionLock');
-    await db.runTransaction(async tx => {
-      const [brand, version] = await Promise.all([tx.get(db.collection('brands').doc(brandId)), tx.get(versionRef)]);
+    const disabled = await db.runTransaction(async tx => {
       await tx.get(lock);
-      if (!brand.exists || version.exists) return;
+      const [brand, version, active] = await Promise.all([
+        tx.get(db.collection('brands').doc(brandId)), tx.get(versionRef), tx.get(col.where('isActive', '==', true))]);
+      if (version.exists) return version.data()?.isActive !== true;
+      if (!brand.exists) return false;
+      const overlap = active.docs.some(doc => questionScopeKey(doc.data()) === questionScopeKey(ESMERALDA_BOOKING_QUESTIONS) &&
+        doc.data().language === 'da' && (doc.data().orderTypes || []).includes('booking'));
+      if (overlap) return false;
       const timestamp = getAdminFieldValue().serverTimestamp();
       tx.create(versionRef, { ...ESMERALDA_BOOKING_QUESTIONS, id: ESMERALDA_BOOKING_VERSION,
         createdAt: timestamp, updatedAt: timestamp, createdBy: 'esmeralda-booking-integration' });
       tx.set(lock, { updatedAt: timestamp }, { merge: true });
+      return false;
     });
+    if (disabled) return false;
   }
   return !!await readActiveQuestionsForBrand(brandId, 'booking', 'da');
 }
