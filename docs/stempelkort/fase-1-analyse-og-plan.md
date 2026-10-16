@@ -1,6 +1,6 @@
 # Fase 1 – Stempelkort: analyse (trin 1) og plan (trin 2)
 
-Status: **Forslag, revideret efter ejerens svar 2026-10-16. Afventer to åbne punkter (Del B).** Der er ikke ændret applikationskode.
+Status: **Plan komplet efter ejerens svar 2026-10-16. Afventer endelig godkendelse før byg.** Der er ikke ændret applikationskode.
 Grundlag: `main` @ `f828c68` (Orderfly-v2) og `esmeralda-restaurant-operations` @ `51c6ced` (mPanel/Opsfly).
 Spec: [fase-1-stempelkort-backend.md](fase-1-stempelkort-backend.md). Fase 2 og 3 er kun læst for at sikre, at fase 1-API'erne dækker dem.
 
@@ -134,7 +134,7 @@ Filerne er `src/app/merchant/layout.tsx`, `merchant/redeem/page.tsx`, `merchant/
 |---|---|---|
 | 1 | Menu | Ny hovedgruppe **Loyalitet** i sidebaren med **Stempelkort** og **Kundescore**. Kundescoren (tidl. "Loyalty" under Promotions) flyttes ud af Promotions. |
 | 2 | Rettighedsnavne | Godkendt (se C3, dog med ét åbent forbehold om oversigtsrettigheden). |
-| 3 | Login-mail | Godkendt: ny skabelon `orderfly.loyalty.login_link` via parret PR i esmeralda-restaurant-operations. |
+| 3 | Login-mail | Godkendt: ny skabelon `orderfly.stamp_card.login_link` via parret PR i esmeralda-restaurant-operations. |
 | 4 | Kanaler | **Parameter pr. brand.** Ved kassen: dine-in og/eller takeaway. Orderfly-ordrer (senere automatik): afhentning og/eller levering. Mindst én kanal skal være valgt, når programmet er aktivt. Wolt, Uber Eats og andre tredjepartskanaler findes ikke som valgmulighed. |
 | 5 | QR-token | **B:** tilfældigt token, gemt i databasen som hash, gyldigt i 60 sekunder og til engangsbrug. Der kræves ingen ny hemmelighed. |
 | a | Afdeling | Når kortet ikke gælder på tværs, er det bundet til afdelingen for det første stempel. |
@@ -143,9 +143,12 @@ Filerne er `src/app/merchant/layout.tsx`, `merchant/redeem/page.tsx`, `merchant/
 | d | Sletning | Kunde og Omnisend-kontakt bevares. Loggen pseudonymiseres. |
 | e | Roller | Der oprettes **ingen** roller fra koden. Rollerne i mPanel findes allerede og administreres dynamisk. Leverancen sørger kun for, at modulets rettigheder står i kataloget og vises samlet i mPanel's rolleeditor, så de kan føjes til eksisterende roller eller nye roller. |
 
-### Åbne punkter
+### Opfølgende beslutninger
 
-- **Oversigtsrettighed:** Rollerne er produktionsdata (`platformAdminControl/access-v1`). Work kan ikke læse dem fra repoet. Har eksisterende roller allerede `orderfly.loyalty:view` (kundescore), vil genbrug af den til stempelkortets oversigt give dem adgangen uden en aktiv beslutning. Anbefaling: en ny `orderfly.stamp_cards:overview` til oversigten. `orderfly.loyalty:*` forbliver kundescorens rettighed og er dermed uændret for eksisterende roller.
+| # | Emne | Beslutning |
+|---|---|---|
+| 6 | Oversigtsrettighed | Ny `orderfly.stamp_cards:overview`. |
+| 7 | Kundescore | **Ren struktur med migration:** `orderfly.loyalty:*` omdøbes til `orderfly.customer_score:*`. Alle eksisterende roller flyttes 1:1, uden at nogen får nye rettigheder. Derefter fjernes `orderfly.loyalty`. Se C3.1. |
 
 ---
 
@@ -185,32 +188,62 @@ Alle dokumenter har `brandId` og `companyId` (snapshot til log og rapporter). Hv
 
 ### C3. Rettigheder
 
-Der tilføjes én ny feature, `orderfly.stamp_cards`, i `FEATURES`. Den følger præcedensen med `orderfly.games:redeem`. Kundescoren beholder `orderfly.loyalty:*` uændret.
+`FEATURES` får to nye features: `orderfly.stamp_cards` (følger præcedensen med `orderfly.games:redeem`) og `orderfly.customer_score`, som afløser `orderfly.loyalty` (se C3.1).
 
 | Spec | Rettighed | Navn i mPanel |
 |---|---|---|
-| Loyalitet – se oversigt | `orderfly.stamp_cards:overview` (anbefalet, se åbent punkt) | Stempelkort · Oversigt |
+| Loyalitet – se oversigt | `orderfly.stamp_cards:overview` | Stempelkort · Oversigt |
 | Stempelkort – kassevisning | `orderfly.stamp_cards:counter` | Stempelkort · Kassevisning |
 | Stempelkort – indløs belønning | `orderfly.stamp_cards:redeem` | Stempelkort · Indløs belønning |
 | Stempelkort – manuel korrektion | `orderfly.stamp_cards:correct` | Stempelkort · Manuel korrektion |
 | Stempelkort – indstillinger | `orderfly.stamp_cards:settings` | Stempelkort · Indstillinger |
 | Stempelkort – medlemmer | `orderfly.stamp_cards:members` | Stempelkort · Medlemmer |
 | Stempelkort – log | `orderfly.stamp_cards:log` | Stempelkort · Log |
-| (Kundescore, eksisterende) | `orderfly.loyalty:view/create/edit/delete` | Kundescore · … (omdøbt fra "Loyalitet") |
+| Kundescore (flyttet) | `orderfly.customer_score:view/create/edit/delete` (tidl. `orderfly.loyalty:*`) | Kundescore · Se/Opret/Redigér/Slet |
 
-**Roller:** Der oprettes ingen roller fra koden, og eksisterende roller ændres ikke. De nye rettigheder er ikke tildelt nogen, når de udrulles. En administrator føjer dem til eksisterende eller nye roller i mPanel.
+**Roller:** Der oprettes ingen roller fra koden. Eksisterende roller ændres kun ved den 1:1-migration, der er beskrevet i C3.1. Stempelkort-rettighederne er ikke tildelt nogen, når de udrulles. En administrator føjer dem til eksisterende eller nye roller i mPanel.
 
 **I mPanel** (parret PR):
-- Ny modulgruppe `{id:'loyalty', name:'Loyalitet', features:['orderfly.stamp_cards','orderfly.loyalty'], initial:['orderfly.stamp_cards:overview']}` i `accessModules`.
+- Ny modulgruppe `{id:'loyalty', name:'Loyalitet', features:['orderfly.stamp_cards','orderfly.customer_score'], initial:['orderfly.stamp_cards:overview']}` i `accessModules`.
 - Modulet "Orderfly" ejer i dag alt med præfikset `orderfly.`. Det ændres, så Loyalitet-rettighederne ikke vises to gange.
 - Danske navne for de nye handlinger. Desuden de manglende navne for `orderfly.games` og `redeem`.
 - Bundlen genbygges, så den matcher `generated-ui-parity`.
 
-**Konsekvens for eksisterende roller:** Ingen ændring i data. I rolleeditoren vises `orderfly.loyalty:*` fremover under Loyalitet i stedet for Orderfly. Fravælges Orderfly-modulet på en rolle, fjernes kundescore-rettigheden ikke længere automatisk.
+**Konsekvens for eksisterende roller:** Kundescore-rettigheden vises fremover under Loyalitet som `customer_score` i stedet for under Orderfly. Fravælges Orderfly-modulet på en rolle, fjernes kundescore-rettigheden ikke længere automatisk. `featureNames` får `orderfly.customer_score:'Kundescore'` og `orderfly.stamp_cards:'Stempelkort'`, og `orderfly.loyalty` fjernes.
 
 **Orderfly:** `navigation.ts` får regler for de nye ruter, som ikke ender på `:view`, på samme måde som `/merchant/redeem` har sin egen regel. `selectorCatalog` medtager `orderfly.stamp_cards:*`, så brugere med kun disse rettigheder får brand- og afdelingsvalg.
 
 **Scope:** `counter`, `redeem` og `correct` tjekkes på den afdeling, hvor handlingen sker. `overview`, `settings`, `members` og `log` tjekkes på de brands og afdelinger, filteret viser. Medlemslister og eksport kræver adgang til hele brandet.
+
+### C3.1 Migration af `orderfly.loyalty` → `orderfly.customer_score`
+
+**Problem:** `policySchema` afviser ukendte rettigheder. Hvis `orderfly.loyalty` fjernes fra kataloget, før de gemte roller er migreret, bliver hele politikken ugyldig (`invalid_policy`). Så mister alle adgang til både Orderfly og mPanel. Migrationen skal derfor ske i den rækkefølge, der er beskrevet herunder.
+
+**Release 1 (denne leverance)**
+1. **Normalisering ved læsning.** `orderfly.loyalty:<action>` accepteres som et *legacy-alias* i `policySchema`. `requireValid` (`authority.ts`) og `authorizeTransaction` (`scoped-data.ts`) normaliserer det til `orderfly.customer_score:<action>` i hukommelsen, før der tages beslutninger.
+   - Fra deploy har eksisterende roller derfor præcis samme adgang under det nye navn.
+   - Kataloget (`PERMISSIONS`) og mPanel viser kun det nye navn.
+   - Alle skrivninger af politikken gemmer den normaliserede form.
+2. **Eksplicit, revideret migration.** En ny kommando i autoriteten, `{action:'migratePermissions', requestId, revision}`, har følgende egenskaber:
+   - Den kan kun udføres af en superuser.
+   - Den kører i én transaktion og tjekker revision.
+   - Den er idempotent: en ny kørsel uden legacy-værdier giver `migrated: 0` uden skrivning.
+   - Den omskriver alle roller 1:1.
+   - Den skriver en `platformAdminAudit`-række med antallet af ændrede roller og deres ID'er før og efter.
+   - Den kan køres som `dryRun:true`, som kun returnerer rapporten.
+   - Den udløses af platformens superuser i mPanel ("Migrér rettigheder") eller af en operatør. Work kører den ikke mod produktion.
+3. Koden bruger kun `orderfly.customer_score:*`: `navigation.ts`, `mpanel-launch.ts` (`/superadmin/loyalty/score`), sidebaren og kundescorens sider.
+   - Kundescorens nuværende adgangsniveau bevares: læsning kræver `view`, og gemning af den globale scoremodel kræver fortsat platformens superuser.
+
+**Release 2 (lille opfølgende PR efter verificeret migration)**
+- Aliaset fjernes.
+- Forudsætningen er, at en læsning af politikken i produktion efter migrationen viser 0 legacy-værdier. Det verificeres skrivebeskyttet med en dry-run.
+
+**Tests**
+- Unit: en politik med legacy-rettigheder giver samme `authorize`-resultat som den migrerede.
+- Migration: tom, delvis og fuld migration. Idempotens. Konflikt ved forkert revision. Afvisning ved ikke-superuser. Audit-række skrives.
+- Ingen delegationsforøgelse: en company-admin, der kun havde `orderfly.loyalty:view`, kan fortsat kun give `customer_score:view`.
+- mPanel: rolleeditoren viser `customer_score` under Loyalitet og ingen "Funktion · Handling".
 
 ### C4. API'er
 
@@ -250,7 +283,7 @@ Loyalitet  (ny hovedgruppe i sidebaren, efter Promotions)
  ├─ Oversigt      /superadmin/loyalty                               orderfly.stamp_cards:overview
  ├─ Stempelkort   /superadmin/loyalty/stamp-card?tab=settings|members|log   settings / members / log
  │                /superadmin/loyalty/stamp-card/members/[memberId]          members (korrektion: correct)
- └─ Kundescore    /superadmin/loyalty/score                         orderfly.loyalty:view  (flyttet fra /superadmin/loyalty)
+ └─ Kundescore    /superadmin/loyalty/score                         orderfly.customer_score:view  (flyttet fra /superadmin/loyalty)
 ```
 - `/superadmin/loyalty` viste tidligere kundescoren. Bogmærker til den gamle side sendes videre til `/superadmin/loyalty/score`, hvis brugeren kun har kundescore-rettighed.
 - Punktet "Loyalty" fjernes fra Promotions.
@@ -264,7 +297,7 @@ Loyalitet  (ny hovedgruppe i sidebaren, efter Promotions)
 - **Ingen datamigration.** Der overføres ikke papirstempler. Programmet starter med `active:false`.
 - **Orderfly:** Firestore-indekser. Ingen ny hemmelighed og ingen ændring i reglerne.
 - **Orderfly `mpanel-launch.ts`:** Kundescorens startside flyttes til `/superadmin/loyalty/score`, og `orderfly.stamp_cards:overview` → `/superadmin/loyalty` tilføjes.
-- **Esmeralda (parret PR):** labels og modulgruppe i mPanel, genbygget bundle samt skabelonen `orderfly.loyalty.login_link` (migration, enqueue-liste og template-kontrakt).
+- **Esmeralda (parret PR):** labels og modulgruppe i mPanel, genbygget bundle samt skabelonen `orderfly.stamp_card.login_link` (migration, enqueue-liste og template-kontrakt).
 - **Efter deploy (drift):** Føj de nye rettigheder til eksisterende eller nye roller i mPanel. Udfyld indstillingerne, og slå programmet til. Work skriver ikke i produktionsdata.
 
 ### C7. Testpunkter
@@ -292,11 +325,12 @@ Loyalitet  (ny hovedgruppe i sidebaren, efter Promotions)
 
 ### C8. Små PR'er (trin 3, efter godkendelse)
 
-1. **Rettigheder og regler:** `FEATURES`, navigation, `rules.ts` og unit-tests, plus parret mPanel-labels-PR.
+1. **Rettigheder, migration og regler:** `FEATURES`, legacy-alias og `migratePermissions`, navigation, `mpanel-launch`, `rules.ts` og unit-tests, plus parret mPanel-PR (modulgruppe, labels og migrationsknap).
 2. **Datamodel og merchant-backend:** stempel, indløsning, korrektion, opslag, QR-validering og udløbsjob.
 3. **Medlemskab:** tilmelding, samtykke, Omnisend begge veje, login-link, session og sletning, plus parret mail-skabelon-PR.
 4. **Admin – Stempelkort:** indstillinger, medlemmer, log og CSV.
 5. **Admin – Loyalitet:** ny hovedgruppe, oversigt, filterudvidelse og flytning af kundescoren.
+6. **Oprydning (release 2):** aliaset `orderfly.loyalty` fjernes efter verificeret migration.
 
 Hver PR opdaterer `docs/` (`firestore-schema.md`, `api-overview.md`, `security-rbac.md`, `FILE-MAP.md` og en ny `docs/stempelkort/README.md` med driftsvejledning).
 
