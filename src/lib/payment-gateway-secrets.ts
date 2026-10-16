@@ -22,11 +22,14 @@ export function redactPaymentGatewaySettings(settings: PaymentGatewaySettings): 
 
 // An empty secret field means "keep the stored value". Only a newly typed value
 // replaces a stored secret, so saving other settings never wipes or echoes it.
-export function mergeStoredPaymentSecrets(submitted: PaymentGatewaySettings, stored: PaymentGatewaySettings | null | undefined): PaymentGatewaySettings {
+// The optional webhook secret can be removed with an explicit clear choice.
+export function mergeStoredPaymentSecrets(submitted: PaymentGatewaySettings, stored: PaymentGatewaySettings | null | undefined,
+  clearWebhookSecret: Partial<Record<Mode, boolean>> = {}): PaymentGatewaySettings {
   const merged: PaymentGatewaySettings = { ...submitted, test: { ...submitted.test }, live: { ...submitted.live } };
   for (const mode of MODES) {
     if (!merged[mode].secretKey && stored?.[mode]?.secretKey) merged[mode].secretKey = stored[mode].secretKey;
-    if (!merged[mode].webhookSecret && stored?.[mode]?.webhookSecret) merged[mode].webhookSecret = stored[mode].webhookSecret;
+    if (clearWebhookSecret[mode] && !merged[mode].webhookSecret) merged[mode].webhookSecret = '';
+    else if (!merged[mode].webhookSecret && stored?.[mode]?.webhookSecret) merged[mode].webhookSecret = stored[mode].webhookSecret;
   }
   return merged;
 }

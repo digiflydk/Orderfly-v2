@@ -115,8 +115,17 @@ export async function updatePaymentGatewaySettings(
 
 	// Secret fields are write-only (#57): an empty field keeps the stored secret.
 	const settingsRef = getAdminDb().collection('platform_settings').doc('payment_gateway');
-	const stored = (await settingsRef.get()).data() as PaymentGatewaySettings | undefined;
-	const validatedFields = paymentGatewaySettingsSchema.safeParse(mergeStoredPaymentSecrets(rawData as PaymentGatewaySettings, stored));
+	let stored: PaymentGatewaySettings | undefined;
+	try {
+		stored = (await settingsRef.get()).data() as PaymentGatewaySettings | undefined;
+	} catch (e) {
+		console.error(e);
+		return { message: 'Failed to update settings: the current payment settings could not be read.', error: true };
+	}
+	const validatedFields = paymentGatewaySettingsSchema.safeParse(mergeStoredPaymentSecrets(rawData as PaymentGatewaySettings, stored, {
+		test: formData.get('test.clearWebhookSecret') === 'on',
+		live: formData.get('live.clearWebhookSecret') === 'on',
+	}));
 
 	if (!validatedFields.success) {
 		const errorMessages = Object.entries(validatedFields.error.flatten().fieldErrors)

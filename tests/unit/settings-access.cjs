@@ -40,3 +40,21 @@ test('#57 Stripe secrets are write-only: never returned, kept when left empty, r
  assert.equal((await api.updatePaymentGatewaySettings(null,form)).error,false);
  assert.deepEqual(writes.at(-1),{activeMode:'live',test:{publishableKey:'pk_test',secretKey:'sk_test_stored',webhookSecret:'whsec_test_stored'},live:{publishableKey:'pk_live',secretKey:'sk_live_stored',webhookSecret:'whsec_live_new'}});
 });
+test('#57 a stored webhook secret is removed only by the explicit clear choice; read failures return a form error',async()=>{
+ const stored={activeMode:'test',test:{publishableKey:'pk_test',secretKey:'sk_test_stored',webhookSecret:'whsec_test_stored'},live:{publishableKey:'',secretKey:'',webhookSecret:'whsec_live_stored'}};
+ const writes=[];let failRead=false;
+ const api=loadTs('src/app/superadmin/settings/actions.ts',{'server-only':{},'next/cache':{revalidatePath:()=>{}},
+  '@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>{}},'./queries':{getPlatformBrandingSettings:async()=>null},
+  '@/lib/firebase-admin':{getAdminDb:()=>({collection:()=>({doc:()=>({get:async()=>{if(failRead)throw Error('unavailable');return {exists:true,data:()=>stored};},set:async value=>writes.push(value)})})})},
+ });
+ const form=new FormData();
+ for(const [k,v] of Object.entries({activeMode:'test','test.publishableKey':'pk_test','test.secretKey':'','test.webhookSecret':'','test.clearWebhookSecret':'on','live.publishableKey':'','live.secretKey':'','live.webhookSecret':''}))form.set(k,v);
+ assert.equal((await api.updatePaymentGatewaySettings(null,form)).error,false);
+ assert.equal(writes.at(-1).test.webhookSecret,'');
+ assert.equal(writes.at(-1).test.secretKey,'sk_test_stored');
+ assert.equal(writes.at(-1).live.webhookSecret,'whsec_live_stored');
+ failRead=true;
+ const failed=await api.updatePaymentGatewaySettings(null,form);
+ assert.equal(failed.error,true);assert.equal(writes.length,1);
+});
+

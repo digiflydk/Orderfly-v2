@@ -214,6 +214,11 @@ export function SettingsForm({ initialPaymentGatewaySettings, initialLanguageSet
                         <div className="space-y-2">
                             <Label htmlFor="test_webhookSecret">Webhook Signing Secret (Optional)</Label>
                             <Input id="test_webhookSecret" name="test.webhookSecret" type="password" autoComplete="off" placeholder={initialPaymentGatewaySettings.test.webhookSecretSet ? 'Gemt – udfyld kun for at erstatte' : ''} />
+                            {initialPaymentGatewaySettings.test.webhookSecretSet && (
+                                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <input type="checkbox" name="test.clearWebhookSecret" /> Fjern gemt webhook secret
+                                </label>
+                            )}
                             {origin && (
                                 <div className="mt-2 flex items-center justify-between rounded-md bg-muted p-2">
                                     <code className="break-all text-sm text-muted-foreground">{webhookUrl}</code>
@@ -236,6 +241,11 @@ export function SettingsForm({ initialPaymentGatewaySettings, initialLanguageSet
                         <div className="space-y-2">
                             <Label htmlFor="live_webhookSecret">Webhook Signing Secret (Optional)</Label>
                             <Input id="live_webhookSecret" name="live.webhookSecret" type="password" autoComplete="off" placeholder={initialPaymentGatewaySettings.live.webhookSecretSet ? 'Gemt – udfyld kun for at erstatte' : ''} />
+                            {initialPaymentGatewaySettings.live.webhookSecretSet && (
+                                <label className="flex items-center gap-2 text-sm text-muted-foreground">
+                                    <input type="checkbox" name="live.clearWebhookSecret" /> Fjern gemt webhook secret
+                                </label>
+                            )}
                             {origin && (
                                 <div className="mt-2 flex items-center justify-between rounded-md bg-muted p-2">
                                     <code className="break-all text-sm text-muted-foreground">{webhookUrl}</code>
