@@ -25,7 +25,15 @@ export const cartSnapshotSchema = z.object({
   deliveryType: z.enum(['pickup', 'delivery']),
   includeBagFee: z.boolean(), choices: cartChoicesSchema,
   savedAt: z.number().finite(), checkoutOrderId: id.optional(),
+  // Chosen fulfillment slot, so a reload keeps it (#187). Checkout revalidates it.
+  selectedTime: z.string().regex(/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/).optional(),
 });
+/** A saved slot is only reused for the same order type while it is still in the future. */
+export function restorableSelectedTime(snapshot: Pick<CartSnapshot, 'deliveryType' | 'selectedTime'> | null | undefined,
+  deliveryType: 'pickup' | 'delivery', now = Date.now()): string | null {
+  if (!snapshot?.selectedTime || snapshot.deliveryType !== deliveryType) return null;
+  return Date.parse(snapshot.selectedTime) > now ? snapshot.selectedTime : null;
+}
 export type CartChoice = z.infer<typeof cartChoiceSchema>;
 export type CartSnapshot = z.infer<typeof cartSnapshotSchema>;
 export function cartChoices(items: CartItem[]): CartChoice[] {
