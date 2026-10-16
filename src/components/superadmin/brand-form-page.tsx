@@ -21,6 +21,7 @@ import { Input } from '@/components/ui/input';
 import { Checkbox } from '@/components/ui/checkbox';
 import type { Brand, User, SubscriptionPlan, FoodCategory, BrandAppearances } from '@/types';
 import { createOrUpdateBrand } from '@/app/superadmin/brands/actions';
+import { brandSlugError, brandSubdomainUrl, slugifyBrandName } from '@/lib/brand-subdomain';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { countries } from '@/lib/countries';
@@ -44,7 +45,7 @@ const brandSchema = z.object({
   // Step 2: Brand Info
   companyName: z.string().min(2, 'Company name is required.'),
   name: z.string().min(2, 'Brand name must be at least 2 characters.'),
-  slug: z.string().min(2, 'Brand slug is required.').regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/, 'Slug can only contain lowercase letters, numbers, and hyphens.'),
+  slug: z.string().trim().superRefine((value, ctx) => { const error = brandSlugError(value); if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error }); }),
   street: z.string().min(2, 'Street name is required.'),
   zipCode: z.string().min(2, 'PO Box / ZIP Code is required.'),
   city: z.string().min(2, 'City is required.'),
@@ -138,9 +139,8 @@ export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmi
     },
   });
 
-  const generateSlug = useCallback((name: string) => {
-    return name.toLowerCase().replace(/\s+/g, '-').replace(/[^\w-]+/g, '');
-  }, []);
+  const generateSlug = useCallback((name: string) => slugifyBrandName(name), []);
+  const [confirmSlugChange, setConfirmSlugChange] = useState(false);
   
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const debouncedSlugGeneration = useCallback(
@@ -201,6 +201,7 @@ export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmi
             }
         }
     }
+    if (confirmSlugChange) formData.append('confirmSlugChange', 'on');
     startTransition(async () => {
       clearSaveError();
       try {
@@ -287,6 +288,15 @@ export function BrandFormPage({ brand, users, plans, foodCategories, centralAdmi
                                                 <FormControl>
                                                     <Input placeholder="esmeralda-pizza" {...field} />
                                                 </FormControl>
+                                                {field.value && !brandSlugError(field.value) && (
+                                                    <p className="text-xs text-muted-foreground" data-testid="brand-subdomain-preview">Offentlig adresse: {brandSubdomainUrl(field.value)}</p>
+                                                )}
+                                                {brand?.slug && field.value !== brand.slug && (
+                                                    <label className="flex items-start gap-2 text-xs text-destructive">
+                                                        <input type="checkbox" checked={confirmSlugChange} onChange={event => setConfirmSlugChange(event.target.checked)} data-testid="confirm-slug-change" />
+                                                        <span>Jeg forstår, at {brandSubdomainUrl(brand.slug)} og /{brand.slug} holder op med at virke.</span>
+                                                    </label>
+                                                )}
                                                 <FormMessage />
                                                 </FormItem>
                                             )}

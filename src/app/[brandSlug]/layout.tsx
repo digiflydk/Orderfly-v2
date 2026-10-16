@@ -33,6 +33,17 @@ export default async function BrandLayout({
     notFound();
   }
 
+  // A suspended brand shows a neutral status page on its subdomain and on
+  // /{slug}, never its storefront, data or another brand (#12).
+  if (brand.status === 'suspended') {
+    return (
+      <main data-brand-status="suspended" className="mx-auto flex min-h-[60vh] max-w-md flex-col items-center justify-center gap-3 px-4 text-center">
+        <h1 className="text-2xl font-semibold">Siden er midlertidigt lukket</h1>
+        <p className="text-muted-foreground">Online bestilling er ikke tilgængelig lige nu. Prøv igen senere.</p>
+      </main>
+    );
+  }
+
   return (
     <AnalyticsProvider brand={brand}>
       <BrandTracking brand={brand} />

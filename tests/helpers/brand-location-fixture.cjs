@@ -21,11 +21,12 @@ function fixture(seed,allowed=true) {
     return {docs,size:docs.length,empty:docs.length===0};
    }};
  }
- const db={collection,doc:key=>ref(key),runTransaction:async fn=>{
-  const pending=[];const result=await fn({get:ref=>ref.get(),set:(ref,data)=>pending.push([ref,data])});
+ const batch=()=>{const ops=[];return {update:(r,data)=>ops.push(()=>r.update(data)),create:(r,data)=>ops.push(()=>r.set(data)),commit:async()=>{for(const op of ops)await op();}};};
+ const db={collection,doc:key=>ref(key),batch,runTransaction:async fn=>{
+  const pending=[];const result=await fn({get:ref=>ref.get(),set:(ref,data)=>pending.push([ref,data]),create:(ref,data)=>pending.push([ref,data])});
   for(const [ref,data] of pending)await ref.set(data);return result;
  }};
- const mocks={'server-only':{},'@/lib/access/native-catalog':{selectorCatalog:async()=>({superuser:true,brands:[],locations:[]})},'@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>({superuser:true})},'@/lib/firebase-admin':{getAdminDb:()=>db},
+ const mocks={'server-only':{},'@/lib/access/native-catalog':{selectorCatalog:async()=>({superuser:true,brands:[],locations:[]})},'@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>({superuser:true}),orderflySession:async()=>({actorId:'actor-1',superuser:true})},'@/lib/firebase-admin':{getAdminDb:()=>db,getAdminFieldValue:()=>({serverTimestamp:()=>'now'})},
   '@/lib/auth/permissions':{hasPermission:()=>allowed},'next/cache':{revalidatePath:(...args)=>invalidations.push(args),revalidateTag:()=>{}},
   'next/navigation':{redirect:path=>{const error=Error('redirect');error.digest='NEXT_REDIRECT;replace;'+path+';307;';throw error;}}};
  return {records,writes,invalidations,users:loadTs('src/app/superadmin/users/actions.ts',mocks),plans:loadTs('src/app/superadmin/subscriptions/actions.ts',mocks),roles:loadTs('src/app/superadmin/roles/actions.ts',mocks),brands:loadTs('src/app/superadmin/brands/actions.ts',mocks),locations:loadTs('src/app/superadmin/locations/actions.ts',mocks)};

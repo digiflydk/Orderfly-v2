@@ -6,6 +6,8 @@
 - **[esmeralda-invoice-attribution.md](esmeralda-invoice-attribution.md)** — Paid invoice snapshot, coordinated email contract, Esmeralda storefront scope and campaign/funnel tracking
 - **[omnisend-paid-orders-119.md](omnisend-paid-orders-119.md)** — Consent-gated native paid-order events, release checks and operations
 
+- **[brand-subdomains.md](brand-subdomains.md)** — Brand subdomains `{slug}.orderfly.dk`: slug rules, routing, one-time DNS/SSL setup and rollback
+
 - **development-workflow.md** — PM → PO → Work automated development, CI, code review, PO acceptance and live-verification gates
 - **deployment-flow.md** — Production merge/deployment, Firebase boundaries, live acceptance and rollback procedure
 - **FILE-MAP.md** — Source file locations and feature map  

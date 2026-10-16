@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getM3PizzaMenuHref } from '@/lib/m3pizza-order-flow';
+import { brandSlugFromHost, brandSubdomainRewrite } from '@/lib/brand-subdomain';
 
 const CANONICAL_HOST = 'orderfly.dk';
 const WWW_HOST = `www.${CANONICAL_HOST}`;
@@ -17,7 +18,9 @@ export function resolveProductionRedirect(url: URL, hostHeader: string | null, f
   const proto = normalizeProto(forwardedProto) || url.protocol.replace(':', '');
 
   const shouldRedirectToCanonicalHost = host === WWW_HOST;
-  const shouldRedirectToHttps = host === CANONICAL_HOST && proto === 'http';
+  // Brand subdomains (#12) are HTTPS-only like the apex domain.
+  const isBrandSubdomain = host.endsWith(`.${CANONICAL_HOST}`) && host !== WWW_HOST;
+  const shouldRedirectToHttps = (host === CANONICAL_HOST || isBrandSubdomain) && proto === 'http';
 
   if (!shouldRedirectToCanonicalHost && !shouldRedirectToHttps) {
     return null;
@@ -25,7 +28,7 @@ export function resolveProductionRedirect(url: URL, hostHeader: string | null, f
 
   const redirectUrl = new URL(url.toString());
   redirectUrl.protocol = 'https:';
-  redirectUrl.host = CANONICAL_HOST;
+  redirectUrl.host = shouldRedirectToCanonicalHost ? CANONICAL_HOST : host;
   return redirectUrl.toString();
 }
 
@@ -41,6 +44,18 @@ export function middleware(request: NextRequest) {
   }
 
   const pathname = request.nextUrl.pathname.replace(/\/$/, '') || '/';
+
+  // {slug}.orderfly.dk serves that brand's storefront (#12). The brand pages
+  // resolve the slug themselves: unknown brands 404, suspended ones show a
+  // status page, and no path can fall back to another brand.
+  const brandSlug = brandSlugFromHost(request.headers.get('x-forwarded-host') ?? request.headers.get('host'));
+  if (brandSlug) {
+    const target = brandSubdomainRewrite(pathname, brandSlug);
+    if (!target) return NextResponse.next();
+    const rewritten = request.nextUrl.clone();
+    rewritten.pathname = target;
+    return NextResponse.rewrite(rewritten);
+  }
 
   if (pathname === '/m3pizza/order') {
     const requestedMethod = request.nextUrl.searchParams.get('deliveryMethod');
