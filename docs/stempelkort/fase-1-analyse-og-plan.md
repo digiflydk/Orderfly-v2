@@ -38,6 +38,25 @@ Rettighedssystemet er **delt mellem de to repos**:
 - `orderfly.loyalty` (view/create/edit/delete) **findes allerede**. Den beskytter den interne kundescore på `/superadmin/loyalty` (se spørgsmål 1).
 - mPanel mangler et navn for `orderfly.games` og for handlingen `redeem` og viser i dag "Funktion · Handling". Det rettes samtidig.
 
+#### A1.1 Kodegennemgang af mPanel (esmeralda-restaurant-operations @ `51c6ced`)
+
+Kilden er `supabase/functions/mpanel-ui/browser.js`. Den genererede `index.ts` holdes byte-identisk via `scripts/generated-ui-parity.mjs` og `build-mpanel-ui.mjs`. Serveren er `supabase/functions/platform-admin/handler.ts`.
+
+- **Rettighedslisten kommer fra Orderfly.** Rolleeditoren viser `accessCatalog.permissions`, som er `PERMISSIONS` returneret af `executeAuthority({action:'list'})` (`authority.ts`). Nye rettigheder i `FEATURES` vises derfor automatisk i mPanel uden kodeændring der. Uden et navn i `featureNames` og en handlingslabel i `permissionName` vises de dog som "Funktion · Handling". Den lukkede label-liste kender kun `view`, `create`, `edit`, `delete` og `approve`.
+- **Moduler** (`accessModules`) er fem grupper: HR, Finance, Produktion, Orderfly (`prefix:'orderfly.'`, `initial:['orderfly.orders:view']`) og Bordbooking.
+  - `moduleOwns` afgør gruppen.
+  - Afkrydser man et modul, sættes `initial`-rettighederne. Fravælger man det, fjernes alle rollens rettigheder i modulet.
+  - Rettigheder, som intet modul ejer, vises under "Selvbetjening og øvrig administration".
+  - Modulnavnene vises også ved brugere (`memberModules`).
+- **Roller** gemmes med `{id, name, companyId, kind, permissions, active}` via `{action:'change', kind:'roles'}`. Det er Orderfly-autoriteten, der validerer delegationen: en admin kan ikke give flere rettigheder, end vedkommende selv har.
+- **Brugere** (memberships) tilknyttes via `enroll`. `platform-admin` kontrollerer først, at medarbejderen er aktiv i `employees.is_active` i en tilladt organisation.
+- **Session og inaktive medarbejdere:** Login i `timeclock-admin-auth` og sessionstjek i `native-session.ts` kræver `employees.is_active=true` og en ikke-tilbagekaldt, ikke-udløbet `employee_sessions`. `platform-admin` gentager tjekket af session, medarbejder og organisation ved hvert kald.
+- **Moduladgang i mPanel-forsiden** (`module_access`) gælder kun Opsfly-moduler. `centralNativePermissions` accepterer kun `opsfly.`/`platform.` med standardhandlinger, så nye `orderfly.*`-handlinger påvirker ikke Opsfly.
+- **Orderfly-genvej fra mPanel** (`orderfly_launch` → Orderfly `src/lib/access/mpanel-launch.ts`) vælger startside ud fra en fast liste. Her står `['orderfly.loyalty:view','/superadmin/loyalty']`. Den skal ændres til kundescorens nye rute, og stempelkort-ruterne skal tilføjes. Ellers kan en bruger med kun stempelkort-rettigheder ikke åbne Orderfly fra mPanel.
+- **Login i Orderfly** (`/api/admin/session`) kræver superuser eller mindst én `orderfly.*`-rettighed. Det dækker de nye rettigheder.
+- **Eksisterende tests**, som udvides: `tests/e2e/access-authority.spec.mjs`, `platform-admin.spec.mjs` og `module-access.spec.mjs` samt `tests/contracts/platform-admin.test.mjs`. Ændringen er R3 i Esmeralda (auth/permissions) og kræver issue, preflight-manifest og docs-opdatering (`docs/modules/platform-administration.md`, `platform-manifest.json`).
+- **De faktiske roller** ligger i Orderflys produktions-Firestore (`platformAdminControl/access-v1`) og kan kun ses i mPanel → Roller. De findes ikke i nogen af de to repos.
+
 ### A2. Medarbejderlogin fra timeloggen (Opsfly)
 
 - `/admin-login` med metoden "opsfly" (navn/e-mail og 6-cifret PIN) → `src/app/api/admin/session/route.ts` → `loginOpsfly()` (`src/lib/access/opsfly-login.ts`) → Esmeraldas `timeclock-admin-auth`, som er samme login som timeloggen.
@@ -117,7 +136,7 @@ Filerne er `src/app/merchant/layout.tsx`, `merchant/redeem/page.tsx`, `merchant/
 | 2 | Rettighedsnavne | Godkendt (se C3, dog med ét åbent forbehold om oversigtsrettigheden). |
 | 3 | Login-mail | Godkendt: ny skabelon `orderfly.loyalty.login_link` via parret PR i esmeralda-restaurant-operations. |
 | 4 | Kanaler | **Parameter pr. brand.** Ved kassen: dine-in og/eller takeaway. Orderfly-ordrer (senere automatik): afhentning og/eller levering. Mindst én kanal skal være valgt, når programmet er aktivt. Wolt, Uber Eats og andre tredjepartskanaler findes ikke som valgmulighed. |
-| 5 | QR-signering | Forklaret. Afventer valg mellem en ny hemmelighed eller tokens gemt i databasen (se åbne punkter). |
+| 5 | QR-token | **B:** tilfældigt token, gemt i databasen som hash, gyldigt i 60 sekunder og til engangsbrug. Der kræves ingen ny hemmelighed. |
 | a | Afdeling | Når kortet ikke gælder på tværs, er det bundet til afdelingen for det første stempel. |
 | b | Belønning | I fase 1 registreres indløsningen manuelt ved kassen. Typen gemmes til visning, rapporter og senere brug. |
 | c | Tenant-filter | Vises kun for platformens superusers. |
@@ -126,7 +145,6 @@ Filerne er `src/app/merchant/layout.tsx`, `merchant/redeem/page.tsx`, `merchant/
 
 ### Åbne punkter
 
-- **QR-token (5):** Skal tokenet signeres med en ny App Hosting-hemmelighed (`LOYALTY_TOKEN_SECRET`), eller skal der bruges et tilfældigt token, der gemmes i databasen? Den anden løsning kræver ingen ny hemmelighed.
 - **Oversigtsrettighed:** Rollerne er produktionsdata (`platformAdminControl/access-v1`). Work kan ikke læse dem fra repoet. Har eksisterende roller allerede `orderfly.loyalty:view` (kundescore), vil genbrug af den til stempelkortets oversigt give dem adgangen uden en aktiv beslutning. Anbefaling: en ny `orderfly.stamp_cards:overview` til oversigten. `orderfly.loyalty:*` forbliver kundescorens rettighed og er dermed uændret for eksisterende roller.
 
 ---
@@ -148,6 +166,7 @@ Alle dokumenter har `brandId` og `companyId` (snapshot til log og rapporter). Hv
 | `loyaltyEvents` | `sha256(brandId, scope, idempotencyKey)` | **Append-only hændelseslog** med alle felterne fra §10: type, antal, beløb, kanal, kilde (`counter_qr`/`counter_search`/`order`/`portal`/`admin`/`job`), medarbejder (`actorId` plus `actorName`-snapshot), årsag, idempotensnøgle, `requestHash` og `createdAt`. Samme nøgle med andet indhold giver 409. |
 | `loyaltyLoginTokens` | `sha256(token)` | `memberId`, `expiresAt` (15 minutter), `usedAt`. Engangsbrug sikres i en transaktion. |
 | `loyaltySessions` | `sha256(token)` | `memberId`, `epoch`, `expiresAt` (indstilling, 180 dage), `revokedAt`. HttpOnly-cookie med eget navn, ikke `__session`. |
+| `loyaltyQrTokens` | `sha256(token)` | `memberId`, `brandId`, `expiresAt` (60 sekunder), `usedAt`. Ved opslag i kassen markeres tokenet som brugt i samme transaktion. Et nyt token udsteder ikke et nyt, før det forrige er udløbet eller brugt. |
 | `loyaltyRateLimits` | `sha256(scope, key, vindue)` | Tæller efter mønstret fra `gamePlayLimits`. |
 
 - **Samtykke** genbruger `marketingConsents`, `marketingOutbox` og `marketingContacts`. `ConsentEvent.source` udvides med `'loyalty'`, og den versionerede tekst kommer fra `loyaltyPrograms`.
@@ -202,7 +221,7 @@ Mønstret følger repoet: zod-validering, `Cache-Control: no-store`, saniterede 
 - `POST /api/loyalty/login-link`: neutralt svar med rate limit pr. e-mail og IP.
 - `GET /api/loyalty/verify?token=`: tokenet bruges én gang og har 15 minutters levetid. Kaldet sætter sessionscookien og redirecter.
 - `GET /api/loyalty/me`: kort, belønninger, historik (uden medarbejdernavne) og samtykkestatus.
-- `GET /api/loyalty/qr`: et signeret token, der lever 60 sekunder (`v1.brandId.memberId.exp.nonce.HMAC`).
+- `GET /api/loyalty/qr`: et tilfældigt token på 256 bit, gemt som hash i `loyaltyQrTokens`, gyldigt i 60 sekunder og til engangsbrug.
 - `POST /api/loyalty/consent`: afmelding eller ny tilmelding til nyhedsbrevet. Synkroniseres til Omnisend (`unsubscribed` tilføjes i provideren).
 - `POST /api/loyalty/delete` og `POST /api/loyalty/logout`.
 
@@ -243,7 +262,8 @@ Loyalitet  (ny hovedgruppe i sidebaren, efter Promotions)
 ### C6. Migrationer og udrulning
 
 - **Ingen datamigration.** Der overføres ikke papirstempler. Programmet starter med `active:false`.
-- **Orderfly:** Firestore-indekser og App Hosting-hemmeligheden `LOYALTY_TOKEN_SECRET` (operatøropgave, se spørgsmål 5). Ingen ændring i reglerne.
+- **Orderfly:** Firestore-indekser. Ingen ny hemmelighed og ingen ændring i reglerne.
+- **Orderfly `mpanel-launch.ts`:** Kundescorens startside flyttes til `/superadmin/loyalty/score`, og `orderfly.stamp_cards:overview` → `/superadmin/loyalty` tilføjes.
 - **Esmeralda (parret PR):** labels og modulgruppe i mPanel, genbygget bundle samt skabelonen `orderfly.loyalty.login_link` (migration, enqueue-liste og template-kontrakt).
 - **Efter deploy (drift):** Føj de nye rettigheder til eksisterende eller nye roller i mPanel. Udfyld indstillingerne, og slå programmet til. Work skriver ikke i produktionsdata.
 
@@ -264,7 +284,7 @@ Loyalitet  (ny hovedgruppe i sidebaren, efter Promotions)
 | Samtykke krævet og logget med version; afmelding bevarer medlemskab; Omnisend begge veje | Tilmelding uden samtykke giver 400. Hændelse i `marketingConsents` med version. Afmelding sendes til Omnisend. Afmelding i Omnisend giver loghændelse |
 | Kundematch uden dublet | Eksisterende kunde, alias og samtidig tilmelding |
 | Login-link én gang og 15 minutter | Genbrug, udløb, rate limit og neutralt svar |
-| Udløbet eller ændret QR-token | Udløbet, forkert signatur, andet brand og et ældre screenshot afvises |
+| Udløbet eller ændret QR-token | Udløbet, ukendt, allerede brugt, andet brand og et ældre screenshot afvises |
 
 **Playwright** (opfanget netværk, ingen produktionsdata, desktop og 390 px): oversigt, indstillinger (validering, gem og genåbn), medlemmer (søg, sortér, CSV), log (filtre) og navigation efter rettighed. `access-navigation.cjs` udvides med de nye ruter.
 
