@@ -33,7 +33,7 @@ test('landing skips unusable grants and retains valid location, company and supe
   [{permissions:['orderfly.catalog:view','orderfly.website:view'],grants:{'orderfly.catalog:view':[]}},'/superadmin/brands/websites'],
   [{grants:{'orderfly.catalog:view':[{tenantId:'brand',locationIds:['location']}]}},'/superadmin/products'],
   [{permissions:['orderfly.feedback:view']},'/superadmin/feedback'],
-  [{permissions:['orderfly.loyalty:view'],brandExists:false},'/superadmin/loyalty'],
+  [{permissions:['orderfly.customer_score:view'],brandExists:false},'/superadmin/loyalty'],
   [{permissions:['orderfly.billing:view'],superuser:true},'/superadmin/sales/orders'],
  ]){
   const f=fixture(options),{code}=await f.service.issueLaunch(f.db,token,challenge);

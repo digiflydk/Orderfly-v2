@@ -1,6 +1,6 @@
 # Fase 1 – Stempelkort: analyse (trin 1) og plan (trin 2)
 
-Status: **Plan komplet efter ejerens svar 2026-10-16. Afventer endelig godkendelse før byg.** Der er ikke ændret applikationskode.
+Status: **Plan komplet efter ejerens svar 2026-10-16. Godkendt af ejeren 2026-10-16.** Der er ikke ændret applikationskode.
 Grundlag: `main` @ `f828c68` (Orderfly-v2) og `esmeralda-restaurant-operations` @ `51c6ced` (mPanel/Opsfly).
 Spec: [fase-1-stempelkort-backend.md](fase-1-stempelkort-backend.md). Fase 2 og 3 er kun læst for at sikre, at fase 1-API'erne dækker dem.
 
