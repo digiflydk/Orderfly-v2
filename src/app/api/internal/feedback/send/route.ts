@@ -4,6 +4,7 @@ import { runOrderNotificationWorker } from '@/lib/notifications/order-worker';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { runGameOutbox } from '@/lib/games/worker';
 import { runMarketingWorker } from '@/lib/marketing/worker';
+import { runLoyaltyExpiry } from '@/lib/loyalty/stamp-card/expiry';
 export const runtime = 'nodejs';
 export const maxDuration = 60;
 export async function POST(request: Request) {
@@ -15,8 +16,10 @@ export async function POST(request: Request) {
     return expected.length === actual.length && timingSafeEqual(expected, actual);
   })) return Response.json({ error: 'Unauthorized' }, { status: 401 });
   try {
-    const [feedback, orders, games, contacts] = await Promise.all([runFeedbackMailWorker(), runOrderNotificationWorker(), runGameOutbox(getAdminDb()), runMarketingWorker(getAdminDb())]);
-    return Response.json({ feedback, orders, games, contacts }, { headers: { 'Cache-Control': 'no-store' } });
+    // Stamp-card expiry is isolated: its failure must not fail the other workers in this heartbeat.
+    const [feedback, orders, games, contacts, loyalty] = await Promise.all([runFeedbackMailWorker(), runOrderNotificationWorker(), runGameOutbox(getAdminDb()), runMarketingWorker(getAdminDb()),
+      runLoyaltyExpiry(getAdminDb()).catch(() => ({ failed: true }))]);
+    return Response.json({ feedback, orders, games, contacts, loyalty }, { headers: { 'Cache-Control': 'no-store' } });
   }
   catch { return Response.json({ error: 'Feedback worker unavailable' }, { status: 503, headers: { 'Cache-Control': 'no-store' } }); }
 }
