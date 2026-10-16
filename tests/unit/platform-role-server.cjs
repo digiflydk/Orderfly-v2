@@ -18,7 +18,6 @@ test('all retired catalogue server writers reject before database access, includ
       if (flag === undefined) delete process.env.MPANEL_PLATFORM_ADMIN_ENABLED;
       else process.env.MPANEL_PLATFORM_ADMIN_ENABLED = flag;
       for (const [file, save, remove] of [
-        ['src/roles/actions.ts', 'createOrUpdateRole', 'deleteRole'],
         ['src/app/superadmin/roles/actions.ts', 'createOrUpdateRole', 'deleteRole'],
         ['src/app/superadmin/users/actions.ts', 'createOrUpdateUser', 'deleteUser'],
         ['src/app/superadmin/subscriptions/actions.ts', 'createOrUpdatePlan', 'deletePlan'],
@@ -40,7 +39,7 @@ test('legacy brand creation cannot create catalogue users while the bridge is of
   process.env.MPANEL_PLATFORM_ADMIN_ENABLED = 'false';
   try {
     const f = fixture([]);
-    const legacy = loadTs('src/brands/actions.ts', {
+    const legacy = loadTs('src/app/superadmin/brands/actions.ts', {
       'server-only': {}, 'next/cache': {}, 'next/navigation': {},
       '@/lib/firebase-admin': { getAdminDb: () => ({ collection: () => ({
         where: () => ({ get: async () => ({ empty: true, docs: [] }) }),
