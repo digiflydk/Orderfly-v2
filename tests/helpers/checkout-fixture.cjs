@@ -73,6 +73,8 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   '@/lib/order-id':{generateOrderId:()=> orderId},'@/lib/firebase':{db:{}},
   '@/lib/url':{getOrigin:async()=> origin},
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
+  // Stale-hold reconciliation has its own suite (stale-discount-holds-210); here it finds nothing.
+  '@/lib/server/stale-discount-holds':{reconcileStaleDiscountHolds:async()=>({inspected:0,released:0,settled:0})},
   '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b',slug:'brand',name:'Test brand',bagFee:4,adminFee:0,...brandOverrides})},
   '@/app/superadmin/locations/actions':{getLocationById:async()=>({id:'l',slug:'location',brandId:'b',city,name:'Test location',isActive:true,deliveryTypes:['pickup','delivery'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'12:00',close:'22:00'}])),...locationOverrides})},
   '@/lib/server/checkout-discounts':{

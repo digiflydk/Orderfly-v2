@@ -1,6 +1,8 @@
 
 import { getDiscounts } from './actions';
 import { getBrands } from '@/app/superadmin/brands/actions';
+import { getAllLocations } from '@/app/superadmin/locations/actions';
+import { promotionEligibilityIssues } from '@/lib/promotion-eligibility';
 import { DiscountsClientPage } from './client-page';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
@@ -11,15 +13,18 @@ async function DiscountsPageContent() {
     const result = await loadSuperadminPage('orderfly.discounts:view', () => Promise.all([
         getDiscounts(),
         getBrands(),
+        getAllLocations(),
     ]));
     if (!result) return <AccessDeniedPage />;
-    const [discounts, brands] = result;
+    const [discounts, brands, locations] = result;
+    const now = new Date();
 
     const brandMap = new Map(brands.map(b => [b.id, b.name]));
 
     const discountsWithDetails = discounts.map(discount => ({
         ...discount,
         brandName: brandMap.get(discount.brandId) || 'Unknown Brand',
+        eligibilityIssues: promotionEligibilityIssues(discount, locations, now),
     }));
 
     return (

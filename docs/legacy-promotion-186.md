@@ -59,3 +59,18 @@ Check Sales & Orders, Newsletter & Omnisend, Loyalty and Esmeralda Amager
 checkout as regressions. A signed-out visit must go to login. If access to an
 authenticated session is unavailable, leave the issue open and report the
 live-positive-path verification as pending.
+
+## Configured Active versus currently valid (#206)
+
+The Discounts and Standard Discounts lists keep the configured Active switch,
+and under it show "Gælder ikke nu" with the reason when an active rule cannot
+apply at checkout right now: only deleted or foreign locations are selected
+("Ingen nuværende butik valgt"), the end date has passed ("Udløbet"), or the
+start date is in the future ("Ikke startet endnu"). Checkout requires the
+customer's location to be listed, so a rule with no location is also flagged.
+The check
+(`src/lib/promotion-eligibility.ts`) is display-only and mirrors checkout's
+exact-instant date comparison. It changes no record: orphaned locations are not
+reassigned and dates are not extended. Which legacy rules to reassign, end or
+delete remains a business decision recorded on #206. Regression:
+`node --test tests/unit/promotion-qa-206-219.cjs`.
