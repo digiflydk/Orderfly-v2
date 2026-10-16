@@ -12,7 +12,7 @@
 | Financial updates | `src/lib/server/settle-checkout.ts` | Paid checkout transaction updates stored counters and latest order date. |
 | Scores and feedback | `src/lib/loyalty/model.ts`, `src/lib/feedback/customer-history.ts` | Recalculate scores from paid orders; feedback detail is permission-gated. |
 
-`src/customers/*` is a legacy copy outside the active App Router tree. The
+The former legacy copy in `src/customers/*` has been removed. The
 `/superadmin/website/customers` page edits website logo entries in general
 settings and does not read the restaurant customer collection.
 

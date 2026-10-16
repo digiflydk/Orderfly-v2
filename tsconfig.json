@@ -26,9 +26,7 @@
   "exclude": [
 	  "node_modules",
 	  "design",
-	  "usr",
 	  "workspace",
-	  "src/workspace",
 	  "src/legacy",
 	  "tests",
 	  "supabase/functions"

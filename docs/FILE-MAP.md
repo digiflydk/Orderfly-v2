@@ -1,5 +1,7 @@
 # File Map (nuværende placeringer — opdater løbende ved ændringer)
 
+All routes live under `src/app`. Shared code lives in `src/lib`, `src/components`, `src/context`, `src/hooks` and `src/types`. The former unreferenced copies outside `src/app` (for example `src/products`, `src/feedback`, `src/[brandSlug]`) and the stale `usr/` snapshot were removed; do not recreate route files outside `src/app`.
+
 ## Customer Webshop (Frontend)
 - **Brand Homepage (Location List):** `src/app/[brandSlug]/page.tsx`
 - **Menu Page (Server):** `src/app/[brandSlug]/[locationSlug]/page.tsx`
