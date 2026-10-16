@@ -8,7 +8,7 @@ async function fixture() {
   const session = { status: 'open', payment_status: 'unpaid', metadata: { orderId: 'ORD-ONE', brandId: 'b', locationId: 'l' } };
   const snapshot = ref => ({ exists: () => data.has(ref), data: () => data.get(ref) });
   const sdk = {
-    doc: (_, collection, id) => `${collection}/${id}`, getDoc: async ref => snapshot(ref),
+    doc: (_, collection, id) => `${collection}/${id}`, getDoc: async ref => snapshot(ref), serverTimestamp: () => 'server-time',
     runTransaction: async (_, callback) => callback({ get: async ref => snapshot(ref), set: (ref, value) => data.set(ref, value), update: (ref, value) => data.set(ref, { ...data.get(ref), ...value }) }),
   };
   const mocks = { '@/lib/firebase': { db: {} }, 'firebase/firestore': sdk };

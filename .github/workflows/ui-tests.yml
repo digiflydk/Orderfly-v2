@@ -75,6 +75,9 @@ jobs:
       - name: Omnisend contact import and consent regression
         run: node --test tests/unit/omnisend-contact-import.cjs tests/unit/omnisend-193.cjs tests/unit/customer-manual-sync.cjs tests/unit/orderfly-booking-sync.cjs
 
+      - name: Stripe payment lifecycle regression (#189)
+        run: node --test tests/unit/stripe-lifecycle-189.cjs tests/unit/cart-cancel.cjs tests/unit/payment-display.cjs tests/unit/takeaway-qa-regressions.cjs
+
       - name: Install Chromium for brand-owner regression
         run: npx playwright install --with-deps chromium
 
