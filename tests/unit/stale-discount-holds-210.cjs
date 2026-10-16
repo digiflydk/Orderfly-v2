@@ -40,7 +40,7 @@ test('#210 a Stripe-verified expired session releases its old hold before checko
   const f = fixture({ 'ORD-374737': heldOrder() }, { cs_old: { id: 'cs_old', status: 'expired', payment_status: 'unpaid', metadata: meta } });
   assert.deepEqual(await f.run(), { inspected: 1, released: 1, settled: 0 });
   assert.deepEqual(f.calls.released, [['ORD-374737', 'esmeralda', 'cs_old', 'amager']]);
-  assert.deepEqual(f.calls.filters.map(([field]) => field), ['brandId', 'appliedDiscountId', 'discountReservation']);
+  assert.deepEqual(f.calls.filters.map(([field]) => field), ['brandId', 'appliedDiscountId', 'discountReservation', 'paymentMethod']);
 });
 
 test('#210 a paid session whose webhook was missed is settled, not released', async () => {
@@ -53,7 +53,7 @@ test('#210 open, young, pickup, foreign-scope and unreachable sessions keep thei
   const f = fixture({
     'ORD-OPEN': heldOrder({ psp: { checkoutSessionId: 'cs_open' } }),
     'ORD-YOUNG': heldOrder({ psp: { checkoutSessionId: 'cs_young' }, createdAt: at(20) }),
-    'ORD-PICKUP': heldOrder({ paymentMethod: 'PayAtPickup', psp: undefined }),
+    'ORD-PICKUP': heldOrder({ paymentMethod: 'PayAtPickup', psp: { checkoutSessionId: 'cs_pickup' } }),
     'ORD-FOREIGN': heldOrder({ psp: { checkoutSessionId: 'cs_foreign' } }),
     'ORD-DOWN': heldOrder({ psp: { checkoutSessionId: 'cs_down' } }),
     'ORD-NOSESSION': heldOrder({ psp: { provider: 'stripe' } }),
@@ -73,4 +73,22 @@ test('#210 no Stripe key or a failing order query leaves every hold untouched', 
   const { calls } = f;
   assert.deepEqual(await reconcileStaleDiscountHolds('esmeralda', 'O2', { db: { collection: () => ({ where() { return this; }, limit() { return this; }, get: async () => { throw Error('index'); } }) }, now: () => NOW }), { inspected: 0, released: 0, settled: 0 });
   assert.deepEqual(calls.released, []);
+});
+
+test('#210 an unresponsive Stripe is bounded by the reconciliation budget', async () => {
+  let clock = NOW;
+  const orders = Object.fromEntries(Array.from({ length: 5 }, (_, i) => [`ORD-${i}`, heldOrder({ psp: { checkoutSessionId: `cs_${i}` } })]));
+  const f = fixture(orders, {});
+  const retrieved = [];
+  const result = await reconcileStaleDiscountHolds('esmeralda', 'O2', {
+    db: { collection: () => ({ where() { return this; }, limit() { return this; },
+      get: async () => ({ docs: Object.entries(orders).map(([id, o]) => ({ id, data: () => o })) }) }) },
+    now: () => clock, stripeKey: async () => 'sk_test',
+    stripe: () => ({ checkout: { sessions: { retrieve: async id => { retrieved.push(id); clock += 4000; throw Error('timeout'); } } } }),
+    release: async () => assert.fail('must not release'), settle: async () => assert.fail('must not settle'),
+  });
+  // Each simulated call consumes 4 s of the 6 s budget: two calls, then stop.
+  assert.equal(retrieved.length, 2);
+  assert.deepEqual(result, { inspected: 2, released: 0, settled: 0 });
+  assert.equal(f.calls.released.length, 0);
 });

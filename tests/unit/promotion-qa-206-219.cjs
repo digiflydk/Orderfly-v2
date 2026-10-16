@@ -19,9 +19,11 @@ test('#206 an Active rule scoped only to a deleted location is flagged as not cu
   assert.deepEqual(promotionEligibilityIssues({ brandId: 'esmeralda', locationIds: ['other-brand-loc'] }, locations, now), ['no_current_location']);
 });
 
-test('#206 rules with a current location, all locations or future dates are reported precisely', () => {
+test('#206 rules with a current location, no location or future dates are reported precisely', () => {
   assert.deepEqual(promotionEligibilityIssues({ brandId: 'esmeralda', locationIds: ['AkGaLAwyJfJ1KR12Dd79', 'amager'] }, locations, now), []);
-  assert.deepEqual(promotionEligibilityIssues({ brandId: 'esmeralda', locationIds: [] }, locations, now), []);
+  // Checkout requires locationIds to include the location: an empty or missing scope is valid nowhere.
+  assert.deepEqual(promotionEligibilityIssues({ brandId: 'esmeralda', locationIds: [] }, locations, now), ['no_current_location']);
+  assert.deepEqual(promotionEligibilityIssues({ brandId: 'esmeralda' }, locations, now), ['no_current_location']);
   assert.deepEqual(promotionEligibilityIssues({ brandId: 'esmeralda', locationIds: ['amager'], startDate: new Date('2026-10-24T00:00:00Z') }, locations, now), ['not_started']);
   assert.deepEqual(promotionEligibilityIssues({ brandId: 'esmeralda', locationIds: ['amager'], endDate: 'not a date' }, locations, now), []);
 });

@@ -9,6 +9,11 @@ import { settlePaidCheckoutSession } from '@/lib/server/settle-checkout';
 // can still be paid, so it is never inspected here.
 const SESSION_LIFETIME_MS = 31 * 60 * 1000;
 const MAX_INSPECTED_HOLDS = 10;
+// Reconciliation runs inside a customer's checkout, including pay-at-pickup.
+// Bound each Stripe call and the whole pass so an unresponsive Stripe only
+// skips reconciliation instead of stalling the order.
+const STRIPE_TIMEOUT_MS = 3000;
+const TOTAL_BUDGET_MS = 6000;
 
 type Dependencies = {
   db?: FirebaseFirestore.Firestore;
@@ -46,19 +51,22 @@ async function reconcile(brandId: string, discountId: string, deps: Dependencies
       .where('brandId', '==', brandId)
       .where('appliedDiscountId', '==', discountId)
       .where('discountReservation', '==', 'held')
+      .where('paymentMethod', '==', 'Stripe')
       .limit(50).get();
   } catch { return result; }
   const candidates = held.docs.filter(doc => {
     const order = doc.data();
     const created = createdAtMs(order.createdAt);
-    return order.paymentMethod !== 'PayAtPickup' && typeof order.psp?.checkoutSessionId === 'string' &&
+    return order.paymentMethod === 'Stripe' && typeof order.psp?.checkoutSessionId === 'string' &&
       order.paymentStatus !== 'Paid' && created !== null && now - created > SESSION_LIFETIME_MS;
   }).slice(0, MAX_INSPECTED_HOLDS);
   if (!candidates.length) return result;
   const key = await (deps.stripeKey ?? getActiveStripeSecretKey)().catch(() => null);
   if (!key) return result;
-  const stripe = (deps.stripe ?? (k => new Stripe(k)))(key);
+  const stripe = (deps.stripe ?? (k => new Stripe(k, { timeout: STRIPE_TIMEOUT_MS, maxNetworkRetries: 0 })))(key);
+  const deadline = now + TOTAL_BUDGET_MS;
   for (const doc of candidates) {
+    if ((deps.now ?? Date.now)() >= deadline) break;
     const order = doc.data();
     result.inspected++;
     try {
