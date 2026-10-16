@@ -92,3 +92,12 @@ This ensures that even if a user bypasses client-side UI restrictions, the serve
 ## Related Code
 - Permission utility: `src/lib/permissions.ts`
 - Guard usage: called at the start of every write Server Action (e.g., `src/app/superadmin/products/actions.ts`)
+---
+
+## Stripe secrets are write-only (#57)
+
+`platform_settings/payment_gateway` holds the Stripe keys. Only server modules read the secret and webhook keys (`src/lib/server/payment-settings.ts`, `server-only`). The Superadmin settings page receives a redacted view (`src/lib/payment-gateway-secrets.ts`): publishable keys plus `secretKeySet` / `webhookSecretSet` flags, never the secret values. The secret fields are empty and show "Gemt – udfyld kun for at erstatte" when a value is stored. Saving with an empty secret field keeps the stored secret, and only a newly typed value replaces it. Firestore rules deny all direct client access, so the document is reachable only through these authorized server paths.
+
+Because earlier releases sent the secret values to the Superadmin browser, rotate the Stripe secret and webhook keys after this release is deployed, then enter the new values once in Superadmin.
+
+Regression: `node --test tests/unit/settings-access.cjs`.
