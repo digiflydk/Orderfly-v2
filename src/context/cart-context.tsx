@@ -348,6 +348,14 @@ export function CartProvider({ children }: { children: ReactNode }) {
     setAppliedDiscount(discount);
   }, []);
 
+  // A different slot is a different order: drop any earlier hosted-checkout
+  // reference first, as item, bag and order-type changes already do.
+  const chooseSelectedTime = useCallback((time: string) => {
+    if (current.current.selectedTime === time) return;
+    checkoutOrderId.current = undefined;
+    setSelectedTime(time);
+  }, []);
+
   const removeDiscount = useCallback(() => {
     setAppliedDiscount(null);
   }, []);
@@ -362,7 +370,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
     location,
     deliveryType,
     selectedTime,
-    setSelectedTime,
+    setSelectedTime: chooseSelectedTime,
     deliveryFee,
     bagFee,
     adminFee,

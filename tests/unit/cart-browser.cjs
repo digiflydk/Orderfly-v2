@@ -26,7 +26,7 @@ function Flow() {
       window.receiptProcessed = true;
     }
   }, [cart.completeCheckout]);
-  const output = {ready:cart.cartReady,items:cart.cartItems,total:cart.checkoutTotal,deliveryType:cart.deliveryType,includeBagFee:cart.includeBagFee,brandId:cart.brand?.id};
+  const output = {ready:cart.cartReady,items:cart.cartItems,total:cart.checkoutTotal,deliveryType:cart.deliveryType,includeBagFee:cart.includeBagFee,brandId:cart.brand?.id,selectedTime:cart.selectedTime};
   return React.createElement('div',null,
     React.createElement('pre',{id:'state'},JSON.stringify(output)),
     React.createElement('button',{id:'edit-line',onClick:()=>cart.addToCart(product,2,[{id:'t',name:'Cheese',price:10}],75,75,cart.cartItems[0])},'Edit line'),
@@ -42,6 +42,7 @@ function Flow() {
     React.createElement('button',{id:'delivery',onClick:()=>cart.setDeliveryType('delivery')},'Delivery'),
     React.createElement('button',{id:'with-bag',onClick:()=>cart.toggleBagFee(true)},'Include bag'),
     React.createElement('button',{id:'without-bag',onClick:()=>cart.toggleBagFee(false)},'No bag'),
+    React.createElement('button',{id:'choose-slot',onClick:()=>{const d=new Date(Date.now()+86400000);d.setUTCSeconds(0,0);cart.setSelectedTime(d.toISOString());}},'Choose slot'),
     React.createElement('button',{id:'pay',onClick:()=>{cart.saveCartForCheckout(params.get('order') || 'ORD-ONE');window.location.assign('/stripe');}},'Pay'),
     React.createElement('a',{href:'/checkout',id:'return'},'Return to Checkout')
   );
@@ -216,6 +217,33 @@ test('changed fulfillment or bag choice survives an old paid confirmation in ano
   });
 });
 
+
+test('#187 a chosen slot survives reload and invalidates an old paid confirmation in another tab', async t => {
+  const paymentTab = await setup(t, '/?deliveryMethod=pickup');
+  await paymentTab.click('#pizza'); await count(paymentTab, 1);
+  await paymentTab.click('#pay'); await paymentTab.waitForURL('**/stripe');
+  assert.equal((await saved(paymentTab)).checkoutOrderId, 'ORD-ONE');
+
+  const cartTab = await paymentTab.context().newPage();
+  await cartTab.goto(origin + '/checkout'); await ready(cartTab);
+  await cartTab.click('#choose-slot');
+  const slot = (await state(cartTab)).selectedTime;
+  assert.match(slot, /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:00\.000Z$/);
+  await cartTab.waitForFunction(value => JSON.parse(localStorage.getItem('orderfly.cart.v1') || '{}').selectedTime === value, slot);
+
+  // Paying the older session must not clear the basket whose slot changed.
+  await paymentTab.goto(origin + '/checkout/confirmation?order=ORD-ONE&status=Paid');
+  await paymentTab.waitForFunction(() => window.receiptProcessed === true);
+  const modified = await saved(paymentTab);
+  assert.ok(modified, 'The old payment must not delete the basket with a new slot');
+  assert.equal(modified.checkoutOrderId, undefined);
+  assert.equal(modified.selectedTime, slot);
+
+  await cartTab.reload(); await ready(cartTab); await count(cartTab, 1);
+  assert.equal((await state(cartTab)).selectedTime, slot);
+  await cartTab.click('#delivery'); await ready(cartTab);
+  assert.equal((await state(cartTab)).selectedTime, 'asap');
+});
 
 test('cart restoration uses a spinner without loading copy and still waits for current prices', async t => {
   const page = await setup(t); await page.click('#pizza'); await count(page, 1);
