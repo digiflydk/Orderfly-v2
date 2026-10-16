@@ -31,12 +31,13 @@ import {
 import { deleteStandardDiscount, updateStandardDiscountStatus, type StandardDiscountActionResult } from './actions';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
+import { promotionEligibilityText, type PromotionEligibilityIssue } from '@/lib/promotion-eligibility';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
 
 
-type DiscountWithDetails = StandardDiscount & { brandName: string };
+type DiscountWithDetails = StandardDiscount & { brandName: string; eligibilityIssues: PromotionEligibilityIssue[] };
 
 interface StandardDiscountsClientPageProps {
     initialDiscounts: DiscountWithDetails[];
@@ -205,6 +206,11 @@ export function StandardDiscountsClientPage({ initialDiscounts, brands, location
                         onCheckedChange={() => handleToggleActive(d.id, d.isActive)}
                         aria-label="Toggle discount status"
                      />
+                     {d.isActive && d.eligibilityIssues.length > 0 && (
+                       <p className="mt-1 text-xs text-destructive" data-testid="promotion-eligibility-warning">
+                         Gælder ikke nu: {d.eligibilityIssues.map(issue => promotionEligibilityText[issue]).join(', ')}
+                       </p>
+                     )}
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>

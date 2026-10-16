@@ -26,12 +26,13 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { deleteDiscount } from './actions';
+import { promotionEligibilityText, type PromotionEligibilityIssue } from '@/lib/promotion-eligibility';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
-type DiscountWithDetails = Discount & { brandName: string };
+type DiscountWithDetails = Discount & { brandName: string; eligibilityIssues: PromotionEligibilityIssue[] };
 
 interface DiscountsClientPageProps {
     initialDiscounts: DiscountWithDetails[];
@@ -170,6 +171,11 @@ export function DiscountsClientPage({ initialDiscounts, brands }: DiscountsClien
                     <Badge variant={d.isActive ? 'default' : 'secondary'}>
                       {d.isActive ? 'Active' : 'Inactive'}
                     </Badge>
+                    {d.isActive && d.eligibilityIssues.length > 0 && (
+                      <p className="mt-1 text-xs text-destructive" data-testid="promotion-eligibility-warning">
+                        Gælder ikke nu: {d.eligibilityIssues.map(issue => promotionEligibilityText[issue]).join(', ')}
+                      </p>
+                    )}
                   </TableCell>
                   <TableCell className="text-right">
                     <DropdownMenu>

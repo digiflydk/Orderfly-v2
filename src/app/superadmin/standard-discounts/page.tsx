@@ -4,6 +4,7 @@ import { upsellClientData } from '@/lib/upsell-serialization';
 import { getBrands } from '@/app/superadmin/brands/actions';
 import { StandardDiscountsClientPage } from './client-page';
 import { getAllLocations } from '../locations/actions';
+import { promotionEligibilityIssues } from '@/lib/promotion-eligibility';
 import { isAdminReady } from '@/lib/runtime';
 import EmptyState from '@/components/ui/empty-state';
 import { loadSuperadminPage } from '@/lib/access/superadmin-page';
@@ -19,10 +20,12 @@ async function StandardDiscountsPageContent() {
     const [discounts, brands, locations] = result;
 
     const brandMap = new Map(brands.map(b => [b.id, b.name]));
+    const now = new Date();
 
     const discountsWithDetails = discounts.map(discount => ({
         ...discount,
         brandName: brandMap.get(discount.brandId) || 'Unknown Brand',
+        eligibilityIssues: promotionEligibilityIssues(discount, locations, now),
     }));
 
     return (

@@ -22,6 +22,7 @@ import { normalizePhone } from '@/lib/integrations/esmeralda-customer-contract';
 import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
 import { newsletterEligible, newsletterAllowsStacking, cartLineEligible, assignedCustomerMatches, restaurantClock, discountMinimumError } from '@/lib/promotion-rules';
 import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
+import { reconcileStaleDiscountHolds } from '@/lib/server/stale-discount-holds';
 import { createHash, randomBytes } from 'node:crypto';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
@@ -605,6 +606,14 @@ export async function createStripeCheckoutSessionAction(
       stage = 'newsletter_consent';
       await recordNewsletterConsent(getAdminDb(),{brandId:brand.id,brandName:brand.name,locationId:location.id,customerId,email:customerInfo.email,
         submissionId:customerInfo.newsletterConsentId,version:customerInfo.newsletterConsentVersion});
+    }
+
+    // A missed Stripe expiry webhook must not keep a limited code blocked (#210).
+    // Reconcile before the order exists, so a still-full code is rejected
+    // without leaving a canceled order behind.
+    if (appliedDiscountIdForOrder) {
+      stage = 'reservation_reconcile';
+      await reconcileStaleDiscountHolds(brandId, appliedDiscountIdForOrder);
     }
 
     // Step 1: Pre-create order with 'Pending' status
