@@ -7,7 +7,7 @@ function fixture() {
   const rows = new Map([['orders/ORD-NEW',{brandId:'esmeralda',locationId:'amager',status:'Pending',paymentStatus:'Pending',discountReservation:'none',totalAmount:79,psp:{checkoutSessionId:'cs_test_new'}}]]);
   const doc=(_,collection,id)=>`${collection}/${id}`;
   const db={};
-  const firestore={db,doc,runTransaction:async(_,callback)=>{
+  const firestore={db,doc,serverTimestamp:()=>'server-time',runTransaction:async(_,callback)=>{
     const draft=new Map([...rows].map(([key,value])=>[key,structuredClone(value)]));
     const tx={get:async ref=>({exists:()=>draft.has(ref),data:()=>draft.get(ref)}),set:(ref,value)=>draft.set(ref,value),update:(ref,value)=>draft.set(ref,{...draft.get(ref),...value})};
     const result=await callback(tx); rows.clear();for(const [key,value] of draft)rows.set(key,value);return result;
@@ -56,14 +56,15 @@ test('#189 expired session respects location/session scope and leaves paid order
 test('#189 superadmin cannot cancel or prepare an unpaid Stripe session by changing status',async()=>{
   const f=fixture(),db={collection:()=>({doc:()=>({get:async()=>({exists:true,data:()=>f.rows.get('orders/ORD-NEW')})})}),runTransaction:async callback=>callback({get:async()=>({data:()=>f.rows.get('orders/ORD-NEW')}),update:()=>{throw Error('must not update')}})};
   const api=loadTs('src/app/superadmin/sales/orders/actions.ts',{
-    '@/lib/access/scoped-data':{authorizeTransaction:async()=>{throw Error('Unpaid Stripe cannot enter merchant authorization');}},
-    '@/lib/firebase-admin':{getAdminDb:()=>db},
-    '@/lib/access/orderfly-session':{requireOrderflyAccess:async()=>{}},
+    // A fully authorized operator: the payment-state guard, not authorization, must reject.
+    '@/lib/access/scoped-data':{authorizeTransaction:async()=>{}},
+    '@/lib/firebase-admin':{getAdminDb:()=>db,getAdminFieldValue:()=>({serverTimestamp:()=>'server-time'})},
+    '@/lib/access/orderfly-session':{requireOrderflyAccess:async()=>({identity:{provider:'firebase',subject:'operator'}})},
     '@/lib/feedback/mail-queue':{queueOrderFeedback:async()=>{}},
     'next/cache':{revalidatePath:()=>{}},
   });
   for(const status of ['Received','In Progress','Canceled','Error']) {
-    const result=await api.updateOrderStatus('ORD-NEW',status);
+    const result=await api.updateOrderStatus('ORD-NEW',status,'Customer abandoned checkout');
     assert.equal(result.success,false);
     assert.match(result.message,/verified payment or Stripe cancellation/);
   }

@@ -19,7 +19,13 @@ events return without reissuing them.
 
 Run `node --test tests/unit/stripe-lifecycle-189.cjs
 tests/unit/takeaway-qa-regressions.cjs tests/unit/admin-sales-filters.cjs`
-and `npm run typecheck`. The tests cover pending completion, failed asynchronous
+and `npm run typecheck`. Orderfly CI runs `stripe-lifecycle-189`, `cart-cancel`,
+`payment-display` and `takeaway-qa-regressions` in the "Stripe payment lifecycle
+regression (#189)" step, so the unpaid, canceled and expired paths cannot
+silently drift again. Their Firestore and operator mocks must follow the
+production modules (for example `serverTimestamp` for `canceledAt`, and a fully
+authorized operator so that the payment-state guard, not authorization, is what
+rejects an unpaid status change). The tests cover pending completion, failed asynchronous
 payment, replay, expiration scope, admin rejection and paid sale projection. An
 approved sandbox preview with Stripe/Firebase access is still required to open
 and cancel or expire a new hosted checkout, then compare customer, Superadmin
