@@ -5,6 +5,7 @@ import { z } from 'zod';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { authorize, policySchema } from '@/lib/access/policy';
 import { principalKey, type VerifiedIdentity } from '@/lib/access/authority';
+import { consumeLimit, RateLimited } from './limits';
 import { applyStamps, canRedeem, cardExpiresAt, COUNTER_CHANNELS, evaluatePurchase, removeStamps, rewardExpiresAt, stampLocation } from './rules';
 import {
   cardIsExpired, COLLECTIONS, copenhagenDay, hashKey, maskEmail, memberIdentityKey, newCard, readProgram,
@@ -95,16 +96,22 @@ function cardView(entry: { card: CardDoc } | null, program: ReturnType<typeof re
 
 // A minute bucket per actor limits enumeration of customers by e-mail or token.
 async function consumeLookupLimit(tx: Transaction, db: Firestore, principalId: string, now: number) {
-  const ref = db.collection(COLLECTIONS.rateLimits).doc(hashKey('lookup', principalId, String(Math.floor(now / 60_000))));
-  const count = Number((await tx.get(ref)).data()?.count || 0);
-  if (count >= LOOKUPS_PER_MINUTE) throw new LoyaltyError('rate_limited', 429);
-  return () => tx.set(ref, { scope: 'lookup', count: count + 1, expiresAt: now + 120_000 });
+  try { return await consumeLimit(tx, db, 'lookup', principalId, LOOKUPS_PER_MINUTE, 60_000, now); }
+  catch (error) { if (error instanceof RateLimited) throw new LoyaltyError('rate_limited', 429); throw error; }
 }
 
 export async function lookupMember(db: Firestore, actor: CounterActor, input: z.infer<typeof lookupSchema>, now: number) {
-  return db.runTransaction(async tx => {
+  const outcome = await db.runTransaction(async tx => {
     const { principalId, can } = await authorizeAt(db, tx, actor, input.brandId, input.locationId, PERMISSION.counter);
     const recordLookup = await consumeLookupLimit(tx, db, principalId, now);
+    // A miss counts against the limit as well, so staff cannot enumerate e-mails or tokens.
+    try { return { view: await resolveLookup(tx, principalId, can, recordLookup) }; }
+    catch (error) { if (error instanceof LoyaltyError) { recordLookup(); return { error }; } throw error; }
+  });
+  if ('error' in outcome) throw outcome.error;
+  return outcome.view;
+
+  async function resolveLookup(tx: Transaction, principalId: string, can: (p: string) => boolean, recordLookup: () => void) {
     let memberId: string, via: 'qr' | 'search', consumeToken: (() => void) | null = null;
     if ('qrToken' in input) {
       const ref = db.collection(COLLECTIONS.qrTokens).doc(hashKey('qr', input.qrToken));
@@ -135,7 +142,7 @@ export async function lookupMember(db: Firestore, actor: CounterActor, input: z.
       program: { active: s.active, name: s.name, counterChannels: s.counterChannels, minimumAmountOre: s.minimumAmountOre, discountedOrdersQualify: s.discountedOrdersQualify },
       permissions: { redeem: can(PERMISSION.redeem), correct: can(PERMISSION.correct) },
     };
-  });
+  }
 }
 
 type StampOutcome = { stamps: number; stampsRequired: number; rewardsEarned: number; cardId: string };

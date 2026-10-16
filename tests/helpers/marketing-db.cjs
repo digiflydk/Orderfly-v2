@@ -24,6 +24,7 @@ exports.memoryDb=(rows=new Map())=>{
   const changes=[];try{const result=await fn({get:r=>r.get(),create:(r,data)=>{if(rows.has(r.path))throw Error('Exists');changes.push(()=>rows.set(r.path,structuredClone(data)));},
     set:(r,data,opts)=>changes.push(()=>rows.set(r.path,opts?.merge?{...rows.get(r.path),...structuredClone(data)}:structuredClone(data))),
     update:(r,data)=>changes.push(()=>rows.set(r.path,{...rows.get(r.path),...structuredClone(data)})),
+    delete:r=>changes.push(()=>rows.delete(r.path)),
    });changes.forEach(apply=>apply());return result;}finally{unlock();}
  }};
 };

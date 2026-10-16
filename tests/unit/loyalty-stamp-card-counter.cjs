@@ -153,6 +153,12 @@ test('lookup by QR token is single use, brand bound and expires; e-mail lookup m
   assert.equal((await lookup({email:'anna@example.com'},'manager')).permissions.correct,true);
 });
 
+test('failed lookups count against the limit, so e-mails cannot be enumerated',async()=>{
+  setup();
+  for(let i=0;i<60;i++)await rejects(counter.lookupMember(db,actor('cashier'),{brandId:'brand',locationId:'l1',email:`guess${i}@example.com`},NOW),'member_not_found');
+  await rejects(counter.lookupMember(db,actor('cashier'),{brandId:'brand',locationId:'l1',email:'anna@example.com'},NOW),'rate_limited');
+});
+
 test('lookups are rate limited per employee',async()=>{
   setup();
   for(let i=0;i<60;i++)await counter.lookupMember(db,actor('cashier'),{brandId:'brand',locationId:'l1',email:'anna@example.com'},NOW);

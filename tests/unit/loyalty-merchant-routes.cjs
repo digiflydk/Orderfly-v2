@@ -45,15 +45,15 @@ test('invalid bodies are 400; business rejections keep their code; unknown failu
   assert.equal(failure.status,503);assert.doesNotMatch(JSON.stringify(failure.body),/secret/);
 });
 
-test('the worker heartbeat runs stamp-card expiry and isolates its failure from the other workers',async()=>{
+test('the worker heartbeat runs stamp-card work and isolates its failure from the other workers',async()=>{
   const previous=process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;process.env.ORDERFLY_FEEDBACK_WORKER_SECRET='y'.repeat(32);
-  const load=expiry=>loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>({sent:1})},
+  const load=worker=>loadTs('src/app/api/internal/feedback/send/route.ts',{'@/lib/feedback/mail-worker':{runFeedbackMailWorker:async()=>({sent:1})},
     '@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},'@/lib/games/worker':{runGameOutbox:async()=>({})},
-    '@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/loyalty/stamp-card/expiry':{runLoyaltyExpiry:expiry}});
+    '@/lib/marketing/worker':{runMarketingWorker:async()=>({})},'@/lib/firebase-admin':{getAdminDb:()=>({})},'@/lib/loyalty/stamp-card/worker':{runLoyaltyWorker:worker}});
   const call=route=>route.POST(new Request('https://orderfly.dk/api/internal/feedback/send',{method:'POST',headers:{authorization:'Bearer '+'y'.repeat(32)}}));
   try{
-    let response=await call(load(async()=>({cards:2,rewards:1})));
-    assert.equal(response.status,200);assert.deepEqual((await response.json()).loyalty,{cards:2,rewards:1});
+    let response=await call(load(async()=>({expiry:{cards:2,rewards:1},mail:{accepted:1}})));
+    assert.equal(response.status,200);assert.deepEqual((await response.json()).loyalty,{expiry:{cards:2,rewards:1},mail:{accepted:1}});
     response=await call(load(async()=>{throw new Error('private');}));
     const body=await response.json();
     assert.equal(response.status,200);assert.deepEqual(body.loyalty,{failed:true});assert.deepEqual(body.feedback,{sent:1});

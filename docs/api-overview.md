@@ -28,3 +28,22 @@ All four endpoints are `POST`, JSON only and same-origin (`Origin` must match; `
 | `/api/merchant/loyalty/correct` | `…:correct` | `kind: add_stamps\|remove_stamps` with `memberId, count`, or `kind: cancel_redemption` with `rewardId`. Always `reason` (3–500 characters) and `idempotencyKey`. | New card state or reward status. Every correction is logged with the employee and reason. |
 
 The authenticated worker heartbeat `/api/internal/feedback/send` also runs `runLoyaltyExpiry`. It expires idle cards and old rewards in separate transactions and logs each expiry. Its failure is reported as `loyalty: {failed: true}` without failing the other workers.
+
+
+## Customer stamp-card API (stempelkort phase 1, PR 3)
+
+Used by the customer portal (phase 2). All endpoints live under `/api/loyalty/{brandSlug}/`. The brand is resolved from its public slug and never from a client ID. Mutations are same-origin JSON only, and reads reject `sec-fetch-site: cross-site`. Responses are `no-store`. Errors are `{error: code}`, and a `401` clears the session cookie.
+
+| Endpoint | Session | Body | Result |
+|---|---|---|---|
+| `GET program` | – | – | `{active, name, stampsRequired, rewardDescription, consentText, consentVersion, terms, termsVersion}`. Texts are empty while inactive. |
+| `POST signup` | – | `{name, email, newsletterConsent: true, termsAccepted: true, consentVersion, termsVersion}` | Always `{ok: true}`. A new member and versioned consent are created, or an existing member gets a login link. The response never reveals which. `409 program_inactive\|program_changed`, `429 rate_limited`. |
+| `POST login-link` | – | `{email}` | Always `{ok: true}`. A mail with a one-time link is sent only to an active member. |
+| `POST verify` | – | `{token}` (64 hex, from the link fragment) | Sets the `__Host-orderfly-loyalty` cookie (HttpOnly, Secure, SameSite=Lax) and returns `{ok, expiresAt}`. `410 link_invalid\|link_expired`. |
+| `GET me` | yes | – | Program, member, card, valid rewards, history (no staff names or reasons) and newsletter status. |
+| `GET qr` | yes | – | `{token, expiresAt}`: a single-use 60-second token for the counter lookup. Limited to 20 per minute. |
+| `POST consent` | yes | `{subscribed: false}` or `{subscribed: true, consentVersion}` | Changes only the newsletter consent and syncs it to Omnisend. Membership and stamps are kept. |
+| `POST delete` | yes | `{confirm: true}` | Deletes the membership and personal data and revokes all sessions. |
+| `POST logout` | yes | `{}` | Revokes this session and clears the cookie. |
+
+The login link is `https://{slug}.orderfly.dk/club/login#token=…`. It is built on the server from the brand slug; the portal address is still an open decision for phase 2. The token is in the fragment and verified by POST, so mail scanners cannot consume it. Login mail uses the central Notification Platform template `orderfly.stamp_card.login_link`, which needs the paired Esmeralda release. The brand mapping comes from `ORDERFLY_LOYALTY_NOTIFICATION_BRANDS`, falling back to the existing `ORDERFLY_GAMES_NOTIFICATION_BRANDS`. The worker heartbeat retries waiting mail; an unknown transport result is not retried.
