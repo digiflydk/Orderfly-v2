@@ -12,7 +12,7 @@ Godkendt analyse og plan: [fase 1](fase-1-analyse-og-plan.md) og [fase 2](fase-2
 | 3 | Medlemskab, samtykke, Omnisend, login-link og session | Merget 2026-10-17 (#257, parret med Esmeralda #412) |
 | 4 | Admin: Stempelkort (indstillinger, medlemmer, log, CSV) | Merget 2026-10-17 (#259) |
 | 5 | Admin: Loyalitet (hovedgruppe, oversigt, kundescore flyttes) | Merget 2026-10-17 (#261) |
-| 6 | Oprydning: aliaset `orderfly.loyalty` og migrationskommandoen fjernes | I review (migrationen kørt i mPanel 2026-10-17) |
+| 6 | Oprydning: aliaset `orderfly.loyalty` og migrationskommandoen fjernes | Merget og udrullet 2026-10-17 (#265) |
 
 ## Rettigheder
 
