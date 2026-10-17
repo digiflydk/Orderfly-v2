@@ -4,13 +4,13 @@ const {loadTs}=require('../helpers/load-ts.cjs');
 const paths=loadTs('src/lib/loyalty/portal-path.ts');
 const texts=loadTs('src/app/[brandSlug]/club/texts.ts');
 const {portalPreset}=loadTs('src/app/[brandSlug]/club/brand-preset.ts');
-const {locationSlugError}=loadTs('src/lib/brand-subdomain.ts');
+const {locationSlugError,brandSlugError}=loadTs('src/lib/brand-subdomain.ts');
 
 test('club paths are recognised on the brand subdomain and on orderfly.dk/{slug}',()=>{
   for(const p of ['/club','/club/login','/esmeralda/club','/esmeralda/club/tilmeld']) assert.equal(paths.isClubPath(p,'esmeralda'),true,p);
   for(const p of ['/','/esmeralda','/esmeralda/amager','/amager','/esmeralda/amager/club','/clubs',null]) assert.equal(paths.isClubPath(p,'esmeralda'),false,String(p));
-  // A brand whose slug is "club" keeps its storefront.
-  assert.equal(paths.isClubPath('/club/amager','club'),false);assert.equal(paths.isClubPath('/club/club','club'),true);
+  // "club" can never be a brand slug, so /club on a subdomain is always the portal.
+  assert.match(brandSlugError('club'),/reserveret/);
   assert.equal(paths.clubBase(true,'esmeralda'),'/club');assert.equal(paths.clubBase(false,'esmeralda'),'/esmeralda/club');
 });
 

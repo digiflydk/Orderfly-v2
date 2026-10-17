@@ -13,6 +13,8 @@ export const RESERVED_BRAND_SLUGS = new Set([
   'www', 'api', 'admin', 'app', 'staging', 'mail', 'support',
   'superadmin', 'superadmin-safe', 'merchant', 'admin-login', 'feedback', 'feedback-admin',
   'games', 'tracking', 'checkout', 'verify', 'brand-safe', 'brand-site', 'm3', 'm3pizza', 'env-debug',
+  // The stamp card portal path (/club on a brand subdomain) must never read as a brand.
+  'club',
   'features', 'pricing', 'contact', 'ok', 'health', 'static', 'assets', 'cdn',
 ]);
 
