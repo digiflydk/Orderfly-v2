@@ -8,7 +8,8 @@ Every brand gets a public address under the production domain: `https://{slug}.o
 - **Slug rules** (`src/lib/brand-subdomain.ts`, enforced in the brand form and again on the server):
   - 2–40 characters: `a–z`, `0–9` and hyphen; starts and ends with a letter or digit.
   - Unique across all brands. A taken slug is rejected with free alternatives (`esmeralda-2`, …).
-  - Reserved names are rejected: `www`, `api`, `admin`, `app`, `staging`, `mail`, `support`, plus first-level app routes and middleware aliases such as `superadmin`, `merchant`, `feedback`, `games` and `m3pizza`.
+  - Reserved names are rejected: `www`, `api`, `admin`, `app`, `staging`, `mail`, `support`, plus first-level app routes and middleware aliases such as `superadmin`, `merchant`, `feedback`, `games` and `m3pizza`, and `club` (the stamp card portal path).
+  - A location cannot use the slug `club`, because `/{brand}/club` is the stamp card portal (`locationSlugError`, enforced in the location form and on the server).
   - New brands get a suggestion from the name. Danish letters are spelled out (`æ`→`ae`, `ø`→`oe`, `å`→`aa`); `Pizza & Pasta` → `pizza-pasta`.
 - **Administration.** The brand form shows the resulting public URL. Changing the slug of an existing brand requires an explicit confirmation, because the old subdomain and `/{old-slug}` stop working. The change is written to `auditLogs` with `action: brand_slug_changed`, `brandId`, `oldSlug`, `newSlug`, `actorId` and `createdAt`.
 - **Routing** (`src/middleware.ts`):

@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { z } from 'zod';
-import { authorize, authorizeMembershipChange, authorizeRoleChange, isSuperuser, normalizePermission, policySchema, type Policy, PERMISSIONS } from './policy';
+import { authorize, authorizeMembershipChange, authorizeRoleChange, isSuperuser, policySchema, type Policy, PERMISSIONS } from './policy';
 
 // Only pass identities obtained from a verified native session. Neither the
 // command payload nor a user-editable profile is an authentication source.
@@ -26,7 +26,6 @@ export const authorityCommandSchema=z.discriminatedUnion('action',[
   z.object({action:z.literal('check'),companyId:key.nullable(),locationIds:z.array(key).max(500).nullable(),permission:z.string().max(160)}).strict(),
   z.object({action:z.literal('checkNative'),product:z.enum(['opsfly','orderfly']),tenantId:key,locationIds:z.array(key).max(500).nullable(),permission:z.string().max(160)}).strict(),
   z.object({action:z.literal('enroll'),identity:identitySchema,name:z.string().trim().min(1).max(160),companyId:key.nullable(),locationIds:z.array(key).max(500).nullable(),roleIds:z.array(key).max(500),revision:z.string().regex(/^[a-f0-9]{64}$/),requestId:z.string().uuid()}).strict(),
-  z.object({action:z.literal('migratePermissions'),dryRun:z.boolean(),revision:z.string().regex(/^[a-f0-9]{64}$/),requestId:z.string().uuid()}).strict(),
   z.object({action:z.literal('change'),kind:z.enum(['roles','memberships','principals','companies']),id:key,revision:z.string().regex(/^[a-f0-9]{64}$/),requestId:z.string().uuid(),value:z.unknown().nullable()}).strict(),
 ]);
 export class AuthorityError extends Error {
@@ -72,26 +71,6 @@ export async function executeAuthority(db:any,identity:VerifiedIdentity,input:un
     if(!saved.exists)return reject('not_initialized',503);
     const policy=requireValid(saved.data());
     if(!policy.principals.some(p=>p.id===actor&&p.active))return reject('principal_inactive');
-    if(command.action==='migratePermissions') {
-      if(!isSuperuser(policy,actor))return reject('platform_access_required');
-      // Report from the stored record: the parsed policy is already normalized.
-      const stored=saved.data()?.roles;
-      const roles=(Array.isArray(stored)?stored:[]).flatMap((role:any)=>{
-        const renamed=(Array.isArray(role?.permissions)?role.permissions:[]).filter((p:unknown)=>typeof p==='string'&&normalizePermission(p)!==p)
-          .map((from:string)=>({from,to:normalizePermission(from)}));
-        return renamed.length?[{id:String(role.id),permissions:renamed}]:[];
-      });
-      const report={ok:true,dryRun:command.dryRun,migrated:roles.length,roles,revision:digest(policy)};
-      if(command.dryRun)return report;
-      const eventRef=db.collection('platformAdminAudit').doc(command.requestId),event=await tx.get(eventRef),fingerprint=digest({actor,command});
-      if(event.exists){if(event.data().fingerprint!==fingerprint)return reject('request_conflict',409);return report;}
-      if(command.revision!==digest(policy))return reject('record_changed',409);
-      // Renaming does not change any decision, so the revision is unchanged.
-      if(!roles.length)return report;
-      tx.set(policyRef,policy);
-      tx.set(eventRef,{actorId:actor,action:'access.migratePermissions',fingerprint,roles,revision:digest(policy),createdAt:new Date().toISOString()});
-      return report;
-    }
     if(command.action==='session') {
       const superuser=isSuperuser(policy,actor);
       const memberships=policy.memberships.filter(m=>m.principalId===actor&&m.active&&(m.companyId===null||policy.companies.some(c=>c.id===m.companyId&&c.active)));

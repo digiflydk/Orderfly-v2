@@ -1,7 +1,7 @@
 # Stempelkort (Esmeralda Club)
 
 Specifikationer: [fase 1](fase-1-stempelkort-backend.md), [fase 2](fase-2-stempelkort-kundeportal.md) og [fase 3](fase-3-stempelkort-merchantportal.md).
-Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md).
+Godkendt analyse og plan: [fase 1](fase-1-analyse-og-plan.md), [fase 2](fase-2-analyse-og-plan.md) og [fase 3](fase-3-analyse-og-plan.md) (fase 3 bygges parallelt med fase 2 efter PM-beslutning 2026-10-17).
 
 ## Status for fase 1
 
@@ -12,7 +12,33 @@ Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md)
 | 3 | Medlemskab, samtykke, Omnisend, login-link og session | Merget 2026-10-17 (#257, parret med Esmeralda #412) |
 | 4 | Admin: Stempelkort (indstillinger, medlemmer, log, CSV) | Merget 2026-10-17 (#259) |
 | 5 | Admin: Loyalitet (hovedgruppe, oversigt, kundescore flyttes) | Merget 2026-10-17 (#261) |
-| 6 | Oprydning: aliaset `orderfly.loyalty` fjernes | Efter verificeret migration |
+| 6 | Oprydning: aliaset `orderfly.loyalty` og migrationskommandoen fjernes | Merget og udrullet 2026-10-17 (#265) |
+
+## Status for fase 3 (kassevisning)
+
+| PR | Indhold | Status |
+|---|---|---|
+| 1 | Indstilling "Kassevisning: log ud efter inaktivitet" (standard 5 minutter) | Merget 2026-10-17 (#266) |
+| 2 | Kassevisningen: adgang og menu, login og brugerskifte, automatisk log ud, scanning, søgning, stempel, indløsning og korrektion | Merget 2026-10-17 (#268) |
+
+Adgang og selve kassevisningen er samlet i PR 2, så menupunktet aldrig peger på en side, der ikke findes.
+
+## Kassevisning (fase 3)
+
+Adressen er `/merchant/stamp-card`. Den kræver `orderfly.stamp_cards:counter`. Al logik ligger i kassens backend fra fase 1; skærmen viser og sender kun.
+
+- **Hvem ser hvad:** En medarbejder, hvis eneste Orderfly-rettigheder er kassevisning, indløs og korrektion, ser kun kassevisningen i fuld skærm. Det gælder efter login, fra `/merchant` og fra mPanel-genvejen. Ledere har menupunktet **Kassevisning** under Loyalitet og knappen **Administration** i kassevisningen.
+- **Login og brugerskifte:** Samme login som timeloggen (navn/e-mail og 6-cifret PIN). **Skift bruger** logger den aktive medarbejder ud. Tabletten husker navnene på de seneste 8 medarbejdere (aldrig PIN), så man trykker sit navn og taster PIN. Navne kan fjernes fra listen.
+- **Automatisk log ud:** efter den indstillede periode uden aktivitet (Indstillinger → "Kassevisning: log ud efter inaktivitet", standard 5 minutter). Det gælder også, hvis tabletten har sovet eller siden genindlæses. Når udlogningen ikke nåede serveren (fx uden net), forbliver tabletten låst, og udlogningen prøves igen hvert 15. sekund og når nettet kommer tilbage. Næste medarbejders PIN sendes først, når den forrige udlogning er færdig, så den aldrig kan logge den nye medarbejder ud.
+- **Brand og afdeling** vælges øverst, hvis der er flere; tabletten husker valget. Er programmet slået fra eller uden kassekanaler, vises det, og knapperne er slået fra.
+- **Scanning:** kameraet åbner og scanner automatisk. Chrome på Android bruger browserens egen QR-læser; Safari på iPad bruger biblioteket `jsqr`. QR-koden skal indeholde præcis kundens token (64 tegn). Alt andet giver "Det er ikke en stempelkort-kode".
+- **Giv stempel:** kanal (kun brandets kassekanaler; én kanal er valgt på forhånd), beløb og Bekræft. Under minimum eller med rabat (når rabatordrer ikke giver stempel) kan der ikke bekræftes. Kvitteringen vises i 4 sekunder.
+- **Dobbeltklik og netværk:** Knappen låses ved første tryk, og hver handling har sin egen idempotensnøgle. Ved "Ingen forbindelse" kan kun samme handling prøves igen med samme nøgle, så den aldrig registreres to gange.
+- **Indløs:** kun med gyldig belønning i afdelingen og rettigheden `…:redeem`, med et bekræftelsestrin.
+- **Korrektion:** kun med `…:correct`. Ved kassen kan der tilføjes eller fjernes stempler med årsag. Annullering af en indløsning sker i admin under Medlemmer (PM-beslutning).
+- **Test:** `tests/unit/loyalty-counter-browser.cjs` kører den rigtige skærm i Chromium ved 1180×820, 820×1180 og 390 px med syntetisk kamera og API.
+
+**Drift før brug:** Tildel `orderfly.stamp_cards:counter` (og evt. `redeem`/`correct`) til kassepersonalets rolle i mPanel, og test hele flowet på restaurantens egen iPad og Android-tablet (spec §8, sidste punkt). Kameraet kræver, at browseren får lov at bruge det første gang.
 
 ## Rettigheder
 
@@ -27,7 +53,7 @@ Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md)
 | `orderfly.stamp_cards:log` | Hændelseslog og eksport |
 | `orderfly.customer_score:*` | Intern kundescore (tidligere `orderfly.loyalty:*`) |
 
-Der oprettes ingen roller fra koden. Rettighederne føjes til eksisterende eller nye roller i mPanel. Migrationen af `orderfly.loyalty` er beskrevet i [freemium-rbac-139.md](../freemium-rbac-139.md).
+Der oprettes ingen roller fra koden. Rettighederne føjes til eksisterende eller nye roller i mPanel. Migrationen af `orderfly.loyalty` er kørt, og det gamle navn accepteres ikke længere (PR 6). Se [freemium-rbac-139.md](../freemium-rbac-139.md).
 
 ## Forretningsregler
 
@@ -86,6 +112,7 @@ Siden `/superadmin/loyalty/stamp-card` har tre faner. Hver fane vises kun med si
 
 - **Indstillinger** (`orderfly.stamp_cards:settings`):
   - Alle parametre fra spec §6.1, herunder kanaler pr. brand og belønningstype med produkt- eller kategorivalg.
+  - Fra fase 3: hvor mange minutter kassevisningen må være uden aktivitet, før den låses (1–60, standard 5). Ældre gemte indstillinger læses som 5 minutter.
   - Hver gemning bliver en ny version (`loyaltyProgramVersions`) og logges med medarbejder, tidspunkt og gammel og ny værdi.
   - Er indstillingerne ændret af en anden imens, afvises gemningen.
   - Ugyldige værdier, inaktive produkter og kategorier samt produkter fra et andet brand afvises på serveren. Vælgeren viser kun aktive produkter og kategorier.
@@ -134,3 +161,71 @@ Menuen **Loyalitet** har nu tre punkter: **Oversigt**, **Stempelkort** og **Kund
 **Visningsgrænse:** Oversigten viser højst 366 dage; en længere valgt periode forkortes til de seneste 366 dage, og siden siger til. Den læser højst 20.000 hændelser pr. brand i perioden og siger også til, hvis den grænse er nået.
 
 mPanel-genveje: `orderfly.stamp_cards:overview` åbner oversigten, og `orderfly.customer_score:view` åbner kundescoren.
+
+## Fase 2 – kundeportal
+
+Plan: [fase-2-analyse-og-plan.md](fase-2-analyse-og-plan.md).
+
+Alle tre PR'er er merget, men **fase 2 er ikke accepteret endnu**. Planen (C7) kræver test på rigtige enheder før accept.
+
+**Før accept:**
+- Manuel test på iPhone og Android: tilmelding og login, hjemmeskærm (også at kunden forbliver logget ind dér) og scanning af QR-koden ved lav lysstyrke. Resultatet noteres her.
+- Visuelt tjek af skrifttyperne Bourton og Brandon.
+
+**Før lancering:** `*.orderfly.dk` skal sættes op ([brand-subdomains.md](../brand-subdomains.md)), så login-mailens link og skiltets QR-kode virker. Login fra mailen kan først testes på enhederne, når det er gjort.
+
+| PR | Indhold | Status |
+|---|---|---|
+| 1 | Ramme, tilmelding, login og vilkår | Merget 2026-10-17 (#267) |
+| 2 | Mit stempelkort og QR-kode | Merget 2026-10-17 (#269) |
+| 3 | Historik, profil, hjemmeskærm og skilt-QR | Merget 2026-10-17 (#270) |
+
+**Adresse:** `https://{slug}.orderfly.dk/club`, fx `https://esmeralda.orderfly.dk/club`. Portalen virker også på `https://orderfly.dk/{slug}/club`, og der omdirigeres ikke, fordi `*.orderfly.dk` endnu ikke er sat op i drift. Login-mailens link peger altid på subdomænet, så login i drift kræver subdomænet ([brand-subdomains.md](../brand-subdomains.md)).
+
+**Sider (PR 1)** i `src/app/[brandSlug]/club/`:
+- `/club`: introduktion med "Bliv medlem" og "Log ind". Et logget ind medlem ser sit stempelkort (PR 2, se nedenfor). Er programmet slået fra, vises en venlig besked.
+- `/club/tilmeld`: navn, e-mail og to afkrydsninger, som ikke er forudafkrydsede. Samtykketeksten og versionerne kommer fra programmet; ændres teksterne undervejs, skal kunden sætte flueben igen. Svaret er altid "Tjek din e-mail".
+- `/club/login`: e-mail → login-link. Åbnes siden fra mailen, fjernes tokenet fra adressen, før det sendes til `verify`. Udløbet og brugt link har hver sin besked og en knap til et nyt link.
+- `/club/vilkaar`: programmets vilkår.
+
+**Sådan virker det:**
+- Siderne læser på serveren med de samme fase 1-funktioner som API'et (`data.ts`) og skriver aldrig. Alle handlinger går gennem `/api/loyalty/{brandSlug}/*`. Der er ingen forretningslogik i frontend og ingen ændringer i `src/lib/loyalty/stamp-card/`.
+- Portalen bruger brandlayoutet (farver, Esmeralda-forudindstillingen i `commerce-ui.css`, cookie-banner og footer) med sin egen header. Webshoppens header vises ikke.
+- **Esmeralda** (`brand-preset.ts`): det hvide logo fra Esmeraldas egen side og skriftfilerne Bourton (overskrifter) og Brandon (brødtekst), som feedback-siderne også bruger. Andre brands bruger logo og farver fra brandindstillingerne. Senere skal det komme fra dynamiske brandindstillinger.
+- **Ingen tracking:** Brandets tredjeparts-tracking (GTM, GA4, Meta) kører ikke på `/club`-sider (`brand-tracking.tsx`).
+- Portalens sider er markeret `noindex`.
+- En afdeling kan ikke få adressen `club`.
+
+**Mit stempelkort (PR 2)** (`member-card.tsx`, `member-qr.tsx`):
+- Stemplerne vises som X af N (fx 2 rækker á 4), med teksten "3 stempler til gratis pizza" bygget af tallene og belønningsbeskrivelsen fra API'et.
+- Optjente belønninger med beskrivelse, udløbsdato og "Vis QR-koden ved kassen for at indløse".
+- Kortets udløbsdato: "Dine stempler udløber, hvis du ikke har fået et nyt stempel inden [dato]". Datoer vises i dansk tid.
+- Er programmet slået fra, ser medlemmet stadig sit kort med en besked om, at der ikke gives nye stempler.
+- **QR-koden:**
+  - Tegnes i browseren (pakken `qrcode`) som sort på hvid med hvid kant, uanset brandets farver.
+  - Hentes fra `GET qr` og fornyes efter 45 sekunder, og straks når kunden vender tilbage til appen eller får forbindelse igen.
+  - Kortet genindlæses ved hver fornyelse, så nye stempler fra kassen dukker op.
+  - Koden skjules, så snart en ny kode bestilles, fordi backend ugyldiggør den gamle i samme øjeblik. Mens den nye hentes, står der "Henter QR-kode…".
+  - Koden skjules senest 57 sekunder efter, at serveren udstedte den, målt med serverens `Date`-header og højst en kodes levetid. Et forkert ur på telefonen kan derfor ikke holde en gammel kode synlig.
+  - Uden forbindelse vises "Ingen forbindelse – QR-koden kan ikke vises" og "Prøv igen".
+  - En udløbet session sender kunden til login.
+  - Skærmen holdes tændt, mens kortet er åbent, hvor browseren understøtter det. Låsen tages igen, når kunden vender tilbage til appen.
+
+**Historik, profil og hjemmeskærm (PR 3):**
+- **Menu:** Et logget ind medlem får menuen Kort, Historik og Profil under logoet.
+- **`/club/historik`:** stempler, fjernede stempler, belønninger, indløsninger og udløb med dato og kanal (Spis her, Takeaway, Afhentning, Levering). Medarbejdere og årsager vises aldrig; API'et sender dem ikke.
+- **`/club/profil`:**
+  - Navn og e-mail.
+  - Nyhedsbrev med status og knap til afmelding eller tilmelding. Ved tilmelding vises samtykketeksten, og dens version sendes med. Teksten forklarer, at medlemskab, stempler og belønninger bevares ved afmelding. Ændringen synkroniseres til Omnisend af fase 1.
+  - Link til vilkår og "Log ud".
+  - "Slet medlemskab" med et bekræftelsestrin, der forklarer, at stempler og belønninger går tabt.
+  - Uden gyldig session sendes kunden til login.
+- **Hjemmeskærm:**
+  - Webapp-manifest pr. brand på `/club/manifest.webmanifest` med programmets navn, start på `/club`, visningen "standalone" og brandets baggrundsfarve.
+  - Ikoner på `/club/ikon/180`, `/192` og `/512`. De laves på serveren med `sharp` ud fra logoet (60 % af fladen, inden for sikkerhedszonen for "maskable" ikoner) på brandets baggrundsfarve; Esmeralda får sort baggrund. Uden et brugbart logo bliver ikonet ensfarvet.
+  - Logoet læses fra brandets gemte data. Et indlejret billede afkodes direkte. En adresse hentes kun fra kendte offentlige billedværter (Webflow-CDN og værterne i `next.config`), uden at følge videresendelser og højst 2 MB. Serveren kan derfor ikke lokkes til at kalde interne adresser.
+  - iPhone får `apple-touch-icon` og titel.
+  - En diskret vejledning på kortet vises på telefoner, indtil kunden lukker den eller åbner portalen fra hjemmeskærmen. På iPhone forklarer den Del → "Føj til hjemmeskærm". Android får browserens egen installationsknap, når den tilbydes, og ellers en vejledning.
+- **Skilt til disken:** [skilt-qr-tilmelding.svg](skilt-qr-tilmelding.svg) er en QR-kode til `https://esmeralda.orderfly.dk/club/tilmeld` med høj fejlkorrektion, klar til tryk. Den virker først, når `*.orderfly.dk` er sat op.
+
+**Test:** `tests/unit/loyalty-portal-pages.cjs` (stier, tekster, datoer, brandudseende og serverlæsning) og `tests/unit/loyalty-portal-browser.cjs` (tilmelding, login, links fra mailen, tracking, kortet QR-kodens fornyelse, udløb, offline og forkert ur, profil, sletning, menu og hjemmeskærm-vejledningen i Chromium ved 390 og 1440 px). `loyalty-portal-pages.cjs` dækker også historiktekster, manifest, ikoner og skilt-QR'en.

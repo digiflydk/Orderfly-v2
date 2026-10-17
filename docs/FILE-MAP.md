@@ -8,6 +8,7 @@ All routes live under `src/app`. Shared code lives in `src/lib`, `src/components
 - **Menu Page (Client):** `src/app/[brandSlug]/[locationSlug]/menu-client.tsx`
 - **Checkout Page:** `src/app/[brandSlug]/[locationSlug]/checkout/page.tsx`
 - **Confirmation Page:** `src/app/[brandSlug]/[locationSlug]/checkout/confirmation/page.tsx`
+- **Stamp card portal (Esmeralda Club):** `src/app/[brandSlug]/club/*` (start with the member card `member-card.tsx` and QR code `member-qr.tsx`, `tilmeld`, `login`, `vilkaar`, `historik`, `profil`, menu `club-nav.tsx`, home screen `home-screen.ts`, `manifest.webmanifest` and `ikon/[size]`; server reads in `data.ts`, brand look in `brand-preset.ts`), paths in `src/lib/loyalty/portal-path.ts`
 - **Cart Context:** `src/context/cart-context.tsx`
 - **Cart Components:** `src/components/cart/*`
 - **Checkout Components:** `src/components/checkout/*`
@@ -33,6 +34,11 @@ All routes live under `src/app`. Shared code lives in `src/lib`, `src/components
 - **Voucher Codes:** `src/app/superadmin/discounts/page.tsx`
 - **Combo Menus:** `src/app/superadmin/combos/page.tsx`
 - **Upsells:** `src/app/superadmin/upsells/page.tsx`
+
+## Loyalty (stempelkort)
+- **Backend:** `src/lib/loyalty/stamp-card/*` (rules, counter, membership, admin), routes `src/app/api/merchant/loyalty/*` and `src/app/api/loyalty/[brandSlug]/*`
+- **Admin:** `src/app/superadmin/loyalty/*` (overview, stamp card settings/members/log, customer score)
+- **Counter view (phase 3):** `src/app/merchant/stamp-card/*` (page, `counter-view.tsx`, `lock-screen.tsx`, `qr-scanner.tsx`, `messages.ts`)
 
 ## People & Access
 - **Users:** `src/app/superadmin/users/page.tsx`

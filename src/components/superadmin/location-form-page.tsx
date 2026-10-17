@@ -24,6 +24,7 @@ import { createOrUpdateLocation } from '@/app/superadmin/locations/actions';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
 import { countries } from '@/lib/countries';
+import { locationSlugError } from '@/lib/brand-subdomain';
 import {
   Select,
   SelectContent,
@@ -58,6 +59,9 @@ const locationSchema = z.object({
   }),
   slug: z.string().min(2, {
     message: 'Slug is required.',
+  }).superRefine((slug, ctx) => {
+    const error = locationSlugError(slug);
+    if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
   }),
   street: z.string().min(2, 'Street name is required.'),
   zipCode: z

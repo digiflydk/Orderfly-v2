@@ -1,0 +1,81 @@
+import 'server-only';
+import sharp from 'sharp';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { rasterData } from '@/lib/storefront-media';
+import { findPortal, portalBase } from './data';
+import { portalPreset } from './brand-preset';
+
+// Home-screen support (spec §4.6): the web app manifest and square icons made
+// from the brand logo on the brand's background colour.
+export const ICON_SIZES = [180, 192, 512] as const;
+const MAX_LOGO_BYTES = 2_000_000;
+// Logos are only fetched from public image hosts (Esmeralda's Webflow CDN and
+// the hosts next.config already allows), never from arbitrary or internal addresses.
+const LOGO_HOSTS = new Set(['cdn.prod.website-files.com', 'firebasestorage.googleapis.com', 'res.cloudinary.com', 'i.postimg.cc', 'images.unsplash.com', 'picsum.photos', 'placehold.co']);
+
+export async function homeScreenBrand(slug: string) {
+  const [portal, base] = await Promise.all([findPortal(slug), portalBase(slug)]);
+  if (!portal) return null;
+  // The stored brand record: its logo may be an inline image the storefront serves through /api/storefront-image.
+  const stored = (await getAdminDb().collection('brands').doc(portal.brand.brandId).get()).data();
+  const preset = portalPreset({ slug, name: portal.brand.brandName, logoUrl: typeof stored?.logoUrl === 'string' ? stored.logoUrl : null,
+    background: stored?.appearances?.colors?.background });
+  return { name: portal.program.name, base, preset };
+}
+
+export function manifest(name: string, base: string, background: string) {
+  return {
+    name, short_name: name, lang: 'da', dir: 'ltr', start_url: base, scope: base, display: 'standalone',
+    background_color: background, theme_color: background,
+    icons: [
+      { src: `${base}/ikon/192`, sizes: '192x192', type: 'image/png', purpose: 'any' },
+      { src: `${base}/ikon/512`, sizes: '512x512', type: 'image/png', purpose: 'any' },
+      { src: `${base}/ikon/512`, sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+    ],
+  };
+}
+
+// An inline (data:) logo is decoded; a URL is fetched only from LOGO_HOSTS,
+// without following redirects, and abandoned as soon as it passes the size limit.
+export async function logoBuffer(source: string | null, fetcher: typeof fetch = fetch): Promise<Buffer | null> {
+  if (!source) return null;
+  const inline = source.match(rasterData);
+  if (inline) {
+    const buffer = Buffer.from(inline[2], 'base64');
+    return buffer.length > MAX_LOGO_BYTES ? null : buffer;
+  }
+  let url: URL;
+  try { url = new URL(source); } catch { return null; }
+  if (url.protocol !== 'https:' || url.port || url.username || !LOGO_HOSTS.has(url.hostname)) return null;
+  try {
+    const response = await fetcher(url, { redirect: 'error', signal: AbortSignal.timeout(5_000) });
+    if (!response.ok || !response.body) return null;
+    const reader = response.body.getReader(), chunks: Uint8Array[] = [];
+    let size = Number(response.headers.get('content-length') || 0);
+    if (size > MAX_LOGO_BYTES) { await reader.cancel(); return null; }
+    size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_LOGO_BYTES) { await reader.cancel(); return null; }
+      chunks.push(value);
+    }
+    return Buffer.concat(chunks);
+  } catch { return null; }
+}
+
+// The logo fills 60% of the square, inside the safe zone of maskable icons.
+// Without a usable logo the icon is the plain brand colour.
+export async function homeScreenIcon(size: number, logoUrl: string | null, background: string, fetchLogo = logoBuffer) {
+  const canvas = sharp({ create: { width: size, height: size, channels: 4, background } });
+  const logo = await fetchLogo(logoUrl);
+  if (logo) {
+    try {
+      const inner = Math.round(size * 0.6);
+      const fitted = await sharp(logo, { limitInputPixels: 40_000_000 }).resize(inner, inner, { fit: 'inside' }).png().toBuffer();
+      return await canvas.composite([{ input: fitted, gravity: 'centre' }]).png().toBuffer();
+    } catch { /* not an image sharp can read: plain icon */ }
+  }
+  return canvas.png().toBuffer();
+}

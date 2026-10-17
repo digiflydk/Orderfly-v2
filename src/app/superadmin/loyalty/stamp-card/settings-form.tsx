@@ -91,6 +91,7 @@ export function SettingsForm({ initial }: { initial: Initial }) {
           {number('cardValidityMonths', 'Kortets gyldighed ved inaktivitet (måneder)', 'Hvert nyt stempel nulstiller fristen.')}
           {number('rewardValidityMonths', 'Belønningens gyldighed (måneder)', 'Fra optjening til belønningen skal være brugt.')}
           {number('sessionDays', 'Kundens login-session (dage)')}
+          {number('counterIdleMinutes', 'Kassevisning: log ud efter inaktivitet (minutter)', 'Fra 1 til 60 minutter. Tabletten låses, og næste medarbejder logger ind med sin PIN.')}
           <div className="grid gap-1.5">
             <Label htmlFor="maxStampsPerDay">Maks. stempler pr. medlem pr. dag</Label>
             <Input id="maxStampsPerDay" type="number" min={1} placeholder="Ingen grænse" value={s.maxStampsPerDay ?? ''}

@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx -y supabase@2.48.3 *)",
+      "Bash(git *)",
+      "Bash(npm *)",
+      "Bash(node *)",
+      "mcp__Supabase",
+      "mcp__github"
+    ]
+  },
+  "autoMode": {
+    "allow": [
+      "$defaults",
+      "The owner has authorized deploying merged code to the Esmeralda Supabase project bdemvarwpfcxyczunchx: applying migrations and deploying Edge Functions with the Supabase CLI or Supabase MCP, after the release gate has merged it to main.",
+      "The owner has authorized the Esmeralda release flow: changing issue titles to the next release state, posting DEPLOYMENT_CONFIRMED comments, and enqueueing synthetic notification test mails.",
+      "The owner has authorized pushing feature branches and opening pull requests in digiflydk/orderfly-v2 and digiflydk/esmeralda-restaurant-operations."
+    ]
+  }
+}

@@ -19,4 +19,7 @@ test('login creates a cookie only for a fresh verified token with current Orderf
  assert.equal((await route.POST(request('https://orderfly.dk'))).status,403);assert.equal(issued,0);
  access={superuser:false,permissions:['orderfly.orders:view']};age=301;assert.equal((await route.POST(request('https://orderfly.dk'))).status,403);assert.equal(issued,0);
  age=0;const response=await route.POST(request('https://orderfly.dk'));assert.equal(response.status,200);assert.match(response.headers.get('set-cookie'),/HttpOnly/i);assert.equal(issued,1);assert.ok(verified.every(([,revoked])=>revoked===true));assert.deepEqual(commands.at(-1),{identity:{provider:'firebase',subject:'real-user'},command:{action:'session'}});
+ assert.equal((await response.json()).home,undefined);
+ access={superuser:false,permissions:['orderfly.stamp_cards:counter','orderfly.stamp_cards:redeem']};
+ const counter=await route.POST(request('https://orderfly.dk'));assert.equal(counter.status,200);assert.equal((await counter.json()).home,'/merchant/stamp-card');
 });

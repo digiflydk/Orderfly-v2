@@ -8,6 +8,7 @@ import { useState } from 'react';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { MenuHeader } from '@/components/layout/menu-header';
+import { isClubPath } from '@/lib/loyalty/portal-path';
 
 export function BrandLayoutClient({
   children,
@@ -31,10 +32,12 @@ export function BrandLayoutClient({
   
   const segments = pathname?.split('/').filter(Boolean) || [];
   const isOrderPage = segments.length >= 2 && !['about','contact','privacy','terms','order'].includes(segments[1]);
-  const showGlobalHeader = !isOrderPage;
+  // The stamp card portal renders its own header and <main>.
+  const isClub = isClubPath(pathname, brand.slug);
+  const showGlobalHeader = !isOrderPage && !isClub;
   // Location routes render their header with server-fetched location data.
-  const showMenuHeader = isOrderPage && segments[1] === 'checkout';
-  const Content = isOrderPage && !showMenuHeader ? 'div' : 'main';
+  const showMenuHeader = isOrderPage && !isClub && segments[1] === 'checkout';
+  const Content = isClub || (isOrderPage && !showMenuHeader) ? 'div' : 'main';
   const showFooter = true;
 
   return (
