@@ -48,12 +48,12 @@ Der oprettes ingen roller fra koden. Rettighederne føjes til eksisterende eller
 
 Sådan fungerer det:
 - **Tjek pr. kald:** Hvert kald tjekker rettigheden for den konkrete afdeling i samme transaktion, som skriver data. Inaktive medarbejdere afvises af det eksisterende Opsfly-sessionstjek.
-- **Idempotens:** Hver stempling, indløsning og korrektion har en idempotensnøgle. Gentages et kald med samme nøgle, returneres samme kvittering. Samme nøgle med andet indhold giver `idempotency_conflict`.
+- **Idempotens:** Hver stempling, indløsning og korrektion har en idempotensnøgle. Gentages et kald med samme nøgle, returneres samme kvittering, men først efter det samme rettighedstjek som et nyt kald. Samme nøgle med andet indhold giver `idempotency_conflict`.
 - **Kortet fryser sine regler:** antal stempler, gyldighed, belønning og afdelingsbinding. Ændrede indstillinger gælder kun nye kort.
-- **QR-tokens:** Et QR-token gemmes kun som hash, gælder i 60 sekunder og kan kun bruges én gang.
+- **QR-tokens:** Et QR-token gemmes kun som hash, gælder i 60 sekunder og kan kun bruges én gang. Kun medlemmets nyeste kode gælder; en ny kode ugyldiggør den forrige.
 - **E-mail-søgning** viser maskeret e-mail. Opslag er begrænset til 60 pr. minut pr. medarbejder.
 - **Udløb:** Udløbne kort og belønninger markeres og logges. Intet slettes. Et stempel efter fristen, men før jobbet har kørt, starter et nyt kort og logger udløbet.
-- **Korrektion** kræver årsag og logges med medarbejderen.
+- **Korrektion** kræver årsag og logges med medarbejderen. Stempler kan ikke tilføjes, mens programmet ikke er aktivt.
 
 Før brug skal indekserne i `docs/loyalty-firestore-indexes.json` oprettes i dataprojektet `orderfly-39325`.
 

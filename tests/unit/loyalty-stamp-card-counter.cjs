@@ -133,6 +133,11 @@ test('permissions are enforced per action and location, including inactive and f
   await rejects(stamp({locationId:'x1'},'manager'),'forbidden');
   await rejects(counter.correctMember(db,actor('cashier'),{brandId:'brand',locationId:'l1',kind:'add_stamps',memberId:'anna',count:1,reason:'Glemt stempel',idempotencyKey:key(1)},NOW),'forbidden');
   assert.equal(events().length,0);
+  // A replay is authorized like a new request: lost permission means no stored receipt.
+  assert.equal((await stamp({idempotencyKey:key(2)})).replayed,false);
+  const policy=db.rows.get('platformAdminControl/access-v1');
+  policy.roles.find(r=>r.id==='kasse').permissions=['orderfly.orders:view'];
+  await rejects(stamp({idempotencyKey:key(2)}),'forbidden');
 });
 
 test('lookup by QR token is single use, brand bound and expires; e-mail lookup masks the address',async()=>{
@@ -145,6 +150,10 @@ test('lookup by QR token is single use, brand bound and expires; e-mail lookup m
   assert.deepEqual(view.permissions,{redeem:true,correct:false});assert.equal(view.program.active,true);
   await rejects(lookup({qrToken:token}),'qr_invalid');
   const late=await counter.issueQrToken(db,'brand','anna',NOW);await rejects(lookup({qrToken:late.token},'cashier',NOW+60_000),'qr_invalid');
+  // A new code revokes the previous one, so an older screenshot cannot be used.
+  const older=await counter.issueQrToken(db,'brand','anna',NOW),newer=await counter.issueQrToken(db,'brand','anna',NOW+1000);
+  await rejects(lookup({qrToken:older.token}),'qr_invalid');
+  assert.equal((await lookup({qrToken:newer.token})).member.id,'anna');
   const foreign=await counter.issueQrToken(db,'brand2','bo',NOW);await rejects(lookup({qrToken:foreign.token}),'qr_invalid');
   await rejects(lookup({qrToken:'f'.repeat(64)}),'qr_invalid');
   assert.equal((await lookup({email:' ANNA@Example.com '})).via,'search');
@@ -184,6 +193,9 @@ test('manual correction needs the right and a reason, and is logged with the emp
   assert.equal((await correct({kind:'cancel_redemption',rewardId:reward.id,reason:'Forkert kunde'},7)).status,'available');
   assert.equal(events('redemption_cancelled')[0].reason,'Forkert kunde');
   await rejects(correct({kind:'cancel_redemption',rewardId:reward.id,reason:'Igen'},8),'reward_not_redeemed');
+  // An inactive program never issues stamps, not even through a correction.
+  db.rows.get('loyaltyPrograms/brand').settings.active=false;
+  await rejects(correct({kind:'add_stamps',memberId:'anna',count:1,reason:'Glemt stempel'},9),'program_inactive');
 });
 
 test('location-bound cards and rewards when cross-location validity is off',async()=>{
