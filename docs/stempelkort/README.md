@@ -75,7 +75,7 @@ Sådan fungerer det:
 
 **Drift før brug:**
 - Indekserne i `docs/loyalty-firestore-indexes.json` skal være oprettet.
-- Esmeralda-skabelonen `orderfly.stamp_card.login_link` skal være udrullet.
+- Esmeralda-skabelonen `orderfly.stamp_card.login_link` skal være udrullet i versionen med `expires_at` (Esmeralda #412). Mailen sender linkets udløb med, og Notification Platform sender aldrig et udløbet link.
 - Brandet skal have en mail-mapping i `ORDERFLY_LOYALTY_NOTIFICATION_BRANDS`, eller den eksisterende i `ORDERFLY_GAMES_NOTIFICATION_BRANDS`.
 
 ## Admin: Stempelkort (PR 4)
