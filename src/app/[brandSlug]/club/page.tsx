@@ -1,8 +1,9 @@
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
 import { loadMember, loadPortal, portalBase } from './data';
+import { MemberCard } from './member-card';
 import { ProgramClosed } from './program-closed';
-import { firstName, nextRewardText, stampWord } from './texts';
+import { stampWord } from './texts';
 
 type Props = { params: Promise<{ brandSlug: string }> };
 
@@ -10,17 +11,7 @@ export default async function ClubPage({ params }: Props) {
   const { brandSlug } = await params;
   const [{ brand, program }, member, base] = await Promise.all([loadPortal(brandSlug), loadMember(brandSlug), portalBase(brandSlug)]);
 
-  if (member) {
-    const { card } = member;
-    return (
-      <section aria-labelledby="club-card" className="flex flex-col gap-3 text-center">
-        <h1 id="club-card" className="text-3xl">{member.program.name}</h1>
-        <p>Hej {firstName(member.member.name)}</p>
-        <p className="text-xl font-semibold">{card.stamps} af {card.stampsRequired} {stampWord(card.stampsRequired)}</p>
-        <p>{nextRewardText(card.stamps, card.stampsRequired, card.rewardDescription)}</p>
-      </section>
-    );
-  }
+  if (member) return <MemberCard member={member} slug={brandSlug} base={base} />;
 
   if (!program.active) return <ProgramClosed name={program.name} />;
 

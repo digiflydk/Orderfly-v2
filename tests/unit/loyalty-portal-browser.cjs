@@ -30,10 +30,12 @@ before(async () => {
     import { SignupForm } from ${src('app/[brandSlug]/club/tilmeld/signup-form')};
     import { LoginFlow } from ${src('app/[brandSlug]/club/login/login-flow')};
     import { BrandTracking } from ${src('components/brand-tracking')};
+    import { MemberCard } from ${src('app/[brandSlug]/club/member-card')};
     const view = location.pathname.slice(1);
     window.__pathname = new URLSearchParams(location.search).get('path') || '/club';
     const node = view === 'signup' ? React.createElement(SignupForm, { slug: 'esmeralda', base: '/club', program: ${JSON.stringify(program)} })
       : view === 'login' ? React.createElement(LoginFlow, { slug: 'esmeralda', base: '/club', programName: 'Esmeralda Club', signedIn: false })
+      : view === 'card' ? React.createElement(MemberCard, { slug: 'esmeralda', base: '/club', member: window.__member || ${JSON.stringify(null)} })
       : view === 'tracking' ? React.createElement(BrandTracking, { brand: { id: 'b', slug: 'esmeralda', gtmContainerId: 'GTM-X' } })
       : React.createElement('h1', null, 'Mit stempelkort');
     createRoot(document.getElementById('root')).render(node);`);
@@ -61,14 +63,17 @@ before(async () => {
 after(async () => { await browser?.close(); await new Promise(resolve => server?.close(resolve)); if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
 
 // Answers the phase 1 API; `answers[path]` is a list of [status, body] or 'abort', used in order.
-async function open(view, { width = 390, hash = '', answers = {} } = {}) {
+async function open(view, { width = 390, hash = '', answers = {}, clock, init } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 900 } });
+  if (clock) await page.clock.install({ time: clock });
+  if (init) await page.addInitScript(init.fn, init.arg);
   const calls = [];
   await page.route('**/api/loyalty/esmeralda/*', async route => {
     const name = new URL(route.request().url()).pathname.split('/').pop();
     calls.push({ name, method: route.request().method(), body: route.request().postDataJSON(), url: page.url(), contentType: route.request().headers()['content-type'] });
     const answer = (answers[name] || []).shift() || [200, { ok: true }];
     if (answer === 'abort') return route.abort('internetdisconnected');
+    if (typeof answer === 'function') return route.fulfill(await answer());
     await route.fulfill({ status: answer[0], contentType: 'application/json', body: JSON.stringify(answer[1]) });
   });
   await page.goto(`${origin}/${view}${hash}`);
@@ -184,4 +189,122 @@ test('brand tracking stays off on portal pages and still runs in the storefront'
       assert.equal(await page.evaluate(() => window.__mounted), mounted, pathname);
     } finally { await page.close(); }
   }
+});
+
+const QRCode = require('qrcode');
+const NOW = Date.parse('2026-10-20T10:00:00Z');
+const member = { program: { name: 'Esmeralda Club', active: true, rewardDescription: 'Gratis pizza', terms: 'Vilkår' },
+  member: { name: 'Anna Hansen', email: 'anna@example.com', joinedAt: NOW },
+  card: { stamps: 5, stampsRequired: 8, expiresAt: Date.parse('2027-04-20T10:00:00Z'), rewardDescription: 'Gratis pizza' },
+  rewards: [{ id: 'r1', description: 'Gratis pizza', expiresAt: Date.parse('2027-01-20T10:00:00Z') }], history: [], newsletter: { subscribed: true, consentVersion: 'consent-1' } };
+// A QR answer stamped with the server's own clock (Date header), independent of the phone's clock.
+const qrAnswer = (token, serverNow) => () => ({ status: 200, contentType: 'application/json', headers: { date: new Date(serverNow).toUTCString() },
+  body: JSON.stringify({ token, expiresAt: serverNow + 60_000 }) });
+// The modules of the code (the dark path), compared independently of how the browser serialises SVG.
+const modules = svg => /stroke="#000000" d="([^"]+)"/.exec(svg)[1];
+const qrSvg = async token => modules(await QRCode.toString(token, { type: 'svg', errorCorrectionLevel: 'M', margin: 4, color: { dark: '#000000', light: '#ffffff' } }));
+const withMember = (m = member) => ({ fn: value => { window.__member = value; }, arg: m });
+
+for (const width of [390, 1440]) test(`the card shows stamps X of N, the next reward, rewards and the expiry date at ${width}px`, async () => {
+  const { page } = await open('card', { width, init: withMember(), answers: { qr: [qrAnswer('a'.repeat(64), NOW)] } });
+  try {
+    await page.getByRole('img', { name: '5 af 8 stempler' }).waitFor();
+    assert.equal(await page.locator('[data-stamp="filled"]').count(), 5);
+    assert.equal(await page.locator('[data-stamp="empty"]').count(), 3);
+    await page.getByText('3 stempler til gratis pizza').waitFor();
+    await page.getByText('Dine stempler udløber, hvis du ikke har fået et nyt stempel inden 20. april 2027.').waitFor();
+    const reward = page.getByRole('listitem');
+    await reward.getByText('Gratis pizza').waitFor();
+    await reward.getByText('Udløber 20. januar 2027').waitFor();
+    await reward.getByText('Vis QR-koden ved kassen for at indløse').waitFor();
+    await page.getByRole('img', { name: 'QR-kode til kassen' }).waitFor();
+    assert.ok(await noOverflow(page));
+  } finally { await page.close(); }
+});
+
+test('a card without stamps or rewards and a closed program say so plainly', async () => {
+  const quiet = { ...member, program: { ...member.program, active: false }, card: { ...member.card, stamps: 0, expiresAt: null }, rewards: [] };
+  const { page } = await open('card', { init: withMember(quiet) });
+  try {
+    await page.getByRole('img', { name: '0 af 8 stempler' }).waitFor();
+    await page.getByText('Klubben giver ikke nye stempler lige nu. Dine stempler og belønninger er gemt.').waitFor();
+    assert.equal(await page.getByText(/udløber, hvis du ikke/).count(), 0);
+    assert.equal(await page.getByRole('heading', { name: 'Dine belønninger' }).count(), 0);
+  } finally { await page.close(); }
+});
+
+test('the QR code encodes the backend token, renews before expiry and refreshes the card', async () => {
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  const slow = async () => { await held; return qrAnswer('b'.repeat(64), NOW + 45_000)(); };
+  const { page, calls } = await open('card', { clock: NOW, init: withMember(), answers: { qr: [qrAnswer('a'.repeat(64), NOW), slow] } });
+  try {
+    const qr = page.getByRole('img', { name: 'QR-kode til kassen' });
+    await qr.waitFor();
+    assert.equal(modules(await qr.innerHTML()), await qrSvg('a'.repeat(64)));
+    await page.clock.runFor(46_000);
+    // The backend revokes the old code when it issues the new one, so the old code is gone while renewing.
+    await page.getByRole('status').filter({ hasText: 'Henter QR-kode…' }).waitFor();
+    assert.equal(await qr.count(), 0);
+    release();
+    await page.waitForFunction(() => window.__refresh === 1);
+    assert.equal(modules(await qr.innerHTML()), await qrSvg('b'.repeat(64)));
+    assert.deepEqual(calls.map(c => [c.name, c.method]), [['qr', 'GET'], ['qr', 'GET']]);
+  } finally { await page.close(); }
+});
+
+test('without a connection the code disappears at expiry, shows a retry button and never an old code', async () => {
+  const { page } = await open('card', { clock: NOW, init: withMember(), answers: { qr: [qrAnswer('a'.repeat(64), NOW), ...Array(20).fill('abort')] } });
+  try {
+    await page.getByRole('img', { name: 'QR-kode til kassen' }).waitFor();
+    await page.clock.runFor(46_000);
+    // A failed renewal may still have revoked the old code, so it is not shown again.
+    await page.getByRole('alert').filter({ hasText: 'Ingen forbindelse – QR-koden kan ikke vises' }).waitFor();
+    assert.equal(await page.getByRole('img', { name: 'QR-kode til kassen' }).count(), 0);
+    await page.unroute('**/api/loyalty/esmeralda/*');
+    await page.route('**/api/loyalty/esmeralda/qr', route => route.fulfill(qrAnswer('c'.repeat(64), NOW + 58_000)()));
+    await page.getByRole('button', { name: 'Prøv igen' }).click();
+    await page.getByRole('img', { name: 'QR-kode til kassen' }).waitFor();
+  } finally { await page.close(); }
+});
+
+for (const skew of [-600_000, 600_000]) test(`a phone clock ${skew > 0 ? 'ahead' : 'behind'} by 10 minutes cannot keep a code on screen longer`, async () => {
+  const { page } = await open('card', { clock: NOW + skew, init: withMember(), answers: { qr: [qrAnswer('a'.repeat(64), NOW), ...Array(20).fill('abort')] } });
+  try {
+    const qr = page.getByRole('img', { name: 'QR-kode til kassen' });
+    await qr.waitFor();
+    const left = await page.evaluate(() => Number(document.querySelector('[data-qr-valid-until]').dataset.qrValidUntil) - Date.now());
+    assert.ok(left <= 57_000 && left > 50_000, String(left));
+    await page.clock.runFor(58_000);
+    await page.getByRole('alert').waitFor();
+    assert.equal(await qr.count(), 0);
+  } finally { await page.close(); }
+});
+
+test('an expired session sends the customer to login', async () => {
+  const { page } = await open('card', { init: withMember(), answers: { qr: [[401, { error: 'unauthorized' }]] } });
+  try {
+    await page.waitForURL(`${origin}/club/login`);
+  } finally { await page.close(); }
+});
+
+test('the screen stays on and the wake lock is taken again after the app returns', async () => {
+  const wakeLock = { fn: () => {
+    window.__locks = [];
+    Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => { const lock = { released: false, release: async () => { lock.released = true; } }; window.__locks.push(lock); return lock; } } });
+  } };
+  const { page } = await open('card', { init: withMember(), answers: { qr: [qrAnswer('a'.repeat(64), Date.now()), qrAnswer('b'.repeat(64), Date.now())] } });
+  await page.addInitScript(wakeLock.fn);
+  try {
+    await page.reload();
+    await page.getByRole('img', { name: 'QR-kode til kassen' }).waitFor();
+    await page.waitForFunction(() => window.__locks.length === 1);
+    // The browser releases the lock while hidden; coming back takes a new one.
+    await page.evaluate(() => { window.__locks[0].released = true; document.dispatchEvent(new Event('visibilitychange')); });
+    await page.waitForFunction(() => window.__locks.length === 2);
+    // While a lock is held, returning does not stack another.
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.waitForTimeout(100);
+    assert.equal(await page.evaluate(() => window.__locks.length), 2);
+  } finally { await page.close(); }
 });

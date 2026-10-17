@@ -1,6 +1,7 @@
 // Browser calls to the phase 1 customer API. The brand is addressed by its
 // public slug; the session is the HttpOnly cookie the API sets.
-export type PortalAnswer<T> = { ok: true; data: T } | { ok: false; error: string };
+// `serverTime` is the response's Date header, so expiry is judged by the server's clock, not the phone's.
+export type PortalAnswer<T> = { ok: true; data: T; serverTime: number } | { ok: false; error: string };
 
 export async function portalRequest<T = Record<string, unknown>>(slug: string, path: string, body?: object): Promise<PortalAnswer<T>> {
   try {
@@ -9,7 +10,7 @@ export async function portalRequest<T = Record<string, unknown>>(slug: string, p
       ...(body ? { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) } : {}),
     });
     const data = await response.json().catch(() => ({}));
-    if (response.ok) return { ok: true, data: data as T };
+    if (response.ok) return { ok: true, data: data as T, serverTime: Date.parse(response.headers.get('date') || '') || Date.now() };
     return { ok: false, error: typeof data?.error === 'string' ? data.error : 'unavailable' };
   } catch {
     return { ok: false, error: 'network' };
@@ -20,6 +21,7 @@ export async function portalRequest<T = Record<string, unknown>>(slug: string, p
 export function portalErrorText(code: string): string {
   switch (code) {
     case 'rate_limited': return 'Du har prøvet mange gange. Vent lidt, og prøv igen.';
+    case 'unauthorized': return 'Du er blevet logget ud. Log ind igen.';
     case 'network': return 'Ingen forbindelse. Tjek din internetforbindelse, og prøv igen.';
     case 'program_inactive': return 'Klubben er ikke åben lige nu. Kig forbi igen senere.';
     case 'invalid_request': return 'Tjek dit navn og din e-mail, og prøv igen.';

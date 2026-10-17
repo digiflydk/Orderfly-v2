@@ -23,6 +23,8 @@ test('reward text is built from the numbers and description the API returns',()=
   assert.equal(texts.nextRewardText(7,8,'en gratis pizza'),'1 stempel til en gratis pizza');
   assert.equal(texts.nextRewardText(2,8,'  '),'6 stempler til næste belønning');
   assert.equal(texts.firstName('  Anna  Hansen '),'Anna');
+  // Danish time: 23:30 UTC on 30 April is already 1 May in Copenhagen.
+  assert.equal(texts.danishDate(Date.parse('2027-04-30T23:30:00Z')),'1. maj 2027');
 });
 
 test('Esmeralda gets the white logo and its Bourton/Brandon font files; other brands use their own logo',()=>{

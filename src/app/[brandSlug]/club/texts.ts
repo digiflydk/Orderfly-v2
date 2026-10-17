@@ -9,3 +9,7 @@ export function nextRewardText(stamps: number, stampsRequired: number, rewardDes
 }
 
 export const firstName = (name: string) => name.trim().split(/\s+/)[0] || name;
+
+// Dates as Danish customers read them, in Danish time.
+const DATE = new Intl.DateTimeFormat('da-DK', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'Europe/Copenhagen' });
+export const danishDate = (epochMs: number) => DATE.format(new Date(epochMs));
