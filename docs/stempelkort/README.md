@@ -7,7 +7,7 @@ Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md)
 
 | PR | Indhold | Status |
 |---|---|---|
-| 1 | Rettigheder, migration af `orderfly.loyalty` og forretningsregler | Klar til review (parret med Esmeralda `feature/stempelkort-fase-1-rettigheder`) |
+| 1 | Rettigheder, migration af `orderfly.loyalty` og forretningsregler | Merget 2026-10-17 (#253, parret med Esmeralda #410) |
 | 2 | Kassens backend (opslag, stempel, indløsning, korrektion, udløbsjob) | Klar til review (bygger på PR 1) |
 | 3 | Medlemskab, samtykke, Omnisend, login-link og session | Klar til review (bygger på PR 2, parret med Esmeralda-skabelon) |
 | 4 | Admin: Stempelkort (indstillinger, medlemmer, log, CSV) | Klar til review (bygger på PR 3) |
