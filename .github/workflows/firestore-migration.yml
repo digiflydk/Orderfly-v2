@@ -1,0 +1,76 @@
+name: Firestore data migration
+
+# Manually started. Runs one migration from scripts/migrations/ against orderfly-39325.
+# preview writes nothing and prints the planned changes with a manifest hash. apply runs only from
+# main, only after approval in the "production" environment, and only while the planned changes
+# still match the reviewed hash. Every apply is logged in dataMigrationAudit.
+# See docs/firestore-operations.md.
+on:
+  workflow_dispatch:
+    inputs:
+      migration:
+        description: "Migration name (scripts/migrations/<name>.mjs)"
+        required: true
+      mode:
+        description: "preview (read only) or apply (write after approval)"
+        type: choice
+        options: [preview, apply]
+        default: preview
+      manifest_sha256:
+        description: "apply only: the manifest hash printed by the reviewed preview"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firestore-production-writes
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    if: inputs.mode == 'preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Plan the migration
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          MIGRATION: ${{ inputs.migration }}
+        run: node scripts/firestore-migrate.mjs "$MIGRATION" preview
+
+  apply:
+    if: inputs.mode == 'apply'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Require main and an approval-protected environment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.ref !== 'refs/heads/main') throw new Error('apply runs only from main.');
+            const {data} = await github.request('GET /repos/{owner}/{repo}/environments/{name}', {...context.repo, name: 'production'});
+            if (!(data.protection_rules || []).some(rule => rule.type === 'required_reviewers' && rule.reviewers?.length)) throw new Error('The production environment has no required reviewers; refusing to write.');
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Apply the reviewed migration
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          MIGRATION: ${{ inputs.migration }}
+          MANIFEST_SHA256: ${{ inputs.manifest_sha256 }}
+        run: node scripts/firestore-migrate.mjs "$MIGRATION" apply

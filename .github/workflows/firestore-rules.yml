@@ -1,0 +1,70 @@
+name: Firestore rules
+
+# Manually started. Publishes the rules file named in firebase.access.json (firestore.access.rules)
+# to orderfly-39325. preview changes nothing and prints the live hash and a diff. apply runs only
+# from main, only after approval in the "production" environment, and only while the live rules
+# still have the reviewed hash. See docs/firestore-operations.md.
+on:
+  workflow_dispatch:
+    inputs:
+      mode:
+        description: "preview (read only) or apply (publish after approval)"
+        type: choice
+        options: [preview, apply]
+        default: preview
+      expected_live_sha256:
+        description: "apply only: the live rules hash printed by the reviewed preview"
+        required: false
+        default: ""
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firestore-production-writes
+  cancel-in-progress: false
+
+jobs:
+  preview:
+    if: inputs.mode == 'preview'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Compare live and candidate rules
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: node scripts/firestore-rules-release.mjs preview
+
+  apply:
+    if: inputs.mode == 'apply'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment: production
+    permissions:
+      contents: read
+      actions: read
+    steps:
+      - name: Require main and an approval-protected environment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            if (context.ref !== 'refs/heads/main') throw new Error('apply runs only from main.');
+            const {data} = await github.request('GET /repos/{owner}/{repo}/environments/{name}', {...context.repo, name: 'production'});
+            if (!(data.protection_rules || []).some(rule => rule.type === 'required_reviewers' && rule.reviewers?.length)) throw new Error('The production environment has no required reviewers; refusing to publish.');
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Publish reviewed rules
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          EXPECTED_LIVE_SHA256: ${{ inputs.expected_live_sha256 }}
+        run: node scripts/firestore-rules-release.mjs apply

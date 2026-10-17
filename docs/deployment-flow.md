@@ -39,6 +39,10 @@ See [Development workflow](development-workflow.md).
 
 A green pre-merge test run proves the candidate code passed its checks. It does not by itself prove that the same commit is live. Merge also does not mean Done.
 
+## Firestore indexes, rules and data migrations
+
+Changes to the production data project `orderfly-39325` go through manual GitHub workflows: **Firestore indexes** (additive), and **Firestore rules** and **Firestore data migration**, which preview first and write only from `main` after approval in the `production` environment. See [Firestore production operations](firestore-operations.md).
+
 ## Production domain configuration (`orderfly.dk`)
 
 - Hosting platform: **Firebase App Hosting** (`orderfly-v21-10334086-b3076`).
