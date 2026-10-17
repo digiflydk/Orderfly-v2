@@ -59,6 +59,8 @@ export type MemberDoc = {
   sessionEpoch: number;
   // Latest stamp, redemption or correction, for the admin member list.
   lastActivityAt?: number;
+  // The member's current QR code; issuing a new one revokes the previous.
+  qrTokenId?: string | null;
 };
 
 export type ProgramDoc = { brandId: string; version: number; settings: ProgramSettings };

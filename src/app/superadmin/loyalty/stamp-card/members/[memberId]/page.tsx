@@ -64,6 +64,7 @@ export default async function MemberPage({ params, searchParams }: { params: Pro
 
       <section className="space-y-3 rounded-lg border bg-white p-4">
         <h2 className="font-semibold">Historik</h2>
+        {detail.eventsTruncated && <p role="status" className="rounded-md bg-amber-50 p-3 text-sm">Viser de seneste 500 hændelser. Ældre hændelser findes i loggen og dens CSV-eksport.</p>}
         <div className="overflow-x-auto"><Table>
           <TableHeader><TableRow><TableHead>Tidspunkt</TableHead><TableHead>Hændelse</TableHead><TableHead>Antal · beløb</TableHead><TableHead>Kanal · kilde</TableHead><TableHead>Afdeling</TableHead><TableHead>Medarbejder</TableHead><TableHead>Årsag</TableHead></TableRow></TableHeader>
           <TableBody>{events.map((e, i) => (

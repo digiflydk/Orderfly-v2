@@ -5,7 +5,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { AuthorityError } from '@/lib/access/authority';
 import { orderflySession } from '@/lib/access/orderfly-session';
 import { correctMember, correctionSchema, LoyaltyError } from '@/lib/loyalty/stamp-card/counter';
-import { listEvents, listMembers, logFilterSchema, saveSettings, saveSettingsSchema } from '@/lib/loyalty/stamp-card/admin';
+import { listEvents, listMembers, logFilterSchema, MEMBER_EXPORT_LIMIT, saveSettings, saveSettingsSchema } from '@/lib/loyalty/stamp-card/admin';
 import type { ZodIssue } from 'zod';
 
 export type ActionResult<T = undefined> = { ok: true; data?: T } | { ok: false; error: string; fields?: Record<string, string> };
@@ -43,7 +43,7 @@ export async function saveProgramSettings(input: unknown): Promise<ActionResult<
 
 
 export async function exportMembers(brandIds: string[]): Promise<ActionResult<Awaited<ReturnType<typeof listMembers>>>> {
-  try { return { ok: true, data: await listMembers(getAdminDb(), await actor(), brandIds.slice(0, 50), Date.now()) }; }
+  try { return { ok: true, data: await listMembers(getAdminDb(), await actor(), brandIds.slice(0, 50), Date.now(), MEMBER_EXPORT_LIMIT) }; }
   catch (error) { return failure(error); }
 }
 

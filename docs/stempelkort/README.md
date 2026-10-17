@@ -48,12 +48,12 @@ Der oprettes ingen roller fra koden. Rettighederne føjes til eksisterende eller
 
 Sådan fungerer det:
 - **Tjek pr. kald:** Hvert kald tjekker rettigheden for den konkrete afdeling i samme transaktion, som skriver data. Inaktive medarbejdere afvises af det eksisterende Opsfly-sessionstjek.
-- **Idempotens:** Hver stempling, indløsning og korrektion har en idempotensnøgle. Gentages et kald med samme nøgle, returneres samme kvittering. Samme nøgle med andet indhold giver `idempotency_conflict`.
+- **Idempotens:** Hver stempling, indløsning og korrektion har en idempotensnøgle. Gentages et kald med samme nøgle, returneres samme kvittering, men først efter det samme rettighedstjek som et nyt kald. Samme nøgle med andet indhold giver `idempotency_conflict`.
 - **Kortet fryser sine regler:** antal stempler, gyldighed, belønning og afdelingsbinding. Ændrede indstillinger gælder kun nye kort.
-- **QR-tokens:** Et QR-token gemmes kun som hash, gælder i 60 sekunder og kan kun bruges én gang.
+- **QR-tokens:** Et QR-token gemmes kun som hash, gælder i 60 sekunder og kan kun bruges én gang. Kun medlemmets nyeste kode gælder; en ny kode ugyldiggør den forrige.
 - **E-mail-søgning** viser maskeret e-mail. Opslag er begrænset til 60 pr. minut pr. medarbejder.
 - **Udløb:** Udløbne kort og belønninger markeres og logges. Intet slettes. Et stempel efter fristen, men før jobbet har kørt, starter et nyt kort og logger udløbet.
-- **Korrektion** kræver årsag og logges med medarbejderen.
+- **Korrektion** kræver årsag og logges med medarbejderen. Stempler kan ikke tilføjes, mens programmet ikke er aktivt.
 
 Før brug skal indekserne i `docs/loyalty-firestore-indexes.json` oprettes i dataprojektet `orderfly-39325`.
 
@@ -88,14 +88,14 @@ Siden `/superadmin/loyalty/stamp-card` har tre faner. Hver fane vises kun med si
   - Alle parametre fra spec §6.1, herunder kanaler pr. brand og belønningstype med produkt- eller kategorivalg.
   - Hver gemning bliver en ny version (`loyaltyProgramVersions`) og logges med medarbejder, tidspunkt og gammel og ny værdi.
   - Er indstillingerne ændret af en anden imens, afvises gemningen.
-  - Ugyldige værdier og produkter fra et andet brand afvises på serveren.
+  - Ugyldige værdier, inaktive produkter og kategorier samt produkter fra et andet brand afvises på serveren. Vælgeren viser kun aktive produkter og kategorier.
 - **Medlemmer** (`…:members`):
   - Navn, e-mail, tilmeldt, stempler X/N, optjente belønninger, næste udløb, nyhedsbrev og seneste aktivitet.
-  - Søgning, sortering og CSV-eksport. Eksporten læses igen på serveren med samme rettighedstjek.
-  - Klik på et medlem åbner fuld historik med belønninger og samtykke.
+  - Søgning, sortering og CSV-eksport. Eksporten læses igen på serveren med samme rettighedstjek og indeholder op til 50.000 medlemmer pr. brand; når det loft nås, siger siden til.
+  - Klik på et medlem åbner historikken (de seneste 500 hændelser, med besked når der er flere) med belønninger og samtykke.
   - Manuel korrektion vises kun med `…:correct` og kun for de afdelinger, rettigheden gælder for.
 - **Log** (`…:log`):
-  - Alle hændelser med filter på periode (dansk tid), kanal, medarbejder og type, samt CSV-eksport.
+  - Alle hændelser med filter på periode (dansk tid), kanal, medarbejder og type, samt CSV-eksport. Filtrene er en del af forespørgslen, så visningsgrænsen gælder de matchende hændelser (sammensatte indekser i `docs/loyalty-firestore-indexes.json`).
   - Loggen kan ikke redigeres eller slettes.
 
 **Filterlinjen** er fælles for siderne under Loyalitet:
