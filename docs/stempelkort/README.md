@@ -1,7 +1,7 @@
 # Stempelkort (Esmeralda Club)
 
 Specifikationer: [fase 1](fase-1-stempelkort-backend.md), [fase 2](fase-2-stempelkort-kundeportal.md) og [fase 3](fase-3-stempelkort-merchantportal.md).
-Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md).
+Godkendt analyse og plan: [fase 1](fase-1-analyse-og-plan.md) og [fase 2](fase-2-analyse-og-plan.md).
 
 ## Status for fase 1
 
@@ -134,3 +134,31 @@ Menuen **Loyalitet** har nu tre punkter: **Oversigt**, **Stempelkort** og **Kund
 **Visningsgrænse:** Oversigten viser højst 366 dage; en længere valgt periode forkortes til de seneste 366 dage, og siden siger til. Den læser højst 20.000 hændelser pr. brand i perioden og siger også til, hvis den grænse er nået.
 
 mPanel-genveje: `orderfly.stamp_cards:overview` åbner oversigten, og `orderfly.customer_score:view` åbner kundescoren.
+
+## Fase 2 – kundeportal
+
+Plan: [fase-2-analyse-og-plan.md](fase-2-analyse-og-plan.md).
+
+| PR | Indhold | Status |
+|---|---|---|
+| 1 | Ramme, tilmelding, login og vilkår | I review |
+| 2 | Mit stempelkort og QR-kode | Ikke startet |
+| 3 | Historik, profil, hjemmeskærm og skilt-QR | Ikke startet |
+
+**Adresse:** `https://{slug}.orderfly.dk/club`, fx `https://esmeralda.orderfly.dk/club`. Portalen virker også på `https://orderfly.dk/{slug}/club`, og der omdirigeres ikke, fordi `*.orderfly.dk` endnu ikke er sat op i drift. Login-mailens link peger altid på subdomænet, så login i drift kræver subdomænet ([brand-subdomains.md](../brand-subdomains.md)).
+
+**Sider (PR 1)** i `src/app/[brandSlug]/club/`:
+- `/club`: introduktion med "Bliv medlem" og "Log ind". For et logget ind medlem vises stempler X af N og tekst om næste belønning (kortet med QR-kode kommer i PR 2). Er programmet slået fra, vises en venlig besked.
+- `/club/tilmeld`: navn, e-mail og to afkrydsninger, som ikke er forudafkrydsede. Samtykketeksten og versionerne kommer fra programmet; ændres teksterne undervejs, skal kunden sætte flueben igen. Svaret er altid "Tjek din e-mail".
+- `/club/login`: e-mail → login-link. Åbnes siden fra mailen, fjernes tokenet fra adressen, før det sendes til `verify`. Udløbet og brugt link har hver sin besked og en knap til et nyt link.
+- `/club/vilkaar`: programmets vilkår.
+
+**Sådan virker det:**
+- Siderne læser på serveren med de samme fase 1-funktioner som API'et (`data.ts`) og skriver aldrig. Alle handlinger går gennem `/api/loyalty/{brandSlug}/*`. Der er ingen forretningslogik i frontend og ingen ændringer i `src/lib/loyalty/stamp-card/`.
+- Portalen bruger brandlayoutet (farver, Esmeralda-forudindstillingen i `commerce-ui.css`, cookie-banner og footer) med sin egen header. Webshoppens header vises ikke.
+- **Esmeralda** (`brand-preset.ts`): det hvide logo fra Esmeraldas egen side og skriftfilerne Bourton (overskrifter) og Brandon (brødtekst), som feedback-siderne også bruger. Andre brands bruger logo og farver fra brandindstillingerne. Senere skal det komme fra dynamiske brandindstillinger.
+- **Ingen tracking:** Brandets tredjeparts-tracking (GTM, GA4, Meta) kører ikke på `/club`-sider (`brand-tracking.tsx`).
+- Portalens sider er markeret `noindex`.
+- En afdeling kan ikke få adressen `club`.
+
+**Test:** `tests/unit/loyalty-portal-pages.cjs` (stier, tekster, brandudseende og serverlæsning) og `tests/unit/loyalty-portal-browser.cjs` (tilmelding, login, links fra mailen og tracking i Chromium ved 390 og 1440 px).
