@@ -57,6 +57,8 @@ export type MemberDoc = {
   termsVersion: string;
   // Incremented to revoke every customer-portal session (logout everywhere, deletion).
   sessionEpoch: number;
+  // The member's current QR code; issuing a new one revokes the previous.
+  qrTokenId?: string | null;
 };
 
 export type ProgramDoc = { brandId: string; version: number; settings: ProgramSettings };
