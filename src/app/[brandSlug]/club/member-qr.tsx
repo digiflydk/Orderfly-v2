@@ -7,8 +7,9 @@ import { Button } from '@/components/ui/button';
 import { portalErrorText, portalRequest } from './portal-api';
 
 // A code from the backend lives 60 seconds and works once; a newer code revokes
-// the older. It is renewed well before expiry and hidden the moment it may have
-// expired, so a screenshot or an offline phone never shows an old code as valid.
+// the older the moment it is issued. The shown code is therefore hidden as soon
+// as a renewal starts, and the moment it may have expired, so a slow connection,
+// a screenshot or an offline phone never shows an invalid code as valid.
 const LIFETIME = 60_000, RENEW_AFTER = 45_000, SAFETY = 3_000, RETRY = 5_000;
 
 type Code = { svg: string; validUntil: number };
@@ -24,19 +25,24 @@ export function MemberQr({ slug, base }: { slug: string; base: string }) {
   const load = useCallback(async () => {
     if (busy.current) return;
     busy.current = true;
-    clearTimeout(timer.current);
+    clearTimeout(timer.current); clearTimeout(expiry.current);
+    setCode(null);
     const answer = await portalRequest<{ token: string; expiresAt: number }>(slug, 'qr');
     busy.current = false;
+    const fail = (error: string) => {
+      setFailure(error);
+      if (document.visibilityState === 'visible') timer.current = setTimeout(load, RETRY);
+    };
     if (!answer.ok) {
       if (answer.error === 'unauthorized') { window.location.assign(`${base}/login`); return; }
-      setFailure(answer.error);
-      // Keep trying quietly while a still-valid code is on screen.
-      if (document.visibilityState === 'visible') timer.current = setTimeout(load, RETRY);
-      return;
+      return fail(answer.error);
     }
     // Remaining life by the server's clock, never more than a code's full lifetime.
     const remaining = Math.min(LIFETIME, Math.max(0, answer.data.expiresAt - answer.serverTime)) - SAFETY;
-    const svg = await QRCode.toString(answer.data.token, { type: 'svg', errorCorrectionLevel: 'M', margin: 4, color: { dark: '#000000', light: '#ffffff' } });
+    let svg: string;
+    try {
+      svg = await QRCode.toString(answer.data.token, { type: 'svg', errorCorrectionLevel: 'M', margin: 4, color: { dark: '#000000', light: '#ffffff' } });
+    } catch { return fail('unavailable'); }
     const validUntil = Date.now() + remaining;
     setCode({ svg, validUntil }); setFailure(null);
     clearTimeout(expiry.current);
@@ -64,14 +70,19 @@ export function MemberQr({ slug, base }: { slug: string; base: string }) {
     };
   }, [load]);
 
-  // Keep the screen on while the code is shown, where the browser supports it.
-  const showing = !!code;
+  // Keep the screen on while the card is open, where the browser supports it.
+  // The browser drops the lock when the app is hidden, so it is taken again on return.
   useEffect(() => {
-    if (!showing || !('wakeLock' in navigator)) return;
-    let lock: { release: () => Promise<void> } | null = null, active = true;
-    navigator.wakeLock.request('screen').then(l => { if (active) lock = l; else void l.release(); }).catch(() => {});
-    return () => { active = false; void lock?.release().catch(() => {}); };
-  }, [showing]);
+    if (!('wakeLock' in navigator)) return;
+    let lock: WakeLockSentinel | null = null, active = true;
+    const acquire = () => {
+      if (document.visibilityState !== 'visible' || (lock && !lock.released)) return;
+      navigator.wakeLock.request('screen').then(l => { if (active) lock = l; else void l.release(); }).catch(() => {});
+    };
+    acquire();
+    document.addEventListener('visibilitychange', acquire);
+    return () => { active = false; document.removeEventListener('visibilitychange', acquire); void lock?.release().catch(() => {}); };
+  }, []);
 
   return (
     <section aria-labelledby="club-qr" className="flex flex-col items-center gap-3 text-center">

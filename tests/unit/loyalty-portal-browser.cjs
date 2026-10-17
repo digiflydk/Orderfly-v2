@@ -73,7 +73,7 @@ async function open(view, { width = 390, hash = '', answers = {}, clock, init } 
     calls.push({ name, method: route.request().method(), body: route.request().postDataJSON(), url: page.url(), contentType: route.request().headers()['content-type'] });
     const answer = (answers[name] || []).shift() || [200, { ok: true }];
     if (answer === 'abort') return route.abort('internetdisconnected');
-    if (typeof answer === 'function') return route.fulfill(answer());
+    if (typeof answer === 'function') return route.fulfill(await answer());
     await route.fulfill({ status: answer[0], contentType: 'application/json', body: JSON.stringify(answer[1]) });
   });
   await page.goto(`${origin}/${view}${hash}`);
@@ -234,12 +234,19 @@ test('a card without stamps or rewards and a closed program say so plainly', asy
 });
 
 test('the QR code encodes the backend token, renews before expiry and refreshes the card', async () => {
-  const { page, calls } = await open('card', { clock: NOW, init: withMember(), answers: { qr: [qrAnswer('a'.repeat(64), NOW), qrAnswer('b'.repeat(64), NOW + 45_000)] } });
+  let release;
+  const held = new Promise(resolve => { release = resolve; });
+  const slow = async () => { await held; return qrAnswer('b'.repeat(64), NOW + 45_000)(); };
+  const { page, calls } = await open('card', { clock: NOW, init: withMember(), answers: { qr: [qrAnswer('a'.repeat(64), NOW), slow] } });
   try {
     const qr = page.getByRole('img', { name: 'QR-kode til kassen' });
     await qr.waitFor();
     assert.equal(modules(await qr.innerHTML()), await qrSvg('a'.repeat(64)));
     await page.clock.runFor(46_000);
+    // The backend revokes the old code when it issues the new one, so the old code is gone while renewing.
+    await page.getByRole('status').filter({ hasText: 'Henter QR-kode…' }).waitFor();
+    assert.equal(await qr.count(), 0);
+    release();
     await page.waitForFunction(() => window.__refresh === 1);
     assert.equal(modules(await qr.innerHTML()), await qrSvg('b'.repeat(64)));
     assert.deepEqual(calls.map(c => [c.name, c.method]), [['qr', 'GET'], ['qr', 'GET']]);
@@ -250,10 +257,8 @@ test('without a connection the code disappears at expiry, shows a retry button a
   const { page } = await open('card', { clock: NOW, init: withMember(), answers: { qr: [qrAnswer('a'.repeat(64), NOW), ...Array(20).fill('abort')] } });
   try {
     await page.getByRole('img', { name: 'QR-kode til kassen' }).waitFor();
-    await page.clock.runFor(50_000);
-    // Still within its life: the code stays while renewal is retried.
-    assert.equal(await page.getByRole('img', { name: 'QR-kode til kassen' }).count(), 1);
-    await page.clock.runFor(8_000);
+    await page.clock.runFor(46_000);
+    // A failed renewal may still have revoked the old code, so it is not shown again.
     await page.getByRole('alert').filter({ hasText: 'Ingen forbindelse – QR-koden kan ikke vises' }).waitFor();
     assert.equal(await page.getByRole('img', { name: 'QR-kode til kassen' }).count(), 0);
     await page.unroute('**/api/loyalty/esmeralda/*');
@@ -280,5 +285,26 @@ test('an expired session sends the customer to login', async () => {
   const { page } = await open('card', { init: withMember(), answers: { qr: [[401, { error: 'unauthorized' }]] } });
   try {
     await page.waitForURL(`${origin}/club/login`);
+  } finally { await page.close(); }
+});
+
+test('the screen stays on and the wake lock is taken again after the app returns', async () => {
+  const wakeLock = { fn: () => {
+    window.__locks = [];
+    Object.defineProperty(navigator, 'wakeLock', { configurable: true, value: { request: async () => { const lock = { released: false, release: async () => { lock.released = true; } }; window.__locks.push(lock); return lock; } } });
+  } };
+  const { page } = await open('card', { init: withMember(), answers: { qr: [qrAnswer('a'.repeat(64), Date.now()), qrAnswer('b'.repeat(64), Date.now())] } });
+  await page.addInitScript(wakeLock.fn);
+  try {
+    await page.reload();
+    await page.getByRole('img', { name: 'QR-kode til kassen' }).waitFor();
+    await page.waitForFunction(() => window.__locks.length === 1);
+    // The browser releases the lock while hidden; coming back takes a new one.
+    await page.evaluate(() => { window.__locks[0].released = true; document.dispatchEvent(new Event('visibilitychange')); });
+    await page.waitForFunction(() => window.__locks.length === 2);
+    // While a lock is held, returning does not stack another.
+    await page.evaluate(() => document.dispatchEvent(new Event('visibilitychange')));
+    await page.waitForTimeout(100);
+    assert.equal(await page.evaluate(() => window.__locks.length), 2);
   } finally { await page.close(); }
 });

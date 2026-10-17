@@ -170,9 +170,10 @@ Plan: [fase-2-analyse-og-plan.md](fase-2-analyse-og-plan.md).
   - Tegnes i browseren (pakken `qrcode`) som sort på hvid med hvid kant, uanset brandets farver.
   - Hentes fra `GET qr` og fornyes efter 45 sekunder, og straks når kunden vender tilbage til appen eller får forbindelse igen.
   - Kortet genindlæses ved hver fornyelse, så nye stempler fra kassen dukker op.
+  - Koden skjules, så snart en ny kode bestilles, fordi backend ugyldiggør den gamle i samme øjeblik. Mens den nye hentes, står der "Henter QR-kode…".
   - Koden skjules senest 57 sekunder efter, at serveren udstedte den, målt med serverens `Date`-header og højst en kodes levetid. Et forkert ur på telefonen kan derfor ikke holde en gammel kode synlig.
   - Uden forbindelse vises "Ingen forbindelse – QR-koden kan ikke vises" og "Prøv igen".
   - En udløbet session sender kunden til login.
-  - Skærmen holdes tændt, mens koden vises, hvor browseren understøtter det.
+  - Skærmen holdes tændt, mens kortet er åbent, hvor browseren understøtter det. Låsen tages igen, når kunden vender tilbage til appen.
 
 **Test:** `tests/unit/loyalty-portal-pages.cjs` (stier, tekster, datoer, brandudseende og serverlæsning) og `tests/unit/loyalty-portal-browser.cjs` (tilmelding, login, links fra mailen, tracking, kortet og QR-kodens fornyelse, udløb, offline og forkert ur i Chromium ved 390 og 1440 px).
