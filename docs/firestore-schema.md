@@ -133,6 +133,23 @@ real-time automation. Clients must have no direct read or write access.
 
 ---
 
+## Stamp-card collections (stempelkort phase 1)
+
+Server-only, like every other collection (`firestore.access.rules` denies browser access). Times are epoch milliseconds and money is integer øre. Every document carries `brandId` and, where relevant, the tenant snapshot `companyId`. Types are in `src/lib/loyalty/stamp-card/model.ts`.
+
+| Collection | ID | Content |
+|---|---|---|
+| `loyaltyPrograms` | `{brandId}` | `{brandId, version, settings}`. `settings` follows `programSettingsSchema`. A missing document means an inactive program. Written by the admin settings (PR 4). |
+| `loyaltyMembers` | random | `customerId`, `name`, `normalizedEmail`, `status` (`active`/`deleted`), `joinedAt`, `currentCardId`, and `stampDay`/`stampsOnDay` for the optional daily limit. Created by sign-up (PR 3). |
+| `loyaltyMemberIdentities` | `sha256(["loyalty-member", brandId, email])` | `{brandId, memberId}`. Prevents duplicates and powers e-mail lookup. |
+| `loyaltyCards` | random | The card freezes the rules it was issued under: `programVersion`, `stampsRequired`, `crossLocation`, `cardValidityMonths`, `rewardValidityMonths`, reward snapshot. Also `stamps`, `status` (`active`/`completed`/`expired`), `locationId` (bound location or `null`), `lastStampAt` and `expiresAt` (`null` until the first stamp). |
+| `loyaltyRewards` | `sha256([eventId, "reward", n])` | Reward snapshot, `description`, `locationId`, `earnedAt`, `expiresAt`, `status` (`available`/`redeemed`/`expired`/`cancelled`) and the redeeming employee and location. |
+| `loyaltyEvents` | `sha256([operation, brandId, idempotencyKey])` or a deterministic job key | Append-only log with tenant, brand, member, type, quantity, amount, channel, source, location, employee ID and name, reason, idempotency key, request hash, card and reward. The primary event stores the operation's `result` receipt. |
+| `loyaltyQrTokens` | `sha256(["qr", token])` | `{brandId, memberId, createdAt, expiresAt, usedAt}`. The raw token is never stored; it is valid for 60 seconds and consumed by the first lookup. |
+| `loyaltyRateLimits` | `sha256(["lookup", principal, minute])` | Per-employee lookup counter, 60 per minute. |
+
+Required composite indexes for the expiry job and the reward lookup are listed in `docs/loyalty-firestore-indexes.json`. Add them additively to the production data project `orderfly-39325`; the file is not a full index inventory.
+
 ## Collection: `discounts`
 Defines customer-entered discount codes and automatic newsletter-signup incentives.
 
