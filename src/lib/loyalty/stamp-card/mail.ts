@@ -43,7 +43,8 @@ export async function deliverLoyaltyMail(db: Firestore, id: string, now = Date.n
     try {
       await client.send({ idempotencyKey: `loyalty-login-${id}`, templateKey: 'orderfly.stamp_card.login_link', organizationId: mail.organizationId,
         senderProfile: mail.senderProfile, locale: 'da', recipientEmail: job.email, recipientName: job.name, relatedEntity: { type: 'loyalty_login', id },
-        variables: { brand_id: job.brandId, brand_name: job.brandName, program_name: job.programName, name: job.name, login_url: job.loginUrl } });
+        variables: { brand_id: job.brandId, brand_name: job.brandName, program_name: job.programName, name: job.name, login_url: job.loginUrl,
+          expires_at: new Date(job.expiresAt).toISOString() } });
       update = { state: 'accepted', loginUrl: null, lastError: null, acceptedAt: Date.now() };
     } catch (error) {
       const failure = error instanceof NotificationPlatformError ? error : new NotificationPlatformError('provider_result_unknown', true);
