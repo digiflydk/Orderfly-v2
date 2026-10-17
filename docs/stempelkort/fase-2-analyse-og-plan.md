@@ -68,9 +68,7 @@ Alle ligger under `/api/loyalty/{brandSlug}/` (`src/app/api/loyalty/[brandSlug]/
 
 ---
 
-## Del B – Beslutninger og åbne spørgsmål
-
-### Svar fra ejeren (2026-10-17)
+## Del B – Beslutninger (svar fra ejeren, 2026-10-17)
 
 | # | Emne | Beslutning |
 |---|---|---|
@@ -78,15 +76,9 @@ Alle ligger under `/api/loyalty/{brandSlug}/` (`src/app/api/loyalty/[brandSlug]/
 | 2 | Logo | Ejeren har ikke set, om Esmeraldas `logoUrl` er det hvide logo. Jeg tjekker det. Er det ikke det hvide logo, lægges det hvide logo (feedback-sidernes `esmeralda-logo.png`) ind i Esmeralda-forudindstillingen for portalen, så det kan flyttes til brandindstillingerne bagefter. |
 | 3 | Adresse | **`https://esmeralda.orderfly.dk/club`**. Subdomænet (`*.orderfly.dk` i App Hosting og DNS) er **endnu ikke sat op**. Konsekvens: portalen virker også på `orderfly.dk/esmeralda/club`, og der laves **ingen** omdirigering til subdomænet. Login-mailens link peger dog altid på subdomænet (fase 1), så login virker først i drift, når subdomænet er sat op. Det er et krav før lancering (C9). |
 | 4 | Telefonnummer | **Nej.** |
-
 | 5 | Skilt-QR til disken | **Ja.** En QR-kode til tilmeldingssiden (`https://esmeralda.orderfly.dk/club/tilmeld`) leveres som SVG-fil i `docs/stempelkort/` til tryk. Selve trykket er drift. |
 | 6 | Hjemmeskærmsikon | Esmeralda har intet kvadratisk app-ikon. **Ikonet laves automatisk** ud fra logoet på brandets baggrundsfarve. |
 | 7 | Reserveret afdelingsadresse | **Ja.** Adressen `club` reserveres i afdelingsformularen og på serveren. |
-
----|---|---|
-| 5 | **Skilt-QR til disken (spec spørgsmål 3).** | Ja: en QR-kode til tilmeldingssiden (`…/club/tilmeld`) leveres som SVG-fil i `docs/stempelkort/` til tryk. Selve trykket er drift. |
-| 6 | **Hjemmeskærmsikon.** Har Esmeralda et kvadratisk app-ikon? | Ellers laver jeg ikonet automatisk ud fra logoet på brandets baggrundsfarve. |
-| 7 | **Reserveret afdelingsadresse.** Må jeg forhindre, at en afdeling får adressen `club`? Det er en lille ændring i afdelingsformularen (uden for `/club`-mappen). | Ja. |
 
 ---
 
