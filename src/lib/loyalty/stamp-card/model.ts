@@ -57,6 +57,8 @@ export type MemberDoc = {
   termsVersion: string;
   // Incremented to revoke every customer-portal session (logout everywhere, deletion).
   sessionEpoch: number;
+  // Latest stamp, redemption or correction, for the admin member list.
+  lastActivityAt?: number;
 };
 
 export type ProgramDoc = { brandId: string; version: number; settings: ProgramSettings };
@@ -71,8 +73,7 @@ export function maskEmail(email: string): string {
   return `${local[0]}***@${domain}`;
 }
 
-const dayFormat = new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' });
-export const copenhagenDay = (at: number) => dayFormat.format(new Date(at));
+export { copenhagenDay } from './day';
 
 // A brand without a saved program is an inactive program with default rules.
 export function readProgram(brandId: string, data: unknown): ProgramDoc {

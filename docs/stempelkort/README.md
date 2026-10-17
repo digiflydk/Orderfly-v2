@@ -10,7 +10,7 @@ Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md)
 | 1 | Rettigheder, migration af `orderfly.loyalty` og forretningsregler | Klar til review (parret med Esmeralda `feature/stempelkort-fase-1-rettigheder`) |
 | 2 | Kassens backend (opslag, stempel, indløsning, korrektion, udløbsjob) | Klar til review (bygger på PR 1) |
 | 3 | Medlemskab, samtykke, Omnisend, login-link og session | Klar til review (bygger på PR 2, parret med Esmeralda-skabelon) |
-| 4 | Admin: Stempelkort (indstillinger, medlemmer, log, CSV) | Ikke startet |
+| 4 | Admin: Stempelkort (indstillinger, medlemmer, log, CSV) | Klar til review (bygger på PR 3) |
 | 5 | Admin: Loyalitet (hovedgruppe, oversigt, kundescore flyttes) | Ikke startet |
 | 6 | Oprydning: aliaset `orderfly.loyalty` fjernes | Efter verificeret migration |
 
@@ -77,3 +77,32 @@ Sådan fungerer det:
 - Indekserne i `docs/loyalty-firestore-indexes.json` skal være oprettet.
 - Esmeralda-skabelonen `orderfly.stamp_card.login_link` skal være udrullet.
 - Brandet skal have en mail-mapping i `ORDERFLY_LOYALTY_NOTIFICATION_BRANDS`, eller den eksisterende i `ORDERFLY_GAMES_NOTIFICATION_BRANDS`.
+
+## Admin: Stempelkort (PR 4)
+
+Menuen har fået hovedgruppen **Loyalitet** med punkterne **Stempelkort** og **Kundescore**. Kundescore er flyttet fra Promotions; dens adresse ændres i del 5.
+
+Siden `/superadmin/loyalty/stamp-card` har tre faner. Hver fane vises kun med sin rettighed, og den rettighed skal gælde hele brandet:
+
+- **Indstillinger** (`orderfly.stamp_cards:settings`):
+  - Alle parametre fra spec §6.1, herunder kanaler pr. brand og belønningstype med produkt- eller kategorivalg.
+  - Hver gemning bliver en ny version (`loyaltyProgramVersions`) og logges med medarbejder, tidspunkt og gammel og ny værdi.
+  - Er indstillingerne ændret af en anden imens, afvises gemningen.
+  - Ugyldige værdier og produkter fra et andet brand afvises på serveren.
+- **Medlemmer** (`…:members`):
+  - Navn, e-mail, tilmeldt, stempler X/N, optjente belønninger, næste udløb, nyhedsbrev og seneste aktivitet.
+  - Søgning, sortering og CSV-eksport. Eksporten læses igen på serveren med samme rettighedstjek.
+  - Klik på et medlem åbner fuld historik med belønninger og samtykke.
+  - Manuel korrektion vises kun med `…:correct` og kun for de afdelinger, rettigheden gælder for.
+- **Log** (`…:log`):
+  - Alle hændelser med filter på periode (dansk tid), kanal, medarbejder og type, samt CSV-eksport.
+  - Loggen kan ikke redigeres eller slettes.
+
+**Filterlinjen** er fælles for siderne under Loyalitet:
+- Kunde (tenant) vises kun ved adgang til flere tenants.
+- Brand er valgt på forhånd, når brugeren kun har adgang til ét.
+- Periode, kanal og medarbejder kan vælges.
+- Valget ligger i URL'en og huskes mellem siderne i samme browserfane.
+- Medlemslisten følger tenant- og brandfiltret. Periode og kanal hører til hændelser og bruges derfor i loggen og på oversigten (del 5).
+
+**Visningsgrænse:** Medlemslisten og loggen viser højst 5.000 rækker pr. brand og siger tydeligt til, når grænsen er nået.

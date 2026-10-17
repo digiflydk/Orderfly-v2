@@ -1,0 +1,250 @@
+import 'server-only';
+import type { Firestore } from 'firebase-admin/firestore';
+import { z } from 'zod';
+import { authorize, policySchema, type Policy } from '@/lib/access/policy';
+import { principalKey, type VerifiedIdentity } from '@/lib/access/authority';
+import { authorizeTransaction } from '@/lib/access/scoped-data';
+import { LoyaltyError } from './counter';
+import { cardIsExpired, COLLECTIONS, EVENT_TYPES, hashKey, readProgram, type CardDoc, type LoyaltyEvent, type MemberDoc, type RewardDoc } from './model';
+import { programSettingsSchema, type ProgramSettings } from './rules';
+
+export type AdminActor = { identity: VerifiedIdentity; name: string };
+export const ADMIN_PERMISSION = {
+  settings: 'orderfly.stamp_cards:settings', members: 'orderfly.stamp_cards:members', log: 'orderfly.stamp_cards:log', correct: 'orderfly.stamp_cards:correct',
+} as const;
+const MEMBER_LIMIT = 5000, EVENT_LIMIT = 5000;
+const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+
+async function readPolicy(db: Firestore): Promise<Policy | null> {
+  const parsed = policySchema.safeParse((await db.collection('platformAdminControl').doc('access-v1').get()).data());
+  return parsed.success ? parsed.data : null;
+}
+
+export type AdminBrand = { brandId: string; brandName: string; companyId: string; companyName: string };
+
+// Brands where the actor holds the permission for the whole brand. Program
+// settings, member lists and the log combine every location, so a
+// location-limited grant does not reveal them.
+export async function adminBrands(db: Firestore, actor: AdminActor, permission: string): Promise<AdminBrand[]> {
+  const policy = await readPolicy(db);
+  if (!policy) return [];
+  const principalId = principalKey(actor.identity), result: AdminBrand[] = [];
+  for (const company of policy.companies.filter(c => c.active)) {
+    if (!authorize(policy, { principalId, companyId: company.id, locationIds: null, permission }).allowed) continue;
+    const brands = await Promise.all(company.orderflyBrandIds.map(brandId => db.collection('brands').doc(brandId).get()));
+    for (const brand of brands) if (brand.exists)
+      result.push({ brandId: brand.id, brandName: String(brand.data()?.name || brand.id), companyId: company.id, companyName: company.name || company.id });
+  }
+  return result.sort((a, b) => a.brandName.localeCompare(b.brandName, 'da'));
+}
+
+async function requireBrand(db: Firestore, actor: AdminActor, brandId: string, permission: string) {
+  const brand = (await adminBrands(db, actor, permission)).find(b => b.brandId === brandId);
+  if (!brand) throw new LoyaltyError('forbidden', 403);
+  return brand;
+}
+
+// Locations of a brand where the actor holds a location-checked permission.
+async function permittedLocations(db: Firestore, actor: AdminActor, brandId: string, permission: string) {
+  const policy = await readPolicy(db);
+  const company = policy?.companies.find(c => c.active && c.orderflyBrandIds.includes(brandId));
+  if (!policy || !company) return [];
+  const principalId = principalKey(actor.identity);
+  const rows = await db.collection('locations').where('brandId', '==', brandId).get();
+  return rows.docs.filter(doc => doc.data().isActive !== false && authorize(policy, { principalId, companyId: company.id, locationIds: [doc.id], permission }).allowed)
+    .map(doc => ({ id: doc.id, name: String(doc.data().name || doc.id) }));
+}
+
+// ---------- Settings ----------
+
+export async function readSettings(db: Firestore, actor: AdminActor, brandId: string) {
+  const brand = await requireBrand(db, actor, brandId, ADMIN_PERMISSION.settings);
+  const [programSnap, products, categories] = await Promise.all([
+    db.collection(COLLECTIONS.programs).doc(brandId).get(),
+    db.collection('products').where('brandId', '==', brandId).get(),
+    db.collection('categories').where('brandId', '==', brandId).get(),
+  ]);
+  const data = programSnap.data();
+  const program = readProgram(brandId, data);
+  return {
+    brand, version: program.version,
+    settings: program.version === 0 ? { ...program.settings, name: `${brand.brandName} Club`.slice(0, 80) } : program.settings,
+    updatedAt: typeof data?.updatedAt === 'number' ? data.updatedAt : null, updatedByName: typeof data?.updatedByName === 'string' ? data.updatedByName : null,
+    products: products.docs.map(d => ({ id: d.id, name: String(d.data().productName || d.id) })).sort((a, b) => a.name.localeCompare(b.name, 'da')),
+    categories: categories.docs.map(d => ({ id: d.id, name: String(d.data().categoryName || d.id) })).sort((a, b) => a.name.localeCompare(b.name, 'da')),
+  };
+}
+
+export const saveSettingsSchema = z.object({ brandId: id, version: z.number().int().min(0), settings: programSettingsSchema }).strict();
+
+function settingsChanges(before: ProgramSettings | null, after: ProgramSettings) {
+  return (Object.keys(after) as Array<keyof ProgramSettings>)
+    .filter(key => JSON.stringify(before?.[key] ?? null) !== JSON.stringify(after[key]))
+    .map(key => ({ field: key, from: before ? before[key] ?? null : null, to: after[key] }));
+}
+
+// Saves a new program version. Earlier cards and rewards keep the rules they
+// were issued under. Every change is logged with employee, time, old and new value.
+export async function saveSettings(db: Firestore, actor: AdminActor, input: z.infer<typeof saveSettingsSchema>, now: number) {
+  const { brandId, settings } = input;
+  return db.runTransaction(async tx => {
+    await authorizeTransaction(tx, actor.identity, { brandId }, ADMIN_PERMISSION.settings, 'company');
+    const policy = policySchema.parse((await tx.get(db.collection('platformAdminControl').doc('access-v1'))).data());
+    const companyId = policy.companies.find(c => c.orderflyBrandIds.includes(brandId))!.id;
+    const ref = db.collection(COLLECTIONS.programs).doc(brandId), saved = (await tx.get(ref)).data();
+    const current = readProgram(brandId, saved);
+    if (input.version !== current.version) throw new LoyaltyError('record_changed', 409);
+    if (settings.reward?.type === 'free_product') {
+      const refs = [...settings.reward.productIds.map(p => db.collection('products').doc(p)), ...settings.reward.categoryIds.map(c => db.collection('categories').doc(c))];
+      const rows = await Promise.all(refs.map(r => tx.get(r)));
+      if (rows.some(row => !row.exists || row.data()?.brandId !== brandId)) throw new LoyaltyError('invalid_reward_reference', 422);
+    }
+    const changes = settingsChanges(current.version === 0 ? null : current.settings, settings);
+    if (!changes.length) return { version: current.version, changed: 0 };
+    const version = current.version + 1;
+    tx.set(ref, { brandId, version, settings, updatedAt: now, updatedBy: principalKey(actor.identity), updatedByName: actor.name });
+    tx.create(db.collection('loyaltyProgramVersions').doc(`${brandId}_${version}`), { brandId, version, settings, createdAt: now, createdBy: principalKey(actor.identity), createdByName: actor.name });
+    const event: LoyaltyEvent = { companyId, brandId, memberId: null, type: 'settings_changed', quantity: changes.length, amountOre: null, channel: null,
+      source: 'admin', locationId: null, actorId: principalKey(actor.identity), actorName: actor.name, reason: null, idempotencyKey: null,
+      requestHash: null, cardId: null, rewardId: null, createdAt: now, result: { version, changes } };
+    tx.create(db.collection(COLLECTIONS.events).doc(hashKey('settings', brandId, String(version))), event);
+    return { version, changed: changes.length };
+  });
+}
+
+// ---------- Members ----------
+
+export type MemberRow = { id: string; brandId: string; brandName: string; name: string; email: string; joinedAt: number; stamps: number; stampsRequired: number;
+  rewards: number; nextExpiry: number | null; newsletter: boolean; lastActivityAt: number | null };
+
+export async function listMembers(db: Firestore, actor: AdminActor, brandIds: string[], now: number) {
+  const permitted = (await adminBrands(db, actor, ADMIN_PERMISSION.members)).filter(b => brandIds.includes(b.brandId));
+  const rows: MemberRow[] = [];
+  let truncated = false;
+  for (const brand of permitted) {
+    const [members, rewards, program] = await Promise.all([
+      db.collection(COLLECTIONS.members).where('brandId', '==', brand.brandId).where('status', '==', 'active').limit(MEMBER_LIMIT + 1).get(),
+      db.collection(COLLECTIONS.rewards).where('brandId', '==', brand.brandId).where('status', '==', 'available').get(),
+      db.collection(COLLECTIONS.programs).doc(brand.brandId).get().then(s => readProgram(brand.brandId, s.data())),
+    ]);
+    if (members.size > MEMBER_LIMIT) truncated = true;
+    const docs = members.docs.slice(0, MEMBER_LIMIT);
+    const cardIds = docs.map(d => (d.data() as MemberDoc).currentCardId).filter((v): v is string => !!v);
+    const cards = new Map<string, CardDoc>();
+    for (let i = 0; i < cardIds.length; i += 100) {
+      const batch = await db.getAll(...cardIds.slice(i, i + 100).map(c => db.collection(COLLECTIONS.cards).doc(c)));
+      for (const card of batch) if (card.exists) cards.set(card.id, card.data() as CardDoc);
+    }
+    const rewardsByMember = new Map<string, number[]>();
+    for (const doc of rewards.docs) {
+      const reward = doc.data() as RewardDoc;
+      if (reward.expiresAt > now) rewardsByMember.set(reward.memberId, [...(rewardsByMember.get(reward.memberId) || []), reward.expiresAt]);
+    }
+    for (const doc of docs) {
+      const member = doc.data() as MemberDoc, card = member.currentCardId ? cards.get(member.currentCardId) : undefined;
+      const live = card && card.memberId === doc.id && card.status === 'active' && !cardIsExpired(card, now) ? card : null;
+      const expiries = [...(rewardsByMember.get(doc.id) || []), ...(live?.expiresAt ? [live.expiresAt] : [])];
+      rows.push({ id: doc.id, brandId: brand.brandId, brandName: brand.brandName, name: member.name, email: member.normalizedEmail, joinedAt: member.joinedAt,
+        stamps: live?.stamps ?? 0, stampsRequired: live?.stampsRequired ?? program.settings.stampsRequired, rewards: rewardsByMember.get(doc.id)?.length ?? 0,
+        nextExpiry: expiries.length ? Math.min(...expiries) : null, newsletter: member.consent?.status === 'given', lastActivityAt: member.lastActivityAt ?? null });
+    }
+  }
+  return { rows: rows.sort((a, b) => b.joinedAt - a.joinedAt), truncated };
+}
+
+export async function memberDetail(db: Firestore, actor: AdminActor, memberId: string, now: number) {
+  if (!id.safeParse(memberId).success) throw new LoyaltyError('member_not_found', 404);
+  const member = (await db.collection(COLLECTIONS.members).doc(memberId).get()).data() as MemberDoc | undefined;
+  if (!member || member.status !== 'active') throw new LoyaltyError('member_not_found', 404);
+  const brand = await requireBrand(db, actor, member.brandId, ADMIN_PERMISSION.members);
+  const [cards, rewards, events, program, locations, correctLocations] = await Promise.all([
+    db.collection(COLLECTIONS.cards).where('memberId', '==', memberId).get(),
+    db.collection(COLLECTIONS.rewards).where('memberId', '==', memberId).get(),
+    db.collection(COLLECTIONS.events).where('memberId', '==', memberId).orderBy('createdAt', 'desc').limit(500).get(),
+    db.collection(COLLECTIONS.programs).doc(member.brandId).get().then(s => readProgram(member.brandId, s.data())),
+    db.collection('locations').where('brandId', '==', member.brandId).get(),
+    permittedLocations(db, actor, member.brandId, ADMIN_PERMISSION.correct),
+  ]);
+  const locationName = new Map(locations.docs.map(d => [d.id, String(d.data().name || d.id)]));
+  const card = member.currentCardId ? cards.docs.find(d => d.id === member.currentCardId)?.data() as CardDoc | undefined : undefined;
+  const live = card && card.brandId === member.brandId && card.status === 'active' && !cardIsExpired(card, now) ? card : null;
+  return {
+    brand,
+    member: { id: memberId, name: member.name, email: member.normalizedEmail, joinedAt: member.joinedAt, customerId: member.customerId,
+      consent: member.consent, termsVersion: member.termsVersion, lastActivityAt: member.lastActivityAt ?? null },
+    card: { stamps: live?.stamps ?? 0, stampsRequired: live?.stampsRequired ?? program.settings.stampsRequired, expiresAt: live?.expiresAt ?? null,
+      locationName: live?.locationId ? locationName.get(live.locationId) ?? null : null },
+    rewards: rewards.docs.map(d => ({ id: d.id, ...(d.data() as RewardDoc) })).filter(r => r.brandId === member.brandId)
+      .sort((a, b) => b.earnedAt - a.earnedAt)
+      .map(r => ({ id: r.id, description: r.description, earnedAt: r.earnedAt, expiresAt: r.expiresAt, status: r.status === 'available' && r.expiresAt <= now ? 'expired' : r.status,
+        redeemedAt: r.redeemedAt, redeemedByName: r.redeemedByName, redeemedLocationName: r.redeemedLocationId ? locationName.get(r.redeemedLocationId) ?? null : null })),
+    events: events.docs.map(d => d.data() as LoyaltyEvent).filter(e => e.brandId === member.brandId).map(e => eventRow(e, locationName, member.name)),
+    correctLocations,
+  };
+}
+
+// ---------- Log ----------
+
+const day = z.string().regex(/^\d{4}-\d{2}-\d{2}$/);
+export const logFilterSchema = z.object({
+  brandIds: z.array(id).min(1).max(50), from: day, to: day,
+  type: z.enum(EVENT_TYPES).nullable(), actorId: z.string().regex(/^[a-f0-9]{64}$/).nullable(), channel: z.string().max(20).nullable(),
+}).strict();
+
+// Midnight in Copenhagen for a calendar day, as epoch milliseconds.
+export function copenhagenMidnight(date: string): number {
+  const [y, m, d] = date.split('-').map(Number);
+  for (const offset of [1, 2]) {
+    const candidate = Date.UTC(y, m - 1, d) - offset * 3_600_000;
+    const hour = Number(new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', hourCycle: 'h23' }).format(new Date(candidate)));
+    if (hour === 0) return candidate;
+  }
+  return Date.UTC(y, m - 1, d);
+}
+
+export type EventRow = { createdAt: number; type: string; memberId: string | null; memberName: string; quantity: number; amountOre: number | null;
+  channel: string | null; source: string; locationName: string | null; actorId: string | null; actorName: string | null; reason: string | null;
+  // Old and new value of each changed setting.
+  details: string | null };
+
+const show = (value: unknown) => value === null || value === undefined ? '—' : typeof value === 'object' ? JSON.stringify(value) : String(value);
+function settingsDetails(e: LoyaltyEvent) {
+  const changes = (e.result as { changes?: Array<{ field: string; from: unknown; to: unknown }> } | undefined)?.changes;
+  return Array.isArray(changes) ? changes.map(c => `${c.field}: ${show(c.from)} → ${show(c.to)}`).join('; ') : null;
+}
+
+function eventRow(e: LoyaltyEvent, locationName: Map<string, string>, memberName: string): EventRow {
+  return { createdAt: e.createdAt, type: e.type, memberId: e.memberId, memberName, quantity: e.quantity, amountOre: e.amountOre, channel: e.channel,
+    source: e.source, locationName: e.locationId ? locationName.get(e.locationId) ?? null : null, actorId: e.actorId, actorName: e.actorName,
+    // Correction reasons are shown; internal codes such as text versions are not.
+    reason: e.source === 'correction' ? e.reason : null, details: e.type === 'settings_changed' ? settingsDetails(e) : null };
+}
+
+export async function listEvents(db: Firestore, actor: AdminActor, filter: z.infer<typeof logFilterSchema>) {
+  const permitted = (await adminBrands(db, actor, ADMIN_PERMISSION.log)).filter(b => filter.brandIds.includes(b.brandId));
+  const from = copenhagenMidnight(filter.from), to = copenhagenMidnight(new Date(Date.parse(filter.to + 'T12:00:00Z') + 86_400_000).toISOString().slice(0, 10));
+  const rows: EventRow[] = [], actors = new Map<string, string>();
+  let truncated = false;
+  for (const brand of permitted) {
+    const [events, locations] = await Promise.all([
+      db.collection(COLLECTIONS.events).where('brandId', '==', brand.brandId).where('createdAt', '>=', from).where('createdAt', '<', to)
+        .orderBy('createdAt', 'desc').limit(EVENT_LIMIT + 1).get(),
+      db.collection('locations').where('brandId', '==', brand.brandId).get(),
+    ]);
+    if (events.size > EVENT_LIMIT) truncated = true;
+    const locationName = new Map(locations.docs.map(d => [d.id, String(d.data().name || d.id)]));
+    const list = events.docs.slice(0, EVENT_LIMIT).map(d => d.data() as LoyaltyEvent);
+    for (const e of list) if (e.actorId && e.actorName) actors.set(e.actorId, e.actorName);
+    const memberIds = [...new Set(list.map(e => e.memberId).filter((v): v is string => !!v))];
+    const names = new Map<string, string>();
+    for (let i = 0; i < memberIds.length; i += 100) {
+      const batch = await db.getAll(...memberIds.slice(i, i + 100).map(m => db.collection(COLLECTIONS.members).doc(m)));
+      for (const doc of batch) names.set(doc.id, doc.data()?.status === 'active' ? String(doc.data()?.name || '') : 'Slettet medlem');
+    }
+    for (const e of list) {
+      if ((filter.type && e.type !== filter.type) || (filter.actorId && e.actorId !== filter.actorId) || (filter.channel && e.channel !== filter.channel)) continue;
+      rows.push(eventRow(e, locationName, e.memberId ? names.get(e.memberId) ?? '' : ''));
+    }
+  }
+  return { rows: rows.sort((a, b) => b.createdAt - a.createdAt), actors: [...actors].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'da')), truncated };
+}
