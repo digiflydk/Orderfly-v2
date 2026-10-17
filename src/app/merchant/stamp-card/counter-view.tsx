@@ -33,7 +33,7 @@ type Screen =
 type Result<T> = { ok: true; data: T } | { ok: false; code: string };
 
 const SCOPE_KEY = 'orderfly.counter.scope', ACTIVITY_KEY = 'orderfly.counter.activity', LOCKED_KEY = 'orderfly.counter.locked';
-const RECEIPT_MS = 4000;
+const RECEIPT_MS = 4000, LOGOUT_RETRY_MS = 15_000;
 const store = {
   get: (key: string) => { try { return localStorage.getItem(key); } catch { return null; } },
   set: (key: string, value: string) => { try { localStorage.setItem(key, value); } catch { /* Private mode. */ } },
@@ -59,12 +59,38 @@ export function CounterView({ employee, brands, adminHref }: { employee: { id: s
   const idleMs = (brand?.program.idleMinutes ?? 5) * 60_000;
   const counterOpen = !!brand?.program.active && brand.program.counterChannels.length > 0;
 
+  // One logout at a time. Once the next employee starts logging in no logout may run,
+  // because its response would clear the new session cookie.
+  const lockedRef = useRef(false), loggedOut = useRef(false), loggingIn = useRef(false);
+  const logoutRun = useRef<Promise<void> | null>(null);
+  const logout = useCallback(() => {
+    if (loggedOut.current) return Promise.resolve();
+    logoutRun.current ??= fetch('/api/admin/session', { method: 'DELETE' })
+      .then(r => { if (r.ok) { loggedOut.current = true; store.remove(LOCKED_KEY); } }, () => {})
+      .finally(() => { logoutRun.current = null; });
+    return logoutRun.current;
+  }, []);
   const lock = useCallback((message?: string) => {
+    if (lockedRef.current) return;
+    lockedRef.current = true;
     setLocked({ message });
     store.set(LOCKED_KEY, employee.id);
-    // The lock screen stays until the next login; a failed logout is retried on the next load.
-    fetch('/api/admin/session', { method: 'DELETE' }).then(r => { if (r.ok) store.remove(LOCKED_KEY); }).catch(() => {});
-  }, [employee.id]);
+    logout();
+  }, [employee.id, logout]);
+
+  // A failed logout keeps the server session valid, so it is retried until it succeeds.
+  useEffect(() => {
+    if (!locked) return;
+    const retry = () => { if (!loggedOut.current && !loggingIn.current && !logoutRun.current) logout(); };
+    const timer = setInterval(retry, LOGOUT_RETRY_MS);
+    window.addEventListener('online', retry);
+    return () => { clearInterval(timer); window.removeEventListener('online', retry); };
+  }, [locked, logout]);
+  const login = {
+    // Waits for a running logout and tries once more before the next employee's PIN is sent.
+    prepare: async () => { loggingIn.current = true; await logoutRun.current; await logout(); },
+    settle: (ok: boolean) => { if (!ok) loggingIn.current = false; },
+  };
 
   // Remembered brand and location for this tablet.
   useEffect(() => {
@@ -90,7 +116,7 @@ export function CounterView({ employee, brands, adminHref }: { employee: { id: s
     if (!fresh && saved?.id === employee.id && typeof saved.at === 'number') lastActivity.current = saved.at; else touch();
     let throttle = 0;
     const onActivity = () => { if (Date.now() - throttle > 5000) { throttle = Date.now(); touch(); } else lastActivity.current = Date.now(); };
-    const check = () => { if (Date.now() - lastActivity.current >= idleMs) lock(`Du blev logget ud efter ${idleMs / 60_000} minutter uden aktivitet.`); };
+    const check = () => { if (!lockedRef.current && Date.now() - lastActivity.current >= idleMs) lock(`Du blev logget ud efter ${idleMs / 60_000} minutter uden aktivitet.`); };
     check();
     const timer = setInterval(check, 10_000);
     window.addEventListener('pointerdown', onActivity); window.addEventListener('keydown', onActivity);
@@ -118,7 +144,7 @@ export function CounterView({ employee, brands, adminHref }: { employee: { id: s
     return fail(result.code);
   }
 
-  if (locked) return <LockScreen message={locked.message} />;
+  if (locked) return <LockScreen message={locked.message} login={login} />;
 
   return (
     <div className="mx-auto flex min-h-screen w-full max-w-4xl flex-col gap-4 p-4 text-foreground md:p-6">

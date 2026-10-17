@@ -86,8 +86,9 @@ async function open({ width = 1180, height = 820, props, api = {}, init } = {}) 
   });
   await page.route('**/api/admin/session', async route => {
     calls.push(['session:' + route.request().method(), route.request().postData() ? JSON.parse(route.request().postData()) : null]);
-    const reply = api.session?.(route.request()) ?? [200, { ok: true }];
+    const reply = (await api.session?.(route.request())) ?? [200, { ok: true }];
     await route.fulfill({ status: reply[0], contentType: 'application/json', body: JSON.stringify(reply[1]) });
+    calls.push(['session:' + route.request().method() + ':done', null]);
   });
   await page.goto(`${origin}/merchant/stamp-card`);
   return { page, calls, close: () => context.close() };
@@ -278,12 +279,19 @@ test('idle time locks the tablet, logs out and survives a reload; a lost session
     await page.getByText('Du blev logget ud efter 1 minutter uden aktivitet.').waitFor();
     assert.equal(await page.getByRole('button', { name: 'Scan QR-kode' }).count(), 0);
     assert.equal(calls.filter(([name]) => name === 'session:DELETE').length, 1);
+    // A locked tablet never logs out again after a successful logout.
+    await page.clock.runFor(60_000);
+    assert.equal(calls.filter(([name]) => name === 'session:DELETE').length, 1);
   } finally { await close(); }
   // A logout that did not reach the server keeps the lock screen after a reload.
   const offline = await open({ api: { session: () => [503, { error: 'x' }] } });
   try {
     await offline.page.getByRole('button', { name: 'Skift bruger' }).click();
     await offline.page.getByRole('heading', { name: 'Kassevisning' }).waitFor();
+    // The server session stays valid until a logout succeeds, so it is retried.
+    await offline.page.clock.runFor(15_500);
+    await offline.page.waitForFunction(() => true);
+    assert.ok(offline.calls.filter(([name]) => name === 'session:DELETE').length >= 2);
     await offline.page.reload();
     await offline.page.getByRole('heading', { name: 'Kassevisning' }).waitFor();
     assert.equal(await offline.page.getByRole('button', { name: 'Scan QR-kode' }).count(), 0);
@@ -309,7 +317,7 @@ test('switching user logs in with name and PIN and remembers the name, never the
     await page.getByRole('button', { name: 'Log ind' }).click();
     await page.getByRole('alert').filter({ hasText: 'Kunne ikke logge ind. Kontrollér navn og PIN.' }).waitFor();
     await page.getByLabel('6-cifret PIN').fill('123456');
-    await Promise.all([page.waitForURL(`${origin}/merchant/stamp-card`, { waitUntil: 'load' }), page.getByRole('button', { name: 'Log ind' }).click()]);
+    await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Log ind' }).click()]);
     assert.deepEqual(calls.filter(([name]) => name === 'session:POST').map(([, body]) => body),
       [{ provider: 'opsfly', identifier: 'Bo Hansen', pin: '000000' }, { provider: 'opsfly', identifier: 'Bo Hansen', pin: '123456' }]);
     // The fresh login is not locked by the earlier session's lock or idle state.
@@ -326,4 +334,18 @@ test('employees without an active counter location see a clear message', async (
   const { page, close } = await open({ props: { brands: [] } });
   try { await page.getByRole('alert').filter({ hasText: 'Du har ikke adgang til stempelkortet i en aktiv afdeling.' }).waitFor(); }
   finally { await close(); }
+});
+
+test('the next PIN is sent only after the previous employee is logged out', async () => {
+  const { page, calls, close } = await open({ api: { session: request => request.method() === 'DELETE' ? new Promise(resolve => setTimeout(() => resolve([200, { ok: true }]), 400)) : [200, { ok: true }] } });
+  try {
+    await page.getByRole('button', { name: 'Skift bruger' }).click();
+    await page.getByLabel('Navn eller e-mail').fill('Bo Hansen');
+    await page.getByRole('button', { name: 'Fortsæt' }).click();
+    await page.getByLabel('6-cifret PIN').fill('123456');
+    await Promise.all([page.waitForEvent('load'), page.getByRole('button', { name: 'Log ind' }).click()]);
+    const order = calls.map(([name]) => name).filter(name => name.startsWith('session:'));
+    assert.deepEqual(order.slice(0, 3), ['session:DELETE', 'session:DELETE:done', 'session:POST']);
+    assert.equal(order.filter(name => name === 'session:DELETE').length, 1);
+  } finally { await close(); }
 });

@@ -22,7 +22,7 @@ function writeRecent(list: string[]) {
 }
 
 // Shared-tablet login with the existing timeclock login (name/e-mail and 6-digit PIN).
-export function LockScreen({ message }: { message?: string }) {
+export function LockScreen({ message, login: hooks }: { message?: string; login: { prepare: () => Promise<void>; settle: (ok: boolean) => void } }) {
   const [recent, setRecent] = useState(readRecent);
   const [identifier, setIdentifier] = useState(''), [chosen, setChosen] = useState<string | null>(null);
   const [pin, setPin] = useState(''), [pending, setPending] = useState(false), [error, setError] = useState('');
@@ -32,7 +32,9 @@ export function LockScreen({ message }: { message?: string }) {
     event.preventDefault();
     if (pending || name.trim().length < 2 || !/^\d{6}$/.test(pin)) return;
     setPending(true); setError('');
+    let ok = false;
     try {
+      await hooks.prepare();
       const response = await fetch('/api/admin/session', { method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ provider: 'opsfly', identifier: name.trim(), pin }) });
       if (!response.ok) {
@@ -41,11 +43,12 @@ export function LockScreen({ message }: { message?: string }) {
           : response.status === 503 ? 'Ingen forbindelse. Prøv igen.' : 'Kunne ikke logge ind. Kontrollér navn og PIN.');
         return;
       }
+      ok = true;
       writeRecent([name.trim(), ...recent.filter(r => r.toLocaleLowerCase('da') !== name.trim().toLocaleLowerCase('da'))]);
       try { sessionStorage.setItem(FRESH_LOGIN_KEY, '1'); } catch { /* The idle timer then starts from the stored activity. */ }
       window.location.assign('/merchant/stamp-card');
     } catch { setError('Ingen forbindelse. Prøv igen.'); }
-    finally { setPending(false); }
+    finally { hooks.settle(ok); setPending(false); }
   }
 
   const forget = (value: string) => { const next = recent.filter(r => r !== value); writeRecent(next); setRecent(next); };
