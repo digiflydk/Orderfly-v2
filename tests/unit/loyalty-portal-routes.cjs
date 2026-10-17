@@ -20,7 +20,9 @@ test('an accepted login mail uses the fixed template and the stored link is eras
   assert.equal(await mail.deliverLoyaltyMail(db,'j1',NOW,{send:async message=>sent.push(message)}),'accepted');
   assert.equal(sent[0].templateKey,'orderfly.stamp_card.login_link');assert.equal(sent[0].idempotencyKey,'loyalty-login-j1');
   assert.equal(sent[0].organizationId,'aaa94d25-3ca6-4ebf-a673-164608db6c55');
-  assert.deepEqual(Object.keys(sent[0].variables).sort(),['brand_id','brand_name','login_url','name','program_name']);
+  assert.deepEqual(Object.keys(sent[0].variables).sort(),['brand_id','brand_name','expires_at','login_url','name','program_name']);
+  // The notification worker refuses to mail the link after this deadline.
+  assert.equal(sent[0].variables.expires_at,new Date(job().expiresAt).toISOString());
   assert.equal(db.rows.get('loyaltyMailOutbox/j1').loginUrl,null);
   assert.equal(await mail.deliverLoyaltyMail(db,'j1',NOW,{send:async()=>assert.fail('sent twice')}),null);
 }));
