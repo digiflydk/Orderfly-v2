@@ -12,7 +12,7 @@ Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md)
 | 3 | Medlemskab, samtykke, Omnisend, login-link og session | Merget 2026-10-17 (#257, parret med Esmeralda #412) |
 | 4 | Admin: Stempelkort (indstillinger, medlemmer, log, CSV) | Merget 2026-10-17 (#259) |
 | 5 | Admin: Loyalitet (hovedgruppe, oversigt, kundescore flyttes) | Merget 2026-10-17 (#261) |
-| 6 | Oprydning: aliaset `orderfly.loyalty` fjernes | Efter verificeret migration |
+| 6 | Oprydning: aliaset `orderfly.loyalty` og migrationskommandoen fjernes | I review (migrationen kørt i mPanel 2026-10-17) |
 
 ## Rettigheder
 
@@ -27,7 +27,7 @@ Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md)
 | `orderfly.stamp_cards:log` | Hændelseslog og eksport |
 | `orderfly.customer_score:*` | Intern kundescore (tidligere `orderfly.loyalty:*`) |
 
-Der oprettes ingen roller fra koden. Rettighederne føjes til eksisterende eller nye roller i mPanel. Migrationen af `orderfly.loyalty` er beskrevet i [freemium-rbac-139.md](../freemium-rbac-139.md).
+Der oprettes ingen roller fra koden. Rettighederne føjes til eksisterende eller nye roller i mPanel. Migrationen af `orderfly.loyalty` er kørt, og det gamle navn accepteres ikke længere (PR 6). Se [freemium-rbac-139.md](../freemium-rbac-139.md).
 
 ## Forretningsregler
 
