@@ -11,7 +11,12 @@ if (!files.length) throw new Error('Name at least one docs/*-firestore-indexes.j
 // A service-account key (CI secret) or an existing token, e.g. FIRESTORE_ACCESS_TOKEN=$(gcloud auth print-access-token).
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
 if (!raw && !process.env.FIRESTORE_ACCESS_TOKEN) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set.');
-const token = process.env.FIRESTORE_ACCESS_TOKEN || (await admin.credential.cert(JSON.parse(raw)).getAccessToken()).access_token;
+// An explicit token wins; the key's account is named only when its key supplied the token.
+const account = process.env.FIRESTORE_ACCESS_TOKEN ? null : JSON.parse(raw);
+const token = process.env.FIRESTORE_ACCESS_TOKEN || (await admin.credential.cert(account).getAccessToken()).access_token;
+// The account name and its home project are not secret; they say which principal needs the IAM role.
+if (account) console.log(`account   ${account.client_email} (key project ${account.project_id}), target project ${PROJECT}`);
+else console.log(`account   principal of FIRESTORE_ACCESS_TOKEN, target project ${PROJECT}`);
 const base = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/collectionGroups`;
 const api = async (url, init = {}) => {
   const res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
@@ -27,6 +32,7 @@ for (const index of wanted) {
   const label = `${index.collectionGroup} (${key(index.fields)})`;
   if (status === 200) console.log(`created   ${label}`);
   else if (status === 409) console.log(`exists    ${label}`);
+  else if (status === 403) throw new Error(`${label}: HTTP 403 ${body.error?.message || ''}. If the role is missing, grant "Cloud Datastore Index Admin" in ${PROJECT} to ${account?.client_email || 'the token\'s principal'}.`);
   else throw new Error(`${label}: HTTP ${status} ${body.error?.message || ''}`);
 }
 
