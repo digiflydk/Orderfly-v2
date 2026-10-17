@@ -40,17 +40,19 @@ async function complete(db: Firestore, ref: DocumentReference, token: string, st
             && contactKey(job.brandId, primaryEmail) === job.contactKey;
         const latest = contact.data()?.latestEventId === job.eventId;
         // A loyalty member keeps the membership; only the program's consent state follows the opt-out.
-        const withdrawLoyaltyConsent = latest && state === 'suppressed' && isPrimaryEmailContact
-            ? await stageProviderConsentWithdrawal(tx, db, job.brandId, primaryEmail, now, job.eventId) : null;
+        // The member may have joined with an alias, so it follows the suppressed contact's own address.
+        const consentEvent = latest && state === 'suppressed'
+            ? (await tx.get(db.collection('marketingConsents').doc(job.eventId))).data() as ConsentEvent | undefined : undefined;
+        const withdrawLoyaltyConsent = consentEvent && consentEvent.brandId === job.brandId && contactKey(job.brandId, consentEvent.email) === job.contactKey
+            ? await stageProviderConsentWithdrawal(tx, db, job.brandId, consentEvent.email, now, job.eventId) : null;
         const attempts = (job.attempts || 0) + 1;
         tx.update(ref, { state, attempts, lease: null, lastError: error || null, updatedAt: now,
             nextAttemptAt: state === 'failed' && retryable && attempts < 8 ? now + retryDelay(attempts) : NEVER });
         if (latest) {
             tx.set(stateRef, { state, updatedAt: now, nextReconcileAt: state === 'synced' ? now + 3600000 : NEVER }, { merge: true });
-            if (state === 'suppressed' && isPrimaryEmailContact) {
+            if (state === 'suppressed' && isPrimaryEmailContact)
                 tx.update(customerRef, { marketingConsent: false });
-                withdrawLoyaltyConsent?.();
-            }
+            withdrawLoyaltyConsent?.();
         }
     });
 }
@@ -139,14 +141,13 @@ export async function runMarketingWorker(db: Firestore, now = Date.now(), makePr
                 const isPrimaryEmailContact = customer.exists
                     && customerData?.brandId === state.brandId
                     && contactKey(state.brandId, primaryEmail) === snap.id;
-                const withdrawLoyaltyConsent = suppressed && isPrimaryEmailContact
-                    ? await stageProviderConsentWithdrawal(tx, db, state.brandId, primaryEmail, now, state.latestEventId) : null;
+                const withdrawLoyaltyConsent = suppressed && contactKey(state.brandId, event.email) === snap.id
+                    ? await stageProviderConsentWithdrawal(tx, db, state.brandId, event.email, now, state.latestEventId) : null;
                 if (suppressed && job.exists && job.data()?.brandId === state.brandId) tx.update(jobRef, {state:'suppressed', lastError:'provider_suppression', updatedAt:now, nextAttemptAt:NEVER});
                 tx.update(snap.ref, { providerStatus: channel?.status || 'missing', providerStatusChangedAt: channel?.statusChangedAt || null, state: suppressed ? 'suppressed' : state.state, nextReconcileAt: suppressed ? NEVER : now + 3600000, updatedAt: now });
-                if (suppressed && isPrimaryEmailContact) {
+                if (suppressed && isPrimaryEmailContact)
                     tx.update(customerRef, { marketingConsent: false });
-                    withdrawLoyaltyConsent?.();
-                }
+                withdrawLoyaltyConsent?.();
             });
             counts.reconciled++;
         }

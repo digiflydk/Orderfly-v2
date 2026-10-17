@@ -206,15 +206,36 @@ test('an opt-out in Omnisend is synced back: consent withdrawn and logged, membe
   assert.equal(rows('loyaltyEvents').filter(e=>e.type==='consent_withdrawn').length,1);
 });
 
+test('an Omnisend opt-out of an alias address withdraws the member consent without touching the primary address',async()=>{
+  setup();
+  db.rows.set('customers/c2',{id:'c2',brandId:BRAND,fullName:'Bo',email:'bo@work.dk',normalizedEmail:'bo@work.dk',emailAliases:['bo@home.dk'],marketingConsent:true});
+  const s=await joined('bo@home.dk');
+  const original=process.env.ORDERFLY_OMNISEND_BRANDS;
+  process.env.ORDERFLY_OMNISEND_BRANDS=JSON.stringify([{brandId:BRAND,omnisendBrandId:'omni',apiKey:'synthetic-key',enabled:true,consentMode:'single_opt_in'}]);
+  const provider={verifyBrand:async()=>{},sync:async()=>'suppressed',contact:async email=>({identifiers:[{type:'email',id:email,channels:{email:{status:'unsubscribed',statusChangedAt:new Date(NOW).toISOString()}}}]}),
+    listContacts:async()=>({contacts:[],after:null})};
+  try{await runMarketingWorker(db,NOW+1,()=>provider);}
+  finally{if(original===undefined)delete process.env.ORDERFLY_OMNISEND_BRANDS;else process.env.ORDERFLY_OMNISEND_BRANDS=original;}
+  assert.equal(rows('marketingContacts')[0].state,'suppressed');
+  const after=db.rows.get('loyaltyMembers/'+s.memberId);
+  assert.equal(after.status,'active');assert.equal(after.consent.status,'withdrawn');assert.equal(after.consent.source,'omnisend');
+  assert.equal(db.rows.get('customers/c2').marketingConsent,true);
+  assert.equal(rows('loyaltyEvents').filter(e=>e.type==='consent_withdrawn').length,1);
+});
+
 test('deletion removes personal data, sessions and rewards but keeps a pseudonymous log and the customer',async()=>{
   setup(settings({stampsRequired:1}));
   const s=await joined(),b=await brand(),member=db.rows.get('loyaltyMembers/'+s.memberId);
+  const {mailJob:waiting}=await m.requestLoginLink(db,b,{email:'anna@example.com'},ctx());
   await counter.grantStamp(db,cashier,{brandId:BRAND,locationId:'l1',memberId:s.memberId,channel:'dine_in',amountOre:15_000,discountUsed:false,via:'qr',idempotencyKey:'2'.padStart(64,'0')},NOW);
   await m.deleteMembership(db,b,s,NOW+1);
   const tomb=db.rows.get('loyaltyMembers/'+s.memberId);
   assert.equal(tomb.status,'deleted');
   for(const field of ['name','normalizedEmail','customerId','consent'])assert.equal(tomb[field],undefined,field);
   assert.equal(rows('loyaltyMemberIdentities').length,0);
+  const mails=rows('loyaltyMailOutbox');
+  assert.ok(mails.length>=2);assert.equal(db.rows.get('loyaltyMailOutbox/'+waiting).state,'cancelled');
+  assert.doesNotMatch(JSON.stringify(mails),/anna@example\.com|Anna Jensen|#token=/);
   assert.ok(rows('loyaltyRewards').every(r=>r.status==='cancelled'));
   await rejects(m.readSession(db,b,s.token,NOW+2),'unauthorized');
   assert.ok(db.rows.get('customers/'+member.customerId));

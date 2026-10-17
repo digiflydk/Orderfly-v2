@@ -68,10 +68,10 @@ Sådan fungerer det:
   - Svaret er altid neutralt.
 - **Samtykke** gemmes i den eksisterende samtykkelog med kilden `loyalty`, teksten og versionen, og synkroniseres til Omnisend.
   - Afmelding i portalen sendes som `unsubscribed`.
-  - Afmelding i Omnisend registreres i den eksisterende afstemning og logges som `consent_withdrawn` på medlemmet.
+  - Afmelding i Omnisend registreres i den eksisterende afstemning og logges som `consent_withdrawn` på medlemmet. Det gælder også, når medlemmet er tilmeldt med en alias-adresse; kundens primære samtykke ændres kun for den primære adresse.
   - Medlemskab og stempler bevares i begge tilfælde.
 - **Login-link:** kan kun bruges én gang og udløber efter 15 minutter. Kundens session varer som indstillet (standard 180 dage) og tjekkes ved hvert kald.
-- **Sletning:** fjerner navn, e-mail og kundekobling og tilbagekalder alle sessioner. Loggen bevares pseudonymiseret.
+- **Sletning:** fjerner navn, e-mail og kundekobling og tilbagekalder alle sessioner. Ventende login-mails annulleres, og alle medlemmets mailjobs mister navn, e-mail og link. Loggen bevares pseudonymiseret.
 
 **Drift før brug:**
 - Indekserne i `docs/loyalty-firestore-indexes.json` skal være oprettet.

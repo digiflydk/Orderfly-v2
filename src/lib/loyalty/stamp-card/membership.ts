@@ -280,10 +280,15 @@ export async function deleteMembership(db: Firestore, brand: ProgramBrand, sessi
     const member = (await tx.get(memberRef)).data() as MemberDoc | undefined;
     if (!member || member.status !== 'active' || member.brandId !== brand.brandId) throw new LoyaltyError('unauthorized', 401);
     const rewards = await tx.get(db.collection(COLLECTIONS.rewards).where('memberId', '==', session.memberId).where('status', '==', 'available'));
+    const mails = await tx.get(db.collection(COLLECTIONS.mailOutbox).where('memberId', '==', session.memberId));
     const cardRef = member.currentCardId ? db.collection(COLLECTIONS.cards).doc(member.currentCardId) : null;
     const card = cardRef ? (await tx.get(cardRef)).data() as CardDoc | undefined : undefined;
     for (const reward of rewards.docs) if (reward.data().brandId === brand.brandId) tx.update(reward.ref, { status: 'cancelled' });
     if (cardRef && card?.status === 'active') tx.update(cardRef, { status: 'expired' });
+    // Waiting login mails are cancelled and every mail job loses the member's name, address and link.
+    for (const mail of mails.docs) if (mail.data().brandId === brand.brandId)
+      tx.update(mail.ref, { email: null, name: null, loginUrl: null, nextAttemptAt: Number.MAX_SAFE_INTEGER, updatedAt: now,
+        ...(['pending', 'failed'].includes(mail.data().state) ? { state: 'cancelled' } : {}) });
     tx.delete(db.collection(COLLECTIONS.identities).doc(memberIdentityKey(brand.brandId, member.normalizedEmail)));
     tx.set(memberRef, { companyId: member.companyId, brandId: member.brandId, status: 'deleted', joinedAt: member.joinedAt, deletedAt: now,
       sessionEpoch: member.sessionEpoch + 1, currentCardId: null });
