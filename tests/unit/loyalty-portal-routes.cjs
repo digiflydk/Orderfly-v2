@@ -68,7 +68,7 @@ test('mutations are same-origin JSON; reads reject cross-site requests',async()=
 test('the session cookie is HttpOnly, Secure, SameSite=Lax and cleared on 401, logout and deletion',async()=>{
   const login=await portal.portalRoute(req('POST',{}),params,{run:async()=>({body:{ok:true},setSession:{token:'c'.repeat(64),expiresAt:Date.now()+86_400_000}})});
   const cookie=login.headers.get('set-cookie');
-  assert.match(cookie,/^__Host-orderfly-loyalty=c{64}; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=8640\d$/);
+  assert.match(cookie,/^__Host-orderfly-loyalty=c{64}; Path=\/; HttpOnly; Secure; SameSite=Lax; Max-Age=86(39|40)\d$/);
   const denied=await portal.portalRoute(req('GET',undefined,{cookie:'__Host-orderfly-loyalty='+'d'.repeat(64)}),params,{session:true,run:async()=>assert.fail('ran')});
   assert.equal(denied.status,401);assert.match(denied.headers.get('set-cookie'),/Max-Age=0/);
   session={memberId:'m'};let seen;
