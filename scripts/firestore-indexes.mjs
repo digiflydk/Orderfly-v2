@@ -8,9 +8,10 @@ import admin from 'firebase-admin';
 const PROJECT = process.env.FIRESTORE_PROJECT_ID || 'orderfly-39325';
 const files = process.argv.slice(2);
 if (!files.length) throw new Error('Name at least one docs/*-firestore-indexes.json file.');
+// A service-account key (CI secret) or an existing token, e.g. FIRESTORE_ACCESS_TOKEN=$(gcloud auth print-access-token).
 const raw = process.env.FIREBASE_SERVICE_ACCOUNT_JSON;
-if (!raw) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set.');
-const { access_token: token } = await admin.credential.cert(JSON.parse(raw)).getAccessToken();
+if (!raw && !process.env.FIRESTORE_ACCESS_TOKEN) throw new Error('FIREBASE_SERVICE_ACCOUNT_JSON is not set.');
+const token = process.env.FIRESTORE_ACCESS_TOKEN || (await admin.credential.cert(JSON.parse(raw)).getAccessToken()).access_token;
 const base = `https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/collectionGroups`;
 const api = async (url, init = {}) => {
   const res = await fetch(url, { ...init, headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
@@ -33,10 +34,16 @@ for (const index of wanted) {
 for (let attempt = 0; attempt < 60; attempt++) {
   const states = [];
   for (const group of [...new Set(wanted.map(i => i.collectionGroup))]) {
-    const { status, body } = await api(`${base}/${group}/indexes`);
-    if (status !== 200) throw new Error(`list ${group}: HTTP ${status} ${body.error?.message || ''}`);
+    const existing = [];
+    for (let page = ''; ;) {
+      const { status, body } = await api(`${base}/${group}/indexes${page ? `?pageToken=${encodeURIComponent(page)}` : ''}`);
+      if (status !== 200) throw new Error(`list ${group}: HTTP ${status} ${body.error?.message || ''}`);
+      existing.push(...(body.indexes || []));
+      if (!body.nextPageToken) break;
+      page = body.nextPageToken;
+    }
     for (const index of wanted.filter(i => i.collectionGroup === group)) {
-      const found = (body.indexes || []).find(i => i.queryScope === index.queryScope && key(i.fields) === key(index.fields));
+      const found = existing.find(i => i.queryScope === index.queryScope && key(i.fields) === key(index.fields));
       states.push([`${group} (${key(index.fields)})`, found?.state || 'MISSING']);
     }
   }
