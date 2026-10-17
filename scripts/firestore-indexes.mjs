@@ -32,7 +32,7 @@ for (const index of wanted) {
   const label = `${index.collectionGroup} (${key(index.fields)})`;
   if (status === 200) console.log(`created   ${label}`);
   else if (status === 409) console.log(`exists    ${label}`);
-  else if (status === 403) throw new Error(`${label}: HTTP 403. Grant "Cloud Datastore Index Admin" in ${PROJECT} to ${account?.client_email || 'the token\'s principal'}.`);
+  else if (status === 403) throw new Error(`${label}: HTTP 403 ${body.error?.message || ''}. If the role is missing, grant "Cloud Datastore Index Admin" in ${PROJECT} to ${account?.client_email || 'the token\'s principal'}.`);
   else throw new Error(`${label}: HTTP ${status} ${body.error?.message || ''}`);
 }
 
