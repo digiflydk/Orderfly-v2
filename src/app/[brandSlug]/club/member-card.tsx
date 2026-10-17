@@ -1,5 +1,6 @@
 import { Check } from 'lucide-react';
 import type { PortalMember } from './data';
+import { HomeScreenHint } from './home-screen-hint';
 import { MemberQr } from './member-qr';
 import { danishDate, firstName, nextRewardText, stampWord } from './texts';
 
@@ -51,6 +52,8 @@ export function MemberCard({ member, slug, base }: { member: PortalMember; slug:
       {card.expiresAt && (
         <p className="text-center">Dine stempler udløber, hvis du ikke har fået et nyt stempel inden {danishDate(card.expiresAt)}.</p>
       )}
+
+      <HomeScreenHint slug={slug} />
     </>
   );
 }
