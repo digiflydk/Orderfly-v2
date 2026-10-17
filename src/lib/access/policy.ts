@@ -10,7 +10,8 @@ export const FEATURES = [
   ['orderfly.games', ['view', 'redeem']],
   ['orderfly.customers', ['view', 'create', 'edit', 'delete']],
   ['orderfly.feedback', ['view', 'create', 'edit', 'delete']],
-  ['orderfly.loyalty', ['view', 'create', 'edit', 'delete']],
+  ['orderfly.customer_score', ['view', 'create', 'edit', 'delete']],
+  ['orderfly.stamp_cards', ['overview', 'counter', 'redeem', 'correct', 'settings', 'members', 'log']],
   ['orderfly.analytics', ['view']],
   ['orderfly.website', ['view', 'create', 'edit', 'delete']],
   ['orderfly.billing', ['view', 'edit']],
@@ -43,10 +44,21 @@ export const FEATURES = [
 export const PERMISSIONS = FEATURES.flatMap(([feature, actions]) =>
   actions.map(action => `${feature}:${action}`));
 const permissionSet = new Set<string>(PERMISSIONS);
+// Renamed features that saved policies may still contain. They are read as
+// their replacement and are never offered in the catalogue. The superuser
+// `migratePermissions` command persists the new names; remove an alias only
+// after production holds no legacy value.
+export const LEGACY_FEATURES: Readonly<Record<string, string>> = { 'orderfly.loyalty': 'orderfly.customer_score' };
+export function normalizePermission(value: string): string {
+  const [feature, action, ...rest] = value.split(':');
+  const next = LEGACY_FEATURES[feature];
+  return next && action && !rest.length ? `${next}:${action}` : value;
+}
 const key = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const keys = z.array(key).max(500).refine(v => new Set(v).size === v.length);
 const permission = z.string().refine(v => permissionSet.has(v), 'Unknown permission');
-const permissions = z.array(permission).max(500).refine(v => new Set(v).size === v.length);
+const permissions = z.array(z.string()).max(500).refine(v => new Set(v).size === v.length)
+  .transform(v => v.map(normalizePermission)).pipe(z.array(permission).refine(v => new Set(v).size === v.length));
 const scope = z.object({ companyId: key.nullable(), locationIds: keys.nullable() }).strict();
 // null locationIds means every location in exactly this company, never every tenant.
 export const roleSchema = z.object({

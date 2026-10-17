@@ -35,14 +35,14 @@ const destinations=[
   ['orderfly.customers:view','/superadmin/customers'],
   ['orderfly.discounts:view','/superadmin/discounts'],
   ['orderfly.feedback:view','/superadmin/feedback'],
-  ['orderfly.loyalty:view','/superadmin/loyalty'],
+  ['orderfly.customer_score:view','/superadmin/loyalty'],
   ['orderfly.analytics:view','/superadmin/analytics/cust-funnel'],
   ['orderfly.website:view','/superadmin/brands/websites'],
 ] as const;
 async function usableDestination(db:Firestore,identity:VerifiedIdentity,permission:string) {
-  // Loyalty settings are global reads. Billing's overview is superuser-only
+  // Customer score settings are global reads. Billing's overview is superuser-only
   // and is deliberately absent from non-superuser destinations.
-  if(permission==='orderfly.loyalty:view')return true;
+  if(permission==='orderfly.customer_score:view')return true;
   const result=await executeAuthority(db,identity,{action:'nativeGrants',product:'orderfly',permission},bootstrap());
   if(!('grants' in result))return false;
   for(const grant of result.grants as Array<{tenantId:string;locationIds:string[]|null}>) {

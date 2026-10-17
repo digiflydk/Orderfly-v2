@@ -147,3 +147,15 @@ The native session response accepts explicit ISO timezone offsets returned by Po
 ## Opsfly Finance permission candidate (2026-09-27)
 
 The catalogue includes independent `opsfly.finance:view`, `:create` and `:edit` rights. A company-scoped role must receive these rights explicitly; existing roles are unchanged. Finance reads and writes are additionally checked by the Opsfly `finance-admin` operation map against the verified employee and organization. Supplier creation also requires `opsfly.procurement:create`. mPanel only reveals the Finance launcher after a successful scoped view check. Release the catalogue before enabling Finance and verify a granted and a denied native employee in the correct organization.
+
+## Loyalty permissions and the customer-score rename (stempelkort phase 1)
+
+The catalogue adds `orderfly.stamp_cards` with the actions `overview`, `counter`, `redeem`, `correct`, `settings`, `members` and `log`, one per right in `docs/stempelkort/fase-1-stempelkort-backend.md` §9. The rights are assigned to no role on release. Administrators add them to existing or new roles in mPanel.
+
+The internal customer score's `orderfly.loyalty` is renamed to `orderfly.customer_score` (same actions). Because `policySchema` rejects unknown permissions, removing the old name before stored roles change would invalidate the whole policy. The release is therefore staged:
+
+1. `LEGACY_FEATURES` in `src/lib/access/policy.ts` reads a stored `orderfly.loyalty:<action>` as `orderfly.customer_score:<action>` before any decision. Existing roles keep exactly the same access. The catalogue, `session`, `list` and every later policy write use only the new name. New decisions requested with the old name are denied.
+2. `{action:'migratePermissions', dryRun, revision, requestId}` (platform superuser only) reports the stored legacy grants per role. Without `dryRun` it persists the normalized policy in one transaction and writes a `platformAdminAudit` entry (`access.migratePermissions`) with each role's from/to pairs. The revision is unchanged because no decision changes. Re-running with nothing to migrate writes nothing, and a repeated request ID with different input is a `request_conflict`. Work does not run it in production; the platform superuser runs it from mPanel or an operator runs it through the existing bridge.
+3. After a read-only dry run in production reports `migrated: 0`, a follow-up release removes the alias.
+
+`tests/unit/access-permission-migration.cjs` covers legacy reads, separation from the new overview right, dry run, audited migration, idempotency, revision/request conflicts, non-superuser rejection and that the rename cannot widen delegation.
