@@ -1,6 +1,6 @@
 # Fase 2 – Stempelkort: kundeportal – analyse og plan
 
-Status: **Plan komplet efter ejerens svar 2026-10-17. Afventer ejerens godkendelse.** Der er ikke ændret applikationskode.
+Status: **Plan komplet efter ejerens svar 2026-10-17. Godkendt af ejeren 2026-10-17.** Bygges i tre PR'er; status står i [README.md](README.md).
 Grundlag: `main` @ `0f3aab9` (Orderfly-v2), hvor fase 1 PR 1–6 er merget.
 Spec: [fase-2-stempelkort-kundeportal.md](fase-2-stempelkort-kundeportal.md). Bygger på [fase 1](fase-1-stempelkort-backend.md) og [fase 1-planen](fase-1-analyse-og-plan.md).
 

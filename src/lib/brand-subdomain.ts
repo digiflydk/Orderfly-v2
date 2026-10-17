@@ -37,6 +37,14 @@ export function brandSlugError(slug: string): string | null {
   return null;
 }
 
+// Fixed pages under /{brand}/ that a location with the same slug would be hidden behind.
+export const RESERVED_LOCATION_SLUGS = new Set(['club']);
+
+/** Returns a Danish explanation when a location slug is reserved, otherwise null. */
+export function locationSlugError(slug: string): string | null {
+  return RESERVED_LOCATION_SLUGS.has(slug.trim().toLowerCase()) ? `"${slug.trim()}" er reserveret og kan ikke bruges som adresse.` : null;
+}
+
 export function brandSubdomainUrl(slug: string): string {
   return `https://${slug}.${ROOT_DOMAIN}`;
 }
