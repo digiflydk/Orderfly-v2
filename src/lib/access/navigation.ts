@@ -25,10 +25,21 @@ const routes: Array<[string, string]> = [
   ['/superadmin/analytics', 'orderfly.analytics:view'],
 ];
 
+const COUNTER = 'orderfly.stamp_cards:counter';
+// Permissions a counter-only employee may hold. Other products' permissions (opsfly., platform.) add no Orderfly menu.
+const COUNTER_ONLY = [COUNTER, 'orderfly.stamp_cards:redeem', 'orderfly.stamp_cards:correct'];
+
+// Counter staff on a shared tablet see only the stamp-card counter view, without the admin menu.
+export function counterOnly(access?: NavigationAccess | null): boolean {
+  return !!access && !access.superuser && access.permissions.includes(COUNTER)
+    && access.permissions.every(p => !p.startsWith('orderfly.') || COUNTER_ONLY.includes(p));
+}
+
 export function canNavigate(href: string, access?: NavigationAccess | null): boolean {
   if (!access) return false;
   if (href === '/merchant/redeem') return access.superuser || access.permissions.includes('orderfly.games:view');
-  if (href === '/merchant') return access.superuser || access.permissions.some(p => p.startsWith('orderfly.') && p.endsWith(':view'));
+  if (href === '/merchant/stamp-card') return access.superuser || access.permissions.includes(COUNTER);
+  if (href === '/merchant') return access.superuser || access.permissions.includes(COUNTER) || access.permissions.some(p => p.startsWith('orderfly.') && p.endsWith(':view'));
   if (href === 'https://www.esmeraldapizza.dk/mpanel#platform') {
     return access.superuser || access.permissions.some(p => p === 'platform.members:view' || p === 'platform.roles:view');
   }

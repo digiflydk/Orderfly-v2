@@ -1,6 +1,6 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {loadTs}=require('../helpers/load-ts.cjs');
-const {canNavigate,filterNavigation}=loadTs('src/lib/access/navigation.ts');
+const {canNavigate,filterNavigation,counterOnly}=loadTs('src/lib/access/navigation.ts');
 test('nested menus hide denied links and empty groups for delegated users',()=>{
  const access={superuser:false,permissions:['orderfly.orders:view']};
  const menu=[{href:'/superadmin/sales/orders'},{label:'System',children:[{href:'/superadmin/settings'}]},{href:'/superadmin/customers'}];
@@ -48,4 +48,15 @@ test('stamp-card administration and customer score are separate destinations',()
  assert.equal(canNavigate('/superadmin/loyalty',overview),true);assert.equal(canNavigate('/superadmin/loyalty/score',overview),false);assert.equal(canNavigate('/superadmin/loyalty/stamp-card',overview),false);
  // Counter-only staff get no administration menu entry.
  assert.equal(canNavigate('/superadmin/loyalty/stamp-card',{superuser:false,permissions:['orderfly.stamp_cards:counter','orderfly.stamp_cards:redeem']}),false);
+});
+test('counter staff reach only the counter view; leaders and superusers keep both',()=>{
+ const staff={superuser:false,permissions:['orderfly.stamp_cards:counter','orderfly.stamp_cards:redeem','opsfly.own_time:view']};
+ assert.equal(counterOnly(staff),true);assert.equal(canNavigate('/merchant/stamp-card',staff),true);assert.equal(canNavigate('/merchant',staff),true);
+ for(const href of ['/merchant/redeem','/merchant/orders','/merchant/payments','/superadmin','/superadmin/loyalty','/superadmin/loyalty/stamp-card'])assert.equal(canNavigate(href,staff),false,href);
+ const leader={superuser:false,permissions:['orderfly.stamp_cards:counter','orderfly.stamp_cards:members','orderfly.orders:view']};
+ assert.equal(counterOnly(leader),false);assert.equal(canNavigate('/merchant/stamp-card',leader),true);assert.equal(canNavigate('/superadmin/loyalty/stamp-card',leader),true);
+ assert.equal(counterOnly({superuser:true,permissions:['orderfly.stamp_cards:counter']}),false);assert.equal(canNavigate('/merchant/stamp-card',{superuser:true,permissions:[]}),true);
+ const redeemOnly={superuser:false,permissions:['orderfly.stamp_cards:redeem']};
+ assert.equal(counterOnly(redeemOnly),false);assert.equal(canNavigate('/merchant/stamp-card',redeemOnly),false);assert.equal(canNavigate('/merchant',redeemOnly),false);
+ assert.equal(counterOnly(null),false);assert.equal(canNavigate('/merchant/stamp-card',{superuser:false,permissions:['orderfly.orders:view']}),false);
 });

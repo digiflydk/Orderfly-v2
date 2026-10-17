@@ -38,7 +38,8 @@ function AdminLoginForm() {
           setError(response.status===429?'For mange forsøg. Vent 10 minutter og prøv igen.':response.status===503?'Login er midlertidigt utilgængeligt. Prøv igen.':'Kunne ikke logge ind. Kontrollér dine loginoplysninger og din adgang i mPanel.');
           return;
         }
-        await clearFirebase?.();window.location.assign(merchantLogin?'/merchant':'/superadmin/sales/orders');
+        const body=await response.json().catch(()=>({}));
+        await clearFirebase?.();window.location.assign(body?.home==='/merchant/stamp-card'?body.home:merchantLogin?'/merchant':'/superadmin/sales/orders');
       } catch {setError('Kunne ikke logge ind. Prøv igen.');}
       finally {await clearFirebase?.().catch(()=>{});setPending(false);}
     }}>
