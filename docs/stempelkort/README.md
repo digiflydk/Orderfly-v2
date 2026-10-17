@@ -10,8 +10,8 @@ Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md)
 | 1 | Rettigheder, migration af `orderfly.loyalty` og forretningsregler | Merget 2026-10-17 (#253, parret med Esmeralda #410) |
 | 2 | Kassens backend (opslag, stempel, indløsning, korrektion, udløbsjob) | Merget 2026-10-17 (#255) |
 | 3 | Medlemskab, samtykke, Omnisend, login-link og session | Merget 2026-10-17 (#257, parret med Esmeralda #412) |
-| 4 | Admin: Stempelkort (indstillinger, medlemmer, log, CSV) | Klar til review (bygger på PR 3) |
-| 5 | Admin: Loyalitet (hovedgruppe, oversigt, kundescore flyttes) | Klar til review (bygger på PR 4) |
+| 4 | Admin: Stempelkort (indstillinger, medlemmer, log, CSV) | Merget 2026-10-17 (#259) |
+| 5 | Admin: Loyalitet (hovedgruppe, oversigt, kundescore flyttes) | Merget 2026-10-17 (#261) |
 | 6 | Oprydning: aliaset `orderfly.loyalty` fjernes | Efter verificeret migration |
 
 ## Rettigheder
