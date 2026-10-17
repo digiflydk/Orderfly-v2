@@ -10,7 +10,14 @@ test('defaults follow the specification and start inactive',()=>{
   assert.equal(s.active,false);assert.equal(s.name,'Esmeralda Club');assert.equal(s.stampsRequired,8);assert.equal(s.minimumAmountOre,10_000);
   assert.equal(s.cardValidityMonths,6);assert.equal(s.rewardValidityMonths,3);assert.equal(s.crossLocation,true);
   assert.equal(s.discountedOrdersQualify,false);assert.equal(s.sessionDays,180);assert.deepEqual(s.counterChannels,['dine_in','takeaway']);
-  assert.equal(s.maxStampsPerDay,null);assert.ok(rules.programSettingsSchema.safeParse(s).success);
+  assert.equal(s.maxStampsPerDay,null);assert.equal(s.counterIdleMinutes,5);assert.ok(rules.programSettingsSchema.safeParse(s).success);
+});
+
+test('settings saved before the counter idle period existed still parse, with 5 minutes',()=>{
+  const {counterIdleMinutes,...stored}=active();
+  const parsed=rules.programSettingsSchema.safeParse(stored);
+  assert.ok(parsed.success);assert.equal(parsed.data.counterIdleMinutes,5);
+  assert.equal(rules.programSettingsSchema.parse(active({counterIdleMinutes:60})).counterIdleMinutes,60);
 });
 
 test('an active program requires reward, texts and at least one channel',()=>{
@@ -21,7 +28,7 @@ test('an active program requires reward, texts and at least one channel',()=>{
 });
 
 test('settings reject non-positive values and unknown or third-party channels',()=>{
-  for(const changes of [{stampsRequired:0},{stampsPerPurchase:0},{cardValidityMonths:0},{rewardValidityMonths:0},{sessionDays:0},
+  for(const changes of [{stampsRequired:0},{stampsPerPurchase:0},{cardValidityMonths:0},{rewardValidityMonths:0},{sessionDays:0},{counterIdleMinutes:0},{counterIdleMinutes:61},{counterIdleMinutes:2.5},{counterIdleMinutes:null},
     {minimumAmountOre:-1},{stampsRequired:1.5},{maxStampsPerDay:0},{counterChannels:['wolt']},{counterChannels:['uber_eats']},
     {orderTypes:['wolt']},{counterChannels:['dine_in','dine_in']},{reward:{type:'percentage',percent:101}},
     {reward:{type:'free_product',productIds:[],categoryIds:[]}},{extra:true}])
