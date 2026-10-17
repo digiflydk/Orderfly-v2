@@ -139,11 +139,16 @@ mPanel-genveje: `orderfly.stamp_cards:overview` åbner oversigten, og `orderfly.
 
 Plan: [fase-2-analyse-og-plan.md](fase-2-analyse-og-plan.md).
 
+Alle tre PR'er er merget. Før lancering mangler:
+- `*.orderfly.dk` skal sættes op ([brand-subdomains.md](../brand-subdomains.md)), så login-mailens link og skiltets QR-kode virker.
+- Manuel test på iPhone og Android: tilmelding og login, hjemmeskærm (også at kunden forbliver logget ind dér) og scanning af QR-koden ved lav lysstyrke.
+- Visuelt tjek af skrifttyperne Bourton og Brandon.
+
 | PR | Indhold | Status |
 |---|---|---|
 | 1 | Ramme, tilmelding, login og vilkår | Merget 2026-10-17 (#267) |
 | 2 | Mit stempelkort og QR-kode | Merget 2026-10-17 (#269) |
-| 3 | Historik, profil, hjemmeskærm og skilt-QR | I review |
+| 3 | Historik, profil, hjemmeskærm og skilt-QR | Merget 2026-10-17 (#270) |
 
 **Adresse:** `https://{slug}.orderfly.dk/club`, fx `https://esmeralda.orderfly.dk/club`. Portalen virker også på `https://orderfly.dk/{slug}/club`, og der omdirigeres ikke, fordi `*.orderfly.dk` endnu ikke er sat op i drift. Login-mailens link peger altid på subdomænet, så login i drift kræver subdomænet ([brand-subdomains.md](../brand-subdomains.md)).
 
