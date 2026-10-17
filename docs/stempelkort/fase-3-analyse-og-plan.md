@@ -1,6 +1,6 @@
 # Fase 3 – Stempelkort: analyse (trin 1) og plan (trin 2)
 
-Status: **Udkast til godkendelse (2026-10-17).** Der er ikke ændret applikationskode.
+Status: **Godkendt af PM 2026-10-17** med svarene i del B.
 Grundlag: `main` @ `0f3aab9` (Orderfly-v2). Esmeralda-repoet er ikke læst igen; fase 1-analysens afsnit A1–A2 om login og mPanel er brugt.
 Spec: [fase-3-stempelkort-merchantportal.md](fase-3-stempelkort-merchantportal.md).
 
@@ -28,7 +28,7 @@ Det er allerede løst i backend:
 - **Log:** stempel via søgning logges som `counter_search`, via QR som `counter_qr`, altid med medarbejderens navn.
 - **Fejlkoder** findes for alle beskeder i spec §6: `qr_invalid`, `member_not_found`, `below_minimum`, `discount_excluded`, `channel_not_allowed`, `daily_limit`, `program_inactive`, `reward_not_available`, `reward_expired`, `reward_wrong_location`, `wrong_location`, `rate_limited`, `forbidden`, `unauthorized`, `unavailable`.
 
-**Huller i forhold til spec (se spørgsmål i del B):**
+**Huller i forhold til spec (se beslutninger i del B):**
 1. **Annullér indløsning ved kassen:** API'et kræver id'et på en *indløst* belønning, men opslaget returnerer kun *gyldige* belønninger. Kassen kan derfor ikke finde den belønning, der skal annulleres (kun lige efter en indløsning, hvor id'et kendes).
 2. **Programstatus på startskærmen** (§5.1) kendes først efter et opslag. Den kan dog læses på serveren, når siden indlæses, med den eksisterende `readProgram` – uden ændring i backend.
 3. **Indløsning lige efter fyldt kort:** stemplingen returnerer ikke den nye belønnings id, og QR-tokenet er brugt. Kunden skal vise en ny QR-kode (eller søges på e-mail) for at indløse med det samme. Jeg foreslår at acceptere det.
@@ -59,7 +59,7 @@ Filerne `src/app/merchant/redeem/page.tsx` og `merchant-games.tsx`:
 - Der er **intet QR-bibliotek** i `package.json`.
 - Browserens indbyggede `BarcodeDetector` virker i Chrome på Android, men **ikke i Safari på iPad**. Der skal derfor bruges et lille bibliotek som reserve (forslag: `jsqr`, ingen afhængigheder, ca. 50 kB, kun indlæst på kassesiden).
 - Kameraet kræver HTTPS (er på plads) og at ingen `Permissions-Policy` blokerer det (der er ingen i `next.config.js`).
-- **Fase 2 har ikke fastlagt, hvad QR-koden indeholder.** Kassens opslag forventer selve tokenet (64 tegn). Det skal aftales med fase 2-sessionen (spørgsmål 3).
+- **Fase 2 har ikke fastlagt, hvad QR-koden indeholder.** Kassens opslag forventer selve tokenet (64 tegn). Det skal aftales med fase 2-sessionen (beslutning 3).
 
 ### A6. Design
 
@@ -68,19 +68,17 @@ Filerne `src/app/merchant/redeem/page.tsx` og `merchant-games.tsx`:
 
 ---
 
-## Del B – Spørgsmål til PM (skal afklares før vi bygger)
+## Del B – Beslutninger (svar fra PM, 2026-10-17)
 
-| # | Spørgsmål | Mit forslag |
+| # | Emne | Beslutning |
 |---|---|---|
-| 1 | **Hvor indstilles perioden for automatisk log ud?** Spec §4 siger "kan indstilles, fx 5 minutter", men fase 1 har intet felt til det. | **A:** Nyt felt "Kassevisning: log ud efter inaktivitet (minutter)" pr. brand under Stempelkort → Indstillinger (standard 5, 1–60). Det kræver en lille ændring i fælles kode (`rules.ts`, admin-indstillinger), se C2. **B:** Fast 5 minutter i koden nu og indstilling senere (ingen fælles kode). |
-| 2 | **Annullér indløsning ved kassen** (hul 1 i A1). | Opslaget udvides, så det også returnerer belønninger indløst de seneste 7 dage, **kun** når medarbejderen har rettigheden "manuel korrektion". Lille, rent additiv ændring i `counter.ts` (se C2). Alternativ: annullering kun i admin under Medlemmer. |
-| 3 | **Indholdet af QR-koden** (aftale med fase 2). | QR-koden indeholder **kun selve tokenet** (64 tegn, små bogstaver og tal). Det giver den mindste og mest læsbare kode. Kassen afviser alt andet med "Det er ikke en stempelkort-kode" (fx skilt-QR til tilmelding). Skal gives videre til fase 2-sessionen. |
-| 4 | **Adresse for kassevisningen.** Spec siger "en visning i den eksisterende platform". | `/merchant/stamp-card` i den eksisterende merchant-portal (samme login, layout og design). For en kun-kasse-medarbejder skjules sidebar og andre menuer, og visningen fylder hele skærmen. Ledere ser menupunktet "Kassevisning" og kan gå frem og tilbage. |
-| 5 | **Afdeling.** Spec nævner kun brandvalg, men backend kræver afdeling (rettighed og afdelingsbinding af kort). | Afdelingen vælges som brandet: forvalgt, hvis medarbejderen kun har én. Tabletten husker sidste valg af brand og afdeling. |
-| 6 | **Hvilken tablet** bruger restauranten (iPad eller Android)? | Påvirker kun test. Der bygges til begge. |
-| 7 | **Ny afhængighed** `jsqr` til QR-scanning på iPad. | Godkend. |
-
----
+| 1 | Automatisk log ud | **A:** Nyt felt pr. brand under Stempelkort → Indstillinger: "Kassevisning: log ud efter inaktivitet (minutter)", standard 5, 1–60. Lille ændring i fælles kode (`rules.ts`, admin-indstillinger), lavet som første PR. |
+| 2 | Annullér indløsning | **Kun i admin** (Medlemmer → medlem → korrektion, som findes fra fase 1). Kassen kan tilføje og fjerne stempler. `counter.ts` ændres ikke. |
+| 3 | QR-kodens indhold | Kun selve tokenet (64 tegn). Alt andet afvises med "Det er ikke en stempelkort-kode". Gives videre til fase 2. |
+| 4 | Adresse | `/merchant/stamp-card` i merchant-portalen. Kun-kasse-medarbejdere ser kun kassevisningen i fuld skærm; ledere får menupunktet "Kassevisning". |
+| 5 | Afdeling | Vælges som brandet, forvalgt ved kun én, og tabletten husker valget. |
+| 6 | Tablet | Både iPad og Android. |
+| 7 | Afhængighed | `jsqr` godkendt. |
 
 ## Del C – Plan (trin 2)
 
@@ -99,7 +97,7 @@ Alt ligger under `src/app/merchant/stamp-card/` (side, klientkomponenter) og kal
 6. **Giv stempel** (højst tre tryk: kanal, beløb, bekræft): kun de kanaler, brandet har slået til (aldrig Wolt/Uber Eats); er der kun én, er den valgt på forhånd. Beløbsfelt med taltastatur; under minimum vises "Beløbet er under X kr. og giver ikke stempel", og Bekræft er slået fra. Afkrydsning "Rabat eller kampagne brugt" kun når rabatordrer ikke giver stempel. Kvittering "Stempel givet – 6 af 8" eller "Kortet er fyldt – belønning optjent" i ca. 4 sekunder, derefter tilbage til start.
 7. **Indløs:** beskrivelsen stort, "Indløs" → bekræftelsestrin → kvittering "Belønning indløst".
 8. **Søg på e-mail:** resultat med navn og maskeret e-mail, medarbejderen bekræfter, derefter samme kundekort (stempler logges "via søgning").
-9. **Korrektion:** tilføj/fjern stempler (antal) eller annullér indløsning (afhænger af spørgsmål 2). Årsag er påkrævet (mindst 3 tegn, som backend kræver).
+9. **Korrektion:** tilføj/fjern stempler (antal). Annullering af indløsning sker i admin (beslutning 2). Årsag er påkrævet (mindst 3 tegn, som backend kræver).
 
 **Dobbeltklik og netværk:** Knappen låses ved første tryk. Idempotensnøglen laves, når handlingen åbnes, og genbruges ved "Prøv igen". Der vises intet som registreret, før backend har svaret OK. Ved netværksfejl: "Ingen forbindelse. Prøv igen."
 
@@ -135,12 +133,11 @@ Alt ligger under `src/app/merchant/stamp-card/` (side, klientkomponenter) og kal
 - `src/app/admin-login/page.tsx`: efter login sendes en kun-kasse-medarbejder til kassevisningen.
 - `src/lib/access/mpanel-launch.ts`: genvej `orderfly.stamp_cards:counter` → `/merchant/stamp-card`, også når rettigheden kun gælder enkelte afdelinger.
 
-**Fælles stempelkort-backend i `src/lib/loyalty/stamp-card/` – kun hvis PM vælger det:**
+**Fælles stempelkort-backend i `src/lib/loyalty/stamp-card/` (beslutning 1):**
 
 | Ændring | Fil | Udløses af | Konfliktrisiko med fase 2 |
 |---|---|---|---|
-| Nyt felt `counterIdleMinutes` (standard 5, 1–60) i programindstillingerne + felt i admin-indstillinger | `rules.ts`, `admin.ts`, admin-indstillingssiden | Spørgsmål 1, svar A | Lav-middel: fase 2 læser programindstillingerne (`program`-routen), men nye felter med standardværdi bryder intet. Ændringen bør laves som første, lille PR og merges hurtigt, så fase 2 får den med. |
-| Opslaget returnerer også belønninger indløst de seneste 7 dage, kun med korrektionsrettighed | `counter.ts` (`lookupMember`) | Spørgsmål 2 | Lav: fase 2 bruger kun `issueQrToken` i `counter.ts`. Rent additivt felt i svaret. |
+| Nyt felt `counterIdleMinutes` (standard 5, 1–60) i programindstillingerne + felt i admin-indstillinger | `rules.ts`, `admin.ts`, admin-indstillingssiden | Beslutning 1 | Lav-middel: fase 2 læser programindstillingerne (`program`-routen), men nye felter med standardværdi bryder intet. Ændringen bør laves som første, lille PR og merges hurtigt, så fase 2 får den med. |
 
 **Ingen ændring i datamodellen** (ingen nye collections eller indekser), Firestore-reglerne, API-routes eller rettighedskataloget. Ingen ændring i Esmeralda/mPanel.
 
@@ -155,7 +152,7 @@ Alt ligger under `src/app/merchant/stamp-card/` (side, klientkomponenter) og kal
 **Unit** (`node --test`, Firestore i hukommelsen som i `tests/unit/loyalty-stamp-card-counter.cjs`):
 - Navigation: kun-kasse-bruger ser kassevisningen og intet andet; leder ser begge; uden rettighed afvises (`access-navigation.cjs`).
 - mPanel-genvej til kassevisningen med afdelingsbegrænset rettighed.
-- Kun hvis valgt: `counterIdleMinutes` (standard, grænser) og opslag med indløste belønninger (kun med `correct`).
+- `counterIdleMinutes`: standardværdi for gamle indstillinger uden feltet, grænser 1–60.
 
 **Playwright** (opfanget netværk, ingen produktionsdata, tablet liggende 1180×820 og stående 820×1180 samt 390 px). Én test pr. punkt i spec §8, der kan testes automatisk:
 - Login, kun kassevisning synlig, afvist login (inaktiv medarbejder), brugerskifte og automatisk log ud (med kunstigt ur).
@@ -169,7 +166,7 @@ Alt ligger under `src/app/merchant/stamp-card/` (side, klientkomponenter) og kal
 
 ### C5. Små PR'er (trin 3, efter godkendelse)
 
-1. **(Kun ved svar A/ja på spørgsmål 1–2) Fælles backend:** `counterIdleMinutes` og indløste belønninger i opslaget, med tests. Merges først og hurtigt for at undgå konflikt med fase 2.
+1. **Fælles backend:** `counterIdleMinutes` i indstillingerne og admin, med tests. Merges først og hurtigt for at undgå konflikt med fase 2.
 2. **Adgang og indgang:** navigation, merchant-layout uden sidebar for kun-kasse, menupunkt, login-redirect og mPanel-genvej.
 3. **Kassevisningen:** låseskærm og brugerskifte, automatisk log ud, start, scanning, søgning, kundekort, stempel, indløsning, korrektion og fejlbeskeder, med Playwright-tests.
 
