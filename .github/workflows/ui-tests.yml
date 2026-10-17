@@ -85,7 +85,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Core browser regression
-        run: node --test tests/unit/merchant-payment-browser.cjs tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs tests/unit/customer-form-browser.cjs tests/unit/customer-sync-actions-browser.cjs tests/unit/loyalty-admin-browser.cjs
+        run: node --test tests/unit/merchant-payment-browser.cjs tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs tests/unit/customer-form-browser.cjs tests/unit/customer-sync-actions-browser.cjs tests/unit/loyalty-admin-browser.cjs tests/unit/loyalty-counter-browser.cjs
 
       - name: Games editor browser regression
         run: node --test tests/unit/games-editor-browser.cjs

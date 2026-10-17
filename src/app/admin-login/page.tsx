@@ -39,6 +39,8 @@ function AdminLoginForm() {
           return;
         }
         const body=await response.json().catch(()=>({}));
+        // A new login restarts the counter view's idle timer (see merchant/stamp-card).
+        try{sessionStorage.setItem('orderfly.counter.fresh-login','1');}catch{/* Private mode. */}
         await clearFirebase?.();window.location.assign(body?.home==='/merchant/stamp-card'?body.home:merchantLogin?'/merchant':'/superadmin/sales/orders');
       } catch {setError('Kunne ikke logge ind. Prøv igen.');}
       finally {await clearFirebase?.().catch(()=>{});setPending(false);}
