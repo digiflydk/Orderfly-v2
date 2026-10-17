@@ -139,10 +139,13 @@ mPanel-genveje: `orderfly.stamp_cards:overview` åbner oversigten, og `orderfly.
 
 Plan: [fase-2-analyse-og-plan.md](fase-2-analyse-og-plan.md).
 
-Alle tre PR'er er merget. Før lancering mangler:
-- `*.orderfly.dk` skal sættes op ([brand-subdomains.md](../brand-subdomains.md)), så login-mailens link og skiltets QR-kode virker.
-- Manuel test på iPhone og Android: tilmelding og login, hjemmeskærm (også at kunden forbliver logget ind dér) og scanning af QR-koden ved lav lysstyrke.
+Alle tre PR'er er merget, men **fase 2 er ikke accepteret endnu**. Planen (C7) kræver test på rigtige enheder før accept.
+
+**Før accept:**
+- Manuel test på iPhone og Android: tilmelding og login, hjemmeskærm (også at kunden forbliver logget ind dér) og scanning af QR-koden ved lav lysstyrke. Resultatet noteres her.
 - Visuelt tjek af skrifttyperne Bourton og Brandon.
+
+**Før lancering:** `*.orderfly.dk` skal sættes op ([brand-subdomains.md](../brand-subdomains.md)), så login-mailens link og skiltets QR-kode virker. Login fra mailen kan først testes på enhederne, når det er gjort.
 
 | PR | Indhold | Status |
 |---|---|---|
