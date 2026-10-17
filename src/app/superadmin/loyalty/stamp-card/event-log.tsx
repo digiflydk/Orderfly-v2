@@ -37,7 +37,7 @@ export function EventLog({ rows, truncated, filter, multiBrand }: { rows: EventR
           <Button variant="outline" onClick={exportCsv} disabled={pending}>Eksportér CSV</Button>
         </div>
       </div>
-      {truncated && <p role="status" className="rounded-md bg-amber-50 p-3 text-sm">Perioden har flere end 5.000 hændelser pr. brand. Vælg en kortere periode.</p>}
+      {truncated && <p role="status" className="rounded-md bg-amber-50 p-3 text-sm">Mere end 5.000 hændelser pr. brand matcher filtrene. Vælg en kortere periode eller flere filtre.</p>}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader><TableRow>

@@ -5,6 +5,13 @@
     {"collectionGroup":"loyaltyRewards","queryScope":"COLLECTION","fields":[{"fieldPath":"memberId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"}]},
     {"collectionGroup":"loyaltyEvents","queryScope":"COLLECTION","fields":[{"fieldPath":"memberId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
     {"collectionGroup":"loyaltyEvents","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"loyaltyEvents","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"type","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"loyaltyEvents","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"actorId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"loyaltyEvents","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"channel","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"loyaltyEvents","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"type","order":"ASCENDING"},{"fieldPath":"actorId","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"loyaltyEvents","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"type","order":"ASCENDING"},{"fieldPath":"channel","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"loyaltyEvents","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"actorId","order":"ASCENDING"},{"fieldPath":"channel","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
+    {"collectionGroup":"loyaltyEvents","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"type","order":"ASCENDING"},{"fieldPath":"actorId","order":"ASCENDING"},{"fieldPath":"channel","order":"ASCENDING"},{"fieldPath":"createdAt","order":"DESCENDING"}]},
     {"collectionGroup":"loyaltyMembers","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"}]},
     {"collectionGroup":"loyaltyRewards","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"status","order":"ASCENDING"}]}
   ],

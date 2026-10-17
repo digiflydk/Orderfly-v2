@@ -88,6 +88,10 @@ test('settings reject stale versions, foreign products, invalid values and users
   for(const bad of [{stampsRequired:0},{minimumAmountOre:-1},{consentText:''},{counterChannels:['wolt']}])
     assert.equal(admin.saveSettingsSchema.safeParse({brandId:'brand',version:1,settings:settings(bad)}).success,false,JSON.stringify(bad));
   assert.equal(rows('loyaltyEvents').length,0);assert.equal(db.rows.get('loyaltyPrograms/brand').version,1);
+  // A retired product can neither be chosen nor saved as the reward.
+  db.rows.set('products/old',{brandId:'brand',productName:'Gammel pizza',isActive:false});
+  assert.ok(!(await admin.readSettings(db,who('leder'),'brand')).products.some(p=>p.id==='old'));
+  await rejects(admin.saveSettings(db,who('leder'),{brandId:'brand',version:1,settings:settings({reward:{type:'free_product',productIds:['old'],categoryIds:[]}})},NOW),'invalid_reward_reference');
 });
 
 test('the member list shows stamps, rewards, next expiry, newsletter and last activity',async()=>{
@@ -101,6 +105,9 @@ test('the member list shows stamps, rewards, next expiry, newsletter and last ac
   assert.equal(anna.nextExpiry,Date.parse('2027-01-20T10:00:01Z'));
   assert.deepEqual({stamps:bo.stamps,rewards:bo.rewards,newsletter:bo.newsletter,next:bo.nextExpiry},{stamps:0,rewards:0,newsletter:false,next:null});
   assert.ok(list.every(r=>r.brandId==='brand'));
+  // The export passes its own, higher limit; a list cut at the limit says so.
+  const cut=await admin.listMembers(db,who('leder'),['brand'],NOW+3000,1);
+  assert.equal(cut.rows.length,1);assert.equal(cut.truncated,true);
 });
 
 test('member detail shows full history with staff, and correction locations follow the right',async()=>{
@@ -113,6 +120,10 @@ test('member detail shows full history with staff, and correction locations foll
   db.rows.get('platformAdminControl/access-v1').roles.find(r=>r.id==='admin').permissions=[S+'members'];
   assert.deepEqual((await admin.memberDetail(db,who('leder'),'anna',NOW+1)).correctLocations,[]);
   await rejects(admin.memberDetail(db,who('leder'),'../x',NOW),'member_not_found');
+  assert.equal(detail.eventsTruncated,false);
+  for(let i=0;i<500;i++)db.rows.set('loyaltyEvents/old'+i,{brandId:'brand',memberId:'anna',type:'stamp_added',source:'counter_search',quantity:1,createdAt:NOW-1000-i});
+  const long=await admin.memberDetail(db,who('leder'),'anna',NOW+1);
+  assert.equal(long.events.length,500);assert.equal(long.eventsTruncated,true);
 });
 
 test('the log filters by Copenhagen period, type, employee and channel and labels deleted members',async()=>{
@@ -131,6 +142,11 @@ test('the log filters by Copenhagen period, type, employee and channel and label
   assert.deepEqual((await list({type:'reward_earned'})).rows.map(r=>r.actorName),['Owner']);
   assert.equal((await list({type:'stamp_removed'})).rows.length,0);
   assert.equal((await list({from:'2026-10-19',to:'2026-10-19'})).rows.length,1);
+  // Filters apply before the 5,000-row limit, so an older matching event is still found.
+  for(let i=0;i<5001;i++)db.rows.set('loyaltyEvents/bulk'+i,{brandId:'brand',memberId:null,type:'stamp_added',source:'order',quantity:1,channel:'takeaway',createdAt:Date.parse('2026-10-20T12:00:00Z')+i});
+  assert.equal((await list({})).truncated,true);
+  const earned=await list({type:'reward_earned'});
+  assert.equal(earned.truncated,false);assert.deepEqual(earned.rows.map(r=>r.memberName),['ANNA']);
 });
 
 test('Copenhagen midnight is correct on both sides of daylight saving time',()=>{

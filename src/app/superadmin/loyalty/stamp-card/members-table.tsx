@@ -33,6 +33,7 @@ export function MembersTable({ rows, truncated, brandIds, filterQuery, multiBran
       ['Brand', 'Navn', 'E-mail', 'Tilmeldt', 'Stempler', 'Stempler til belønning', 'Optjente belønninger', 'Næste udløb', 'Nyhedsbrev', 'Seneste aktivitet'],
       ...result.data.rows.map(r => [r.brandName, r.name, r.email, formatDate(r.joinedAt), r.stamps, r.stampsRequired, r.rewards, formatDate(r.nextExpiry), r.newsletter ? 'Tilmeldt' : 'Afmeldt', formatDateTime(r.lastActivityAt)]),
     ]);
+    if (result.data.truncated) toast({ variant: 'destructive', title: 'Eksporten er ufuldstændig', description: 'Filen indeholder de første 50.000 medlemmer pr. brand.' });
   });
 
   return (
@@ -44,7 +45,7 @@ export function MembersTable({ rows, truncated, brandIds, filterQuery, multiBran
           <Button variant="outline" onClick={exportCsv} disabled={pending}>Eksportér CSV</Button>
         </div>
       </div>
-      {truncated && <p role="status" className="rounded-md bg-amber-50 p-3 text-sm">Listen viser de første 5.000 medlemmer pr. brand. Brug søgning eller eksport.</p>}
+      {truncated && <p role="status" className="rounded-md bg-amber-50 p-3 text-sm">Listen viser de første 5.000 medlemmer pr. brand. Brug søgning, eller eksportér alle medlemmer som CSV.</p>}
       <div className="overflow-x-auto">
         <Table>
           <TableHeader>

@@ -12,7 +12,9 @@ export type AdminActor = { identity: VerifiedIdentity; name: string };
 export const ADMIN_PERMISSION = {
   settings: 'orderfly.stamp_cards:settings', members: 'orderfly.stamp_cards:members', log: 'orderfly.stamp_cards:log', correct: 'orderfly.stamp_cards:correct',
 } as const;
-const MEMBER_LIMIT = 5000, EVENT_LIMIT = 5000;
+const MEMBER_LIMIT = 5000, EVENT_LIMIT = 5000, HISTORY_LIMIT = 500;
+// The CSV export reads past the on-screen limit, up to a hard ceiling it reports.
+export const MEMBER_EXPORT_LIMIT = 50_000;
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 
 async function readPolicy(db: Firestore): Promise<Policy | null> {
@@ -70,8 +72,9 @@ export async function readSettings(db: Firestore, actor: AdminActor, brandId: st
     brand, version: program.version,
     settings: program.version === 0 ? { ...program.settings, name: `${brand.brandName} Club`.slice(0, 80) } : program.settings,
     updatedAt: typeof data?.updatedAt === 'number' ? data.updatedAt : null, updatedByName: typeof data?.updatedByName === 'string' ? data.updatedByName : null,
-    products: products.docs.map(d => ({ id: d.id, name: String(d.data().productName || d.id) })).sort((a, b) => a.name.localeCompare(b.name, 'da')),
-    categories: categories.docs.map(d => ({ id: d.id, name: String(d.data().categoryName || d.id) })).sort((a, b) => a.name.localeCompare(b.name, 'da')),
+    // Only active products and categories can be promised as a reward.
+    products: products.docs.filter(d => d.data().isActive !== false).map(d => ({ id: d.id, name: String(d.data().productName || d.id) })).sort((a, b) => a.name.localeCompare(b.name, 'da')),
+    categories: categories.docs.filter(d => d.data().isActive !== false).map(d => ({ id: d.id, name: String(d.data().categoryName || d.id) })).sort((a, b) => a.name.localeCompare(b.name, 'da')),
   };
 }
 
@@ -97,7 +100,7 @@ export async function saveSettings(db: Firestore, actor: AdminActor, input: z.in
     if (settings.reward?.type === 'free_product') {
       const refs = [...settings.reward.productIds.map(p => db.collection('products').doc(p)), ...settings.reward.categoryIds.map(c => db.collection('categories').doc(c))];
       const rows = await Promise.all(refs.map(r => tx.get(r)));
-      if (rows.some(row => !row.exists || row.data()?.brandId !== brandId)) throw new LoyaltyError('invalid_reward_reference', 422);
+      if (rows.some(row => !row.exists || row.data()?.brandId !== brandId || row.data()?.isActive === false)) throw new LoyaltyError('invalid_reward_reference', 422);
     }
     const changes = settingsChanges(current.version === 0 ? null : current.settings, settings);
     if (!changes.length) return { version: current.version, changed: 0 };
@@ -117,18 +120,18 @@ export async function saveSettings(db: Firestore, actor: AdminActor, input: z.in
 export type MemberRow = { id: string; brandId: string; brandName: string; name: string; email: string; joinedAt: number; stamps: number; stampsRequired: number;
   rewards: number; nextExpiry: number | null; newsletter: boolean; lastActivityAt: number | null };
 
-export async function listMembers(db: Firestore, actor: AdminActor, brandIds: string[], now: number) {
+export async function listMembers(db: Firestore, actor: AdminActor, brandIds: string[], now: number, limit = MEMBER_LIMIT) {
   const permitted = (await adminBrands(db, actor, ADMIN_PERMISSION.members)).filter(b => brandIds.includes(b.brandId));
   const rows: MemberRow[] = [];
   let truncated = false;
   for (const brand of permitted) {
     const [members, rewards, program] = await Promise.all([
-      db.collection(COLLECTIONS.members).where('brandId', '==', brand.brandId).where('status', '==', 'active').limit(MEMBER_LIMIT + 1).get(),
+      db.collection(COLLECTIONS.members).where('brandId', '==', brand.brandId).where('status', '==', 'active').limit(limit + 1).get(),
       db.collection(COLLECTIONS.rewards).where('brandId', '==', brand.brandId).where('status', '==', 'available').get(),
       db.collection(COLLECTIONS.programs).doc(brand.brandId).get().then(s => readProgram(brand.brandId, s.data())),
     ]);
-    if (members.size > MEMBER_LIMIT) truncated = true;
-    const docs = members.docs.slice(0, MEMBER_LIMIT);
+    if (members.docs.length > limit) truncated = true;
+    const docs = members.docs.slice(0, limit);
     const cardIds = docs.map(d => (d.data() as MemberDoc).currentCardId).filter((v): v is string => !!v);
     const cards = new Map<string, CardDoc>();
     for (let i = 0; i < cardIds.length; i += 100) {
@@ -160,7 +163,7 @@ export async function memberDetail(db: Firestore, actor: AdminActor, memberId: s
   const [cards, rewards, events, program, locations, correctLocations] = await Promise.all([
     db.collection(COLLECTIONS.cards).where('memberId', '==', memberId).get(),
     db.collection(COLLECTIONS.rewards).where('memberId', '==', memberId).get(),
-    db.collection(COLLECTIONS.events).where('memberId', '==', memberId).orderBy('createdAt', 'desc').limit(500).get(),
+    db.collection(COLLECTIONS.events).where('memberId', '==', memberId).orderBy('createdAt', 'desc').limit(HISTORY_LIMIT + 1).get(),
     db.collection(COLLECTIONS.programs).doc(member.brandId).get().then(s => readProgram(member.brandId, s.data())),
     db.collection('locations').where('brandId', '==', member.brandId).get(),
     permittedLocations(db, actor, member.brandId, ADMIN_PERMISSION.correct),
@@ -178,7 +181,8 @@ export async function memberDetail(db: Firestore, actor: AdminActor, memberId: s
       .sort((a, b) => b.earnedAt - a.earnedAt)
       .map(r => ({ id: r.id, description: r.description, earnedAt: r.earnedAt, expiresAt: r.expiresAt, status: r.status === 'available' && r.expiresAt <= now ? 'expired' : r.status,
         redeemedAt: r.redeemedAt, redeemedByName: r.redeemedByName, redeemedLocationName: r.redeemedLocationId ? locationName.get(r.redeemedLocationId) ?? null : null })),
-    events: events.docs.map(d => d.data() as LoyaltyEvent).filter(e => e.brandId === member.brandId).map(e => eventRow(e, locationName, member.name)),
+    events: events.docs.slice(0, HISTORY_LIMIT).map(d => d.data() as LoyaltyEvent).filter(e => e.brandId === member.brandId).map(e => eventRow(e, locationName, member.name)),
+    eventsTruncated: events.docs.length > HISTORY_LIMIT,
     correctLocations,
   };
 }
@@ -220,6 +224,16 @@ function eventRow(e: LoyaltyEvent, locationName: Map<string, string>, memberName
     reason: e.source === 'correction' ? e.reason : null, details: e.type === 'settings_changed' ? settingsDetails(e) : null };
 }
 
+// The type, employee and channel filters are part of the query, so the row limit
+// applies to matching events only (composite indexes in loyalty-firestore-indexes.json).
+function eventQuery(db: Firestore, brandId: string, filter: { type: string | null; actorId: string | null; channel: string | null }) {
+  let query = db.collection(COLLECTIONS.events).where('brandId', '==', brandId);
+  if (filter.type) query = query.where('type', '==', filter.type);
+  if (filter.actorId) query = query.where('actorId', '==', filter.actorId);
+  if (filter.channel) query = query.where('channel', '==', filter.channel);
+  return query;
+}
+
 export async function listEvents(db: Firestore, actor: AdminActor, filter: z.infer<typeof logFilterSchema>) {
   const permitted = (await adminBrands(db, actor, ADMIN_PERMISSION.log)).filter(b => filter.brandIds.includes(b.brandId));
   const from = copenhagenMidnight(filter.from), to = copenhagenMidnight(new Date(Date.parse(filter.to + 'T12:00:00Z') + 86_400_000).toISOString().slice(0, 10));
@@ -227,11 +241,11 @@ export async function listEvents(db: Firestore, actor: AdminActor, filter: z.inf
   let truncated = false;
   for (const brand of permitted) {
     const [events, locations] = await Promise.all([
-      db.collection(COLLECTIONS.events).where('brandId', '==', brand.brandId).where('createdAt', '>=', from).where('createdAt', '<', to)
+      eventQuery(db, brand.brandId, filter).where('createdAt', '>=', from).where('createdAt', '<', to)
         .orderBy('createdAt', 'desc').limit(EVENT_LIMIT + 1).get(),
       db.collection('locations').where('brandId', '==', brand.brandId).get(),
     ]);
-    if (events.size > EVENT_LIMIT) truncated = true;
+    if (events.docs.length > EVENT_LIMIT) truncated = true;
     const locationName = new Map(locations.docs.map(d => [d.id, String(d.data().name || d.id)]));
     const list = events.docs.slice(0, EVENT_LIMIT).map(d => d.data() as LoyaltyEvent);
     for (const e of list) if (e.actorId && e.actorName) actors.set(e.actorId, e.actorName);
@@ -241,10 +255,7 @@ export async function listEvents(db: Firestore, actor: AdminActor, filter: z.inf
       const batch = await db.getAll(...memberIds.slice(i, i + 100).map(m => db.collection(COLLECTIONS.members).doc(m)));
       for (const doc of batch) names.set(doc.id, doc.data()?.status === 'active' ? String(doc.data()?.name || '') : 'Slettet medlem');
     }
-    for (const e of list) {
-      if ((filter.type && e.type !== filter.type) || (filter.actorId && e.actorId !== filter.actorId) || (filter.channel && e.channel !== filter.channel)) continue;
-      rows.push(eventRow(e, locationName, e.memberId ? names.get(e.memberId) ?? '' : ''));
-    }
+    for (const e of list) rows.push(eventRow(e, locationName, e.memberId ? names.get(e.memberId) ?? '' : ''));
   }
   return { rows: rows.sort((a, b) => b.createdAt - a.createdAt), actors: [...actors].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'da')), truncated };
 }

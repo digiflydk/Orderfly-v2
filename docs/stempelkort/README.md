@@ -88,14 +88,14 @@ Siden `/superadmin/loyalty/stamp-card` har tre faner. Hver fane vises kun med si
   - Alle parametre fra spec §6.1, herunder kanaler pr. brand og belønningstype med produkt- eller kategorivalg.
   - Hver gemning bliver en ny version (`loyaltyProgramVersions`) og logges med medarbejder, tidspunkt og gammel og ny værdi.
   - Er indstillingerne ændret af en anden imens, afvises gemningen.
-  - Ugyldige værdier og produkter fra et andet brand afvises på serveren.
+  - Ugyldige værdier, inaktive produkter og kategorier samt produkter fra et andet brand afvises på serveren. Vælgeren viser kun aktive produkter og kategorier.
 - **Medlemmer** (`…:members`):
   - Navn, e-mail, tilmeldt, stempler X/N, optjente belønninger, næste udløb, nyhedsbrev og seneste aktivitet.
-  - Søgning, sortering og CSV-eksport. Eksporten læses igen på serveren med samme rettighedstjek.
-  - Klik på et medlem åbner fuld historik med belønninger og samtykke.
+  - Søgning, sortering og CSV-eksport. Eksporten læses igen på serveren med samme rettighedstjek og indeholder op til 50.000 medlemmer pr. brand; når det loft nås, siger siden til.
+  - Klik på et medlem åbner historikken (de seneste 500 hændelser, med besked når der er flere) med belønninger og samtykke.
   - Manuel korrektion vises kun med `…:correct` og kun for de afdelinger, rettigheden gælder for.
 - **Log** (`…:log`):
-  - Alle hændelser med filter på periode (dansk tid), kanal, medarbejder og type, samt CSV-eksport.
+  - Alle hændelser med filter på periode (dansk tid), kanal, medarbejder og type, samt CSV-eksport. Filtrene er en del af forespørgslen, så visningsgrænsen gælder de matchende hændelser (sammensatte indekser i `docs/loyalty-firestore-indexes.json`).
   - Loggen kan ikke redigeres eller slettes.
 
 **Filterlinjen** er fælles for siderne under Loyalitet:
