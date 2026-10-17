@@ -31,7 +31,7 @@ Rerun a preview whenever production changed in between; an outdated hash is alwa
 
 The contract is in [`scripts/migrations/README.md`](../scripts/migrations/README.md): `plan(db)` reads only and returns JSON items without personal data (they are logged), `applyItem(db, item)` re-checks each document in a transaction, and a finished migration plans nothing on rerun. A migration is applied only after its pull request is reviewed and merged to `main`.
 
-`migratePermissions` (permission rename) is not a data migration here; it runs through the access authority from mPanel. See [freemium-rbac-139.md](freemium-rbac-139.md).
+The one-time permission rename (`orderfly.loyalty` → `orderfly.customer_score`) ran through the access authority from mPanel and was removed afterwards. See [freemium-rbac-139.md](freemium-rbac-139.md).
 
 ## One-time setup
 
