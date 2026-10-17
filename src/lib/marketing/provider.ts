@@ -71,6 +71,14 @@ export class Omnisend {
     }
     async sync(event: ConsentEvent): Promise<'synced' | 'already_subscribed' | 'suppressed'> {
         const before = await this.contact(event.email), channel = emailChannel(before, event.email);
+        if (event.action === 'unsubscribe') {
+            // Never create a provider contact only to record an opt-out.
+            if (!channel || channel.status !== 'subscribed') return 'suppressed';
+            await this.api('contacts', consentPayload(event));
+            if (emailChannel(await this.contact(event.email), event.email)?.status === 'subscribed')
+                throw new MarketingError('provider_unsubscribe_unconfirmed');
+            return 'suppressed';
+        }
         // A timed-out previous POST may already have subscribed this contact.
         // The provider lookup is the idempotent confirmation of that consent.
         if (channel?.status === 'subscribed') return 'already_subscribed';

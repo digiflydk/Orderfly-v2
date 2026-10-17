@@ -133,6 +133,29 @@ real-time automation. Clients must have no direct read or write access.
 
 ---
 
+## Stamp-card collections (stempelkort phase 1)
+
+Server-only, like every other collection (`firestore.access.rules` denies browser access). Times are epoch milliseconds and money is integer øre. Every document carries `brandId` and, where relevant, the tenant snapshot `companyId`. Types are in `src/lib/loyalty/stamp-card/model.ts`.
+
+| Collection | ID | Content |
+|---|---|---|
+| `loyaltyPrograms` | `{brandId}` | `{brandId, version, settings}`. `settings` follows `programSettingsSchema`. A missing document means an inactive program. Written by the admin settings (PR 4). |
+| `loyaltyMembers` | random | `customerId`, `name`, `normalizedEmail`, `status` (`active`/`deleted`), `joinedAt`, `currentCardId`, `stampDay`/`stampsOnDay` for the optional daily limit, `consent` (`given`/`withdrawn`, time, source `portal`/`omnisend`, consent event and text version), `termsVersion`, `sessionEpoch` and `lastActivityAt` (latest stamp, redemption or correction). Deletion keeps only `companyId`, `brandId`, `status`, `joinedAt`, `deletedAt` and the epoch, so the log stays pseudonymous. |
+| `loyaltyProgramVersions` | `{brandId}_{version}` | Immutable snapshot of each saved program version with the employee and time. The settings change itself is logged as a `settings_changed` event with every field's old and new value. |
+| `loyaltyMemberIdentities` | `sha256(["loyalty-member", brandId, email])` | `{brandId, memberId}`. Prevents duplicates and powers e-mail lookup. |
+| `loyaltyCards` | random | The card freezes the rules it was issued under: `programVersion`, `stampsRequired`, `crossLocation`, `cardValidityMonths`, `rewardValidityMonths`, reward snapshot. Also `stamps`, `status` (`active`/`completed`/`expired`), `locationId` (bound location or `null`), `lastStampAt` and `expiresAt` (`null` until the first stamp). |
+| `loyaltyRewards` | `sha256([eventId, "reward", n])` | Reward snapshot, `description`, `locationId`, `earnedAt`, `expiresAt`, `status` (`available`/`redeemed`/`expired`/`cancelled`) and the redeeming employee and location. |
+| `loyaltyEvents` | `sha256([operation, brandId, idempotencyKey])` or a deterministic job key | Append-only log with tenant, brand, member, type, quantity, amount, channel, source, location, employee ID and name, reason, idempotency key, request hash, card and reward. The primary event stores the operation's `result` receipt. |
+| `loyaltyQrTokens` | `sha256(["qr", token])` | `{brandId, memberId, createdAt, expiresAt, usedAt}`. The raw token is never stored; it is valid for 60 seconds and consumed by the first lookup. |
+| `loyaltyRateLimits` | `sha256([scope, key, window])` | Fixed-window counters: employee lookups (60/min), sign-up per IP (20/h), login links per e-mail (5/h) and per IP (30/h), link verification per IP (30/h), QR tokens per member (20/min). Keys are hashed, so no raw e-mail or IP is stored. |
+| `loyaltyLoginTokens` | `sha256(["login", token])` | `{brandId, memberId, createdAt, expiresAt (15 min), usedAt}`. Single use. |
+| `loyaltySessions` | `sha256(["session", token])` | `{brandId, memberId, epoch, createdAt, expiresAt (program sessionDays, default 180 days), revokedAt}`. The raw token exists only in the `__Host-orderfly-loyalty` cookie. |
+| `loyaltyMailOutbox` | same ID as the login token | Login mail job. It holds the link only until it is accepted, expires or fails permanently. States: `pending`, `dispatching`, `accepted`, `failed`, `uncertain`, `expired`. |
+
+Newsletter consent from the program uses the existing `marketingConsents`, `marketingOutbox` and `marketingContacts` with `source: 'loyalty'`, the program's consent text and a version derived from that text. A portal opt-out is a consent event with `action: 'unsubscribe'`.
+
+Required composite indexes for the expiry job and the reward lookup are listed in `docs/loyalty-firestore-indexes.json`. Add them additively to the production data project `orderfly-39325`; the file is not a full index inventory.
+
 ## Collection: `discounts`
 Defines customer-entered discount codes and automatic newsletter-signup incentives.
 

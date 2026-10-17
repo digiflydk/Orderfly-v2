@@ -130,7 +130,7 @@ export async function updateLoyaltySettings(
 
   try {
     await getAdminDb().collection('platform_settings').doc('loyalty').set(validatedFields.data);
-    revalidatePath('/superadmin/loyalty');
+    revalidatePath('/superadmin/loyalty/score');
     return { message: 'Loyalty settings updated successfully.', error: false };
   } catch (e) {
     console.error(e);

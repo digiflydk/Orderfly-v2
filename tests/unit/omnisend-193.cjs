@@ -114,6 +114,7 @@ test('#193 existing notification heartbeat also runs the consent queue without s
   '@/lib/notifications/order-worker':{runOrderNotificationWorker:async()=>({})},
   '@/lib/games/worker':{runGameOutbox:async()=>({})},
   '@/lib/marketing/worker':{runMarketingWorker:async()=>{calls++;return {processed:1}}},
+  '@/lib/loyalty/stamp-card/worker':{runLoyaltyWorker:async()=>({cards:0,rewards:0})},
   '@/lib/firebase-admin':{getAdminDb:()=>({})},
  });
  const previous=process.env.ORDERFLY_FEEDBACK_WORKER_SECRET;

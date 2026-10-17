@@ -35,7 +35,11 @@ const destinations=[
   ['orderfly.customers:view','/superadmin/customers'],
   ['orderfly.discounts:view','/superadmin/discounts'],
   ['orderfly.feedback:view','/superadmin/feedback'],
-  ['orderfly.customer_score:view','/superadmin/loyalty'],
+  ['orderfly.stamp_cards:overview','/superadmin/loyalty'],
+  ['orderfly.customer_score:view','/superadmin/loyalty/score'],
+  ['orderfly.stamp_cards:settings','/superadmin/loyalty/stamp-card?tab=settings'],
+  ['orderfly.stamp_cards:members','/superadmin/loyalty/stamp-card?tab=members'],
+  ['orderfly.stamp_cards:log','/superadmin/loyalty/stamp-card?tab=log'],
   ['orderfly.analytics:view','/superadmin/analytics/cust-funnel'],
   ['orderfly.website:view','/superadmin/brands/websites'],
 ] as const;
@@ -48,6 +52,8 @@ async function usableDestination(db:Firestore,identity:VerifiedIdentity,permissi
   for(const grant of result.grants as Array<{tenantId:string;locationIds:string[]|null}>) {
     // Feedback aggregates locations and requires a company-wide grant.
     if(permission==='orderfly.feedback:view'&&grant.locationIds!==null)continue;
+    // Stamp-card administration also combines every location of a brand.
+    if(permission.startsWith('orderfly.stamp_cards:')&&grant.locationIds!==null)continue;
     if(!(await db.collection('brands').doc(grant.tenantId).get()).exists)continue;
     if(grant.locationIds===null)return true;
     for(const id of grant.locationIds) {
