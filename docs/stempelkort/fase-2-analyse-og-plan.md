@@ -1,6 +1,6 @@
 # Fase 2 – Stempelkort: kundeportal – analyse og plan
 
-Status: **Udkast til ejerens godkendelse (2026-10-17).** Der er ikke ændret applikationskode.
+Status: **Udkast. Ejeren har svaret på spørgsmål 1–4 (2026-10-17); spørgsmål 5–7 og godkendelse af planen mangler.** Der er ikke ændret applikationskode.
 Grundlag: `main` @ `0f3aab9` (Orderfly-v2), hvor fase 1 PR 1–6 er merget.
 Spec: [fase-2-stempelkort-kundeportal.md](fase-2-stempelkort-kundeportal.md). Bygger på [fase 1](fase-1-stempelkort-backend.md) og [fase 1-planen](fase-1-analyse-og-plan.md).
 
@@ -68,16 +68,21 @@ Alle ligger under `/api/loyalty/{brandSlug}/` (`src/app/api/loyalty/[brandSlug]/
 
 ---
 
-## Del B – Spørgsmål til ejeren
+## Del B – Beslutninger og åbne spørgsmål
 
-Jeg har brug for svar på disse, før jeg bygger. Mit forslag står ved hvert spørgsmål.
+### Svar fra ejeren (2026-10-17)
+
+| # | Emne | Beslutning |
+|---|---|---|
+| 1 | Design | **Genbrug** Esmeraldas eksisterende forudindstilling i koden og de skriftfiler, feedback-siderne bruger. Andre brands får farver, skriftnavn og logo fra brandindstillingerne. **På sigt** skal portalen tilpasses hver merchants branding dynamisk (brandindstillinger med overskrifts-/brødtekstskrift og logovarianter). Det er en senere opgave og ikke en del af fase 2. |
+| 2 | Logo | Ejeren har ikke set, om Esmeraldas `logoUrl` er det hvide logo. Jeg tjekker det. Er det ikke det hvide logo, lægges det hvide logo (feedback-sidernes `esmeralda-logo.png`) ind i Esmeralda-forudindstillingen for portalen, så det kan flyttes til brandindstillingerne bagefter. |
+| 3 | Adresse | **`https://esmeralda.orderfly.dk/club`**. Subdomænet (`*.orderfly.dk` i App Hosting og DNS) er **endnu ikke sat op**. Konsekvens: portalen virker også på `orderfly.dk/esmeralda/club`, og der laves **ingen** omdirigering til subdomænet. Login-mailens link peger dog altid på subdomænet (fase 1), så login virker først i drift, når subdomænet er sat op. Det er et krav før lancering (C9). |
+| 4 | Telefonnummer | **Nej.** |
+
+### Stadig åbne
 
 | # | Spørgsmål | Mit forslag |
 |---|---|---|
-| 1 | **Design fra brandindstillinger.** Brandindstillingerne har kun ét skriftnavn og ét logo. Skal portalen (A) genbruge Esmeraldas eksisterende forudindstilling i koden plus de skriftfiler, feedback-siderne allerede bruger, og for andre brands bruge farver, skriftnavn og logo fra brandindstillingerne? Eller (B) skal brandindstillingerne udvides med overskrifts-/brødtekstskrift og logovarianter (ændring i datamodel og brandformular, større opgave)? | **A.** Det følger "arv det eksisterende design" og ændrer ikke datamodellen. B kan komme senere. |
-| 2 | **Esmeraldas hvide logo.** Er det `logoUrl` i Esmeraldas brandindstillinger det hvide logo til sort baggrund? Feedback-siderne bruger `esmeralda-logo.png` fra Webflow. | Jeg bruger brandets `logoUrl` og tjekker visuelt. Er det det forkerte, bruger jeg feedback-sidernes logo i Esmeralda-forudindstillingen. |
-| 3 | **Adresse (spec spørgsmål 1).** Fase 1 har lagt login-linket fast på `esmeralda.orderfly.dk/club`. Er det godkendt? En side direkte på esmeraldapizza.dk (Webflow) kræver en proxy eller indlejring og er ikke med i planen. | **`https://esmeralda.orderfly.dk/club`**, med links fra esmeraldapizza.dk, nyhedsbreve og kvitteringer. `orderfly.dk/esmeralda/club` sendes videre til subdomænet. |
-| 4 | **Telefonnummer (spec spørgsmål 2).** | **Nej** i fase 2. Det kræver ændring af backend og datamodel (fælles kode med fase 3). |
 | 5 | **Skilt-QR til disken (spec spørgsmål 3).** | Ja: en QR-kode til tilmeldingssiden (`…/club/tilmeld`) leveres som SVG-fil i `docs/stempelkort/` til tryk. Selve trykket er drift. |
 | 6 | **Hjemmeskærmsikon.** Har Esmeralda et kvadratisk app-ikon? | Ellers laver jeg ikonet automatisk ud fra logoet på brandets baggrundsfarve. |
 | 7 | **Reserveret afdelingsadresse.** Må jeg forhindre, at en afdeling får adressen `club`? Det er en lille ændring i afdelingsformularen (uden for `/club`-mappen). | Ja. |
@@ -123,7 +128,8 @@ Adresserne er på brandets subdomæne, fx `esmeralda.orderfly.dk/club/…`.
 
 - Portalen bruger brandlayoutet (farver, Esmeralda-forudindstillingen, cookie-banner og footer), men med en **enkel portal-header** (logo og menu: Kort, Historik, Profil) i stedet for webshoppens header med kurv.
 - Ændring i `src/app/[brandSlug]/layout-client.tsx`: `club` får sin egen header. Ændring i `src/components/brand-tracking.tsx`: ingen tracking på `/club`-sider.
-- Esmeralda (forudsat svar A på spørgsmål 1): Bourton til overskrifter og Brandon til brødtekst, indlæst med de skriftfiler, der allerede bruges på feedback-siderne, og kun på `/club`-siderne. Andre brands: farver, skriftnavn og logo fra brandindstillingerne.
+- Esmeralda (beslutning 1): Bourton til overskrifter og Brandon til brødtekst, indlæst med de skriftfiler, der allerede bruges på feedback-siderne, og kun på `/club`-siderne. Hvidt logo på sort baggrund (beslutning 2). Andre brands: farver, skriftnavn og logo fra brandindstillingerne.
+- Esmeralda-tilpasningerne samles ét sted (portalens forudindstilling), så de senere kan erstattes af dynamiske brandindstillinger uden at ændre siderne.
 - Mobil først (390 px), også tablet og computer (indholdet centreres i en smal kolonne).
 - Tilgængelighed: overskrifter i rigtig rækkefølge, labels på alle felter, fejlbeskeder læses op, synlig fokus, kontrast mindst 4,5:1, tekst mindst 16 px, knapper mindst 44 px høje.
 - Ydeevne: ingen store biblioteker, QR-tegning kun på kortsiden, ingen tracking.
@@ -193,5 +199,5 @@ Hver PR merger `main` ind før merge og opdaterer `docs/stempelkort/README.md` o
 
 - Programmet skal være slået til med tekster i admin (fase 1).
 - Login-mailen kræver brandets mail-opsætning (fase 1, README).
-- `*.orderfly.dk` skal være koblet på i App Hosting (`docs/brand-subdomains.md`). Det kunne jeg ikke verificere herfra (netværket er spærret).
+- **Krav før lancering:** `*.orderfly.dk` skal kobles på i App Hosting og DNS (`docs/brand-subdomains.md`). Det er ikke gjort endnu (beslutning 3). Indtil da virker login-linket i mailen ikke i drift. Portalens sider kan ses på `orderfly.dk/esmeralda/club`.
 - Links fra esmeraldapizza.dk, nyhedsbreve, kvitteringer og skiltet på disken sættes op af ejeren.
