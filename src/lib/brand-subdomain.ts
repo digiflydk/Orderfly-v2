@@ -13,6 +13,8 @@ export const RESERVED_BRAND_SLUGS = new Set([
   'www', 'api', 'admin', 'app', 'staging', 'mail', 'support',
   'superadmin', 'superadmin-safe', 'merchant', 'admin-login', 'feedback', 'feedback-admin',
   'games', 'tracking', 'checkout', 'verify', 'brand-safe', 'brand-site', 'm3', 'm3pizza', 'env-debug',
+  // The stamp card portal path (/club on a brand subdomain) must never read as a brand.
+  'club',
   'features', 'pricing', 'contact', 'ok', 'health', 'static', 'assets', 'cdn',
 ]);
 
@@ -35,6 +37,14 @@ export function brandSlugError(slug: string): string | null {
     return 'Slug må kun indeholde små bogstaver a–z, tal og bindestreg, og skal starte og slutte med et bogstav eller tal.';
   if (RESERVED_BRAND_SLUGS.has(slug)) return `"${slug}" er reserveret og kan ikke bruges.`;
   return null;
+}
+
+// Fixed pages under /{brand}/ that a location with the same slug would be hidden behind.
+export const RESERVED_LOCATION_SLUGS = new Set(['club']);
+
+/** Returns a Danish explanation when a location slug is reserved, otherwise null. */
+export function locationSlugError(slug: string): string | null {
+  return RESERVED_LOCATION_SLUGS.has(slug.trim().toLowerCase()) ? `"${slug.trim()}" er reserveret og kan ikke bruges som adresse.` : null;
 }
 
 export function brandSubdomainUrl(slug: string): string {

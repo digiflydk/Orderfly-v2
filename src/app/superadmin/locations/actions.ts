@@ -5,6 +5,7 @@ import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { publicLocationRecord } from '@/lib/public-native-records';
 import { selectorCatalog } from '@/lib/access/native-catalog';
 import { calculateTimeSlots } from '@/lib/time-slots';
+import { locationSlugError } from '@/lib/brand-subdomain';
 
 import { revalidatePath, revalidateTag } from 'next/cache';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -25,7 +26,10 @@ const locationSchema = z.object({
   id: z.string().optional(),
   brandId: z.string().min(1, { message: 'Brand is required.' }),
   name: z.string().min(2, { message: 'Location name must be at least 2 characters.' }),
-  slug: z.string().min(2, { message: 'Slug is required.' }),
+  slug: z.string().min(2, { message: 'Slug is required.' }).superRefine((slug, ctx) => {
+    const error = locationSlugError(slug);
+    if (error) ctx.addIssue({ code: z.ZodIssueCode.custom, message: error });
+  }),
   street: z.string().min(2, 'Street name is required.'),
   zipCode: z.string().min(2, 'PO Box / ZIP Code is required.'),
   city: z.string().min(2, 'City is required.'),
