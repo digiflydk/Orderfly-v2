@@ -8,7 +8,7 @@ All routes live under `src/app`. Shared code lives in `src/lib`, `src/components
 - **Menu Page (Client):** `src/app/[brandSlug]/[locationSlug]/menu-client.tsx`
 - **Checkout Page:** `src/app/[brandSlug]/[locationSlug]/checkout/page.tsx`
 - **Confirmation Page:** `src/app/[brandSlug]/[locationSlug]/checkout/confirmation/page.tsx`
-- **Stamp card portal (Esmeralda Club):** `src/app/[brandSlug]/club/*` (start with the member card `member-card.tsx` and QR code `member-qr.tsx`, `tilmeld`, `login`, `vilkaar`; server reads in `data.ts`, brand look in `brand-preset.ts`), paths in `src/lib/loyalty/portal-path.ts`
+- **Stamp card portal (Esmeralda Club):** `src/app/[brandSlug]/club/*` (start with the member card `member-card.tsx` and QR code `member-qr.tsx`, `tilmeld`, `login`, `vilkaar`, `historik`, `profil`, menu `club-nav.tsx`, home screen `home-screen.ts`, `manifest.webmanifest` and `ikon/[size]`; server reads in `data.ts`, brand look in `brand-preset.ts`), paths in `src/lib/loyalty/portal-path.ts`
 - **Cart Context:** `src/context/cart-context.tsx`
 - **Cart Components:** `src/components/cart/*`
 - **Checkout Components:** `src/components/checkout/*`
