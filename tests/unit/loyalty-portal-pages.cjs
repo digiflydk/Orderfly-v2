@@ -75,8 +75,7 @@ test('portal links stay on the address the customer uses',async()=>{
 });
 
 const sharp=require('sharp');
-const home=loadTs('src/app/[brandSlug]/club/home-screen.ts',{'server-only':{},sharp:{default:sharp},'@/lib/data/brand-location':{getBrandBySlug:async()=>null},'./data':{},
-  '@/app/[brandSlug]/club/data':{}});
+const home=loadTs('src/app/[brandSlug]/club/home-screen.ts',{'server-only':{},sharp:{default:sharp},'@/lib/firebase-admin':{getAdminDb:()=>({})},'./data':{}});
 
 test('the web app manifest names the program and starts on the portal address',()=>{
   const m=home.manifest('Esmeralda Club','/club','#000000');
@@ -118,4 +117,28 @@ test('the counter sign QR in docs leads to the sign-up page',async()=>{
   const QRCode=require('qrcode'),fs=require('node:fs');
   const expected=await QRCode.toString('https://esmeralda.orderfly.dk/club/tilmeld',{type:'svg',errorCorrectionLevel:'H',margin:4,color:{dark:'#000000',light:'#ffffff'}});
   assert.equal(fs.readFileSync('docs/stempelkort/skilt-qr-tilmelding.svg','utf8'),expected);
+});
+
+test('logos are fetched only from public image hosts, without redirects, and cut off at 2 MB',async()=>{
+  const png=await sharp({create:{width:4,height:4,channels:4,background:'#ff0000'}}).png().toBuffer();
+  const calls=[];
+  const stream=(chunks,length)=>async(url,options)=>{calls.push([String(url),options.redirect]);
+    return new Response(new ReadableStream({pull(c){const next=chunks.shift();if(next)c.enqueue(next);else c.close();}}),{headers:length?{'content-length':String(length)}:{}});};
+  // An inline logo (served to browsers via /api/storefront-image) is decoded, never fetched.
+  assert.deepEqual(await home.logoBuffer('data:image/png;base64,'+png.toString('base64'),stream([])),png);
+  assert.equal(calls.length,0);
+  for(const blocked of ['http://cdn.prod.website-files.com/x.png','https://169.254.169.254/latest','https://localhost/x.png','https://internal.example/x.png',
+    'https://cdn.prod.website-files.com:8443/x.png','https://user@cdn.prod.website-files.com/x.png','/api/storefront-image?x=1','not a url'])
+    assert.equal(await home.logoBuffer(blocked,stream([png])),null,blocked);
+  assert.equal(calls.length,0);
+  assert.deepEqual(await home.logoBuffer('https://cdn.prod.website-files.com/logo.png',stream([png.subarray(0,10),png.subarray(10)])),png);
+  assert.deepEqual(calls,[['https://cdn.prod.website-files.com/logo.png','error']]);
+  // No or false Content-Length: the stream is abandoned once it passes the limit.
+  const mb=new Uint8Array(1_000_000);let pulled=0;
+  const endless=async()=>new Response(new ReadableStream({pull(c){pulled++;c.enqueue(mb);}}));
+  assert.equal(await home.logoBuffer('https://res.cloudinary.com/logo.png',endless),null);
+  assert.ok(pulled<=4,String(pulled));
+  assert.equal(await home.logoBuffer('https://res.cloudinary.com/logo.png',stream([png],3_000_000)),null);
+  // Redirects and network errors give no logo.
+  assert.equal(await home.logoBuffer('https://res.cloudinary.com/logo.png',async()=>{throw new TypeError('redirect');}),null);
 });

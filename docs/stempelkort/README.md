@@ -188,6 +188,7 @@ Plan: [fase-2-analyse-og-plan.md](fase-2-analyse-og-plan.md).
 - **Hjemmeskærm:**
   - Webapp-manifest pr. brand på `/club/manifest.webmanifest` med programmets navn, start på `/club`, visningen "standalone" og brandets baggrundsfarve.
   - Ikoner på `/club/ikon/180`, `/192` og `/512`. De laves på serveren med `sharp` ud fra logoet (60 % af fladen, inden for sikkerhedszonen for "maskable" ikoner) på brandets baggrundsfarve; Esmeralda får sort baggrund. Uden et brugbart logo bliver ikonet ensfarvet.
+  - Logoet læses fra brandets gemte data. Et indlejret billede afkodes direkte. En adresse hentes kun fra kendte offentlige billedværter (Webflow-CDN og værterne i `next.config`), uden at følge videresendelser og højst 2 MB. Serveren kan derfor ikke lokkes til at kalde interne adresser.
   - iPhone får `apple-touch-icon` og titel.
   - En diskret vejledning på kortet vises på telefoner, indtil kunden lukker den eller åbner portalen fra hjemmeskærmen. På iPhone forklarer den Del → "Føj til hjemmeskærm". Android får browserens egen installationsknap, når den tilbydes, og ellers en vejledning.
 - **Skilt til disken:** [skilt-qr-tilmelding.svg](skilt-qr-tilmelding.svg) er en QR-kode til `https://esmeralda.orderfly.dk/club/tilmeld` med høj fejlkorrektion, klar til tryk. Den virker først, når `*.orderfly.dk` er sat op.

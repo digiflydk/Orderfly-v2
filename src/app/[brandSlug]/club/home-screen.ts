@@ -1,6 +1,7 @@
 import 'server-only';
 import sharp from 'sharp';
-import { getBrandBySlug } from '@/lib/data/brand-location';
+import { getAdminDb } from '@/lib/firebase-admin';
+import { rasterData } from '@/lib/storefront-media';
 import { findPortal, portalBase } from './data';
 import { portalPreset } from './brand-preset';
 
@@ -8,11 +9,17 @@ import { portalPreset } from './brand-preset';
 // from the brand logo on the brand's background colour.
 export const ICON_SIZES = [180, 192, 512] as const;
 const MAX_LOGO_BYTES = 2_000_000;
+// Logos are only fetched from public image hosts (Esmeralda's Webflow CDN and
+// the hosts next.config already allows), never from arbitrary or internal addresses.
+const LOGO_HOSTS = new Set(['cdn.prod.website-files.com', 'firebasestorage.googleapis.com', 'res.cloudinary.com', 'i.postimg.cc', 'images.unsplash.com', 'picsum.photos', 'placehold.co']);
 
 export async function homeScreenBrand(slug: string) {
-  const [portal, storefrontBrand, base] = await Promise.all([findPortal(slug), getBrandBySlug(slug), portalBase(slug)]);
+  const [portal, base] = await Promise.all([findPortal(slug), portalBase(slug)]);
   if (!portal) return null;
-  const preset = portalPreset({ slug, name: portal.brand.brandName, logoUrl: storefrontBrand?.logoUrl, background: storefrontBrand?.appearances?.colors.background });
+  // The stored brand record: its logo may be an inline image the storefront serves through /api/storefront-image.
+  const stored = (await getAdminDb().collection('brands').doc(portal.brand.brandId).get()).data();
+  const preset = portalPreset({ slug, name: portal.brand.brandName, logoUrl: typeof stored?.logoUrl === 'string' ? stored.logoUrl : null,
+    background: stored?.appearances?.colors?.background });
   return { name: portal.program.name, base, preset };
 }
 
@@ -28,14 +35,33 @@ export function manifest(name: string, base: string, background: string) {
   };
 }
 
-async function logoBuffer(url: string | null) {
-  if (!url || !url.startsWith('https://')) return null;
-  try {
-    const response = await fetch(url, { signal: AbortSignal.timeout(5_000) });
-    const length = Number(response.headers.get('content-length') || 0);
-    if (!response.ok || length > MAX_LOGO_BYTES) return null;
-    const buffer = Buffer.from(await response.arrayBuffer());
+// An inline (data:) logo is decoded; a URL is fetched only from LOGO_HOSTS,
+// without following redirects, and abandoned as soon as it passes the size limit.
+export async function logoBuffer(source: string | null, fetcher: typeof fetch = fetch): Promise<Buffer | null> {
+  if (!source) return null;
+  const inline = source.match(rasterData);
+  if (inline) {
+    const buffer = Buffer.from(inline[2], 'base64');
     return buffer.length > MAX_LOGO_BYTES ? null : buffer;
+  }
+  let url: URL;
+  try { url = new URL(source); } catch { return null; }
+  if (url.protocol !== 'https:' || url.port || url.username || !LOGO_HOSTS.has(url.hostname)) return null;
+  try {
+    const response = await fetcher(url, { redirect: 'error', signal: AbortSignal.timeout(5_000) });
+    if (!response.ok || !response.body) return null;
+    const reader = response.body.getReader(), chunks: Uint8Array[] = [];
+    let size = Number(response.headers.get('content-length') || 0);
+    if (size > MAX_LOGO_BYTES) { await reader.cancel(); return null; }
+    size = 0;
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      size += value.byteLength;
+      if (size > MAX_LOGO_BYTES) { await reader.cancel(); return null; }
+      chunks.push(value);
+    }
+    return Buffer.concat(chunks);
   } catch { return null; }
 }
 
@@ -47,7 +73,7 @@ export async function homeScreenIcon(size: number, logoUrl: string | null, backg
   if (logo) {
     try {
       const inner = Math.round(size * 0.6);
-      const fitted = await sharp(logo).resize(inner, inner, { fit: 'inside' }).png().toBuffer();
+      const fitted = await sharp(logo, { limitInputPixels: 40_000_000 }).resize(inner, inner, { fit: 'inside' }).png().toBuffer();
       return await canvas.composite([{ input: fitted, gravity: 'centre' }]).png().toBuffer();
     } catch { /* not an image sharp can read: plain icon */ }
   }
