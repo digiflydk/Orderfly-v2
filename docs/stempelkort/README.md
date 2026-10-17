@@ -141,14 +141,14 @@ Plan: [fase-2-analyse-og-plan.md](fase-2-analyse-og-plan.md).
 
 | PR | Indhold | Status |
 |---|---|---|
-| 1 | Ramme, tilmelding, login og vilkår | I review |
-| 2 | Mit stempelkort og QR-kode | Ikke startet |
+| 1 | Ramme, tilmelding, login og vilkår | Merget 2026-10-17 (#267) |
+| 2 | Mit stempelkort og QR-kode | I review |
 | 3 | Historik, profil, hjemmeskærm og skilt-QR | Ikke startet |
 
 **Adresse:** `https://{slug}.orderfly.dk/club`, fx `https://esmeralda.orderfly.dk/club`. Portalen virker også på `https://orderfly.dk/{slug}/club`, og der omdirigeres ikke, fordi `*.orderfly.dk` endnu ikke er sat op i drift. Login-mailens link peger altid på subdomænet, så login i drift kræver subdomænet ([brand-subdomains.md](../brand-subdomains.md)).
 
 **Sider (PR 1)** i `src/app/[brandSlug]/club/`:
-- `/club`: introduktion med "Bliv medlem" og "Log ind". For et logget ind medlem vises stempler X af N og tekst om næste belønning (kortet med QR-kode kommer i PR 2). Er programmet slået fra, vises en venlig besked.
+- `/club`: introduktion med "Bliv medlem" og "Log ind". Et logget ind medlem ser sit stempelkort (PR 2, se nedenfor). Er programmet slået fra, vises en venlig besked.
 - `/club/tilmeld`: navn, e-mail og to afkrydsninger, som ikke er forudafkrydsede. Samtykketeksten og versionerne kommer fra programmet; ændres teksterne undervejs, skal kunden sætte flueben igen. Svaret er altid "Tjek din e-mail".
 - `/club/login`: e-mail → login-link. Åbnes siden fra mailen, fjernes tokenet fra adressen, før det sendes til `verify`. Udløbet og brugt link har hver sin besked og en knap til et nyt link.
 - `/club/vilkaar`: programmets vilkår.
@@ -161,4 +161,18 @@ Plan: [fase-2-analyse-og-plan.md](fase-2-analyse-og-plan.md).
 - Portalens sider er markeret `noindex`.
 - En afdeling kan ikke få adressen `club`.
 
-**Test:** `tests/unit/loyalty-portal-pages.cjs` (stier, tekster, brandudseende og serverlæsning) og `tests/unit/loyalty-portal-browser.cjs` (tilmelding, login, links fra mailen og tracking i Chromium ved 390 og 1440 px).
+**Mit stempelkort (PR 2)** (`member-card.tsx`, `member-qr.tsx`):
+- Stemplerne vises som X af N (fx 2 rækker á 4), med teksten "3 stempler til gratis pizza" bygget af tallene og belønningsbeskrivelsen fra API'et.
+- Optjente belønninger med beskrivelse, udløbsdato og "Vis QR-koden ved kassen for at indløse".
+- Kortets udløbsdato: "Dine stempler udløber, hvis du ikke har fået et nyt stempel inden [dato]". Datoer vises i dansk tid.
+- Er programmet slået fra, ser medlemmet stadig sit kort med en besked om, at der ikke gives nye stempler.
+- **QR-koden:**
+  - Tegnes i browseren (pakken `qrcode`) som sort på hvid med hvid kant, uanset brandets farver.
+  - Hentes fra `GET qr` og fornyes efter 45 sekunder, og straks når kunden vender tilbage til appen eller får forbindelse igen.
+  - Kortet genindlæses ved hver fornyelse, så nye stempler fra kassen dukker op.
+  - Koden skjules senest 57 sekunder efter, at serveren udstedte den, målt med serverens `Date`-header og højst en kodes levetid. Et forkert ur på telefonen kan derfor ikke holde en gammel kode synlig.
+  - Uden forbindelse vises "Ingen forbindelse – QR-koden kan ikke vises" og "Prøv igen".
+  - En udløbet session sender kunden til login.
+  - Skærmen holdes tændt, mens koden vises, hvor browseren understøtter det.
+
+**Test:** `tests/unit/loyalty-portal-pages.cjs` (stier, tekster, datoer, brandudseende og serverlæsning) og `tests/unit/loyalty-portal-browser.cjs` (tilmelding, login, links fra mailen, tracking, kortet og QR-kodens fornyelse, udløb, offline og forkert ur i Chromium ved 390 og 1440 px).
