@@ -42,6 +42,7 @@ const destinations=[
   ['orderfly.stamp_cards:log','/superadmin/loyalty/stamp-card?tab=log'],
   ['orderfly.analytics:view','/superadmin/analytics/cust-funnel'],
   ['orderfly.website:view','/superadmin/brands/websites'],
+  ['orderfly.stamp_cards:counter','/merchant/stamp-card'],
 ] as const;
 async function usableDestination(db:Firestore,identity:VerifiedIdentity,permission:string) {
   // Customer score settings are global reads. Billing's overview is superuser-only
@@ -53,7 +54,8 @@ async function usableDestination(db:Firestore,identity:VerifiedIdentity,permissi
     // Feedback aggregates locations and requires a company-wide grant.
     if(permission==='orderfly.feedback:view'&&grant.locationIds!==null)continue;
     // Stamp-card administration also combines every location of a brand.
-    if(permission.startsWith('orderfly.stamp_cards:')&&grant.locationIds!==null)continue;
+    // The counter view works per location, so location-scoped counter staff can land there.
+    if(permission.startsWith('orderfly.stamp_cards:')&&permission!=='orderfly.stamp_cards:counter'&&grant.locationIds!==null)continue;
     if(!(await db.collection('brands').doc(grant.tenantId).get()).exists)continue;
     if(grant.locationIds===null)return true;
     for(const id of grant.locationIds) {

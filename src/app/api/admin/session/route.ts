@@ -3,6 +3,7 @@ import { cookies } from 'next/headers';
 import { z } from 'zod';
 import { getAdminApp, getAdminDb } from '@/lib/firebase-admin';
 import { executeAuthority, type VerifiedIdentity } from '@/lib/access/authority';
+import { counterOnly } from '@/lib/access/navigation';
 import { getOrigin } from '@/lib/url';
 import { createOpsflyCookie, loginOpsfly, logoutOpsfly, OPSFLY_COOKIE_PREFIX, OpsflyLoginError, readOpsflyCookie } from '@/lib/access/opsfly-login';
 
@@ -13,6 +14,8 @@ const bootstrapIdentity=():VerifiedIdentity=>({provider:'opsfly',subject:process
 async function checkAccess(identity:VerifiedIdentity) {
   const access=await executeAuthority(getAdminDb(),identity,{action:'session'},bootstrapIdentity());
   if(!('permissions' in access)||!('superuser' in access)||(!access.superuser&&!access.permissions.some((p:string)=>p.startsWith('orderfly.'))))throw new Error();
+  // Counter-only staff land on the counter view instead of a page they cannot open.
+  return counterOnly({superuser:access.superuser===true,permissions:access.permissions as string[]})?{home:'/merchant/stamp-card'}:{};
 }
 export async function POST(request: Request) {
   if(request.headers.get('origin')!==await getOrigin())return NextResponse.json({error:'Forbidden'},{status:403});
@@ -25,9 +28,9 @@ export async function POST(request: Request) {
       if(!parsed.success)return NextResponse.json({error:'Kontrollér brugernavn og PIN.'},{status:400});
       const native=await loginOpsfly(parsed.data.identifier,parsed.data.pin);
       try {
-        await checkAccess(native.identity);
+        const landing=await checkAccess(native.identity);
         const cookie=createOpsflyCookie(native.token,native.expires_at);
-        const response=NextResponse.json({ok:true},{headers:{'Cache-Control':'no-store'}});
+        const response=NextResponse.json({ok:true,...landing},{headers:{'Cache-Control':'no-store'}});
         response.cookies.set('__session',cookie.value,{...cookieOptions,maxAge:cookie.maxAge});
         return response;
       } catch(error) {await logoutOpsfly(native.token).catch(()=>{});throw error;}
@@ -37,10 +40,10 @@ export async function POST(request: Request) {
     const auth=getAdminApp().auth();
     const decoded=await auth.verifyIdToken(idToken,true);
     if(typeof decoded.auth_time!=='number'||Math.abs(Date.now()/1000-decoded.auth_time)>300)throw new Error();
-    await checkAccess({provider:'firebase',subject:decoded.uid});
+    const landing=await checkAccess({provider:'firebase',subject:decoded.uid});
     const expiresIn=8*60*60*1000;
     const session=await auth.createSessionCookie(idToken,{expiresIn});
-    const response=NextResponse.json({ok:true},{headers:{'Cache-Control':'no-store'}});
+    const response=NextResponse.json({ok:true,...landing},{headers:{'Cache-Control':'no-store'}});
     response.cookies.set('__session',session,{...cookieOptions,maxAge:expiresIn/1000});
     return response;
   } catch(error) {

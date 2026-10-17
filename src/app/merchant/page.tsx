@@ -1,13 +1,17 @@
 import { getFiltersData } from '@/app/superadmin/_filters-data';
 import { AdminOverview } from '@/app/superadmin/overview-client';
 import { orderflySession } from '@/lib/access/orderfly-session';
-import { canNavigate } from '@/lib/access/navigation';
+import { redirect } from 'next/navigation';
+import { canNavigate, counterOnly } from '@/lib/access/navigation';
 
 export const dynamic='force-dynamic';
 
 export default async function MerchantOverview() {
-  const [scope,access]=await Promise.all([getFiltersData(),orderflySession()]);
+  const access=await orderflySession();
+  if(counterOnly(access))redirect('/merchant/stamp-card');
+  const scope=await getFiltersData();
   const destinations=[
+    {href:'/merchant/stamp-card',label:'Kassevisning',description:'Scan kundens stempelkort, giv stempel og indløs belønninger.'},
     {href:'/merchant/redeem',label:'Indløs kode',description:'Find en gæsts gevinst og registrér indløsning i restauranten.'},
     {href:'/merchant/orders',label:'Ordrer',description:'Klargør dine ordrer og registrér betaling ved afhentning.'},
     {href:'/merchant/payments',label:'Betalingsmetoder',description:'Vælg onlinebetaling og betaling ved afhentning pr. restaurant.'},

@@ -38,6 +38,8 @@ test('landing skips unusable grants and retains valid location, company and supe
   [{permissions:['orderfly.stamp_cards:members']},'/superadmin/loyalty/stamp-card?tab=members'],
   [{permissions:['orderfly.stamp_cards:log','orderfly.website:view'],grants:{'orderfly.stamp_cards:log':[{tenantId:'brand',locationIds:['location']}]}},'/superadmin/brands/websites'],
   [{permissions:['orderfly.billing:view'],superuser:true},'/superadmin/sales/orders'],
+  [{permissions:['orderfly.stamp_cards:counter','orderfly.stamp_cards:redeem'],grants:{'orderfly.stamp_cards:counter':[{tenantId:'brand',locationIds:['location']}]}},'/merchant/stamp-card'],
+  [{permissions:['orderfly.stamp_cards:counter','orderfly.orders:view']},'/superadmin/sales/orders'],
  ]){
   const f=fixture(options),{code}=await f.service.issueLaunch(f.db,token,challenge);
   assert.equal((await f.service.redeemLaunch(f.db,code,challenge)).path,path);
