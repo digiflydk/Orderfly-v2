@@ -55,7 +55,7 @@ Sådan fungerer det:
 - **Udløb:** Udløbne kort og belønninger markeres og logges. Intet slettes. Et stempel efter fristen, men før jobbet har kørt, starter et nyt kort og logger udløbet.
 - **Korrektion** kræver årsag og logges med medarbejderen. Stempler kan ikke tilføjes, mens programmet ikke er aktivt.
 
-Før brug skal indekserne i `docs/loyalty-firestore-indexes.json` oprettes i dataprojektet `orderfly-39325`.
+Før brug skal indekserne i `docs/loyalty-firestore-indexes.json` oprettes i dataprojektet `orderfly-39325`. Det sker med GitHub-workflowet **Firestore indexes**, som kun opretter manglende indexes og venter, til de er klar.
 
 ## Medlemskab og kundesession (PR 3)
 
