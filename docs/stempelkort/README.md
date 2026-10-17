@@ -8,8 +8,8 @@ Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md)
 | PR | Indhold | Status |
 |---|---|---|
 | 1 | Rettigheder, migration af `orderfly.loyalty` og forretningsregler | Merget 2026-10-17 (#253, parret med Esmeralda #410) |
-| 2 | Kassens backend (opslag, stempel, indløsning, korrektion, udløbsjob) | Klar til review (bygger på PR 1) |
-| 3 | Medlemskab, samtykke, Omnisend, login-link og session | Ikke startet |
+| 2 | Kassens backend (opslag, stempel, indløsning, korrektion, udløbsjob) | Merget 2026-10-17 (#255) |
+| 3 | Medlemskab, samtykke, Omnisend, login-link og session | Klar til review (bygger på PR 2, parret med Esmeralda-skabelon) |
 | 4 | Admin: Stempelkort (indstillinger, medlemmer, log, CSV) | Ikke startet |
 | 5 | Admin: Loyalitet (hovedgruppe, oversigt, kundescore flyttes) | Ikke startet |
 | 6 | Oprydning: aliaset `orderfly.loyalty` fjernes | Efter verificeret migration |
@@ -56,3 +56,24 @@ Sådan fungerer det:
 - **Korrektion** kræver årsag og logges med medarbejderen. Stempler kan ikke tilføjes, mens programmet ikke er aktivt.
 
 Før brug skal indekserne i `docs/loyalty-firestore-indexes.json` oprettes i dataprojektet `orderfly-39325`.
+
+## Medlemskab og kundesession (PR 3)
+
+- **Kode:** `src/lib/loyalty/stamp-card/membership.ts` (tilmelding, login-link, session, kortvisning, QR, samtykke, sletning, logout), `mail.ts` (login-mail) og `portal-http.ts`.
+- **Routes:** `src/app/api/loyalty/[brandSlug]/*`.
+
+Sådan fungerer det:
+- **Tilmelding** kræver begge afkrydsninger og præcis den samtykke- og vilkårstekst, kunden fik vist (versioneret ud fra teksten).
+  - En eksisterende kunde kobles på normaliseret e-mail via den fælles identitetsreservation. Det giver ingen dubletter.
+  - Svaret er altid neutralt.
+- **Samtykke** gemmes i den eksisterende samtykkelog med kilden `loyalty`, teksten og versionen, og synkroniseres til Omnisend.
+  - Afmelding i portalen sendes som `unsubscribed`.
+  - Afmelding i Omnisend registreres i den eksisterende afstemning og logges som `consent_withdrawn` på medlemmet. Det gælder også, når medlemmet er tilmeldt med en alias-adresse; kundens primære samtykke ændres kun for den primære adresse.
+  - Medlemskab og stempler bevares i begge tilfælde.
+- **Login-link:** kan kun bruges én gang og udløber efter 15 minutter. Kundens session varer som indstillet (standard 180 dage) og tjekkes ved hvert kald.
+- **Sletning:** fjerner navn, e-mail og kundekobling og tilbagekalder alle sessioner. Ventende login-mails annulleres, og alle medlemmets mailjobs mister navn, e-mail og link. Loggen bevares pseudonymiseret.
+
+**Drift før brug:**
+- Indekserne i `docs/loyalty-firestore-indexes.json` skal være oprettet.
+- Esmeralda-skabelonen `orderfly.stamp_card.login_link` skal være udrullet i versionen med `expires_at` (Esmeralda #412). Mailen sender linkets udløb med, og Notification Platform sender aldrig et udløbet link.
+- Brandet skal have en mail-mapping i `ORDERFLY_LOYALTY_NOTIFICATION_BRANDS`, eller den eksisterende i `ORDERFLY_GAMES_NOTIFICATION_BRANDS`.

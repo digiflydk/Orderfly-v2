@@ -13,6 +13,9 @@ export const COLLECTIONS = {
   events: 'loyaltyEvents',
   qrTokens: 'loyaltyQrTokens',
   rateLimits: 'loyaltyRateLimits',
+  loginTokens: 'loyaltyLoginTokens',
+  sessions: 'loyaltySessions',
+  mailOutbox: 'loyaltyMailOutbox',
 } as const;
 
 export const EVENT_TYPES = [
@@ -49,6 +52,12 @@ export type MemberDoc = {
   companyId: string; brandId: string; customerId: string; name: string; normalizedEmail: string;
   status: 'active' | 'deleted'; joinedAt: number; currentCardId: string | null;
   stampDay: string | null; stampsOnDay: number;
+  // Newsletter consent as collected by the program. Sign-up requires it; withdrawing it keeps the membership.
+  consent: { status: 'given' | 'withdrawn'; at: number; source: 'portal' | 'omnisend'; eventId: string; version?: string };
+  termsVersion: string;
+  // Incremented to revoke every customer-portal session (logout everywhere, deletion).
+  sessionEpoch: number;
+  // The member's current QR code; issuing a new one revokes the previous.
   qrTokenId?: string | null;
 };
 

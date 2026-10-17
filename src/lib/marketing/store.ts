@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { customerHasEmail } from '@/lib/customer-identity';
 import { normalizeEmail } from '@/lib/integrations/esmeralda-customer-contract';
-import type { Firestore } from 'firebase-admin/firestore';
+import type { Firestore, Transaction } from 'firebase-admin/firestore';
 import { NEWSLETTER_CONSENT_VERSION, PREVIOUS_NEWSLETTER_CONSENT_VERSION, newsletterConsentText, type ConsentEvent } from './consent';
 export const contactKey = (brandId: string, email: string) => createHash('sha256').update(`${brandId}\n${email.trim().toLowerCase()}`).digest('hex');
 export async function recordNewsletterConsent(db: Firestore, input: {
@@ -46,4 +46,42 @@ export async function recordNewsletterConsent(db: Firestore, input: {
             tx.update(customerRef, { marketingConsent: true });
     });
     return id;
+}
+
+// Stages an explicit, versioned consent change inside the caller's transaction,
+// so it commits atomically with the change that collected it (a loyalty sign-up
+// or a portal preference). Reads happen now; call the returned function after
+// all other reads. The caller has verified that the customer belongs to the
+// brand and has this e-mail; `primaryEmail` says whether it is the customer's
+// primary address, the only one `customers.marketingConsent` describes. A newer
+// explicit event always becomes the contact's latest event, so it supersedes
+// an earlier provider opt-out.
+export async function stageExplicitConsent(tx: Transaction, db: Firestore, input: {
+    brandId: string;
+    customerId: string;
+    email: string;
+    source: 'loyalty';
+    action: 'subscribe' | 'unsubscribe';
+    requestId: string;
+    capturedAt: number;
+    version: string;
+    wording: string;
+    primaryEmail: boolean;
+}) {
+    const email = input.email.trim().toLowerCase();
+    const key = contactKey(input.brandId, email);
+    const id = createHash('sha256').update(`${key}\n${input.source}\n${input.requestId}`).digest('hex');
+    const eventRef = db.collection('marketingConsents').doc(id), jobRef = db.collection('marketingOutbox').doc(id), stateRef = db.collection('marketingContacts').doc(key);
+    const existing = await tx.get(eventRef);
+    return { id, apply: () => {
+        if (existing.exists) return;
+        const event: ConsentEvent = { id, brandId: input.brandId, customerId: input.customerId, locationId: '', email, channel: 'email', source: input.source,
+            capturedAt: input.capturedAt, version: input.version, wording: input.wording, ...(input.action === 'unsubscribe' ? { action: 'unsubscribe' as const } : {}) };
+        tx.create(eventRef, event);
+        tx.create(jobRef, { eventId: id, contactKey: key, brandId: input.brandId, customerId: input.customerId, state: 'pending', attempts: 0,
+            nextAttemptAt: input.capturedAt, createdAt: input.capturedAt, updatedAt: input.capturedAt });
+        tx.set(stateRef, { brandId: input.brandId, customerId: input.customerId, latestEventId: id, updatedAt: input.capturedAt,
+            state: 'pending', nextReconcileAt: Number.MAX_SAFE_INTEGER }, { merge: true });
+        if (input.primaryEmail) tx.update(db.collection('customers').doc(input.customerId), { marketingConsent: input.action === 'subscribe' });
+    } };
 }
