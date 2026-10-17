@@ -1,6 +1,6 @@
 # Fase 2 – Stempelkort: kundeportal – analyse og plan
 
-Status: **Udkast. Ejeren har svaret på spørgsmål 1–4 (2026-10-17); spørgsmål 5–7 og godkendelse af planen mangler.** Der er ikke ændret applikationskode.
+Status: **Plan komplet efter ejerens svar 2026-10-17. Afventer ejerens godkendelse.** Der er ikke ændret applikationskode.
 Grundlag: `main` @ `0f3aab9` (Orderfly-v2), hvor fase 1 PR 1–6 er merget.
 Spec: [fase-2-stempelkort-kundeportal.md](fase-2-stempelkort-kundeportal.md). Bygger på [fase 1](fase-1-stempelkort-backend.md) og [fase 1-planen](fase-1-analyse-og-plan.md).
 
@@ -79,10 +79,11 @@ Alle ligger under `/api/loyalty/{brandSlug}/` (`src/app/api/loyalty/[brandSlug]/
 | 3 | Adresse | **`https://esmeralda.orderfly.dk/club`**. Subdomænet (`*.orderfly.dk` i App Hosting og DNS) er **endnu ikke sat op**. Konsekvens: portalen virker også på `orderfly.dk/esmeralda/club`, og der laves **ingen** omdirigering til subdomænet. Login-mailens link peger dog altid på subdomænet (fase 1), så login virker først i drift, når subdomænet er sat op. Det er et krav før lancering (C9). |
 | 4 | Telefonnummer | **Nej.** |
 
-### Stadig åbne
+| 5 | Skilt-QR til disken | **Ja.** En QR-kode til tilmeldingssiden (`https://esmeralda.orderfly.dk/club/tilmeld`) leveres som SVG-fil i `docs/stempelkort/` til tryk. Selve trykket er drift. |
+| 6 | Hjemmeskærmsikon | Esmeralda har intet kvadratisk app-ikon. **Ikonet laves automatisk** ud fra logoet på brandets baggrundsfarve. |
+| 7 | Reserveret afdelingsadresse | **Ja.** Adressen `club` reserveres i afdelingsformularen og på serveren. |
 
-| # | Spørgsmål | Mit forslag |
-|---|---|---|
+---|---|---|
 | 5 | **Skilt-QR til disken (spec spørgsmål 3).** | Ja: en QR-kode til tilmeldingssiden (`…/club/tilmeld`) leveres som SVG-fil i `docs/stempelkort/` til tryk. Selve trykket er drift. |
 | 6 | **Hjemmeskærmsikon.** Har Esmeralda et kvadratisk app-ikon? | Ellers laver jeg ikonet automatisk ud fra logoet på brandets baggrundsfarve. |
 | 7 | **Reserveret afdelingsadresse.** Må jeg forhindre, at en afdeling får adressen `club`? Det er en lille ændring i afdelingsformularen (uden for `/club`-mappen). | Ja. |
