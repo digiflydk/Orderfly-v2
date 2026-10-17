@@ -36,6 +36,13 @@ for(const [name,patch] of [['missing brand',{brandId:'deleted'}],['empty brand',
  assert.equal(result.error,true);assert.equal(f.writes.length,0);
  });
 
+test('a location cannot take the slug of the stamp card portal (/{brand}/club)',async()=>{
+ for(const slug of ['club','Club']){
+  const f=fixture();const result=await f.locations.createOrUpdateLocation(null,formData({...location,brandId:'b',slug}));
+  assert.equal(result.error,true);assert.match(result.message,/reserveret/);assert.equal(f.writes.length,0);
+ }
+});
+
 test('location creation still accepts a real brand and checkbox on values',async()=>{
  const f=fixture();const form=formData({...location,id:undefined,brandId:'b'});form.set('isActive','on');
  await redirected(f.locations.createOrUpdateLocation(null,form));

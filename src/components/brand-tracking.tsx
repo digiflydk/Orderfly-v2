@@ -1,12 +1,17 @@
 'use client';
 
 import { useEffect } from 'react';
+import { usePathname } from 'next/navigation';
 import type { Brand } from '@/types';
 import { trackingConsent, clearRejectedTrackingCookies } from '@/lib/analytics';
 import { mountBrandTracking } from '@/lib/brand-tracking-frame';
+import { isClubPath } from '@/lib/loyalty/portal-path';
 
 export function BrandTracking({ brand }: { brand: Brand }) {
+  // The stamp card portal shows personal data, login links and QR codes: no third-party tracking there.
+  const club = isClubPath(usePathname(), brand.slug);
   useEffect(() => {
+    if (club) return;
     let stop: (() => void) | undefined;
     let previous = '';
     const updateConsent = () => {
@@ -22,6 +27,6 @@ export function BrandTracking({ brand }: { brand: Brand }) {
     window.addEventListener('orderfly:consent', updateConsent);
     window.addEventListener('storage', updateConsent);
     return () => { window.removeEventListener('storage', updateConsent); window.removeEventListener('orderfly:consent', updateConsent); stop?.(); };
-  }, [brand.id, brand.gtmContainerId, brand.ga4MeasurementId, brand.googleAdsConversionId, brand.googleAdsPurchaseLabel, brand.metaPixelId]);
+  }, [club, brand.id, brand.gtmContainerId, brand.ga4MeasurementId, brand.googleAdsConversionId, brand.googleAdsPurchaseLabel, brand.metaPixelId]);
   return null;
 }
