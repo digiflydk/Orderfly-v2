@@ -172,6 +172,11 @@ test('the overview counts members, stamps, rewards, expiry and consent within fi
   assert.equal(dineIn.kpi.stamps,1);assert.equal(dineIn.kpi.rewardsRedeemed,1);
   const before=await admin.loyaltyOverview(db,who('leder'),{...filter,from:'2026-10-01',to:'2026-10-13'},at+5000);
   assert.deepEqual([before.kpi.stamps,before.kpi.newMembers,before.kpi.activeMembers],[0,0,2]);
+  assert.equal(o.periodShortened,false);
+  // A custom period longer than 366 days is shortened, so every counted stamp has a daily bucket.
+  const long=await admin.loyaltyOverview(db,who('leder'),{...filter,from:'2020-01-01'},at+5000);
+  assert.equal(long.periodShortened,true);assert.equal(long.periodFrom,'2025-10-20');assert.equal(long.daily.length,366);
+  assert.equal(long.daily.reduce((n,d)=>n+d.stamps,0),long.kpi.stamps);assert.equal(long.kpi.stamps,3);
   // A card whose deadline falls within 30 days counts as expiring.
   await stamp('anna',10,at+6000);
   const later=Date.parse('2027-04-01T00:00:00Z');

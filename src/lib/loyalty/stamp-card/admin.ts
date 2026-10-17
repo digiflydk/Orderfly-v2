@@ -255,15 +255,19 @@ export const overviewFilterSchema = z.object({
   brandIds: z.array(id).min(1).max(50), from: day, to: day, channel: z.enum(['dine_in', 'takeaway']).nullable(),
 }).strict();
 const OVERVIEW_EVENT_LIMIT = 20_000;
+const OVERVIEW_MAX_DAYS = 366;
 const COUNTER_SOURCES = new Set(['counter_qr', 'counter_search', 'order']);
 
 // Every figure follows the filters. The channel filter applies to stamps, the
 // only events with a sales channel; redemptions and rewards are counted for the brand.
 export async function loyaltyOverview(db: Firestore, actor: AdminActor, filter: z.infer<typeof overviewFilterSchema>, now: number) {
   const permitted = (await adminBrands(db, actor, 'orderfly.stamp_cards:overview')).filter(b => filter.brandIds.includes(b.brandId));
-  const from = copenhagenMidnight(filter.from), to = copenhagenMidnight(new Date(Date.parse(filter.to + 'T12:00:00Z') + 86_400_000).toISOString().slice(0, 10));
+  const shift = (day: string, n: number) => new Date(Date.parse(day + 'T12:00:00Z') + n * 86_400_000).toISOString().slice(0, 10);
+  // Longer custom periods are shortened to the last 366 days, so every counted event has a daily bucket.
+  const firstDay = filter.from < shift(filter.to, -(OVERVIEW_MAX_DAYS - 1)) ? shift(filter.to, -(OVERVIEW_MAX_DAYS - 1)) : filter.from;
+  const from = copenhagenMidnight(firstDay), to = copenhagenMidnight(shift(filter.to, 1));
   const days: string[] = [];
-  for (let d = filter.from; d <= filter.to && days.length < 400; d = new Date(Date.parse(d + 'T12:00:00Z') + 86_400_000).toISOString().slice(0, 10)) days.push(d);
+  for (let d = firstDay; d <= filter.to; d = shift(d, 1)) days.push(d);
   const daily = new Map(days.map(d => [d, { day: d, stamps: 0, redemptions: 0 }]));
   const channels = { dine_in: 0, takeaway: 0 };
   const staff = new Map<string, { name: string; stamps: number; redemptions: number }>();
@@ -323,6 +327,6 @@ export async function loyaltyOverview(db: Firestore, actor: AdminActor, filter: 
   return {
     programs, kpi: { ...kpi, newsletterShare: kpi.activeMembers ? kpi.newsletterMembers / kpi.activeMembers : null },
     daily: [...daily.values()], channels, staff: [...staff.values()].sort((a, b) => b.stamps + b.redemptions - a.stamps - a.redemptions),
-    latest: latest.sort((a, b) => b.createdAt - a.createdAt).slice(0, 20), truncated,
+    latest: latest.sort((a, b) => b.createdAt - a.createdAt).slice(0, 20), truncated, periodFrom: firstDay, periodShortened: firstDay !== filter.from,
   };
 }

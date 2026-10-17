@@ -131,6 +131,6 @@ Menuen **Loyalitet** har nu tre punkter: **Oversigt**, **Stempelkort** og **Kund
 - Stempler og indløsninger pr. medarbejder i perioden.
 - Genveje til indstillinger, medlemsliste og log. Hver genvej vises kun med sin rettighed.
 
-**Visningsgrænse:** Oversigten læser højst 20.000 hændelser pr. brand i perioden og siger til, hvis grænsen er nået.
+**Visningsgrænse:** Oversigten viser højst 366 dage; en længere valgt periode forkortes til de seneste 366 dage, og siden siger til. Den læser højst 20.000 hændelser pr. brand i perioden og siger også til, hvis den grænse er nået.
 
 mPanel-genveje: `orderfly.stamp_cards:overview` åbner oversigten, og `orderfly.customer_score:view` åbner kundescoren.

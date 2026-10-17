@@ -60,6 +60,7 @@ export default async function LoyaltyOverviewPage({ searchParams }: { searchPara
         </ul>
       </div>
       <LoyaltyFiltersBar filters={filters} brands={brands} />
+      {data.periodShortened && <p role="status" className="rounded-md bg-amber-50 p-3 text-sm">Oversigten viser højst 366 dage. Tallene gælder fra {data.periodFrom} til {filters.to}.</p>}
       {data.truncated && <p role="status" className="rounded-md bg-amber-50 p-3 text-sm">Perioden har flere end 20.000 hændelser pr. brand. Vælg en kortere periode for præcise tal.</p>}
 
       <section aria-label="Nøgletal" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
