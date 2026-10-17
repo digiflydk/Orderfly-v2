@@ -97,7 +97,9 @@ export async function saveSettings(db: Firestore, actor: AdminActor, input: z.in
     const ref = db.collection(COLLECTIONS.programs).doc(brandId), saved = (await tx.get(ref)).data();
     const current = readProgram(brandId, saved);
     if (input.version !== current.version) throw new LoyaltyError('record_changed', 409);
-    if (settings.reward?.type === 'free_product') {
+    // Switching off must always be possible, even when the unchanged reward points at a retired product.
+    const rewardUnchanged = JSON.stringify(settings.reward) === JSON.stringify(current.settings.reward);
+    if (settings.reward?.type === 'free_product' && (settings.active || !rewardUnchanged)) {
       const refs = [...settings.reward.productIds.map(p => db.collection('products').doc(p)), ...settings.reward.categoryIds.map(c => db.collection('categories').doc(c))];
       const rows = await Promise.all(refs.map(r => tx.get(r)));
       if (rows.some(row => !row.exists || row.data()?.brandId !== brandId || row.data()?.isActive === false)) throw new LoyaltyError('invalid_reward_reference', 422);
@@ -113,6 +115,42 @@ export async function saveSettings(db: Firestore, actor: AdminActor, input: z.in
     tx.create(db.collection(COLLECTIONS.events).doc(hashKey('settings', brandId, String(version))), event);
     return { version, changed: changes.length };
   });
+}
+
+// ---------- Programs ----------
+
+export type ProgramRow = { brandId: string; brandName: string; companyName: string; name: string; active: boolean; version: number;
+  updatedAt: number | null; updatedByName: string | null; members: number };
+
+// Stamp cards that have been created (saved at least once) for the given
+// brands. A brand without a saved program is offered under "Opret" instead.
+export async function listPrograms(db: Firestore, actor: AdminActor, brandIds: string[]): Promise<ProgramRow[]> {
+  const brands = (await adminBrands(db, actor, ADMIN_PERMISSION.settings)).filter(b => brandIds.includes(b.brandId));
+  if (!brands.length) return [];
+  const docs = await db.getAll(...brands.map(b => db.collection(COLLECTIONS.programs).doc(b.brandId)));
+  const rows = await Promise.all(brands.map(async (brand, i) => {
+    const data = docs[i].data(), program = readProgram(brand.brandId, data);
+    if (program.version === 0) return null;
+    const members = await db.collection(COLLECTIONS.members).where('brandId', '==', brand.brandId).where('status', '==', 'active').count().get();
+    return { brandId: brand.brandId, brandName: brand.brandName, companyName: brand.companyName, name: program.settings.name, active: program.settings.active,
+      version: program.version, updatedAt: typeof data?.updatedAt === 'number' ? data.updatedAt : null,
+      updatedByName: typeof data?.updatedByName === 'string' ? data.updatedByName : null, members: members.data().count };
+  }));
+  return rows.filter((row): row is ProgramRow => row !== null);
+}
+
+export const setProgramActiveSchema = z.object({ brandId: id, version: z.number().int().min(1), active: z.boolean() }).strict();
+
+// Switches a created program on or off as a new settings version, with the
+// same validation, version check and log entry as saving the settings form.
+export async function setProgramActive(db: Firestore, actor: AdminActor, input: z.infer<typeof setProgramActiveSchema>, now: number) {
+  await requireBrand(db, actor, input.brandId, ADMIN_PERMISSION.settings);
+  const program = readProgram(input.brandId, (await db.collection(COLLECTIONS.programs).doc(input.brandId).get()).data());
+  if (program.version === 0) throw new LoyaltyError('program_missing', 404);
+  if (program.version !== input.version) throw new LoyaltyError('record_changed', 409);
+  const parsed = saveSettingsSchema.safeParse({ brandId: input.brandId, version: input.version, settings: { ...program.settings, active: input.active } });
+  if (!parsed.success) throw new LoyaltyError('settings_incomplete', 422);
+  return saveSettings(db, actor, parsed.data, now);
 }
 
 // ---------- Members ----------

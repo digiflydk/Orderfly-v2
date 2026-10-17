@@ -5,7 +5,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { AuthorityError } from '@/lib/access/authority';
 import { orderflySession } from '@/lib/access/orderfly-session';
 import { correctMember, correctionSchema, LoyaltyError } from '@/lib/loyalty/stamp-card/counter';
-import { listEvents, listMembers, logFilterSchema, MEMBER_EXPORT_LIMIT, saveSettings, saveSettingsSchema } from '@/lib/loyalty/stamp-card/admin';
+import { listEvents, listMembers, logFilterSchema, MEMBER_EXPORT_LIMIT, saveSettings, saveSettingsSchema, setProgramActive, setProgramActiveSchema } from '@/lib/loyalty/stamp-card/admin';
 import type { ZodIssue } from 'zod';
 
 export type ActionResult<T = undefined> = { ok: true; data?: T } | { ok: false; error: string; fields?: Record<string, string> };
@@ -41,6 +41,16 @@ export async function saveProgramSettings(input: unknown): Promise<ActionResult<
   } catch (error) { return failure(error); }
 }
 
+// Switches a created program on or off from the overview; saved as a new settings version.
+export async function setProgramActiveAction(input: unknown): Promise<ActionResult<{ version: number; changed: number }>> {
+  const parsed = setProgramActiveSchema.safeParse(input);
+  if (!parsed.success) return { ok: false, error: 'invalid_input' };
+  try {
+    const data = await setProgramActive(getAdminDb(), await actor(), parsed.data, Date.now());
+    revalidatePath('/superadmin/loyalty/stamp-card');
+    return { ok: true, data };
+  } catch (error) { return failure(error); }
+}
 
 export async function exportMembers(brandIds: string[]): Promise<ActionResult<Awaited<ReturnType<typeof listMembers>>>> {
   try { return { ok: true, data: await listMembers(getAdminDb(), await actor(), brandIds.slice(0, 50), Date.now(), MEMBER_EXPORT_LIMIT) }; }

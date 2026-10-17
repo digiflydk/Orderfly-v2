@@ -30,11 +30,12 @@ before(async () => {
   const actions = write('actions.js', `
     const calls = window.__calls = [];
     export async function saveProgramSettings(input){ calls.push(['save', input]); return window.__saveResult || { ok: true, data: { version: 2, changed: 1 } }; }
+    export async function setProgramActiveAction(input){ calls.push(['active', input]); return window.__activeResult || { ok: true, data: { version: input.version + 1, changed: 1 } }; }
     export async function exportMembers(brandIds){ calls.push(['members', brandIds]); return { ok: true, data: { rows: ${JSON.stringify(members)}, truncated: false } }; }
     export async function exportEvents(filter){ calls.push(['events', filter]); return { ok: true, data: { rows: ${JSON.stringify(events)}, actors: [], truncated: false } }; }
     export async function correctMemberAction(input){ calls.push(['correct', input]); return input.reason.includes('fejl') ? { ok: false, error: 'no_active_stamps' } : { ok: true, data: {} }; }`);
   const navigation = write('navigation.js', `
-    export const useRouter = () => ({ refresh(){ (window.__refresh = (window.__refresh || 0) + 1); }, replace(url){ (window.__replaced = window.__replaced || []).push(url); }, push(){} });
+    export const useRouter = () => ({ refresh(){ (window.__refresh = (window.__refresh || 0) + 1); }, replace(url){ (window.__replaced = window.__replaced || []).push(url); }, push(url){ (window.__pushed = window.__pushed || []).push(url); } });
     export const usePathname = () => '/superadmin/loyalty/stamp-card';
     export const useSearchParams = () => new URLSearchParams('tab=log&period=7d');`);
   const link = write('link.js', `import React from 'react';export default function Link({href,children,...props}){return React.createElement('a',{href,...props},children)}`);
@@ -45,11 +46,15 @@ before(async () => {
     import { MembersTable } from ${src('app/superadmin/loyalty/stamp-card/members-table')};
     import { EventLog } from ${src('app/superadmin/loyalty/stamp-card/event-log')};
     import { CorrectionPanel } from ${src('app/superadmin/loyalty/stamp-card/members/[memberId]/correction-panel')};
+    import { ProgramsOverview } from ${src('app/superadmin/loyalty/stamp-card/programs-overview')};
     import { OverviewCharts } from ${src('app/superadmin/loyalty/overview-charts')};
     const view = location.pathname.slice(1);
     const node = view === 'settings' ? React.createElement(SettingsForm, { initial: { brand: { brandId: 'b', brandName: 'Esmeralda' }, version: 1, settings: ${JSON.stringify(settings)}, updatedAt: ${NOW}, updatedByName: 'Leder', products: [{ id: 'pizza', name: 'Pizza' }], categories: [] } })
       : view === 'members' ? React.createElement(MembersTable, { rows: ${JSON.stringify(members)}, truncated: false, brandIds: ['b'], filterQuery: 'period=30d', multiBrand: false })
       : view === 'log' ? React.createElement(EventLog, { rows: ${JSON.stringify(events)}, truncated: false, filter: { brandIds: ['b'], from: '2026-10-14', to: '2026-10-20', type: null, actorId: null, channel: null }, multiBrand: false })
+      : view === 'programs' ? React.createElement(ProgramsOverview, { status: 'all', editHref: '/superadmin/loyalty/stamp-card?tab=settings', available: [{ brandId: 'b3', brandName: 'Tredje' }],
+          rows: [{ brandId: 'b', brandName: 'Esmeralda', companyName: 'Esmeralda ApS', name: 'Esmeralda Club', active: true, version: 4, updatedAt: ${NOW}, updatedByName: 'Leder', members: 12 },
+            { brandId: 'b2', brandName: 'Andet', companyName: 'Andet ApS', name: 'Andet Club', active: false, version: 1, updatedAt: ${NOW}, updatedByName: null, members: 0 }] })
       : view === 'overview' ? React.createElement(OverviewCharts, { daily: [{ day: '2026-10-18', stamps: 4, redemptions: 1 }, { day: '2026-10-19', stamps: 0, redemptions: 0 }, { day: '2026-10-20', stamps: 7, redemptions: 2 }], channels: { dine_in: 5, takeaway: 6 } })
       : React.createElement(CorrectionPanel, { brandId: 'b', memberId: 'm1', locations: [{ id: 'l1', name: 'Amager' }, { id: 'l2', name: 'Vesterbro' }], redeemedRewards: [{ id: 'r1', description: 'Gratis pizza', redeemedAt: ${NOW} }] });
     createRoot(document.getElementById('root')).render(React.createElement(React.Fragment, null, node, React.createElement(Toaster)));`);
@@ -170,4 +175,35 @@ for (const width of [390, 1440]) test(`overview charts render one series each wi
     await page.getByText('Dine-in: 5 · Takeaway: 6').waitFor();
     assert.ok(await noOverflow(page));
   } finally { await page.close(); }
+});
+
+for (const width of [390, 1440]) test(`the stamp card overview lists programs, creates per brand and confirms activation changes at ${width}px`, async () => {
+  const page = await open('programs', width);
+  await page.getByText('2 af 2 stempelkort').waitFor();
+  assert.equal(await page.getByRole('link', { name: 'Rediger' }).first().getAttribute('href'), '/superadmin/loyalty/stamp-card?tab=settings&edit=b');
+  await page.getByLabel('Status').selectOption('inactive');
+  assert.deepEqual(await page.evaluate(() => window.__replaced), ['/superadmin/loyalty/stamp-card?tab=log&period=7d&status=inactive']);
+  assert.equal(await page.getByRole('button', { name: 'Opret stempelkort' }).isDisabled(), true);
+  await page.getByLabel('Opret for brand').selectOption('b3');
+  await page.getByRole('button', { name: 'Opret stempelkort' }).click();
+  assert.deepEqual(await page.evaluate(() => window.__pushed), ['/superadmin/loyalty/stamp-card?tab=settings&edit=b3']);
+  // Nothing changes until the dialog is confirmed.
+  await page.getByRole('button', { name: 'Deaktivér', exact: true }).click();
+  await page.getByRole('alertdialog').getByText('Deaktivér Esmeralda Club?').waitFor();
+  await page.getByRole('button', { name: 'Annullér' }).click();
+  assert.deepEqual(await calls(page), []);
+  // A slow request keeps the dialog locked until it settles.
+  await page.evaluate(() => { window.__activeResult = new Promise(resolve => { window.__resolveActive = resolve; }); });
+  await page.getByRole('button', { name: 'Deaktivér', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Deaktivér', exact: true }).click();
+  assert.equal(await page.getByRole('alertdialog').getByRole('button', { name: 'Deaktivér', exact: true }).isDisabled(), true);
+  await page.evaluate(() => window.__resolveActive({ ok: true, data: { version: 5, changed: 1 } }));
+  await page.getByRole('alertdialog').waitFor({ state: 'detached' });
+  await page.evaluate(() => { window.__calls.length = 0; window.__activeResult = { ok: false, error: 'settings_incomplete' }; });
+  await page.getByRole('button', { name: 'Aktivér', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Aktivér', exact: true }).click();
+  await page.getByText('Udfyld indstillingerne (belønning, vilkår og samtykketekst), før programmet aktiveres.').first().waitFor();
+  assert.deepEqual(await calls(page), [['active', { brandId: 'b2', version: 1, active: true }]]);
+  assert.ok(await noOverflow(page));
+  await page.close();
 });

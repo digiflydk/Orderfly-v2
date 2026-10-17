@@ -6,6 +6,7 @@ exports.memoryDb=(rows=new Map())=>{
  const query=(name,filters=[],order=null,count=Infinity)=>({
   doc:id=>ref(name+'/'+(id??require('node:crypto').randomBytes(10).toString('hex'))),where:(field,op,value)=>query(name,[...filters,{field,op,value}],order,count),
   orderBy:(field,dir)=>query(name,filters,{field,dir},count),limit:n=>query(name,filters,order,n),
+  count:()=>({get:async()=>{const n=(await query(name,filters,order,count).get()).docs.length;return {data:()=>({count:n})};}}),
   get:async()=>{let values=[...rows].filter(([key,value])=>key.startsWith(name+'/')&&filters.every(f=>{
    const actual=value[f.field];
    if(f.op==='==')return actual===f.value;

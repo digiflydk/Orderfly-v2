@@ -3,11 +3,12 @@ import { redirect } from 'next/navigation';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { orderflySession } from '@/lib/access/orderfly-session';
 import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
-import { ADMIN_PERMISSION, adminBrands, listEvents, listMembers, readSettings } from '@/lib/loyalty/stamp-card/admin';
+import { ADMIN_PERMISSION, adminBrands, listEvents, listMembers, listPrograms, readSettings } from '@/lib/loyalty/stamp-card/admin';
 import { EVENT_TYPES } from '@/lib/loyalty/stamp-card/model';
 import { filterQuery, parseFilters } from '@/lib/loyalty/stamp-card/filters';
 import { LoyaltyFiltersBar } from '@/components/superadmin/loyalty/loyalty-filters';
 import { SettingsForm } from './settings-form';
+import { ProgramsOverview, type ProgramStatus } from './programs-overview';
 import { MembersTable } from './members-table';
 import { EventLog } from './event-log';
 import { cn } from '@/lib/utils';
@@ -15,7 +16,7 @@ import { cn } from '@/lib/utils';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const TABS = [['settings', 'Indstillinger'], ['members', 'Medlemmer'], ['log', 'Log']] as const;
+const TABS = [['settings', 'Oversigt'], ['members', 'Medlemmer'], ['log', 'Log']] as const;
 type Tab = typeof TABS[number][0];
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
@@ -37,8 +38,29 @@ export default async function StampCardPage({ searchParams }: { searchParams: Se
 
   let body: React.ReactNode;
   if (tab === 'settings') {
-    const brandId = brandIds[0];
-    body = brandId ? <SettingsForm key={brandId} initial={await readSettings(db, actor, brandId)} /> : <p>Vælg et brand.</p>;
+    // The overview lists created stamp cards; ?edit= opens one brand's settings, also to create it.
+    const one = (key: string) => { const v = params[key]; return Array.isArray(v) ? v[0] : v; };
+    const edit = brands.find(b => b.brandId === one('edit'));
+    if (edit) {
+      return (
+        <Shell tabs={tabs} tab={tab} query={filterQuery(filters)}>
+          <Link href={`/superadmin/loyalty/stamp-card?${filterQuery(filters, { tab: 'settings' })}`} className="text-sm text-muted-foreground hover:text-foreground">← Tilbage til oversigten</Link>
+          <SettingsForm key={edit.brandId} initial={await readSettings(db, actor, edit.brandId)} />
+        </Shell>
+      );
+    }
+    const programs = await listPrograms(db, actor, brands.map(b => b.brandId));
+    const status = (['active', 'inactive'] as const).find(s => s === one('status')) ?? 'all';
+    const created = new Set(programs.map(p => p.brandId));
+    body = <ProgramsOverview rows={programs.filter(p => brandIds.includes(p.brandId))} status={status as ProgramStatus}
+      editHref={`/superadmin/loyalty/stamp-card?${filterQuery(filters, { tab: 'settings' })}`}
+      available={inCompany.filter(b => !created.has(b.brandId)).map(b => ({ brandId: b.brandId, brandName: b.brandName }))} />;
+    return (
+      <Shell tabs={tabs} tab={tab} query={filterQuery(filters)}>
+        <LoyaltyFiltersBar filters={filters} brands={brands} showPeriod={false} showChannel={false} extraParams={{ tab, ...(status !== 'all' ? { status } : {}) }} />
+        {body}
+      </Shell>
+    );
   } else if (tab === 'members') {
     const { rows, truncated } = await listMembers(db, actor, brandIds, now);
     body = <MembersTable rows={rows} truncated={truncated} brandIds={brandIds} filterQuery={filterQuery(filters)} multiBrand={brandIds.length > 1} />;
@@ -67,7 +89,7 @@ function Shell({ tabs, tab, query, children }: { tabs: ReadonlyArray<readonly [T
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Stempelkort</h1>
-        <p className="text-muted-foreground">Indstillinger, medlemmer og log for loyalitetsprogrammet.</p>
+        <p className="text-muted-foreground">Oversigt, medlemmer og log for loyalitetsprogrammet.</p>
       </div>
       <nav aria-label="Stempelkort" className="flex gap-1 border-b">
         {tabs.map(([key, label]) => (

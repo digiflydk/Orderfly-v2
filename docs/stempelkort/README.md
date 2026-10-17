@@ -108,9 +108,15 @@ Sådan fungerer det:
 
 Menuen har fået hovedgruppen **Loyalitet** med punkterne **Stempelkort** og **Kundescore**. Kundescore er flyttet fra Promotions; adresse og oversigt kom i PR 5 (se nedenfor).
 
-Siden `/superadmin/loyalty/stamp-card` har tre faner. Hver fane vises kun med sin rettighed, og den rettighed skal gælde hele brandet:
+Siden `/superadmin/loyalty/stamp-card` har tre faner: Oversigt, Medlemmer og Log. Hver fane vises kun med sin rettighed, og den rettighed skal gælde hele brandet:
 
-- **Indstillinger** (`orderfly.stamp_cards:settings`):
+- **Oversigt** (`orderfly.stamp_cards:settings`), ændret 2026-10-18 efter PM-beslutning:
+  - Siden åbner med en liste over de stempelkort, der er oprettet, med brand, virksomhed, programnavn, status (Aktiv/Inaktiv), antal aktive medlemmer og sidst ændret af hvem.
+  - Der oprettes ikke automatisk et stempelkort pr. brand. **Opret stempelkort** vælger et brand uden stempelkort og åbner indstillingerne; først når de gemmes, findes programmet (inaktivt, indtil det aktiveres).
+  - Filter på virksomhed og brand (det fælles filter) og på status.
+  - **Rediger** åbner indstillingerne (`?tab=settings&edit={brandId}`).
+  - **Aktivér/Deaktivér** kræver bekræftelse og gemmes som en ny version med samme validering, versionstjek og log som indstillingerne. Et program kan ikke aktiveres, før belønning, vilkår og samtykketekst er udfyldt.
+- **Indstillinger** (åbnes fra oversigten, samme rettighed):
   - Alle parametre fra spec §6.1, herunder kanaler pr. brand og belønningstype med produkt- eller kategorivalg.
   - Fra fase 3: hvor mange minutter kassevisningen må være uden aktivitet, før den låses (1–60, standard 5). Ældre gemte indstillinger læses som 5 minutter.
   - Hver gemning bliver en ny version (`loyaltyProgramVersions`) og logges med medarbejder, tidspunkt og gammel og ny værdi.

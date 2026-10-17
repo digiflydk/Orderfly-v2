@@ -94,6 +94,36 @@ test('settings reject stale versions, foreign products, invalid values and users
   await rejects(admin.saveSettings(db,who('leder'),{brandId:'brand',version:1,settings:settings({reward:{type:'free_product',productIds:['old'],categoryIds:[]}})},NOW),'invalid_reward_reference');
 });
 
+test('the overview lists only created stamp cards per permitted brand and switches them on and off with a logged version',async()=>{
+  setup();
+  db.rows.delete('loyaltyPrograms/brand2');
+  db.rows.set('brands/brand3',{name:'Tredje',slug:'brand3'});
+  db.rows.get('platformAdminControl/access-v1').companies[0].orderflyBrandIds.push('brand3');
+  const list=await admin.listPrograms(db,who('owner'),['brand','brand2','brand3']);
+  assert.deepEqual(list.map(p=>[p.brandId,p.name,p.active,p.version,p.members]),[['brand','Esmeralda Club',true,1,2]]);
+  assert.deepEqual(await admin.listPrograms(db,who('fremmed'),['brand']),[]);
+  assert.deepEqual(await admin.listPrograms(db,who('kasse'),['brand']),[]);
+  const off=await admin.setProgramActive(db,who('leder'),{brandId:'brand',version:1,active:false},NOW);
+  assert.deepEqual(off,{version:2,changed:1});
+  assert.equal(db.rows.get('loyaltyPrograms/brand').settings.active,false);
+  assert.deepEqual(rows('loyaltyEvents')[0].result.changes,[{field:'active',from:true,to:false}]);
+  await rejects(admin.setProgramActive(db,who('leder'),{brandId:'brand',version:1,active:true},NOW),'record_changed');
+  await rejects(admin.setProgramActive(db,who('leder'),{brandId:'brand3',version:1,active:true},NOW),'program_missing');
+  await rejects(admin.setProgramActive(db,who('fremmed'),{brandId:'brand',version:2,active:true},NOW),'forbidden');
+  await rejects(admin.setProgramActive(db,who('kasse'),{brandId:'brand',version:2,active:true},NOW),'forbidden');
+  // A saved but incomplete program cannot be activated from the overview.
+  db.rows.set('loyaltyPrograms/brand3',{brandId:'brand3',version:1,settings:{...defaultProgramSettings('Tredje'),active:false}});
+  await rejects(admin.setProgramActive(db,who('leder'),{brandId:'brand3',version:1,active:true},NOW),'settings_incomplete');
+  assert.equal(db.rows.get('loyaltyPrograms/brand3').version,1);
+  assert.deepEqual((await admin.setProgramActive(db,who('leder'),{brandId:'brand',version:2,active:true},NOW)).version,3);
+  assert.equal(admin.setProgramActiveSchema.safeParse({brandId:'brand',version:0,active:true}).success,false);
+  // A program whose reward product was retired can still be switched off, but not on again.
+  db.rows.set('products/pizza',{brandId:'brand',productName:'Pizza',isActive:false});
+  assert.equal((await admin.setProgramActive(db,who('leder'),{brandId:'brand',version:3,active:false},NOW)).version,4);
+  assert.equal(db.rows.get('loyaltyPrograms/brand').settings.active,false);
+  await rejects(admin.setProgramActive(db,who('leder'),{brandId:'brand',version:4,active:true},NOW),'invalid_reward_reference');
+});
+
 test('the member list shows stamps, rewards, next expiry, newsletter and last activity',async()=>{
   setup();
   await stamp('anna',1);await stamp('anna',2,NOW+1000);await stamp('anna',3,NOW+2000);
