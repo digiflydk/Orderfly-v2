@@ -97,7 +97,9 @@ export async function saveSettings(db: Firestore, actor: AdminActor, input: z.in
     const ref = db.collection(COLLECTIONS.programs).doc(brandId), saved = (await tx.get(ref)).data();
     const current = readProgram(brandId, saved);
     if (input.version !== current.version) throw new LoyaltyError('record_changed', 409);
-    if (settings.reward?.type === 'free_product') {
+    // Switching off must always be possible, even when the unchanged reward points at a retired product.
+    const rewardUnchanged = JSON.stringify(settings.reward) === JSON.stringify(current.settings.reward);
+    if (settings.reward?.type === 'free_product' && (settings.active || !rewardUnchanged)) {
       const refs = [...settings.reward.productIds.map(p => db.collection('products').doc(p)), ...settings.reward.categoryIds.map(c => db.collection('categories').doc(c))];
       const rows = await Promise.all(refs.map(r => tx.get(r)));
       if (rows.some(row => !row.exists || row.data()?.brandId !== brandId || row.data()?.isActive === false)) throw new LoyaltyError('invalid_reward_reference', 422);

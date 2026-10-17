@@ -192,7 +192,14 @@ for (const width of [390, 1440]) test(`the stamp card overview lists programs, c
   await page.getByRole('alertdialog').getByText('Deaktivér Esmeralda Club?').waitFor();
   await page.getByRole('button', { name: 'Annullér' }).click();
   assert.deepEqual(await calls(page), []);
-  await page.evaluate(() => { window.__activeResult = { ok: false, error: 'settings_incomplete' }; });
+  // A slow request keeps the dialog locked until it settles.
+  await page.evaluate(() => { window.__activeResult = new Promise(resolve => { window.__resolveActive = resolve; }); });
+  await page.getByRole('button', { name: 'Deaktivér', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: 'Deaktivér', exact: true }).click();
+  assert.equal(await page.getByRole('alertdialog').getByRole('button', { name: 'Deaktivér', exact: true }).isDisabled(), true);
+  await page.evaluate(() => window.__resolveActive({ ok: true, data: { version: 5, changed: 1 } }));
+  await page.getByRole('alertdialog').waitFor({ state: 'detached' });
+  await page.evaluate(() => { window.__calls.length = 0; window.__activeResult = { ok: false, error: 'settings_incomplete' }; });
   await page.getByRole('button', { name: 'Aktivér', exact: true }).click();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Aktivér', exact: true }).click();
   await page.getByText('Udfyld indstillingerne (belønning, vilkår og samtykketekst), før programmet aktiveres.').first().waitFor();

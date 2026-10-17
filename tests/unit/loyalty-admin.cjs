@@ -117,6 +117,11 @@ test('the overview lists only created stamp cards per permitted brand and switch
   assert.equal(db.rows.get('loyaltyPrograms/brand3').version,1);
   assert.deepEqual((await admin.setProgramActive(db,who('leder'),{brandId:'brand',version:2,active:true},NOW)).version,3);
   assert.equal(admin.setProgramActiveSchema.safeParse({brandId:'brand',version:0,active:true}).success,false);
+  // A program whose reward product was retired can still be switched off, but not on again.
+  db.rows.set('products/pizza',{brandId:'brand',productName:'Pizza',isActive:false});
+  assert.equal((await admin.setProgramActive(db,who('leder'),{brandId:'brand',version:3,active:false},NOW)).version,4);
+  assert.equal(db.rows.get('loyaltyPrograms/brand').settings.active,false);
+  await rejects(admin.setProgramActive(db,who('leder'),{brandId:'brand',version:4,active:true},NOW),'invalid_reward_reference');
 });
 
 test('the member list shows stamps, rewards, next expiry, newsletter and last activity',async()=>{

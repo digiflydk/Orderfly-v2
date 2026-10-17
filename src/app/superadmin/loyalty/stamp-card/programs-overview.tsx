@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useTransition } from 'react';
+import { useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { Plus } from 'lucide-react';
 import Link from '@/components/superadmin/admin-link';
@@ -28,7 +28,7 @@ export function ProgramsOverview({ rows, available, status, editHref }: {
   rows: ProgramRow[]; available: Array<{ brandId: string; brandName: string }>; status: ProgramStatus; editHref: string;
 }) {
   const router = useRouter(), pathname = usePathname(), params = useSearchParams(), { toast } = useToast();
-  const [pending, start] = useTransition(), [confirm, setConfirm] = useState<ProgramRow | null>(null), [create, setCreate] = useState('');
+  const [pending, setPending] = useState(false), [confirm, setConfirm] = useState<ProgramRow | null>(null), [create, setCreate] = useState('');
   const edit = (brandId: string) => `${editHref}&edit=${encodeURIComponent(brandId)}`;
   const visible = rows.filter(r => status === 'all' || (status === 'active') === r.active);
 
@@ -37,13 +37,17 @@ export function ProgramsOverview({ rows, available, status, editHref }: {
     if (value === 'all') next.delete('status'); else next.set('status', value);
     router.replace(`${pathname}?${next}`, { scroll: false });
   };
-  const toggle = (row: ProgramRow) => start(async () => {
-    const result = await setProgramActiveAction({ brandId: row.brandId, version: row.version, active: !row.active });
+  // Explicit in-flight state keeps the dialog disabled until the server action settles.
+  const toggle = async (row: ProgramRow) => {
+    setPending(true);
+    const result = await setProgramActiveAction({ brandId: row.brandId, version: row.version, active: !row.active })
+      .catch(() => ({ ok: false as const, error: 'unavailable' }));
+    setPending(false);
     setConfirm(null);
     if (result.ok) toast({ title: row.active ? `${row.name} er deaktiveret` : `${row.name} er aktiveret` });
     else toast({ variant: 'destructive', title: row.active ? 'Programmet blev ikke deaktiveret' : 'Programmet blev ikke aktiveret', description: ERRORS[result.error] ?? 'Prøv igen.' });
     router.refresh();
-  });
+  };
 
   return (
     <section className="space-y-3 rounded-lg border bg-white p-4">
@@ -101,7 +105,7 @@ export function ProgramsOverview({ rows, available, status, editHref }: {
           </p>
         )}
       </div>
-      <AlertDialog open={!!confirm} onOpenChange={open => { if (!open) setConfirm(null); }}>
+      <AlertDialog open={!!confirm} onOpenChange={open => { if (!open && !pending) setConfirm(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>{confirm?.active ? `Deaktivér ${confirm?.name}?` : `Aktivér ${confirm?.name}?`}</AlertDialogTitle>
@@ -113,7 +117,7 @@ export function ProgramsOverview({ rows, available, status, editHref }: {
           </AlertDialogHeader>
           <AlertDialogFooter>
             <AlertDialogCancel disabled={pending}>Annullér</AlertDialogCancel>
-            <AlertDialogAction disabled={pending} onClick={event => { event.preventDefault(); if (confirm) toggle(confirm); }}>
+            <AlertDialogAction disabled={pending} onClick={event => { event.preventDefault(); if (confirm && !pending) void toggle(confirm); }}>
               {confirm?.active ? 'Deaktivér' : 'Aktivér'}
             </AlertDialogAction>
           </AlertDialogFooter>
