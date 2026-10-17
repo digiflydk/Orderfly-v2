@@ -154,7 +154,7 @@ Server-only, like every other collection (`firestore.access.rules` denies browse
 
 Newsletter consent from the program uses the existing `marketingConsents`, `marketingOutbox` and `marketingContacts` with `source: 'loyalty'`, the program's consent text and a version derived from that text. A portal opt-out is a consent event with `action: 'unsubscribe'`.
 
-Required composite indexes for the expiry job and the reward lookup are listed in `docs/loyalty-firestore-indexes.json`. Add them additively to the production data project `orderfly-39325`; the file is not a full index inventory.
+Required composite indexes for the expiry job and the reward lookup are listed in `docs/loyalty-firestore-indexes.json`. Add them additively to the production data project `orderfly-39325`; the file is not a full index inventory. Create them with the manual GitHub workflow **Firestore indexes** (`.github/workflows/firestore-indexes.yml`, script `scripts/firestore-indexes.mjs`): it creates only missing indexes from the chosen `docs/*-firestore-indexes.json` files, never deletes one, and waits until all are `READY`. Locally, the same script runs with `FIRESTORE_ACCESS_TOKEN=$(gcloud auth print-access-token) node scripts/firestore-indexes.mjs docs/loyalty-firestore-indexes.json`. Do not deploy these partial files with `firebase deploy --only firestore:indexes`, which offers to delete every index not in the file.
 
 ## Collection: `discounts`
 Defines customer-entered discount codes and automatic newsletter-signup incentives.

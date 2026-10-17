@@ -1,0 +1,37 @@
+name: Firestore indexes
+
+# Manually started. Creates the composite indexes listed in the chosen docs/*-firestore-indexes.json
+# files in orderfly-39325. Additive only: existing indexes are kept and nothing is deleted.
+on:
+  workflow_dispatch:
+    inputs:
+      files:
+        description: "Space-separated index files under docs/"
+        required: true
+        default: "docs/loyalty-firestore-indexes.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: firestore-indexes
+  cancel-in-progress: false
+
+jobs:
+  indexes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Create missing indexes and wait until READY
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+          FILES: ${{ inputs.files }}
+        run: |
+          for f in $FILES; do case "$f" in docs/*-firestore-indexes.json) ;; *) echo "Refusing $f"; exit 1;; esac; done
+          node scripts/firestore-indexes.mjs $FILES
