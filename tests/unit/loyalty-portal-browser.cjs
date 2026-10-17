@@ -24,6 +24,7 @@ before(async () => {
     export const useRouter = () => ({ refresh(){ window.__refresh = (window.__refresh || 0) + 1; }, replace(){}, push(){} });
     export const usePathname = () => window.__pathname;`);
   const tracking = write('tracking.js', `export function mountBrandTracking(){ window.__mounted = (window.__mounted || 0) + 1; return () => {}; }`);
+  const link = write('link.js', `import React from 'react';export default function Link({href,children,...props}){return React.createElement('a',{href,...props},children)}`);
   const analytics = write('analytics.js', `export const trackingConsent = () => ({ statistics: true, marketing: true }); export function clearRejectedTrackingCookies(){}`);
   const entry = write('entry.js', `
     import React from 'react'; import { createRoot } from 'react-dom/client';
@@ -31,22 +32,29 @@ before(async () => {
     import { LoginFlow } from ${src('app/[brandSlug]/club/login/login-flow')};
     import { BrandTracking } from ${src('components/brand-tracking')};
     import { MemberCard } from ${src('app/[brandSlug]/club/member-card')};
+    import { ProfileSettings } from ${src('app/[brandSlug]/club/profil/profile-settings')};
+    import { ClubNav } from ${src('app/[brandSlug]/club/club-nav')};
+    import { HomeScreenHint } from ${src('app/[brandSlug]/club/home-screen-hint')};
     const view = location.pathname.slice(1);
     window.__pathname = new URLSearchParams(location.search).get('path') || '/club';
     const node = view === 'signup' ? React.createElement(SignupForm, { slug: 'esmeralda', base: '/club', program: ${JSON.stringify(program)} })
       : view === 'login' ? React.createElement(LoginFlow, { slug: 'esmeralda', base: '/club', programName: 'Esmeralda Club', signedIn: false })
       : view === 'card' ? React.createElement(MemberCard, { slug: 'esmeralda', base: '/club', member: window.__member || ${JSON.stringify(null)} })
+      : view === 'profile' ? React.createElement(ProfileSettings, { slug: 'esmeralda', base: '/club', programName: 'Esmeralda Club', member: { name: 'Anna Hansen', email: 'anna@example.com' },
+          newsletter: { subscribed: new URLSearchParams(location.search).get('subscribed') !== 'no', consentVersion: 'consent-2', consentText: 'Ja tak til nyhedsbrevet på e-mail.' } })
+      : view === 'nav' ? React.createElement(ClubNav, { base: '/club', programName: 'Esmeralda Club' })
+      : view === 'hint' ? React.createElement(HomeScreenHint, { slug: 'esmeralda' })
       : view === 'tracking' ? React.createElement(BrandTracking, { brand: { id: 'b', slug: 'esmeralda', gtmContainerId: 'GTM-X' } })
       : React.createElement('h1', null, 'Mit stempelkort');
     createRoot(document.getElementById('root')).render(node);`);
   const loader = write('loader.js', `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   await new Promise((resolve, reject) => webpackModule.webpack({
     mode: 'development', devtool: false, entry, output: { path: dir, filename: 'bundle.js' },
-    resolve: { alias: { 'next/navigation': navigation, '@/lib/brand-tracking-frame': tracking, '@/lib/analytics': analytics, '@': path.join(root, 'src'),
+    resolve: { alias: { 'next/navigation': navigation, 'next/link$': link, '@/lib/brand-tracking-frame': tracking, '@/lib/analytics': analytics, '@': path.join(root, 'src'),
       'react$': require.resolve('next/dist/compiled/react'), 'react/jsx-runtime$': require.resolve('next/dist/compiled/react/jsx-runtime'),
       'react-dom$': require.resolve('next/dist/compiled/react-dom'), 'react-dom/client$': require.resolve('next/dist/compiled/react-dom/client') },
       extensions: ['.tsx', '.ts', '.js'], modules: [path.join(root, 'node_modules'), 'node_modules'] },
-    module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }, { test: /loyalty-portal-.*[\\/](entry|navigation|tracking|analytics)\.js$/, use: [loader] }] },
+    module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }, { test: /loyalty-portal-.*[\\/](entry|navigation|tracking|analytics|link)\.js$/, use: [loader] }] },
   }).run((error, stats) => error ? reject(error) : stats.hasErrors() ? reject(Error(stats.toString({ all: false, errors: true }))) : resolve()));
   execFileSync(path.join(root, 'node_modules/.bin/tailwindcss'), ['-c', path.join(root, 'tailwind.config.ts'), '-i', path.join(root, 'src/app/globals.css'), '-o', path.join(dir, 'styles.css'), '--minify'], { cwd: root, stdio: 'pipe' });
   const styles = fs.readFileSync(path.join(dir, 'styles.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/styles/commerce-ui.css'), 'utf8');
@@ -63,8 +71,8 @@ before(async () => {
 after(async () => { await browser?.close(); await new Promise(resolve => server?.close(resolve)); if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
 
 // Answers the phase 1 API; `answers[path]` is a list of [status, body] or 'abort', used in order.
-async function open(view, { width = 390, hash = '', answers = {}, clock, init } = {}) {
-  const page = await browser.newPage({ viewport: { width, height: 900 } });
+async function open(view, { width = 390, hash = '', answers = {}, clock, init, device = {} } = {}) {
+  const page = await browser.newPage({ viewport: { width, height: 900 }, ...device });
   if (clock) await page.clock.install({ time: clock });
   if (init) await page.addInitScript(init.fn, init.arg);
   const calls = [];
@@ -307,4 +315,101 @@ test('the screen stays on and the wake lock is taken again after the app returns
     await page.waitForTimeout(100);
     assert.equal(await page.evaluate(() => window.__locks.length), 2);
   } finally { await page.close(); }
+});
+
+for (const width of [390, 1440]) test(`the profile unsubscribes and resubscribes the newsletter and keeps the membership at ${width}px`, async () => {
+  const { page, calls } = await open('profile', { width, answers: { consent: [[200, { subscribed: false }], [200, { subscribed: true }]] } });
+  try {
+    await page.getByText('Anna Hansen').waitFor();
+    await page.getByText('anna@example.com').waitFor();
+    await page.getByText('Du beholder dit medlemskab, dine stempler og dine belønninger, selv om du afmelder nyhedsbrevet.').waitFor();
+    await page.getByRole('button', { name: 'Afmeld nyhedsbrevet' }).click();
+    await page.getByRole('status').filter({ hasText: 'Du er afmeldt nyhedsbrevet. Dit medlemskab og dine stempler er bevaret.' }).waitFor();
+    await page.getByText('Ja tak til nyhedsbrevet på e-mail.').waitFor();
+    await page.getByRole('button', { name: 'Tilmeld nyhedsbrevet' }).click();
+    await page.getByRole('status').filter({ hasText: 'Du er tilmeldt nyhedsbrevet.' }).waitFor();
+    assert.deepEqual(calls.map(c => [c.name, c.body]), [['consent', { subscribed: false }], ['consent', { subscribed: true, consentVersion: 'consent-2' }]]);
+    assert.equal(await page.getByRole('link', { name: 'Læs vilkårene for Esmeralda Club' }).getAttribute('href'), '/club/vilkaar');
+    assert.ok(await noOverflow(page));
+  } finally { await page.close(); }
+});
+
+test('changed consent text is reloaded before resubscribing', async () => {
+  const { page } = await open('profile?subscribed=no', { answers: { consent: [[409, { error: 'program_changed' }]] } });
+  try {
+    await page.getByRole('button', { name: 'Tilmeld nyhedsbrevet' }).click();
+    await page.getByRole('alert').filter({ hasText: 'Teksten er blevet opdateret' }).waitFor();
+    assert.equal(await page.evaluate(() => window.__refresh), 1);
+  } finally { await page.close(); }
+});
+
+test('deleting asks for confirmation, explains the loss and then confirms the deletion', async () => {
+  const { page, calls } = await open('profile');
+  try {
+    await page.getByRole('button', { name: 'Slet medlemskab' }).click();
+    const dialog = page.getByRole('alertdialog', { name: 'Slet dit medlemskab?' });
+    await dialog.getByText('Dine stempler og belønninger går tabt og kan ikke genskabes.').waitFor();
+    await dialog.getByRole('button', { name: 'Behold medlemskab' }).click();
+    assert.equal(calls.length, 0);
+    await page.getByRole('button', { name: 'Slet medlemskab' }).click();
+    await page.getByRole('button', { name: 'Ja, slet mit medlemskab' }).click();
+    await page.getByRole('heading', { name: 'Dit medlemskab er slettet' }).waitFor();
+    assert.deepEqual(calls.map(c => [c.name, c.body]), [['delete', { confirm: true }]]);
+  } finally { await page.close(); }
+});
+
+test('logging out returns to the portal start; an expired session goes to login', async () => {
+  const out = await open('profile');
+  try {
+    await out.page.getByRole('button', { name: 'Log ud' }).click();
+    await out.page.waitForURL(`${origin}/club`);
+    assert.deepEqual(out.calls.map(c => [c.name, c.method]), [['logout', 'POST']]);
+  } finally { await out.page.close(); }
+  const { page } = await open('profile', { answers: { consent: [[401, { error: 'unauthorized' }]] } });
+  try {
+    await page.getByRole('button', { name: 'Afmeld nyhedsbrevet' }).click();
+    await page.waitForURL(`${origin}/club/login`);
+  } finally { await page.close(); }
+});
+
+test('the portal menu marks the current page on the subdomain and on orderfly.dk/{slug}', async () => {
+  for (const [pathname, current] of [['/club', 'Kort'], ['/club/historik', 'Historik'], ['/esmeralda/club/profil', 'Profil']]) {
+    const { page } = await open(`nav?path=${encodeURIComponent(pathname)}`);
+    try {
+      const nav = page.getByRole('navigation', { name: 'Menu for Esmeralda Club' });
+      await nav.waitFor();
+      assert.deepEqual(await nav.getByRole('link').evaluateAll(links => links.map(l => [l.textContent, l.getAttribute('href'), l.getAttribute('aria-current')])),
+        [['Kort', '/club', current === 'Kort' ? 'page' : null], ['Historik', '/club/historik', current === 'Historik' ? 'page' : null], ['Profil', '/club/profil', current === 'Profil' ? 'page' : null]]);
+    } finally { await page.close(); }
+  }
+});
+
+const iphone = { isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/18.0 Mobile/15E148 Safari/604.1' };
+const android = { isMobile: true, hasTouch: true, userAgent: 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0 Mobile Safari/537.36' };
+
+test('the home-screen guide shows once on phones and stays closed', async () => {
+  const { page } = await open('hint', { device: iphone });
+  try {
+    await page.getByRole('heading', { name: 'Læg kortet på din hjemmeskærm' }).waitFor();
+    await page.getByText('Tryk på Del-knappen i Safari, og vælg »Føj til hjemmeskærm«.', { exact: false }).waitFor();
+    await page.getByRole('button', { name: 'Luk' }).click();
+    assert.equal(await page.getByRole('heading', { name: 'Læg kortet på din hjemmeskærm' }).count(), 0);
+    await page.reload();
+    await page.waitForTimeout(200);
+    assert.equal(await page.getByRole('heading', { name: 'Læg kortet på din hjemmeskærm' }).count(), 0);
+  } finally { await page.close(); }
+  const droid = await open('hint', { device: android });
+  try {
+    await droid.page.getByText('Åbn browserens menu (⋮), og vælg »Føj til startskærm«.', { exact: false }).waitFor();
+    // Chrome's own install prompt replaces the manual steps when offered.
+    await droid.page.evaluate(() => { const e = new Event('beforeinstallprompt', { cancelable: true }); e.prompt = async () => { window.__prompted = true; }; window.dispatchEvent(e); });
+    await droid.page.getByRole('button', { name: 'Føj til hjemmeskærm' }).click();
+    assert.equal(await droid.page.evaluate(() => window.__prompted), true);
+    await droid.page.waitForFunction(() => !document.querySelector('#club-home-screen'));
+  } finally { await droid.page.close(); }
+  const desktop = await open('hint', { width: 1440 });
+  try {
+    await desktop.page.waitForTimeout(200);
+    assert.equal(await desktop.page.getByRole('heading', { name: 'Læg kortet på din hjemmeskærm' }).count(), 0);
+  } finally { await desktop.page.close(); }
 });

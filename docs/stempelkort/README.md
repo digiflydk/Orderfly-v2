@@ -142,8 +142,8 @@ Plan: [fase-2-analyse-og-plan.md](fase-2-analyse-og-plan.md).
 | PR | Indhold | Status |
 |---|---|---|
 | 1 | Ramme, tilmelding, login og vilkår | Merget 2026-10-17 (#267) |
-| 2 | Mit stempelkort og QR-kode | I review |
-| 3 | Historik, profil, hjemmeskærm og skilt-QR | Ikke startet |
+| 2 | Mit stempelkort og QR-kode | Merget 2026-10-17 (#269) |
+| 3 | Historik, profil, hjemmeskærm og skilt-QR | I review |
 
 **Adresse:** `https://{slug}.orderfly.dk/club`, fx `https://esmeralda.orderfly.dk/club`. Portalen virker også på `https://orderfly.dk/{slug}/club`, og der omdirigeres ikke, fordi `*.orderfly.dk` endnu ikke er sat op i drift. Login-mailens link peger altid på subdomænet, så login i drift kræver subdomænet ([brand-subdomains.md](../brand-subdomains.md)).
 
@@ -176,4 +176,21 @@ Plan: [fase-2-analyse-og-plan.md](fase-2-analyse-og-plan.md).
   - En udløbet session sender kunden til login.
   - Skærmen holdes tændt, mens kortet er åbent, hvor browseren understøtter det. Låsen tages igen, når kunden vender tilbage til appen.
 
-**Test:** `tests/unit/loyalty-portal-pages.cjs` (stier, tekster, datoer, brandudseende og serverlæsning) og `tests/unit/loyalty-portal-browser.cjs` (tilmelding, login, links fra mailen, tracking, kortet og QR-kodens fornyelse, udløb, offline og forkert ur i Chromium ved 390 og 1440 px).
+**Historik, profil og hjemmeskærm (PR 3):**
+- **Menu:** Et logget ind medlem får menuen Kort, Historik og Profil under logoet.
+- **`/club/historik`:** stempler, fjernede stempler, belønninger, indløsninger og udløb med dato og kanal (Spis her, Takeaway, Afhentning, Levering). Medarbejdere og årsager vises aldrig; API'et sender dem ikke.
+- **`/club/profil`:**
+  - Navn og e-mail.
+  - Nyhedsbrev med status og knap til afmelding eller tilmelding. Ved tilmelding vises samtykketeksten, og dens version sendes med. Teksten forklarer, at medlemskab, stempler og belønninger bevares ved afmelding. Ændringen synkroniseres til Omnisend af fase 1.
+  - Link til vilkår og "Log ud".
+  - "Slet medlemskab" med et bekræftelsestrin, der forklarer, at stempler og belønninger går tabt.
+  - Uden gyldig session sendes kunden til login.
+- **Hjemmeskærm:**
+  - Webapp-manifest pr. brand på `/club/manifest.webmanifest` med programmets navn, start på `/club`, visningen "standalone" og brandets baggrundsfarve.
+  - Ikoner på `/club/ikon/180`, `/192` og `/512`. De laves på serveren med `sharp` ud fra logoet (60 % af fladen, inden for sikkerhedszonen for "maskable" ikoner) på brandets baggrundsfarve; Esmeralda får sort baggrund. Uden et brugbart logo bliver ikonet ensfarvet.
+  - Logoet læses fra brandets gemte data. Et indlejret billede afkodes direkte. En adresse hentes kun fra kendte offentlige billedværter (Webflow-CDN og værterne i `next.config`), uden at følge videresendelser og højst 2 MB. Serveren kan derfor ikke lokkes til at kalde interne adresser.
+  - iPhone får `apple-touch-icon` og titel.
+  - En diskret vejledning på kortet vises på telefoner, indtil kunden lukker den eller åbner portalen fra hjemmeskærmen. På iPhone forklarer den Del → "Føj til hjemmeskærm". Android får browserens egen installationsknap, når den tilbydes, og ellers en vejledning.
+- **Skilt til disken:** [skilt-qr-tilmelding.svg](skilt-qr-tilmelding.svg) er en QR-kode til `https://esmeralda.orderfly.dk/club/tilmeld` med høj fejlkorrektion, klar til tryk. Den virker først, når `*.orderfly.dk` er sat op.
+
+**Test:** `tests/unit/loyalty-portal-pages.cjs` (stier, tekster, datoer, brandudseende og serverlæsning) og `tests/unit/loyalty-portal-browser.cjs` (tilmelding, login, links fra mailen, tracking, kortet QR-kodens fornyelse, udløb, offline og forkert ur, profil, sletning, menu og hjemmeskærm-vejledningen i Chromium ved 390 og 1440 px). `loyalty-portal-pages.cjs` dækker også historiktekster, manifest, ikoner og skilt-QR'en.

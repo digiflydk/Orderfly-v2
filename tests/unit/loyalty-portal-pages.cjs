@@ -32,7 +32,10 @@ test('Esmeralda gets the white logo and its Bourton/Brandon font files; other br
   assert.match(esmeralda.logoUrl,/esmeralda-logo\.png$/);
   assert.match(esmeralda.fontCss,/font-family:'Bourton Base'.*bourtonbase\.woff2/);
   assert.match(esmeralda.fontCss,/font-family:'Brandon Text Office Regular'.*BrandonTextOffice-Regular\.ttf/);
-  assert.deepEqual(portalPreset({slug:'other',name:'Other',logoUrl:'https://x/logo.png'}),{logoUrl:'https://x/logo.png',logoAlt:'Other',fontCss:null});
+  assert.equal(esmeralda.background,'#000000');
+  assert.deepEqual(portalPreset({slug:'other',name:'Other',logoUrl:'https://x/logo.png',background:'#FAF0E6'}),{logoUrl:'https://x/logo.png',logoAlt:'Other',fontCss:null,background:'#FAF0E6'});
+  // Only a hex colour can paint the icon; anything else falls back to white.
+  assert.equal(portalPreset({slug:'other',name:'Other',background:'0 0% 100%'}).background,'#ffffff');
   assert.equal(portalPreset({slug:'other',name:'Other'}).logoUrl,null);
 });
 
@@ -61,6 +64,7 @@ test('portal pages read the member through the phase 1 session check and fail cl
   const ok=loadData({cookie:'b'.repeat(64),session:{memberId:'m'}});
   assert.deepEqual(await ok.data.loadMember('esmeralda'),{member:{name:'Anna'},session:{memberId:'m'}});
   await assert.rejects(loadData({}).data.loadPortal('unknown'),/NOT_FOUND/);
+  assert.equal(await loadData({}).data.findPortal('unknown'),null);
 });
 
 test('portal links stay on the address the customer uses',async()=>{
@@ -68,4 +72,73 @@ test('portal links stay on the address the customer uses',async()=>{
   assert.equal(await loadData({host:'orderfly.dk'}).data.portalBase('esmeralda'),'/esmeralda/club');
   // Another brand's subdomain never shortens the path.
   assert.equal(await loadData({host:'other.orderfly.dk'}).data.portalBase('esmeralda'),'/esmeralda/club');
+});
+
+const sharp=require('sharp');
+const home=loadTs('src/app/[brandSlug]/club/home-screen.ts',{'server-only':{},sharp:{default:sharp},'@/lib/firebase-admin':{getAdminDb:()=>({})},'./data':{}});
+
+test('the web app manifest names the program and starts on the portal address',()=>{
+  const m=home.manifest('Esmeralda Club','/club','#000000');
+  assert.equal(m.name,'Esmeralda Club');assert.equal(m.start_url,'/club');assert.equal(m.scope,'/club');assert.equal(m.display,'standalone');
+  assert.equal(m.theme_color,'#000000');assert.equal(m.lang,'da');
+  assert.deepEqual(m.icons.map(i=>[i.src,i.sizes,i.purpose]),[['/club/ikon/192','192x192','any'],['/club/ikon/512','512x512','any'],['/club/ikon/512','512x512','maskable']]);
+  assert.equal(home.manifest('X Club','/x/club','#ffffff').icons[0].src,'/x/club/ikon/192');
+});
+
+test('home-screen icons are square, on the brand colour, with the logo centred; a bad logo gives a plain icon',async()=>{
+  const logo=await sharp({create:{width:300,height:100,channels:4,background:'#ffffff'}}).png().toBuffer();
+  const fetched=[];
+  const png=await home.homeScreenIcon(192,'https://cdn/logo.png','#000000',async url=>{fetched.push(url);return logo;});
+  assert.deepEqual(fetched,['https://cdn/logo.png']);
+  const {data,info}=await sharp(png).raw().toBuffer({resolveWithObject:true});
+  assert.equal(info.width,192);assert.equal(info.height,192);
+  const pixel=(x,y)=>[...data.subarray((y*info.width+x)*info.channels,(y*info.width+x)*info.channels+3)];
+  assert.deepEqual(pixel(2,2),[0,0,0]);assert.deepEqual(pixel(96,96),[255,255,255]);
+  // The logo stays within the 60% safe area (192 * 0.6 = 115 px wide).
+  assert.deepEqual(pixel(96-60,96),[0,0,0]);assert.deepEqual(pixel(96-55,96),[255,255,255]);
+  for(const bad of [async()=>null,async()=>Buffer.from('not an image')]){
+    const plain=await sharp(await home.homeScreenIcon(180,'https://cdn/x.png','#112233',bad)).raw().toBuffer({resolveWithObject:true});
+    assert.equal(plain.info.width,180);assert.deepEqual([...plain.data.subarray(90*180*plain.info.channels+90*plain.info.channels).subarray(0,3)],[0x11,0x22,0x33]);
+  }
+  assert.deepEqual([...home.ICON_SIZES],[180,192,512]);
+});
+
+test('history rows name the event and channel in Danish, never staff',()=>{
+  assert.deepEqual(texts.historyText({type:'stamp_added',quantity:1,channel:'dine_in'}),{label:'Stempel',channel:'Spis her'});
+  assert.deepEqual(texts.historyText({type:'stamp_added',quantity:2,channel:'takeaway'}),{label:'Stempel (2 stempler)',channel:'Takeaway'});
+  assert.deepEqual(texts.historyText({type:'reward_redeemed',quantity:0,channel:null}),{label:'Belønning indløst',channel:null});
+  assert.deepEqual(texts.historyText({type:'stamps_expired',quantity:5,channel:null}),{label:'Stempler udløbet (5 stempler)',channel:null});
+  assert.equal(texts.historyText({type:'reward_expired',quantity:0,channel:'pickup'}).channel,'Afhentning');
+  assert.equal(texts.historyText({type:'something_new',quantity:0,channel:'wolt'}).label,'Hændelse');
+  assert.equal(texts.historyText({type:'something_new',quantity:0,channel:'wolt'}).channel,null);
+});
+
+test('the counter sign QR in docs leads to the sign-up page',async()=>{
+  const QRCode=require('qrcode'),fs=require('node:fs');
+  const expected=await QRCode.toString('https://esmeralda.orderfly.dk/club/tilmeld',{type:'svg',errorCorrectionLevel:'H',margin:4,color:{dark:'#000000',light:'#ffffff'}});
+  assert.equal(fs.readFileSync('docs/stempelkort/skilt-qr-tilmelding.svg','utf8'),expected);
+});
+
+test('logos are fetched only from public image hosts, without redirects, and cut off at 2 MB',async()=>{
+  const png=await sharp({create:{width:4,height:4,channels:4,background:'#ff0000'}}).png().toBuffer();
+  const calls=[];
+  const stream=(chunks,length)=>async(url,options)=>{calls.push([String(url),options.redirect]);
+    return new Response(new ReadableStream({pull(c){const next=chunks.shift();if(next)c.enqueue(next);else c.close();}}),{headers:length?{'content-length':String(length)}:{}});};
+  // An inline logo (served to browsers via /api/storefront-image) is decoded, never fetched.
+  assert.deepEqual(await home.logoBuffer('data:image/png;base64,'+png.toString('base64'),stream([])),png);
+  assert.equal(calls.length,0);
+  for(const blocked of ['http://cdn.prod.website-files.com/x.png','https://169.254.169.254/latest','https://localhost/x.png','https://internal.example/x.png',
+    'https://cdn.prod.website-files.com:8443/x.png','https://user@cdn.prod.website-files.com/x.png','/api/storefront-image?x=1','not a url'])
+    assert.equal(await home.logoBuffer(blocked,stream([png])),null,blocked);
+  assert.equal(calls.length,0);
+  assert.deepEqual(await home.logoBuffer('https://cdn.prod.website-files.com/logo.png',stream([png.subarray(0,10),png.subarray(10)])),png);
+  assert.deepEqual(calls,[['https://cdn.prod.website-files.com/logo.png','error']]);
+  // No or false Content-Length: the stream is abandoned once it passes the limit.
+  const mb=new Uint8Array(1_000_000);let pulled=0;
+  const endless=async()=>new Response(new ReadableStream({pull(c){pulled++;c.enqueue(mb);}}));
+  assert.equal(await home.logoBuffer('https://res.cloudinary.com/logo.png',endless),null);
+  assert.ok(pulled<=4,String(pulled));
+  assert.equal(await home.logoBuffer('https://res.cloudinary.com/logo.png',stream([png],3_000_000)),null);
+  // Redirects and network errors give no logo.
+  assert.equal(await home.logoBuffer('https://res.cloudinary.com/logo.png',async()=>{throw new TypeError('redirect');}),null);
 });
