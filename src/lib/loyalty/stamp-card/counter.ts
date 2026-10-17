@@ -127,6 +127,7 @@ export async function lookupMember(db: Firestore, actor: CounterActor, input: z.
       memberId = String(identity.memberId); via = 'search';
     }
     const member = await activeMember(tx, db, input.brandId, memberId);
+    if (via === 'qr' && member.qrTokenId !== hashKey('qr', (input as { qrToken: string }).qrToken)) throw new LoyaltyError('qr_invalid', 410);
     const [program, card, rewards] = await Promise.all([
       tx.get(db.collection(COLLECTIONS.programs).doc(input.brandId)).then(s => readProgram(input.brandId, s.data())),
       currentCard(tx, db, member, memberId),
@@ -206,9 +207,10 @@ function addStampsToCard(w: Writer, ctx: {
 export async function grantStamp(db: Firestore, actor: CounterActor, input: z.infer<typeof stampSchema>, now: number) {
   const hash = requestHash({ op: 'stamp', ...input }), eventId = hashKey('stamp', input.brandId, input.idempotencyKey);
   return db.runTransaction(async tx => {
+    // Authorized first: a replay never returns a stored receipt to someone who has lost the permission.
+    const { companyId, principalId } = await authorizeAt(db, tx, actor, input.brandId, input.locationId, PERMISSION.counter);
     const prior = await replay(tx, db, eventId, hash);
     if (prior) return { ...(prior.result as StampOutcome), replayed: true };
-    const { companyId, principalId } = await authorizeAt(db, tx, actor, input.brandId, input.locationId, PERMISSION.counter);
     const member = await activeMember(tx, db, input.brandId, input.memberId);
     const [program, entry] = await Promise.all([
       tx.get(db.collection(COLLECTIONS.programs).doc(input.brandId)).then(s => readProgram(input.brandId, s.data())),
@@ -230,9 +232,10 @@ export async function grantStamp(db: Firestore, actor: CounterActor, input: z.in
 export async function redeemReward(db: Firestore, actor: CounterActor, input: z.infer<typeof redeemSchema>, now: number) {
   const hash = requestHash({ op: 'redeem', ...input }), eventId = hashKey('redeem', input.brandId, input.idempotencyKey);
   return db.runTransaction(async tx => {
+    // Authorized first: a replay never returns a stored receipt to someone who has lost the permission.
+    const { companyId, principalId } = await authorizeAt(db, tx, actor, input.brandId, input.locationId, PERMISSION.redeem);
     const prior = await replay(tx, db, eventId, hash);
     if (prior) return { rewardId: input.rewardId, description: String((prior.result as { description?: string })?.description || ''), replayed: true };
-    const { companyId, principalId } = await authorizeAt(db, tx, actor, input.brandId, input.locationId, PERMISSION.redeem);
     const ref = db.collection(COLLECTIONS.rewards).doc(input.rewardId);
     const reward = (await tx.get(ref)).data() as RewardDoc | undefined;
     if (!reward || reward.brandId !== input.brandId) throw new LoyaltyError('reward_not_found', 404);
@@ -253,9 +256,10 @@ export async function redeemReward(db: Firestore, actor: CounterActor, input: z.
 export async function correctMember(db: Firestore, actor: CounterActor, input: z.infer<typeof correctionSchema>, now: number) {
   const hash = requestHash({ op: 'correct', ...input }), eventId = hashKey('correct', input.brandId, input.idempotencyKey);
   return db.runTransaction(async tx => {
+    // Authorized first: a replay never returns a stored receipt to someone who has lost the permission.
+    const { companyId, principalId } = await authorizeAt(db, tx, actor, input.brandId, input.locationId, PERMISSION.correct);
     const prior = await replay(tx, db, eventId, hash);
     if (prior) return { ...(prior.result as object), replayed: true };
-    const { companyId, principalId } = await authorizeAt(db, tx, actor, input.brandId, input.locationId, PERMISSION.correct);
     const meta = { companyId, brandId: input.brandId, createdAt: now };
     const actorFields = { actorId: principalId, actorName: actor.name, reason: input.reason, locationId: input.locationId,
       idempotencyKey: input.idempotencyKey, requestHash: hash };
@@ -280,6 +284,8 @@ export async function correctMember(db: Firestore, actor: CounterActor, input: z
       currentCard(tx, db, member, input.memberId),
     ]);
     if (input.kind === 'add_stamps') {
+      // Like ordinary stamping, an inactive or unconfigured program never issues stamps or rewards.
+      if (!program.settings.active) throw new LoyaltyError('program_inactive', 422);
       const outcome = addStampsToCard({ tx, db }, { companyId, brandId: input.brandId, memberId: input.memberId, member, program, entry,
         count: input.count, locationId: input.locationId, now, eventId, hash, idempotencyKey: input.idempotencyKey,
         base: { source: 'correction', actorId: principalId, actorName: actor.name, reason: input.reason } });
@@ -299,9 +305,14 @@ export async function correctMember(db: Firestore, actor: CounterActor, input: z
 // Issued to the signed-in member (customer portal, phase 2). Stored as a hash,
 // valid for 60 seconds and consumed by the first counter lookup.
 export const QR_TOKEN_LIFETIME = 60_000;
+// Only the member's newest token is valid; issuing one revokes the previous code.
 export async function issueQrToken(db: Firestore, brandId: string, memberId: string, now: number) {
-  const token = randomBytes(32).toString('hex');
-  await db.collection(COLLECTIONS.qrTokens).doc(hashKey('qr', token)).set({ brandId, memberId, createdAt: now, expiresAt: now + QR_TOKEN_LIFETIME, usedAt: null });
+  const token = randomBytes(32).toString('hex'), id = hashKey('qr', token);
+  await db.runTransaction(async tx => {
+    await activeMember(tx, db, brandId, memberId);
+    tx.set(db.collection(COLLECTIONS.qrTokens).doc(id), { brandId, memberId, createdAt: now, expiresAt: now + QR_TOKEN_LIFETIME, usedAt: null });
+    tx.update(db.collection(COLLECTIONS.members).doc(memberId), { qrTokenId: id });
+  });
   return { token, expiresAt: now + QR_TOKEN_LIFETIME };
 }
 

@@ -49,6 +49,7 @@ export type MemberDoc = {
   companyId: string; brandId: string; customerId: string; name: string; normalizedEmail: string;
   status: 'active' | 'deleted'; joinedAt: number; currentCardId: string | null;
   stampDay: string | null; stampsOnDay: number;
+  qrTokenId?: string | null;
 };
 
 export type ProgramDoc = { brandId: string; version: number; settings: ProgramSettings };
