@@ -39,6 +39,8 @@ export const programSettingsSchema = z.object({
   counterChannels: subset(COUNTER_CHANNELS),
   orderTypes: subset(ORDER_TYPES),
   maxStampsPerDay: count(1, 100).nullable(),
+  // Counter view locks after this many idle minutes. Defaulted so versions saved before the field still parse.
+  counterIdleMinutes: count(1, 60).default(5),
   terms: text(20_000),
   consentText: text(2_000),
 }).strict().superRefine((s, ctx) => {
@@ -57,7 +59,7 @@ export function defaultProgramSettings(brandName: string): ProgramSettings {
     active: false, name: `${brandName.trim() || 'Loyalitets'} Club`.slice(0, 80), stampsRequired: 8, minimumAmountOre: 10_000,
     stampsPerPurchase: 1, cardValidityMonths: 6, reward: null, rewardDescription: '', rewardValidityMonths: 3,
     crossLocation: true, discountedOrdersQualify: false, sessionDays: 180, counterChannels: ['dine_in', 'takeaway'],
-    orderTypes: ['pickup'], maxStampsPerDay: null, terms: '', consentText: '',
+    orderTypes: ['pickup'], maxStampsPerDay: null, counterIdleMinutes: 5, terms: '', consentText: '',
   };
 }
 
