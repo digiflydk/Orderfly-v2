@@ -18,9 +18,27 @@ Godkendt analyse og plan: [fase 1](fase-1-analyse-og-plan.md), [fase 2](fase-2-a
 
 | PR | Indhold | Status |
 |---|---|---|
-| 1 | Indstilling "Kassevisning: log ud efter inaktivitet" (standard 5 minutter) | I review |
-| 2 | Adgang og indgang: navigation, menu, login-redirect og mPanel-genvej | Ikke startet |
-| 3 | Kassevisningen: login og brugerskifte, scanning, søgning, stempel, indløsning og korrektion | Ikke startet |
+| 1 | Indstilling "Kassevisning: log ud efter inaktivitet" (standard 5 minutter) | Merget 2026-10-17 (#266) |
+| 2 | Kassevisningen: adgang og menu, login og brugerskifte, automatisk log ud, scanning, søgning, stempel, indløsning og korrektion | #268 |
+
+Adgang og selve kassevisningen er samlet i PR 2, så menupunktet aldrig peger på en side, der ikke findes.
+
+## Kassevisning (fase 3)
+
+Adressen er `/merchant/stamp-card`. Den kræver `orderfly.stamp_cards:counter`. Al logik ligger i kassens backend fra fase 1; skærmen viser og sender kun.
+
+- **Hvem ser hvad:** En medarbejder, hvis eneste Orderfly-rettigheder er kassevisning, indløs og korrektion, ser kun kassevisningen i fuld skærm. Det gælder efter login, fra `/merchant` og fra mPanel-genvejen. Ledere har menupunktet **Kassevisning** under Loyalitet og knappen **Administration** i kassevisningen.
+- **Login og brugerskifte:** Samme login som timeloggen (navn/e-mail og 6-cifret PIN). **Skift bruger** logger den aktive medarbejder ud. Tabletten husker navnene på de seneste 8 medarbejdere (aldrig PIN), så man trykker sit navn og taster PIN. Navne kan fjernes fra listen.
+- **Automatisk log ud:** efter den indstillede periode uden aktivitet (Indstillinger → "Kassevisning: log ud efter inaktivitet", standard 5 minutter). Det gælder også, hvis tabletten har sovet eller siden genindlæses. Når udlogningen ikke nåede serveren (fx uden net), forbliver tabletten låst, og udlogningen prøves igen hvert 15. sekund og når nettet kommer tilbage. Næste medarbejders PIN sendes først, når den forrige udlogning er færdig, så den aldrig kan logge den nye medarbejder ud.
+- **Brand og afdeling** vælges øverst, hvis der er flere; tabletten husker valget. Er programmet slået fra eller uden kassekanaler, vises det, og knapperne er slået fra.
+- **Scanning:** kameraet åbner og scanner automatisk. Chrome på Android bruger browserens egen QR-læser; Safari på iPad bruger biblioteket `jsqr`. QR-koden skal indeholde præcis kundens token (64 tegn). Alt andet giver "Det er ikke en stempelkort-kode".
+- **Giv stempel:** kanal (kun brandets kassekanaler; én kanal er valgt på forhånd), beløb og Bekræft. Under minimum eller med rabat (når rabatordrer ikke giver stempel) kan der ikke bekræftes. Kvitteringen vises i 4 sekunder.
+- **Dobbeltklik og netværk:** Knappen låses ved første tryk, og hver handling har sin egen idempotensnøgle. Ved "Ingen forbindelse" kan kun samme handling prøves igen med samme nøgle, så den aldrig registreres to gange.
+- **Indløs:** kun med gyldig belønning i afdelingen og rettigheden `…:redeem`, med et bekræftelsestrin.
+- **Korrektion:** kun med `…:correct`. Ved kassen kan der tilføjes eller fjernes stempler med årsag. Annullering af en indløsning sker i admin under Medlemmer (PM-beslutning).
+- **Test:** `tests/unit/loyalty-counter-browser.cjs` kører den rigtige skærm i Chromium ved 1180×820, 820×1180 og 390 px med syntetisk kamera og API.
+
+**Drift før brug:** Tildel `orderfly.stamp_cards:counter` (og evt. `redeem`/`correct`) til kassepersonalets rolle i mPanel, og test hele flowet på restaurantens egen iPad og Android-tablet (spec §8, sidste punkt). Kameraet kræver, at browseren får lov at bruge det første gang.
 
 ## Rettigheder
 

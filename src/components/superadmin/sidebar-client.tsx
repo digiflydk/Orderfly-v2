@@ -44,6 +44,7 @@ import {
   Gamepad2,
   TicketCheck,
   Stamp,
+  ScanLine,
 } from 'lucide-react'
 import { getSuperadminUserContext, type SuperadminUser } from '@/lib/auth/superadmin-context'
 import { LogoutButton } from './logout-button'
@@ -140,6 +141,7 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/loyalty', label: 'Oversigt', icon: BarChart3 },
         { href: '/superadmin/loyalty/stamp-card', label: 'Stempelkort', icon: Stamp },
         { href: '/superadmin/loyalty/score', label: 'Kundescore', icon: Trophy },
+        { href: '/merchant/stamp-card', label: 'Kassevisning', icon: ScanLine },
       ],
     },
     {
@@ -194,8 +196,10 @@ export function SuperAdminSidebarClient({
   ]
 
   const candidateGroups: Group[] = (centralAdmin ? allGroups.filter(g => g.key !== 'people') : allGroups)
-    .filter(g => !merchantPortal || !['people','system','platform','loyalty'].includes(g.key))
-    .map(g => ({...g, items:g.items.filter(i => (!['/merchant/redeem','/merchant/payments'].includes(i.href || '') || merchantPortal))}));
+    .filter(g => !merchantPortal || !['people','system','platform'].includes(g.key))
+    // The merchant portal shows only the counter view from Loyalitet; administration stays in /superadmin.
+    .map(g => ({...g, items:g.items.filter(i => (!['/merchant/redeem','/merchant/payments'].includes(i.href || '') || merchantPortal)
+      && (!merchantPortal || g.key !== 'loyalty' || i.href === '/merchant/stamp-card'))}));
 
   const groups: Group[] = candidateGroups.map(group => ({...group, items: filterNavigation(group.items, access)})).filter(group => group.items.length > 0);
 

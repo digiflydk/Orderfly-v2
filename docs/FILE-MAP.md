@@ -35,6 +35,11 @@ All routes live under `src/app`. Shared code lives in `src/lib`, `src/components
 - **Combo Menus:** `src/app/superadmin/combos/page.tsx`
 - **Upsells:** `src/app/superadmin/upsells/page.tsx`
 
+## Loyalty (stempelkort)
+- **Backend:** `src/lib/loyalty/stamp-card/*` (rules, counter, membership, admin), routes `src/app/api/merchant/loyalty/*` and `src/app/api/loyalty/[brandSlug]/*`
+- **Admin:** `src/app/superadmin/loyalty/*` (overview, stamp card settings/members/log, customer score)
+- **Counter view (phase 3):** `src/app/merchant/stamp-card/*` (page, `counter-view.tsx`, `lock-screen.tsx`, `qr-scanner.tsx`, `messages.ts`)
+
 ## People & Access
 - **Users:** `src/app/superadmin/users/page.tsx`
 - **Roles:** `src/app/superadmin/roles/page.tsx`

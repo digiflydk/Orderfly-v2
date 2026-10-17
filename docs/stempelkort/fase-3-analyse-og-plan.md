@@ -167,8 +167,7 @@ Alt ligger under `src/app/merchant/stamp-card/` (side, klientkomponenter) og kal
 ### C5. Små PR'er (trin 3, efter godkendelse)
 
 1. **Fælles backend:** `counterIdleMinutes` i indstillingerne og admin, med tests. Merges først og hurtigt for at undgå konflikt med fase 2.
-2. **Adgang og indgang:** navigation, merchant-layout uden sidebar for kun-kasse, menupunkt, login-redirect og mPanel-genvej.
-3. **Kassevisningen:** låseskærm og brugerskifte, automatisk log ud, start, scanning, søgning, kundekort, stempel, indløsning, korrektion og fejlbeskeder, med Playwright-tests.
+2. **Adgang og kassevisningen** (samlet i én PR under byggeriet, så menupunktet aldrig peger på en side, der ikke findes): navigation, merchant-layout uden sidebar for kun-kasse, menupunkt, login-redirect og mPanel-genvej, samt låseskærm og brugerskifte, automatisk log ud, start, scanning, søgning, kundekort, stempel, indløsning, korrektion og fejlbeskeder, med Playwright-tests.
 
 Hver PR opdaterer `docs/stempelkort/README.md` (status og driftsvejledning til kassen), og ved behov `api-overview.md`, `security-rbac.md` og `FILE-MAP.md`. Før merge flettes `main` ind. Esmeralda-deploy er ikke nødvendig for fase 3.
 
