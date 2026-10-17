@@ -12,14 +12,17 @@ import { SESSION_COOKIE } from '@/lib/loyalty/stamp-card/portal-http';
 // Server-side reads for the customer portal. They use the same phase 1 functions
 // as /api/loyalty/{brandSlug}/* and never write; every change goes through those APIs.
 
-export const loadPortal = cache(async (slug: string) => {
+// The brand and its public program, or null for an unknown or suspended brand.
+export const findPortal = cache(async (slug: string) => {
   const db = getAdminDb();
   const brand = await resolveBrand(db, slug).catch(error => {
-    if (error instanceof LoyaltyError) notFound();
+    if (error instanceof LoyaltyError) return null;
     throw error;
   });
-  return { brand, program: await programForPortal(db, brand) };
+  return brand ? { brand, program: await programForPortal(db, brand) } : null;
 });
+
+export const loadPortal = cache(async (slug: string) => (await findPortal(slug)) ?? notFound());
 
 // The signed-in member's card, or null when there is no valid session.
 export const loadMember = cache(async (slug: string) => {
