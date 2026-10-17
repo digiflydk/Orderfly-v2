@@ -23,7 +23,7 @@ function setup(){
     companies:[{id:'esmeralda',name:'Esmeralda',active:true,locationIds:['l1','l2'],orderflyBrandIds:['brand'],opsflyOrganizationId:null},
       {id:'andet',name:'Andet',active:true,locationIds:['x1'],orderflyBrandIds:['brand2'],opsflyOrganizationId:null}],
     roles:[{id:'super',name:'Super',companyId:null,kind:'superuser',permissions:[],active:true},
-      {id:'admin',name:'Admin',companyId:'esmeralda',kind:'company_user',active:true,permissions:[S+'settings',S+'members',S+'log',S+'correct']},
+      {id:'admin',name:'Admin',companyId:'esmeralda',kind:'company_user',active:true,permissions:[S+'settings',S+'members',S+'log',S+'correct',S+'overview']},
       {id:'leder',name:'Leder',companyId:'esmeralda',kind:'company_user',active:true,permissions:[S+'members',S+'log',S+'correct',S+'counter',S+'redeem']},
       {id:'kasse',name:'Kasse',companyId:'esmeralda',kind:'company_user',active:true,permissions:[S+'counter',S+'redeem']},
       {id:'andet-admin',name:'Admin',companyId:'andet',kind:'company_user',active:true,permissions:[S+'settings',S+'members',S+'log']}],
@@ -163,4 +163,40 @@ test('filters parse presets and reject malformed URL values',()=>{
   assert.equal(f.period,'custom');assert.deepEqual([f.from,f.to],['2026-09-21','2026-10-20']);
   assert.deepEqual(f.brands,['a','c']);assert.equal(f.channel,null);assert.equal(f.actor,null);
   assert.deepEqual(parseFilters({},NOW).period,'30d');
+});
+
+test('the overview counts members, stamps, rewards, expiry and consent within filters and tenant',async()=>{
+  setup();
+  const at=Date.parse('2026-10-20T08:00:00Z');
+  await stamp('anna',1,at);await stamp('anna',2,at+1000);
+  await counter.grantStamp(db,who('owner'),{brandId:'brand',locationId:'l2',memberId:'bo',channel:'dine_in',amountOre:20_000,discountUsed:false,via:'search',idempotencyKey:'7'.padStart(64,'0')},at+2000);
+  const [reward]=rows('loyaltyRewards');
+  await counter.redeemReward(db,who('leder'),{brandId:'brand',locationId:'l1',rewardId:reward.id,via:'qr',idempotencyKey:'8'.padStart(64,'0')},at+3000);
+  await counter.correctMember(db,who('leder'),{brandId:'brand',locationId:'l1',kind:'add_stamps',memberId:'bo',count:1,reason:'Kompensation',idempotencyKey:'9'.padStart(64,'0')},at+4000);
+  const filter={brandIds:['brand','brand2'],from:'2026-10-14',to:'2026-10-20',channel:null};
+  const o=await admin.loyaltyOverview(db,who('leder'),filter,at+5000);
+  assert.deepEqual(o.programs.map(p=>p.brandId),['brand']);
+  assert.deepEqual({...o.kpi,newsletterShare:undefined},{activeMembers:2,newMembers:2,stamps:3,rewardsEarned:2,rewardsRedeemed:1,rewardsOpen:1,cardsExpiringSoon:0,newsletterMembers:1,newsletterShare:undefined});
+  assert.equal(o.kpi.newsletterShare,0.5);
+  // Corrections are adjustments, not stamps given at the counter; Bo's correction still completes a card and earns a reward.
+  assert.deepEqual(o.channels,{dine_in:1,takeaway:2});
+  assert.equal(o.daily.length,7);assert.deepEqual(o.daily.at(-1),{day:'2026-10-20',stamps:3,redemptions:1});
+  assert.deepEqual(o.staff.map(s=>[s.name,s.stamps,s.redemptions]),[['Leder',2,1],['Owner',1,0]]);
+  // The correction and the reward it completed share a timestamp, so their order is not asserted.
+  assert.ok(o.latest.slice(0,2).some(e=>e.type==='stamp_added'&&e.reason==='Kompensation'));assert.ok(o.latest.length<=20);
+  const dineIn=await admin.loyaltyOverview(db,who('leder'),{...filter,channel:'dine_in'},at+5000);
+  assert.equal(dineIn.kpi.stamps,1);assert.equal(dineIn.kpi.rewardsRedeemed,1);
+  const before=await admin.loyaltyOverview(db,who('leder'),{...filter,from:'2026-10-01',to:'2026-10-13'},at+5000);
+  assert.deepEqual([before.kpi.stamps,before.kpi.newMembers,before.kpi.activeMembers],[0,0,2]);
+  assert.equal(o.periodShortened,false);
+  // A custom period longer than 366 days is shortened, so every counted stamp has a daily bucket.
+  const long=await admin.loyaltyOverview(db,who('leder'),{...filter,from:'2020-01-01'},at+5000);
+  assert.equal(long.periodShortened,true);assert.equal(long.periodFrom,'2025-10-20');assert.equal(long.daily.length,366);
+  assert.equal(long.daily.reduce((n,d)=>n+d.stamps,0),long.kpi.stamps);assert.equal(long.kpi.stamps,3);
+  // A card whose deadline falls within 30 days counts as expiring.
+  await stamp('anna',10,at+6000);
+  const later=Date.parse('2027-04-01T00:00:00Z');
+  assert.equal((await admin.loyaltyOverview(db,who('leder'),filter,later)).kpi.cardsExpiringSoon,1);
+  assert.deepEqual((await admin.loyaltyOverview(db,who('fremmed'),filter,at)).programs,[]);
+  assert.deepEqual((await admin.loyaltyOverview(db,who('kasse'),filter,at)).programs,[]);
 });

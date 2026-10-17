@@ -11,7 +11,7 @@ import { Form, FormControl, FormDescription, FormField, FormItem, FormLabel, For
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { useToast } from '@/hooks/use-toast';
-import { updateLoyaltySettings, type FormState } from './actions';
+import { updateLoyaltySettings, type FormState } from '../actions';
 import { useRouter } from 'next/navigation';
 import { scoreSettingsSchema } from '@/lib/loyalty/model';
 import { Loader2 } from 'lucide-react';
