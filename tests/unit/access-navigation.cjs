@@ -40,9 +40,12 @@ test('retired billing permission does not expose a billing destination',()=>{
 test('stamp-card administration and customer score are separate destinations',()=>{
  const card=href=>canNavigate(href,{superuser:false,permissions:['orderfly.stamp_cards:log']});
  assert.equal(card('/superadmin/loyalty/stamp-card'),true);assert.equal(card('/superadmin/loyalty/stamp-card/members/m1'),true);
- assert.equal(card('/superadmin/loyalty'),false);
+ assert.equal(card('/superadmin/loyalty'),false);assert.equal(card('/superadmin/loyalty/score'),false);
  const score={superuser:false,permissions:['orderfly.customer_score:view']};
- assert.equal(canNavigate('/superadmin/loyalty',score),true);assert.equal(canNavigate('/superadmin/loyalty/stamp-card',score),false);
+ assert.equal(canNavigate('/superadmin/loyalty/score',score),true);assert.equal(canNavigate('/superadmin/loyalty/stamp-card',score),false);
+ assert.equal(canNavigate('/superadmin/loyalty',score),false);
+ const overview={superuser:false,permissions:['orderfly.stamp_cards:overview']};
+ assert.equal(canNavigate('/superadmin/loyalty',overview),true);assert.equal(canNavigate('/superadmin/loyalty/score',overview),false);assert.equal(canNavigate('/superadmin/loyalty/stamp-card',overview),false);
  // Counter-only staff get no administration menu entry.
  assert.equal(canNavigate('/superadmin/loyalty/stamp-card',{superuser:false,permissions:['orderfly.stamp_cards:counter','orderfly.stamp_cards:redeem']}),false);
 });

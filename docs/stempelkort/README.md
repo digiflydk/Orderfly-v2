@@ -11,7 +11,7 @@ Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md)
 | 2 | Kassens backend (opslag, stempel, indløsning, korrektion, udløbsjob) | Klar til review (bygger på PR 1) |
 | 3 | Medlemskab, samtykke, Omnisend, login-link og session | Klar til review (bygger på PR 2, parret med Esmeralda-skabelon) |
 | 4 | Admin: Stempelkort (indstillinger, medlemmer, log, CSV) | Klar til review (bygger på PR 3) |
-| 5 | Admin: Loyalitet (hovedgruppe, oversigt, kundescore flyttes) | Ikke startet |
+| 5 | Admin: Loyalitet (hovedgruppe, oversigt, kundescore flyttes) | Klar til review (bygger på PR 4) |
 | 6 | Oprydning: aliaset `orderfly.loyalty` fjernes | Efter verificeret migration |
 
 ## Rettigheder
@@ -80,7 +80,7 @@ Sådan fungerer det:
 
 ## Admin: Stempelkort (PR 4)
 
-Menuen har fået hovedgruppen **Loyalitet** med punkterne **Stempelkort** og **Kundescore**. Kundescore er flyttet fra Promotions; dens adresse ændres i del 5.
+Menuen har fået hovedgruppen **Loyalitet** med punkterne **Stempelkort** og **Kundescore**. Kundescore er flyttet fra Promotions; adresse og oversigt kom i PR 5 (se nedenfor).
 
 Siden `/superadmin/loyalty/stamp-card` har tre faner. Hver fane vises kun med sin rettighed, og den rettighed skal gælde hele brandet:
 
@@ -106,3 +106,31 @@ Siden `/superadmin/loyalty/stamp-card` har tre faner. Hver fane vises kun med si
 - Medlemslisten følger tenant- og brandfiltret. Periode og kanal hører til hændelser og bruges derfor i loggen og på oversigten (del 5).
 
 **Visningsgrænse:** Medlemslisten og loggen viser højst 5.000 rækker pr. brand og siger tydeligt til, når grænsen er nået.
+
+## Admin: Loyalitet-oversigt og kundescore (PR 5)
+
+Menuen **Loyalitet** har nu tre punkter: **Oversigt**, **Stempelkort** og **Kundescore**.
+
+**Kundescore** har fået sin egen adresse, `/superadmin/loyalty/score`, og kræver `orderfly.customer_score:view` (eller superbruger). Gamle bogmærker til `/superadmin/loyalty` sender en bruger uden adgang til oversigten videre til kundescoren, hvis brugeren har adgang dertil.
+
+**Oversigten** ligger på `/superadmin/loyalty` og kræver `orderfly.stamp_cards:overview` for hele brandet. Den viser kun brands, hvor rettigheden gælder, og alle tal følger den fælles filterlinje (tenant, brand, periode og kanal):
+
+- Programstatus pr. brand (aktivt eller ikke aktivt).
+- Nøgletal:
+  - Aktive medlemmer (i alt) og nye medlemmer (i perioden).
+  - Stempler givet i perioden. Kun køb ved kassen og ordrer tæller, ikke manuelle korrektioner. Kanalfiltret gælder her.
+  - Belønninger optjent og indløst i perioden.
+  - Optjente, ikke indløste belønninger lige nu.
+  - Kort, der udløber inden for 30 dage.
+  - Andel af aktive medlemmer med nyhedsbrevssamtykke.
+- Grafer:
+  - Stempler pr. dag og indløsninger pr. dag (dansk tid).
+  - Stempler fordelt på dine-in og takeaway.
+  - Hver graf har én serie i adminens primærfarve (ingen nye farver), og tallene kan vises som tabel.
+- Seneste 20 hændelser (uafhængigt af perioden) med link til hele loggen.
+- Stempler og indløsninger pr. medarbejder i perioden.
+- Genveje til indstillinger, medlemsliste og log. Hver genvej vises kun med sin rettighed.
+
+**Visningsgrænse:** Oversigten læser højst 20.000 hændelser pr. brand i perioden og siger til, hvis grænsen er nået.
+
+mPanel-genveje: `orderfly.stamp_cards:overview` åbner oversigten, og `orderfly.customer_score:view` åbner kundescoren.

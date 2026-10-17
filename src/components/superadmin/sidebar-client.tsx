@@ -65,7 +65,7 @@ type Group = {
 
 function isActive(pathname: string, href?: string) {
   if (!href) return false
-  if (href === '/superadmin' || href === '/merchant') return pathname === href;
+  if (href === '/superadmin' || href === '/merchant' || href === '/superadmin/loyalty') return pathname === href;
   return pathname === href || pathname.startsWith(href + '/')
 }
 
@@ -137,8 +137,9 @@ export function SuperAdminSidebarClient({
       key: 'loyalty',
       title: 'Loyalitet',
       items: [
+        { href: '/superadmin/loyalty', label: 'Oversigt', icon: BarChart3 },
         { href: '/superadmin/loyalty/stamp-card', label: 'Stempelkort', icon: Stamp },
-        { href: '/superadmin/loyalty', label: 'Kundescore', icon: Trophy },
+        { href: '/superadmin/loyalty/score', label: 'Kundescore', icon: Trophy },
       ],
     },
     {

@@ -45,10 +45,12 @@ before(async () => {
     import { MembersTable } from ${src('app/superadmin/loyalty/stamp-card/members-table')};
     import { EventLog } from ${src('app/superadmin/loyalty/stamp-card/event-log')};
     import { CorrectionPanel } from ${src('app/superadmin/loyalty/stamp-card/members/[memberId]/correction-panel')};
+    import { OverviewCharts } from ${src('app/superadmin/loyalty/overview-charts')};
     const view = location.pathname.slice(1);
     const node = view === 'settings' ? React.createElement(SettingsForm, { initial: { brand: { brandId: 'b', brandName: 'Esmeralda' }, version: 1, settings: ${JSON.stringify(settings)}, updatedAt: ${NOW}, updatedByName: 'Leder', products: [{ id: 'pizza', name: 'Pizza' }], categories: [] } })
       : view === 'members' ? React.createElement(MembersTable, { rows: ${JSON.stringify(members)}, truncated: false, brandIds: ['b'], filterQuery: 'period=30d', multiBrand: false })
       : view === 'log' ? React.createElement(EventLog, { rows: ${JSON.stringify(events)}, truncated: false, filter: { brandIds: ['b'], from: '2026-10-14', to: '2026-10-20', type: null, actorId: null, channel: null }, multiBrand: false })
+      : view === 'overview' ? React.createElement(OverviewCharts, { daily: [{ day: '2026-10-18', stamps: 4, redemptions: 1 }, { day: '2026-10-19', stamps: 0, redemptions: 0 }, { day: '2026-10-20', stamps: 7, redemptions: 2 }], channels: { dine_in: 5, takeaway: 6 } })
       : React.createElement(CorrectionPanel, { brandId: 'b', memberId: 'm1', locations: [{ id: 'l1', name: 'Amager' }, { id: 'l2', name: 'Vesterbro' }], redeemedRewards: [{ id: 'r1', description: 'Gratis pizza', redeemedAt: ${NOW} }] });
     createRoot(document.getElementById('root')).render(React.createElement(React.Fragment, null, node, React.createElement(Toaster)));`);
   const loader = write('loader.js', `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
@@ -153,6 +155,19 @@ test('manual correction requires a reason, uses a fresh idempotency key and repo
     assert.equal(second.kind, 'remove_stamps');
     await page.getByLabel('Handling').selectOption('cancel_redemption');
     await page.getByRole('combobox', { name: /^Indløsning/ }).waitFor();
+    assert.ok(await noOverflow(page));
+  } finally { await page.close(); }
+});
+
+for (const width of [390, 1440]) test(`overview charts render one series each with a table alternative at ${width}px`, async () => {
+  const page = await open('overview', width);
+  try {
+    for (const name of ['Stempler pr. dag', 'Indløsninger pr. dag', 'Stempler fordelt på kanal']) await page.getByRole('img', { name }).waitFor();
+    await page.locator('.recharts-bar-rectangle').first().waitFor();
+    assert.ok(await page.locator('.recharts-bar-rectangle').count() >= 6);
+    await page.getByText('Vis tallene som tabel').click();
+    await page.getByRole('cell', { name: '2026-10-20' }).waitFor();
+    await page.getByText('Dine-in: 5 · Takeaway: 6').waitFor();
     assert.ok(await noOverflow(page));
   } finally { await page.close(); }
 });

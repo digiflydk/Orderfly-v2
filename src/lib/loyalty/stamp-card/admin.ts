@@ -127,7 +127,7 @@ export async function listMembers(db: Firestore, actor: AdminActor, brandIds: st
       db.collection(COLLECTIONS.rewards).where('brandId', '==', brand.brandId).where('status', '==', 'available').get(),
       db.collection(COLLECTIONS.programs).doc(brand.brandId).get().then(s => readProgram(brand.brandId, s.data())),
     ]);
-    if (members.size > MEMBER_LIMIT) truncated = true;
+    if (members.docs.length > MEMBER_LIMIT) truncated = true;
     const docs = members.docs.slice(0, MEMBER_LIMIT);
     const cardIds = docs.map(d => (d.data() as MemberDoc).currentCardId).filter((v): v is string => !!v);
     const cards = new Map<string, CardDoc>();
@@ -231,7 +231,7 @@ export async function listEvents(db: Firestore, actor: AdminActor, filter: z.inf
         .orderBy('createdAt', 'desc').limit(EVENT_LIMIT + 1).get(),
       db.collection('locations').where('brandId', '==', brand.brandId).get(),
     ]);
-    if (events.size > EVENT_LIMIT) truncated = true;
+    if (events.docs.length > EVENT_LIMIT) truncated = true;
     const locationName = new Map(locations.docs.map(d => [d.id, String(d.data().name || d.id)]));
     const list = events.docs.slice(0, EVENT_LIMIT).map(d => d.data() as LoyaltyEvent);
     for (const e of list) if (e.actorId && e.actorName) actors.set(e.actorId, e.actorName);
@@ -247,4 +247,82 @@ export async function listEvents(db: Firestore, actor: AdminActor, filter: z.inf
     }
   }
   return { rows: rows.sort((a, b) => b.createdAt - a.createdAt), actors: [...actors].map(([id, name]) => ({ id, name })).sort((a, b) => a.name.localeCompare(b.name, 'da')), truncated };
+}
+
+// ---------- Overview ----------
+
+export const overviewFilterSchema = z.object({
+  brandIds: z.array(id).min(1).max(50), from: day, to: day, channel: z.enum(['dine_in', 'takeaway']).nullable(),
+}).strict();
+const OVERVIEW_EVENT_LIMIT = 20_000;
+const COUNTER_SOURCES = new Set(['counter_qr', 'counter_search', 'order']);
+
+// Every figure follows the filters. The channel filter applies to stamps, the
+// only events with a sales channel; redemptions and rewards are counted for the brand.
+export async function loyaltyOverview(db: Firestore, actor: AdminActor, filter: z.infer<typeof overviewFilterSchema>, now: number) {
+  const permitted = (await adminBrands(db, actor, 'orderfly.stamp_cards:overview')).filter(b => filter.brandIds.includes(b.brandId));
+  const from = copenhagenMidnight(filter.from), to = copenhagenMidnight(new Date(Date.parse(filter.to + 'T12:00:00Z') + 86_400_000).toISOString().slice(0, 10));
+  const days: string[] = [];
+  for (let d = filter.from; d <= filter.to && days.length < 400; d = new Date(Date.parse(d + 'T12:00:00Z') + 86_400_000).toISOString().slice(0, 10)) days.push(d);
+  const daily = new Map(days.map(d => [d, { day: d, stamps: 0, redemptions: 0 }]));
+  const channels = { dine_in: 0, takeaway: 0 };
+  const staff = new Map<string, { name: string; stamps: number; redemptions: number }>();
+  const kpi = { activeMembers: 0, newMembers: 0, stamps: 0, rewardsEarned: 0, rewardsRedeemed: 0, rewardsOpen: 0, cardsExpiringSoon: 0, newsletterMembers: 0 };
+  const programs: Array<{ brandId: string; brandName: string; name: string; active: boolean }> = [];
+  const latest: Array<EventRow & { brandName: string }> = [];
+  let truncated = false;
+  const dayOf = (at: number) => new Intl.DateTimeFormat('en-CA', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' }).format(new Date(at));
+
+  for (const brand of permitted) {
+    const [program, members, events, recent, rewards, expiring, locations] = await Promise.all([
+      db.collection(COLLECTIONS.programs).doc(brand.brandId).get().then(s => readProgram(brand.brandId, s.data())),
+      db.collection(COLLECTIONS.members).where('brandId', '==', brand.brandId).where('status', '==', 'active').get(),
+      db.collection(COLLECTIONS.events).where('brandId', '==', brand.brandId).where('createdAt', '>=', from).where('createdAt', '<', to)
+        .orderBy('createdAt', 'desc').limit(OVERVIEW_EVENT_LIMIT + 1).get(),
+      db.collection(COLLECTIONS.events).where('brandId', '==', brand.brandId).orderBy('createdAt', 'desc').limit(20).get(),
+      db.collection(COLLECTIONS.rewards).where('brandId', '==', brand.brandId).where('status', '==', 'available').get(),
+      db.collection(COLLECTIONS.cards).where('brandId', '==', brand.brandId).where('status', '==', 'active')
+        .where('expiresAt', '>', now).where('expiresAt', '<=', now + 30 * 86_400_000).get(),
+      db.collection('locations').where('brandId', '==', brand.brandId).get(),
+    ]);
+    programs.push({ brandId: brand.brandId, brandName: brand.brandName, name: program.settings.name, active: program.settings.active });
+    for (const doc of members.docs) {
+      const member = doc.data() as MemberDoc;
+      kpi.activeMembers++;
+      if (member.joinedAt >= from && member.joinedAt < to) kpi.newMembers++;
+      if (member.consent?.status === 'given') kpi.newsletterMembers++;
+    }
+    kpi.rewardsOpen += rewards.docs.filter(d => (d.data() as RewardDoc).expiresAt > now).length;
+    kpi.cardsExpiringSoon += expiring.docs.length;
+    if (events.docs.length > OVERVIEW_EVENT_LIMIT) truncated = true;
+    for (const doc of events.docs.slice(0, OVERVIEW_EVENT_LIMIT)) {
+      const e = doc.data() as LoyaltyEvent, bucket = daily.get(dayOf(e.createdAt));
+      const person = () => { const key = e.actorId!; if (!staff.has(key)) staff.set(key, { name: e.actorName || 'Ukendt', stamps: 0, redemptions: 0 }); return staff.get(key)!; };
+      if (e.type === 'stamp_added' && COUNTER_SOURCES.has(e.source) && (!filter.channel || e.channel === filter.channel)) {
+        kpi.stamps += e.quantity;
+        if (bucket) bucket.stamps += e.quantity;
+        if (e.channel === 'dine_in' || e.channel === 'takeaway') channels[e.channel] += e.quantity;
+        if (e.actorId) person().stamps += e.quantity;
+      } else if (e.type === 'reward_earned') kpi.rewardsEarned++;
+      else if (e.type === 'reward_redeemed') {
+        kpi.rewardsRedeemed++;
+        if (bucket) bucket.redemptions++;
+        if (e.actorId) person().redemptions++;
+      }
+    }
+    const locationName = new Map(locations.docs.map(d => [d.id, String(d.data().name || d.id)]));
+    const memberIds = [...new Set(recent.docs.map(d => (d.data() as LoyaltyEvent).memberId).filter((v): v is string => !!v))];
+    const names = new Map<string, string>();
+    if (memberIds.length) for (const doc of await db.getAll(...memberIds.map(m => db.collection(COLLECTIONS.members).doc(m))))
+      names.set(doc.id, doc.data()?.status === 'active' ? String(doc.data()?.name || '') : 'Slettet medlem');
+    for (const doc of recent.docs) {
+      const e = doc.data() as LoyaltyEvent;
+      latest.push({ ...eventRow(e, locationName, e.memberId ? names.get(e.memberId) ?? '' : ''), brandName: brand.brandName });
+    }
+  }
+  return {
+    programs, kpi: { ...kpi, newsletterShare: kpi.activeMembers ? kpi.newsletterMembers / kpi.activeMembers : null },
+    daily: [...daily.values()], channels, staff: [...staff.values()].sort((a, b) => b.stamps + b.redemptions - a.stamps - a.redemptions),
+    latest: latest.sort((a, b) => b.createdAt - a.createdAt).slice(0, 20), truncated,
+  };
 }
