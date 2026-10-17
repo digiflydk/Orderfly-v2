@@ -1,7 +1,7 @@
 # Stempelkort (Esmeralda Club)
 
 Specifikationer: [fase 1](fase-1-stempelkort-backend.md), [fase 2](fase-2-stempelkort-kundeportal.md) og [fase 3](fase-3-stempelkort-merchantportal.md).
-Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md).
+Godkendt analyse og plan: [fase 1](fase-1-analyse-og-plan.md) og [fase 3](fase-3-analyse-og-plan.md) (fase 3 bygges parallelt med fase 2 efter PM-beslutning 2026-10-17).
 
 ## Status for fase 1
 
@@ -13,6 +13,14 @@ Godkendt analyse og plan: [fase-1-analyse-og-plan.md](fase-1-analyse-og-plan.md)
 | 4 | Admin: Stempelkort (indstillinger, medlemmer, log, CSV) | Merget 2026-10-17 (#259) |
 | 5 | Admin: Loyalitet (hovedgruppe, oversigt, kundescore flyttes) | Merget 2026-10-17 (#261) |
 | 6 | Oprydning: aliaset `orderfly.loyalty` og migrationskommandoen fjernes | Merget og udrullet 2026-10-17 (#265) |
+
+## Status for fase 3 (kassevisning)
+
+| PR | Indhold | Status |
+|---|---|---|
+| 1 | Indstilling "Kassevisning: log ud efter inaktivitet" (standard 5 minutter) | I review |
+| 2 | Adgang og indgang: navigation, menu, login-redirect og mPanel-genvej | Ikke startet |
+| 3 | Kassevisningen: login og brugerskifte, scanning, søgning, stempel, indløsning og korrektion | Ikke startet |
 
 ## Rettigheder
 
@@ -86,6 +94,7 @@ Siden `/superadmin/loyalty/stamp-card` har tre faner. Hver fane vises kun med si
 
 - **Indstillinger** (`orderfly.stamp_cards:settings`):
   - Alle parametre fra spec §6.1, herunder kanaler pr. brand og belønningstype med produkt- eller kategorivalg.
+  - Fra fase 3: hvor mange minutter kassevisningen må være uden aktivitet, før den låses (1–60, standard 5). Ældre gemte indstillinger læses som 5 minutter.
   - Hver gemning bliver en ny version (`loyaltyProgramVersions`) og logges med medarbejder, tidspunkt og gammel og ny værdi.
   - Er indstillingerne ændret af en anden imens, afvises gemningen.
   - Ugyldige værdier, inaktive produkter og kategorier samt produkter fra et andet brand afvises på serveren. Vælgeren viser kun aktive produkter og kategorier.

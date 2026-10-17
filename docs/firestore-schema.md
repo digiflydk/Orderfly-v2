@@ -139,7 +139,7 @@ Server-only, like every other collection (`firestore.access.rules` denies browse
 
 | Collection | ID | Content |
 |---|---|---|
-| `loyaltyPrograms` | `{brandId}` | `{brandId, version, settings}`. `settings` follows `programSettingsSchema`. A missing document means an inactive program. Written by the admin settings (PR 4). |
+| `loyaltyPrograms` | `{brandId}` | `{brandId, version, settings}`. `settings` follows `programSettingsSchema`. A missing document means an inactive program. Written by the admin settings (PR 4). `settings.counterIdleMinutes` (1–60, default 5) locks the counter view after inactivity; versions saved before the field existed read as 5. |
 | `loyaltyMembers` | random | `customerId`, `name`, `normalizedEmail`, `status` (`active`/`deleted`), `joinedAt`, `currentCardId`, `stampDay`/`stampsOnDay` for the optional daily limit, `consent` (`given`/`withdrawn`, time, source `portal`/`omnisend`, consent event and text version), `termsVersion`, `sessionEpoch` and `lastActivityAt` (latest stamp, redemption or correction). Deletion keeps only `companyId`, `brandId`, `status`, `joinedAt`, `deletedAt` and the epoch, so the log stays pseudonymous. |
 | `loyaltyProgramVersions` | `{brandId}_{version}` | Immutable snapshot of each saved program version with the employee and time. The settings change itself is logged as a `settings_changed` event with every field's old and new value. |
 | `loyaltyMemberIdentities` | `sha256(["loyalty-member", brandId, email])` | `{brandId, memberId}`. Prevents duplicates and powers e-mail lookup. |
