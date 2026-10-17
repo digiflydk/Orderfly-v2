@@ -18,8 +18,8 @@ Godkendt analyse og plan: [fase 1](fase-1-analyse-og-plan.md), [fase 2](fase-2-a
 
 | PR | Indhold | Status |
 |---|---|---|
-| 1 | Indstilling "Kassevisning: log ud efter inaktivitet" (standard 5 minutter) | I review |
-| 2 | Kassevisningen: adgang og menu, login og brugerskifte, automatisk log ud, scanning, søgning, stempel, indløsning og korrektion | I review |
+| 1 | Indstilling "Kassevisning: log ud efter inaktivitet" (standard 5 minutter) | Merget 2026-10-17 (#266) |
+| 2 | Kassevisningen: adgang og menu, login og brugerskifte, automatisk log ud, scanning, søgning, stempel, indløsning og korrektion | #268 |
 
 Adgang og selve kassevisningen er samlet i PR 2, så menupunktet aldrig peger på en side, der ikke findes.
 
