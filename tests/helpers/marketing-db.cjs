@@ -19,7 +19,7 @@ exports.memoryDb=(rows=new Map())=>{
   }));
    if(order)values.sort((a,b)=>(a[1][order.field]-b[1][order.field])*(order.dir==='desc'?-1:1));return {docs:values.slice(0,count).map(([key])=>snap(key))};},
  });
- return {rows,collection:name=>query(name),runTransaction:async fn=>{
+ return {rows,collection:name=>query(name),getAll:async(...refs)=>refs.map(r=>snap(r.path)),runTransaction:async fn=>{
   let unlock;const previous=tail;tail=new Promise(resolve=>unlock=resolve);await previous;
   const changes=[];try{const result=await fn({get:r=>r.get(),create:(r,data)=>{if(rows.has(r.path))throw Error('Exists');changes.push(()=>rows.set(r.path,structuredClone(data)));},
     set:(r,data,opts)=>changes.push(()=>rows.set(r.path,opts?.merge?{...rows.get(r.path),...structuredClone(data)}:structuredClone(data))),

@@ -196,7 +196,7 @@ function addStampsToCard(w: Writer, ctx: {
       ? { ...next, locationId: next.crossLocation ? null : ctx.locationId, lastStampAt: now, expiresAt: cardExpiresAt(nowDate, next.cardValidityMonths).getTime() }
       : next);
   }
-  tx.update(db.collection(COLLECTIONS.members).doc(memberId), { ...ctx.memberPatch, currentCardId: finalCardId });
+  tx.update(db.collection(COLLECTIONS.members).doc(memberId), { ...ctx.memberPatch, currentCardId: finalCardId, lastActivityAt: now });
   const outcome = { stamps: result.card.stamps, stampsRequired: result.card.stampsRequired, rewardsEarned: result.rewards, cardId: finalCardId };
   writeEvent(w, ctx.eventId, event(meta, { ...ctx.base, type: 'stamp_added', memberId, quantity: ctx.count, locationId: ctx.locationId,
     idempotencyKey: ctx.idempotencyKey, requestHash: ctx.hash, cardId: entry.id, result: outcome }));
@@ -244,6 +244,7 @@ export async function redeemReward(db: Firestore, actor: CounterActor, input: z.
     const allowed = canRedeem({ status: reward.status, expiresAt: new Date(reward.expiresAt), locationId: reward.locationId }, new Date(now), input.locationId);
     if (!allowed.allowed) throw new LoyaltyError(allowed.reason === 'not_available' ? 'reward_not_available' : `reward_${allowed.reason}`, 409);
     tx.update(ref, { status: 'redeemed', redeemedAt: now, redeemedBy: principalId, redeemedByName: actor.name, redeemedLocationId: input.locationId });
+    tx.update(db.collection(COLLECTIONS.members).doc(reward.memberId), { lastActivityAt: now });
     writeEvent({ tx, db }, eventId, event({ companyId, brandId: input.brandId, createdAt: now }, { type: 'reward_redeemed',
       source: input.via === 'qr' ? 'counter_qr' : 'counter_search', memberId: reward.memberId, quantity: 1, locationId: input.locationId,
       actorId: principalId, actorName: actor.name, idempotencyKey: input.idempotencyKey, requestHash: hash, cardId: reward.cardId,
@@ -270,6 +271,7 @@ export async function correctMember(db: Firestore, actor: CounterActor, input: z
       // A cancelled redemption restores the reward; one past its validity is expired, not usable.
       const status = reward.expiresAt > now ? 'available' : 'expired';
       tx.update(ref, { status, redeemedAt: null, redeemedBy: null, redeemedByName: null, redeemedLocationId: null });
+      tx.update(db.collection(COLLECTIONS.members).doc(reward.memberId), { lastActivityAt: now });
       const result = { rewardId: input.rewardId, status };
       writeEvent({ tx, db }, eventId, event(meta, { ...actorFields, type: 'redemption_cancelled', source: 'correction', memberId: reward.memberId,
         quantity: 1, cardId: reward.cardId, rewardId: input.rewardId, result }));
@@ -294,6 +296,7 @@ export async function correctMember(db: Firestore, actor: CounterActor, input: z
     let next;
     try { next = removeStamps(entry.card, input.count); } catch { throw new LoyaltyError('no_active_stamps', 409); }
     tx.update(db.collection(COLLECTIONS.cards).doc(entry.id), { stamps: next.stamps });
+    tx.update(db.collection(COLLECTIONS.members).doc(input.memberId), { lastActivityAt: now });
     const result = { stamps: next.stamps, stampsRequired: next.stampsRequired, cardId: entry.id };
     writeEvent({ tx, db }, eventId, event(meta, { ...actorFields, type: 'stamp_removed', source: 'correction', memberId: input.memberId,
       quantity: input.count, cardId: entry.id, result }));

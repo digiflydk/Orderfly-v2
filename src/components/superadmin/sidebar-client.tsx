@@ -43,6 +43,7 @@ import {
   Cookie,
   Gamepad2,
   TicketCheck,
+  Stamp,
 } from 'lucide-react'
 import { getSuperadminUserContext, type SuperadminUser } from '@/lib/auth/superadmin-context'
 import { LogoutButton } from './logout-button'
@@ -130,7 +131,14 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/games', label: 'Games', icon: Gamepad2 },
         { href: '/merchant/redeem', label: 'Indløs kode', icon: TicketCheck },
         { href: '/superadmin/standard-discounts', label: 'Standard Discounts', icon: Percent },
-        { href: '/superadmin/loyalty', label: 'Loyalty', icon: Trophy },
+      ],
+    },
+    {
+      key: 'loyalty',
+      title: 'Loyalitet',
+      items: [
+        { href: '/superadmin/loyalty/stamp-card', label: 'Stempelkort', icon: Stamp },
+        { href: '/superadmin/loyalty', label: 'Kundescore', icon: Trophy },
       ],
     },
     {
@@ -185,8 +193,8 @@ export function SuperAdminSidebarClient({
   ]
 
   const candidateGroups: Group[] = (centralAdmin ? allGroups.filter(g => g.key !== 'people') : allGroups)
-    .filter(g => !merchantPortal || !['people','system','platform'].includes(g.key))
-    .map(g => ({...g, items:g.items.filter(i => (!['/merchant/redeem','/merchant/payments'].includes(i.href || '') || merchantPortal) && (!merchantPortal || i.href !== '/superadmin/loyalty'))}));
+    .filter(g => !merchantPortal || !['people','system','platform','loyalty'].includes(g.key))
+    .map(g => ({...g, items:g.items.filter(i => (!['/merchant/redeem','/merchant/payments'].includes(i.href || '') || merchantPortal))}));
 
   const groups: Group[] = candidateGroups.map(group => ({...group, items: filterNavigation(group.items, access)})).filter(group => group.items.length > 0);
 

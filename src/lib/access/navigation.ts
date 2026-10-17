@@ -33,6 +33,9 @@ export function canNavigate(href: string, access?: NavigationAccess | null): boo
     return access.superuser || access.permissions.some(p => p === 'platform.members:view' || p === 'platform.roles:view');
   }
   if (access.superuser) return true;
+  // Stamp-card administration: any of its tabs. Must precede the /superadmin/loyalty prefix (customer score).
+  if (href === '/superadmin/loyalty/stamp-card' || href.startsWith('/superadmin/loyalty/stamp-card/'))
+    return ['settings', 'members', 'log'].some(action => access.permissions.includes(`orderfly.stamp_cards:${action}`));
   if (href === '/superadmin') return access.permissions.some(p => p.startsWith('orderfly.') && p.endsWith(':view'));
   const route = routes.find(([path]) => href === path || href.startsWith(path + '/'));
   return !!route && access.permissions.includes(route[1]);

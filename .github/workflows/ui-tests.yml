@@ -67,7 +67,7 @@ jobs:
         run: npm run typecheck
 
       - name: Platform administration and brand-reference regression
-        run: node --test tests/unit/mpanel-platform-admin.cjs tests/unit/brand-location-edit.cjs tests/unit/platform-role-server.cjs tests/unit/freemium-access.cjs tests/unit/access-authority.cjs tests/unit/order-access.cjs tests/unit/admin-session.cjs tests/unit/opsfly-login.cjs tests/unit/mpanel-launch.cjs tests/unit/website-access.cjs tests/unit/access-permission-migration.cjs tests/unit/loyalty-stamp-card-rules.cjs tests/unit/loyalty-stamp-card-counter.cjs tests/unit/loyalty-merchant-routes.cjs tests/unit/loyalty-membership.cjs tests/unit/loyalty-portal-routes.cjs
+        run: node --test tests/unit/mpanel-platform-admin.cjs tests/unit/brand-location-edit.cjs tests/unit/platform-role-server.cjs tests/unit/freemium-access.cjs tests/unit/access-authority.cjs tests/unit/order-access.cjs tests/unit/admin-session.cjs tests/unit/opsfly-login.cjs tests/unit/mpanel-launch.cjs tests/unit/website-access.cjs tests/unit/access-permission-migration.cjs tests/unit/loyalty-stamp-card-rules.cjs tests/unit/loyalty-stamp-card-counter.cjs tests/unit/loyalty-merchant-routes.cjs tests/unit/loyalty-membership.cjs tests/unit/loyalty-portal-routes.cjs tests/unit/loyalty-admin.cjs
 
       - name: Booking feedback and mail regression
         run: node --test tests/unit/booking-feedback-setup-144.cjs tests/unit/booking-feedback-timing.cjs tests/unit/feedback-mail.cjs tests/unit/feedback-readiness.cjs tests/unit/feedback-central-access.cjs tests/unit/feedback-scopes.cjs tests/unit/feedback-admin-notifications.cjs tests/unit/feedback-report-public.cjs tests/unit/feedback-page-access.cjs tests/unit/feedback-presentation.cjs tests/unit/feedback-review-evidence.cjs
@@ -85,7 +85,7 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Core browser regression
-        run: node --test tests/unit/merchant-payment-browser.cjs tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs tests/unit/customer-form-browser.cjs tests/unit/customer-sync-actions-browser.cjs
+        run: node --test tests/unit/merchant-payment-browser.cjs tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs tests/unit/customer-form-browser.cjs tests/unit/customer-sync-actions-browser.cjs tests/unit/loyalty-admin-browser.cjs
 
       - name: Games editor browser regression
         run: node --test tests/unit/games-editor-browser.cjs

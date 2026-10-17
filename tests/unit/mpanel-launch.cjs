@@ -34,6 +34,8 @@ test('landing skips unusable grants and retains valid location, company and supe
   [{grants:{'orderfly.catalog:view':[{tenantId:'brand',locationIds:['location']}]}},'/superadmin/products'],
   [{permissions:['orderfly.feedback:view']},'/superadmin/feedback'],
   [{permissions:['orderfly.customer_score:view'],brandExists:false},'/superadmin/loyalty'],
+  [{permissions:['orderfly.stamp_cards:members']},'/superadmin/loyalty/stamp-card?tab=members'],
+  [{permissions:['orderfly.stamp_cards:log','orderfly.website:view'],grants:{'orderfly.stamp_cards:log':[{tenantId:'brand',locationIds:['location']}]}},'/superadmin/brands/websites'],
   [{permissions:['orderfly.billing:view'],superuser:true},'/superadmin/sales/orders'],
  ]){
   const f=fixture(options),{code}=await f.service.issueLaunch(f.db,token,challenge);
