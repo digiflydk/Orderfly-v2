@@ -25,8 +25,8 @@ export function OrderModal({ open, onOpenChange, onDeliveryMethodSelected, modes
   const content = (
     <>
       <DialogHeader className="text-center p-6 pb-4">
-        <DialogTitle className="text-xl font-bold uppercase text-m3-dark">Vælg leveringsmetode</DialogTitle>
-        <DialogDescription className="text-sm text-neutral-600">
+        <DialogTitle className="text-xl font-bold uppercase text-white">Vælg leveringsmetode</DialogTitle>
+        <DialogDescription className="text-sm text-white/70">
           Vælg om du vil hente din pizza eller få den leveret
         </DialogDescription>
       </DialogHeader>
