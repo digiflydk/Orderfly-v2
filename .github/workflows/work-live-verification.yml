@@ -38,7 +38,7 @@ jobs:
             core.setOutput('issue-number', String(issueNumber));
             core.setOutput('clean-title', clean);
             await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[AWAITING LIVE VERIFY] ${clean}`});
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_LIVE_VERIFY: PO-approved PR #${pr.number} was merged to main. Running read-only live Playwright health checks. A green smoke run is evidence for PO, not permission for Work to mark Done.`});
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_LIVE_VERIFY: PR #${pr.number} was merged to main (PO acceptance, or the automatic merge rule in AGENTS.md as stated in the merge commit). Running read-only live Playwright health checks. A green smoke run is evidence for PO, not permission for Work to mark Done.`});
 
       - name: Check out merged main
         if: steps.context.outputs.managed == 'true'

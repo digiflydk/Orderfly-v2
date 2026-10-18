@@ -18,7 +18,7 @@ Orderfly follows the same PM / PO / Work lifecycle as Esmeralda:
 
 `[READY FOR DEV] -> [IN DEVELOPMENT] -> [IN REVIEW] -> [READY FOR PO] -> [AWAITING LIVE VERIFY] -> [DONE]`
 
-Work branches from `main` and opens pull requests into `main`. Work never merges or deploys its own change. PO acceptance is required before merge, and deployment plus live verification are required before an issue is Done.
+Work branches from `main` and opens pull requests into `main`. Work does not merge or deploy its own change, except under the automatic merge rule in [AGENTS.md](../AGENTS.md#automatic-merge-and-deploy): all CI green and the Codex code review completed without unresolved findings on the head commit. Otherwise PO acceptance is required before merge. Deployment plus live verification are always required before an issue is Done.
 
 See [Development workflow](development-workflow.md).
 
@@ -30,10 +30,10 @@ See [Development workflow](development-workflow.md).
 4. Work opens or updates a PR into `main`.
 5. The existing Orderfly Playwright workflow must pass on the Work branch, including the build exercised by Playwright. Work also runs TypeScript typecheck before creating the PR.
 6. Independent code review must pass.
-7. The issue moves to `[READY FOR PO]`.
+7. If Work merges under the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy), continue at step 10. Otherwise the issue moves to `[READY FOR PO]`.
 8. PO reviews acceptance criteria, PR/diff, CI, Playwright evidence, code review, documentation and unresolved risks.
 9. If accepted, the exact reviewed PR is merged to `main`, and the issue becomes `[AWAITING LIVE VERIFY]`.
-10. Firebase App Hosting deploys, or the release operator deploys, the approved `main` commit.
+10. Firebase App Hosting deploys, or the release operator deploys, the merged `main` commit.
 11. Read-only live Playwright and any issue-specific controlled live verification are performed.
 12. Only PO may close the issue as `[DONE]` after confirming the approved change is live and all acceptance evidence is complete. PM is then notified.
 
@@ -128,7 +128,7 @@ A Work-managed development issue is not Done until all applicable items are true
 - Playwright green
 - independent code review green
 - documentation updated
-- PO acceptance recorded
+- PO acceptance recorded, or the automatic merge rule in AGENTS.md met
 - PR merged to `main`
 - approved change deployed
 - read-only live verification green

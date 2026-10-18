@@ -10,7 +10,7 @@ Orderfly uses the same product-development lifecycle as Esmeralda. The repositor
 
 - **PM:** defines business goal, priority and product decisions.
 - **PO:** converts requests and bugs into GitHub issues with scope, priority, acceptance criteria, dependencies, test requirements and documentation impact. PO accepts or rejects completed implementation.
-- **Work:** automated implementation agent. It writes code, tests and documentation on a feature branch but cannot merge or declare the issue Done.
+- **Work:** automated implementation agent. It writes code, tests and documentation on a feature branch. It may merge its own PR only under the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy), and it never declares the issue Done.
 
 GitHub issues, pull requests, CI evidence and repository documentation are the operational source of truth.
 
@@ -24,16 +24,17 @@ GitHub issues, pull requests, CI evidence and repository documentation are the o
 
 1. PO creates a trusted, complete issue and prefixes it `[READY FOR DEV]`.
 2. `.github/workflows/work-developer.yml` checks out `main`, creates or resumes `work-issue-<number>` and runs the Work coding agent.
-3. Work implements only the issue scope and acceptance criteria, adds or updates tests, runs local verification and updates relevant documentation. Work may not deploy, merge, change secrets or mutate production data.
+3. Work implements only the issue scope and acceptance criteria, adds or updates tests, runs local verification and updates relevant documentation. Work may not change secrets or mutate production data, and may not merge or deploy outside the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy).
 4. Work pushes its branch and creates or updates one PR into `main` with `Work-Managed-Issue: #<number>` in the PR body.
 5. Work explicitly dispatches the existing `.github/workflows/ui-tests.yml` Playwright workflow on the Work branch. Explicit dispatch is used because bot-authored GitHub events do not recursively start ordinary workflows with the same `GITHUB_TOKEN`.
 6. Playwright CI failure records evidence, returns the issue to `[READY FOR DEV]` and explicitly dispatches Work again. Automatic retries are capped; repeated failures become `[BLOCKED]`.
 7. Green Playwright CI triggers `.github/workflows/work-quality-gate.yml`, which resolves the linked Work PR and runs a separate read-only Codex code review against the issue acceptance criteria and the diff to `main`.
 8. Blocking review findings are written back to the issue and Work is explicitly dispatched for a repair iteration. A clean review changes the issue to `[READY FOR PO]`.
-9. PO inspects the issue, PR, diff, Playwright evidence, review findings, documentation and unresolved risks. If acceptance criteria are not proven, PO sends the task back to `[READY FOR DEV]` with concrete findings.
-10. When PO accepts the implementation, the PR is merged to `main` and the issue becomes `[AWAITING LIVE VERIFY]`.
-11. `.github/workflows/work-live-verification.yml` runs read-only Playwright against the live Orderfly environment and records evidence on the issue.
-12. PO marks `[DONE]` only when the approved change is live and all issue-specific live acceptance criteria are satisfied. A green generic smoke test is evidence, not automatic permission for Work to close the issue.
+9. If Work merges under the [automatic merge rule](../AGENTS.md#automatic-merge-and-deploy) (CI green, Codex review clean on the current head, branch up to date with `main`), the issue goes directly to `[AWAITING LIVE VERIFY]` and steps 10–11 are skipped. The GitHub Actions pipeline does not do this automatically.
+10. Otherwise PO inspects the issue, PR, diff, Playwright evidence, review findings, documentation and unresolved risks. If acceptance criteria are not proven, PO sends the task back to `[READY FOR DEV]` with concrete findings.
+11. When PO accepts the implementation, the PR is merged to `main` and the issue becomes `[AWAITING LIVE VERIFY]`.
+12. `.github/workflows/work-live-verification.yml` runs read-only Playwright against the live Orderfly environment and records evidence on the issue.
+13. PO marks `[DONE]` only when the approved change is live and all issue-specific live acceptance criteria are satisfied. A green generic smoke test is evidence, not automatic permission for Work to close the issue.
 
 Only issue comments from repository owners/members/collaborators and `github-actions[bot]` are included in coding/review context. This prevents arbitrary comments from becoming agent instructions while preserving CI and review feedback.
 
@@ -62,7 +63,7 @@ Before `[READY FOR PO]`:
 
 Before `[DONE]`:
 
-- PO acceptance
+- PO acceptance, or the automatic merge rule in [AGENTS.md](../AGENTS.md#automatic-merge-and-deploy)
 - Merge to `main`
 - Deployment evidence for the approved change
 - Read-only Playwright live verification
