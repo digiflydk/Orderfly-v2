@@ -110,6 +110,18 @@ for (const width of [390, 1440]) test(`settings save converts kroner, keeps the 
   } finally { await page.close(); }
 });
 
+test('an inactive draft with no product or category chosen saves without a reward', async () => {
+  const page = await open('settings', 1440);
+  try {
+    await page.locator('div.rounded-full', { hasText: 'Pizza' }).getByRole('button').click();
+    await page.getByRole('button', { name: 'Gem indstillinger' }).click();
+    await page.getByText('Indstillingerne er gemt').first().waitFor();
+    const [[, input]] = await calls(page);
+    assert.equal(input.settings.active, false);
+    assert.equal(input.settings.reward, null);
+  } finally { await page.close(); }
+});
+
 for (const width of [390, 1440]) test(`members search, sort and export a CSV without formula injection at ${width}px`, async () => {
   const page = await open('members', width);
   try {

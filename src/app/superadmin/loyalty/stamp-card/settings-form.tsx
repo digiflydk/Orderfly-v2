@@ -41,7 +41,9 @@ export function SettingsForm({ initial }: { initial: Initial }) {
 
   function submit(event: React.FormEvent) {
     event.preventDefault();
-    const settings = { ...s, minimumAmountOre: ore(minimum) };
+    // A free product with nothing chosen is no reward yet; an inactive draft may save without one.
+    const empty = s.reward?.type === 'free_product' && s.reward.productIds.length + s.reward.categoryIds.length === 0;
+    const settings = { ...s, reward: empty ? null : s.reward, minimumAmountOre: ore(minimum) };
     start(async () => {
       const result = await saveProgramSettings({ brandId: initial.brand.brandId, version: initial.version, settings });
       if (result.ok) {
