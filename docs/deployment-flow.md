@@ -39,6 +39,8 @@ See [Development workflow](development-workflow.md).
 
 A green pre-merge test run proves the candidate code passed its checks. It does not by itself prove that the same commit is live. Merge also does not mean Done.
 
+`/api/health` reports the deployed commit as `release`. `work-live-verification.yml` waits until CI on the merge commit is green and the live `release` is the merge commit or a later `main` that contains it (`.github/scripts/wait-for-release.cjs`, at most 40 minutes) before it runs the smoke tests, so live evidence always belongs to the merged change.
+
 ## Firestore indexes, rules and data migrations
 
 Changes to the production data project `orderfly-39325` go through manual GitHub workflows: **Firestore indexes** (additive), and **Firestore rules** and **Firestore data migration**, which preview first and write only from `main` after approval in the `production` environment. See [Firestore production operations](firestore-operations.md).

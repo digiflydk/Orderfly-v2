@@ -53,4 +53,4 @@ The rule applies when Work has merge access, for example a Claude Code session. 
 
 The rule does not cover a PR that changes this rule, GitHub secrets or workflow permissions, or that requires a production data write (Firestore rules, indexes or data migrations through the `production` environment). Those still need PO acceptance.
 
-After the merge, Firebase App Hosting deploys `main`. Work waits until the new build is live, then performs the issue's live verification (read-only, or the controlled and reversible scenario the issue defines) and reports the result. If live verification fails, Work opens a revert PR at once and reports it. The merge commit states that it was merged under this rule.
+After the merge, Firebase App Hosting deploys `main`. Work waits until CI on the merge commit is green and `/api/health` reports the merge commit (or a later `main` that contains it) as `release`, then performs the issue's live verification (read-only, or the controlled and reversible scenario the issue defines) and reports the result. If live verification fails, Work opens a revert PR at once and reports it. The merge commit states that it was merged under this rule.

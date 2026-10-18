@@ -10,6 +10,8 @@ export async function GET() {
   return NextResponse.json({
     ok: true,
     service: "orderfly",
+    // The deployed commit, so post-merge verification can wait for the right build.
+    release: process.env.NEXT_PUBLIC_RELEASE_SHA || "unknown",
     time: new Date().toISOString(),
   });
 }

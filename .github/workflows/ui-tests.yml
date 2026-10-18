@@ -76,7 +76,7 @@ jobs:
         run: node --test tests/unit/omnisend-contact-import.cjs tests/unit/omnisend-193.cjs tests/unit/customer-manual-sync.cjs tests/unit/orderfly-booking-sync.cjs
 
       - name: Stripe payment lifecycle regression (#189)
-        run: node --test tests/unit/stripe-lifecycle-189.cjs tests/unit/cart-cancel.cjs tests/unit/payment-display.cjs tests/unit/takeaway-qa-regressions.cjs
+        run: node --test tests/unit/stripe-lifecycle-189.cjs tests/unit/cart-cancel.cjs tests/unit/payment-display.cjs tests/unit/takeaway-qa-regressions.cjs tests/unit/wait-for-release.cjs
 
       - name: Promotion and reservation regression (#206, #210, #219)
         run: node --test tests/unit/stale-discount-holds-210.cjs tests/unit/promotion-qa-206-219.cjs tests/unit/qa-218-187.cjs tests/unit/brand-subdomains-12.cjs
