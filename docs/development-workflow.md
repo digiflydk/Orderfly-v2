@@ -62,7 +62,7 @@ Before `[READY FOR PO]`:
 
 Before `[DONE]`:
 
-- PO acceptance
+- PO acceptance, or the automatic merge rule in [AGENTS.md](../AGENTS.md#automatic-merge-and-deploy)
 - Merge to `main`
 - Deployment evidence for the approved change
 - Read-only Playwright live verification
