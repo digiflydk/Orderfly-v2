@@ -118,6 +118,7 @@ Siden `/superadmin/loyalty/stamp-card` har tre faner: Oversigt, Medlemmer og Log
   - **Aktivér/Deaktivér** kræver bekræftelse og gemmes som en ny version med samme validering, versionstjek og log som indstillingerne. Et program kan ikke aktiveres, før belønning, vilkår og samtykketekst er udfyldt.
 - **Indstillinger** (åbnes fra oversigten, samme rettighed):
   - Alle parametre fra spec §6.1, herunder kanaler pr. brand og belønningstype med produkt- eller kategorivalg.
+  - Er belønningstypen "Gratis produkt" uden valgt produkt eller kategori, gemmes belønningen som tom. Et inaktivt program kan derfor gemmes uden belønning (som ved oprettelsen); et aktivt afvises med "Skal udfyldes, når programmet er aktivt".
   - Fra fase 3: hvor mange minutter kassevisningen må være uden aktivitet, før den låses (1–60, standard 5). Ældre gemte indstillinger læses som 5 minutter.
   - Hver gemning bliver en ny version (`loyaltyProgramVersions`) og logges med medarbejder, tidspunkt og gammel og ny værdi.
   - Er indstillingerne ændret af en anden imens, afvises gemningen.
@@ -203,7 +204,7 @@ Alle tre PR'er er merget, men **fase 2 er ikke accepteret endnu**. Planen (C7) k
 - En afdeling kan ikke få adressen `club`.
 
 **Mit stempelkort (PR 2)** (`member-card.tsx`, `member-qr.tsx`):
-- Stemplerne vises som X af N (fx 2 rækker á 4), med teksten "3 stempler til gratis pizza" bygget af tallene og belønningsbeskrivelsen fra API'et.
+- Stemplerne vises som X af N (fx 2 rækker á 4), med teksten "3 stempler til gratis pizza" bygget af tallene og belønningsbeskrivelsen fra API'et. Beskrivelsens første bogstav gøres kun småt, når det efterfølges af et lille bogstav ("Gratis pizza" → "gratis pizza"); forkortelser som "VIP-menu" bevares.
 - Optjente belønninger med beskrivelse, udløbsdato og "Vis QR-koden ved kassen for at indløse".
 - Kortets udløbsdato: "Dine stempler udløber, hvis du ikke har fået et nyt stempel inden [dato]". Datoer vises i dansk tid.
 - Er programmet slået fra, ser medlemmet stadig sit kort med en besked om, at der ikke gives nye stempler.

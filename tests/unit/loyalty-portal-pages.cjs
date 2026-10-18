@@ -22,6 +22,10 @@ test('reward text is built from the numbers and description the API returns',()=
   assert.equal(texts.nextRewardText(5,8,'Gratis pizza'),'3 stempler til gratis pizza');
   assert.equal(texts.nextRewardText(7,8,'en gratis pizza'),'1 stempel til en gratis pizza');
   assert.equal(texts.nextRewardText(2,8,'  '),'6 stempler til næste belønning');
+  assert.equal(texts.nextRewardText(5,8,'VIP-menu for to'),'3 stempler til VIP-menu for to');
+  assert.equal(texts.nextRewardText(5,8,'TEST – gratis pizza'),'3 stempler til TEST – gratis pizza');
+  assert.equal(texts.nextRewardText(5,8,'Ølpakke'),'3 stempler til ølpakke');
+  assert.equal(texts.nextRewardText(5,8,'2 gratis pizzaer'),'3 stempler til 2 gratis pizzaer');
   assert.equal(texts.firstName('  Anna  Hansen '),'Anna');
   // Danish time: 23:30 UTC on 30 April is already 1 May in Copenhagen.
   assert.equal(texts.danishDate(Date.parse('2027-04-30T23:30:00Z')),'1. maj 2027');

@@ -4,7 +4,9 @@ export const stampWord = (count: number) => count === 1 ? 'stempel' : 'stempler'
 
 export function nextRewardText(stamps: number, stampsRequired: number, rewardDescription: string) {
   const left = Math.max(0, stampsRequired - stamps), reward = rewardDescription.trim();
-  const target = reward ? reward[0].toLocaleLowerCase('da-DK') + reward.slice(1) : 'næste belønning';
+  // "Gratis pizza" reads as "gratis pizza" mid-sentence; acronyms such as "VIP-menu" keep their capitals.
+  const target = !reward ? 'næste belønning'
+    : /^\p{Lu}\p{Ll}/u.test(reward) ? reward[0].toLocaleLowerCase('da-DK') + reward.slice(1) : reward;
   return `${left} ${stampWord(left)} til ${target}`;
 }
 
