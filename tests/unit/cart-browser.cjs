@@ -324,3 +324,12 @@ test('an unchanged basket refreshes without a price notice; a real change shows 
  const box=await notice.boundingBox();
  assert.ok(box.y<100,'the notice must not cover the basket and pay buttons at the bottom');
 });
+
+test('a product moved to another category refreshes the basket, so category promotions use the current catalog',async t=>{
+ const page=await setup(t);await page.click('#pizza');await count(page,1);
+ const before=(await state(page)).items[0].categoryId;
+ catalog.products[0].categoryId='moved-category';
+ await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
+ await page.waitForFunction(()=>JSON.parse(document.querySelector('#state').textContent).items[0].categoryId==='moved-category');
+ assert.notEqual(before,'moved-category');
+});
