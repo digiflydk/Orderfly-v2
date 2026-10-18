@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  checks: read
   issues: write
   pull-requests: read
 
@@ -17,7 +18,7 @@ jobs:
   live-verify:
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 60
     steps:
       - name: Resolve Work-managed issue
         id: context
@@ -40,11 +41,28 @@ jobs:
             await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[AWAITING LIVE VERIFY] ${clean}`});
             await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_LIVE_VERIFY: PR #${pr.number} was merged to main (PO acceptance, or the automatic merge rule in AGENTS.md as stated in the merge commit). Running read-only live Playwright health checks. A green smoke run is evidence for PO, not permission for Work to mark Done.`});
 
-      - name: Check out merged main
+      - name: Check out the merge commit
         if: steps.context.outputs.managed == 'true'
         uses: actions/checkout@v6
         with:
-          ref: main
+          # The merge commit is on main; pinning it keeps a later merge from swapping the gate mid-run.
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
+
+      - name: Wait for CI and deployment of the merge commit
+        id: release
+        if: steps.context.outputs.managed == 'true'
+        uses: actions/github-script@v7
+        env:
+          LIVE_URL: ${{ env.LIVE_URL }}
+          MERGE_SHA: ${{ github.event.pull_request.merge_commit_sha }}
+        with:
+          github-token: ${{ github.token }}
+          script: |
+            const { waitForRelease } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/wait-for-release.cjs`);
+            const { release } = await waitForRelease({ github, owner: context.repo.owner, repo: context.repo.repo,
+              mergeSha: process.env.MERGE_SHA, liveUrl: process.env.LIVE_URL, self: 'live-verify',
+              required: ['Typecheck and build', 'rules'], log: core.info });
+            core.setOutput('deployed-sha', release);
 
       - name: Setup Node.js
         if: steps.context.outputs.managed == 'true'
@@ -140,11 +158,12 @@ jobs:
         env:
           ISSUE_NUMBER: ${{ steps.context.outputs.issue-number }}
           LIVE_URL: ${{ env.LIVE_URL }}
+          DEPLOYED_SHA: ${{ steps.release.outputs.deployed-sha }}
           RUN_URL: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           github-token: ${{ github.token }}
           script: |
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.ISSUE_NUMBER), body: `WORK_LIVE_VERIFY_PASSED: Read-only post-merge Playwright smoke passed on ${process.env.LIVE_URL}. Run: ${process.env.RUN_URL}. PO must still verify deployment evidence and any issue-specific live acceptance criteria before marking Done.`});
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.ISSUE_NUMBER), body: `WORK_LIVE_VERIFY_PASSED: Read-only post-merge Playwright smoke passed on ${process.env.LIVE_URL}, which runs ${process.env.DEPLOYED_SHA} (CI green on the merge commit). Run: ${process.env.RUN_URL}. PO must still verify deployment evidence and any issue-specific live acceptance criteria before marking Done.`});
 
       - name: Mark live verification failure as blocked
         if: failure() && steps.context.outputs.managed == 'true'
@@ -157,4 +176,4 @@ jobs:
           github-token: ${{ github.token }}
           script: |
             await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.ISSUE_NUMBER), title: `[BLOCKED] ${process.env.CLEAN_TITLE}`});
-            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.ISSUE_NUMBER), body: `WORK_LIVE_BLOCKED: Post-merge Playwright live verification failed. Run: ${process.env.RUN_URL}. The issue is not Done.`});
+            await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: Number(process.env.ISSUE_NUMBER), body: `WORK_LIVE_BLOCKED: Post-merge live verification failed (CI on the merge commit, deployment of that commit, or the Playwright smoke). Run: ${process.env.RUN_URL}. The issue is not Done.`});
