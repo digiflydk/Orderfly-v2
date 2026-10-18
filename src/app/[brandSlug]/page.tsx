@@ -29,10 +29,10 @@ function BrandPageComponent({ brand, locations }: PageProps) {
         <div className="space-y-8">
             <div>
             <h1 className="text-3xl font-bold text-center sm:text-left">
-                Choose restaurant
+                Vælg restaurant
             </h1>
             <p className="text-lg text-muted-foreground text-center sm:text-left">
-                Next you choose food and drinks that you can order for pick-up or delivery.
+                Derefter vælger du mad og drikke, som du kan bestille til afhentning eller levering.
             </p>
             </div>
 

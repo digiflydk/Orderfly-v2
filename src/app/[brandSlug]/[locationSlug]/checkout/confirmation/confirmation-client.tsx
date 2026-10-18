@@ -180,7 +180,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                            <CheckCircle2 className="h-10 w-10 text-green-600" />
                         </div>
                         <h1 className="text-3xl font-bold tracking-tight">Tak for din bestilling!</h1>
-                        {pickupAccepted && <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-950">Betales ved afhentning: {formatPrice(order.totalAmount)}. Restauranten har modtaget din bestilling. Betal i restauranten ved afhentning.</p>}
+                        {pickupAccepted && <p className="mt-4 rounded-lg border border-amber-300 bg-amber-50 p-4 font-semibold text-amber-950">Betales ved afhentning: {formatPrice(order.totalAmount)} Restauranten har modtaget din bestilling. Betal i restauranten ved afhentning.</p>}
                         <p className="text-muted-foreground mt-2">
                            Din ordre <span className="font-mono text-foreground bg-muted p-1 rounded-sm">{id}</span> er bekræftet.
                         </p>

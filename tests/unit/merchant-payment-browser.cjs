@@ -159,6 +159,7 @@ async function submitPromotion(page) {
   await page.getByRole('checkbox', { name: /Jeg accepterer|I accept the/ }).first().check();
   await page.getByRole('button', { name: /Bestil og betal ved afhentning/ }).first().click(); await page.waitForURL('**/confirmation?*');
   await expect(page.getByText(/Betales ved afhentning: 94/)).toBeVisible();
+  await expect(page.getByText(/kr\.\./)).toHaveCount(0);
 }
 for (const method of ['cash', 'card']) test(`promotion checkout → receipt → merchant, ${method}, no Stripe and exactly one paid sale`, async t => {
   const name = 'pickup-' + method, page = await pageFor(t, name, '/', method === 'cash'); await submitPromotion(page);

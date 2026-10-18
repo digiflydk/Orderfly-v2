@@ -9,3 +9,13 @@ import type { CartItem } from '@/types';
 export const isLockedItem = (item: CartItem) => {
   return item.itemType === 'combo' || (item.basePrice && item.price < item.basePrice);
 };
+
+/**
+ * What the customer pays for, independent of property order or display-only
+ * fields: two baskets with the same signature cost the same.
+ */
+export const cartPriceSignature = (items: CartItem[]) => JSON.stringify(items.map(item => [
+  item.cartItemId, item.id, item.itemType, item.quantity, item.basePrice, item.price, item.itemTotal,
+  item.toppings.map(topping => [topping.id ?? topping.name, topping.price]),
+  (item.comboSelections || []).map(group => [group.groupId ?? group.groupName, group.products.map(product => product.id)]),
+]));

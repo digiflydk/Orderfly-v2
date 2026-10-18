@@ -17,7 +17,7 @@ interface LocationCardProps {
 }
 
 export function LocationCard({ location }: LocationCardProps) {
-  const [openingStatus, setOpeningStatus] = useState<string>('Checking...');
+  const [openingStatus, setOpeningStatus] = useState<string>('Tjekker…');
   const [isOpenNow, setIsOpenNow] = useState<boolean>(false);
   const [nextOpeningTime, setNextOpeningTime] = useState('');
 
@@ -45,10 +45,10 @@ export function LocationCard({ location }: LocationCardProps) {
         const isOpen = now >= openDate && now < closeDate;
         setIsOpenNow(isOpen);
         setNextOpeningTime(todaysHours.open);
-        setOpeningStatus(isOpen ? `Open | Closes at ${todaysHours.close}` : `Closed`);
+        setOpeningStatus(isOpen ? `Åben | Lukker kl. ${todaysHours.close}` : `Lukket`);
       } else {
         setIsOpenNow(false);
-        setOpeningStatus('Closed');
+        setOpeningStatus('Lukket');
          for (let i = 1; i <= 7; i++) {
           const nextDayIndex = (now.getDay() + i) % 7;
           const nextDayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][nextDayIndex].toLowerCase();
@@ -79,9 +79,9 @@ export function LocationCard({ location }: LocationCardProps) {
         return openingStatus;
     }
     if (location.allowPreOrder) {
-      return `Pre-order | Opens at ${nextOpeningTime}`;
+      return `Forudbestil | Åbner kl. ${nextOpeningTime}`;
     }
-    return `${openingStatus} | Opens at ${nextOpeningTime}`;
+    return `${openingStatus} | Åbner kl. ${nextOpeningTime}`;
   };
 
   return (
@@ -89,7 +89,7 @@ export function LocationCard({ location }: LocationCardProps) {
       type="button"
       onClick={onSelect}
       className="group w-full text-left"
-      aria-label={`Choose ${location.name}`}
+      aria-label={`Vælg ${location.name}`}
     >
       <Card className="relative w-full overflow-hidden transition-all duration-300 h-64 rounded-lg border-0 bg-transparent group-hover:shadow-xl group-hover:-translate-y-1">
           <Image
@@ -105,13 +105,13 @@ export function LocationCard({ location }: LocationCardProps) {
               {location.supportsDelivery && (
                 <Badge variant="secondary" className="text-xs font-medium bg-black/20 text-white backdrop-blur-sm border-white/50">
                     <Truck className="h-3 w-3 mr-1.5" />
-                    Delivery
+                    Levering
                 </Badge>
               )}
               {location.supportsPickup && (
                   <Badge variant="secondary" className="text-xs font-medium bg-black/20 text-white backdrop-blur-sm border-white/50">
                       <Store className="h-3 w-3 mr-1.5" />
-                      Pickup
+                      Afhentning
                   </Badge>
               )}
           </div>

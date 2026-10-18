@@ -310,3 +310,17 @@ test('QA209 open cart reprices changed campaigns on focus without payment or rel
  assert.equal((await state(page)).items[0].quantity,1);
  assert.equal((await saved(page)).checkoutOrderId,undefined);
 });
+
+test('an unchanged basket refreshes without a price notice; a real change shows it above the page',async t=>{
+ const page=await setup(t);await page.click('#pizza');await count(page,1);
+ const notice=page.getByRole('status').filter({hasText:'Priser eller tilbud er opdateret'});
+ const restored=()=>page.waitForResponse(r=>r.url().endsWith('/restore'));
+ await Promise.all([restored(),page.evaluate(()=>window.dispatchEvent(new Event('focus')))]);
+ await page.waitForTimeout(300);
+ assert.equal(await notice.count(),0);
+ catalog.products[0].price=89;
+ await Promise.all([restored(),page.evaluate(()=>window.dispatchEvent(new Event('focus')))]);
+ await notice.waitFor();
+ const box=await notice.boundingBox();
+ assert.ok(box.y<100,'the notice must not cover the basket and pay buttons at the bottom');
+});

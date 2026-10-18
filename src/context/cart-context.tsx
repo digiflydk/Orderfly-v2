@@ -11,7 +11,7 @@ import { useSearchParams } from 'next/navigation';
 import { syncDeliveryUrl } from '@/lib/delivery-url';
 import { money, sumMoney, lineMoney } from '@/lib/money';
 import { basketTotals } from '@/lib/basket-totals';
-import { isLockedItem } from '@/lib/cart-utils';
+import { cartPriceSignature, isLockedItem } from '@/lib/cart-utils';
 
 interface CartContextType {
   cartReady: boolean;
@@ -244,7 +244,9 @@ export function CartProvider({ children }: { children: ReactNode }) {
       try {
         const result = await restoreCartAction({ brandId: state.brand.id, locationId: state.location.id, deliveryType: state.deliveryType, choices });
         if (disposed || generation.current !== request || checkoutOrderId.current || fingerprint !== JSON.stringify(cartChoices(current.current.cartItems))) return;
-        if (JSON.stringify(result.items) !== JSON.stringify(current.current.cartItems)) {
+        // Server and client build the same line with different property order, so
+        // compare what is paid for; otherwise every refresh would report a change.
+        if (cartPriceSignature(result.items) !== cartPriceSignature(current.current.cartItems)) {
           current.current = { ...current.current, cartItems: result.items };
           setCartItems(result.items);
           setCartNotice('Priser eller tilbud er opdateret. Kontrollér kurven før betaling.');
@@ -408,7 +410,7 @@ export function CartProvider({ children }: { children: ReactNode }) {
         <button className="mt-4 rounded bg-primary px-4 py-2 text-primary-foreground" onClick={() => setRetry(value => value + 1)}>Prøv igen</button>
       </div> : <span className="h-8 w-8 animate-spin rounded-full border-2 border-muted border-t-primary" aria-label="Indlæser" />}
     </div>}
-    {cartReady && cartNotice && <div role="status" className="fixed bottom-4 left-4 right-4 z-[90] rounded border bg-background p-4 shadow-lg">
+    {cartReady && cartNotice && <div role="status" className="fixed left-4 right-4 top-4 z-[90] rounded border bg-background p-4 shadow-lg">
       {cartNotice}<button className="ml-4 underline" onClick={() => setCartNotice('')}>Luk</button>
     </div>}
   </CartContext.Provider>;

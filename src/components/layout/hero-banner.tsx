@@ -14,9 +14,11 @@ interface HeroBannerProps {
   location: Location;
 }
 
+const DANISH_DAYS = ['søndag', 'mandag', 'tirsdag', 'onsdag', 'torsdag', 'fredag', 'lørdag'];
+
 export function HeroBanner({ location }: HeroBannerProps) {
   const { deliveryType } = useCart();
-  const [openingStatusText, setOpeningStatusText] = useState('Checking...');
+  const [openingStatusText, setOpeningStatusText] = useState('Tjekker…');
   const [statusVariant, setStatusVariant] = useState<'default' | 'destructive' | 'outline'>('outline');
   
   useEffect(() => {
@@ -42,7 +44,7 @@ export function HeroBanner({ location }: HeroBannerProps) {
         
         const isOpen = now >= openDate && now < closeDate;
         if(isOpen) {
-            setOpeningStatusText(`Open | Closes at ${todaysHours.close}`);
+            setOpeningStatusText(`Åben | Lukker kl. ${todaysHours.close}`);
             setStatusVariant('default');
         } else {
             let nextOpenDay = '';
@@ -51,15 +53,15 @@ export function HeroBanner({ location }: HeroBannerProps) {
                 const nextDayName = ['sunday', 'monday', 'tuesday', 'wednesday', 'thursday', 'friday', 'saturday'][nextDayIndex].toLowerCase();
                 const nextDayHours = location.openingHours?.[nextDayName as keyof typeof location.openingHours];
                 if (nextDayHours && nextDayHours.isOpen) {
-                    nextOpenDay = `${nextDayName.charAt(0).toUpperCase() + nextDayName.slice(1)} at ${nextDayHours.open}`;
+                    nextOpenDay = `${DANISH_DAYS[nextDayIndex]} kl. ${nextDayHours.open}`;
                     break;
                 }
             }
-            setOpeningStatusText(location.allowPreOrder ? `Pre-order | Opens ${nextOpenDay}` : `Closed | Opens ${nextOpenDay}`);
+            setOpeningStatusText(location.allowPreOrder ? `Forudbestil | Åbner ${nextOpenDay}` : `Lukket | Åbner ${nextOpenDay}`);
             setStatusVariant(location.allowPreOrder ? 'default' : 'destructive');
         }
       } else {
-         setOpeningStatusText('Closed');
+         setOpeningStatusText('Lukket');
          setStatusVariant('destructive');
       }
     };
@@ -88,13 +90,13 @@ export function HeroBanner({ location }: HeroBannerProps) {
             {location.supportsDelivery && (
               <Badge variant="outline" className="border-white/50 bg-black/20 text-white backdrop-blur-sm">
                 <Truck className="h-3 w-3 mr-1.5" />
-                Delivery
+                Levering
               </Badge>
             )}
             {location.supportsPickup && (
               <Badge variant="outline" className="border-white/50 bg-black/20 text-white backdrop-blur-sm">
                 <Store className="h-3 w-3 mr-1.5" />
-                Pick-up
+                Afhentning
               </Badge>
             )}
           </div>
@@ -121,7 +123,7 @@ export function HeroBanner({ location }: HeroBannerProps) {
             <div className="mt-4 flex flex-wrap items-center gap-2">
               {deliveryType === 'delivery' && (
                  <Badge variant="outline" className="border-white/50 bg-black/20 text-white backdrop-blur-sm font-normal text-[11px]">
-                    Delivery price from: {location.deliveryFee.toFixed(0)} kr. & min. Order size: {location.minOrder.toFixed(0)} kr.
+                    Levering fra {location.deliveryFee.toFixed(0)} kr. · Minimumsbestilling {location.minOrder.toFixed(0)} kr.
                 </Badge>
               )}
             </div>

@@ -1,6 +1,6 @@
 'use client';
 import {NEWSLETTER_CONSENT_VERSION,newsletterConsentText} from '@/lib/marketing/consent';
-import {formatPrice,localizeTime} from '@/lib/storefront-format';
+import {formatPrice,itemCountLabel,localizeTime} from '@/lib/storefront-format';
 import { useCheckoutKeyboard } from '@/hooks/use-checkout-keyboard';
 import { statisticsAllowed } from '@/lib/analytics';
 
@@ -687,7 +687,7 @@ function CheckoutForm({ location }: { location: Location }) {
     return (
       <div className="text-center">
         <h1 className="text-2xl font-bold">Din kurv er tom</h1>
-        <p className="text-muted-foreground">You can't check out with an empty cart.</p>
+        <p className="text-muted-foreground">Tilføj varer, før du går til kassen.</p>
         <Button asChild className="mt-4">
           <Link href={`/${params.brandSlug}/${params.locationSlug}`}>Tilbage til menuen</Link>
         </Button>
@@ -698,7 +698,9 @@ function CheckoutForm({ location }: { location: Location }) {
   const isTermsAccepted = form.watch('acceptTerms');
   const isFormLocked = isProcessing || isValidatingDiscount || paymentUncertain || !!paymentUrl;
 
-  const AcceptTermsAndCompleteOrder = ({ isSticky }: { isSticky?: boolean }) => (
+  // Called as a function, not rendered as <Component/>: a component defined inside render is a new
+  // type on every render, so React would remount the checkbox and drop taps landing mid-update.
+  const acceptTermsAndCompleteOrder = (isSticky?: boolean) => (
     <div className={cn(isSticky && "container mx-auto max-w-[1140px] px-0")}>
       {isDeliveryBelowMinOrder && (
         <Alert variant="warning" className="mb-4">
@@ -1016,7 +1018,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       <div className="flex items-center gap-2">
                         <ShoppingCart className="h-5 w-5" />
                         <h2 className="text-lg font-bold">
-                          Ordreoversigt ({itemCount} varer)
+                          Ordreoversigt ({itemCountLabel(itemCount)})
                         </h2>
                       </div>
                     </AccordionTrigger>
@@ -1043,14 +1045,14 @@ function CheckoutForm({ location }: { location: Location }) {
                   </CardContent>
                 </Card>
                 <div className="p-4 bg-background border border-t-0 rounded-b-lg">
-                  <AcceptTermsAndCompleteOrder />
+                  {acceptTermsAndCompleteOrder()}
                 </div>
               </div>
             </div>
           </div>
 
           <div className="commerce-checkout-bar fixed bottom-0 left-0 right-0 bg-background border-t p-0 z-50 lg:hidden">
-            <AcceptTermsAndCompleteOrder isSticky />
+            {acceptTermsAndCompleteOrder(true)}
           </div>
         </form>
       </FormProvider>
