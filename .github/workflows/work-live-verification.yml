@@ -41,11 +41,12 @@ jobs:
             await github.rest.issues.update({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, title: `[AWAITING LIVE VERIFY] ${clean}`});
             await github.rest.issues.createComment({owner: context.repo.owner, repo: context.repo.repo, issue_number: issueNumber, body: `WORK_LIVE_VERIFY: PR #${pr.number} was merged to main (PO acceptance, or the automatic merge rule in AGENTS.md as stated in the merge commit). Running read-only live Playwright health checks. A green smoke run is evidence for PO, not permission for Work to mark Done.`});
 
-      - name: Check out merged main
+      - name: Check out the merge commit
         if: steps.context.outputs.managed == 'true'
         uses: actions/checkout@v6
         with:
-          ref: main
+          # The merge commit is on main; pinning it keeps a later merge from swapping the gate mid-run.
+          ref: ${{ github.event.pull_request.merge_commit_sha }}
 
       - name: Wait for CI and deployment of the merge commit
         id: release
