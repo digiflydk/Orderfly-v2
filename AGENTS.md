@@ -46,7 +46,7 @@ Approved by PO/PM on 2026-10-18. Work may merge its own pull request into `main`
 1. Every CI check is completed and green. None is failing, pending or cancelled.
 2. The Codex code review has completed on the head commit with no unresolved findings, and every review thread is resolved.
 3. No human reviewer has requested changes or asked to hold the PR.
-4. The PR branch contains the current `main`. If `main` has moved since CI and the Codex review ran, Work updates the branch and waits for every gate to pass again on the new head before merging. Work merges with the head SHA it verified, so a later push cannot slip in.
+4. The PR branch contains the current `main`. If `main` has moved since CI and the Codex review ran, Work updates the branch and waits for every gate to pass again on the new head before merging. Work merges with the head SHA it verified, so a later push cannot slip in. The merge API cannot pin the base, so right after merging Work checks that the merge commit's parent is the `main` it verified. If `main` moved in between, Work waits for CI on the new `main` before live verification and reverts at once if it fails. Enabling "Require branches to be up to date before merging" in branch protection closes this window entirely.
 5. Work has run the typecheck and the relevant tests itself, and the documentation is updated.
 
 The rule applies when Work has merge access, for example a Claude Code session. The GitHub Actions pipeline (`work-developer.yml` and `work-quality-gate.yml`) does not merge automatically; there a clean review still ends in `[READY FOR PO]`.
