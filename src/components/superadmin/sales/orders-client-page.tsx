@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { paymentMethodLabel } from '@/lib/merchant-payment-methods';
 import { sumNetPaidSales } from '@/lib/paid-order';
-import { canceledPickupPaymentLabel } from '@/lib/orders/presentation';
+import { canceledPickupPaymentLabel, ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
 import { AdminDateRange } from '@/components/superadmin/admin-date-range';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
@@ -48,7 +48,7 @@ function formatCurrency(value: number): string {
 
 function formatDate(value?: string): string {
   if (!value) {
-    return 'Unknown date';
+    return 'Ukendt dato';
   }
 
   const date = new Date(value);
@@ -63,6 +63,7 @@ function formatDate(value?: string): string {
     year: 'numeric',
     hour: '2-digit',
     minute: '2-digit',
+    timeZone: 'Europe/Copenhagen',
   }).format(date);
 }
 
@@ -104,12 +105,12 @@ export function OrdersClientPage({
     event.preventDefault();
 
     if ((dateFrom && !dateTo) || (!dateFrom && dateTo)) {
-      setDateError('Select both a from date and a to date.');
+      setDateError('Vælg både en fra-dato og en til-dato.');
       return;
     }
 
     if (dateFrom && dateTo && dateFrom > dateTo) {
-      setDateError('The from date cannot be later than the to date.');
+      setDateError('Fra-datoen kan ikke ligge efter til-datoen.');
       return;
     }
 
@@ -147,11 +148,11 @@ export function OrdersClientPage({
       <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">
-            Sales &amp; Orders
+            Salg og ordrer
           </h1>
 
           <p className="text-muted-foreground">
-            View and manage all orders.
+            Se og administrér alle ordrer.
           </p>
         </div>
       </div>
@@ -160,12 +161,12 @@ export function OrdersClientPage({
         <Card>
           <CardContent className="pt-6">
             <div className="flex flex-col gap-4 lg:flex-row lg:items-end">
-              <AdminDateRange className="flex-1" from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} fromLabel="Payment date from" toLabel="Payment date to" groupLabel="Payment date range" />
+              <AdminDateRange className="flex-1" from={dateFrom} to={dateTo} onFromChange={setDateFrom} onToChange={setDateTo} fromLabel="Betalt fra" toLabel="Betalt til" groupLabel="Betalingsperiode" />
 
               <div className="flex gap-2">
-                <Button type="submit">Apply</Button>
+                <Button type="submit">Anvend</Button>
                 <Button type="button" variant="outline" onClick={clearDateFilter}>
-                  Clear
+                  Nulstil
                 </Button>
               </div>
             </div>
@@ -181,7 +182,7 @@ export function OrdersClientPage({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Total Orders
+              Betalte ordrer
             </CardTitle>
 
             <ClipboardList className="h-4 w-4 text-muted-foreground" />
@@ -197,7 +198,7 @@ export function OrdersClientPage({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Total Revenue
+              Betalt omsætning
             </CardTitle>
 
             <CircleDollarSign className="h-4 w-4 text-muted-foreground" />
@@ -213,7 +214,7 @@ export function OrdersClientPage({
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">
-              Latest Payment
+              Seneste betaling
             </CardTitle>
 
             <CalendarDays className="h-4 w-4 text-muted-foreground" />
@@ -223,7 +224,7 @@ export function OrdersClientPage({
             <div className="text-sm font-medium">
               {latestOrder
                 ? formatDate(latestOrder.paidAt)
-                : 'No orders yet'}
+                : 'Ingen ordrer endnu'}
             </div>
           </CardContent>
         </Card>
@@ -233,11 +234,10 @@ export function OrdersClientPage({
         <CardHeader>
           <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
             <div>
-              <CardTitle>Orders</CardTitle>
+              <CardTitle>Ordrer</CardTitle>
 
               <p className="mt-1 text-sm text-muted-foreground">
-                {filteredOrders.length} order
-                {filteredOrders.length === 1 ? '' : 's'}
+                {filteredOrders.length} {filteredOrders.length === 1 ? 'ordre' : 'ordrer'}
               </p>
             </div>
 
@@ -249,7 +249,7 @@ export function OrdersClientPage({
                 onChange={event =>
                   setSearch(event.target.value)
                 }
-                placeholder="Search by order ID"
+                placeholder="Søg på ordre-id"
                 className="pl-9"
               />
             </div>
@@ -262,15 +262,15 @@ export function OrdersClientPage({
               <ClipboardList className="mx-auto mb-3 h-8 w-8 text-muted-foreground" />
 
               <h2 className="font-semibold">
-                No orders found
+                Ingen ordrer fundet
               </h2>
 
               <p className="mt-1 text-sm text-muted-foreground">
                 {data.length === 0
                   ? dateFrom && dateTo
-                    ? 'No orders were found in the selected date range.'
-                    : 'There are currently no orders in the orders collection.'
-                  : 'No orders match your search.'}
+                    ? 'Der er ingen ordrer i den valgte periode.'
+                    : 'Der er endnu ingen ordrer.'
+                  : 'Ingen ordrer matcher din søgning.'}
               </p>
             </div>
           ) : (
@@ -279,11 +279,11 @@ export function OrdersClientPage({
                 <TableHeader>
                   <TableRow>
                     <TableHead scope="col">
-                      Order ID
+                      Ordre-id
                     </TableHead>
 
                     <TableHead scope="col">
-                      Payment date
+                      Betalt
                     </TableHead>
 
                     <TableHead scope="col">
@@ -291,7 +291,7 @@ export function OrdersClientPage({
                     </TableHead>
 
                     <TableHead scope="col" className="text-right">
-                      Total
+                      I alt
                     </TableHead>
 
                     <TableHead scope="col" className="text-right">
@@ -315,7 +315,7 @@ export function OrdersClientPage({
 
                       <TableCell>
                         <Badge variant="secondary">
-                          {order.status === 'Canceled' && order.paymentMethod === 'PayAtPickup' ? 'Annulleret' : order.paymentStatus === 'Paid' || order.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && order.status !== 'Pending' ? order.status : order.paymentStatus === 'Failed' ? 'Betaling afbrudt' : 'Afventer betaling'}
+                          {order.status === 'Canceled' && order.paymentMethod === 'PayAtPickup' ? 'Annulleret' : order.paymentStatus === 'Paid' || order.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && order.status !== 'Pending' ? ORDER_STATUS_LABELS[order.status as keyof typeof ORDER_STATUS_LABELS] ?? order.status : order.paymentStatus === 'Failed' ? 'Betaling afbrudt' : 'Afventer betaling'}
                         </Badge>
                         <p className="mt-1 text-sm">{canceledPickupPaymentLabel(order) ?? paymentMethodLabel(order)}</p>
                       </TableCell>

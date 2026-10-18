@@ -4,7 +4,7 @@ import { useCart } from '@/context/cart-context';
 import { Button } from '@/components/ui/button';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger, SheetDescription } from '@/components/ui/sheet';
 import { CartContents, CartTotals, CartCheckoutButton } from './cart-contents';
-import { formatPrice } from '@/lib/storefront-format';
+import { formatPrice, itemCountLabel } from '@/lib/storefront-format';
 export function MobileFloatingCart({ floating = true }: {
     floating?: boolean;
 }) {
@@ -21,7 +21,7 @@ export function MobileFloatingCart({ floating = true }: {
         </Button>
       </SheetTrigger>
       <SheetContent side="bottom" data-commerce-panel="cart" className="flex flex-col p-0">
-        <SheetHeader className="p-4"><SheetTitle>Din kurv · {itemCount} varer</SheetTitle><SheetDescription>Rediger dine varer, eller gå videre til kassen.</SheetDescription></SheetHeader>
+        <SheetHeader className="p-4"><SheetTitle>Din kurv · {itemCountLabel(itemCount)}</SheetTitle><SheetDescription>Rediger dine varer, eller gå videre til kassen.</SheetDescription></SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto"><CartContents onEdit={() => setOpen(false)}/><CartTotals onBrowse={() => setOpen(false)}/></div>
         <div className="shrink-0 p-4 pt-2"><CartCheckoutButton /></div>
       </SheetContent>

@@ -3,6 +3,7 @@
 - **[games-scratch-card.md](games-scratch-card.md)** — Games and Scratch Card draft preview, data, access and launch boundary
 - **[unified-order-flow-71.md](unified-order-flow-71.md)** — Unified cart, inline upsell, newsletter consent and Omnisend activation
 - **[qa-order-flow-71.md](qa-order-flow-71.md)** — Focused local evidence and remaining release QA
+- **[order-flow-polish-2026-10-18.md](order-flow-polish-2026-10-18.md)** — Rettelser i kurv, kasse, restaurantvalg og admin-ordrer efter live-test med Stripe
 - **[esmeralda-invoice-attribution.md](esmeralda-invoice-attribution.md)** — Paid invoice snapshot, coordinated email contract, Esmeralda storefront scope and campaign/funnel tracking
 - **[omnisend-paid-orders-119.md](omnisend-paid-orders-119.md)** — Consent-gated native paid-order events, release checks and operations
 

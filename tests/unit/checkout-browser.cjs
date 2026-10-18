@@ -165,6 +165,17 @@ test('two immediate submissions create only one payment request',async t=>{
  const page=await setup(t,'double-click');await page.locator('form').evaluate(form=>{form.requestSubmit();form.requestSubmit();});
  await page.waitForURL('**/stripe?*');assert.equal(requests.get('double-click').length,1);
 });
+test('terms checkbox and pay button keep their element while the customer types, so a tap is never lost',async t=>{
+ const page=await setup(t,'success-mobile');
+ const terms=page.getByRole('checkbox',{name:/Jeg accepterer|I accept the/}).last();
+ const before=await terms.elementHandle(),payButton=await page.getByRole('button',{name:/Gå til betaling/}).last().elementHandle();
+ await page.getByPlaceholder('John Doe',{exact:true}).fill('Test Customer Again');
+ const newsletter=page.getByRole('checkbox',{name:/Få nyheder og tilbud/}).first();
+ await newsletter.check();await newsletter.uncheck();
+ assert.equal(await before.evaluate(node=>node.isConnected),true,'the checkbox was remounted');
+ assert.equal(await payButton.evaluate(node=>node.isConnected),true,'the pay button was remounted');
+ assert.equal(await terms.getAttribute('aria-checked'),'true');
+});
 test('invalid email is visibly rejected; correcting it allows payment',async t=>{
  const page=await setup(t,'invalid');await page.getByPlaceholder('john@example.com').fill('invalid');await pay(page);
  await page.getByText('Kontrollér de markerede felter, før du går til betaling.').first().waitFor();assert.equal(requests.has('invalid'),false);

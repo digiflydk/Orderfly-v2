@@ -10,13 +10,24 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import type { OrderDetail } from '@/types';
-import { ArrowLeft, CreditCard, Download, Hash, Link as LinkIcon, Mail, MapPin, Phone, ShoppingCart, Truck, User, MessageSquare } from 'lucide-react';
+import { ArrowLeft, CreditCard, Hash, Link as LinkIcon, Mail, MapPin, Phone, ShoppingCart, Truck, User, MessageSquare } from 'lucide-react';
 import Link from '@/components/superadmin/admin-link';
-import { format } from 'date-fns';
+import { formatPrice } from '@/lib/storefront-format';
+import { ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
 
 export const revalidate = 0; // Force dynamic rendering
+
+const PAYMENT_STATUS_LABELS: Record<string, string> = { Paid: 'Betalt', Pending: 'Afventer', Failed: 'Mislykket', Refunded: 'Refunderet' };
+const DELIVERY_TYPE_LABELS: Record<string, string> = { Delivery: 'Levering', Pickup: 'Afhentning' };
+const danishTime = (value: string | number | Date) => new Date(value).toLocaleString('da-DK', { dateStyle: 'long', timeStyle: 'short', timeZone: 'Europe/Copenhagen' });
+// Checkout session ids carry the Stripe mode; the dashboard keeps test and live payments apart.
+function stripeDashboardUrl(psp?: OrderDetail['psp']) {
+	if (!psp?.paymentIntentId) return null;
+	const test = psp.checkoutSessionId?.startsWith('cs_test_') ? 'test/' : '';
+	return `https://dashboard.stripe.com/${test}payments/${encodeURIComponent(psp.paymentIntentId)}`;
+}
 
 
 const statusVariantMap: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
@@ -57,6 +68,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 	if (!order) {
 		notFound();
 	}
+	const stripeUrl = stripeDashboardUrl(order.psp);
 
 
 	return (
@@ -66,35 +78,34 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 					<Button variant="outline" size="sm" asChild>
 						<Link href="/superadmin/sales/orders">
 							<ArrowLeft className="mr-2" />
-							Back to Orders
+							Tilbage til ordrer
 						</Link>
 					</Button>
 					<h1 className="text-2xl font-bold tracking-tight flex items-center gap-2">
-						Order <span className="font-mono text-xl bg-muted px-2 py-1 rounded-md">{order.id}</span>
+						Ordre <span className="font-mono text-xl bg-muted px-2 py-1 rounded-md">{order.id}</span>
 					</h1>
 					<p className="text-muted-foreground">
-						{order.paidAt ? `Paid ${format(new Date(order.paidAt), 'MMMM d, yyyy HH:mm')}` : 'Payment date not available'}
+						{order.paidAt ? `Betalt ${danishTime(order.paidAt)}` : 'Ikke betalt endnu'}
 					</p>
 				</div>
 				<div className="flex items-center gap-2">
                     <FeedbackRequestButton orderId={order.id} />
-					<Button variant="outline"><Download className="mr-2" />Export</Button>
-					{order.paymentMethod !== 'PayAtPickup' && <Button asChild><Link href="#" target="_blank"><LinkIcon className="mr-2" />View in Stripe</Link></Button>}
+					{stripeUrl && <Button asChild><a href={stripeUrl} target="_blank" rel="noopener noreferrer"><LinkIcon className="mr-2" />Se i Stripe</a></Button>}
 				</div>
 			</div>
 
 			<div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
 				<div className="lg:col-span-2 space-y-6">
 					<Card>
-						<CardHeader><CardTitle>Order Summary</CardTitle></CardHeader>
+						<CardHeader><CardTitle>Ordreoversigt</CardTitle></CardHeader>
 						<CardContent>
 							<Table>
 								<TableHeader>
 									<TableRow>
-										<TableHead>Product</TableHead>
-										<TableHead>Quantity</TableHead>
-										<TableHead>Unit Price</TableHead>
-										<TableHead className="text-right">Total</TableHead>
+										<TableHead>Vare</TableHead>
+										<TableHead>Antal</TableHead>
+										<TableHead>Stykpris</TableHead>
+										<TableHead className="text-right">I alt</TableHead>
 									</TableRow>
 								</TableHeader>
 								<TableBody>
@@ -106,44 +117,44 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
                                                 {item.comboSelections?.map(group => <p key={group.groupId || group.groupName} className="text-xs text-muted-foreground">{group.groupName}: {group.products.map(product => product.name).join(', ')}</p>)}
 											</TableCell>
 											<TableCell>{item.quantity}</TableCell>
-											<TableCell>kr. {(item.unitPrice ?? 0).toFixed(2)}</TableCell>
-											<TableCell className="text-right">kr. {item.totalPrice.toFixed(2)}</TableCell>
+											<TableCell>{formatPrice(item.unitPrice ?? 0)}</TableCell>
+											<TableCell className="text-right">{formatPrice(item.totalPrice)}</TableCell>
 										</TableRow>
 									))}
 									<TableRow>
-										<TableCell colSpan={3} className="text-right font-medium">Subtotal</TableCell>
-										<TableCell className="text-right">kr. {order.paymentDetails.subtotal.toFixed(2)}</TableCell>
+										<TableCell colSpan={3} className="text-right font-medium">Varesubtotal</TableCell>
+										<TableCell className="text-right">{formatPrice(order.paymentDetails.subtotal)}</TableCell>
 									</TableRow>
 									{order.paymentDetails.discountTotal > 0 && (
 										<TableRow>
-											<TableCell colSpan={3} className="text-right font-medium text-green-600">Discount</TableCell>
-											<TableCell className="text-right text-green-600">- kr. {order.paymentDetails.discountTotal.toFixed(2)}</TableCell>
+											<TableCell colSpan={3} className="text-right font-medium text-green-600">Rabat</TableCell>
+											<TableCell className="text-right text-green-600">−{formatPrice(order.paymentDetails.discountTotal)}</TableCell>
 										</TableRow>
 									)}
 									<TableRow>
-										<TableCell colSpan={3} className="text-right font-medium">Delivery Fee</TableCell>
-										<TableCell className="text-right">kr. {(order.paymentDetails.deliveryFee ?? 0).toFixed(2)}</TableCell>
+										<TableCell colSpan={3} className="text-right font-medium">Levering</TableCell>
+										<TableCell className="text-right">{formatPrice(order.paymentDetails.deliveryFee ?? 0)}</TableCell>
 									</TableRow>
 									{(order.paymentDetails.bagFee ?? 0) > 0 && (
 										<TableRow>
-											<TableCell colSpan={3} className="text-right font-medium">Bag Fee</TableCell>
-											<TableCell className="text-right">kr. {order.paymentDetails.bagFee!.toFixed(2)}</TableCell>
+											<TableCell colSpan={3} className="text-right font-medium">Pose</TableCell>
+											<TableCell className="text-right">{formatPrice(order.paymentDetails.bagFee!)}</TableCell>
 										</TableRow>
 									)}
 									{(order.paymentDetails.adminFee ?? 0) > 0 && (
 										<TableRow>
-											<TableCell colSpan={3} className="text-right font-medium">Admin Fee</TableCell>
-											<TableCell className="text-right">kr. {order.paymentDetails.adminFee!.toFixed(2)}</TableCell>
+											<TableCell colSpan={3} className="text-right font-medium">Administrationsgebyr</TableCell>
+											<TableCell className="text-right">{formatPrice(order.paymentDetails.adminFee!)}</TableCell>
 										</TableRow>
 									)}
 									<TableRow className="font-bold text-lg">
-										<TableCell colSpan={3} className="text-right">Total Amount</TableCell>
-										<TableCell className="text-right">kr. {order.totalAmount.toFixed(2)}</TableCell>
+										<TableCell colSpan={3} className="text-right">I alt</TableCell>
+										<TableCell className="text-right">{formatPrice(order.totalAmount)}</TableCell>
 									</TableRow>
 									{(order.paymentDetails.vatAmount ?? 0) > 0 && (
 										<TableRow>
 											<TableCell colSpan={3} className="text-right text-sm text-muted-foreground">Heraf moms</TableCell>
-											<TableCell className="text-right text-sm text-muted-foreground">kr. {order.paymentDetails.vatAmount!.toFixed(2)}</TableCell>
+											<TableCell className="text-right text-sm text-muted-foreground">{formatPrice(order.paymentDetails.vatAmount!)}</TableCell>
 										</TableRow>
 									)}
 								</TableBody>
@@ -154,34 +165,34 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 
 				<div className="space-y-6">
 					<Card>
-						<CardHeader><CardTitle>Order Details</CardTitle></CardHeader>
+						<CardHeader><CardTitle>Ordredetaljer</CardTitle></CardHeader>
 						<CardContent className="space-y-4">
-							<InfoItem icon={Hash} label="Order Status"><Badge variant={statusVariantMap[order.status]}>{order.status}</Badge></InfoItem>
-							{order.status === 'Canceled' && order.cancellationComment && <InfoItem icon={MessageSquare} label="Cancellation comment"><p className="whitespace-pre-wrap">{order.cancellationComment}</p></InfoItem>}
-							<InfoItem icon={order.deliveryType === 'Delivery' ? Truck : ShoppingCart} label="Order Type">{order.deliveryType}</InfoItem>
-							<InfoItem icon={MapPin} label="Location">{order.brandName} - {order.locationName}</InfoItem>
+							<InfoItem icon={Hash} label="Ordrestatus"><Badge variant={statusVariantMap[order.status]}>{ORDER_STATUS_LABELS[order.status] ?? order.status}</Badge></InfoItem>
+							{order.status === 'Canceled' && order.cancellationComment && <InfoItem icon={MessageSquare} label="Begrundelse for annullering"><p className="whitespace-pre-wrap">{order.cancellationComment}</p></InfoItem>}
+							<InfoItem icon={order.deliveryType === 'Delivery' ? Truck : ShoppingCart} label="Ordretype">{DELIVERY_TYPE_LABELS[order.deliveryType] ?? order.deliveryType}</InfoItem>
+							<InfoItem icon={MapPin} label="Restaurant">{order.brandName} - {order.locationName}</InfoItem>
 						</CardContent>
 					</Card>
 
 					<Card>
-						<CardHeader><CardTitle>Customer</CardTitle></CardHeader>
+						<CardHeader><CardTitle>Kunde</CardTitle></CardHeader>
 						<CardContent className="space-y-4">
-							<InfoItem icon={User} label="Name">
+							<InfoItem icon={User} label="Navn">
 								<Link href={`/superadmin/customers/${order.customerDetails.id}`} className="text-primary hover:underline">{order.customerName}</Link>
 							</InfoItem>
-							<InfoItem icon={Mail} label="Email">{order.customerContact}</InfoItem>
-							<InfoItem icon={MapPin} label="Delivery Address">{order.customerDetails.address}</InfoItem>
+							<InfoItem icon={Mail} label="E-mail">{order.customerContact}</InfoItem>
+							<InfoItem icon={MapPin} label="Leveringsadresse">{order.customerDetails.address}</InfoItem>
 						</CardContent>
 					</Card>
 
 					<Card>
-						<CardHeader><CardTitle>Payment</CardTitle></CardHeader>
+						<CardHeader><CardTitle>Betaling</CardTitle></CardHeader>
 						<CardContent className="space-y-4">
-							<InfoItem icon={CreditCard} label="Payment Status"><Badge variant={statusVariantMap[order.paymentStatus]}>{order.paymentStatus}</Badge></InfoItem>
-							<InfoItem icon={CreditCard} label="Payment Method">{paymentMethodLabel(order)}</InfoItem>
-							{order.paymentCollection && <p>Betaling modtaget {new Date(order.paymentCollection.receivedAt).toLocaleString('da-DK', { timeZone: 'Europe/Copenhagen' })} af {order.paymentCollection.employeeName || order.paymentCollection.employeeId}.</p>}
+							<InfoItem icon={CreditCard} label="Betalingsstatus"><Badge variant={statusVariantMap[order.paymentStatus]}>{PAYMENT_STATUS_LABELS[order.paymentStatus] ?? order.paymentStatus}</Badge></InfoItem>
+							<InfoItem icon={CreditCard} label="Betalingsmetode">{paymentMethodLabel(order)}</InfoItem>
+							{order.paymentCollection && <p>Betaling modtaget {danishTime(order.paymentCollection.receivedAt)} af {order.paymentCollection.employeeName || order.paymentCollection.employeeId}.</p>}
 							<OrderPaymentActions orderId={order.id} paymentMethod={order.paymentMethod} paymentStatus={order.paymentStatus} status={order.status} canEdit={access.superuser || access.permissions.includes('orderfly.orders:edit')} />
-							<InfoItem icon={Hash} label="Payment Reference">
+							<InfoItem icon={Hash} label="Betalingsreference">
 								<p className="font-mono text-xs break-all">{order.psp?.paymentIntentId || order.psp?.checkoutSessionId}</p>
 							</InfoItem>
 						</CardContent>

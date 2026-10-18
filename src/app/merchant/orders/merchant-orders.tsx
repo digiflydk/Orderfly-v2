@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from '@/components/superadmin/admin-link';
+import { ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
 import { OrderPaymentActions } from '@/components/superadmin/order-payment-actions';
 import { paymentMethodLabel } from '@/lib/merchant-payment-methods';
 import { sumNetPaidSales } from '@/lib/paid-order';
@@ -10,7 +11,7 @@ import type { OrderDetail, OrderStatus } from '@/types';
 
 export type MerchantOrderRow = { id: string; customerName: string; locationName: string; createdAt: string;
   totalAmount: number; paidSale: boolean; netTotal: number; refundedAmountOre: number; status: OrderStatus; paymentStatus: string; paymentMethod: string; paymentCollection?: OrderDetail['paymentCollection'] };
-const statusNames: Record<OrderStatus, string> = { Pending: 'Afventer betaling', Received: 'Modtaget', 'In Progress': 'Tilberedes', Ready: 'Klar', Completed: 'Afsluttet', Delivered: 'Leveret', Canceled: 'Annulleret', Error: 'Kontakt restauranten' };
+const statusNames = ORDER_STATUS_LABELS;
 export function MerchantOrders({ orders, canEdit }: { orders: MerchantOrderRow[]; canEdit: boolean }) {
   const router = useRouter(), [search, setSearch] = useState('');
   useEffect(() => { const timer = setInterval(() => router.refresh(), 20000); return () => clearInterval(timer); }, [router]);

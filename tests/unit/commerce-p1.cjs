@@ -219,3 +219,8 @@ test('Paid receipt retries verified settlement but preserves Paid on Stripe time
   const f=receiptFixture(options);assert.equal((await f.api.readGuestReceipt(f.proof)).paymentStatus,'Paid');assert.equal(f.settlements(),0);
  }
 });
+
+test('item counts read as Danish singular and plural',()=>{
+ const {itemCountLabel}=loadTs('src/lib/storefront-format.ts');
+ assert.equal(itemCountLabel(1),'1 vare');assert.equal(itemCountLabel(2),'2 varer');assert.equal(itemCountLabel(0),'0 varer');
+});
