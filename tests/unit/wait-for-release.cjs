@@ -25,7 +25,7 @@ test('a later main that contains the merge counts as deployed',async()=>{
 });
 test('an older or unrelated live build never counts as the merge',async()=>{
   const h=harness({checks:[[ok('Typecheck and build')]],releases:[OLD],compare:{[`${MERGE}...${OLD}`]:'behind'}});
-  await assert.rejects(h.run(),/Timed out: CI passed, live release c+/);
+  await assert.rejects(h.run(),/Timed out: CI passed \(Typecheck and build\), live release c+/);
 });
 test('failed CI on the merge commit stops verification at once',async()=>{
   const h=harness({checks:[[{name:'Typecheck and build',status:'completed',conclusion:'failure'}]],releases:[MERGE]});
@@ -34,6 +34,16 @@ test('failed CI on the merge commit stops verification at once',async()=>{
 test('the workflow\'s own check run is ignored, and no checks at all keeps waiting',async()=>{
   const h=harness({checks:[[{name:'live-verify',status:'in_progress'}]],releases:[MERGE]});
   await assert.rejects(h.run(),/Timed out: CI pending/);
+});
+test('a check that registers after CI first looked green still fails the gate',async()=>{
+  const h=harness({checks:[[ok('rules')],[ok('rules'),{name:'Typecheck and build',status:'completed',conclusion:'failure'}]],releases:[OLD,MERGE]});
+  await assert.rejects(h.run(),/CI failed on merge commit a+: Typecheck and build: failure/);
+});
+test('required checks must be reported before the gate passes',async()=>{
+  const h=harness({checks:[[ok('rules')],[ok('rules')],[ok('rules'),ok('Typecheck and build')]],releases:[MERGE]});
+  assert.deepEqual(await h.run({required:['Typecheck and build','rules']}),{release:MERGE});
+  const missing=harness({checks:[[ok('rules')]],releases:[MERGE]});
+  await assert.rejects(missing.run({required:['Typecheck and build']}),/not reported yet: Typecheck and build/);
 });
 test('a missing merge SHA is rejected',async()=>{
   const h=harness({checks:[[ok('x')]],releases:[MERGE]});

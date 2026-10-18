@@ -59,7 +59,8 @@ jobs:
           script: |
             const { waitForRelease } = require(`${process.env.GITHUB_WORKSPACE}/.github/scripts/wait-for-release.cjs`);
             const { release } = await waitForRelease({ github, owner: context.repo.owner, repo: context.repo.repo,
-              mergeSha: process.env.MERGE_SHA, liveUrl: process.env.LIVE_URL, self: 'live-verify', log: core.info });
+              mergeSha: process.env.MERGE_SHA, liveUrl: process.env.LIVE_URL, self: 'live-verify',
+              required: ['Typecheck and build', 'rules'], log: core.info });
             core.setOutput('deployed-sha', release);
 
       - name: Setup Node.js
