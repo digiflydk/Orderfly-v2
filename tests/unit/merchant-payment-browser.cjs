@@ -187,6 +187,8 @@ test('merchant cancellation releases a promotion reservation without paid KPI or
   await expect(page.getByRole('button', { name: 'Registrér betaling modtaget', exact: true })).toHaveCount(0);
   const f = await getCase('pickup-cancel'); assert.equal(f.order().status, 'Canceled'); assert.equal(f.order().cancellationComment, 'Kunden bad om annullering'); assert.equal(f.order().discountReservation, 'released');
   assert.equal((await state('pickup-cancel')).kpis.totalSales, 0); assert.equal(f.records.get('discounts/d').usedCount, 0);
+  // The cancel action refreshes the list; leaving mid-refresh aborts the next navigation.
+  await page.waitForLoadState('networkidle');
   await page.goto(receiptUrl);
   await expect(page.getByRole('heading', { name: 'Ordren er annulleret', exact: true })).toBeVisible();
   await expect(page.getByText(/Restauranten har annulleret din afhentningsordre/)).toBeVisible();
