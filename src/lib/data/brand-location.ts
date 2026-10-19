@@ -33,7 +33,11 @@ export async function getLocationsForBrand(brandId: string): Promise<Location[]>
     const db = getAdminDb();
     const q = db.collection('locations').where('brandId', '==', brandId);
     const querySnapshot = await q.get();
-    return querySnapshot.docs.map(doc => publicLocationRecord(doc.id, doc.data()));
+    // The image endpoint serves only active records, so an inactive location keeps its inline picture.
+    return querySnapshot.docs.map(doc => {
+      const location = publicLocationRecord(doc.id, doc.data());
+      return location.isActive === false ? location : storefrontMedia(location, 'locations', doc.id);
+    });
 }
 
 

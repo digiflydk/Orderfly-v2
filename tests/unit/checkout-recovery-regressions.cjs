@@ -48,7 +48,7 @@ function reservations(){
   const result=await fn(tx);records.clear();for(const row of draft)records.set(...row);return result;
  };
  const api=loadTs('src/lib/discount-reservations.ts',{
-  '@/lib/firebase':{db:{}},'firebase/firestore':{doc:(_,table,id)=>table+'/'+id,runTransaction:(_,fn)=>transaction(fn)},
+  '@/lib/firebase':{db:{}},'firebase/firestore':{serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),doc:(_,table,id)=>table+'/'+id,runTransaction:(_,fn)=>transaction(fn)},
  });
  const add=(id,discount)=>records.set('orders/'+id,{brandId:'b',customerDetails:{id:'c'},appliedDiscountId:discount});
  const capacity=()=>[...records].find(([key])=>key.startsWith('checkout_customer_capacity/'))[1];
