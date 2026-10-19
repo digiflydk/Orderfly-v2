@@ -202,15 +202,15 @@ test('pay-at-pickup order-received mail: one message while accepted and unpaid, 
  }
  assert.equal(sent.length,1);
 });
-test('pay-at-pickup mail: a failed location read before dispatch is retried, never lost or sent',async t=>{
+test('pay-at-pickup mail: a transient read failure before dispatch is retried, never lost or sent',async t=>{
  const f=setup(t);Object.assign(f.records.get('orders/order'),{paymentMethod:'PayAtPickup',deliveryType:'Pickup',paymentStatus:'Pending',status:'Received',customerContact:'private@example.test',invoice:undefined,psp:undefined});
  f.records.set('orderNotificationJobs/pickup',{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:'pickup-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
  const original=f.db.collection;let fail=true;
  f.db.collection=(...args)=>{const collection=original(...args);if(args[0]!=='locations')return collection;const doc=collection.doc;collection.doc=(...ids)=>{const ref=doc(...ids);const get=ref.get;ref.get=async()=>{if(fail)throw Object.assign(Error('unavailable'),{code:14});return get();};return ref;};return collection;};
- const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{},NotificationPlatformClient:class{}}});
+ const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{constructor(code,uncertain=false,retryable=false){super(code);Object.assign(this,{code,uncertain,retryable});}},NotificationPlatformClient:class{}}});
  const client=()=>({send:async message=>sent.push(message)});
  await worker.runOrderNotificationWorker(client);
- assert.equal(sent.length,0);assert.equal(f.records.get('orderNotificationJobs/pickup').state,'pending');assert.equal(f.records.get('orderNotificationJobs/pickup').lastError,'claim_read_failed');
+ assert.equal(sent.length,0);assert.equal(f.records.get('orderNotificationJobs/pickup').state,'pending');assert.equal(f.records.get('orderNotificationJobs/pickup').lastError,'provider_preflight_failed');
  fail=false;await worker.runOrderNotificationWorker(client,Date.now()+120000);
  assert.equal(sent.length,1);assert.equal(f.records.get('orderNotificationJobs/pickup').state,'accepted');
 });
@@ -236,4 +236,19 @@ test('pay-at-pickup mail: the address sent is the one read in the claim',async t
  const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{},NotificationPlatformClient:class{}}});
  await worker.runOrderNotificationWorker(()=>({send:async message=>sent.push(message)}));
  assert.equal(sent.length,1);assert.equal(sent[0].variables.fulfillmentAddress,'Ny adresse 2');
+});
+test('order mail: a transient failure of the first order read is retried, a permanent one is not',async t=>{
+ for(const [code,state] of [[14,'pending'],[7,'failed']]){
+  const f=setup(t);Object.assign(f.records.get('orders/order'),{paymentMethod:'PayAtPickup',deliveryType:'Pickup',paymentStatus:'Pending',status:'Received',customerContact:'private@example.test',invoice:undefined,psp:undefined});
+  f.records.set('locations/l',{...f.records.get('locations/l'),brandId:'b'});
+  f.records.set('orderNotificationJobs/pickup',{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:'pickup-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+  const original=f.db.collection;let fail=true;
+  f.db.collection=(...args)=>{const collection=original(...args);if(args[0]!=='orders')return collection;const doc=collection.doc;collection.doc=(...ids)=>{const ref=doc(...ids);const get=ref.get;ref.get=async()=>{if(fail){fail=false;throw Object.assign(Error('read failed'),{code});}return get();};return ref;};return collection;};
+  const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{constructor(code,uncertain=false,retryable=false){super(code);Object.assign(this,{code,uncertain,retryable});}},NotificationPlatformClient:class{}}});
+  const client=()=>({send:async message=>sent.push(message)});
+  await worker.runOrderNotificationWorker(client);
+  assert.equal(sent.length,0);assert.equal(f.records.get('orderNotificationJobs/pickup').state,state,String(code));assert.equal(f.records.get('orderNotificationJobs/pickup').lastError,'provider_preflight_failed');
+  await worker.runOrderNotificationWorker(client,Date.now()+120000);
+  assert.equal(sent.length,state==='pending'?1:0);
+ }
 });

@@ -7,14 +7,11 @@ import { completedFeedbackOrder, feedbackSourceKey, signOrderFeedbackInvitation 
 import { resolveBookingFeedbackInvitationToken } from '@/lib/integrations/esmeralda-feedback-integration';
 import { pendingFeedbackMessage, type FeedbackMailKind, type FeedbackMailSource } from './mail-queue';
 import { readActiveQuestionsForBrand } from './question-store';
+import { transientReadError } from '@/lib/firestore-transient';
 import { feedbackAdminNotificationConfig, feedbackAdminNotifications, type FeedbackAdminNotificationSource } from './admin-notifications';
 const never = Number.MAX_SAFE_INTEGER, leaseMs = 120000;
 type Lease = { eventId: string; lease: string; attempts: number };
 type Job = (FeedbackMailSource & { kind: FeedbackMailKind } | FeedbackAdminNotificationSource & { kind: 'adminNotification' }) & Lease;
-function transientReadError(error: unknown) {
-  const code = error && typeof error === 'object' && 'code' in error ? error.code : undefined;
-  return [4, 8, 10, 13, 14, 'deadline-exceeded', 'resource-exhausted', 'aborted', 'internal', 'unavailable', 'ETIMEDOUT', 'ECONNRESET'].includes(code as string | number);
-}
 function feedbackOrigin() {
   const url = new URL(process.env.ORDERFLY_FEEDBACK_ORIGIN || 'https://orderfly.dk');
   if (url.protocol !== 'https:' || url.username || url.password || url.pathname !== '/' || url.search || url.hash) throw new FeedbackMailError('invalid_feedback_origin');

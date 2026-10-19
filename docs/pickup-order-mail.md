@@ -19,7 +19,7 @@ Kunder, der vælger "Betal ved afhentning", får en mail om, at ordren er modtag
 
    - Lokationen findes og hører til ordrens brand.
 
-   Ellers bliver jobbet `suppressed`. Ordren og lokationen læses i den transaktion, der låser jobbet til afsendelse. Bliver ordren betalt eller annulleret, eller flyttes lokationen inden da, sendes mailen derfor ikke, og adressen i mailen er den, transaktionen læste. En læsefejl i transaktionen giver et nyt forsøg (`claim_read_failed`), fordi intet er sendt endnu.
+   Ellers bliver jobbet `suppressed`. Ordren og lokationen læses i den transaktion, der låser jobbet til afsendelse. Bliver ordren betalt eller annulleret, eller flyttes lokationen inden da, sendes mailen derfor ikke, og adressen i mailen er den, transaktionen læste. En midlertidig Firestore-fejl før afsendelse giver et nyt forsøg (`provider_preflight_failed`, op til 3 gange), fordi intet er sendt endnu. Det gælder også ordre-bekræftelsen.
 3. Mailen sendes via Esmeraldas Notification Platform med skabelonen `orderfly.order.received_pay_at_pickup` og disse variabler:
    - `orderId`, `customerName`, `brandName`, `locationName`, `deliveryTime`, `totalAmount`, `currency` (DKK).
    - `fulfillmentAddress`: restaurantens adresse, den samme som på fakturaen (`locationAddress` i `src/lib/order-invoice.ts`).
