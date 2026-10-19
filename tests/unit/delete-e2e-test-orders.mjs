@@ -21,6 +21,8 @@ function seed() {
     ['orders/ORD-489552', order({ paymentStatus: 'Pending', paidAt: undefined, totalAmount: 93, status: 'Received', discountReservation: 'held' })],
     ['orders/ORD-859925', order({ customerName: 'TEST E2E-kunde 2', paymentStatus: 'Failed', paidAt: undefined, status: 'Canceled', totalAmount: 93, discountReservation: 'released' })],
     ['orders/ORD-REAL', order({ customerName: 'Rigtig kunde', paidAt: REAL, totalAmount: 100 })],
+    // Another brand's order pointing at the same customer id must never be read as this customer's history.
+    ['orders/ORD-FOREIGN', order({ brandId: 'other', customerName: 'Rigtig kunde', paidAt: T2 + 5000, totalAmount: 50 })],
     [`orderNotificationJobs/${hashId(['order-confirmation', BRAND, 'ORD-385369'])}`, { orderId: 'ORD-385369' }],
     ['analytics_events/e1', { orderId: 'ORD-385369', brandId: BRAND }],
     ['analytics_events/e2', { orderId: 'ORD-REAL', brandId: BRAND }],

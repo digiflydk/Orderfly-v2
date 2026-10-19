@@ -66,7 +66,7 @@ export async function plan(db) {
       if (facts.customerId && !restoreFor.has(facts.customerId)) {
         const customer = await db.collection('customers').doc(facts.customerId).get();
         if (customer.exists && customer.data().brandId !== BRAND_ID) throw new Error(`${orderId} points to a customer outside Esmeralda.`);
-        const others = await db.collection('orders').where('customerDetails.id', '==', facts.customerId).get();
+        const others = await db.collection('orders').where('brandId', '==', BRAND_ID).where('customerDetails.id', '==', facts.customerId).get();
         const latest = others.docs
           .filter(doc => !ORDER_IDS.includes(doc.id) && doc.data().brandId === BRAND_ID && doc.data().paymentStatus === 'Paid')
           .map(doc => millis(doc.data().paidAt)).filter(ms => ms !== null);
@@ -83,7 +83,7 @@ export async function plan(db) {
       items.push({ kind: 'order', orderId, linked, ...facts, upsellsCounted, restoreLastOrderDate: facts.customerId ? restoreFor.get(facts.customerId) : null });
     }
     // Order references can repeat across brands; only Esmeralda's events belong to these orders.
-    const events = await db.collection('analytics_events').where('orderId', '==', orderId).get();
+    const events = await db.collection('analytics_events').where('brandId', '==', BRAND_ID).where('orderId', '==', orderId).get();
     for (const event of events.docs) if (event.data().brandId === BRAND_ID) items.push({ kind: 'metric', orderId, path: `analytics_events/${event.id}` });
   }
   return items;
