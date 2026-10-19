@@ -55,6 +55,10 @@ export async function plan(db) {
       if (!isTestOrder(orderId, order)) throw new Error(`${orderId} is not the Esmeralda test order; nothing is planned.`);
       const facts = factsOf(order);
       if (facts.discountId?.startsWith('game_')) throw new Error(`${orderId} used a game voucher; this migration does not reverse vouchers.`);
+      if (facts.discountId) {
+        const discount = await db.collection('discounts').doc(facts.discountId).get();
+        if (discount.exists && discount.data().brandId !== BRAND_ID) throw new Error(`${orderId} points to a discount outside Esmeralda.`);
+      }
       if (facts.customerId && !restoreFor.has(facts.customerId)) {
         const customer = await db.collection('customers').doc(facts.customerId).get();
         if (customer.exists && customer.data().brandId !== BRAND_ID) throw new Error(`${orderId} points to a customer outside Esmeralda.`);
@@ -106,6 +110,7 @@ export async function applyItem(db, item) {
     ]);
     const customer = customerSnap?.exists ? customerSnap.data() : null;
     if (customer && customer.brandId !== BRAND_ID) throw new Error(`${item.orderId} points to a customer outside Esmeralda.`);
+    if (discountSnap?.exists && discountSnap.data().brandId !== BRAND_ID) throw new Error(`${item.orderId} points to a discount outside Esmeralda.`);
 
     for (const path of item.linked) tx.delete(doc(path));
     const paid = item.paidAmount ? 1 : 0, held = item.held ? 1 : 0;

@@ -84,6 +84,9 @@ test('refuses foreign orders and customers, game vouchers, and orders changed af
   const otherBrand = memoryDb(seed());
   otherBrand.rows.get('customers/c1').brandId = 'other';
   await assert.rejects(plan(otherBrand), /outside Esmeralda/);
+  const otherDiscount = memoryDb(seed());
+  otherDiscount.rows.get('discounts/d1').brandId = 'other';
+  await assert.rejects(plan(otherDiscount), /discount outside Esmeralda/);
 
   for (const change of [{ customerName: 'Rigtig kunde' }, { customerDetails: { id: 'c2' } }, { paymentStatus: 'Refunded' }, { appliedDiscountId: 'd2' }]) {
     const db = memoryDb(seed());
@@ -99,4 +102,11 @@ test('refuses foreign orders and customers, game vouchers, and orders changed af
   const before = structuredClone([...moved.rows]);
   await assert.rejects(applyItem(moved, first), /outside Esmeralda/);
   assert.deepEqual([...moved.rows], before);
+  // The discount moved to another brand between preview and apply: nothing is written.
+  const movedDiscount = memoryDb(seed());
+  const items = await plan(movedDiscount);
+  movedDiscount.rows.get('discounts/d1').brandId = 'other';
+  const untouched = structuredClone([...movedDiscount.rows]);
+  await assert.rejects(applyItem(movedDiscount, items.find(item => item.orderId === 'ORD-389910' && item.kind === 'order')), /discount outside Esmeralda/);
+  assert.deepEqual([...movedDiscount.rows], untouched);
 });
