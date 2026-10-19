@@ -114,7 +114,7 @@ test('reservation serializes concurrent sessions, releases safely, preserves pai
   'node:crypto':require('node:crypto'),
   '@/lib/firebase':{db:{}},
   'firebase/firestore':{
-   doc:(_,c,id)=>c+'/'+id,
+   serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),doc:(_,c,id)=>c+'/'+id,
    runTransaction:(_,fn)=>{
     const task=queue.then(async()=>{
      const draft=structuredClone(state);
@@ -202,14 +202,15 @@ test('upsell history retains A and B and accepts legacy stored ID', () => {
 test('integration-created customer is resolved by normalized email within tenant', async () => {
  const rows=[{id:'integration-auto-id',brandId:'b',normalizedEmail:'a@example.com'},{id:'other-brand-id',brandId:'other',normalizedEmail:'a@example.com'}];
  const api=load('src/lib/checkout-customer-identity.ts',{
-  '@/lib/firebase':{db:{}},'firebase/firestore':{
-   collection:()=>null,where:(field,op,value)=>row=>row[field]===value,limit:()=>null,
+  '@/lib/firebase':{db:{}},'@/lib/integrations/esmeralda-customer-contract':require('../helpers/load-ts.cjs').loadTs('src/lib/integrations/esmeralda-customer-contract.ts'),'@/lib/customer-identity':require('../helpers/load-ts.cjs').loadTs('src/lib/customer-identity.ts'),'firebase/firestore':{
+   collection:()=>null,where:(field,op,value)=>row=>op==='array-contains'?(row[field]||[]).includes(value):row[field]===value,limit:()=>null,
    query:(_, ...filters)=>filters.filter(Boolean),
-   getDocs:async filters=>{const docs=rows.filter(row=>filters.every(f=>f(row)));return {size:docs.length,empty:!docs.length,docs};},
+   getDocs:async filters=>{const docs=rows.filter(row=>filters.every(f=>f(row))).map(row=>({id:row.id,ref:{id:row.id},data:()=>row}));return {size:docs.length,empty:!docs.length,docs};},
+   doc:(_,c,id)=>({id,path:c+'/'+id}),getDoc:async ref=>({id:ref.id,exists:()=>false,data:()=>undefined}),
   },
  });
  assert.equal((await api.findCheckoutCustomer('b',' A@EXAMPLE.COM ')).id,'integration-auto-id');
  assert.equal(await api.findCheckoutCustomer('missing','a@example.com'),null);
  rows.push({id:'duplicate',brandId:'b',normalizedEmail:'a@example.com'});
- await assert.rejects(api.findCheckoutCustomer('b','a@example.com'),/Multiple/);
+ await assert.rejects(api.findCheckoutCustomer('b','a@example.com'),/ambiguous_email_identity/);
 });

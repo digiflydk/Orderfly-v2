@@ -98,7 +98,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
     }
     return snapshot(ref);
    },
-   runTransaction:async(_,callback)=>callback({get:async ref=>snapshot(ref),set:(ref,data,options)=>{save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)}),
+   runTransaction:async(_,callback)=>callback({get:async ref=>snapshot(ref),set:(ref,data,options)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)}),
    serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),
    setDoc:async(ref,data)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data);writes.push({ref,data});events.push(ref.collection);},
    updateDoc:async(ref,data)=>{

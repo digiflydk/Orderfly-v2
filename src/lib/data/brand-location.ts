@@ -33,7 +33,7 @@ export async function getLocationsForBrand(brandId: string): Promise<Location[]>
     const db = getAdminDb();
     const q = db.collection('locations').where('brandId', '==', brandId);
     const querySnapshot = await q.get();
-    return querySnapshot.docs.map(doc => publicLocationRecord(doc.id, doc.data()));
+    return querySnapshot.docs.map(doc => storefrontMedia(publicLocationRecord(doc.id, doc.data()), 'locations', doc.id));
 }
 
 
