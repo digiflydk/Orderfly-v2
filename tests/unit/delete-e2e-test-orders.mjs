@@ -8,7 +8,7 @@ const { memoryDb } = createRequire(import.meta.url)('../helpers/marketing-db.cjs
 const BRAND = 'oeypKaMyYcQjIwaa1PtV';
 const hashId = parts => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 const T1 = Date.parse('2026-10-18T10:00:00Z'), T2 = Date.parse('2026-10-18T11:00:00Z'), REAL = Date.parse('2026-10-01T12:00:00Z');
-const order = (extra = {}) => ({ brandId: BRAND, customerName: 'TEST E2E-kunde', customerDetails: { id: 'c1' }, paymentStatus: 'Paid', paidAt: T1, totalAmount: 172, discountReservation: 'none', ...extra });
+const order = (extra = {}) => ({ brandId: BRAND, locationId: 'l1', customerName: 'TEST E2E-kunde', customerDetails: { id: 'c1' }, paymentStatus: 'Paid', paidAt: T1, totalAmount: 172, discountReservation: 'none', ...extra });
 const capacity = {
   customer: `checkout_customer_capacity/${hashId([BRAND, 'c1'])}`,
   discount: `checkout_discount_capacity/${hashId([BRAND, 'd1'])}`,
@@ -16,14 +16,19 @@ const capacity = {
 };
 function seed() {
   return new Map([
-    ['orders/ORD-385369', order()],
+    ['orders/ORD-385369', order({ verifiedUpsellIds: ['u1', 'u-other-location', 'u-other-brand'] })],
     ['orders/ORD-389910', order({ totalAmount: 221, paidAt: T2, appliedDiscountId: 'd1', discountReservation: 'consumed' })],
     ['orders/ORD-489552', order({ paymentStatus: 'Pending', paidAt: undefined, totalAmount: 93, status: 'Received', discountReservation: 'held' })],
     ['orders/ORD-859925', order({ customerName: 'TEST E2E-kunde 2', paymentStatus: 'Failed', paidAt: undefined, status: 'Canceled', totalAmount: 93, discountReservation: 'released' })],
     ['orders/ORD-REAL', order({ customerName: 'Rigtig kunde', paidAt: REAL, totalAmount: 100 })],
     [`orderNotificationJobs/${hashId(['order-confirmation', BRAND, 'ORD-385369'])}`, { orderId: 'ORD-385369' }],
-    ['analytics_events/e1', { orderId: 'ORD-385369' }],
-    ['analytics_events/e2', { orderId: 'ORD-REAL' }],
+    ['analytics_events/e1', { orderId: 'ORD-385369', brandId: BRAND }],
+    ['analytics_events/e2', { orderId: 'ORD-REAL', brandId: BRAND }],
+    // Another brand reused the same six-digit order reference.
+    ['analytics_events/e3', { orderId: 'ORD-385369', brandId: 'other' }],
+    ['upsells/u1', { brandId: BRAND, locationIds: ['l1'], conversions: 3 }],
+    ['upsells/u-other-location', { brandId: BRAND, locationIds: ['l2'], conversions: 3 }],
+    ['upsells/u-other-brand', { brandId: 'other', locationIds: ['l1'], conversions: 3 }],
     // Real order 100 + test orders 172 + 221 (one with discount d1), plus one held pickup order.
     ['customers/c1', { brandId: BRAND, totalOrders: 3, totalSpend: 493, lastOrderDate: T2, discountUsage: { d1: 2 }, name: 'x' }],
     [capacity.customer, { paid: 3, held: 1, firstTimeHeld: false }],
@@ -44,6 +49,10 @@ test('deletes only the listed test orders and undoes totals, capacity, discount 
   assert.equal(db.rows.has(`orderNotificationJobs/${hashId(['order-confirmation', BRAND, 'ORD-385369'])}`), false);
   assert.equal(db.rows.has('analytics_events/e1'), false);
   assert.equal(db.rows.has('analytics_events/e2'), true);
+  assert.equal(db.rows.has('analytics_events/e3'), true, 'another brand\'s event with the same order reference stays');
+  assert.equal(db.rows.get('upsells/u1').conversions, 2);
+  assert.equal(db.rows.get('upsells/u-other-location').conversions, 3, 'settlement never counted it');
+  assert.equal(db.rows.get('upsells/u-other-brand').conversions, 3);
   const customer = db.rows.get('customers/c1');
   assert.deepEqual({ ...customer, lastOrderDate: undefined }, { brandId: BRAND, totalOrders: 1, totalSpend: 100, discountUsage: { d1: 1 }, name: 'x', lastOrderDate: undefined });
   assert.equal(new Date(customer.lastOrderDate).getTime(), REAL, 'falls back to the real paid order');
@@ -88,7 +97,7 @@ test('refuses foreign orders and customers, game vouchers, and orders changed af
   otherDiscount.rows.get('discounts/d1').brandId = 'other';
   await assert.rejects(plan(otherDiscount), /discount outside Esmeralda/);
 
-  for (const change of [{ customerName: 'Rigtig kunde' }, { customerDetails: { id: 'c2' } }, { paymentStatus: 'Refunded' }, { appliedDiscountId: 'd2' }]) {
+  for (const change of [{ customerName: 'Rigtig kunde' }, { customerDetails: { id: 'c2' } }, { paymentStatus: 'Refunded' }, { appliedDiscountId: 'd2' }, { verifiedUpsellIds: ['u9'] }]) {
     const db = memoryDb(seed());
     const [first] = await plan(db);
     Object.assign(db.rows.get('orders/ORD-385369'), change);

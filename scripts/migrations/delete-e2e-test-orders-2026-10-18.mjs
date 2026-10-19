@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 
-export const description = 'Delete the five Esmeralda test orders from the live Stripe test of 2026-10-18 (PO-approved) and undo their customer totals and checkout capacity.';
+export const description = 'Delete the five Esmeralda test orders from the live Stripe test of 2026-10-18 (PO-approved) and undo their customer totals, checkout capacity and upsell conversions.';
 
 // Only these orders, only on Esmeralda, and only when they still carry the exact name typed in the test.
 const BRAND_ID = 'oeypKaMyYcQjIwaa1PtV';
@@ -41,6 +41,8 @@ function factsOf(order) {
     firstTime: order.firstTimeReservation === true,
     paidAmount: paid ? Number(order.totalAmount) : 0,
     paidAt: paid ? millis(order.paidAt) : null,
+    // Settlement counted a conversion on each verified upsell of a paid order.
+    upsellIds: paid ? [...new Set((Array.isArray(order.verifiedUpsellIds) ? order.verifiedUpsellIds : []).filter(id => typeof id === 'string' && /^[^/\\?#]{1,160}$/.test(id)))].slice(0, 97).sort() : [],
   };
 }
 
@@ -75,8 +77,9 @@ export async function plan(db) {
       }
       items.push({ kind: 'order', orderId, linked, ...facts, restoreLastOrderDate: facts.customerId ? restoreFor.get(facts.customerId) : null });
     }
+    // Order references can repeat across brands; only Esmeralda's events belong to these orders.
     const events = await db.collection('analytics_events').where('orderId', '==', orderId).get();
-    for (const event of events.docs) items.push({ kind: 'metric', orderId, path: `analytics_events/${event.id}` });
+    for (const event of events.docs) if (event.data().brandId === BRAND_ID) items.push({ kind: 'metric', orderId, path: `analytics_events/${event.id}` });
   }
   return items;
 }
@@ -88,7 +91,7 @@ export async function applyItem(db, item) {
     const ref = db.collection(collection).doc(id);
     await db.runTransaction(async tx => {
       const snap = await tx.get(ref);
-      if (snap.exists && snap.data().orderId === item.orderId) tx.delete(ref);
+      if (snap.exists && snap.data().orderId === item.orderId && snap.data().brandId === BRAND_ID) tx.delete(ref);
     });
     return;
   }
@@ -104,10 +107,12 @@ export async function applyItem(db, item) {
     const order = orderSnap.data();
     if (!isTestOrder(item.orderId, order)) throw new Error(`${item.orderId} changed since the preview.`);
     const facts = factsOf(order);
-    if (Object.keys(facts).some(key => facts[key] !== item[key])) throw new Error(`${item.orderId} changed since the preview.`);
-    const [customerSnap, discountSnap, ...capacitySnaps] = await Promise.all([
-      customerRef ? tx.get(customerRef) : null, discountRef ? tx.get(discountRef) : null, ...capacityRefs.map(ref => tx.get(ref)),
+    if (Object.keys(facts).some(key => JSON.stringify(facts[key]) !== JSON.stringify(item[key]))) throw new Error(`${item.orderId} changed since the preview.`);
+    const upsellRefs = item.upsellIds.map(id => doc(`upsells/${id}`));
+    const [customerSnap, discountSnap, ...rest] = await Promise.all([
+      customerRef ? tx.get(customerRef) : null, discountRef ? tx.get(discountRef) : null, ...capacityRefs.map(ref => tx.get(ref)), ...upsellRefs.map(ref => tx.get(ref)),
     ]);
+    const capacitySnaps = rest.slice(0, capacityRefs.length), upsellSnaps = rest.slice(capacityRefs.length);
     const customer = customerSnap?.exists ? customerSnap.data() : null;
     if (customer && customer.brandId !== BRAND_ID) throw new Error(`${item.orderId} points to a customer outside Esmeralda.`);
     if (discountSnap?.exists && discountSnap.data().brandId !== BRAND_ID) throw new Error(`${item.orderId} points to a discount outside Esmeralda.`);
@@ -121,6 +126,13 @@ export async function applyItem(db, item) {
         ...values, paid: Math.max(0, (values.paid || 0) - paid), held: Math.max(0, (values.held || 0) - held),
         ...(index === 0 ? { firstTimeHeld: item.firstTime && held ? false : !!values.firstTimeHeld } : {}),
       });
+    });
+    // Undo exactly the conversions settlement counted: same brand and location scope as settle-checkout.ts.
+    upsellRefs.forEach((ref, index) => {
+      const offer = upsellSnaps[index].exists ? upsellSnaps[index].data() : null;
+      if (offer && offer.brandId === BRAND_ID && Array.isArray(offer.locationIds) && offer.locationIds.includes(order.locationId)) {
+        tx.update(ref, { conversions: Math.max(0, (Number(offer.conversions) || 0) - 1) });
+      }
     });
     if (discountSnap?.exists) tx.update(discountRef, { usedCount: Math.max(0, (discountSnap.data().usedCount || 0) - 1) });
     if (customer && paid) {
