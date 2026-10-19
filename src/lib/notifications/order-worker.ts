@@ -58,14 +58,17 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
         if (!location || location.brandId !== job.brandId) { await finish('suppressed', 'location_not_eligible'); counts.suppressed++; continue; }
         pickupAddress = locationAddress(location);
       }
-      // Payment or cancellation can land while the location is read; recheck the order as the job is claimed.
+      // Payment, cancellation or a location move can land while the location is read; recheck both as the job is claimed.
+      const locationRef = db.collection('locations').doc(String(order.locationId));
       const ownsLease = await db.runTransaction(async tx => {
-        const [current, latest] = await Promise.all([tx.get(ref), tx.get(orderRef)]);
+        const [current, latest, place] = await Promise.all([tx.get(ref), tx.get(orderRef), pickup ? tx.get(locationRef) : null]);
         if (current.data()?.lease !== lease || current.data()?.state !== 'preparing') return false;
         if (!eligible(latest.data())) return 'ineligible' as const;
+        if (place && (!place.data() || place.data()?.brandId !== job.brandId)) return 'location' as const;
         tx.update(ref, { state: 'dispatching', nextAttemptAt: Date.now() + leaseMs, updatedAt: Date.now() }); return true;
       });
       if (ownsLease === 'ineligible') { await finish('suppressed', 'order_not_eligible'); counts.suppressed++; continue; }
+      if (ownsLease === 'location') { await finish('suppressed', 'location_not_eligible'); counts.suppressed++; continue; }
       if (!ownsLease) continue;
       if (pickup) {
         dispatched = true;
