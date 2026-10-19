@@ -82,3 +82,10 @@ test('sales use the selected paidAt period while current pending orders stay sep
   assert.equal('totalCookieConsents' in result.kpis, false);
   assert.equal('totalActiveBrands' in result, false);
 });
+
+test('admin order list says an unpaid order is not paid instead of an unknown date', () => {
+  const { formatPaidAt } = loadTs('src/lib/orders/presentation.ts');
+  assert.equal(formatPaidAt(undefined), 'Ikke betalt');
+  assert.equal(formatPaidAt('not a date'), 'Ukendt dato');
+  assert.match(formatPaidAt('2026-10-18T12:40:00Z'), /18\. okt\. 2026.*14\.40/);
+});

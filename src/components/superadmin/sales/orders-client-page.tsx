@@ -16,7 +16,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { paymentMethodLabel } from '@/lib/merchant-payment-methods';
 import { sumNetPaidSales } from '@/lib/paid-order';
-import { canceledPickupPaymentLabel, ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
+import { canceledPickupPaymentLabel, formatPaidAt, ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
 import { AdminDateRange } from '@/components/superadmin/admin-date-range';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 
@@ -44,27 +44,6 @@ function formatCurrency(value: number): string {
     style: 'currency',
     currency: 'DKK',
   }).format(Number.isFinite(value) ? value : 0);
-}
-
-function formatDate(value?: string): string {
-  if (!value) {
-    return 'Ukendt dato';
-  }
-
-  const date = new Date(value);
-
-  if (Number.isNaN(date.getTime())) {
-    return 'Unknown date';
-  }
-
-  return new Intl.DateTimeFormat('da-DK', {
-    day: '2-digit',
-    month: 'short',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    timeZone: 'Europe/Copenhagen',
-  }).format(date);
 }
 
 export function OrdersClientPage({
@@ -223,7 +202,7 @@ export function OrdersClientPage({
           <CardContent>
             <div className="text-sm font-medium">
               {latestOrder
-                ? formatDate(latestOrder.paidAt)
+                ? formatPaidAt(latestOrder.paidAt)
                 : 'Ingen ordrer endnu'}
             </div>
           </CardContent>
@@ -310,7 +289,7 @@ export function OrdersClientPage({
                       </TableCell>
 
                       <TableCell className="text-muted-foreground">
-                        {formatDate(order.paidAt)}
+                        {formatPaidAt(order.paidAt)}
                       </TableCell>
 
                       <TableCell>
