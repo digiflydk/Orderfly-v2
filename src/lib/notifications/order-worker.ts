@@ -39,11 +39,14 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
     });
     let dispatched = false;
     try {
-      const orderDoc = await db.collection('orders').doc(String(job.orderId || '')).get();
+      const orderRef = db.collection('orders').doc(String(job.orderId || ''));
+      const orderDoc = await orderRef.get();
       const order = orderDoc.data();
       const pickup = job.kind === 'pickupReceived';
-      const payable = pickup ? !!order && pickupUnpaid(order) : order?.paymentStatus === 'Paid' && order.status !== 'Canceled';
-      if (!order || !payable || order.brandId !== job.brandId || order.locationId !== job.locationId || !validEmail(order.customerContact)) {
+      const eligible = (current: Record<string, any> | undefined): current is Record<string, any> => !!current &&
+        (pickup ? pickupUnpaid(current) : current.paymentStatus === 'Paid' && current.status !== 'Canceled') &&
+        current.brandId === job.brandId && current.locationId === job.locationId && validEmail(current.customerContact);
+      if (!eligible(order)) {
         await finish('suppressed', 'order_not_eligible'); counts.suppressed++; continue;
       }
       // The pickup address comes from the order's own location; read it before dispatch so a failed read can retry.
@@ -55,11 +58,14 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
         if (!location || location.brandId !== job.brandId) { await finish('suppressed', 'location_not_eligible'); counts.suppressed++; continue; }
         pickupAddress = locationAddress(location);
       }
+      // Payment or cancellation can land while the location is read; recheck the order as the job is claimed.
       const ownsLease = await db.runTransaction(async tx => {
-        const current = (await tx.get(ref)).data();
-        if (current?.lease !== lease || current.state !== 'preparing') return false;
+        const [current, latest] = await Promise.all([tx.get(ref), tx.get(orderRef)]);
+        if (current.data()?.lease !== lease || current.data()?.state !== 'preparing') return false;
+        if (!eligible(latest.data())) return 'ineligible' as const;
         tx.update(ref, { state: 'dispatching', nextAttemptAt: Date.now() + leaseMs, updatedAt: Date.now() }); return true;
       });
+      if (ownsLease === 'ineligible') { await finish('suppressed', 'order_not_eligible'); counts.suppressed++; continue; }
       if (!ownsLease) continue;
       if (pickup) {
         dispatched = true;

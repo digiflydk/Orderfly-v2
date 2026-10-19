@@ -214,3 +214,14 @@ test('pay-at-pickup mail: a failed location read before dispatch is retried, nev
  fail=false;await worker.runOrderNotificationWorker(client,Date.now()+120000);
  assert.equal(sent.length,1);assert.equal(f.records.get('orderNotificationJobs/pickup').state,'accepted');
 });
+test('pay-at-pickup mail: payment or cancellation during the location read suppresses the mail',async t=>{
+ for(const change of [{paymentStatus:'Paid'},{status:'Canceled',paymentStatus:'Failed'}]){
+  const f=setup(t);Object.assign(f.records.get('orders/order'),{paymentMethod:'PayAtPickup',deliveryType:'Pickup',paymentStatus:'Pending',status:'Received',customerContact:'private@example.test',invoice:undefined,psp:undefined});
+  f.records.set('orderNotificationJobs/pickup',{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:'pickup-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+  const original=f.db.collection;
+  f.db.collection=(...args)=>{const collection=original(...args);if(args[0]!=='locations')return collection;const doc=collection.doc;collection.doc=(...ids)=>{const ref=doc(...ids);const get=ref.get;ref.get=async()=>{Object.assign(f.records.get('orders/order'),change);return get();};return ref;};return collection;};
+  const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{},NotificationPlatformClient:class{}}});
+  await worker.runOrderNotificationWorker(()=>({send:async message=>sent.push(message)}));
+  assert.equal(sent.length,0,JSON.stringify(change));assert.equal(f.records.get('orderNotificationJobs/pickup').state,'suppressed');assert.equal(f.records.get('orderNotificationJobs/pickup').lastError,'order_not_eligible');
+ }
+});
