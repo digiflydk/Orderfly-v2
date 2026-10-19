@@ -23,7 +23,7 @@ function seed() {
     ['orders/ORD-REAL', order({ customerName: 'Rigtig kunde', paidAt: REAL, totalAmount: 100 })],
     // Another brand's order pointing at the same customer id must never be read as this customer's history.
     ['orders/ORD-FOREIGN', order({ brandId: 'other', customerName: 'Rigtig kunde', paidAt: T2 + 5000, totalAmount: 50 })],
-    [`orderNotificationJobs/${hashId(['order-confirmation', BRAND, 'ORD-385369'])}`, { orderId: 'ORD-385369' }],
+    [`orderNotificationJobs/${hashId(['order-confirmation', BRAND, 'ORD-385369'])}`, { orderId: 'ORD-385369', brandId: BRAND }],
     ['analytics_events/e1', { orderId: 'ORD-385369', brandId: BRAND }],
     ['analytics_events/e2', { orderId: 'ORD-REAL', brandId: BRAND }],
     // Another brand reused the same six-digit order reference.
@@ -122,6 +122,15 @@ test('refuses foreign orders and customers, game vouchers, and orders changed af
     const unchanged = structuredClone([...rescoped.rows]);
     await assert.rejects(applyItem(rescoped, planned), /upsell scope changed/);
     assert.deepEqual([...rescoped.rows], unchanged);
+  }
+  // A linked job replaced by another order's or brand's record after the preview: nothing is written.
+  for (const replacement of [{ orderId: 'ORD-OTHER', brandId: BRAND }, { orderId: 'ORD-385369', brandId: 'other' }]) {
+    const replaced = memoryDb(seed());
+    const planned = (await plan(replaced)).find(item => item.orderId === 'ORD-385369' && item.kind === 'order');
+    replaced.rows.set(`orderNotificationJobs/${hashId(['order-confirmation', BRAND, 'ORD-385369'])}`, replacement);
+    const kept = structuredClone([...replaced.rows]);
+    await assert.rejects(applyItem(replaced, planned), /does not belong/);
+    assert.deepEqual([...replaced.rows], kept);
   }
   // The discount moved to another brand between preview and apply: nothing is written.
   const movedDiscount = memoryDb(seed());

@@ -22,7 +22,8 @@ Migrationen stopper uden at skrive noget, hvis et af disse tilfælde gælder:
 - ordren ikke er testordren,
 - kunden eller rabatten hører til et andet brand,
 - ordren brugte et gavekort fra spil,
-- ordren eller et af dens upsell-tilbud er ændret siden preview, fx kunde, betaling, rabat eller lokationer.
+- ordren eller et af dens upsell-tilbud er ændret siden preview, fx kunde, betaling, rabat eller lokationer,
+- et tilknyttet job eller en konvertering ikke længere hører til testordren og Esmeralda.
 
 Planen indeholder kun id'er, beløb og tidspunkter.
 

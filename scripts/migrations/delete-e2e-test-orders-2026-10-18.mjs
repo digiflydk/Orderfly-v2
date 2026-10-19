@@ -114,17 +114,25 @@ export async function applyItem(db, item) {
     const facts = factsOf(order);
     if (Object.keys(facts).some(key => JSON.stringify(facts[key]) !== JSON.stringify(item[key]))) throw new Error(`${item.orderId} changed since the preview.`);
     const upsellRefs = item.upsellIds.map(id => doc(`upsells/${id}`));
+    const linkedRefs = item.linked.map(doc);
     const [customerSnap, discountSnap, ...rest] = await Promise.all([
-      customerRef ? tx.get(customerRef) : null, discountRef ? tx.get(discountRef) : null, ...capacityRefs.map(ref => tx.get(ref)), ...upsellRefs.map(ref => tx.get(ref)),
+      customerRef ? tx.get(customerRef) : null, discountRef ? tx.get(discountRef) : null,
+      ...capacityRefs.map(ref => tx.get(ref)), ...upsellRefs.map(ref => tx.get(ref)), ...linkedRefs.map(ref => tx.get(ref)),
     ]);
-    const capacitySnaps = rest.slice(0, capacityRefs.length), upsellSnaps = rest.slice(capacityRefs.length);
+    const capacitySnaps = rest.slice(0, capacityRefs.length);
+    const upsellSnaps = rest.slice(capacityRefs.length, capacityRefs.length + upsellRefs.length);
+    const linkedSnaps = rest.slice(capacityRefs.length + upsellRefs.length);
+    // A linked job or conversion is only deleted when it still belongs to this Esmeralda test order.
+    linkedSnaps.forEach((snap, index) => {
+      if (snap.exists && (snap.data().brandId !== BRAND_ID || snap.data().orderId !== item.orderId)) throw new Error(`${item.linked[index]} does not belong to ${item.orderId}.`);
+    });
     const counted = item.upsellIds.filter((id, index) => upsellCounts(upsellSnaps[index].exists ? upsellSnaps[index].data() : null, order.locationId));
     if (JSON.stringify(counted) !== JSON.stringify(item.upsellsCounted)) throw new Error(`${item.orderId} upsell scope changed since the preview.`);
     const customer = customerSnap?.exists ? customerSnap.data() : null;
     if (customer && customer.brandId !== BRAND_ID) throw new Error(`${item.orderId} points to a customer outside Esmeralda.`);
     if (discountSnap?.exists && discountSnap.data().brandId !== BRAND_ID) throw new Error(`${item.orderId} points to a discount outside Esmeralda.`);
 
-    for (const path of item.linked) tx.delete(doc(path));
+    linkedRefs.forEach((ref, index) => { if (linkedSnaps[index].exists) tx.delete(ref); });
     const paid = item.paidAmount ? 1 : 0, held = item.held ? 1 : 0;
     capacityRefs.forEach((ref, index) => {
       if (!capacitySnaps[index].exists) return;
