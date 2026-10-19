@@ -26,3 +26,19 @@ test('late acknowledgement preserves the newer failed withdrawal and retries it 
   await api.retryPendingConsent();assert.equal(requests[2].marketing,false);assert.equal(store.has('pending_cookie_consent'),false);assert.equal(store.get('orderfly_anonymous_id'),id);assert.equal(cookies.at(-1)[1],id);
  }finally{global.fetch=oldFetch;}
 });
+const linkedCustomer=(marketing,timestamp,anon=foreign)=>['customers/c',{id:'c',brandId:'b',email:'test@example.test',normalizedEmail:'test@example.test',phone:'12345678',normalizedPhone:'12345678',locationIds:['l'],marketingConsent:false,
+ cookie_consent:{marketing,statistics:true,functional:true,timestamp,consent_version:'v1',linked_anon_id:anon,origin_brand:'b'}}];
+test('a returning customer who changes cookie consent from yes to no gets the new choice on their profile',async()=>{
+ const f=await checkout({consentCookie:id+'.'+secret,seed:[linkedCustomer(true,new Date('2026-01-01T00:00:00Z')),['anonymous_cookie_consents/'+id,consent()]]});
+ assert.equal(f.result.success,true);const saved=f.records.get('customers/c').cookie_consent;
+ assert.equal(saved.marketing,false);assert.equal(saved.linked_anon_id,id);
+});
+test('the same linked browser updates its own consent on the profile',async()=>{
+ const f=await checkout({consentCookie:id+'.'+secret,seed:[linkedCustomer(false,new Date('2026-01-01T00:00:00Z'),id),['anonymous_cookie_consents/'+id,{...consent(),marketing:true}]]});
+ assert.equal(f.result.success,true);assert.equal(f.records.get('customers/c').cookie_consent.marketing,true);
+});
+test('an older consent from another browser does not overwrite a newer choice on the profile',async()=>{
+ const f=await checkout({consentCookie:id+'.'+secret,seed:[linkedCustomer(false,new Date(Date.now()+60_000)),['anonymous_cookie_consents/'+id,{...consent(),marketing:true}]]});
+ assert.equal(f.result.success,true);const saved=f.records.get('customers/c').cookie_consent;
+ assert.equal(saved.marketing,false);assert.equal(saved.linked_anon_id,foreign);
+});

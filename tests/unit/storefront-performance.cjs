@@ -33,7 +33,7 @@ test('inline pictures become short versioned URLs; image response is compressed,
 test('menu cache separates tenants and locations and refreshes after tag invalidation',async()=>{
  const cache=new Map();let reads=0;let productName='old';const options=[];
  const db={collection:collection=>{const filters={};const q={where:(k,op,v)=>{filters[k]=v;return q;},get:async()=>{reads++;return {docs:[{id:collection==='products'?'p':'c',data:()=>collection==='products'?{productName,brandId:filters.brandId,isActive:true,categoryId:'c'}:{categoryName:'Pizza'}}]};}};return q;}};
- const catalog=load('src/lib/server/catalog.ts',{'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},'@/lib/storefront-media':media,'next/cache':{unstable_cache:(fn,keys,opts)=>{options.push(opts);return async(...args)=>{const key=JSON.stringify([keys,args]);if(!cache.has(key))cache.set(key,await fn(...args));return cache.get(key);};}}});
+ const catalog=load('src/lib/server/catalog.ts',{'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},'@/lib/storefront-media':media,'@/lib/synthetic-product':require('../helpers/load-ts.cjs').loadTs('src/lib/synthetic-product.ts'),'next/cache':{unstable_cache:(fn,keys,opts)=>{options.push(opts);return async(...args)=>{const key=JSON.stringify([keys,args]);if(!cache.has(key))cache.set(key,await fn(...args));return cache.get(key);};}}});
  await catalog.getMenuForRender({brandId:'a',locationId:'l'});await catalog.getMenuForRender({brandId:'a',locationId:'l'});assert.equal(reads,2);
  await catalog.getMenuForRender({brandId:'b',locationId:'l'});assert.equal(reads,4);
  await catalog.getMenuForRender({brandId:'b',locationId:'other'});assert.equal(reads,6);
@@ -51,4 +51,16 @@ test('cached campaign rows still filter delivery method and expiration on every 
  assert.equal((await api.getStorefrontDiscounts(params)).length,1);
  assert.equal((await api.getStorefrontDiscounts({...params,deliveryType:'pickup'})).length,0);
  row.endDate='2000-01-01T00:00:00Z';assert.equal((await api.getStorefrontDiscounts(params)).length,0);
+});
+test('the restaurant list sends inline location pictures as short image URLs',async()=>{
+ const inline='data:image/png;base64,'+(await sharp({create:{width:800,height:600,channels:3,background:'#208030'}}).png().toBuffer()).toString('base64');
+ const docs=[{id:'l',data:()=>({brandId:'b',slug:'shop',name:'Shop',isActive:true,imageUrl:inline})},{id:'closed',data:()=>({brandId:'b',slug:'closed',name:'Closed',isActive:false,imageUrl:inline})}];
+ const db={collection:()=>{const q={where:()=>q,limit:()=>q,get:async()=>({empty:false,docs})};return q;}};
+ const api=load('src/lib/data/brand-location.ts',{'@/lib/firebase-admin':{getAdminDb:()=>db},react:{cache:fn=>fn},'next/cache':{unstable_cache:fn=>fn},'@/lib/storefront-media':media,'@/lib/public-native-records':require('../helpers/load-ts.cjs').loadTs('src/lib/public-native-records.ts')});
+ const [location,closed]=await api.getLocationsForBrand('b');
+ // The image endpoint rejects inactive records, so their picture must stay inline rather than break.
+ assert.equal(closed.imageUrl,inline);
+ assert.match(location.imageUrl,/^\/api\/storefront-image\?/);
+ assert.equal(new URL('https://test'+location.imageUrl).searchParams.get('collection'),'locations');
+ assert.equal(new URL('https://test'+location.imageUrl).searchParams.get('field'),'imageUrl');
 });

@@ -54,3 +54,7 @@ consent data. Both run in the existing Funnel regression workflow.
 Independent review and PO acceptance precede merge. Deployment and read-only
 verification on the live cookie report remain separate gates; this document
 does not claim live verification of the changes.
+
+## Consent on the customer profile (2026-10-19)
+
+At checkout the browser's verified consent (`of_consent_identity` cookie) is copied to the customer's `cookie_consent`. Before, a profile that was already linked was never updated, so a customer who later changed yes to no (or no to yes) kept the old choice on the profile. Now the profile takes the checkout's consent when it is at least as new as the stored one (`last_seen` versus the stored `timestamp`), from the same or another browser. An older choice from another browser does not overwrite a newer one. The profile still changes only at checkout; `anonymous_cookie_consents` remains the authoritative latest choice per browser. Covered by `tests/unit/consent-delivery.cjs`.

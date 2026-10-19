@@ -179,7 +179,8 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
                     // Marketing consent is changed only with the durable consent/outbox transaction.
                 };
 
-                if (cookieConsentData && !customerData.cookie_consent?.linked_anon_id) {
+                // The profile keeps the latest choice, so a later yes/no replaces an older one.
+                if (cookieConsentData && consentTime(cookieConsentData.timestamp) >= consentTime(customerData.cookie_consent?.timestamp)) {
                     updatedData.cookie_consent = cookieConsentData;
                 }
 
@@ -240,6 +241,14 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
         console.error('checkout_customer_failed', { code: e?.code || 'unknown' });
         throw new Error(`Could not create or update customer profile: ${e.message}`);
     }
+}
+
+function consentTime(value: unknown): number {
+    const date = typeof (value as { toDate?: unknown })?.toDate === 'function'
+        ? (value as { toDate: () => Date }).toDate()
+        : value instanceof Date ? value : value ? new Date(value as string | number) : null;
+    const time = date?.getTime();
+    return typeof time === 'number' && Number.isFinite(time) ? time : 0;
 }
 
 // Legacy hash retained only for safe lookup of pre-v2 customer ids.
