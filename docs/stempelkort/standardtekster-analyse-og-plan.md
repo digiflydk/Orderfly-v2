@@ -1,6 +1,12 @@
 # Standardtekster for samtykke og vilkår – analyse og plan
 
-Status: **Ejeren har besvaret spørgsmålene 2026-10-19 (se B1). Afventer godkendelse af den nye ordlyd i afsnit 8 (B2), før der bygges.** Der er ikke ændret applikationskode.
+Status: **Godkendt af ejeren 2026-10-19, inkl. ordlyden i afsnit 8 (B2). Bygget i én PR.** Se [README](README.md#standardtekster-for-samtykke-og-vilkår) for, hvordan det virker.
+
+Afvigelser fra planen under bygningen:
+- Brandets tekstversioner ligger i en ny fane **Tekstversioner** under Stempelkort, ved siden af Oversigt, Medlemmer og Log.
+- Pladsholdere, der mangler, blokerer kun, når de bruges i teksten. En egen tekst uden fx `{cvr}` kræver ikke CVR-nr.
+- Teksterne valideres ved gemning (`saveSettingsSchema`), ikke ved læsning. Et gemt program med en ugyldig skabelon kan altså stadig læses. Programmet holdes lukket for tilmelding, indtil teksten er rettet.
+- Linket til Brands vises kun for platformens superuser, fordi kun superusers kan redigere brands.
 Grundlag: `main` @ `HEAD` 2026-10-19. Hører til fase 1 (backend og admin) og bruges i fase 2 (kundeportal).
 
 ---

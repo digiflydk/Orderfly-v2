@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TERMS_ACCEPT_DEFAULT } from './texts';
 
 // Pure stamp-card rules. No I/O: callers load the program version that applies
 // to the card, authorize the actor and persist the outcome in one transaction.
@@ -41,14 +42,19 @@ export const programSettingsSchema = z.object({
   maxStampsPerDay: count(1, 100).nullable(),
   // Counter view locks after this many idle minutes. Defaulted so versions saved before the field still parse.
   counterIdleMinutes: count(1, 60).default(5),
+  // Minimum age stated in the terms ({aldersgrænse}). Defaulted so earlier versions still parse.
+  minimumAge: count(13, 99).default(15),
+  // Texts are templates with placeholders, filled when shown (texts.ts).
   terms: text(20_000),
   consentText: text(2_000),
+  consentHelp: text(2_000).default(''),
+  termsAccept: text(300).default(TERMS_ACCEPT_DEFAULT),
 }).strict().superRefine((s, ctx) => {
   if (!s.active) return;
   // An inactive draft may be incomplete; launching requires every customer-facing value.
   const missing: Array<[boolean, string]> = [
     [!s.reward, 'reward'], [!s.rewardDescription, 'rewardDescription'], [!s.terms, 'terms'],
-    [!s.consentText, 'consentText'], [s.counterChannels.length + s.orderTypes.length === 0, 'counterChannels'],
+    [!s.consentText, 'consentText'], [!s.termsAccept, 'termsAccept'], [s.counterChannels.length + s.orderTypes.length === 0, 'counterChannels'],
   ];
   for (const [failed, path] of missing) if (failed) ctx.addIssue({ code: 'custom', path: [path], message: 'Required when the program is active' });
 });
@@ -59,7 +65,8 @@ export function defaultProgramSettings(brandName: string): ProgramSettings {
     active: false, name: `${brandName.trim() || 'Loyalitets'} Club`.slice(0, 80), stampsRequired: 8, minimumAmountOre: 10_000,
     stampsPerPurchase: 1, cardValidityMonths: 6, reward: null, rewardDescription: '', rewardValidityMonths: 3,
     crossLocation: true, discountedOrdersQualify: false, sessionDays: 180, counterChannels: ['dine_in', 'takeaway'],
-    orderTypes: ['pickup'], maxStampsPerDay: null, counterIdleMinutes: 5, terms: '', consentText: '',
+    orderTypes: ['pickup'], maxStampsPerDay: null, counterIdleMinutes: 5, minimumAge: 15, terms: '', consentText: '', consentHelp: '',
+    termsAccept: TERMS_ACCEPT_DEFAULT,
   };
 }
 

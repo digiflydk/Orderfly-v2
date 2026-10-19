@@ -13,6 +13,7 @@ webpackModule.init();
 const root = process.cwd();
 let dir, server, browser, origin;
 const NOW = Date.parse('2026-10-20T10:00:00Z');
+const TEXTS = require('../helpers/load-ts.cjs').loadTs('src/lib/loyalty/stamp-card/texts.ts');
 
 before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'loyalty-admin-'));
@@ -20,13 +21,21 @@ before(async () => {
   const src = rel => JSON.stringify(path.join(root, 'src', rel));
   const settings = { active: false, name: 'Esmeralda Club', stampsRequired: 8, minimumAmountOre: 10000, stampsPerPurchase: 1, cardValidityMonths: 6,
     reward: { type: 'free_product', productIds: ['pizza'], categoryIds: [] }, rewardDescription: 'Gratis pizza', rewardValidityMonths: 3, crossLocation: true,
-    discountedOrdersQualify: false, sessionDays: 180, counterChannels: ['dine_in', 'takeaway'], orderTypes: ['pickup'], maxStampsPerDay: null, terms: 'Vilkår', consentText: 'Samtykke' };
+    discountedOrdersQualify: false, sessionDays: 180, counterChannels: ['dine_in', 'takeaway'], orderTypes: ['pickup'], maxStampsPerDay: null, minimumAge: 15, terms: 'Vilkår', consentText: 'Samtykke', consentHelp: '',
+    termsAccept: 'Jeg accepterer vilkårene for {programnavn}.' };
   const members = [
     { id: 'm1', brandId: 'b', brandName: 'Esmeralda', name: '=HYPERLINK("x")', email: 'a@example.com', joinedAt: NOW - 86400000, stamps: 3, stampsRequired: 8, rewards: 1, nextExpiry: NOW + 9e8, newsletter: true, lastActivityAt: NOW },
     { id: 'm2', brandId: 'b', brandName: 'Esmeralda', name: 'Bo Hansen', email: 'bo@example.com', joinedAt: NOW, stamps: 0, stampsRequired: 8, rewards: 0, nextExpiry: null, newsletter: false, lastActivityAt: null },
   ];
   const events = [{ createdAt: NOW, type: 'stamp_added', memberId: 'm1', memberName: 'Anna', quantity: 1, amountOre: 15000, channel: 'takeaway', source: 'counter_search', locationName: 'Amager', actorId: 'a'.repeat(64), actorName: 'Kasse', reason: null, details: null },
     { createdAt: NOW - 1, type: 'settings_changed', memberId: null, memberName: '', quantity: 1, amountOre: null, channel: null, source: 'admin', locationName: null, actorId: 'b'.repeat(64), actorName: 'Leder', reason: null, details: 'stampsRequired: 8 → 10' }];
+  // An active program on the standard texts, published as version 1.
+  const standard = { ...settings, active: true, ...TEXTS.CURRENT_TEMPLATE.texts };
+  const brandData = { name: 'Esmeralda', companyName: 'Esmeralda Pizza ApS', street: 'Vestergade 1', zipCode: '8000', city: 'Aarhus C', companyRegNo: '12345678',
+    supportEmail: 'club@esmeralda.dk', privacyUrl: 'https://esmeralda.dk/privatliv' };
+  const textsInitial = (brand, active) => JSON.stringify({ brand: { brandId: 'b', brandName: 'Esmeralda' }, version: 3, settings: { ...standard, active }, updatedAt: NOW, updatedByName: 'Leder',
+    products: [{ id: 'pizza', name: 'Pizza' }], categories: [], texts: { version: 1, effectiveFrom: NOW, key: TEXTS.textKey(standard), templateVersion: TEXTS.CURRENT_TEMPLATE.version },
+    textContext: { brand, activeLocations: 2 } });
   const actions = write('actions.js', `
     const calls = window.__calls = [];
     export async function saveProgramSettings(input){ calls.push(['save', input]); return window.__saveResult || { ok: true, data: { version: 2, changed: 1 } }; }
@@ -49,7 +58,10 @@ before(async () => {
     import { ProgramsOverview } from ${src('app/superadmin/loyalty/stamp-card/programs-overview')};
     import { OverviewCharts } from ${src('app/superadmin/loyalty/overview-charts')};
     const view = location.pathname.slice(1);
-    const node = view === 'settings' ? React.createElement(SettingsForm, { initial: { brand: { brandId: 'b', brandName: 'Esmeralda' }, version: 1, settings: ${JSON.stringify(settings)}, updatedAt: ${NOW}, updatedByName: 'Leder', products: [{ id: 'pizza', name: 'Pizza' }], categories: [] } })
+    const node = view === 'settings' ? React.createElement(SettingsForm, { initial: { brand: { brandId: 'b', brandName: 'Esmeralda' }, version: 1, settings: ${JSON.stringify(settings)}, updatedAt: ${NOW}, updatedByName: 'Leder', products: [{ id: 'pizza', name: 'Pizza' }], categories: [],
+      texts: { version: 0, effectiveFrom: null, key: null, templateVersion: null }, textContext: { brand: { name: 'Esmeralda' }, activeLocations: 2 } }, canEditBrand: true })
+      : view === 'texts' ? React.createElement(SettingsForm, { initial: ${textsInitial(brandData, true)}, canEditBrand: true })
+      : view === 'texts-missing' ? React.createElement(SettingsForm, { initial: ${textsInitial({ ...brandData, companyRegNo: null }, false)}, canEditBrand: false })
       : view === 'members' ? React.createElement(MembersTable, { rows: ${JSON.stringify(members)}, truncated: false, brandIds: ['b'], filterQuery: 'period=30d', multiBrand: false })
       : view === 'log' ? React.createElement(EventLog, { rows: ${JSON.stringify(events)}, truncated: false, filter: { brandIds: ['b'], from: '2026-10-14', to: '2026-10-20', type: null, actorId: null, channel: null }, multiBrand: false })
       : view === 'programs' ? React.createElement(ProgramsOverview, { status: 'all', editHref: '/superadmin/loyalty/stamp-card?tab=settings', available: [{ brandId: 'b3', brandName: 'Tredje' }],
@@ -106,6 +118,72 @@ for (const width of [390, 1440]) test(`settings save converts kroner, keeps the 
     await page.evaluate(() => { window.__saveResult = { ok: false, error: 'invalid_settings', fields: { consentText: 'Skal udfyldes, når programmet er aktivt.' } }; });
     await page.getByRole('button', { name: 'Gem indstillinger' }).click();
     await page.getByRole('alert').filter({ hasText: 'Skal udfyldes, når programmet er aktivt.' }).waitFor();
+    assert.ok(await noOverflow(page));
+  } finally { await page.close(); }
+});
+
+for (const width of [390, 1440]) test(`the texts preview shows the filled terms and a changed rule warns about notice at ${width}px`, async () => {
+  const page = await open('texts', width);
+  try {
+    await page.getByRole('tab', { name: 'Forhåndsvisning' }).click();
+    const preview = page.getByTestId('texts-preview');
+    await preview.getByText(/Esmeralda Pizza ApS, Vestergade 1, 8000 Aarhus C, CVR-nr\. 12345678/).waitFor();
+    assert.doesNotMatch(await preview.innerText(), /[{}]/);
+    assert.match(await preview.innerText(), /Version 1, gældende fra 20\. oktober 2026\./);
+    assert.equal(await page.getByRole('alert').count(), 0);
+    await page.getByLabel('Minimumsbeløb pr. køb (kr.)').fill('150');
+    await preview.getByText(/mindst 150 kr\. hos Esmeralda/).waitFor();
+    assert.match(await preview.innerText(), /Version 2, gældende fra/);
+    await page.getByRole('button', { name: 'Gem indstillinger' }).click();
+    await page.getByRole('alertdialog', { name: 'Vilkårene ændres for et aktivt program' }).getByText(/30 dages varsel/).waitFor();
+    await page.getByRole('button', { name: 'Annuller' }).click();
+    assert.equal((await calls(page)).length, 0);
+    await page.getByRole('button', { name: 'Gem indstillinger' }).click();
+    await page.getByRole('button', { name: 'Gem ændringerne' }).click();
+    await page.getByText('Indstillingerne er gemt').first().waitFor();
+    const [[name, input]] = await calls(page);
+    assert.equal(name, 'save'); assert.equal(input.settings.minimumAmountOre, 15000); assert.equal(input.settings.terms, TEXTS.CURRENT_TEMPLATE.texts.terms);
+    assert.ok(await noOverflow(page));
+  } finally { await page.close(); }
+});
+
+test('Gendan standardtekst restores all four texts only after confirmation; a rule unrelated to the texts saves without a warning', async () => {
+  const page = await open('texts', 1440);
+  try {
+    await page.getByLabel('Samtykketekst').fill('Egen tekst');
+    await page.getByLabel('Vilkår', { exact: true }).fill('Egne vilkår');
+    await page.getByRole('button', { name: 'Gendan standardtekst' }).click();
+    await page.getByRole('button', { name: 'Annuller' }).click();
+    assert.equal(await page.getByLabel('Samtykketekst').inputValue(), 'Egen tekst');
+    await page.getByRole('button', { name: 'Gendan standardtekst' }).click();
+    await page.getByRole('button', { name: 'Gendan', exact: true }).click();
+    for (const [label, field] of [['Samtykketekst', 'consentText'], ['Forklaring under samtykket', 'consentHelp'], ['Accept af vilkår', 'termsAccept']])
+      assert.equal(await page.getByLabel(label, { exact: true }).inputValue(), TEXTS.CURRENT_TEMPLATE.texts[field]);
+    assert.equal(await page.getByLabel('Vilkår', { exact: true }).inputValue(), TEXTS.CURRENT_TEMPLATE.texts.terms);
+    await page.getByLabel('Kundens login-session (dage)').fill('90');
+    await page.getByRole('button', { name: 'Gem indstillinger' }).click();
+    await page.getByText('Indstillingerne er gemt').first().waitFor();
+    assert.equal(await page.getByRole('alertdialog').count(), 0);
+    assert.equal((await calls(page))[0][1].settings.sessionDays, 90);
+  } finally { await page.close(); }
+});
+
+test('missing brand details are listed and a mistyped placeholder is flagged at once', async () => {
+  const page = await open('texts-missing', 390);
+  try {
+    const alert = page.getByRole('alert').filter({ hasText: 'Programmet kan ikke aktiveres' });
+    await alert.getByText('CVR-nr. mangler under Brands.').waitFor();
+    await alert.getByText('Kontakt en platformsadministrator for at få brandets oplysninger udfyldt.').waitFor();
+    assert.equal(await alert.getByRole('link').count(), 0);
+    await page.getByRole('tab', { name: 'Forhåndsvisning' }).click();
+    assert.equal(await page.getByTestId('texts-preview').locator('mark', { hasText: '{cvr}' }).count(), 1);
+    await page.getByRole('tab', { name: 'Rediger' }).click();
+    await page.getByLabel('Accept af vilkår').fill('Jeg accepterer {vilkaar}.');
+    await page.getByRole('alert').filter({ hasText: 'Ukendt pladsholder: {vilkaar}' }).waitFor();
+    await page.evaluate(() => { window.__saveResult = { ok: false, error: 'texts_incomplete', missing: [{ placeholder: 'cvr', label: 'CVR-nr.', fields: ['terms'] }] }; });
+    await page.getByLabel('Accept af vilkår').fill('Jeg accepterer vilkårene.');
+    await page.getByRole('button', { name: 'Gem indstillinger' }).click();
+    await page.getByText('Mangler: CVR-nr.', { exact: true }).first().waitFor();
     assert.ok(await noOverflow(page));
   } finally { await page.close(); }
 });

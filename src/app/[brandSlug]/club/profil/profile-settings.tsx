@@ -11,7 +11,7 @@ import { portalErrorText, portalRequest } from '../portal-api';
 type Props = {
   slug: string; base: string; programName: string;
   member: { name: string; email: string };
-  newsletter: { subscribed: boolean; consentVersion: string; consentText: string };
+  newsletter: { subscribed: boolean; consentVersion: string; consentText: string; consentHelp: string };
 };
 
 // Profile and settings (spec §4.5). Each change goes through the phase 1 API;
@@ -89,7 +89,10 @@ export function ProfileSettings({ slug, base, programName, member, newsletter }:
           </Button>
         ) : newsletter.consentText ? (
           <>
-            <p className="whitespace-pre-line rounded-md border p-3 text-sm">{newsletter.consentText}</p>
+            <div className="flex flex-col gap-2 rounded-md border p-3 text-sm">
+              <p className="whitespace-pre-line">{newsletter.consentText}</p>
+              {newsletter.consentHelp && <p className="whitespace-pre-line opacity-80">{newsletter.consentHelp}</p>}
+            </div>
             <Button type="button" variant="brand" size="lg" className="min-h-12 text-base" disabled={busy !== null} onClick={() => setNewsletter(true)}>
               {busy === 'consent' ? 'Øjeblik…' : 'Tilmeld nyhedsbrevet'}
             </Button>

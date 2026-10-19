@@ -7,6 +7,8 @@ import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { LoyaltyError } from './counter';
 import { cardIsExpired, COLLECTIONS, EVENT_TYPES, hashKey, readProgram, type CardDoc, type LoyaltyEvent, type MemberDoc, type RewardDoc } from './model';
 import { programSettingsSchema, type ProgramSettings } from './rules';
+import { loadTextContext, renderedHash, renderedTextId, renderForProgram, TextsIncomplete } from './program-texts';
+import { checkTemplate, CURRENT_TEMPLATE, matchingTemplateVersion, TEMPLATE_VERSIONS, TEXT_FIELDS, textKey, type ProgramTexts } from './texts';
 
 export type AdminActor = { identity: VerifiedIdentity; name: string };
 export const ADMIN_PERMISSION = {
@@ -68,9 +70,12 @@ export async function readSettings(db: Firestore, actor: AdminActor, brandId: st
   ]);
   const data = programSnap.data();
   const program = readProgram(brandId, data);
+  // A new stamp card starts from a copy of the current standard texts.
+  const settings = program.version === 0 ? { ...program.settings, name: `${brand.brandName} Club`.slice(0, 80), ...CURRENT_TEMPLATE.texts } : program.settings;
   return {
-    brand, version: program.version,
-    settings: program.version === 0 ? { ...program.settings, name: `${brand.brandName} Club`.slice(0, 80) } : program.settings,
+    brand, version: program.version, settings, texts: program.texts,
+    // What the placeholders read, so the preview fills them exactly as the portal does.
+    textContext: await loadTextContext(db, brandId),
     updatedAt: typeof data?.updatedAt === 'number' ? data.updatedAt : null, updatedByName: typeof data?.updatedByName === 'string' ? data.updatedByName : null,
     // Only active products and categories can be promised as a reward.
     products: products.docs.filter(d => d.data().isActive !== false).map(d => ({ id: d.id, name: String(d.data().productName || d.id) })).sort((a, b) => a.name.localeCompare(b.name, 'da')),
@@ -78,7 +83,14 @@ export async function readSettings(db: Firestore, actor: AdminActor, brandId: st
   };
 }
 
-export const saveSettingsSchema = z.object({ brandId: id, version: z.number().int().min(0), settings: programSettingsSchema }).strict();
+export const saveSettingsSchema = z.object({ brandId: id, version: z.number().int().min(0), settings: programSettingsSchema }).strict()
+  .superRefine(({ settings }, ctx) => {
+    // A template that could reach a customer with a broken placeholder is never saved, active or not.
+    for (const field of TEXT_FIELDS) {
+      const problem = checkTemplate(settings[field]);
+      if (problem) ctx.addIssue({ code: 'custom', path: ['settings', field], message: problem, params: { template: true } });
+    }
+  });
 
 function settingsChanges(before: ProgramSettings | null, after: ProgramSettings) {
   return (Object.keys(after) as Array<keyof ProgramSettings>)
@@ -105,16 +117,95 @@ export async function saveSettings(db: Firestore, actor: AdminActor, input: z.in
       if (rows.some(row => !row.exists || row.data()?.brandId !== brandId || row.data()?.isActive === false)) throw new LoyaltyError('invalid_reward_reference', 422);
     }
     const changes = settingsChanges(current.version === 0 ? null : current.settings, settings);
-    if (!changes.length) return { version: current.version, changed: 0 };
+    if (!changes.length) return { version: current.version, changed: 0, textVersion: current.texts.version };
     const version = current.version + 1;
-    tx.set(ref, { brandId, version, settings, updatedAt: now, updatedBy: principalKey(actor.identity), updatedByName: actor.name });
-    tx.create(db.collection('loyaltyProgramVersions').doc(`${brandId}_${version}`), { brandId, version, settings, createdAt: now, createdBy: principalKey(actor.identity), createdByName: actor.name });
+    // Texts are published while the program is active: a different textKey gets a new
+    // text version valid from now. Brand master data is not part of the key.
+    const key = textKey(settings), publish = settings.active && key !== current.texts.key;
+    const texts = publish ? { version: current.texts.version + 1, effectiveFrom: now, key, templateVersion: matchingTemplateVersion(settings) }
+      : { ...current.texts, templateVersion: matchingTemplateVersion(settings) };
+    let published: { rendered: ProgramTexts; hash: string; known: boolean } | null = null;
+    if (settings.active) {
+      const result = renderForProgram(settings, texts, await loadTextContext(db, brandId, tx));
+      if (result.missing.length || result.invalid.length) throw new TextsIncomplete(result.missing, result.invalid);
+      if (publish) {
+        const hash = renderedHash(result.texts);
+        published = { rendered: result.texts, hash, known: (await tx.get(db.collection(COLLECTIONS.renderedTexts).doc(renderedTextId(brandId, texts.version, hash)))).exists };
+      }
+    }
+    tx.set(ref, { brandId, version, settings, texts, updatedAt: now, updatedBy: principalKey(actor.identity), updatedByName: actor.name });
+    tx.create(db.collection('loyaltyProgramVersions').doc(`${brandId}_${version}`), { brandId, version, settings, texts, createdAt: now, createdBy: principalKey(actor.identity), createdByName: actor.name });
+    if (published) {
+      // Immutable record of the published version, as customers see it from now on.
+      tx.create(db.collection(COLLECTIONS.textVersions).doc(`${brandId}_${texts.version}`), { brandId, companyId, textVersion: texts.version,
+        effectiveFrom: now, templateVersion: texts.templateVersion, programVersion: version,
+        templates: Object.fromEntries(TEXT_FIELDS.map(f => [f, settings[f]])), rendered: published.rendered, renderedHash: published.hash,
+        createdAt: now, createdBy: principalKey(actor.identity), createdByName: actor.name });
+      if (!published.known) tx.create(db.collection(COLLECTIONS.renderedTexts).doc(renderedTextId(brandId, texts.version, published.hash)),
+        { brandId, textVersion: texts.version, hash: published.hash, texts: published.rendered, createdAt: now });
+    }
     const event: LoyaltyEvent = { companyId, brandId, memberId: null, type: 'settings_changed', quantity: changes.length, amountOre: null, channel: null,
       source: 'admin', locationId: null, actorId: principalKey(actor.identity), actorName: actor.name, reason: null, idempotencyKey: null,
-      requestHash: null, cardId: null, rewardId: null, createdAt: now, result: { version, changes } };
+      requestHash: null, cardId: null, rewardId: null, createdAt: now, result: { version, changes, textVersion: texts.version } };
     tx.create(db.collection(COLLECTIONS.events).doc(hashKey('settings', brandId, String(version))), event);
-    return { version, changed: changes.length };
+    return { version, changed: changes.length, textVersion: texts.version };
   });
+}
+
+// ---------- Text versions ----------
+
+export type TextVersionRow = { brandId: string; brandName: string; textVersion: number; effectiveFrom: number; templateVersion: string | null;
+  createdByName: string | null; members: number; current: boolean };
+
+// Published text versions of the brands where the actor holds the settings permission.
+export async function listTextVersions(db: Firestore, actor: AdminActor, brandIds: string[]): Promise<TextVersionRow[]> {
+  const brands = (await adminBrands(db, actor, ADMIN_PERMISSION.settings)).filter(b => brandIds.includes(b.brandId));
+  const rows = await Promise.all(brands.map(async brand => {
+    const [versions, program] = await Promise.all([
+      db.collection(COLLECTIONS.textVersions).where('brandId', '==', brand.brandId).get(),
+      db.collection(COLLECTIONS.programs).doc(brand.brandId).get().then(s => readProgram(brand.brandId, s.data())),
+    ]);
+    return Promise.all(versions.docs.map(d => d.data()).filter(v => v.brandId === brand.brandId).map(async v => {
+      const members = await db.collection(COLLECTIONS.members).where('brandId', '==', brand.brandId).where('textVersion', '==', v.textVersion).count().get();
+      return { brandId: brand.brandId, brandName: brand.brandName, textVersion: Number(v.textVersion), effectiveFrom: Number(v.effectiveFrom),
+        templateVersion: typeof v.templateVersion === 'string' ? v.templateVersion : null, createdByName: typeof v.createdByName === 'string' ? v.createdByName : null,
+        members: members.data().count, current: v.textVersion === program.texts.version };
+    }));
+  }));
+  return rows.flat().sort((a, b) => a.brandName.localeCompare(b.brandName, 'da') || b.textVersion - a.textVersion);
+}
+
+const textsOf = (value: unknown): ProgramTexts | null => {
+  const t = value as Partial<ProgramTexts> | undefined;
+  return t && TEXT_FIELDS.every(f => typeof t[f] === 'string') ? Object.fromEntries(TEXT_FIELDS.map(f => [f, t[f]])) as ProgramTexts : null;
+};
+
+// One published version exactly as customers saw it, plus the variants members
+// saw after the brand's master data changed.
+export async function textVersionDetail(db: Firestore, actor: AdminActor, brandId: string, textVersion: number) {
+  const brand = await requireBrand(db, actor, brandId, ADMIN_PERMISSION.settings);
+  if (!Number.isSafeInteger(textVersion) || textVersion < 1) throw new LoyaltyError('text_version_not_found', 404);
+  const [snap, variants] = await Promise.all([
+    db.collection(COLLECTIONS.textVersions).doc(`${brandId}_${textVersion}`).get(),
+    db.collection(COLLECTIONS.renderedTexts).where('brandId', '==', brandId).where('textVersion', '==', textVersion).get(),
+  ]);
+  const data = snap.data(), rendered = textsOf(data?.rendered);
+  if (!data || data.brandId !== brandId || !rendered) throw new LoyaltyError('text_version_not_found', 404);
+  return {
+    brand, textVersion, effectiveFrom: Number(data.effectiveFrom), templateVersion: typeof data.templateVersion === 'string' ? data.templateVersion : null,
+    createdByName: typeof data.createdByName === 'string' ? data.createdByName : null, rendered,
+    variants: variants.docs.map(d => d.data()).filter(v => v.brandId === brandId && v.hash !== data.renderedHash)
+      .map(v => ({ createdAt: Number(v.createdAt), texts: textsOf(v.texts) })).filter((v): v is { createdAt: number; texts: ProgramTexts } => !!v.texts)
+      .sort((a, b) => a.createdAt - b.createdAt),
+  };
+}
+
+// How many saved programs use each standard text version unchanged. Called only
+// from the platform superuser's template page.
+export async function templateUsage(db: Firestore): Promise<Record<string, number>> {
+  const counts = await Promise.all(TEMPLATE_VERSIONS.map(async t =>
+    [t.version, (await db.collection(COLLECTIONS.programs).where('texts.templateVersion', '==', t.version).count().get()).data().count] as const));
+  return Object.fromEntries(counts);
 }
 
 // ---------- Programs ----------
@@ -149,7 +240,7 @@ export async function setProgramActive(db: Firestore, actor: AdminActor, input: 
   if (program.version === 0) throw new LoyaltyError('program_missing', 404);
   if (program.version !== input.version) throw new LoyaltyError('record_changed', 409);
   const parsed = saveSettingsSchema.safeParse({ brandId: input.brandId, version: input.version, settings: { ...program.settings, active: input.active } });
-  if (!parsed.success) throw new LoyaltyError('settings_incomplete', 422);
+  if (!parsed.success) throw new LoyaltyError(parsed.error.issues.some(i => (i as { params?: { template?: boolean } }).params?.template) ? 'texts_invalid' : 'settings_incomplete', 422);
   return saveSettings(db, actor, parsed.data, now);
 }
 
