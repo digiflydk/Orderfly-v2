@@ -2,10 +2,14 @@ import { createHash } from 'node:crypto';
 
 export const description = 'Delete the five Esmeralda test orders from the live Stripe test of 2026-10-18 (PO-approved) and undo their customer totals.';
 
-// Only these orders, only on Esmeralda, and only when they still carry the test customer name.
+// Only these orders, only on Esmeralda, and only when they still carry the exact name typed in the test.
 const BRAND_ID = 'oeypKaMyYcQjIwaa1PtV';
-const TEST_CUSTOMER = 'TEST E2E-kunde';
-export const ORDER_IDS = ['ORD-385369', 'ORD-389910', 'ORD-244989', 'ORD-489552', 'ORD-859925'];
+// ORD-859925 was the focus-stability check, which retyped the name after ticking the terms.
+const TEST_CUSTOMERS = {
+  'ORD-385369': 'TEST E2E-kunde', 'ORD-389910': 'TEST E2E-kunde', 'ORD-244989': 'TEST E2E-kunde',
+  'ORD-489552': 'TEST E2E-kunde', 'ORD-859925': 'TEST E2E-kunde 2',
+};
+export const ORDER_IDS = Object.keys(TEST_CUSTOMERS);
 
 const hashId = parts => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 // Documents keyed by the order that settlement may have created (see settle-checkout.ts).
@@ -15,8 +19,8 @@ const linkedPaths = orderId => [
   `gameConversions/${hashId(['orderfly', BRAND_ID, orderId])}`,
 ];
 
-function isTestOrder(order) {
-  return order?.brandId === BRAND_ID && order?.customerName === TEST_CUSTOMER;
+function isTestOrder(orderId, order) {
+  return order?.brandId === BRAND_ID && order?.customerName === TEST_CUSTOMERS[orderId];
 }
 
 export async function plan(db) {
@@ -25,7 +29,7 @@ export async function plan(db) {
     const snap = await db.collection('orders').doc(orderId).get();
     if (snap.exists) {
       const order = snap.data();
-      if (!isTestOrder(order)) throw new Error(`${orderId} is not the Esmeralda test order; nothing is planned.`);
+      if (!isTestOrder(orderId, order)) throw new Error(`${orderId} is not the Esmeralda test order; nothing is planned.`);
       const linked = [];
       for (const path of linkedPaths(orderId)) {
         const [collection, id] = path.split('/');
@@ -62,7 +66,7 @@ export async function applyItem(db, item) {
     const orderSnap = await tx.get(orderRef);
     if (!orderSnap.exists) throw new Error(`${item.orderId} no longer exists; rerun the preview.`);
     const order = orderSnap.data();
-    if (!isTestOrder(order)) throw new Error(`${item.orderId} changed since the preview.`);
+    if (!isTestOrder(item.orderId, order)) throw new Error(`${item.orderId} changed since the preview.`);
     const paidAmount = order.paymentStatus === 'Paid' ? Number(order.totalAmount) : 0;
     if (paidAmount !== item.paidAmount) throw new Error(`${item.orderId} payment changed since the preview.`);
     const customerSnap = customerRef ? await tx.get(customerRef) : null;

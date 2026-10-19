@@ -13,6 +13,7 @@ function seed() {
     ['orders/ORD-385369', order()],
     ['orders/ORD-389910', order({ totalAmount: 221 })],
     ['orders/ORD-489552', order({ paymentStatus: 'Pending', totalAmount: 93 })],
+    ['orders/ORD-859925', order({ customerName: 'TEST E2E-kunde 2', paymentStatus: 'Failed', status: 'Canceled', totalAmount: 93 })],
     ['orders/ORD-REAL', order({ customerName: 'Rigtig kunde' })],
     [`orderNotificationJobs/${hashId(['order-confirmation', BRAND, 'ORD-385369'])}`, { orderId: 'ORD-385369' }],
     ['analytics_events/e1', { orderId: 'ORD-385369' }],
@@ -27,7 +28,7 @@ test('deletes only the listed test orders, their jobs and metrics, and undoes th
   const items = await plan(db);
   assert.equal(JSON.stringify(items).includes('okh@'), false, 'no personal data in the logged plan');
   await run(db);
-  for (const id of ['ORD-385369', 'ORD-389910', 'ORD-489552']) assert.equal(db.rows.has(`orders/${id}`), false);
+  for (const id of ['ORD-385369', 'ORD-389910', 'ORD-489552', 'ORD-859925']) assert.equal(db.rows.has(`orders/${id}`), false);
   assert.equal(db.rows.has('orders/ORD-REAL'), true);
   assert.equal(db.rows.has(`orderNotificationJobs/${hashId(['order-confirmation', BRAND, 'ORD-385369'])}`), false);
   assert.equal(db.rows.has('analytics_events/e1'), false);
@@ -47,6 +48,9 @@ test('is idempotent: a second run plans nothing and changes nothing', async () =
 test('refuses an order that is not the test order, and an order changed after the preview', async () => {
   const foreign = memoryDb(new Map([['orders/ORD-385369', order({ customerName: 'Rigtig kunde' })]]));
   await assert.rejects(plan(foreign), /not the Esmeralda test order/);
+  // Each order must carry its own test name, not just any test name.
+  const swapped = memoryDb(new Map([['orders/ORD-385369', order({ customerName: 'TEST E2E-kunde 2' })]]));
+  await assert.rejects(plan(swapped), /not the Esmeralda test order/);
   const db = memoryDb(seed());
   const [first] = await plan(db);
   db.rows.set('orders/ORD-385369', order({ customerName: 'Rigtig kunde' }));
