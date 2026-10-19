@@ -20,6 +20,6 @@ jobs:
         with:
           distribution: temurin
           java-version: 21
-      - run: node --test tests/unit/platform-firestore-preparation.mjs tests/unit/firestore-operations.mjs
+      - run: node --test tests/unit/platform-firestore-preparation.mjs tests/unit/firestore-operations.mjs tests/unit/delete-e2e-test-orders.mjs
       - run: npm ci --prefix tests/firestore
       - run: npm test --prefix tests/firestore

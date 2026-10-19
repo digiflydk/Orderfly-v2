@@ -27,6 +27,10 @@ Rerun a preview whenever production changed in between; an outdated hash is alwa
 
 `firestore.access.rules` is the deny-all browser policy from #139. Publish it only when [freemium-rbac-139.md](freemium-rbac-139.md) step 4 allows it (the server migration is deployed and verified). The preview diff shows what the live rules lose.
 
+## Runbooks for one-time migrations
+
+- [test-order-cleanup-2026-10-18.md](test-order-cleanup-2026-10-18.md): sletning af testordrerne fra live-testen 2026-10-18.
+
 ## Writing a migration
 
 The contract is in [`scripts/migrations/README.md`](../scripts/migrations/README.md): `plan(db)` reads only and returns JSON items without personal data (they are logged), `applyItem(db, item)` re-checks each document in a transaction, and a finished migration plans nothing on rerun. A migration is applied only after its pull request is reviewed and merged to `main`.
