@@ -114,7 +114,8 @@ export async function applyItem(db, item) {
     const facts = factsOf(order);
     if (Object.keys(facts).some(key => JSON.stringify(facts[key]) !== JSON.stringify(item[key]))) throw new Error(`${item.orderId} changed since the preview.`);
     const upsellRefs = item.upsellIds.map(id => doc(`upsells/${id}`));
-    const linkedRefs = item.linked.map(doc);
+    // Every deterministic path is read here, not just those seen at preview: a webhook retry may create one in between.
+    const jobPaths = linkedPaths(item.orderId), linkedRefs = jobPaths.map(doc);
     const [customerSnap, discountSnap, ...rest] = await Promise.all([
       customerRef ? tx.get(customerRef) : null, discountRef ? tx.get(discountRef) : null,
       ...capacityRefs.map(ref => tx.get(ref)), ...upsellRefs.map(ref => tx.get(ref)), ...linkedRefs.map(ref => tx.get(ref)),
@@ -124,7 +125,7 @@ export async function applyItem(db, item) {
     const linkedSnaps = rest.slice(capacityRefs.length + upsellRefs.length);
     // A linked job or conversion is only deleted when it still belongs to this Esmeralda test order.
     linkedSnaps.forEach((snap, index) => {
-      if (snap.exists && (snap.data().brandId !== BRAND_ID || snap.data().orderId !== item.orderId)) throw new Error(`${item.linked[index]} does not belong to ${item.orderId}.`);
+      if (snap.exists && (snap.data().brandId !== BRAND_ID || snap.data().orderId !== item.orderId)) throw new Error(`${jobPaths[index]} does not belong to ${item.orderId}.`);
     });
     const counted = item.upsellIds.filter((id, index) => upsellCounts(upsellSnaps[index].exists ? upsellSnaps[index].data() : null, order.locationId));
     if (JSON.stringify(counted) !== JSON.stringify(item.upsellsCounted)) throw new Error(`${item.orderId} upsell scope changed since the preview.`);

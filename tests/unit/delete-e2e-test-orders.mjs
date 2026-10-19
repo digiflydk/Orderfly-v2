@@ -132,6 +132,14 @@ test('refuses foreign orders and customers, game vouchers, and orders changed af
     await assert.rejects(applyItem(replaced, planned), /does not belong/);
     assert.deepEqual([...replaced.rows], kept);
   }
+  // A job created by a webhook retry after the preview is deleted with the order, never left behind.
+  const late = memoryDb(seed());
+  const lateItem = (await plan(late)).find(item => item.orderId === 'ORD-389910' && item.kind === 'order');
+  const latePath = `marketingOrderOutbox/${hashId(['omnisend-paid-order', BRAND, 'ORD-389910'])}`;
+  late.rows.set(latePath, { orderId: 'ORD-389910', brandId: BRAND });
+  await applyItem(late, lateItem);
+  assert.equal(late.rows.has(latePath), false);
+  assert.equal(late.rows.has('orders/ORD-389910'), false);
   // The discount moved to another brand between preview and apply: nothing is written.
   const movedDiscount = memoryDb(seed());
   const items = await plan(movedDiscount);
