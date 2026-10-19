@@ -9,7 +9,7 @@ For hver ordre sker følgende i én transaktion:
 - Ordren og de jobs, der er knyttet til den, slettes. Det gælder `orderNotificationJobs` (bekræftelse og afhentning), `marketingOrderOutbox` og `gameConversions`.
 - Kundens `totalOrders`, `totalSpend` og `discountUsage` rulles tilbage for betalte ordrer. `lastOrderDate` rulles kun tilbage, hvis den stadig peger på testkøbet. Den sættes da til kundens seneste rigtige betalte ordre, eller `null` hvis der ingen er.
 - Checkout-kapaciteten rulles tilbage: `paid`/`held` for kunde, rabat og par, samt `firstTimeHeld`. Rabattens `usedCount` rulles også tilbage.
-- Konverteringer på verificerede upsells rulles tilbage, men kun for tilbud, som afregningen talte med (samme brand og lokation).
+- Konverteringer på verificerede upsells rulles tilbage, men kun for tilbud, som afregningen talte med (samme brand og lokation). Preview låser, hvilke tilbud det gælder. Ændres et tilbuds brand eller lokationer før apply, stopper apply.
 
 Desuden slettes Esmeraldas `analytics_events` med samme `orderId`. Events fra andre brands med samme ordrereference bevares.
 
@@ -22,7 +22,7 @@ Migrationen stopper uden at skrive noget, hvis et af disse tilfælde gælder:
 - ordren ikke er testordren,
 - kunden eller rabatten hører til et andet brand,
 - ordren brugte et gavekort fra spil,
-- ordren er ændret siden preview, fx kunde, betaling, rabat eller upsells.
+- ordren eller et af dens upsell-tilbud er ændret siden preview, fx kunde, betaling, rabat eller lokationer.
 
 Planen indeholder kun id'er, beløb og tidspunkter.
 

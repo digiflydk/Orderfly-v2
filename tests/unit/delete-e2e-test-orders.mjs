@@ -111,6 +111,16 @@ test('refuses foreign orders and customers, game vouchers, and orders changed af
   const before = structuredClone([...moved.rows]);
   await assert.rejects(applyItem(moved, first), /outside Esmeralda/);
   assert.deepEqual([...moved.rows], before);
+  // An offer's location scope changed between preview and apply: nothing is written.
+  for (const locationIds of [['l2'], ['l1']]) {
+    const rescoped = memoryDb(seed());
+    const planned = (await plan(rescoped)).find(item => item.orderId === 'ORD-385369' && item.kind === 'order');
+    assert.deepEqual(planned.upsellsCounted, ['u1']);
+    rescoped.rows.get(locationIds[0] === 'l2' ? 'upsells/u1' : 'upsells/u-other-location').locationIds = locationIds;
+    const unchanged = structuredClone([...rescoped.rows]);
+    await assert.rejects(applyItem(rescoped, planned), /upsell scope changed/);
+    assert.deepEqual([...rescoped.rows], unchanged);
+  }
   // The discount moved to another brand between preview and apply: nothing is written.
   const movedDiscount = memoryDb(seed());
   const items = await plan(movedDiscount);
