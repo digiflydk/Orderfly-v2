@@ -30,6 +30,14 @@ for (const config of [{ online: true, payAtPickup: false }, { online: false, pay
       assert.equal(order.discountReservation, 'held');
       assert.equal(order.invoice, undefined);
       if (selected === 'pay_at_pickup') { assert.equal(order.psp, undefined); assert.equal(f.coupon, undefined); }
+      // Only the accepted pay-at-pickup order gets the order-received mail job, committed with the acceptance.
+      const mailJobs = [...f.records].filter(([key]) => key.startsWith('orderNotificationJobs/'));
+      if (selected === 'online') assert.equal(mailJobs.length, 0);
+      else {
+        assert.deepEqual(mailJobs.map(([key]) => key), [`orderNotificationJobs/${capacityKey(['pickup-received', 'b', 'ORD-TEST'])}`]);
+        assert.deepEqual({ ...mailJobs[0][1], eventId: undefined, nextAttemptAt: undefined, createdAt: undefined, updatedAt: undefined },
+          { orderId: 'ORD-TEST', brandId: 'b', locationId: 'l', kind: 'pickupReceived', state: 'pending', attempts: 0, eventId: undefined, nextAttemptAt: undefined, createdAt: undefined, updatedAt: undefined });
+      }
     });
   }
 }
@@ -52,7 +60,8 @@ test('cash/card registration commits invoice, employee, promotion and KPI exactl
     assert.equal(f.records.get('discounts/d').usedCount, 1);
     assert.equal(f.records.get('customers/' + f.order().customerDetails.id).totalOrders, 1);
     assert.equal(f.order().discountReservation, 'consumed');
-    assert.equal([...f.records.keys()].filter(key => key.startsWith('orderNotificationJobs/')).length, 1);
+    // The order-received mail from acceptance plus exactly one paid confirmation (the receipt).
+    assert.deepEqual([...f.records].filter(([key]) => key.startsWith('orderNotificationJobs/')).map(([, job]) => job.kind).sort(), ['orderConfirmation', 'pickupReceived']);
     assert.equal([...f.records.keys()].filter(key => key.startsWith('auditLogs/')).length, 1);
     await assert.rejects(f.cancel(), /betalt ordre/);
   }

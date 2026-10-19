@@ -23,7 +23,7 @@ Live-test af købsflowet på Esmeralda Pizza Amager med Stripe i testtilstand: a
 - Kolonnen "Betalt" og kortet "Seneste betaling" viser "Ikke betalt", når ordren ikke har betalingsstatus `Paid`, fx en ordre med betaling ved afhentning. Før stod der "Ukendt dato". En betalt ordre uden gyldigt betalingstidspunkt viser fortsat "Ukendt dato" (`formatPaidAt` i `src/lib/orders/presentation.ts`).
 
 ## Ikke med her
-- **Mail ved betaling ved afhentning:** Kunden får i dag kun bekræftelsen i browseren. Mailen kræver en ny skabelon i Esmeraldas Notification Platform, fordi `orderfly.order.confirmation` forudsætter betaling og faktura. Det kræver en parret ændring i Esmeralda-repoet.
+- **Mail ved betaling ved afhentning:** Kom efterfølgende i en parret ændring: skabelonen `orderfly.order.received_pay_at_pickup` i Esmeraldas Notification Platform og et `pickupReceived`-job i Orderfly. Se `docs/pickup-order-mail.md`.
 
 ## Test
 `tests/unit/cart-browser.cjs` (uændret kurv giver ingen besked, en reel ændring gør, og beskeden ligger øverst), `tests/unit/checkout-browser.cjs` (afkrydsning og knap bevarer deres element under opdateringer), `tests/unit/commerce-p1.cjs` (vare/varer) og `tests/unit/merchant-payment-browser.cjs` (ingen "kr.."). De nye browsertests fejler uden rettelserne.

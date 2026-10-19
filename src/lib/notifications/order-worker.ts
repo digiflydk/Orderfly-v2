@@ -2,11 +2,15 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { NotificationPlatformClient, NotificationPlatformError } from './platform';
+import { locationAddress } from '@/lib/order-invoice';
+import { transientReadError } from '@/lib/firestore-transient';
 
 const never = Number.MAX_SAFE_INTEGER;
 const leaseMs = 120000;
 const validEmail = (value: unknown): value is string => typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-type OrderNotificationJob = { orderId: string; brandId: string; locationId: string; eventId: string; lease: string; attempts?: number };
+type OrderNotificationJob = { orderId: string; brandId: string; locationId: string; eventId: string; lease: string; attempts?: number; kind?: string };
+// A pay-at-pickup order is mailed once accepted and still unpaid; it gets the paid confirmation when it is paid.
+const pickupUnpaid = (order: Record<string, any>) => order.paymentMethod === 'PayAtPickup' && order.deliveryType === 'Pickup' && !order.psp && order.paymentStatus === 'Pending' && !['Pending', 'Canceled'].includes(order.status);
 
 export async function runOrderNotificationWorker(makeClient = () => new NotificationPlatformClient(), now = Date.now()) {
   const db = getAdminDb();
@@ -36,17 +40,45 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
     });
     let dispatched = false;
     try {
-      const orderDoc = await db.collection('orders').doc(String(job.orderId || '')).get();
+      const orderRef = db.collection('orders').doc(String(job.orderId || ''));
+      const orderDoc = await orderRef.get();
       const order = orderDoc.data();
-      if (!order || order.paymentStatus !== 'Paid' || order.status === 'Canceled' || order.brandId !== job.brandId || order.locationId !== job.locationId || !validEmail(order.customerContact)) {
+      const pickup = job.kind === 'pickupReceived';
+      const eligible = (current: Record<string, any> | undefined): current is Record<string, any> => !!current &&
+        (pickup ? pickupUnpaid(current) : current.paymentStatus === 'Paid' && current.status !== 'Canceled') &&
+        current.brandId === job.brandId && current.locationId === job.locationId && validEmail(current.customerContact);
+      if (!eligible(order)) {
         await finish('suppressed', 'order_not_eligible'); counts.suppressed++; continue;
       }
+      // Recheck the order and read the pickup location in the claim transaction, so a payment, cancellation or
+      // location edit in between is seen, and the address sent is the one the claim accepted.
+      const locationRef = db.collection('locations').doc(String(order.locationId));
+      let pickupAddress = '';
       const ownsLease = await db.runTransaction(async tx => {
-        const current = (await tx.get(ref)).data();
-        if (current?.lease !== lease || current.state !== 'preparing') return false;
+        const [current, latest, place] = await Promise.all([tx.get(ref), tx.get(orderRef), pickup ? tx.get(locationRef) : null]);
+        if (current.data()?.lease !== lease || current.data()?.state !== 'preparing') return false;
+        if (!eligible(latest.data())) return 'ineligible' as const;
+        const location = place?.data();
+        if (pickup && (!location || location.brandId !== job.brandId)) return 'location' as const;
+        pickupAddress = location ? locationAddress(location) : '';
         tx.update(ref, { state: 'dispatching', nextAttemptAt: Date.now() + leaseMs, updatedAt: Date.now() }); return true;
       });
+      if (ownsLease === 'ineligible') { await finish('suppressed', 'order_not_eligible'); counts.suppressed++; continue; }
+      if (ownsLease === 'location') { await finish('suppressed', 'location_not_eligible'); counts.suppressed++; continue; }
       if (!ownsLease) continue;
+      if (pickup) {
+        dispatched = true;
+        await makeClient().send({
+          idempotencyKey: String(job.eventId), templateKey: 'orderfly.order.received_pay_at_pickup', locale: 'da',
+          recipientEmail: order.customerContact.trim().toLowerCase(), recipientName: String(order.customerName || ''),
+          relatedEntity: { type: 'commerce_order', id: orderDoc.id },
+          variables: {
+            orderId: orderDoc.id, customerName: String(order.customerName || ''), brandName: String(order.brandName || ''), locationName: String(order.locationName || ''),
+            deliveryTime: String(order.deliveryTime || ''), totalAmount: Number(order.totalAmount || 0), currency: 'DKK', fulfillmentAddress: pickupAddress,
+          },
+        });
+        await finish('accepted'); counts.accepted++; continue;
+      }
       dispatched = true;
       const invoice = order.invoice;
       if (invoice && (!invoice.number || !Array.isArray(invoice.lines))) {
@@ -69,7 +101,8 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
       });
       await finish('accepted'); counts.accepted++;
     } catch (error) {
-      const known = error instanceof NotificationPlatformError ? error : new NotificationPlatformError(dispatched ? 'provider_result_unknown' : 'provider_preflight_failed', dispatched, false);
+      // A transient Firestore failure before dispatch sent nothing, so it is retried like a rate limit.
+      const known = error instanceof NotificationPlatformError ? error : new NotificationPlatformError(dispatched ? 'provider_result_unknown' : 'provider_preflight_failed', dispatched, !dispatched && transientReadError(error));
       const state = known.uncertain ? 'uncertain' : 'failed';
       await finish(state, known.code, known.retryable); counts[state]++;
     }

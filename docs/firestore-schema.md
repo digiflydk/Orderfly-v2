@@ -119,7 +119,7 @@ One document per brand. `questionVersionId` optionally assigns an active feedbac
 
 ## Collections: `feedbackMailJobs` and `orderNotificationJobs`
 
-Durable, idempotent notification outboxes. Jobs store source identifiers, state, attempts, timestamps and an opaque event ID. Recipient email and signed feedback URL are resolved from authoritative records immediately before dispatch and are not stored in admin projections. `accepted` means accepted by the central mPanel queue; Mailtrap delivery remains authoritative in mPanel.
+Durable, idempotent notification outboxes. Jobs store source identifiers, state, attempts, timestamps and an opaque event ID. `orderNotificationJobs.kind` is `orderConfirmation` (paid order, id from `['order-confirmation', brandId, orderId]`) or `pickupReceived` (accepted pay-at-pickup order, id from `['pickup-received', brandId, orderId]`). Recipient email and signed feedback URL are resolved from authoritative records immediately before dispatch and are not stored in admin projections. `accepted` means accepted by the central mPanel queue; Mailtrap delivery remains authoritative in mPanel.
 
 ## Collection: `marketingOrderOutbox`
 

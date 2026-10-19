@@ -174,3 +174,81 @@ test('order confirmation worker sends one scoped message and suppresses canceled
  const result=await worker.runOrderNotificationWorker(client);assert.equal(result.suppressed,1);assert.equal(sent.length,1);assert.equal(f.records.get('orderNotificationJobs/canceled').state,'suppressed');
  assert.doesNotMatch(JSON.stringify(f.records.get('orderNotificationJobs/job')),/private@example/);
 });
+
+test('pay-at-pickup order-received mail: one message while accepted and unpaid, suppressed once paid or canceled',async t=>{
+ const f=setup(t);Object.assign(f.records.get('orders/order'),{paymentMethod:'PayAtPickup',deliveryType:'Pickup',paymentStatus:'Pending',status:'Received',customerContact:'private@example.test',customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',totalAmount:104,deliveryTime:'18:30',invoice:undefined,psp:undefined});
+ f.records.set('locations/l',{...(f.records.get('locations/l')||{}),brandId:'b',address:undefined,street:'Testvej 1',zipCode:'2300',city:'København S',country:'DK'});
+ f.records.set('orderNotificationJobs/pickup',{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:'pickup-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+ // A paid-confirmation job for the same unpaid order must not send the paid template.
+ f.records.set('orderNotificationJobs/confirmation',{orderId:'order',brandId:'b',locationId:'l',kind:'orderConfirmation',eventId:'confirmation-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+ const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{},NotificationPlatformClient:class{}}});
+ const client=()=>({send:async message=>sent.push(message)});
+ await Promise.all([worker.runOrderNotificationWorker(client),worker.runOrderNotificationWorker(client)]);
+ assert.equal(sent.length,1);assert.equal(sent[0].templateKey,'orderfly.order.received_pay_at_pickup');assert.equal(sent[0].idempotencyKey,'pickup-event');
+ assert.deepEqual(sent[0].variables,{orderId:'order',customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',deliveryTime:'18:30',totalAmount:104,currency:'DKK',fulfillmentAddress:'Testvej 1, 2300 København S, DK'});
+ assert.equal(f.records.get('orderNotificationJobs/pickup').state,'accepted');assert.equal(f.records.get('orderNotificationJobs/confirmation').state,'suppressed');
+ for(const update of [{paymentStatus:'Paid'},{status:'Canceled',paymentStatus:'Failed'},{status:'Pending'},{deliveryType:'Delivery'},{psp:{provider:'stripe'}}]){
+  const id='pickup-'+JSON.stringify(update);Object.assign(f.records.get('orders/order'),{paymentStatus:'Pending',status:'Received',deliveryType:'Pickup',psp:undefined},update);
+  f.records.set('orderNotificationJobs/'+id,{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:id,state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+  await worker.runOrderNotificationWorker(client);assert.equal(f.records.get('orderNotificationJobs/'+id).state,'suppressed',id);
+ }
+ assert.equal(sent.length,1);
+ // A location moved to another brand or deleted never lends its address to this brand's customer.
+ Object.assign(f.records.get('orders/order'),{paymentStatus:'Pending',status:'Received',deliveryType:'Pickup',psp:undefined});
+ for(const [id,location] of [['moved',{...f.records.get('locations/l'),brandId:'other'}],['deleted',null]]){
+  location?f.records.set('locations/l',location):f.records.delete('locations/l');
+  f.records.set('orderNotificationJobs/'+id,{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:id,state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+  await worker.runOrderNotificationWorker(client);assert.equal(f.records.get('orderNotificationJobs/'+id).state,'suppressed',id);assert.equal(f.records.get('orderNotificationJobs/'+id).lastError,'location_not_eligible');
+ }
+ assert.equal(sent.length,1);
+});
+test('pay-at-pickup mail: a transient read failure before dispatch is retried, never lost or sent',async t=>{
+ const f=setup(t);Object.assign(f.records.get('orders/order'),{paymentMethod:'PayAtPickup',deliveryType:'Pickup',paymentStatus:'Pending',status:'Received',customerContact:'private@example.test',invoice:undefined,psp:undefined});
+ f.records.set('orderNotificationJobs/pickup',{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:'pickup-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+ const original=f.db.collection;let fail=true;
+ f.db.collection=(...args)=>{const collection=original(...args);if(args[0]!=='locations')return collection;const doc=collection.doc;collection.doc=(...ids)=>{const ref=doc(...ids);const get=ref.get;ref.get=async()=>{if(fail)throw Object.assign(Error('unavailable'),{code:14});return get();};return ref;};return collection;};
+ const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{constructor(code,uncertain=false,retryable=false){super(code);Object.assign(this,{code,uncertain,retryable});}},NotificationPlatformClient:class{}}});
+ const client=()=>({send:async message=>sent.push(message)});
+ await worker.runOrderNotificationWorker(client);
+ assert.equal(sent.length,0);assert.equal(f.records.get('orderNotificationJobs/pickup').state,'pending');assert.equal(f.records.get('orderNotificationJobs/pickup').lastError,'provider_preflight_failed');
+ fail=false;await worker.runOrderNotificationWorker(client,Date.now()+120000);
+ assert.equal(sent.length,1);assert.equal(f.records.get('orderNotificationJobs/pickup').state,'accepted');
+});
+test('pay-at-pickup mail: payment, cancellation or a location move before the claim suppresses the mail',async t=>{
+ const changes=[['orders/order',{paymentStatus:'Paid'},'order_not_eligible'],['orders/order',{status:'Canceled',paymentStatus:'Failed'},'order_not_eligible'],['locations/l',{brandId:'other'},'location_not_eligible']];
+ for(const [path,change,error] of changes){
+  const f=setup(t);Object.assign(f.records.get('orders/order'),{paymentMethod:'PayAtPickup',deliveryType:'Pickup',paymentStatus:'Pending',status:'Received',customerContact:'private@example.test',invoice:undefined,psp:undefined});
+  f.records.set('orderNotificationJobs/pickup',{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:'pickup-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+  // The change lands right after the worker's first read of the order, before the claim transaction.
+  const original=f.db.collection;let reads=0;
+  f.db.collection=(...args)=>{const collection=original(...args);if(args[0]!=='orders')return collection;const doc=collection.doc;collection.doc=(...ids)=>{const ref=doc(...ids);const get=ref.get;ref.get=async()=>{const result=await get();if(++reads===1)Object.assign(f.records.get(path),change);return result;};return ref;};return collection;};
+  const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{},NotificationPlatformClient:class{}}});
+  await worker.runOrderNotificationWorker(()=>({send:async message=>sent.push(message)}));
+  assert.equal(sent.length,0,JSON.stringify(change));assert.equal(f.records.get('orderNotificationJobs/pickup').state,'suppressed');assert.equal(f.records.get('orderNotificationJobs/pickup').lastError,error);
+ }
+});
+test('pay-at-pickup mail: the address sent is the one read in the claim',async t=>{
+ const f=setup(t);Object.assign(f.records.get('orders/order'),{paymentMethod:'PayAtPickup',deliveryType:'Pickup',paymentStatus:'Pending',status:'Received',customerContact:'private@example.test',invoice:undefined,psp:undefined});
+ f.records.set('locations/l',{...f.records.get('locations/l'),brandId:'b',address:'Gammel adresse 1'});
+ f.records.set('orderNotificationJobs/pickup',{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:'pickup-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+ const original=f.db.collection;let reads=0;
+ f.db.collection=(...args)=>{const collection=original(...args);if(args[0]!=='orders')return collection;const doc=collection.doc;collection.doc=(...ids)=>{const ref=doc(...ids);const get=ref.get;ref.get=async()=>{const result=await get();if(++reads===1)f.records.get('locations/l').address='Ny adresse 2';return result;};return ref;};return collection;};
+ const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{},NotificationPlatformClient:class{}}});
+ await worker.runOrderNotificationWorker(()=>({send:async message=>sent.push(message)}));
+ assert.equal(sent.length,1);assert.equal(sent[0].variables.fulfillmentAddress,'Ny adresse 2');
+});
+test('order mail: a transient failure of the first order read is retried, a permanent one is not',async t=>{
+ for(const [code,state] of [[14,'pending'],[7,'failed']]){
+  const f=setup(t);Object.assign(f.records.get('orders/order'),{paymentMethod:'PayAtPickup',deliveryType:'Pickup',paymentStatus:'Pending',status:'Received',customerContact:'private@example.test',invoice:undefined,psp:undefined});
+  f.records.set('locations/l',{...f.records.get('locations/l'),brandId:'b'});
+  f.records.set('orderNotificationJobs/pickup',{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:'pickup-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+  const original=f.db.collection;let fail=true;
+  f.db.collection=(...args)=>{const collection=original(...args);if(args[0]!=='orders')return collection;const doc=collection.doc;collection.doc=(...ids)=>{const ref=doc(...ids);const get=ref.get;ref.get=async()=>{if(fail){fail=false;throw Object.assign(Error('read failed'),{code});}return get();};return ref;};return collection;};
+  const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{constructor(code,uncertain=false,retryable=false){super(code);Object.assign(this,{code,uncertain,retryable});}},NotificationPlatformClient:class{}}});
+  const client=()=>({send:async message=>sent.push(message)});
+  await worker.runOrderNotificationWorker(client);
+  assert.equal(sent.length,0);assert.equal(f.records.get('orderNotificationJobs/pickup').state,state,String(code));assert.equal(f.records.get('orderNotificationJobs/pickup').lastError,'provider_preflight_failed');
+  await worker.runOrderNotificationWorker(client,Date.now()+120000);
+  assert.equal(sent.length,state==='pending'?1:0);
+ }
+});

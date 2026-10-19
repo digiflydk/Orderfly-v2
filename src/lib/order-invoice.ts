@@ -5,6 +5,11 @@ function address(...parts: Array<string | undefined>) {
   return parts.map(value => value?.trim()).filter(Boolean).join(', ');
 }
 
+// The restaurant's address as printed on invoices and pickup mails.
+export function locationAddress(location: Partial<Pick<Location, 'address' | 'street' | 'zipCode' | 'city' | 'country'>>) {
+  return location.address || address(location.street, `${location.zipCode || ''} ${location.city || ''}`.trim(), location.country);
+}
+
 function isoDate(value: OrderDetail['fulfillmentAt'], fallback: string) {
   if (!value) return fallback;
   const date = typeof value === 'object' && 'toDate' in value ? value.toDate() : new Date(value);
@@ -52,7 +57,7 @@ export function buildOrderInvoice(input: {
     },
     fulfillmentLocation: {
       name: location.name,
-      address: location.address || address(location.street, `${location.zipCode || ''} ${location.city || ''}`.trim(), location.country),
+      address: locationAddress(location),
     },
     customer: { name: order.customerName, email: order.customerContact, ...(customerAddress ? { address: customerAddress } : {}) },
     lines,
