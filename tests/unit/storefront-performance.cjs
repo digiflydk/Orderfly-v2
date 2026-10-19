@@ -54,10 +54,12 @@ test('cached campaign rows still filter delivery method and expiration on every 
 });
 test('the restaurant list sends inline location pictures as short image URLs',async()=>{
  const inline='data:image/png;base64,'+(await sharp({create:{width:800,height:600,channels:3,background:'#208030'}}).png().toBuffer()).toString('base64');
- const docs=[{id:'l',data:()=>({brandId:'b',slug:'shop',name:'Shop',isActive:true,imageUrl:inline})}];
+ const docs=[{id:'l',data:()=>({brandId:'b',slug:'shop',name:'Shop',isActive:true,imageUrl:inline})},{id:'closed',data:()=>({brandId:'b',slug:'closed',name:'Closed',isActive:false,imageUrl:inline})}];
  const db={collection:()=>{const q={where:()=>q,limit:()=>q,get:async()=>({empty:false,docs})};return q;}};
  const api=load('src/lib/data/brand-location.ts',{'@/lib/firebase-admin':{getAdminDb:()=>db},react:{cache:fn=>fn},'next/cache':{unstable_cache:fn=>fn},'@/lib/storefront-media':media,'@/lib/public-native-records':require('../helpers/load-ts.cjs').loadTs('src/lib/public-native-records.ts')});
- const [location]=await api.getLocationsForBrand('b');
+ const [location,closed]=await api.getLocationsForBrand('b');
+ // The image endpoint rejects inactive records, so their picture must stay inline rather than break.
+ assert.equal(closed.imageUrl,inline);
  assert.match(location.imageUrl,/^\/api\/storefront-image\?/);
  assert.equal(new URL('https://test'+location.imageUrl).searchParams.get('collection'),'locations');
  assert.equal(new URL('https://test'+location.imageUrl).searchParams.get('field'),'imageUrl');
