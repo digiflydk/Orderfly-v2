@@ -96,15 +96,16 @@ test('#12 changing an existing slug needs confirmation and is audit-logged with 
   assert.deepEqual({ ...audit[0], createdAt: undefined }, { action: 'brand_slug_changed', brandId: 'b', oldSlug: 'esmeralda-qa', newSlug: 'esmeralda-new', actorId: 'actor-1', createdAt: undefined });
 });
 
-test('#12 a suspended brand renders the neutral status page, never its storefront', async () => {
-  // loadTs does not compile JSX; transpile this layout with the React JSX runtime.
+// loadTs does not compile JSX; transpile pages and layouts with the React JSX runtime.
+function loadTsx(file, mocks) {
   const ts = require('typescript'), fs = require('node:fs');
-  const loadTsx = (file, mocks) => {
-    const mod = { exports: {} };
-    const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-    new Function('require', 'module', 'exports', code)(name => name in mocks ? mocks[name] : require(name), mod, mod.exports);
-    return mod.exports;
-  };
+  const mod = { exports: {} };
+  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+  new Function('require', 'module', 'exports', code)(name => name in mocks ? mocks[name] : require(name), mod, mod.exports);
+  return mod.exports;
+}
+
+test('#12 a suspended brand renders the neutral status page, never its storefront', async () => {
   const render = status => loadTsx('src/app/[brandSlug]/layout.tsx', {
     react: require('react'), 'react/jsx-runtime': require('react/jsx-runtime'),
     'next/navigation': { notFound: () => { throw Error('NOT_FOUND'); } },
@@ -211,4 +212,21 @@ test('#282 Stripe return addresses are short on the brand subdomain and unchange
     assert.equal(apex.success, `${origin}/brand/location/checkout/confirmation`, origin);
     assert.equal(apex.cancel, `${origin}/brand/location/checkout/cancel`, origin);
   }
+});
+
+test('#282 the public reviews page links back to the menu and to more reviews on the short path', async () => {
+  const page = host => loadTsx('src/app/[brandSlug]/[locationSlug]/reviews/page.tsx', {
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    'next/navigation': { notFound: () => { throw Error('NOT_FOUND'); } },
+    '@/lib/data/brand-location': { getBrandAndLocation: async () => ({ brand: { id: 'b', slug: 'esmeralda' }, location: { id: 'l', brandId: 'b', name: 'Amager' } }) },
+    '@/lib/feedback/public-reviews': { readPublicReviews: async () => ({ reviews: [], next: 'r 2' }) },
+    '@/components/feedback/public-reviews-view': { PublicReviewsView: () => null },
+    '@/lib/server/storefront-path': loadTs('src/lib/server/storefront-path.ts', { 'server-only': {}, 'next/headers': { headers: async () => new Headers({ host }) } }),
+  }).default({ params: Promise.resolve({ brandSlug: 'esmeralda', locationSlug: 'esmeralda-pizza-amager' }), searchParams: Promise.resolve({}) });
+  const sub = (await page('esmeralda.orderfly.dk')).props;
+  assert.equal(sub.menuHref, '/esmeralda-pizza-amager');
+  assert.equal(sub.nextHref, '/esmeralda-pizza-amager/reviews?after=r%202');
+  const apex = (await page('orderfly.dk')).props;
+  assert.equal(apex.menuHref, '/esmeralda/esmeralda-pizza-amager');
+  assert.equal(apex.nextHref, '/esmeralda/esmeralda-pizza-amager/reviews?after=r%202');
 });
