@@ -49,24 +49,23 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
       if (!eligible(order)) {
         await finish('suppressed', 'order_not_eligible'); counts.suppressed++; continue;
       }
-      // The pickup address comes from the order's own location; read it before dispatch so a failed read can retry.
-      let pickupAddress = '';
-      if (pickup) {
-        let location: Record<string, any> | undefined;
-        try { location = (await db.collection('locations').doc(String(order.locationId)).get()).data(); }
-        catch { await finish('failed', 'location_read_failed', true); counts.failed++; continue; }
-        if (!location || location.brandId !== job.brandId) { await finish('suppressed', 'location_not_eligible'); counts.suppressed++; continue; }
-        pickupAddress = locationAddress(location);
-      }
-      // Payment, cancellation or a location move can land while the location is read; recheck both as the job is claimed.
+      // Recheck the order and read the pickup location in the claim transaction, so a payment, cancellation or
+      // location edit in between is seen, and the address sent is the one the claim accepted. Reads here are
+      // retried on failure: nothing has been dispatched yet.
       const locationRef = db.collection('locations').doc(String(order.locationId));
-      const ownsLease = await db.runTransaction(async tx => {
-        const [current, latest, place] = await Promise.all([tx.get(ref), tx.get(orderRef), pickup ? tx.get(locationRef) : null]);
-        if (current.data()?.lease !== lease || current.data()?.state !== 'preparing') return false;
-        if (!eligible(latest.data())) return 'ineligible' as const;
-        if (place && (!place.data() || place.data()?.brandId !== job.brandId)) return 'location' as const;
-        tx.update(ref, { state: 'dispatching', nextAttemptAt: Date.now() + leaseMs, updatedAt: Date.now() }); return true;
-      });
+      let pickupAddress = '';
+      let ownsLease: boolean | 'ineligible' | 'location';
+      try {
+        ownsLease = await db.runTransaction(async tx => {
+          const [current, latest, place] = await Promise.all([tx.get(ref), tx.get(orderRef), pickup ? tx.get(locationRef) : null]);
+          if (current.data()?.lease !== lease || current.data()?.state !== 'preparing') return false;
+          if (!eligible(latest.data())) return 'ineligible' as const;
+          const location = place?.data();
+          if (pickup && (!location || location.brandId !== job.brandId)) return 'location' as const;
+          pickupAddress = location ? locationAddress(location) : '';
+          tx.update(ref, { state: 'dispatching', nextAttemptAt: Date.now() + leaseMs, updatedAt: Date.now() }); return true;
+        });
+      } catch { await finish('failed', 'claim_read_failed', true); counts.failed++; continue; }
       if (ownsLease === 'ineligible') { await finish('suppressed', 'order_not_eligible'); counts.suppressed++; continue; }
       if (ownsLease === 'location') { await finish('suppressed', 'location_not_eligible'); counts.suppressed++; continue; }
       if (!ownsLease) continue;
