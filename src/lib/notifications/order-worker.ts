@@ -46,6 +46,15 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
       if (!order || !payable || order.brandId !== job.brandId || order.locationId !== job.locationId || !validEmail(order.customerContact)) {
         await finish('suppressed', 'order_not_eligible'); counts.suppressed++; continue;
       }
+      // The pickup address comes from the order's own location; read it before dispatch so a failed read can retry.
+      let pickupAddress = '';
+      if (pickup) {
+        let location: Record<string, any> | undefined;
+        try { location = (await db.collection('locations').doc(String(order.locationId)).get()).data(); }
+        catch { await finish('failed', 'location_read_failed', true); counts.failed++; continue; }
+        if (!location || location.brandId !== job.brandId) { await finish('suppressed', 'location_not_eligible'); counts.suppressed++; continue; }
+        pickupAddress = locationAddress(location);
+      }
       const ownsLease = await db.runTransaction(async tx => {
         const current = (await tx.get(ref)).data();
         if (current?.lease !== lease || current.state !== 'preparing') return false;
@@ -53,7 +62,6 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
       });
       if (!ownsLease) continue;
       if (pickup) {
-        const location = (await db.collection('locations').doc(String(order.locationId)).get()).data();
         dispatched = true;
         await makeClient().send({
           idempotencyKey: String(job.eventId), templateKey: 'orderfly.order.received_pay_at_pickup', locale: 'da',
@@ -61,7 +69,7 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
           relatedEntity: { type: 'commerce_order', id: orderDoc.id },
           variables: {
             orderId: orderDoc.id, customerName: String(order.customerName || ''), brandName: String(order.brandName || ''), locationName: String(order.locationName || ''),
-            deliveryTime: String(order.deliveryTime || ''), totalAmount: Number(order.totalAmount || 0), currency: 'DKK', fulfillmentAddress: location ? locationAddress(location) : '',
+            deliveryTime: String(order.deliveryTime || ''), totalAmount: Number(order.totalAmount || 0), currency: 'DKK', fulfillmentAddress: pickupAddress,
           },
         });
         await finish('accepted'); counts.accepted++; continue;

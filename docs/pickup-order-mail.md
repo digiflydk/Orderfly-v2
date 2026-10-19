@@ -17,6 +17,8 @@ Kunder, der vælger "Betal ved afhentning", får en mail om, at ordren er modtag
    - Samme brand og lokation.
    - Gyldig e-mail.
 
+   - Lokationen findes og hører til ordrens brand. Den læses før afsendelse, og en midlertidig læsefejl prøves igen.
+
    Ellers bliver jobbet `suppressed`.
 3. Mailen sendes via Esmeraldas Notification Platform med skabelonen `orderfly.order.received_pay_at_pickup` og disse variabler:
    - `orderId`, `customerName`, `brandName`, `locationName`, `deliveryTime`, `totalAmount`, `currency` (DKK).

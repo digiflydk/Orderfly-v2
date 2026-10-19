@@ -177,7 +177,7 @@ test('order confirmation worker sends one scoped message and suppresses canceled
 
 test('pay-at-pickup order-received mail: one message while accepted and unpaid, suppressed once paid or canceled',async t=>{
  const f=setup(t);Object.assign(f.records.get('orders/order'),{paymentMethod:'PayAtPickup',deliveryType:'Pickup',paymentStatus:'Pending',status:'Received',customerContact:'private@example.test',customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',totalAmount:104,deliveryTime:'18:30',invoice:undefined,psp:undefined});
- f.records.set('locations/l',{...(f.records.get('locations/l')||{}),address:undefined,street:'Testvej 1',zipCode:'2300',city:'København S',country:'DK'});
+ f.records.set('locations/l',{...(f.records.get('locations/l')||{}),brandId:'b',address:undefined,street:'Testvej 1',zipCode:'2300',city:'København S',country:'DK'});
  f.records.set('orderNotificationJobs/pickup',{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:'pickup-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
  // A paid-confirmation job for the same unpaid order must not send the paid template.
  f.records.set('orderNotificationJobs/confirmation',{orderId:'order',brandId:'b',locationId:'l',kind:'orderConfirmation',eventId:'confirmation-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
@@ -193,4 +193,24 @@ test('pay-at-pickup order-received mail: one message while accepted and unpaid, 
   await worker.runOrderNotificationWorker(client);assert.equal(f.records.get('orderNotificationJobs/'+id).state,'suppressed',id);
  }
  assert.equal(sent.length,1);
+ // A location moved to another brand or deleted never lends its address to this brand's customer.
+ Object.assign(f.records.get('orders/order'),{paymentStatus:'Pending',status:'Received',deliveryType:'Pickup',psp:undefined});
+ for(const [id,location] of [['moved',{...f.records.get('locations/l'),brandId:'other'}],['deleted',null]]){
+  location?f.records.set('locations/l',location):f.records.delete('locations/l');
+  f.records.set('orderNotificationJobs/'+id,{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:id,state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+  await worker.runOrderNotificationWorker(client);assert.equal(f.records.get('orderNotificationJobs/'+id).state,'suppressed',id);assert.equal(f.records.get('orderNotificationJobs/'+id).lastError,'location_not_eligible');
+ }
+ assert.equal(sent.length,1);
+});
+test('pay-at-pickup mail: a failed location read before dispatch is retried, never lost or sent',async t=>{
+ const f=setup(t);Object.assign(f.records.get('orders/order'),{paymentMethod:'PayAtPickup',deliveryType:'Pickup',paymentStatus:'Pending',status:'Received',customerContact:'private@example.test',invoice:undefined,psp:undefined});
+ f.records.set('orderNotificationJobs/pickup',{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:'pickup-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+ const original=f.db.collection;let fail=true;
+ f.db.collection=(...args)=>{const collection=original(...args);if(args[0]!=='locations')return collection;const doc=collection.doc;collection.doc=(...ids)=>{const ref=doc(...ids);const get=ref.get;ref.get=async()=>{if(fail)throw Object.assign(Error('unavailable'),{code:14});return get();};return ref;};return collection;};
+ const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{},NotificationPlatformClient:class{}}});
+ const client=()=>({send:async message=>sent.push(message)});
+ await worker.runOrderNotificationWorker(client);
+ assert.equal(sent.length,0);assert.equal(f.records.get('orderNotificationJobs/pickup').state,'pending');assert.equal(f.records.get('orderNotificationJobs/pickup').lastError,'location_read_failed');
+ fail=false;await worker.runOrderNotificationWorker(client,Date.now()+120000);
+ assert.equal(sent.length,1);assert.equal(f.records.get('orderNotificationJobs/pickup').state,'accepted');
 });
