@@ -3,6 +3,7 @@ import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { useCart } from '@/context/cart-context';
 import { useAnalytics } from '@/context/analytics-context';
+import { browserStorefrontPath } from '@/hooks/use-storefront-path';
 // Recommendations are inline. Navigation never waits for marketing services.
 export function useMenuCheckout() {
     const { brand, location, cartReady, deliveryType, cartItems, checkoutTotal, itemCount } = useCart();
@@ -19,7 +20,7 @@ export function useMenuCheckout() {
             trackEvent('start_checkout', { cartValue: checkoutTotal, itemsCount: itemCount, deliveryType });
         }
         catch { /* Optional telemetry. */ }
-        router.push(`/${brand.slug}/${location.slug}/checkout`);
+        router.push(browserStorefrontPath(brand.slug, location.slug, 'checkout'));
     };
     return { isPending, handleCheckoutClick };
 }

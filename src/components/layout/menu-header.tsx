@@ -10,6 +10,7 @@ import { safeImage } from '@/lib/images';
 import { formatPrice } from '@/lib/storefront-format';
 import { locationHeaderDetails } from '@/lib/location-header';
 import { PublicReviewsLink } from '@/components/feedback/public-reviews-link';
+import { useStorefrontPath } from '@/hooks/use-storefront-path';
 
 export function MenuHeader({ brand, initialLocation, initialNow }: {
   brand: Brand;
@@ -22,7 +23,8 @@ export function MenuHeader({ brand, initialLocation, initialNow }: {
   const location = candidate?.brandId === brand.id ? candidate : null;
   const pathname = usePathname();
   const checkout = pathname?.includes('/checkout');
-  const href = location ? `/${brand.slug}/${location.slug}` : `/${brand.slug}`;
+  const storefront = useStorefrontPath(brand.slug);
+  const href = location ? storefront(location.slug) : storefront();
   const [now, setNow] = useState<Date | null>(() => initialNow === undefined ? null : new Date(initialNow));
   useEffect(() => {
     const update = () => setNow(new Date());

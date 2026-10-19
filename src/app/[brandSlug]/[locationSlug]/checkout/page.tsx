@@ -5,6 +5,7 @@ import { getBrandBySlug } from "@/app/superadmin/brands/actions";
 import { getActiveLocationBySlug } from "@/app/superadmin/locations/actions";
 import type { AsyncPageProps } from "@/types/next-async-props";
 import { resolveParams } from "@/lib/next/resolve-props";
+import { storefrontHref } from "@/lib/server/storefront-path";
 
 export const runtime = "nodejs";
 
@@ -17,7 +18,7 @@ export default async function CheckoutPage({
 
   const location = await getActiveLocationBySlug(brand.id, locationSlug);
   if (!location) {
-    redirect(`/${brand.slug}`);
+    redirect(await storefrontHref(brand.slug));
   }
 
   return (

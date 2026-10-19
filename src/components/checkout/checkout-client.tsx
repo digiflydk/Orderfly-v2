@@ -32,6 +32,7 @@ import { Badge } from "../ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useParams } from "next/navigation";
+import { useStorefrontPath } from "@/hooks/use-storefront-path";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -343,6 +344,7 @@ function CheckoutForm({ location }: { location: Location }) {
 
   const { toast } = useToast();
   const params = useParams();
+  const menuPath = useStorefrontPath(params.brandSlug as string)(params.locationSlug as string);
   const [isProcessing, setIsProcessing] = useState(false);
   const [isValidatingDiscount, setIsValidatingDiscount] = useState(false);
   const enabledPaymentMethods = useMemo(() => availableCheckoutMethods(location, deliveryType || 'pickup'), [location, deliveryType]);
@@ -689,7 +691,7 @@ function CheckoutForm({ location }: { location: Location }) {
         <h1 className="text-2xl font-bold">Din kurv er tom</h1>
         <p className="text-muted-foreground">Tilføj varer, før du går til kassen.</p>
         <Button asChild className="mt-4">
-          <Link href={`/${params.brandSlug}/${params.locationSlug}`}>Tilbage til menuen</Link>
+          <Link href={menuPath}>Tilbage til menuen</Link>
         </Button>
       </div>
     );
@@ -772,7 +774,7 @@ function CheckoutForm({ location }: { location: Location }) {
           <Button type="button" variant="outline" disabled><ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Tilbage til menuen</Button>
         ) : (
           <Button type="button" variant="outline" asChild>
-            <Link href={`/${params.brandSlug}/${params.locationSlug}?deliveryMethod=${deliveryType || 'pickup'}`}>
+            <Link href={`${menuPath}?deliveryMethod=${deliveryType || 'pickup'}`}>
               <ArrowLeft className="mr-2 h-4 w-4" aria-hidden="true" />Tilbage til menuen
             </Link>
           </Button>

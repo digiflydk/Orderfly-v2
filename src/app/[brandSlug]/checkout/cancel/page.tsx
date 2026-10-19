@@ -7,6 +7,7 @@ import { XCircle } from "lucide-react";
 import Link from "next/link";
 import { Suspense } from 'react';
 import { useSearchParams, useParams } from "next/navigation";
+import { useStorefrontPath } from "@/hooks/use-storefront-path";
 
 
 function CancelMessage() {
@@ -15,6 +16,7 @@ function CancelMessage() {
     const error = searchParams.get('error');
     const brandSlug = params.brandSlug as string;
     const locationSlug = params.locationSlug as string;
+    const checkoutPath = useStorefrontPath(brandSlug)(locationSlug, 'checkout');
 
     return (
         <Card className="w-full max-w-lg text-center">
@@ -33,7 +35,7 @@ function CancelMessage() {
             <CardContent>
                 {error && <p className="text-sm text-destructive">{error}</p>}
                 <Button asChild className="mt-6">
-                    <Link href={`/${brandSlug}/${locationSlug}/checkout`}>Return to Checkout</Link>
+                    <Link href={checkoutPath}>Return to Checkout</Link>
                 </Button>
             </CardContent>
         </Card>
