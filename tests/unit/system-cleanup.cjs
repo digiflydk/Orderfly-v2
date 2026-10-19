@@ -125,3 +125,12 @@ test('backfill requires the exact reviewed set before writing',async()=>{
   assert.equal(writes,0);
  }
 });
+test('storefront cookie banner is Danish whatever the browser language',async()=>{
+ const urls=[],set=[];const previous=global.navigator;
+ Object.defineProperty(global,'navigator',{value:{language:'en-US'},configurable:true});
+ try{
+  const hook=loadTs('src/hooks/use-cookie-texts.ts',{react:{useState:initial=>[initial,value=>set.push(value)],useEffect:fn=>fn()},'@/lib/public-read':{publicRead:async url=>{urls.push(url);return {banner_title:'Vi bruger cookies'};}}});
+  hook.useCookieTexts({brandId:'b'});await new Promise(resolve=>setImmediate(resolve));
+  assert.match(urls[0],/language=da(&|$)/);assert.equal(set[0].banner_title,'Vi bruger cookies');assert.equal(set[0].language,'da');
+ }finally{Object.defineProperty(global,'navigator',{value:previous,configurable:true});}
+});

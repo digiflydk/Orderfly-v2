@@ -1,12 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { defaultTexts, getDefaultCookieTexts } from '@/lib/cookie-texts';
+import { defaultTexts, getDefaultCookieTexts, STOREFRONT_COOKIE_LANGUAGE } from '@/lib/cookie-texts';
 import { publicRead } from '@/lib/public-read';
 export function useCookieTexts({ brandId }: {brandId: string}) {
   const [texts, setTexts] = useState(defaultTexts);
   useEffect(() => {
     let cancelled = false;
-    const language = navigator.language;
+    // The storefront is Danish, so the banner is too, whatever the browser's language.
+    const language = STOREFRONT_COOKIE_LANGUAGE;
     const query = new URLSearchParams({brandId, language});
     setTexts(getDefaultCookieTexts(language));
     publicRead<typeof defaultTexts>(`/api/public/cookie-texts?${query}`).then(result => {

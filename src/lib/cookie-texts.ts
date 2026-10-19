@@ -1,6 +1,7 @@
 import type { CookieTexts } from '@/types';
 export const COOKIE_LANGUAGE_PATTERN = /^(?:[a-z]{2}(?:-[a-z]{2})?|[a-z]{3})$/i;
 export const APP_VERSION = "1.0.59";
+export const STOREFRONT_COOKIE_LANGUAGE = 'da';
 
 type PublicCookieTexts = Omit<CookieTexts, 'id' | 'last_updated'>;
 const englishTexts: PublicCookieTexts = {
