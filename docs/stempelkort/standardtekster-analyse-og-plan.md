@@ -1,6 +1,6 @@
 # Standardtekster for samtykke og vilkår – analyse og plan
 
-Status: **Afventer godkendelse.** Der er ikke ændret applikationskode.
+Status: **Ejeren har besvaret spørgsmålene 2026-10-19 (se B1). Afventer godkendelse af den nye ordlyd i afsnit 8 (B2), før der bygges.** Der er ikke ændret applikationskode.
 Grundlag: `main` @ `HEAD` 2026-10-19. Hører til fase 1 (backend og admin) og bruges i fase 2 (kundeportal).
 
 ---
@@ -35,7 +35,7 @@ Fra stempelkortet (`programSettingsSchema` i `src/lib/loyalty/stamp-card/rules.t
 | `{belønning_gyldighed}` | `rewardValidityMonths` |
 | `{stempel_gyldighed}` | `cardValidityMonths` |
 | `{aldersgrænse}` | **findes ikke**, ny indstilling `minimumAge` (standard 15) |
-| `{opbevaring_efter_ophør}` | **findes ikke**, ny indstilling `retentionMonths` (se spørgsmål 3) |
+| `{opbevaring_efter_ophør}` | **findes ikke**. Udgår efter beslutning B1.3. |
 | `{#hvis rabat_giver_stempel}` | `discountedOrdersQualify` |
 | `{#hvis flere_afdelinger}` | `crossLocation` og mere end én aktiv afdeling i `locations` (`brandId`, `isActive !== false`). `brand.locationsCount` er ikke pålidelig nok, så afdelingerne tælles. |
 | `{version}`, `{gældende_fra}` | **findes ikke** som tekstversion. Se A3. |
@@ -77,6 +77,35 @@ Fra stempelkortet (`programSettingsSchema` i `src/lib/loyalty/stamp-card/rules.t
 | 5 | **E-mailudbyder:** Platformen ved via `ORDERFLY_OMNISEND_BRANDS`, om et brand bruger Omnisend. Skal `{emailudbyder}` indføres? | Nej, behold "vores e-mailudbyder". Navnet ligger i en hemmelighed, og afsnittet er korrekt uden det. |
 | 6 | **Eksisterende programmer** med egen fritekst (fx Esmeralda, hvis teksterne allerede er gemt): skal de beholde teksten? | Ja. De markeres "bruger ikke standardteksten" med knappen "Gendan standardtekst". Intet ændres automatisk. |
 
+### B1. Beslutninger (ejeren, 2026-10-19)
+
+| # | Beslutning |
+|---|---|
+| 1 | Standardskabelonen ligger **i koden**, og alle versioner bevares der. En side med en tabel over versionerne kan vise hver gammel version (se C5a). |
+| 2 | **(b)** Brandets tekst får en ny version, hver gang den udfyldte tekst ændres ved en gemning. |
+| 3 | **Ingen automatisk sletning nu.** Ophører et medlemskab, deaktiveres medlemmet. `{opbevaring_efter_ophør}` og indstillingen udgår. Sætningen i vilkårenes afsnit 8 omskrives, så den ikke lover en fast slettefrist (B2). |
+| 4 | Kun en advarsel i admin om 30 dages varsel. |
+| 5 | Admin viser de manglende brandfelter med et link til Brands. Uden adgang står der "Kontakt en platformsadministrator". |
+| 6 | Versionssider: **både** en side for platformens superuser over standardskabelonens versioner **og** en fane over brandets udgivne tekstversioner. Begge har "Vis". |
+
+Spørgsmål 5 (e-mailudbyder) og 6 (eksisterende programmer) følger anbefalingen.
+
+### B2. Ny ordlyd i vilkårenes afsnit 8, tredje afsnit (til godkendelse)
+
+Opgavens tekst:
+
+> Vi opbevarer oplysningerne, så længe du er medlem, og sletter dem senest {opbevaring_efter_ophør} måneder efter, at medlemskabet er ophørt, medmindre lovgivningen kræver andet. Du har ret til …
+
+Forslag:
+
+> Vi opbevarer oplysningerne, så længe du er medlem. Lukker vi dit medlemskab eller programmet, bliver medlemskabet deaktiveret. Du kan til enhver tid slette dit medlemskab og dine oplysninger i {programnavn} eller ved at skrive til {kontakt_email}. Når du sletter dit medlemskab, fjerner vi dit navn og din e-mailadresse fra programmet. Hændelser som stempler og indløsninger gemmes uden oplysninger, der kan føre tilbage til dig. Du har ret til indsigt, berigtigelse, sletning, begrænsning, indsigelse og dataportabilitet og kan klage til Datatilsynet. Læs mere i vores privatlivspolitik ({privatlivspolitik_url}).
+
+Det er status `deleted`, når medlemmet sletter sig. I dag findes der ingen funktion i admin til at deaktivere et medlem eller lukke et medlemskab ved misbrug (vilkårenes afsnit 7). Den bygges ikke i denne PR. Sætningen "Lukker vi dit medlemskab …" er derfor et løfte om, hvad der sker, når funktionen findes, eller når programmet slås fra.
+
+Begrundelse: Teksten beskriver præcis det, platformen gør i dag. Sletning i portalen fjerner navn, e-mail og kundekobling, og loggen pseudonymiseres (fase 1, PR 3). Der kommer ingen slettefrist, systemet ikke overholder. Teksten bør gennemlæses juridisk før lancering.
+
+**Bemærk:** "uden oplysninger, der kan føre tilbage til dig" er lidt stærkere end "pseudonymiseret". Loggen beholder medlemmets interne id, men det id kan ikke kobles til en person, når navn og e-mail er fjernet. Vil du være helt præcis, kan der stå "gemmes uden dit navn og din e-mailadresse".
+
 ---
 
 ## Del C – Plan
@@ -85,7 +114,7 @@ Fra stempelkortet (`programSettingsSchema` i `src/lib/loyalty/stamp-card/rules.t
 
 Ny fil `src/lib/loyalty/stamp-card/texts.ts`:
 
-- `TEXT_TEMPLATE_VERSION = 'stamp-card-da-2026-10-19'` og `TEXT_TEMPLATES = { consentText, consentHelp, termsAccept, terms }`, ordret efter opgavens afsnit 5–7. Overskriften "Vilkår for {programnavn}" er ikke en del af `terms`, fordi siden `/club/vilkaar` allerede viser den.
+- `TEXT_TEMPLATE_VERSION = 'stamp-card-da-2026-10-19'` og de fire tekster `consentText`, `consentHelp`, `termsAccept` og `terms`, ordret efter opgavens afsnit 5–7. Den eneste afvigelse er afsnit 8 (B2). Overskriften "Vilkår for {programnavn}" er ikke en del af `terms`, fordi siden `/club/vilkaar` allerede viser den.
 - `renderText(template, values)`:
   - Pladsholdere `{navn}` og betingelser `{#hvis x}…{/hvis}` og `{#hvis ikke x}…{/hvis}`. Ingen indlejring, ingen kode og ingen HTML. Resultatet vises som ren tekst (`whitespace-pre-line`), som i dag.
   - Returnerer `{ text, missing: string[] }`. Mangler en værdi, kommer pladsholderen i `missing`, og teksten må ikke vises.
@@ -97,6 +126,8 @@ Ny fil `src/lib/loyalty/stamp-card/texts.ts`:
   - Datoer vises med `danishDate` (dansk tid). Funktionen flyttes fra portalens `texts.ts` til `src/lib`, så admin og portal bruger den samme.
   - `{belønning}` får lille forbogstav midt i sætningen, efter den regel der allerede bruges i `nextRewardText` ("Gratis pizza" → "gratis pizza", "VIP-menu" bevares). Reglen flyttes ud i en fælles hjælper.
   - Påkrævet: alle syv brand- og tenantfelter samt `programnavn`, `belønning`, `version` og `gældende_fra`. Talindstillingerne har altid en værdi.
+  - `{opbevaring_efter_ophør}` findes ikke (B1.3).
+- `TEXT_TEMPLATES` er en liste over **alle** versioner, hver med `version`, `publishedAt`, en kort ændringsnote og de fire tekster. Den nyeste er den aktuelle. En version ændres aldrig, når den er udgivet; en ændring er en ny version. En unit-test låser hashen af hver udgivet version, så en gammel version ikke kan ændres ved en fejl.
 - `renderProgramTexts(...)` samler det hele og giver de fire udfyldte tekster, samlet `missing` og en hash af den udfyldte tekst.
 
 ### C2. Datamodel (`loyaltyPrograms.settings`, bagudkompatibel)
@@ -107,7 +138,6 @@ Ny fil `src/lib/loyalty/stamp-card/texts.ts`:
 | `consentHelp` | ny, tekst (maks. 2.000) | Forklaringen under samtykkefeltet (skabelon 5, del 2). Standard `''` ved læsning af ældre versioner. |
 | `termsAccept` | ny, tekst (maks. 300) | Teksten ved andet afkrydsningsfelt. Standard ved læsning: "Jeg accepterer vilkårene for {programnavn}.", så ældre programmer viser det samme som i dag. |
 | `minimumAge` | nyt tal (13–99), standard 15 | `{aldersgrænse}` |
-| `retentionMonths` | nyt tal (1–120) | Kun hvis spørgsmål 3 godkendes. |
 | `templateVersion` | `string \| null` | Den standardskabelon, teksterne er kopieret fra. `null` = egen tekst. |
 | `textVersion` | heltal ≥ 0 | `{version}`. Tælles op, når den udfyldte tekst ændres ved en gemning (spørgsmål 2). |
 | `textEffectiveFrom` | epoch ms \| null | `{gældende_fra}`. Sættes til gemmetidspunktet ved ny `textVersion`. |
@@ -136,18 +166,32 @@ Ny fil `src/lib/loyalty/stamp-card/texts.ts`:
 - Den bruger **samme** `renderProgramTexts` som portalen, på de værdier der står i formularen. Brandets data og antallet af afdelinger sendes med fra `readSettings`. Manglende værdier vises som markerede felter i forhåndsvisningen (kun i admin) med en forklaring.
 - Testen sammenligner forhåndsvisningen med portalens HTML for de samme data.
 
+### C5a. Versionssider (B1.6)
+
+**Standardskabelonens versioner** (`/superadmin/settings/stamp-card-texts`, kun platformens superuser via `requirePlatformSuperuser`, som cookieteksterne):
+- En tabel (`ui/table`) med version, udgivet, ændringsnote, status (Aktuel/Tidligere) og antal brands, der bruger versionen (`templateVersion` på `loyaltyPrograms`).
+- "Vis" åbner versionen (`…/stamp-card-texts/{version}`) med de fire tekster og pladsholderne fremhævet. Siden er skrivebeskyttet, fordi skabelonen ligger i koden.
+- Menupunktet ligger under Indstillinger ved siden af Cookie-tekster.
+
+**Brandets tekstversioner** (ny fane **Tekstversioner** under Stempelkort, `orderfly.stamp_cards:settings` for hele brandet):
+- En tabel med version, gældende fra, udgivet af, standardskabelonen versionen bygger på (eller "Egen tekst") og antal medlemmer, der er tilmeldt på versionen.
+- "Vis" åbner præcis den udfyldte tekst, kunden så: samtykke, forklaring, accept og vilkår.
+- Kilden er den nye collection `loyaltyTextVersions/{brandId}_{textVersion}`. Den oprettes uforanderligt (`tx.create`) i samme transaktion som gemningen, når `textVersion` tælles op. Den indeholder de udfyldte tekster, hashen af dem, den rå skabelontekst, `templateVersion`, `effectiveFrom` og hvem der udgav den.
+- Ændres brandets stamdata efter udgivelsen (fx adressen), afviger den udfyldte tekst fra snapshottet. Ved tilmelding gemmes den tekst, kunden faktisk så, derfor også i `loyaltyRenderedTexts/{hash}` (oprettes kun, hvis den ikke findes). Visningen viser snapshottet og en note, når medlemmer har set en variant med andre stamdata.
+- Læsning tjekker brandet med `requireBrand`. Dokumenter fra et andet brand afvises med 404.
+
 ### C6. Kundeportal og samtykkelog (fase 2-filer)
 
 - `programForPortal` og `memberView` returnerer de **udfyldte** tekster: `consentText`, `consentHelp`, `termsAccept`, `terms`, samt `textVersion` og `textEffectiveFrom`.
 - `consentVersion` og `termsVersion` bliver en hash af den **udfyldte** tekst (`textVersion('consent', rendered)`). Den eksisterende kontrol "kunden så den aktuelle tekst" i `signup` og `setNewsletterConsent` dækker dermed også ændrede indstillinger og brandoplysninger. Ændres noget, mens kunden står på siden, får kunden `program_changed` og skal sætte flueben igen (det findes allerede).
-- Samtykkeloggen (`marketingConsents.wording`) gemmer den udfyldte samtykketekst, som i dag. Nyt: medlemmet og `member_joined`-hændelsen får `termsTextVersion` (tallet), `termsHash` og en reference til `loyaltyProgramVersions/{brandId}_{version}`, så den viste vilkårstekst kan genskabes præcis. Den udfyldte vilkårstekst gemmes ikke pr. medlem, fordi den er op til 20.000 tegn. Den kan genskabes fra versionssnapshottet og brandets data, og hashen beviser, at det er den samme tekst. **Alternativ:** gem hele den udfyldte vilkårstekst pr. tekstversion i et nyt uforanderligt dokument `loyaltyTermsTexts/{hash}`. Det er mere robust, hvis brandets stamdata ændres senere. Jeg anbefaler alternativet.
+- Samtykkeloggen (`marketingConsents.wording`) gemmer den udfyldte samtykketekst, som i dag. Nyt: medlemmet og `member_joined`-hændelsen får `textVersion` (tallet) og `textHash`. Hashen peger på `loyaltyRenderedTexts/{hash}` (C5a), som indeholder alle fire udfyldte tekster. Den viste tekst kan derfor altid genskabes ordret, også hvis brandets stamdata ændres senere. Den lange vilkårstekst gemmes én gang pr. variant og ikke pr. medlem.
 - `signup-form.tsx`: accept-teksten og forklaringen kommer fra programmet. Den hardkodede tekst fjernes. Ordet "vilkårene" i accept-teksten bliver et link til `/club/vilkaar`.
 - `/club/vilkaar` viser de udfyldte vilkår. Linjen "Version {version}, gældende fra {gældende_fra}" er en del af skabelonen.
 
 ### C7. Advarsel om 30 dages varsel
 
 - Når et **aktivt** program gemmes med en ændret vilkårstekst, viser formularen før gemning en bekræftelse: "Væsentlige ændringer af vilkårene kræver 30 dages varsel til medlemmerne (vilkårenes afsnit 10). Nye medlemmer ser den nye tekst med det samme." Ændringen gemmes først, når brugeren bekræfter.
-- Det samme gælder, når en indstilling, der indgår i vilkårene, ændres (minimumsbeløb, antal stempler, belønning, gyldighed, rabatflaget, afdelinger, aldersgrænse og opbevaring).
+- Det samme gælder, når en indstilling, der indgår i vilkårene, ændres (minimumsbeløb, antal stempler, belønning, gyldighed, rabatflaget, afdelinger og aldersgrænse).
 
 ### C8. Tenant- og brandgrænser
 
@@ -165,14 +209,14 @@ Ny fil `src/lib/loyalty/stamp-card/texts.ts`:
 | Kunden ser aldrig en uudfyldt pladsholder | Ukendt pladsholder afvises ved gemning. Brandfelt slettet efter aktivering lukker tilmeldingen. Portal-HTML indeholder aldrig `{`. |
 | Forhåndsvisning = kundens visning | Samme input giver samme tekst i admin og portal (unit og browser). |
 | Ny version og logget samtykke | `textVersion` og `textEffectiveFrom` ved tekstændring. Tilmelding logger den udfyldte tekst og versionen. Gammel hash giver `program_changed`. |
+| Versionssider | Superuser-siden viser alle skabelonversioner og afviser andre end superusers. Brandets fane viser udgivne versioner med "Vis" af den udfyldte tekst. Et snapshot ændres aldrig. Hashen af hver udgivet skabelonversion er låst i en test. |
 | "Gendan standardtekst" | Ændret tekst → gendan → gem giver skabelonen og `templateVersion`. Besked ved ældre skabelonversion. |
 | Ingen data på tværs af brands | Se C8. |
 
 Desuden: de eksisterende tests `loyalty-stamp-card-*.cjs`, `loyalty-portal-pages.cjs` og `loyalty-portal-browser.cjs` opdateres (tilmelding viser forklaring og linket accept-tekst). Browser-testen af admin udvides med forhåndsvisning, manglende felter og bekræftelsen ved 30 dages varsel. `npm run typecheck`.
 
-### C10. PR'er
+### C10. PR
 
-1. **Standardtekster** (denne opgave): C1–C9 i én afgrænset PR. Docs: `docs/stempelkort/README.md`, `docs/firestore-schema.md` (nye felter) og denne plan.
-2. **Opbevaring efter ophør** (kun hvis spørgsmål 3 godkendes): indstilling og sletningsjob i heartbeat i en separat PR. Indtil den er merget, indeholder skabelonen ikke afsnittet med `{opbevaring_efter_ophør}`. Jeg foreslår i stedet "sletter dem, når medlemskabet ophører, medmindre lovgivningen kræver andet", eller at sætningen venter.
+Én afgrænset PR med C1–C9 og C5a. Docs: `docs/stempelkort/README.md`, `docs/firestore-schema.md` (nye felter og collections), `docs/api-overview.md` og denne plan. Der kommer ingen PR med et sletningsjob (B1.3).
 
-Ingen hemmeligheder, Firestore-regler, indekser eller produktionsdata ændres.
+Ingen hemmeligheder, Firestore-regler, indekser eller produktionsdata ændres. De nye collections læses og skrives kun fra serveren, og opslag sker på dokument-id, så der skal ikke bruges nye indekser. Optællingen af medlemmer pr. tekstversion bruger `count()` på (`brandId`, `textVersion`). Viser den sig at kræve et sammensat indeks, tilføjes det i `docs/loyalty-firestore-indexes.json`.
