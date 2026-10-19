@@ -202,7 +202,7 @@ export function OrdersClientPage({
           <CardContent>
             <div className="text-sm font-medium">
               {latestOrder
-                ? formatPaidAt(latestOrder.paidAt)
+                ? formatPaidAt(latestOrder.paidAt, latestOrder.paymentStatus)
                 : 'Ingen ordrer endnu'}
             </div>
           </CardContent>
@@ -289,7 +289,7 @@ export function OrdersClientPage({
                       </TableCell>
 
                       <TableCell className="text-muted-foreground">
-                        {formatPaidAt(order.paidAt)}
+                        {formatPaidAt(order.paidAt, order.paymentStatus)}
                       </TableCell>
 
                       <TableCell>

@@ -10,15 +10,15 @@ export function canceledPickupPaymentLabel(order: { status?: unknown; paymentMet
     : 'Ingen betaling modtaget';
 }
 
-// Only paid orders have a payment time, so a missing one means the order is not paid.
-export function formatPaidAt(value?: string): string {
-  if (!value) {
+// The payment status decides "not paid"; a paid order with a missing or malformed time is an unknown date.
+export function formatPaidAt(value: string | undefined, paymentStatus: unknown): string {
+  if (paymentStatus !== 'Paid') {
     return 'Ikke betalt';
   }
 
-  const date = new Date(value);
+  const date = new Date(value || '');
 
-  if (Number.isNaN(date.getTime())) {
+  if (!value || Number.isNaN(date.getTime())) {
     return 'Ukendt dato';
   }
 

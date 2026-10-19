@@ -85,7 +85,10 @@ test('sales use the selected paidAt period while current pending orders stay sep
 
 test('admin order list says an unpaid order is not paid instead of an unknown date', () => {
   const { formatPaidAt } = loadTs('src/lib/orders/presentation.ts');
-  assert.equal(formatPaidAt(undefined), 'Ikke betalt');
-  assert.equal(formatPaidAt('not a date'), 'Ukendt dato');
-  assert.match(formatPaidAt('2026-10-18T12:40:00Z'), /18\. okt\. 2026.*14\.40/);
+  assert.equal(formatPaidAt(undefined, 'Pending'), 'Ikke betalt');
+  assert.equal(formatPaidAt(undefined, 'Failed'), 'Ikke betalt');
+  // Page serialization turns a malformed paidAt into undefined; a paid order still reads as an unknown date.
+  assert.equal(formatPaidAt(undefined, 'Paid'), 'Ukendt dato');
+  assert.equal(formatPaidAt('not a date', 'Paid'), 'Ukendt dato');
+  assert.match(formatPaidAt('2026-10-18T12:40:00Z', 'Paid'), /18\. okt\. 2026.*14\.40/);
 });
