@@ -20,6 +20,7 @@ Live-test af købsflowet på Esmeralda Pizza Amager med Stripe i testtilstand: a
 - Tidspunkter vises altid i dansk tid (`Europe/Copenhagen`) uanset browserens og serverens tidszone. Ordresiden formaterede før betalingstidspunktet på serveren i UTC.
 - "View in Stripe" pegede på `#`. "Se i Stripe" åbner nu betalingen i Stripe Dashboard (test eller live efter checkout-sessionens id) og vises kun, når der er et betalings-id.
 - "Export" havde ingen funktion og er fjernet.
+- Kolonnen "Betalt" og kortet "Seneste betaling" viser "Ikke betalt", når ordren ikke har betalingsstatus `Paid`, fx en ordre med betaling ved afhentning. Før stod der "Ukendt dato". En betalt ordre uden gyldigt betalingstidspunkt viser fortsat "Ukendt dato" (`formatPaidAt` i `src/lib/orders/presentation.ts`).
 
 ## Ikke med her
 - **Mail ved betaling ved afhentning:** Kunden får i dag kun bekræftelsen i browseren. Mailen kræver en ny skabelon i Esmeraldas Notification Platform, fordi `orderfly.order.confirmation` forudsætter betaling og faktura. Det kræver en parret ændring i Esmeralda-repoet.
