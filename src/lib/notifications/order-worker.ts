@@ -2,11 +2,14 @@ import 'server-only';
 import { randomUUID } from 'node:crypto';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { NotificationPlatformClient, NotificationPlatformError } from './platform';
+import { locationAddress } from '@/lib/order-invoice';
 
 const never = Number.MAX_SAFE_INTEGER;
 const leaseMs = 120000;
 const validEmail = (value: unknown): value is string => typeof value === 'string' && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
-type OrderNotificationJob = { orderId: string; brandId: string; locationId: string; eventId: string; lease: string; attempts?: number };
+type OrderNotificationJob = { orderId: string; brandId: string; locationId: string; eventId: string; lease: string; attempts?: number; kind?: string };
+// A pay-at-pickup order is mailed once accepted and still unpaid; it gets the paid confirmation when it is paid.
+const pickupUnpaid = (order: Record<string, any>) => order.paymentMethod === 'PayAtPickup' && order.deliveryType === 'Pickup' && !order.psp && order.paymentStatus === 'Pending' && !['Pending', 'Canceled'].includes(order.status);
 
 export async function runOrderNotificationWorker(makeClient = () => new NotificationPlatformClient(), now = Date.now()) {
   const db = getAdminDb();
@@ -38,7 +41,9 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
     try {
       const orderDoc = await db.collection('orders').doc(String(job.orderId || '')).get();
       const order = orderDoc.data();
-      if (!order || order.paymentStatus !== 'Paid' || order.status === 'Canceled' || order.brandId !== job.brandId || order.locationId !== job.locationId || !validEmail(order.customerContact)) {
+      const pickup = job.kind === 'pickupReceived';
+      const payable = pickup ? !!order && pickupUnpaid(order) : order?.paymentStatus === 'Paid' && order.status !== 'Canceled';
+      if (!order || !payable || order.brandId !== job.brandId || order.locationId !== job.locationId || !validEmail(order.customerContact)) {
         await finish('suppressed', 'order_not_eligible'); counts.suppressed++; continue;
       }
       const ownsLease = await db.runTransaction(async tx => {
@@ -47,6 +52,20 @@ export async function runOrderNotificationWorker(makeClient = () => new Notifica
         tx.update(ref, { state: 'dispatching', nextAttemptAt: Date.now() + leaseMs, updatedAt: Date.now() }); return true;
       });
       if (!ownsLease) continue;
+      if (pickup) {
+        const location = (await db.collection('locations').doc(String(order.locationId)).get()).data();
+        dispatched = true;
+        await makeClient().send({
+          idempotencyKey: String(job.eventId), templateKey: 'orderfly.order.received_pay_at_pickup', locale: 'da',
+          recipientEmail: order.customerContact.trim().toLowerCase(), recipientName: String(order.customerName || ''),
+          relatedEntity: { type: 'commerce_order', id: orderDoc.id },
+          variables: {
+            orderId: orderDoc.id, customerName: String(order.customerName || ''), brandName: String(order.brandName || ''), locationName: String(order.locationName || ''),
+            deliveryTime: String(order.deliveryTime || ''), totalAmount: Number(order.totalAmount || 0), currency: 'DKK', fulfillmentAddress: location ? locationAddress(location) : '',
+          },
+        });
+        await finish('accepted'); counts.accepted++; continue;
+      }
       dispatched = true;
       const invoice = order.invoice;
       if (invoice && (!invoice.number || !Array.isArray(invoice.lines))) {

@@ -29,6 +29,7 @@ flowchart LR
 | Manage Discounts               | `src/app/superadmin/standard-discounts/actions.ts` | `standardDiscounts`        | `{ type, value, minOrder, active }`                             | Updates automatic discounts                           |
 | Assign Feedback Form           | `src/lib/feedback/settings.ts`                     | `feedbackSettings`         | `{ brandId, questionVersionId, mail/reminder settings }`       | Assigns one active form and automation to a brand     |
 | Settle Paid Order              | `src/lib/server/settle-checkout.ts`                | `orders`, `customers`, `orderNotificationJobs` | Scoped payment update and confirmation outbox | Commits payment state and one idempotent confirmation job |
+| Accept Pay-at-Pickup Order     | `src/app/checkout/actions.ts`                      | `orders`, `orderNotificationJobs` | Acceptance update and order-received outbox | Commits the acceptance and one idempotent `pickupReceived` job |
 
 ---
 

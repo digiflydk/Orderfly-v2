@@ -174,3 +174,23 @@ test('order confirmation worker sends one scoped message and suppresses canceled
  const result=await worker.runOrderNotificationWorker(client);assert.equal(result.suppressed,1);assert.equal(sent.length,1);assert.equal(f.records.get('orderNotificationJobs/canceled').state,'suppressed');
  assert.doesNotMatch(JSON.stringify(f.records.get('orderNotificationJobs/job')),/private@example/);
 });
+
+test('pay-at-pickup order-received mail: one message while accepted and unpaid, suppressed once paid or canceled',async t=>{
+ const f=setup(t);Object.assign(f.records.get('orders/order'),{paymentMethod:'PayAtPickup',deliveryType:'Pickup',paymentStatus:'Pending',status:'Received',customerContact:'private@example.test',customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',totalAmount:104,deliveryTime:'18:30',invoice:undefined,psp:undefined});
+ f.records.set('locations/l',{...(f.records.get('locations/l')||{}),address:undefined,street:'Testvej 1',zipCode:'2300',city:'København S',country:'DK'});
+ f.records.set('orderNotificationJobs/pickup',{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:'pickup-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+ // A paid-confirmation job for the same unpaid order must not send the paid template.
+ f.records.set('orderNotificationJobs/confirmation',{orderId:'order',brandId:'b',locationId:'l',kind:'orderConfirmation',eventId:'confirmation-event',state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+ const sent=[];const worker=loadTs('src/lib/notifications/order-worker.ts',{...f.mocks,'./platform':{NotificationPlatformError:class extends Error{},NotificationPlatformClient:class{}}});
+ const client=()=>({send:async message=>sent.push(message)});
+ await Promise.all([worker.runOrderNotificationWorker(client),worker.runOrderNotificationWorker(client)]);
+ assert.equal(sent.length,1);assert.equal(sent[0].templateKey,'orderfly.order.received_pay_at_pickup');assert.equal(sent[0].idempotencyKey,'pickup-event');
+ assert.deepEqual(sent[0].variables,{orderId:'order',customerName:'QA Guest',brandName:'Esmeralda QA',locationName:'Amager',deliveryTime:'18:30',totalAmount:104,currency:'DKK',fulfillmentAddress:'Testvej 1, 2300 København S, DK'});
+ assert.equal(f.records.get('orderNotificationJobs/pickup').state,'accepted');assert.equal(f.records.get('orderNotificationJobs/confirmation').state,'suppressed');
+ for(const update of [{paymentStatus:'Paid'},{status:'Canceled',paymentStatus:'Failed'},{status:'Pending'},{deliveryType:'Delivery'},{psp:{provider:'stripe'}}]){
+  const id='pickup-'+JSON.stringify(update);Object.assign(f.records.get('orders/order'),{paymentStatus:'Pending',status:'Received',deliveryType:'Pickup',psp:undefined},update);
+  f.records.set('orderNotificationJobs/'+id,{orderId:'order',brandId:'b',locationId:'l',kind:'pickupReceived',eventId:id,state:'pending',nextAttemptAt:Date.now()-1,attempts:0});
+  await worker.runOrderNotificationWorker(client);assert.equal(f.records.get('orderNotificationJobs/'+id).state,'suppressed',id);
+ }
+ assert.equal(sent.length,1);
+});

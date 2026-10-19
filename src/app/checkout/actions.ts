@@ -23,7 +23,7 @@ import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
 import { newsletterEligible, newsletterAllowsStacking, cartLineEligible, assignedCustomerMatches, restaurantClock, discountMinimumError } from '@/lib/promotion-rules';
 import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
 import { reconcileStaleDiscountHolds } from '@/lib/server/stale-discount-holds';
-import { createHash, randomBytes } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { headers } from 'next/headers';
 import Stripe from 'stripe';
 import { db } from '@/lib/server/firestore-compat';
@@ -674,6 +674,7 @@ export async function createStripeCheckoutSessionAction(
       // disable/reassignment cannot admit a new pickup order.
       stage = 'pickup_acceptance';
       sessionRequestStarted = true; // A lost acceptance response is not a rejection.
+      const pickupMailRef = doc(db, 'orderNotificationJobs', createHash('sha256').update(JSON.stringify(['pickup-received', brandId, orderId])).digest('hex'));
       try {
         await runTransaction(db, async transaction => {
           const [saved, nativeLocation] = await Promise.all([
@@ -687,6 +688,11 @@ export async function createStripeCheckoutSessionAction(
             fulfillmentAt = resolveFulfillmentTime(current, deliveryType, deliveryTime);
           } catch (error) { throw Object.assign(error instanceof Error ? error : new Error('Invalid pickup order'), { code: 'pickup_order_rejected' }); }
           transaction.update(orderRef, { status: 'Received', acceptedAt: serverTimestamp(), fulfillmentAt, deliveryTime: displayFulfillmentTime(fulfillmentAt), updatedAt: serverTimestamp() });
+          // The order-received mail is committed with the acceptance, so only an accepted order is ever mailed.
+          transaction.set(pickupMailRef, {
+            orderId, brandId, locationId, kind: 'pickupReceived', state: 'pending', eventId: randomUUID(),
+            nextAttemptAt: Date.now(), attempts: 0, createdAt: Date.now(), updatedAt: Date.now(),
+          });
         });
       } catch (error) {
         if ((error as { code?: string })?.code === 'pickup_order_rejected') sessionRequestStarted = false;
