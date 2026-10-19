@@ -8,7 +8,7 @@ exports.memoryDb=(rows=new Map())=>{
   orderBy:(field,dir)=>query(name,filters,{field,dir},count),limit:n=>query(name,filters,order,n),
   count:()=>({get:async()=>{const n=(await query(name,filters,order,count).get()).docs.length;return {data:()=>({count:n})};}}),
   get:async()=>{let values=[...rows].filter(([key,value])=>key.startsWith(name+'/')&&filters.every(f=>{
-   const actual=value[f.field];
+   const actual=f.field.split('.').reduce((node,key)=>node?.[key],value);
    if(f.op==='==')return actual===f.value;
    if(f.op==='in')return f.value.includes(actual);
    if(f.op==='array-contains')return Array.isArray(actual)&&actual.includes(f.value);
