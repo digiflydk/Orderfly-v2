@@ -14,6 +14,8 @@ const {principalKey}=loadTs('src/lib/access/authority.ts',mocks);
 const {customerIdentityKey}=loadTs('src/lib/customer-identity.ts');
 
 const NOW=Date.parse('2026-10-20T10:00:00Z'),DAY=86_400_000,BRAND='brand';
+// The marketing worker also reads the wall clock (deadlines, completion time); keep it on the test clock so the suite does not expire with the calendar.
+const realNow=Date.now,clockOffset=NOW-realNow();Date.now=()=>realNow()+clockOffset;
 const CONSENT='Ja tak til nyhedsbrev fra Esmeralda på e-mail med tilbud og nyheder. Du kan altid afmelde dig.';
 const settings=(changes={})=>({...defaultProgramSettings('Esmeralda'),active:true,reward:{type:'free_product',productIds:['pizza'],categoryIds:[]},
   rewardDescription:'Gratis pizza',terms:'Vilkår for Esmeralda Club',consentText:CONSENT,...changes});

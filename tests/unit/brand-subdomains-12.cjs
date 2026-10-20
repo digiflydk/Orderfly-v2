@@ -236,3 +236,47 @@ test('#282 the public reviews page links back to the menu and to more reviews on
   assert.equal(apex.menuHref, '/esmeralda/esmeralda-pizza-amager');
   assert.equal(apex.nextHref, '/esmeralda/esmeralda-pizza-amager/reviews?after=r%202');
 });
+
+test('#282 "Bestil nu" on orderfly.dk continues on the brand subdomain; other hosts stay in the app', () => {
+  const entry = (host, ...segments) => lib.orderEntryUrl(host, 'esmeralda', ...segments);
+  for (const host of ['orderfly.dk', 'www.orderfly.dk', 'OrderFly.dk:443'])
+    assert.equal(entry(host, 'esmeralda-pizza-amager'), 'https://esmeralda.orderfly.dk/esmeralda-pizza-amager', host);
+  // Already on the subdomain: same short in-app path as before.
+  assert.equal(entry('esmeralda.orderfly.dk', 'esmeralda-pizza-amager'), '/esmeralda-pizza-amager');
+  // Local, preview and other hosts keep today's path.
+  for (const host of ['localhost:3000', 'studio--orderfly.hosted.app', 'other.orderfly.dk', '', null])
+    assert.equal(entry(host, 'esmeralda-pizza-amager'), '/esmeralda/esmeralda-pizza-amager', String(host));
+  // A location that collides with an app path keeps the long form on the subdomain too.
+  assert.equal(entry('orderfly.dk', 'feedback'), 'https://esmeralda.orderfly.dk/esmeralda/feedback');
+  // A slug that cannot be a subdomain stays on orderfly.dk.
+  assert.equal(lib.orderEntryUrl('orderfly.dk', 'admin', 'x'), '/admin/x');
+});
+
+test('#282 the "Bestil nu" sheet does a full jump to the subdomain on orderfly.dk and an in-app push elsewhere', () => {
+  const run = (host, brandSlug) => {
+    let state = null; const pushes = [], assigns = [], types = [];
+    global.window = { location: { host, assign: url => assigns.push(url) } };
+    try {
+      const mod = loadTsx('src/components/modals/DeliveryMethodModal.tsx', {
+        react: { useState: () => [state, next => { state = next; }], useEffect: fn => fn() },
+        'react/jsx-runtime': require('react/jsx-runtime'),
+        'next/navigation': { useRouter: () => ({ push: path => pushes.push(path) }) },
+        '@/context/cart-context': { useCart: () => ({ location: null, setDeliveryType: type => types.push(type) }) },
+        '@/components/ui/dialog': {}, '@/components/ui/button': {}, '@/components/storefront/OrderModal': { OrderModal: () => null },
+        'lucide-react': {}, '@/hooks/use-storefront-path': loadTs('src/hooks/use-storefront-path.ts'),
+      });
+      mod.default();
+      mod.openDeliveryModal({ brandSlug, locationSlug: 'esmeralda-pizza-amager', location: { deliveryTypes: ['pickup', 'delivery'] } });
+      const sheet = mod.default();
+      if (brandSlug === 'esmeralda') sheet.props.onDeliveryMethodSelected('delivery');
+      // The generic dialog: [header, Afhentning, Levering].
+      else sheet.props.children.props.children.filter(child => child.props?.onClick)[1].props.onClick();
+      return { pushes, assigns, types };
+    } finally { delete global.window; }
+  };
+  assert.deepEqual(run('orderfly.dk', 'esmeralda'), { pushes: [], assigns: ['https://esmeralda.orderfly.dk/esmeralda-pizza-amager?deliveryMethod=delivery'], types: ['delivery'] });
+  assert.deepEqual(run('esmeralda.orderfly.dk', 'esmeralda'), { pushes: ['/esmeralda-pizza-amager?deliveryMethod=delivery'], assigns: [], types: ['delivery'] });
+  assert.deepEqual(run('localhost:3000', 'esmeralda'), { pushes: ['/esmeralda/esmeralda-pizza-amager?deliveryMethod=delivery'], assigns: [], types: ['delivery'] });
+  // The generic dialog of other brands follows the same rule.
+  assert.deepEqual(run('orderfly.dk', 'cph-qa').assigns, ['https://cph-qa.orderfly.dk/esmeralda-pizza-amager?deliveryMethod=delivery']);
+});
