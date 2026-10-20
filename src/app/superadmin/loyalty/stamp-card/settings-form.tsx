@@ -13,28 +13,34 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { MultiSelect } from '@/components/ui/multi-select';
 import { AdminSelectField } from '@/components/superadmin/admin-select-field';
 import { useToast } from '@/hooks/use-toast';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import type { ProgramSettings } from '@/lib/loyalty/stamp-card/rules';
+import type { ProgramTextsMeta } from '@/lib/loyalty/stamp-card/model';
+import { CURRENT_TEMPLATE, textKey } from '@/lib/loyalty/stamp-card/texts';
 import { saveProgramSettings } from './actions';
+import { ProgramTextsCard, type TextContextView } from './program-texts-card';
 
 type Option = { id: string; name: string };
 type Initial = { brand: { brandId: string; brandName: string }; version: number; settings: ProgramSettings; updatedAt: number | null;
-  updatedByName: string | null; products: Option[]; categories: Option[] };
+  updatedByName: string | null; products: Option[]; categories: Option[]; texts: ProgramTextsMeta; textContext: TextContextView };
 
 const ERRORS: Record<string, string> = {
   record_changed: 'Indstillingerne er ændret af en anden. Genindlæs siden og prøv igen.',
   invalid_reward_reference: 'Et valgt produkt eller en kategori findes ikke længere for brandet.',
   forbidden: 'Du har ikke adgang til at ændre indstillingerne for dette brand.',
   invalid_settings: 'Kontrollér de markerede felter.',
+  texts_incomplete: 'Teksterne mangler oplysninger. Se listen under Tekster.',
 };
 const kr = (ore: number) => (ore / 100).toString().replace('.', ',');
 const ore = (value: string) => Math.round(Number(value.replace(',', '.')) * 100);
 const int = (value: string) => (value.trim() === '' ? NaN : Number(value));
 
-export function SettingsForm({ initial }: { initial: Initial }) {
+export function SettingsForm({ initial, canEditBrand }: { initial: Initial; canEditBrand: boolean }) {
   const router = useRouter(), { toast } = useToast(), [pending, start] = useTransition();
   const [s, setS] = useState<ProgramSettings>(initial.settings);
   const [minimum, setMinimum] = useState(kr(initial.settings.minimumAmountOre));
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [warn, setWarn] = useState<ProgramSettings | null>(null);
   const set = <K extends keyof ProgramSettings>(key: K, value: ProgramSettings[K]) => setS(prev => ({ ...prev, [key]: value }));
   const reward = s.reward ?? { type: 'free_product' as const, productIds: [], categoryIds: [] };
   const toggle = <T extends string>(list: T[], value: T, on: boolean) => on ? [...new Set([...list, value])] : list.filter(v => v !== value);
@@ -44,6 +50,16 @@ export function SettingsForm({ initial }: { initial: Initial }) {
     // A free product with nothing chosen is no reward yet; an inactive draft may save without one.
     const empty = s.reward?.type === 'free_product' && s.reward.productIds.length + s.reward.categoryIds.length === 0;
     const settings = { ...s, reward: empty ? null : s.reward, minimumAmountOre: ore(minimum) };
+    // Publishing changed terms needs notice to the members (terms §10), also when a program is
+    // switched on again after edits. A program active since before text versions has no published
+    // key; its saved settings are what members saw.
+    const published = initial.texts.key ?? (initial.settings.active ? textKey(initial.settings) : null);
+    if (settings.active && published !== null && textKey(settings) !== published) { setWarn(settings); return; }
+    save(settings);
+  }
+
+  function save(settings: ProgramSettings) {
+    setWarn(null);
     start(async () => {
       const result = await saveProgramSettings({ brandId: initial.brand.brandId, version: initial.version, settings });
       if (result.ok) {
@@ -52,7 +68,8 @@ export function SettingsForm({ initial }: { initial: Initial }) {
         router.refresh();
       } else {
         setErrors(result.fields ?? {});
-        toast({ variant: 'destructive', title: 'Indstillingerne blev ikke gemt', description: ERRORS[result.error] ?? 'Prøv igen.' });
+        toast({ variant: 'destructive', title: 'Indstillingerne blev ikke gemt',
+          description: result.missing?.length ? `Mangler: ${result.missing.map(m => m.label).join(', ')}`.replace(/([^.])$/, '$1.') : ERRORS[result.error] ?? 'Prøv igen.' });
       }
     });
   }
@@ -93,6 +110,7 @@ export function SettingsForm({ initial }: { initial: Initial }) {
           {number('cardValidityMonths', 'Kortets gyldighed ved inaktivitet (måneder)', 'Hvert nyt stempel nulstiller fristen.')}
           {number('rewardValidityMonths', 'Belønningens gyldighed (måneder)', 'Fra optjening til belønningen skal være brugt.')}
           {number('sessionDays', 'Kundens login-session (dage)')}
+          {number('minimumAge', 'Aldersgrænse (år)', 'Står i vilkårene som kravet for at blive medlem.')}
           {number('counterIdleMinutes', 'Kassevisning: log ud efter inaktivitet (minutter)', 'Fra 1 til 60 minutter. Tabletten låses, og næste medarbejder logger ind med sin PIN.')}
           <div className="grid gap-1.5">
             <Label htmlFor="maxStampsPerDay">Maks. stempler pr. medlem pr. dag</Label>
@@ -170,24 +188,28 @@ export function SettingsForm({ initial }: { initial: Initial }) {
         </CardContent>
       </Card>
 
-      <Card>
-        <CardHeader><CardTitle>Tekster</CardTitle><CardDescription>Ændringer gemmes som en ny version. Nye medlemmer giver samtykke til den aktuelle tekst.</CardDescription></CardHeader>
-        <CardContent className="grid gap-6">
-          <div className="grid gap-1.5">
-            <Label htmlFor="consentText">Samtykketekst</Label>
-            <Textarea id="consentText" rows={4} maxLength={2000} value={s.consentText} onChange={e => set('consentText', e.target.value)} />
-            <p className="text-xs text-muted-foreground">Skal nævne kanalen (e-mail), hvad nyhedsbrevet indeholder, og at kunden altid kan afmelde sig.</p>{field('consentText')}
-          </div>
-          <div className="grid gap-1.5">
-            <Label htmlFor="terms">Vilkår</Label>
-            <Textarea id="terms" rows={8} maxLength={20000} value={s.terms} onChange={e => set('terms', e.target.value)} />{field('terms')}
-          </div>
-        </CardContent>
-      </Card>
+      <ProgramTextsCard settings={{ ...s, minimumAmountOre: ore(minimum) }} texts={initial.texts} context={initial.textContext} brandId={initial.brand.brandId}
+        canEditBrand={canEditBrand} errors={errors} onChange={(field, value) => set(field, value)}
+        onRestore={() => setS(prev => ({ ...prev, ...CURRENT_TEMPLATE.texts }))} />
 
       <div className="flex justify-end">
         <Button type="submit" disabled={pending}>{pending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Gem indstillinger</Button>
       </div>
+
+      <AlertDialog open={!!warn} onOpenChange={open => { if (!open) setWarn(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Vilkårene ændres</AlertDialogTitle>
+            <AlertDialogDescription>
+              Væsentlige ændringer af vilkårene kræver 30 dages varsel til medlemmerne (vilkårenes afsnit 10). Nye medlemmer ser den nye tekst med det samme, og den bliver version {initial.texts.version + 1}.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Annuller</AlertDialogCancel>
+            <AlertDialogAction onClick={() => warn && save(warn)}>Gem ændringerne</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </form>
   );
 }

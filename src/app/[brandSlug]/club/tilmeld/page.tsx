@@ -10,6 +10,6 @@ export default async function SignupPage({ params }: Props) {
   const [{ program }, member, base] = await Promise.all([loadPortal(brandSlug), loadMember(brandSlug), portalBase(brandSlug)]);
   if (member) redirect(base);
   if (!program.active) return <ProgramClosed name={program.name} />;
-  return <SignupForm slug={brandSlug} base={base} program={{ name: program.name, consentText: program.consentText,
-    consentVersion: program.consentVersion, termsVersion: program.termsVersion }} />;
+  return <SignupForm slug={brandSlug} base={base} program={{ name: program.name, consentText: program.consentText, consentHelp: program.consentHelp,
+    termsAccept: program.termsAccept, consentVersion: program.consentVersion, termsVersion: program.termsVersion }} />;
 }

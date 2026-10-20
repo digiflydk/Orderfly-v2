@@ -3,7 +3,7 @@ import { redirect } from 'next/navigation';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { orderflySession } from '@/lib/access/orderfly-session';
 import { AccessDeniedPage } from '@/components/superadmin/access-denied-page';
-import { ADMIN_PERMISSION, adminBrands, listEvents, listMembers, listPrograms, readSettings } from '@/lib/loyalty/stamp-card/admin';
+import { ADMIN_PERMISSION, adminBrands, listEvents, listMembers, listPrograms, listTextVersions, readSettings, textVersionDetail } from '@/lib/loyalty/stamp-card/admin';
 import { EVENT_TYPES } from '@/lib/loyalty/stamp-card/model';
 import { filterQuery, parseFilters } from '@/lib/loyalty/stamp-card/filters';
 import { LoyaltyFiltersBar } from '@/components/superadmin/loyalty/loyalty-filters';
@@ -11,13 +11,16 @@ import { SettingsForm } from './settings-form';
 import { ProgramsOverview, type ProgramStatus } from './programs-overview';
 import { MembersTable } from './members-table';
 import { EventLog } from './event-log';
+import { TextVersionDetail, TextVersions } from './text-versions';
 import { cn } from '@/lib/utils';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const TABS = [['settings', 'Oversigt'], ['members', 'Medlemmer'], ['log', 'Log']] as const;
+const TABS = [['settings', 'Oversigt'], ['members', 'Medlemmer'], ['log', 'Log'], ['texts', 'Tekstversioner']] as const;
 type Tab = typeof TABS[number][0];
+// Published texts belong to the program's settings and need the same permission.
+const TAB_PERMISSION: Record<Tab, string> = { settings: ADMIN_PERMISSION.settings, members: ADMIN_PERMISSION.members, log: ADMIN_PERMISSION.log, texts: ADMIN_PERMISSION.settings };
 type SearchParams = Promise<Record<string, string | string[] | undefined>>;
 
 export default async function StampCardPage({ searchParams }: { searchParams: SearchParams }) {
@@ -25,7 +28,7 @@ export default async function StampCardPage({ searchParams }: { searchParams: Se
   if (!session) redirect('/admin-login');
   const db = getAdminDb(), actor = { identity: session.identity, name: session.name }, params = await searchParams, now = Date.now();
   // Each tab shows only brands where the user holds that tab's permission for the whole brand.
-  const access = Object.fromEntries(await Promise.all(TABS.map(async ([tab]) => [tab, await adminBrands(db, actor, ADMIN_PERMISSION[tab])] as const)));
+  const access = Object.fromEntries(await Promise.all(TABS.map(async ([tab]) => [tab, await adminBrands(db, actor, TAB_PERMISSION[tab])] as const)));
   const tabs = TABS.filter(([tab]) => access[tab].length);
   if (!tabs.length) return <AccessDeniedPage />;
   const requested = (Array.isArray(params.tab) ? params.tab[0] : params.tab) as Tab;
@@ -45,7 +48,7 @@ export default async function StampCardPage({ searchParams }: { searchParams: Se
       return (
         <Shell tabs={tabs} tab={tab} query={filterQuery(filters)}>
           <Link href={`/superadmin/loyalty/stamp-card?${filterQuery(filters, { tab: 'settings' })}`} className="text-sm text-muted-foreground hover:text-foreground">← Tilbage til oversigten</Link>
-          <SettingsForm key={edit.brandId} initial={await readSettings(db, actor, edit.brandId)} />
+          <SettingsForm key={edit.brandId} initial={await readSettings(db, actor, edit.brandId)} canEditBrand={session.superuser} />
         </Shell>
       );
     }
@@ -61,6 +64,20 @@ export default async function StampCardPage({ searchParams }: { searchParams: Se
         {body}
       </Shell>
     );
+  } else if (tab === 'texts') {
+    const one = (key: string) => { const v = params[key]; return Array.isArray(v) ? v[0] : v; };
+    const back = `/superadmin/loyalty/stamp-card?${filterQuery(filters, { tab: 'texts' })}`;
+    const viewBrand = brands.find(b => b.brandId === one('textBrand')), viewVersion = Number(one('textVersion'));
+    if (viewBrand && Number.isSafeInteger(viewVersion)) {
+      const detail = await textVersionDetail(db, actor, viewBrand.brandId, viewVersion).catch(() => null);
+      return (
+        <Shell tabs={tabs} tab={tab} query={filterQuery(filters)}>
+          <Link href={back} className="text-sm text-muted-foreground hover:text-foreground">← Tilbage til tekstversionerne</Link>
+          {detail ? <TextVersionDetail detail={detail} /> : <p className="text-muted-foreground">Versionen findes ikke.</p>}
+        </Shell>
+      );
+    }
+    body = <TextVersions rows={await listTextVersions(db, actor, brandIds)} viewHref={back} multiBrand={brandIds.length > 1} />;
   } else if (tab === 'members') {
     const { rows, truncated } = await listMembers(db, actor, brandIds, now);
     body = <MembersTable rows={rows} truncated={truncated} brandIds={brandIds} filterQuery={filterQuery(filters)} multiBrand={brandIds.length > 1} />;
@@ -89,7 +106,7 @@ function Shell({ tabs, tab, query, children }: { tabs: ReadonlyArray<readonly [T
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Stempelkort</h1>
-        <p className="text-muted-foreground">Oversigt, medlemmer og log for loyalitetsprogrammet.</p>
+        <p className="text-muted-foreground">Oversigt, medlemmer, log og tekstversioner for loyalitetsprogrammet.</p>
       </div>
       <nav aria-label="Stempelkort" className="flex gap-1 border-b">
         {tabs.map(([key, label]) => (

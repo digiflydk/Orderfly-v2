@@ -36,8 +36,8 @@ Used by the customer portal (phase 2). All endpoints live under `/api/loyalty/{b
 
 | Endpoint | Session | Body | Result |
 |---|---|---|---|
-| `GET program` | – | – | `{active, name, stampsRequired, rewardDescription, consentText, consentVersion, terms, termsVersion}`. Texts are empty while inactive. |
-| `POST signup` | – | `{name, email, newsletterConsent: true, termsAccepted: true, consentVersion, termsVersion}` | Always `{ok: true}`. A new member and versioned consent are created, or an existing member gets a login link. The response never reveals which. `409 program_inactive\|program_changed`, `429 rate_limited`. |
+| `GET program` | – | – | `{active, name, stampsRequired, rewardDescription, consentText, consentHelp, termsAccept, terms, consentVersion, termsVersion}`. The texts are filled from the standard-text placeholders (brand details and settings). They are empty while inactive, and `active` is false when a placeholder cannot be filled. `consentVersion` hashes the filled consent and explanation; `termsVersion` hashes the filled acceptance text and terms. |
+| `POST signup` | – | `{name, email, newsletterConsent: true, termsAccepted: true, consentVersion, termsVersion}` | Always `{ok: true}`. A new member and versioned consent are created, or an existing member gets a login link. The response never reveals which. The consent log stores the filled consent text, and the member stores the published text version and the hash of the filled texts shown (`loyaltyRenderedTexts`). `409 program_inactive\|program_changed`, `429 rate_limited`. |
 | `POST login-link` | – | `{email}` | Always `{ok: true}`. A mail with a one-time link is sent only to an active member. |
 | `POST verify` | – | `{token}` (64 hex, from the link fragment) | Sets the `__Host-orderfly-loyalty` cookie (HttpOnly, Secure, SameSite=Lax) and returns `{ok, expiresAt}`. `410 link_invalid\|link_expired`. |
 | `GET me` | yes | – | Program, member, card, valid rewards, history (no staff names or reasons) and newsletter status. |

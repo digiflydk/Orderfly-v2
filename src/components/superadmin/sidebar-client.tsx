@@ -41,6 +41,7 @@ import {
   LayoutTemplate,
   ChevronDown,
   Cookie,
+  ScrollText,
   Gamepad2,
   TicketCheck,
   Stamp,
@@ -190,6 +191,7 @@ export function SuperAdminSidebarClient({
       title: 'System',
       items: [
         { href: '/superadmin/settings/cookie-texts', label: 'Cookies', icon: Cookie },
+        { href: '/superadmin/settings/stamp-card-texts', label: 'Stempelkort-tekster', icon: ScrollText },
         { href: '/superadmin/settings', label: 'Settings', icon: SettingsIcon },
       ],
     },

@@ -14,7 +14,9 @@ webpackModule.init();
 const root = process.cwd();
 let dir, server, browser, origin;
 const TOKEN = 'c'.repeat(64);
-const program = { name: 'Esmeralda Club', consentText: 'Ja tak, send mig nyhedsbrevet fra Esmeralda på e-mail.\nDu kan altid afmelde dig.', consentVersion: 'consent-1', termsVersion: 'terms-1' };
+const program = { name: 'Esmeralda Club', consentText: 'Ja tak, send mig nyhedsbrevet fra Esmeralda på e-mail.\nDu kan altid afmelde dig.',
+  consentHelp: 'Medlemskab af Esmeralda Club kræver tilmelding til vores nyhedsbrev.', termsAccept: 'Jeg accepterer vilkårene for Esmeralda Club.',
+  consentVersion: 'consent-1', termsVersion: 'terms-1' };
 
 before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'loyalty-portal-'));
@@ -106,7 +108,12 @@ for (const width of [390, 1440]) test(`sign-up needs both unticked boxes, sends 
     await page.getByRole('button', { name: 'Bliv medlem' }).click();
     await page.getByText('Du skal give samtykke til nyhedsbrevet for at blive medlem.').waitFor();
     assert.equal(calls.length, 0);
-    assert.equal(await page.getByRole('link', { name: 'Læs vilkårene' }).getAttribute('href'), '/club/vilkaar');
+    // "vilkårene" in the acceptance text is the link to the terms; the explanation stands under the consent.
+    const termsLink = page.getByRole('link', { name: 'vilkårene', exact: true });
+    assert.equal(await termsLink.getAttribute('href'), '/club/vilkaar');
+    assert.equal(await termsLink.getAttribute('target'), '_blank');
+    assert.equal(await page.getByRole('link', { name: 'Læs vilkårene' }).count(), 0);
+    await page.getByText('Medlemskab af Esmeralda Club kræver tilmelding til vores nyhedsbrev.').waitFor();
     await consent.click();
     await page.getByRole('button', { name: 'Bliv medlem' }).click();
     await page.getByRole('heading', { name: 'Tjek din e-mail' }).waitFor();

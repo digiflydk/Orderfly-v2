@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { CheckEmail } from '../check-email';
 import { portalErrorText, portalRequest } from '../portal-api';
 
-type Program = { name: string; consentText: string; consentVersion: string; termsVersion: string };
+type Program = { name: string; consentText: string; consentHelp: string; termsAccept: string; consentVersion: string; termsVersion: string };
 type Errors = Partial<Record<'name' | 'email' | 'consent' | 'terms' | 'form', string>>;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -20,6 +20,9 @@ export function SignupForm({ slug, base, program }: { slug: string; base: string
   const router = useRouter();
   const [name, setName] = useState(''), [email, setEmail] = useState('');
   const [consent, setConsent] = useState(false), [terms, setTerms] = useState(false);
+  // The word "vilkårene" in the acceptance text links to the terms (shown in a new tab).
+  const termsHref = `${base}/vilkaar`, at = program.termsAccept.indexOf('vilkårene');
+  const linked = at < 0 ? null : [program.termsAccept.slice(0, at), program.termsAccept.slice(at + 'vilkårene'.length)] as const;
   const [errors, setErrors] = useState<Errors>({}), [busy, setBusy] = useState(false), [sentTo, setSentTo] = useState<string | null>(null);
   const shown = useRef(program);
   const summary = useRef<HTMLParagraphElement>(null);
@@ -85,15 +88,18 @@ export function SignupForm({ slug, base, program }: { slug: string; base: string
             aria-invalid={!!errors.consent} aria-describedby={describedBy('consent')} />
           <Label htmlFor="club-consent" className="whitespace-pre-line text-base font-normal leading-relaxed">{program.consentText}</Label>
         </div>
+        {program.consentHelp && <p id="club-consent-help" className="whitespace-pre-line text-sm leading-relaxed opacity-80">{program.consentHelp}</p>}
         {fieldError('consent')}
       </div>
       <div className="flex flex-col gap-2">
         <div className="flex items-start gap-3">
           <Checkbox id="club-terms" checked={terms} onCheckedChange={value => setTerms(value === true)} className="mt-1 h-5 w-5"
             aria-invalid={!!errors.terms} aria-describedby={describedBy('terms')} />
-          <Label htmlFor="club-terms" className="text-base font-normal leading-relaxed">Jeg accepterer vilkårene for {program.name}.</Label>
+          <Label htmlFor="club-terms" className="text-base font-normal leading-relaxed">
+            {linked ? <>{linked[0]}<a href={termsHref} target="_blank" rel="noopener" className="underline underline-offset-4">vilkårene</a>{linked[1]}</> : program.termsAccept}
+          </Label>
         </div>
-        <a href={`${base}/vilkaar`} target="_blank" rel="noopener" className="ml-8 self-start py-2 underline underline-offset-4">Læs vilkårene</a>
+        {!linked && <a href={termsHref} target="_blank" rel="noopener" className="ml-8 self-start py-2 underline underline-offset-4">Læs vilkårene</a>}
         {fieldError('terms')}
       </div>
       <Button type="submit" variant="brand" size="lg" disabled={busy} className="min-h-12 text-base">{busy ? 'Øjeblik…' : 'Bliv medlem'}</Button>
