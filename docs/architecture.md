@@ -4,6 +4,8 @@ This document provides a unified overview of how the frontend, server actions, A
 
 Merchant payment methods: see [configuration, pickup settlement, reservations and QA](merchant-payment-methods.md).
 
+Kitchen printing: see [domain foundations, planned trigger integration and QA](printing.md).
+
 ## System Context (Mermaid)
 ```mermaid
 flowchart LR
