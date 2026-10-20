@@ -19,6 +19,22 @@ Every brand gets a public address under the production domain: `https://{slug}.o
   - Any other first segment is scoped under this brand, so one subdomain can never render another brand.
   - App-wide paths (`/_next`, `/api`, `/feedback`, `/games`, `/tracking`, admin areas, `robots.txt` etc.) pass through unchanged.
   - Brand subdomains are HTTPS-only, like the apex.
+- **Short storefront addresses (#282).** On a brand subdomain every storefront link and redirect leaves out the brand slug; on `orderfly.dk` they keep `/{slug}/…`:
+
+  | Page | `esmeralda.orderfly.dk` | `orderfly.dk` |
+  |---|---|---|
+  | Brand (choose a restaurant) | `/` | `/esmeralda` |
+  | Menu | `/esmeralda-pizza-amager` | `/esmeralda/esmeralda-pizza-amager` |
+  | Checkout | `/esmeralda-pizza-amager/checkout` | `/esmeralda/esmeralda-pizza-amager/checkout` |
+  | Stripe return (confirmation, cancel) | `/esmeralda-pizza-amager/checkout/confirmation?…` | `/esmeralda/esmeralda-pizza-amager/checkout/confirmation?…` |
+  | Stamp card | `/club` | `/esmeralda/club` |
+
+  - One helper builds them: `storefrontPath(slug, onBrandSubdomain, ...segments)` in `src/lib/brand-subdomain.ts`, following `clubBase`. "On the brand subdomain" means `brandSlugFromHost(host) === slug`, so `www`, reserved names, `localhost` and another brand's subdomain keep the long form. The short form is used only when the middleware rewrites it back to the same page, so a location whose slug equals the brand slug (the subdomain serves `/{slug}` as the brand page) or an app-wide path such as `feedback`, `games` or `api` keeps the long form.
+  - Server redirects use `storefrontHref` (`src/lib/server/storefront-path.ts`, request host). Stripe `success_url`/`cancel_url` and the pay-at-pickup confirmation in `src/app/checkout/actions.ts` use the checkout origin's host.
+  - Browser code uses `useStorefrontPath` for links and `browserStorefrontPath` for `router.push` (`src/hooks/use-storefront-path.ts`). Links are rendered with `/{slug}/…` on the server, which works on every host, and switch to the short form after hydration. That keeps the storefront pages static, without reading request headers in the brand layout.
+  - The storefront layout reads the page from the path after the brand (`storefrontSegments`), so headers and footers are the same on both forms.
+  - **Old links keep working and are not redirected.** The middleware still serves `/{slug}/…` on the subdomain unchanged, so bookmarks, mails and Stripe sessions created before #282 (`…/esmeralda/…/checkout/confirmation?order_id=…&session_id=…&receipt_token=…` and `…/checkout/cancel?order_id=…&token=…`) open with all their query parameters. No redirect was added: it would only be cosmetic and could break a form or server action posted from a page opened before the change.
+  - No data changes. Brand and location slugs are unchanged; a shorter location slug (`/amager`) is a separate data decision.
 - **Unknown, inactive and suspended brands.**
   - An unknown subdomain resolves to `/{unknown}`, which has no brand and returns the neutral 404. There is no fallback brand.
   - A brand with `status: suspended` shows a neutral "Siden er midlertidigt lukket" page on its subdomain and on `/{slug}`, without brand data.
@@ -36,12 +52,13 @@ This is the only manual infrastructure step. New brands then work without per-br
 4. Verify:
    - `https://esmeralda.orderfly.dk` shows Esmeralda.
    - `https://esmeralda.orderfly.dk/esmeralda-pizza-amager` shows the Amager menu.
+   - Navigating from `https://esmeralda.orderfly.dk` to the menu and checkout never shows `/esmeralda/` in the address bar (#282).
    - An unknown subdomain returns 404.
    - `https://orderfly.dk` and `https://www.orderfly.dk` behave as before.
 
 ## Local and preview testing
 
-Browsers resolve `*.localhost` to the local machine. With `npm run dev`, open `http://esmeralda.localhost:3000` to exercise the same routing. Unit coverage: `node --test tests/unit/brand-subdomains-12.cjs`.
+Browsers resolve `*.localhost` to the local machine. With `npm run dev`, open `http://esmeralda.localhost:3000` to exercise the same routing. Unit coverage: `node --test tests/unit/brand-subdomains-12.cjs` (routing, `storefrontPath`, old links, and Stripe return addresses on the subdomain and the apex).
 
 ## Rollback
 

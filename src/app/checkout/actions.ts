@@ -38,6 +38,7 @@ import { getToppings } from '../superadmin/toppings/actions';
 import { getLoyaltySettings } from '../superadmin/loyalty/actions';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 import { getOrigin } from '@/lib/url';
+import { brandSlugFromHost, storefrontPath } from '@/lib/brand-subdomain';
 import { generateOrderId } from '@/lib/order-id';
 import { readGuestReceipt, type GuestReceipt } from '@/lib/server/guest-receipt';
 
@@ -434,6 +435,8 @@ export async function createStripeCheckoutSessionAction(
     stage = 'validation';
 
     const origin = await getOrigin();
+    // Return addresses stay short on the brand's own subdomain (#282), unchanged on orderfly.dk.
+    const checkoutPath = storefrontPath(brandSlug, brandSlugFromHost(origin.split('://').pop()) === brandSlug, locationSlug, 'checkout');
     
     const [brand, location] = await Promise.all([
         getBrandById(brandId),
@@ -707,7 +710,7 @@ export async function createStripeCheckoutSessionAction(
         if ((error as { code?: string })?.code === 'pickup_order_rejected') sessionRequestStarted = false;
         throw error;
       }
-      return { success: true, orderId, url: `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&receipt_token=${receiptToken}` };
+      return { success: true, orderId, url: `${origin}${checkoutPath}/confirmation?order_id=${orderId}&receipt_token=${receiptToken}` };
     }
     if (!stripe) throw new Error('Stripe API key is not configured.');
 
@@ -751,8 +754,8 @@ export async function createStripeCheckoutSessionAction(
         mode: 'payment',
         expires_at: Math.floor(Date.now() / 1000) + 31 * 60,
         customer_email: customerInfo.email,
-        success_url: `${origin}/${brandSlug}/${locationSlug}/checkout/confirmation?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}&receipt_token=${receiptToken}`,
-        cancel_url: `${origin}/${brandSlug}/${locationSlug}/checkout/cancel?order_id=${orderId}&token=${cancelToken}`,
+        success_url: `${origin}${checkoutPath}/confirmation?order_id=${orderId}&session_id={CHECKOUT_SESSION_ID}&receipt_token=${receiptToken}`,
+        cancel_url: `${origin}${checkoutPath}/cancel?order_id=${orderId}&token=${cancelToken}`,
         metadata: {
             orderId,
             brandId,

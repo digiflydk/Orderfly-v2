@@ -8,6 +8,7 @@ import Link from "next/link";
 import { cancelCheckout } from '@/app/checkout/cancel-actions';
 import { useEffect, useState, Suspense } from 'react';
 import { useSearchParams, useParams } from "next/navigation";
+import { useStorefrontPath } from "@/hooks/use-storefront-path";
 
 
 function CancelMessage() {
@@ -22,6 +23,7 @@ function CancelMessage() {
     }, [orderId, token]);
     const brandSlug = params.brandSlug as string;
     const locationSlug = params.locationSlug as string;
+    const checkoutPath = useStorefrontPath(brandSlug)(locationSlug, 'checkout');
 
     return (
         <Card className="w-full max-w-lg text-center">
@@ -39,7 +41,7 @@ function CancelMessage() {
             <CardContent>
                 {status === 'error' && <Button onClick={() => { setStatus('loading'); void cancelCheckout(orderId || '', token || '').then(r => setStatus(r.status)).catch(() => setStatus('error')); }}>Prøv at annullere igen</Button>}
                 {status === 'canceled' && <Button asChild className="mt-6">
-                    <Link href={`/${brandSlug}/${locationSlug}/checkout`}>Tilbage til kassen</Link>
+                    <Link href={checkoutPath}>Tilbage til kassen</Link>
                 </Button>}
             </CardContent>
         </Card>

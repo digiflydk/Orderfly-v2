@@ -52,7 +52,7 @@ test('actual checkout action rejects tampering before side effects, allows valid
   stripe:{default:class Stripe {}},'@/lib/firebase':{db:{}},
   '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>{if(++identityCalls===2)throw Error('AFTER_PRICE_VALIDATION');return {ref:{id:'c'},exists:()=>true,data:()=>({brandId:'b'})};}},
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
-  '@/lib/url':{getOrigin:async()=> 'https://example.test'},
+  '@/lib/url':{getOrigin:async()=> 'https://example.test'},'@/lib/brand-subdomain':loadTs('src/lib/brand-subdomain.ts'),
   '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b',slug:'brand'})},
   '@/app/superadmin/locations/actions':{getLocationById:async()=>({id:'l',brandId:'b',slug:'location',isActive:true,deliveryTypes:['pickup'],allowPreOrder:true,prep_time:20,delivery_time:20,openingHours:Object.fromEntries(['monday','tuesday','wednesday','thursday','friday','saturday','sunday'].map(day=>[day,{isOpen:true,open:'12:00',close:'22:00'}]))})},
   '@/app/superadmin/standard-discounts/actions':{getActiveStandardDiscounts:async()=>[offer]},

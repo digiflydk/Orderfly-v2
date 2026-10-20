@@ -96,15 +96,16 @@ test('#12 changing an existing slug needs confirmation and is audit-logged with 
   assert.deepEqual({ ...audit[0], createdAt: undefined }, { action: 'brand_slug_changed', brandId: 'b', oldSlug: 'esmeralda-qa', newSlug: 'esmeralda-new', actorId: 'actor-1', createdAt: undefined });
 });
 
-test('#12 a suspended brand renders the neutral status page, never its storefront', async () => {
-  // loadTs does not compile JSX; transpile this layout with the React JSX runtime.
+// loadTs does not compile JSX; transpile pages and layouts with the React JSX runtime.
+function loadTsx(file, mocks) {
   const ts = require('typescript'), fs = require('node:fs');
-  const loadTsx = (file, mocks) => {
-    const mod = { exports: {} };
-    const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
-    new Function('require', 'module', 'exports', code)(name => name in mocks ? mocks[name] : require(name), mod, mod.exports);
-    return mod.exports;
-  };
+  const mod = { exports: {} };
+  const code = ts.transpileModule(fs.readFileSync(file, 'utf8'), { fileName: file, compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+  new Function('require', 'module', 'exports', code)(name => name in mocks ? mocks[name] : require(name), mod, mod.exports);
+  return mod.exports;
+}
+
+test('#12 a suspended brand renders the neutral status page, never its storefront', async () => {
   const render = status => loadTsx('src/app/[brandSlug]/layout.tsx', {
     react: require('react'), 'react/jsx-runtime': require('react/jsx-runtime'),
     'next/navigation': { notFound: () => { throw Error('NOT_FOUND'); } },
@@ -137,4 +138,101 @@ test('#12 the analytics collector accepts brand subdomain origins and still reje
   } finally {
     process.env.NODE_ENV = env;
   }
+});
+
+test('#282 storefront paths drop the brand slug on its own subdomain and stay unchanged elsewhere', () => {
+  const sub = host => lib.brandSlugFromHost(host) === 'esmeralda';
+  // The brand subdomain, also locally, gets the short form.
+  for (const host of ['esmeralda.orderfly.dk', 'esmeralda.localhost:3000']) {
+    assert.equal(lib.storefrontPath('esmeralda', sub(host)), '/');
+    assert.equal(lib.storefrontPath('esmeralda', sub(host), 'esmeralda-pizza-amager'), '/esmeralda-pizza-amager');
+    assert.equal(lib.storefrontPath('esmeralda', sub(host), 'esmeralda-pizza-amager', 'checkout', 'confirmation'), '/esmeralda-pizza-amager/checkout/confirmation');
+  }
+  // orderfly.dk, www, localhost, reserved names and another brand's subdomain keep /{slug}/….
+  for (const host of ['orderfly.dk', 'www.orderfly.dk', 'localhost:3000', 'admin.orderfly.dk', 'club.orderfly.dk', 'other-brand.orderfly.dk', '', null]) {
+    assert.equal(lib.storefrontPath('esmeralda', sub(host)), '/esmeralda', String(host));
+    assert.equal(lib.storefrontPath('esmeralda', sub(host), 'esmeralda-pizza-amager', 'checkout'), '/esmeralda/esmeralda-pizza-amager/checkout', String(host));
+  }
+  // A location named like the brand keeps the long form: the subdomain serves /{slug} as the brand page.
+  assert.equal(lib.storefrontPath('esmeralda', true, 'esmeralda'), '/esmeralda/esmeralda');
+  assert.equal(lib.brandSubdomainRewrite(lib.storefrontPath('esmeralda', true, 'esmeralda'), 'esmeralda'), null);
+  // So does a location named like an app-wide path the middleware passes through.
+  for (const location of ['feedback', 'games', 'api', 'merchant', 'verify', 'tracking']) {
+    assert.equal(lib.storefrontPath('esmeralda', true, location), `/esmeralda/${location}`, location);
+    assert.equal(lib.storefrontPath('esmeralda', true, location, 'checkout'), `/esmeralda/${location}/checkout`, location);
+  }
+  assert.equal(lib.storefrontPath('esmeralda', true, 'robots.txt'), '/esmeralda/robots.txt');
+  // Every short path resolves to the same brand route as the long one.
+  for (const segments of [[], ['esmeralda-pizza-amager'], ['esmeralda-pizza-amager', 'checkout', 'cancel']])
+    assert.equal(lib.brandSubdomainRewrite(lib.storefrontPath('esmeralda', true, ...segments), 'esmeralda'), lib.storefrontPath('esmeralda', false, ...segments));
+});
+
+test('#282 the storefront layout reads the same page from the long and the short path', () => {
+  for (const [long, short] of [['/esmeralda', '/'], ['/esmeralda/esmeralda-pizza-amager', '/esmeralda-pizza-amager'], ['/esmeralda/esmeralda-pizza-amager/checkout', '/esmeralda-pizza-amager/checkout'], ['/esmeralda/club/profil', '/club/profil']])
+    assert.deepEqual(lib.storefrontSegments(short, 'esmeralda'), lib.storefrontSegments(long, 'esmeralda'), short);
+  assert.deepEqual(lib.storefrontSegments('/esmeralda/esmeralda-pizza-amager/checkout', 'esmeralda'), ['esmeralda-pizza-amager', 'checkout']);
+  assert.deepEqual(lib.storefrontSegments(null, 'esmeralda'), []);
+});
+
+test('#282 browser navigation (menu, Til kassen) uses the short path only on the brand subdomain', () => {
+  const { browserStorefrontPath } = loadTs('src/hooks/use-storefront-path.ts');
+  const at = (host, ...args) => { global.window = { location: { host } }; try { return browserStorefrontPath(...args); } finally { delete global.window; } };
+  assert.equal(at('esmeralda.orderfly.dk', 'esmeralda', 'esmeralda-pizza-amager', 'checkout'), '/esmeralda-pizza-amager/checkout');
+  assert.equal(at('orderfly.dk', 'esmeralda', 'esmeralda-pizza-amager', 'checkout'), '/esmeralda/esmeralda-pizza-amager/checkout');
+  assert.equal(at('other.orderfly.dk', 'esmeralda', 'esmeralda-pizza-amager'), '/esmeralda/esmeralda-pizza-amager');
+});
+
+test('#282 old /{slug}/… links on the subdomain keep working, including Stripe returns, without a redirect', () => {
+  const { run } = middlewareFor();
+  const legacy = [
+    '/esmeralda',
+    '/esmeralda/esmeralda-pizza-amager?deliveryMethod=pickup',
+    '/esmeralda/esmeralda-pizza-amager/checkout',
+    '/esmeralda/esmeralda-pizza-amager/checkout/confirmation?order_id=ORD-1&session_id=cs_test_1&receipt_token=rt',
+    '/esmeralda/esmeralda-pizza-amager/checkout/cancel?order_id=ORD-1&token=ct',
+    '/esmeralda/checkout/confirmation?order_id=ORD-1&session_id=cs_test_1',
+  ];
+  for (const path of legacy) assert.deepEqual(run(`https://esmeralda.orderfly.dk${path}`), { kind: 'next' }, path);
+  // The new short Stripe returns resolve to the same pages.
+  assert.deepEqual(run('https://esmeralda.orderfly.dk/esmeralda-pizza-amager/checkout/confirmation?order_id=ORD-1&session_id=cs_test_1'), { kind: 'rewrite', path: '/esmeralda/esmeralda-pizza-amager/checkout/confirmation' });
+  assert.deepEqual(run('https://esmeralda.orderfly.dk/esmeralda-pizza-amager/checkout/cancel?order_id=ORD-1&token=ct'), { kind: 'rewrite', path: '/esmeralda/esmeralda-pizza-amager/checkout/cancel' });
+  // orderfly.dk/{slug}/… is untouched.
+  assert.deepEqual(run('https://orderfly.dk/esmeralda/esmeralda-pizza-amager/checkout/confirmation?order_id=ORD-1'), { kind: 'next' });
+});
+
+test('#282 Stripe return addresses are short on the brand subdomain and unchanged on orderfly.dk', async () => {
+  const { checkout } = require('../helpers/checkout-fixture.cjs');
+  const urls = async origin => {
+    const { result, sessionParams } = await checkout({ origin });
+    assert.equal(result.success, true, result.error);
+    return { success: sessionParams.success_url.split('?')[0], cancel: sessionParams.cancel_url.split('?')[0], query: [sessionParams.success_url.split('?')[1], sessionParams.cancel_url.split('?')[1]] };
+  };
+  // The fixture's brand slug is `brand` and its location slug `location`.
+  const sub = await urls('https://brand.orderfly.dk');
+  assert.equal(sub.success, 'https://brand.orderfly.dk/location/checkout/confirmation');
+  assert.equal(sub.cancel, 'https://brand.orderfly.dk/location/checkout/cancel');
+  assert.match(sub.query[0], /^order_id=ORD-TEST&session_id=\{CHECKOUT_SESSION_ID\}&receipt_token=[^&]+$/);
+  assert.match(sub.query[1], /^order_id=ORD-TEST&token=[^&]+$/);
+  for (const origin of ['https://orderfly.dk', 'https://example.test', 'https://other-brand.orderfly.dk', 'http://localhost:9002']) {
+    const apex = await urls(origin);
+    assert.equal(apex.success, `${origin}/brand/location/checkout/confirmation`, origin);
+    assert.equal(apex.cancel, `${origin}/brand/location/checkout/cancel`, origin);
+  }
+});
+
+test('#282 the public reviews page links back to the menu and to more reviews on the short path', async () => {
+  const page = host => loadTsx('src/app/[brandSlug]/[locationSlug]/reviews/page.tsx', {
+    'react/jsx-runtime': require('react/jsx-runtime'),
+    'next/navigation': { notFound: () => { throw Error('NOT_FOUND'); } },
+    '@/lib/data/brand-location': { getBrandAndLocation: async () => ({ brand: { id: 'b', slug: 'esmeralda' }, location: { id: 'l', brandId: 'b', name: 'Amager' } }) },
+    '@/lib/feedback/public-reviews': { readPublicReviews: async () => ({ reviews: [], next: 'r 2' }) },
+    '@/components/feedback/public-reviews-view': { PublicReviewsView: () => null },
+    '@/lib/server/storefront-path': loadTs('src/lib/server/storefront-path.ts', { 'server-only': {}, 'next/headers': { headers: async () => new Headers({ host }) } }),
+  }).default({ params: Promise.resolve({ brandSlug: 'esmeralda', locationSlug: 'esmeralda-pizza-amager' }), searchParams: Promise.resolve({}) });
+  const sub = (await page('esmeralda.orderfly.dk')).props;
+  assert.equal(sub.menuHref, '/esmeralda-pizza-amager');
+  assert.equal(sub.nextHref, '/esmeralda-pizza-amager/reviews?after=r%202');
+  const apex = (await page('orderfly.dk')).props;
+  assert.equal(apex.menuHref, '/esmeralda/esmeralda-pizza-amager');
+  assert.equal(apex.nextHref, '/esmeralda/esmeralda-pizza-amager/reviews?after=r%202');
 });
