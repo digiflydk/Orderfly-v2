@@ -280,3 +280,34 @@ test('#282 the "Bestil nu" sheet does a full jump to the subdomain on orderfly.d
   // The generic dialog of other brands follows the same rule.
   assert.deepEqual(run('orderfly.dk', 'cph-qa').assigns, ['https://cph-qa.orderfly.dk/esmeralda-pizza-amager?deliveryMethod=delivery']);
 });
+
+test('#282 the orderfly.dk landing page "Bestil nu" continues on the brand subdomain; other hosts stay in the app', () => {
+  const React = require('react');
+  const run = host => {
+    const pushes = [], assigns = [], stored = [];
+    global.window = { location: { host, assign: url => assigns.push(url) } };
+    try {
+      const Stub = () => null, OrderModal = () => null;
+      const { default: LandingClient } = loadTsx('src/app/brand-site/m3pizza/landing-client.tsx', {
+        // The order sheet is open; effects do not run.
+        react: { useState: value => [value === false ? true : typeof value === 'function' ? value() : value, () => {}], useEffect: () => {}, useMemo: fn => fn() },
+        'react/jsx-runtime': require('react/jsx-runtime'),
+        'next/navigation': { useRouter: () => ({ push: path => pushes.push(path) }) },
+        '@/components/storefront/Hero': { Hero: Stub }, '@/components/storefront/CTADeck': { CTADeck: Stub }, '@/components/storefront/MenuGrid': { MenuGrid: Stub },
+        '@/components/storefront/PromoBanner': { PromoBanner: Stub }, '@/components/storefront/FooterCTA': { FooterCTA: Stub },
+        '@/components/storefront/StandardStorefront': { StandardStorefront: Stub }, '@/components/storefront/StickyOrderChoice': { default: Stub },
+        '@/lib/m3pizza-order-flow': { ...loadTs('src/lib/m3pizza-order-flow.ts'), persistM3PizzaDeliveryMethod: mode => stored.push(mode) },
+        '@/lib/storefront-promotion': { promotionTile: x => x }, '@/lib/combo-eligibility': { comboEligible: () => true },
+        '@/context/analytics-context': { AnalyticsProvider: Stub }, '@/components/cookie-consent': { CookieConsent: Stub },
+        '@/components/storefront/OrderModal': { OrderModal }, '@/hooks/use-storefront-path': loadTs('src/hooks/use-storefront-path.ts'),
+      });
+      const tree = LandingClient({ brand: { id: 'b', slug: 'esmeralda', name: 'Esmeralda' }, location: { id: 'l', slug: 'esmeralda-pizza-amager', deliveryTypes: ['pickup', 'delivery'] }, products: [], discounts: [], config: null });
+      const find = node => !node || typeof node !== 'object' ? null : node.type === OrderModal ? node : React.Children.toArray(node.props?.children).map(find).find(Boolean) || null;
+      find(tree).props.onDeliveryMethodSelected('delivery');
+      return { pushes, assigns, stored };
+    } finally { delete global.window; }
+  };
+  assert.deepEqual(run('orderfly.dk'), { pushes: [], assigns: ['https://esmeralda.orderfly.dk/esmeralda-pizza-amager?deliveryMethod=delivery'], stored: ['delivery'] });
+  assert.deepEqual(run('www.orderfly.dk').assigns, ['https://esmeralda.orderfly.dk/esmeralda-pizza-amager?deliveryMethod=delivery']);
+  assert.deepEqual(run('localhost:3000'), { pushes: ['/esmeralda/esmeralda-pizza-amager?deliveryMethod=delivery'], assigns: [], stored: ['delivery'] });
+});

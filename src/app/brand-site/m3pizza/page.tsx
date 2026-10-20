@@ -1,4 +1,6 @@
 import { Suspense } from 'react';
+import { headers } from 'next/headers';
+import { orderEntryUrl } from '@/lib/brand-subdomain';
 import Link from 'next/link';
 import { getBrandAndLocation } from '@/lib/data/brand-location';
 import { getMenuForRender } from '@/lib/server/catalog';
@@ -15,11 +17,15 @@ function Loading() {
     <p role="status" className="text-center text-sm text-white/70">Menuen er på vej…</p></div>
   </main>;
 }
-function Fallback() {
+async function Fallback() {
+  // Same rule as "Bestil nu": from orderfly.dk the menu opens on the brand subdomain (#282).
+  const requestHeaders = await headers();
+  const [, brandSlug, locationSlug] = M3PIZZA_MENU_PATH.split('/');
+  const menu = orderEntryUrl(requestHeaders.get('x-forwarded-host') ?? requestHeaders.get('host'), brandSlug, locationSlug);
   return <main data-commerce-root className="min-h-screen bg-black text-white p-8"><h1 className="text-3xl font-bold">Bestil mad</h1>
     <p className="my-4">Se restaurantens menu, og vælg levering eller afhentning.</p>
-    <div className="flex gap-4"><Link className="rounded bg-primary p-3 text-primary-foreground" href={`${M3PIZZA_MENU_PATH}?deliveryMethod=pickup`}>Afhentning</Link>
-    <Link className="rounded border p-3" href={`${M3PIZZA_MENU_PATH}?deliveryMethod=delivery`}>Levering</Link></div></main>;
+    <div className="flex gap-4"><Link className="rounded bg-primary p-3 text-primary-foreground" href={`${menu}?deliveryMethod=pickup`}>Afhentning</Link>
+    <Link className="rounded border p-3" href={`${menu}?deliveryMethod=delivery`}>Levering</Link></div></main>;
 }
 async function Content() {
   try {
