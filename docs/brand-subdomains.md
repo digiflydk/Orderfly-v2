@@ -24,9 +24,9 @@ Every brand gets a public address under the production domain: `https://{slug}.o
   | Page | `esmeralda.orderfly.dk` | `orderfly.dk` |
   |---|---|---|
   | Brand (choose a restaurant) | `/` | `/esmeralda` |
-  | Menu | `/esmeralda-pizza-amager` | `/esmeralda/esmeralda-pizza-amager` |
-  | Checkout | `/esmeralda-pizza-amager/checkout` | `/esmeralda/esmeralda-pizza-amager/checkout` |
-  | Stripe return (confirmation, cancel) | `/esmeralda-pizza-amager/checkout/confirmation?…` | `/esmeralda/esmeralda-pizza-amager/checkout/confirmation?…` |
+  | Menu | `/amager` | `/esmeralda/amager` |
+  | Checkout | `/amager/checkout` | `/esmeralda/amager/checkout` |
+  | Stripe return (confirmation, cancel) | `/amager/checkout/confirmation?…` | `/esmeralda/amager/checkout/confirmation?…` |
   | Stamp card | `/club` | `/esmeralda/club` |
 
   - One helper builds them: `storefrontPath(slug, onBrandSubdomain, ...segments)` in `src/lib/brand-subdomain.ts`, following `clubBase`. "On the brand subdomain" means `brandSlugFromHost(host) === slug`, so `www`, reserved names, `localhost` and another brand's subdomain keep the long form. The short form is used only when the middleware rewrites it back to the same page, so a location whose slug equals the brand slug (the subdomain serves `/{slug}` as the brand page) or an app-wide path such as `feedback`, `games` or `api` keeps the long form.
@@ -34,7 +34,7 @@ Every brand gets a public address under the production domain: `https://{slug}.o
   - Browser code uses `useStorefrontPath` for links and `browserStorefrontPath` for `router.push` (`src/hooks/use-storefront-path.ts`). Links are rendered with `/{slug}/…` on the server, which works on every host, and switch to the short form after hydration. That keeps the storefront pages static, without reading request headers in the brand layout.
   - The storefront layout reads the page from the path after the brand (`storefrontSegments`), so headers and footers are the same on both forms.
   - **Old links keep working and are not redirected.** The middleware still serves `/{slug}/…` on the subdomain unchanged, so bookmarks, mails and Stripe sessions created before #282 (`…/esmeralda/…/checkout/confirmation?order_id=…&session_id=…&receipt_token=…` and `…/checkout/cancel?order_id=…&token=…`) open with all their query parameters. No redirect was added: it would only be cosmetic and could break a form or server action posted from a page opened before the change.
-  - No data changes. Brand and location slugs are unchanged; a shorter location slug (`/amager`) is a separate data decision.
+  - No data changes in #282. Afterwards, on 2026-10-20 before launch, the Amager location slug was changed in superadmin from `esmeralda-pizza-amager` to `amager` (PO decision, no customers yet). A location slug is an ordinary field on the location: changing it does not redirect, so links with the old slug return 404. The hard-coded order entry (`M3PIZZA_MENU_PATH` in `src/lib/m3pizza-order-flow.ts`, used by "Bestil her" on `orderfly.dk/` and `/m3pizza/order`) must follow the same slug.
   - **"Bestil nu" on orderfly.dk moves to the subdomain.** When a customer on `orderfly.dk` (or `www`) chooses pickup or delivery in the "Bestil nu" sheet, the browser continues on `https://{slug}.orderfly.dk/{location}?deliveryMethod=…` (`orderEntryUrl` in `src/lib/brand-subdomain.ts`, used by `src/components/modals/DeliveryMethodModal.tsx`). It is a full page load, so the address shows the short form from then on. Other hosts (the subdomain itself, `localhost`, previews) keep in-app navigation, and `orderfly.dk/{slug}/…` still serves the storefront for existing links. Cookie choices and the cart are stored per address, so a customer who already chose cookies on `orderfly.dk` is asked again on the subdomain.
 - **Unknown, inactive and suspended brands.**
   - An unknown subdomain resolves to `/{unknown}`, which has no brand and returns the neutral 404. There is no fallback brand.
@@ -52,7 +52,7 @@ This is the only manual infrastructure step. New brands then work without per-br
 3. Wait until the console shows the domain as connected and the certificate as active. App Hosting provisions and renews the wildcard certificate automatically.
 4. Verify:
    - `https://esmeralda.orderfly.dk` shows Esmeralda.
-   - `https://esmeralda.orderfly.dk/esmeralda-pizza-amager` shows the Amager menu.
+   - `https://esmeralda.orderfly.dk/amager` shows the Amager menu.
    - Navigating from `https://esmeralda.orderfly.dk` to the menu and checkout never shows `/esmeralda/` in the address bar (#282).
    - An unknown subdomain returns 404.
    - `https://orderfly.dk` and `https://www.orderfly.dk` behave as before.

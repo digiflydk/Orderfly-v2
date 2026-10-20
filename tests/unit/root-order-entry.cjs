@@ -20,7 +20,7 @@ for (const [requested, expected] of [
   test(`order entry maps ${requested} to Esmeralda Amager ${expected}`, () => {
     assert.equal(
       orderFlow.getM3PizzaMenuHref(requested),
-      `/esmeralda/esmeralda-pizza-amager?deliveryMethod=${expected}`,
+      `/esmeralda/amager?deliveryMethod=${expected}`,
     );
   });
 }
