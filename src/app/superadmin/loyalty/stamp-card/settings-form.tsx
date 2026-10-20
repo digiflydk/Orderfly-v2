@@ -50,8 +50,10 @@ export function SettingsForm({ initial, canEditBrand }: { initial: Initial; canE
     // A free product with nothing chosen is no reward yet; an inactive draft may save without one.
     const empty = s.reward?.type === 'free_product' && s.reward.productIds.length + s.reward.categoryIds.length === 0;
     const settings = { ...s, reward: empty ? null : s.reward, minimumAmountOre: ore(minimum) };
-    // Changing the published terms of an active program needs notice to the members (terms §10).
-    if (initial.settings.active && settings.active && initial.texts.version > 0 && textKey(settings) !== initial.texts.key) { setWarn(settings); return; }
+    // Changing the terms of an active program needs notice to the members (terms §10). A program
+    // active since before text versions has no published key; its saved settings are what members saw.
+    const published = initial.texts.key ?? textKey(initial.settings);
+    if (initial.settings.active && settings.active && textKey(settings) !== published) { setWarn(settings); return; }
     save(settings);
   }
 

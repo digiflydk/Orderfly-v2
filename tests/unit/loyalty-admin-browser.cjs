@@ -61,6 +61,8 @@ before(async () => {
     const node = view === 'settings' ? React.createElement(SettingsForm, { initial: { brand: { brandId: 'b', brandName: 'Esmeralda' }, version: 1, settings: ${JSON.stringify(settings)}, updatedAt: ${NOW}, updatedByName: 'Leder', products: [{ id: 'pizza', name: 'Pizza' }], categories: [],
       texts: { version: 0, effectiveFrom: null, key: null, templateVersion: null }, textContext: { brand: { name: 'Esmeralda' }, activeLocations: 2 } }, canEditBrand: true })
       : view === 'texts' ? React.createElement(SettingsForm, { initial: ${textsInitial(brandData, true)}, canEditBrand: true })
+      : view === 'texts-legacy' ? React.createElement(SettingsForm, { initial: { ...${textsInitial(brandData, true)}, settings: { ...${JSON.stringify(settings)}, active: true },
+          texts: { version: 0, effectiveFrom: null, key: null, templateVersion: null } }, canEditBrand: true })
       : view === 'texts-missing' ? React.createElement(SettingsForm, { initial: ${textsInitial({ ...brandData, companyRegNo: null }, false)}, canEditBrand: false })
       : view === 'members' ? React.createElement(MembersTable, { rows: ${JSON.stringify(members)}, truncated: false, brandIds: ['b'], filterQuery: 'period=30d', multiBrand: false })
       : view === 'log' ? React.createElement(EventLog, { rows: ${JSON.stringify(events)}, truncated: false, filter: { brandIds: ['b'], from: '2026-10-14', to: '2026-10-20', type: null, actorId: null, channel: null }, multiBrand: false })
@@ -165,6 +167,20 @@ test('Gendan standardtekst restores all four texts only after confirmation; a ru
     await page.getByText('Indstillingerne er gemt').first().waitFor();
     assert.equal(await page.getByRole('alertdialog').count(), 0);
     assert.equal((await calls(page))[0][1].settings.sessionDays, 90);
+  } finally { await page.close(); }
+});
+
+test('a program active since before text versions still warns when its terms change', async () => {
+  const page = await open('texts-legacy', 1440);
+  try {
+    await page.getByLabel('Kundens login-session (dage)').fill('90');
+    await page.getByRole('button', { name: 'Gem indstillinger' }).click();
+    await page.getByText('Indstillingerne er gemt').first().waitFor();
+    assert.equal(await page.getByRole('alertdialog').count(), 0);
+    await page.getByLabel('Vilkår', { exact: true }).fill('Nye vilkår');
+    await page.getByRole('button', { name: 'Gem indstillinger' }).click();
+    await page.getByRole('alertdialog', { name: 'Vilkårene ændres for et aktivt program' }).waitFor();
+    assert.equal((await calls(page)).length, 1);
   } finally { await page.close(); }
 });
 
