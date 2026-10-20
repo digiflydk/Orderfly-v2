@@ -156,6 +156,12 @@ test('#282 storefront paths drop the brand slug on its own subdomain and stay un
   // A location named like the brand keeps the long form: the subdomain serves /{slug} as the brand page.
   assert.equal(lib.storefrontPath('esmeralda', true, 'esmeralda'), '/esmeralda/esmeralda');
   assert.equal(lib.brandSubdomainRewrite(lib.storefrontPath('esmeralda', true, 'esmeralda'), 'esmeralda'), null);
+  // So does a location named like an app-wide path the middleware passes through.
+  for (const location of ['feedback', 'games', 'api', 'merchant', 'verify', 'tracking']) {
+    assert.equal(lib.storefrontPath('esmeralda', true, location), `/esmeralda/${location}`, location);
+    assert.equal(lib.storefrontPath('esmeralda', true, location, 'checkout'), `/esmeralda/${location}/checkout`, location);
+  }
+  assert.equal(lib.storefrontPath('esmeralda', true, 'robots.txt'), '/esmeralda/robots.txt');
   // Every short path resolves to the same brand route as the long one.
   for (const segments of [[], ['esmeralda-pizza-amager'], ['esmeralda-pizza-amager', 'checkout', 'cancel']])
     assert.equal(lib.brandSubdomainRewrite(lib.storefrontPath('esmeralda', true, ...segments), 'esmeralda'), lib.storefrontPath('esmeralda', false, ...segments));
