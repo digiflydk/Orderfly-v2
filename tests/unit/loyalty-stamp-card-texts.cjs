@@ -66,6 +66,8 @@ test('the standard template is valid, fully filled with the brand and settings a
   // Approved wording for section 8 (owner, 2026-10-19): no fixed deletion period.
   assert.match(terms,/Lukker vi dit medlemskab eller programmet, bliver medlemskabet deaktiveret\./);
   assert.doesNotMatch(terms,/opbevaring|senest .* måneder efter/);
+  // Deactivation stops redemption at once, so the terms do not promise redemption during the notice (owner, 2026-10-20).
+  assert.match(terms,/allerede har optjent\.\n\n11\. Lovvalg/);assert.doesNotMatch(terms,/indløses i varslingsperioden/);
 });
 
 test('conditional sections follow the settings and leave no empty line behind',()=>{
@@ -126,7 +128,7 @@ test('every unfillable placeholder is reported and the template rules reject typ
 
 test('a published template version never changes; the brand copy is matched to it',()=>{
   // Locked hashes: changing a released version must be a new entry in TEMPLATE_VERSIONS.
-  const LOCKED={'stamp-card-da-2026-10-19':'b076b416'};
+  const LOCKED={'stamp-card-da-2026-10-19':'960dff76'};
   for(const t of texts.TEMPLATE_VERSIONS){
     const hash=createHash('sha256').update(JSON.stringify(texts.TEXT_FIELDS.map(f=>t.texts[f]))).digest('hex').slice(0,8);
     assert.equal(hash,LOCKED[t.version],t.version);

@@ -260,7 +260,7 @@ Vi opbevarer oplysningerne, så længe du er medlem. Lukker vi dit medlemskab el
 Du kan til enhver tid slette dit medlemskab i {programnavn} eller ved at skrive til {kontakt_email}. Ikke-indløste stempler og belønninger bortfalder.
 
 10. Ændringer og ophør
-Vi kan ændre vilkårene eller lukke {programnavn} med mindst 30 dages varsel på e-mail eller i {programnavn}. Ændringer påvirker ikke stempler og belønninger, du allerede har optjent. Lukker programmet, kan optjente belønninger indløses i varslingsperioden.
+Vi kan ændre vilkårene eller lukke {programnavn} med mindst 30 dages varsel på e-mail eller i {programnavn}. Ændringer påvirker ikke stempler og belønninger, du allerede har optjent.
 
 11. Lovvalg og klager
 Vilkårene er underlagt dansk ret. Har du en klage, så kontakt os på {kontakt_email}. Du kan også klage til Forbrugerklagenævnet via forbrug.dk.

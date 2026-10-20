@@ -190,6 +190,7 @@ Plan: [standardtekster-analyse-og-plan.md](standardtekster-analyse-og-plan.md) (
 - Fra stempelkortet: `{programnavn}`, `{minimumsbeløb}`, `{antal_stempler}`, `{belønning}`, `{belønning_gyldighed}`, `{stempel_gyldighed}`, `{stempler_pr_køb}`, `{maks_stempler_pr_dag}` og `{aldersgrænse}` (ny indstilling, standard 15 år).
 - Fra tekstversionen: `{version}` og `{gældende_fra}`.
 - `{opbevaring_efter_ophør}` findes ikke (ejerbeslutning 2026-10-19). Vilkårenes afsnit 8 beskriver i stedet deaktivering og sletning på anmodning.
+- Afsnit 10 lover ikke, at belønninger kan indløses i varslingsperioden, når programmet lukker, fordi "Deaktivér" stopper indløsning med det samme (ejerbeslutning 2026-10-20).
 
 **Betingede afsnit:** `{#hvis rabat_giver_stempel}…{/hvis}` og `{#hvis ikke …}`. `flere_stempler_pr_køb` er sand, når et køb giver mere end ét stempel. Standardteksten bruger da flertal: "Du får N stempler", "Stemplerne registreres" og "fjernes de stempler".
 - `dagsgrænse` er sand, når "maks. stempler pr. medlem pr. dag" er sat. Standardteksten nævner da grænsen.
