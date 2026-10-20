@@ -191,11 +191,11 @@ Plan: [standardtekster-analyse-og-plan.md](standardtekster-analyse-og-plan.md) (
 - Fra tekstversionen: `{version}` og `{gældende_fra}`.
 - `{opbevaring_efter_ophør}` findes ikke (ejerbeslutning 2026-10-19). Vilkårenes afsnit 8 beskriver i stedet deaktivering og sletning på anmodning.
 
-**Betingede afsnit:** `{#hvis rabat_giver_stempel}…{/hvis}` og `{#hvis ikke …}`. `flere_stempler_pr_køb` er sand, når et køb giver mere end ét stempel. Standardteksten siger da "Du får N stempler" i stedet for "Du får ét stempel".
+**Betingede afsnit:** `{#hvis rabat_giver_stempel}…{/hvis}` og `{#hvis ikke …}`. `flere_stempler_pr_køb` er sand, når et køb giver mere end ét stempel. Standardteksten bruger da flertal: "Du får N stempler", "Stemplerne registreres" og "fjernes de stempler".
 - `dagsgrænse` er sand, når "maks. stempler pr. medlem pr. dag" er sat. Standardteksten nævner da grænsen.
 - Kanalerne afgør, hvilken af tre sætninger afsnit 3 bruger: `restaurant_og_takeaway`, `kun_restaurant` eller `kun_takeaway`.
   - Restaurant er dine-in ved kassen.
-  - Takeaway er takeaway ved kassen eller en Orderfly-ordre (afhentning/levering).
+  - Takeaway er takeaway ved kassen. Orderfly-ordrer (afhentning/levering) giver endnu ikke stempler og nævnes derfor ikke. Når den automatiske stempling slås til, skal skabelonen og tekstnøglen udvides.
   - Med begge kanaler er teksten den godkendte (ejerbeslutning 2026-10-20). `flere_afdelinger` er sand, når kortet gælder på tværs, og brandet har mere end én aktiv afdeling. Et betinget afsnit starter og slutter på samme linje. En linje, der bliver tom, fjernes.
 
 **I admin** (Stempelkort → Rediger → Tekster, rettigheden `orderfly.stamp_cards:settings`):

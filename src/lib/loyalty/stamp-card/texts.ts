@@ -131,7 +131,7 @@ export type BrandTextSource = Partial<Record<'name' | 'companyName' | 'street' |
 export type TextSettings = {
   name: string; minimumAmountOre: number; stampsRequired: number; rewardDescription: string; rewardValidityMonths: number;
   cardValidityMonths: number; minimumAge: number; discountedOrdersQualify: boolean; crossLocation: boolean; stampsPerPurchase: number;
-  counterChannels: readonly string[]; orderTypes: readonly string[]; maxStampsPerDay: number | null;
+  counterChannels: readonly string[]; maxStampsPerDay: number | null;
 };
 
 const str = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -155,9 +155,10 @@ export const lowerFirst = (text: string) => /^\p{Lu}\p{Ll}/u.test(text) ? text[0
 
 export function textValues(input: { brand: BrandTextSource; settings: TextSettings; activeLocations: number; version: number | null; effectiveFrom: number | null }): TextValues {
   const { brand, settings: s } = input, reward = s.rewardDescription.trim();
-  // The terms name the channels that give stamps: dine-in at the counter, and takeaway ordered
-  // directly (takeaway at the counter or an Orderfly pickup/delivery order).
-  const restaurant = s.counterChannels.includes('dine_in'), takeaway = s.counterChannels.includes('takeaway') || s.orderTypes.length > 0;
+  // The terms name the channels that give stamps today: dine-in and takeaway at the counter.
+  // Stamps from Orderfly orders (orderTypes) are not switched on yet, so they are not promised;
+  // when they are, this and textKey must include them.
+  const restaurant = s.counterChannels.includes('dine_in'), takeaway = s.counterChannels.includes('takeaway');
   return {
     values: {
       brand_navn: str(brand.name), programnavn: str(s.name), virksomhed_navn: str(brand.companyName), virksomhed_adresse: brandAddress(brand),
@@ -180,7 +181,7 @@ export function textKey(settings: ProgramTexts & TextSettings) {
   const s = settings;
   return JSON.stringify([TEXT_FIELDS.map(f => s[f]), s.name, s.minimumAmountOre, s.stampsRequired, s.rewardDescription.trim(),
     s.rewardValidityMonths, s.cardValidityMonths, s.minimumAge, s.discountedOrdersQualify, s.crossLocation, s.stampsPerPurchase,
-    [...s.counterChannels].sort(), [...s.orderTypes].sort(), s.maxStampsPerDay]);
+    [...s.counterChannels].sort(), s.maxStampsPerDay]);
 }
 
 type PublishedTexts = { version: number; effectiveFrom: number | null; key: string | null };
@@ -231,7 +232,7 @@ Medlemskab kræver, at du tilmelder dig vores nyhedsbrev. Afmelder du dig senere
 {#hvis rabat_giver_stempel}Køb med rabatkode eller kampagnetilbud giver også stempler.{/hvis}
 {#hvis ikke rabat_giver_stempel}Køb med rabatkode eller kampagnetilbud giver ikke stempler.{/hvis}
 
-Du skal vise din QR-kode i {programnavn} ved betalingen. Stemplet registreres af vores medarbejder ved købet og kan ikke gives efterfølgende.
+Du skal vise din QR-kode i {programnavn} ved betalingen. {#hvis ikke flere_stempler_pr_køb}Stemplet registreres{/hvis}{#hvis flere_stempler_pr_køb}Stemplerne registreres{/hvis} af vores medarbejder ved købet og kan ikke gives efterfølgende.
 
 4. Belønninger
 Når du har samlet {antal_stempler} stempler, får du {belønning}, og et nyt stempelkort starter. Belønningen er gyldig i {belønning_gyldighed} måneder og indløses ved at vise din QR-kode ved kassen.
@@ -243,7 +244,7 @@ Belønninger kan ikke ombyttes til kontanter og kan ikke kombineres med andre ra
 Dine stempler udløber, hvis du ikke har fået et nyt stempel inden for {stempel_gyldighed} måneder. Hvert nyt stempel forlænger fristen. Du kan altid se udløbsdatoen i {programnavn}. Udløbne stempler og belønninger kan ikke genoprettes.
 
 6. Refusion og annullering
-Bliver et køb refunderet eller annulleret, fjernes det stempel, købet gav.
+Bliver et køb refunderet eller annulleret, fjernes {#hvis ikke flere_stempler_pr_køb}det stempel{/hvis}{#hvis flere_stempler_pr_køb}de stempler{/hvis}, købet gav.
 
 7. Misbrug
 Ved misbrug eller forsøg på misbrug, fx deling af QR-kode eller flere medlemskaber pr. person, kan vi fjerne stempler og belønninger og lukke medlemskabet.

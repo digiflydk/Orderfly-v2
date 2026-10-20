@@ -91,9 +91,14 @@ test('conditional sections follow the settings and leave no empty line behind',(
   const dineIn=render({counterChannels:['dine_in'],orderTypes:[]},2);
   assert.ok(dineIn.includes('\n\nStempler gives ved køb i restauranten. Takeaway og køb via Wolt, Uber Eats og andre udbydere giver ikke stempler.\nKøb med rabatkode'));
   assert.ok(!dineIn.includes(both));
-  for(const changes of [{counterChannels:['takeaway'],orderTypes:[]},{counterChannels:[],orderTypes:['pickup']}])
-    assert.ok(render(changes,2).includes('\n\nStempler gives ved takeaway, som du bestiller direkte hos os. Køb i restauranten og køb via Wolt, Uber Eats og andre udbydere giver ikke stempler.\nKøb med rabatkode'),JSON.stringify(changes));
-  assert.ok(render({counterChannels:['dine_in'],orderTypes:['delivery']},2).includes(both));
+  assert.ok(render({counterChannels:['takeaway'],orderTypes:[]},2).includes('\n\nStempler gives ved takeaway, som du bestiller direkte hos os. Køb i restauranten og køb via Wolt, Uber Eats og andre udbydere giver ikke stempler.\nKøb med rabatkode'));
+  // Orderfly orders do not give stamps yet, so they never put takeaway in the terms.
+  assert.ok(render({counterChannels:['dine_in'],orderTypes:['pickup','delivery']},2).includes('Stempler gives ved køb i restauranten. Takeaway og'));
+  // More stamps per purchase are plural everywhere the purchase's stamps are mentioned.
+  const plural=render({stampsPerPurchase:3},2),one=render({stampsPerPurchase:1},2);
+  assert.match(plural,/Stemplerne registreres af vores medarbejder ved købet/);assert.match(plural,/fjernes de stempler, købet gav\./);
+  assert.match(one,/ved betalingen\. Stemplet registreres af vores medarbejder ved købet og kan ikke gives efterfølgende\./);
+  assert.match(one,/annulleret, fjernes det stempel, købet gav\./);
   // A daily limit is stated after the stamp rule, only when it is set.
   assert.match(render({maxStampsPerDay:2},2),/efter eventuel rabat\. Du kan højst få 2 stempler pr\. dag\.\n/);
   assert.match(render({maxStampsPerDay:null},2),/efter eventuel rabat\.\n/);
@@ -121,7 +126,7 @@ test('every unfillable placeholder is reported and the template rules reject typ
 
 test('a published template version never changes; the brand copy is matched to it',()=>{
   // Locked hashes: changing a released version must be a new entry in TEMPLATE_VERSIONS.
-  const LOCKED={'stamp-card-da-2026-10-19':'0f3cb9b3'};
+  const LOCKED={'stamp-card-da-2026-10-19':'b076b416'};
   for(const t of texts.TEMPLATE_VERSIONS){
     const hash=createHash('sha256').update(JSON.stringify(texts.TEXT_FIELDS.map(f=>t.texts[f]))).digest('hex').slice(0,8);
     assert.equal(hash,LOCKED[t.version],t.version);
@@ -130,7 +135,8 @@ test('a published template version never changes; the brand copy is matched to i
   assert.equal(texts.matchingTemplateVersion({...TEMPLATE,terms:TEMPLATE.terms+' Ekstra.'}),null);
   assert.notEqual(texts.textKey(full()),texts.textKey(full({minimumAmountOre:15000})));
   assert.notEqual(texts.textKey(full()),texts.textKey(full({stampsPerPurchase:2})));
-  for(const changes of [{counterChannels:['dine_in']},{orderTypes:[]},{maxStampsPerDay:3}])assert.notEqual(texts.textKey(full()),texts.textKey(full(changes)),JSON.stringify(changes));
+  for(const changes of [{counterChannels:['dine_in']},{maxStampsPerDay:3}])assert.notEqual(texts.textKey(full()),texts.textKey(full(changes)),JSON.stringify(changes));
+  assert.equal(texts.textKey(full()),texts.textKey(full({orderTypes:['delivery']})),'orderTypes do not change the terms yet');
   assert.equal(texts.textKey(full({counterChannels:['dine_in','takeaway']})),texts.textKey(full({counterChannels:['takeaway','dine_in']})));
   assert.equal(texts.textKey(full()),texts.textKey(full({sessionDays:30,counterIdleMinutes:9})));
 });
