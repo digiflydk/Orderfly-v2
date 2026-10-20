@@ -283,3 +283,29 @@ test('a member who saw a variant after a brand detail changed is listed under th
   const [row]=await admin.listTextVersions(db,who('admin'),['brand']);
   assert.equal(row.members,1);
 });
+
+test('a program active before text versions gets a baseline and publishes version 1 on its next active save',async()=>{
+  setup();
+  // Saved before this change: no texts metadata, own free text without placeholders.
+  const legacy=full({active:true,consentHelp:'',terms:'Egne vilkår.',consentText:'Ja tak til nyhedsbrev på e-mail. Du kan altid afmelde dig.'});
+  db.rows.set('loyaltyPrograms/brand',{brandId:'brand',version:3,settings:legacy});
+  // Switching it off keeps version 0 but records what members saw, so edits made while off count as changed terms.
+  await save({...legacy,active:false});
+  assert.equal(db.rows.get('loyaltyPrograms/brand').texts.version,0);
+  assert.equal(db.rows.get('loyaltyPrograms/brand').texts.key,texts.textKey(legacy));
+  assert.equal((await admin.listPrograms(db,who('admin'),['brand']))[0].termsChanged,false);
+  await save({...legacy,active:false,terms:'Ændrede vilkår.'});
+  assert.equal((await admin.listPrograms(db,who('admin'),['brand']))[0].termsChanged,true);
+  // Back on with the original texts still publishes a backed version 1.
+  assert.equal((await save({...legacy,active:true})).textVersion,1);
+  assert.equal(rows('loyaltyTextVersions').map(r=>r.id).join(),'brand_1');
+  assert.equal(rows('loyaltyTextVersions')[0].rendered.terms,'Egne vilkår.');
+});
+
+test('an active program from before text versions publishes version 1 on any save',async()=>{
+  setup();
+  const legacy=full({active:true});
+  db.rows.set('loyaltyPrograms/brand',{brandId:'brand',version:2,settings:legacy});
+  assert.equal((await save({...legacy,sessionDays:30})).textVersion,1);
+  assert.equal(rows('loyaltyTextVersions').length,1);
+});

@@ -120,10 +120,13 @@ export async function saveSettings(db: Firestore, actor: AdminActor, input: z.in
     if (!changes.length) return { version: current.version, changed: 0, textVersion: current.texts.version };
     const version = current.version + 1;
     // Texts are published while the program is active: a different textKey gets a new
-    // text version valid from now. Brand master data is not part of the key.
-    const key = textKey(settings), publish = settings.active && key !== current.texts.key;
+    // text version valid from now. Brand master data is not part of the key. A program that
+    // was active before text versions existed has no key; the texts its members saw are its
+    // baseline, and its first active save publishes version 1.
+    const baseKey = current.texts.key ?? (current.settings.active ? textKey(current.settings) : null);
+    const key = textKey(settings), publish = settings.active && (key !== baseKey || current.texts.version === 0);
     const texts = publish ? { version: current.texts.version + 1, effectiveFrom: now, key, templateVersion: matchingTemplateVersion(settings) }
-      : { ...current.texts, templateVersion: matchingTemplateVersion(settings) };
+      : { ...current.texts, key: baseKey, templateVersion: matchingTemplateVersion(settings) };
     let published: { rendered: ProgramTexts; hash: string; known: boolean } | null = null;
     if (settings.active) {
       const result = renderForProgram(settings, texts, await loadTextContext(db, brandId, tx));
