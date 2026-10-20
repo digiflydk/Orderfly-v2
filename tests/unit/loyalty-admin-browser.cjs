@@ -63,12 +63,13 @@ before(async () => {
       : view === 'texts' ? React.createElement(SettingsForm, { initial: ${textsInitial(brandData, true)}, canEditBrand: true })
       : view === 'texts-legacy' ? React.createElement(SettingsForm, { initial: { ...${textsInitial(brandData, true)}, settings: { ...${JSON.stringify(settings)}, active: true },
           texts: { version: 0, effectiveFrom: null, key: null, templateVersion: null } }, canEditBrand: true })
+      : view === 'texts-reactivate' ? React.createElement(SettingsForm, { initial: ${textsInitial(brandData, false)}, canEditBrand: true })
       : view === 'texts-missing' ? React.createElement(SettingsForm, { initial: ${textsInitial({ ...brandData, companyRegNo: null }, false)}, canEditBrand: false })
       : view === 'members' ? React.createElement(MembersTable, { rows: ${JSON.stringify(members)}, truncated: false, brandIds: ['b'], filterQuery: 'period=30d', multiBrand: false })
       : view === 'log' ? React.createElement(EventLog, { rows: ${JSON.stringify(events)}, truncated: false, filter: { brandIds: ['b'], from: '2026-10-14', to: '2026-10-20', type: null, actorId: null, channel: null }, multiBrand: false })
       : view === 'programs' ? React.createElement(ProgramsOverview, { status: 'all', editHref: '/superadmin/loyalty/stamp-card?tab=settings', available: [{ brandId: 'b3', brandName: 'Tredje' }],
           rows: [{ brandId: 'b', brandName: 'Esmeralda', companyName: 'Esmeralda ApS', name: 'Esmeralda Club', active: true, version: 4, updatedAt: ${NOW}, updatedByName: 'Leder', members: 12 },
-            { brandId: 'b2', brandName: 'Andet', companyName: 'Andet ApS', name: 'Andet Club', active: false, version: 1, updatedAt: ${NOW}, updatedByName: null, members: 0 }] })
+            { brandId: 'b2', brandName: 'Andet', companyName: 'Andet ApS', name: 'Andet Club', active: false, version: 1, updatedAt: ${NOW}, updatedByName: null, members: 0, termsChanged: true }] })
       : view === 'overview' ? React.createElement(OverviewCharts, { daily: [{ day: '2026-10-18', stamps: 4, redemptions: 1 }, { day: '2026-10-19', stamps: 0, redemptions: 0 }, { day: '2026-10-20', stamps: 7, redemptions: 2 }], channels: { dine_in: 5, takeaway: 6 } })
       : React.createElement(CorrectionPanel, { brandId: 'b', memberId: 'm1', locations: [{ id: 'l1', name: 'Amager' }, { id: 'l2', name: 'Vesterbro' }], redeemedRewards: [{ id: 'r1', description: 'Gratis pizza', redeemedAt: ${NOW} }] });
     createRoot(document.getElementById('root')).render(React.createElement(React.Fragment, null, node, React.createElement(Toaster)));`);
@@ -137,7 +138,7 @@ for (const width of [390, 1440]) test(`the texts preview shows the filled terms 
     await preview.getByText(/mindst 150 kr\. hos Esmeralda/).waitFor();
     assert.match(await preview.innerText(), /Version 2, gældende fra/);
     await page.getByRole('button', { name: 'Gem indstillinger' }).click();
-    await page.getByRole('alertdialog', { name: 'Vilkårene ændres for et aktivt program' }).getByText(/30 dages varsel/).waitFor();
+    await page.getByRole('alertdialog', { name: 'Vilkårene ændres' }).getByText(/30 dages varsel/).waitFor();
     await page.getByRole('button', { name: 'Annuller' }).click();
     assert.equal((await calls(page)).length, 0);
     await page.getByRole('button', { name: 'Gem indstillinger' }).click();
@@ -179,7 +180,21 @@ test('a program active since before text versions still warns when its terms cha
     assert.equal(await page.getByRole('alertdialog').count(), 0);
     await page.getByLabel('Vilkår', { exact: true }).fill('Nye vilkår');
     await page.getByRole('button', { name: 'Gem indstillinger' }).click();
-    await page.getByRole('alertdialog', { name: 'Vilkårene ændres for et aktivt program' }).waitFor();
+    await page.getByRole('alertdialog', { name: 'Vilkårene ændres' }).waitFor();
+    assert.equal((await calls(page)).length, 1);
+  } finally { await page.close(); }
+});
+
+test('switching a published program on again with changed terms warns; unchanged terms do not', async () => {
+  const page = await open('texts-reactivate', 1440);
+  try {
+    await page.getByRole('switch', { name: 'Program aktivt' }).click();
+    await page.getByRole('button', { name: 'Gem indstillinger' }).click();
+    await page.getByText('Indstillingerne er gemt').first().waitFor();
+    assert.equal(await page.getByRole('alertdialog').count(), 0);
+    await page.getByLabel('Vilkår', { exact: true }).fill('Ændrede vilkår');
+    await page.getByRole('button', { name: 'Gem indstillinger' }).click();
+    await page.getByRole('alertdialog', { name: 'Vilkårene ændres' }).waitFor();
     assert.equal((await calls(page)).length, 1);
   } finally { await page.close(); }
 });
@@ -307,6 +322,7 @@ for (const width of [390, 1440]) test(`the stamp card overview lists programs, c
   await page.getByRole('alertdialog').waitFor({ state: 'detached' });
   await page.evaluate(() => { window.__calls.length = 0; window.__activeResult = { ok: false, error: 'settings_incomplete' }; });
   await page.getByRole('button', { name: 'Aktivér', exact: true }).click();
+  await page.getByRole('alertdialog').getByText(/Vilkårene er ændret siden sidst og udgives som en ny version\. Væsentlige ændringer kræver 30 dages varsel/).waitFor();
   await page.getByRole('alertdialog').getByRole('button', { name: 'Aktivér', exact: true }).click();
   await page.getByText('Udfyld indstillingerne (belønning, vilkår og samtykketekst), før programmet aktiveres.').first().waitFor();
   assert.deepEqual(await calls(page), [['active', { brandId: 'b2', version: 1, active: true }]]);

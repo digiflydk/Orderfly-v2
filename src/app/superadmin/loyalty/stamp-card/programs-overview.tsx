@@ -115,6 +115,7 @@ export function ProgramsOverview({ rows, available, status, editHref }: {
               {confirm?.active
                 ? 'Kunder kan hverken optjene stempler, tilmelde sig eller indløse belønninger, før programmet aktiveres igen. Stempler og belønninger bevares.'
                 : 'Kunder kan tilmelde sig, optjene stempler og indløse belønninger med de gemte indstillinger.'}
+              {!confirm?.active && confirm?.termsChanged && ' Vilkårene er ændret siden sidst og udgives som en ny version. Væsentlige ændringer kræver 30 dages varsel til medlemmerne (vilkårenes afsnit 10).'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

@@ -50,10 +50,11 @@ export function SettingsForm({ initial, canEditBrand }: { initial: Initial; canE
     // A free product with nothing chosen is no reward yet; an inactive draft may save without one.
     const empty = s.reward?.type === 'free_product' && s.reward.productIds.length + s.reward.categoryIds.length === 0;
     const settings = { ...s, reward: empty ? null : s.reward, minimumAmountOre: ore(minimum) };
-    // Changing the terms of an active program needs notice to the members (terms §10). A program
-    // active since before text versions has no published key; its saved settings are what members saw.
-    const published = initial.texts.key ?? textKey(initial.settings);
-    if (initial.settings.active && settings.active && textKey(settings) !== published) { setWarn(settings); return; }
+    // Publishing changed terms needs notice to the members (terms §10), also when a program is
+    // switched on again after edits. A program active since before text versions has no published
+    // key; its saved settings are what members saw.
+    const published = initial.texts.key ?? (initial.settings.active ? textKey(initial.settings) : null);
+    if (settings.active && published !== null && textKey(settings) !== published) { setWarn(settings); return; }
     save(settings);
   }
 
@@ -198,7 +199,7 @@ export function SettingsForm({ initial, canEditBrand }: { initial: Initial; canE
       <AlertDialog open={!!warn} onOpenChange={open => { if (!open) setWarn(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Vilkårene ændres for et aktivt program</AlertDialogTitle>
+            <AlertDialogTitle>Vilkårene ændres</AlertDialogTitle>
             <AlertDialogDescription>
               Væsentlige ændringer af vilkårene kræver 30 dages varsel til medlemmerne (vilkårenes afsnit 10). Nye medlemmer ser den nye tekst med det samme, og den bliver version {initial.texts.version + 1}.
             </AlertDialogDescription>

@@ -175,6 +175,10 @@ test('a changed setting shows at once in the terms and publishes a new version; 
   assert.equal(rows('loyaltyTextVersions').length,2);
   // Off and on again with the same texts is the same version.
   await save(full({active:false,minimumAmountOre:15000,sessionDays:90}));
+  assert.equal((await admin.listPrograms(db,who('admin'),['brand']))[0].termsChanged,false);
+  await save(full({active:false,minimumAmountOre:20000,sessionDays:90}));
+  assert.equal((await admin.listPrograms(db,who('admin'),['brand']))[0].termsChanged,true,'activating would publish changed terms');
+  await save(full({active:false,minimumAmountOre:15000,sessionDays:90}));
   assert.equal((await save(full({active:true,minimumAmountOre:15000,sessionDays:90}))).textVersion,2);
   assert.equal(db.rows.get('loyaltyPrograms/brand').texts.templateVersion,texts.CURRENT_TEMPLATE.version);
   await save(full({active:true,minimumAmountOre:15000,sessionDays:90,consentHelp:'Egen forklaring.'}));

@@ -211,7 +211,9 @@ export async function templateUsage(db: Firestore): Promise<Record<string, numbe
 // ---------- Programs ----------
 
 export type ProgramRow = { brandId: string; brandName: string; companyName: string; name: string; active: boolean; version: number;
-  updatedAt: number | null; updatedByName: string | null; members: number };
+  updatedAt: number | null; updatedByName: string | null; members: number;
+  // The saved texts differ from the last published version, so activating publishes changed terms.
+  termsChanged: boolean };
 
 // Stamp cards that have been created (saved at least once) for the given
 // brands. A brand without a saved program is offered under "Opret" instead.
@@ -225,7 +227,8 @@ export async function listPrograms(db: Firestore, actor: AdminActor, brandIds: s
     const members = await db.collection(COLLECTIONS.members).where('brandId', '==', brand.brandId).where('status', '==', 'active').count().get();
     return { brandId: brand.brandId, brandName: brand.brandName, companyName: brand.companyName, name: program.settings.name, active: program.settings.active,
       version: program.version, updatedAt: typeof data?.updatedAt === 'number' ? data.updatedAt : null,
-      updatedByName: typeof data?.updatedByName === 'string' ? data.updatedByName : null, members: members.data().count };
+      updatedByName: typeof data?.updatedByName === 'string' ? data.updatedByName : null, members: members.data().count,
+      termsChanged: program.texts.key !== null && textKey(program.settings) !== program.texts.key };
   }));
   return rows.filter((row): row is ProgramRow => row !== null);
 }
