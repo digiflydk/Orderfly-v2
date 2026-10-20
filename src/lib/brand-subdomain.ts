@@ -94,3 +94,21 @@ export function brandSubdomainRewrite(pathname: string, slug: string): string | 
   if (pathname === `/${slug}` || pathname.startsWith(`/${slug}/`)) return null;
   return pathname === '/' ? `/${slug}` : `/${slug}${pathname}`;
 }
+
+/**
+ * Storefront address for a brand (#282): /{slug}/… on orderfly.dk, /… on the
+ * brand's own subdomain, like clubBase. The short form is used only when the
+ * middleware rewrites it back to the same page, so a location slug equal to the
+ * brand slug or to an app-wide path (/feedback, /api, …) keeps the long form.
+ */
+export function storefrontPath(slug: string, onBrandSubdomain: boolean, ...segments: string[]): string {
+  const long = [slug, ...segments].map(part => `/${part}`).join('');
+  const short = segments.map(part => `/${part}`).join('') || '/';
+  return onBrandSubdomain && brandSubdomainRewrite(short, slug) === long ? short : long;
+}
+
+/** Path segments after the brand, the same for /{slug}/x on the apex and /x on the subdomain. */
+export function storefrontSegments(pathname: string | null | undefined, slug: string): string[] {
+  const segments = (pathname ?? '').split('/').filter(Boolean);
+  return segments[0] === slug ? segments.slice(1) : segments;
+}

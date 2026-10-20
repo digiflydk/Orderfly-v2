@@ -7,6 +7,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Button } from '@/components/ui/button';
 import { OrderModal } from '@/components/storefront/OrderModal';
 import type { Location } from '@/types';
+import { browserStorefrontPath } from '@/hooks/use-storefront-path';
 type Payload = {brandSlug: string; locationSlug: string; location?: Location};
 let open: ((payload: Payload) => void) | null = null;
 export function openDeliveryModal(payload: Payload) { open?.(payload); }
@@ -21,7 +22,7 @@ export default function DeliveryMethodModal() {
   function choose(mode: 'pickup' | 'delivery') {
     if (!payload || !activeLocation?.deliveryTypes.includes(mode)) return;
     setDeliveryType(mode);
-    router.push(`/${payload.brandSlug}/${payload.locationSlug}?deliveryMethod=${mode}`);
+    router.push(`${browserStorefrontPath(payload.brandSlug, payload.locationSlug)}?deliveryMethod=${mode}`);
     setPayload(null);
   }
   const close = (value: boolean) => {if (!value) setPayload(null);};

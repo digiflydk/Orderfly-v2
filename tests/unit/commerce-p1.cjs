@@ -138,6 +138,7 @@ test('delayed webhook reconciliation reports paid only after shared settlement; 
  assert.equal((await expired.api.readGuestReceipt(expired.proof)).paymentStatus,'Failed');assert.equal(expired.settlements(),0);
 });
 
+const storefront=loadTs('src/lib/brand-subdomain.ts');
 function hookFixture({analytics=()=>{},cart={}}={}) {
  const state=[];let index=0;const navigations=[];
  const hooks={useRef:value=>{const i=index++;return state[i]||=( {current:value});},useState:value=>{const i=index++;if(!(i in state))state[i]=value;return[state[i],next=>{state[i]=typeof next==='function'?next(state[i]):next}]}};
@@ -145,6 +146,8 @@ function hookFixture({analytics=()=>{},cart={}}={}) {
   react:hooks,'next/navigation':{useRouter:()=>({push:path=>navigations.push(path)})},
   '@/context/cart-context':{useCart:()=>({brand:{id:'b',slug:'brand'},location:{id:'l',slug:'location'},cartReady:true,deliveryType:'pickup',cartItems:[{...comboCart('p'),tags:[]}],checkoutTotal:100,itemCount:1,...cart})},
   '@/context/analytics-context':{useAnalytics:()=>({trackEvent:analytics})},
+  // Browser host orderfly.dk; the subdomain form is covered in brand-subdomains-12.
+  '@/hooks/use-storefront-path':{browserStorefrontPath:(slug,...segments)=>storefront.storefrontPath(slug,false,...segments)},
  });
  const render=()=>{index=0;return api.useMenuCheckout()};
  return{first:render(),render,navigations};
@@ -174,6 +177,7 @@ test('real receipt component displays Pending/Failed truthfully and includes com
  const {ConfirmationClient}=loadComponent('src/app/[brandSlug]/[locationSlug]/checkout/confirmation/confirmation-client.tsx',{
   '@/context/cart-context':{useCart:()=>({completeCheckout:()=>{throw Error('SSR must not clear cart')}})},
   '@/lib/storefront-format':loadTs('src/lib/storefront-format.ts'),
+  '@/hooks/use-storefront-path':{useStorefrontPath:slug=>(...segments)=>storefront.storefrontPath(slug,false,...segments)},
  });
  const f=receiptFixture();const order=await f.api.readGuestReceipt(f.proof);
  const render=paymentStatus=>renderToStaticMarkup(React.createElement(ConfirmationClient,{order:{...order,paymentStatus,productItems:[{...order.productItems[0],comboSelections:[{groupId:'g',groupName:'Pizza choice',products:[{id:'p2',name:'Pepperoni'}]}]}]},brand:{id:'b',slug:'brand'},location:{id:'l',slug:'location'},sessionId:f.proof.sessionId,receiptToken:f.proof.receiptToken}));

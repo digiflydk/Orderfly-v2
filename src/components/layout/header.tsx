@@ -4,10 +4,11 @@ import Image from 'next/image';
 import Link from 'next/link';
 import type { Brand } from '@/types';
 import { useEffect, useState } from 'react';
+import { useStorefrontPath } from '@/hooks/use-storefront-path';
 
 export function Header({ brand }: { brand: Brand }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const href = `/${brand.slug}`;
+  const href = useStorefrontPath(brand.slug)();
   useEffect(() => {
     const close = (event: KeyboardEvent) => { if (event.key === 'Escape') setMenuOpen(false); };
     window.addEventListener('keydown', close);

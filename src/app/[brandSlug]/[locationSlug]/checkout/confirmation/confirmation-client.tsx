@@ -7,6 +7,7 @@ import { formatPrice, localizeTime } from '@/lib/storefront-format';
 
 import type { Brand, Location, OrderDetail, PaymentDetails } from "@/types";
 import { useCart } from '@/context/cart-context';
+import { useStorefrontPath } from '@/hooks/use-storefront-path';
 
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -88,6 +89,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
         return () => { stopped = true; controller.abort(); clearTimeout(timer); clearTimeout(deadline); };
     }, [sessionId, receiptToken, orderId, brand?.id, location?.id, order?.paymentStatus, retry]);
     const { completeCheckout } = useCart();
+    const storefront = useStorefrontPath(brand?.slug);
     const pickupAccepted = order?.paymentMethod === 'PayAtPickup' && order.paymentStatus === 'Pending' && !['Pending', 'Canceled'].includes(order.status);
     useEffect(() => {
         if (pickupAccepted && order && brand && location) completeCheckout(order.id, brand.id, location.id);
@@ -126,7 +128,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                         <CardContent>
                              <Button variant="outline" disabled={checking || !sessionId} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>
                              <Button asChild className="mt-6">
-                                <Link href={brand && location ? `/${brand.slug}/${location.slug}` : brand ? `/${brand.slug}` : `/`}>Tilbage til menuen</Link>
+                                <Link href={brand && location ? storefront(location.slug) : brand ? storefront() : `/`}>Tilbage til menuen</Link>
                             </Button>
                         </CardContent>
                     </Card>
@@ -146,7 +148,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
               'Betalingen er endnu ikke bekræftet. Kontrollér status igen, eller kontakt restauranten, før du betaler igen.'}</p>
             <p className="mb-4">Ordrenummer: {order.id}</p>
             {!failed && <Button disabled={checking} onClick={() => setRetry(value => value + 1)}>Kontrollér betalingsstatus</Button>}
-            <Button asChild variant="outline" className="ml-2"><Link href={`/${brand.slug}/${location.slug}`}>Tilbage til menuen</Link></Button>
+            <Button asChild variant="outline" className="ml-2"><Link href={storefront(location.slug)}>Tilbage til menuen</Link></Button>
         </main>;
     }
 
@@ -309,7 +311,7 @@ export function ConfirmationClient({ order: initialOrder, brand, location, sessi
                             <Link href={`/feedback?orderId=${order.id}&customerId=${order.customerDetails.id}`}>Giv feedback</Link>
                         </Button>
                         <Button asChild>
-                            <Link href={`/${brand.slug}/${location.slug}`}>Tilbage til menuen</Link>
+                            <Link href={storefront(location.slug)}>Tilbage til menuen</Link>
                         </Button>
                     </div>
                 </div>

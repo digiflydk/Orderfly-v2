@@ -2,6 +2,7 @@ import { notFound } from 'next/navigation';
 import { getBrandAndLocation } from '@/lib/data/brand-location';
 import { readPublicReviews } from '@/lib/feedback/public-reviews';
 import { PublicReviewsView } from '@/components/feedback/public-reviews-view';
+import { storefrontHref } from '@/lib/server/storefront-path';
 export const dynamic = 'force-dynamic';
 export const revalidate = 0;
 export default async function ReviewsPage({ params, searchParams }: { params: Promise<{ brandSlug: string; locationSlug: string }>; searchParams: Promise<{ after?: string }> }) {
@@ -10,6 +11,6 @@ export default async function ReviewsPage({ params, searchParams }: { params: Pr
   if (!brand || !location || location.brandId !== brand.id) notFound();
   const page = await readPublicReviews(brand.id, location.id, (await searchParams).after);
   if (!page) notFound();
-  const href = `/${encodeURIComponent(brandSlug)}/${encodeURIComponent(locationSlug)}`;
+  const href = await storefrontHref(brand.slug, encodeURIComponent(locationSlug));
   return <PublicReviewsView locationName={location.name} menuHref={href} reviews={page.reviews} nextHref={page.next ? `${href}/reviews?after=${encodeURIComponent(page.next)}` : null} />;
 }

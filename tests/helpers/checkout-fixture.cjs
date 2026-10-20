@@ -71,7 +71,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   }},
   '@/lib/discount-reservations':{reserveDiscount:async()=>{events.push('reserve');if(fault==='reserve')throw Error('Discount capacity reached');},releaseDiscount:async()=>{events.push('release');if(fault==='release')throw Error('cleanup offline');}},
   '@/lib/order-id':{generateOrderId:()=> orderId},'@/lib/firebase':{db:{}},
-  '@/lib/url':{getOrigin:async()=> origin},
+  '@/lib/url':{getOrigin:async()=> origin},'@/lib/brand-subdomain':loadTs('src/lib/brand-subdomain.ts'),
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
   // Stale-hold reconciliation has its own suite (stale-discount-holds-210); here it finds nothing.
   '@/lib/server/stale-discount-holds':{reconcileStaleDiscountHolds:async()=>({inspected:0,released:0,settled:0})},
@@ -98,7 +98,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
     }
     return snapshot(ref);
    },
-   runTransaction:async(_,callback)=>callback({get:async ref=>snapshot(ref),set:(ref,data,options)=>{save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)}),
+   runTransaction:async(_,callback)=>callback({get:async ref=>snapshot(ref),set:(ref,data,options)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)}),
    serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),
    setDoc:async(ref,data)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data);writes.push({ref,data});events.push(ref.collection);},
    updateDoc:async(ref,data)=>{
