@@ -24,3 +24,19 @@ for (const [requested, expected] of [
     );
   });
 }
+
+test('order entry on orderfly.dk continues on the brand subdomain; other hosts stay relative', () => {
+  for (const host of ['orderfly.dk', 'www.orderfly.dk', 'orderfly.dk:443'])
+    assert.equal(orderFlow.getM3PizzaOrderEntryUrl(host, 'takeaway'), 'https://esmeralda.orderfly.dk/amager?deliveryMethod=pickup', host);
+  assert.equal(orderFlow.getM3PizzaOrderEntryUrl('orderfly.dk', 'delivery'), 'https://esmeralda.orderfly.dk/amager?deliveryMethod=delivery');
+  assert.equal(orderFlow.getM3PizzaOrderEntryUrl('esmeralda.orderfly.dk', 'delivery'), '/amager?deliveryMethod=delivery');
+  for (const host of ['localhost:3000', '127.0.0.1:3000', 'preview.example.test', null])
+    assert.equal(orderFlow.getM3PizzaOrderEntryUrl(host, 'invalid'), '/esmeralda/amager?deliveryMethod=pickup', String(host));
+});
+
+test('the landing order modal uses the subdomain entry, not a hard-coded /{brand}/{location} push', () => {
+  const source = fs.readFileSync('src/app/brand-site/m3pizza/landing-client.tsx', 'utf8');
+  assert.match(source, /browserOrderEntryUrl\(brand\.slug, location\.slug\)/);
+  assert.match(source, /window\.location\.assign\(target\)/);
+  assert.doesNotMatch(source, /router\.push\(`\/\$\{brand\.slug\}/);
+});

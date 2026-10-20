@@ -16,6 +16,7 @@ import { comboEligible } from '@/lib/combo-eligibility';
 import { AnalyticsProvider } from '@/context/analytics-context';
 import { CookieConsent } from '@/components/cookie-consent';
 import { OrderModal } from '@/components/storefront/OrderModal';
+import { browserOrderEntryUrl } from '@/hooks/use-storefront-path';
 
 export default function LandingClient({brand, location, products, discounts, config}: {
   brand: Brand; location: Location; products: ProductForMenu[]; discounts: StandardDiscount[]; config: StorefrontLinks | null;
@@ -32,7 +33,10 @@ export default function LandingClient({brand, location, products, discounts, con
   const choose = (method: 'takeaway' | 'delivery') => {
     const mode = normalizeM3PizzaDeliveryMethod(method);
     persistM3PizzaDeliveryMethod(mode);
-    router.push(`/${brand.slug}/${location.slug}?deliveryMethod=${mode}`);
+    const target = `${browserOrderEntryUrl(brand.slug, location.slug)}?deliveryMethod=${mode}`;
+    // From orderfly.dk the order continues on the brand subdomain, a full page load.
+    if (/^https?:/.test(target)) window.location.assign(target);
+    else router.push(target);
   };
   return <AnalyticsProvider brand={brand}>
     <StandardStorefront brand={brand} onOrderClick={order} config={config} onCookieSettings={() => setCookieModalOpen(true)}>
