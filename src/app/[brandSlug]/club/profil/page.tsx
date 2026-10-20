@@ -10,5 +10,6 @@ export default async function ProfilePage({ params }: Props) {
   if (!member) redirect(`${base}/login`);
   return <ProfileSettings slug={brandSlug} base={base} programName={member.program.name}
     member={{ name: member.member.name, email: member.member.email }}
-    newsletter={{ subscribed: member.newsletter.subscribed, consentVersion: program.consentVersion, consentText: program.consentText }} />;
+    newsletter={{ subscribed: member.newsletter.subscribed, consentVersion: program.consentVersion, consentText: program.consentText,
+      consentHelp: program.consentHelp }} />;
 }

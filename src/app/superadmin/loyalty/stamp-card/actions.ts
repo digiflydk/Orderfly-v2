@@ -6,11 +6,15 @@ import { AuthorityError } from '@/lib/access/authority';
 import { orderflySession } from '@/lib/access/orderfly-session';
 import { correctMember, correctionSchema, LoyaltyError } from '@/lib/loyalty/stamp-card/counter';
 import { listEvents, listMembers, logFilterSchema, MEMBER_EXPORT_LIMIT, saveSettings, saveSettingsSchema, setProgramActive, setProgramActiveSchema } from '@/lib/loyalty/stamp-card/admin';
+import { TextsIncomplete } from '@/lib/loyalty/stamp-card/program-texts';
+import { PLACEHOLDERS } from '@/lib/loyalty/stamp-card/texts';
 import type { ZodIssue } from 'zod';
 
-export type ActionResult<T = undefined> = { ok: true; data?: T } | { ok: false; error: string; fields?: Record<string, string> };
+export type MissingTextValue = { placeholder: string; label: string; fields: string[] };
+export type ActionResult<T = undefined> = { ok: true; data?: T } | { ok: false; error: string; fields?: Record<string, string>; missing?: MissingTextValue[] };
 
 function danishIssue(issue: ZodIssue) {
+  if (issue.code === 'custom' && (issue.params as { template?: boolean } | undefined)?.template) return issue.message;
   if (issue.message === 'Required when the program is active') return 'Skal udfyldes, når programmet er aktivt.';
   if (issue.message === 'Choose a product or category') return 'Vælg mindst ét produkt eller én kategori.';
   if (issue.code === 'too_small') return 'Værdien er for lille.';
@@ -22,12 +26,15 @@ async function actor() {
   return { identity: session.identity, name: session.name };
 }
 function failure(error: unknown): ActionResult<never> {
+  if (error instanceof TextsIncomplete) return { ok: false, error: error.code,
+    fields: Object.fromEntries(error.invalid.map(f => [f, 'Teksten kan ikke læses. Ret pladsholderne.'])),
+    missing: error.missing.map(m => ({ placeholder: m.placeholder, label: PLACEHOLDERS[m.placeholder], fields: m.fields })) };
   if (error instanceof LoyaltyError) return { ok: false, error: error.code };
   if (error instanceof AuthorityError) return { ok: false, error: error.status === 401 ? 'unauthorized' : 'forbidden' };
   return { ok: false, error: 'unavailable' };
 }
 
-export async function saveProgramSettings(input: unknown): Promise<ActionResult<{ version: number; changed: number }>> {
+export async function saveProgramSettings(input: unknown): Promise<ActionResult<{ version: number; changed: number; textVersion: number }>> {
   const parsed = saveSettingsSchema.safeParse(input);
   if (!parsed.success) {
     const fields: Record<string, string> = {};
@@ -42,7 +49,7 @@ export async function saveProgramSettings(input: unknown): Promise<ActionResult<
 }
 
 // Switches a created program on or off from the overview; saved as a new settings version.
-export async function setProgramActiveAction(input: unknown): Promise<ActionResult<{ version: number; changed: number }>> {
+export async function setProgramActiveAction(input: unknown): Promise<ActionResult<{ version: number; changed: number; textVersion: number }>> {
   const parsed = setProgramActiveSchema.safeParse(input);
   if (!parsed.success) return { ok: false, error: 'invalid_input' };
   try {

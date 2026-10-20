@@ -17,6 +17,8 @@ import { setProgramActiveAction } from './actions';
 export type ProgramStatus = 'all' | 'active' | 'inactive';
 const ERRORS: Record<string, string> = {
   settings_incomplete: 'Udfyld indstillingerne (belønning, vilkår og samtykketekst), før programmet aktiveres.',
+  texts_incomplete: 'Teksterne mangler oplysninger, fx CVR-nr. eller kontakt-e-mail. Åbn indstillingerne for at se, hvad der mangler.',
+  texts_invalid: 'Teksterne indeholder en ukendt pladsholder. Ret dem under indstillingerne.',
   invalid_reward_reference: 'Et produkt eller en kategori i belønningen findes ikke længere. Ret belønningen under Rediger.',
   record_changed: 'Programmet er ændret af en anden. Siden er opdateret; prøv igen.',
   forbidden: 'Du har ikke adgang til at ændre dette program.',
@@ -113,6 +115,7 @@ export function ProgramsOverview({ rows, available, status, editHref }: {
               {confirm?.active
                 ? 'Kunder kan hverken optjene stempler, tilmelde sig eller indløse belønninger, før programmet aktiveres igen. Stempler og belønninger bevares.'
                 : 'Kunder kan tilmelde sig, optjene stempler og indløse belønninger med de gemte indstillinger.'}
+              {!confirm?.active && confirm?.termsChanged && ' Vilkårene er ændret siden sidst og udgives som en ny version. Væsentlige ændringer kræver 30 dages varsel til medlemmerne (vilkårenes afsnit 10).'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

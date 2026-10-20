@@ -16,6 +16,8 @@ export const COLLECTIONS = {
   loginTokens: 'loyaltyLoginTokens',
   sessions: 'loyaltySessions',
   mailOutbox: 'loyaltyMailOutbox',
+  textVersions: 'loyaltyTextVersions',
+  renderedTexts: 'loyaltyRenderedTexts',
 } as const;
 
 export const EVENT_TYPES = [
@@ -55,6 +57,8 @@ export type MemberDoc = {
   // Newsletter consent as collected by the program. Sign-up requires it; withdrawing it keeps the membership.
   consent: { status: 'given' | 'withdrawn'; at: number; source: 'portal' | 'omnisend'; eventId: string; version?: string };
   termsVersion: string;
+  // Published text version and hash of the filled texts the member saw (loyaltyRenderedTexts/{textHash}).
+  textVersion?: number; textHash?: string;
   // Incremented to revoke every customer-portal session (logout everywhere, deletion).
   sessionEpoch: number;
   // Latest stamp, redemption or correction, for the admin member list.
@@ -63,7 +67,18 @@ export type MemberDoc = {
   qrTokenId?: string | null;
 };
 
-export type ProgramDoc = { brandId: string; version: number; settings: ProgramSettings };
+// The published text version, kept apart from the settings the admin form sends.
+// It is counted up when an active program is saved with a different textKey.
+export type ProgramTextsMeta = { version: number; effectiveFrom: number | null; key: string | null; templateVersion: string | null };
+export const NO_TEXTS: ProgramTextsMeta = { version: 0, effectiveFrom: null, key: null, templateVersion: null };
+export type ProgramDoc = { brandId: string; version: number; settings: ProgramSettings; texts: ProgramTextsMeta };
+
+function readTexts(value: unknown): ProgramTextsMeta {
+  const t = value as Partial<ProgramTextsMeta> | undefined;
+  if (!t || !Number.isSafeInteger(t.version) || t.version! < 0) return NO_TEXTS;
+  return { version: t.version!, effectiveFrom: typeof t.effectiveFrom === 'number' ? t.effectiveFrom : null,
+    key: typeof t.key === 'string' ? t.key : null, templateVersion: typeof t.templateVersion === 'string' ? t.templateVersion : null };
+}
 
 export const hashKey = (...parts: string[]) => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
 export const memberIdentityKey = (brandId: string, email: string) => hashKey('loyalty-member', brandId, normalizeEmail(email));
@@ -82,8 +97,8 @@ export function readProgram(brandId: string, data: unknown): ProgramDoc {
   const row = data as Partial<ProgramDoc> | undefined;
   const parsed = programSettingsSchema.safeParse(row?.settings);
   if (!row || row.brandId !== brandId || !parsed.success || !Number.isSafeInteger(row.version))
-    return { brandId, version: 0, settings: defaultProgramSettings('') };
-  return { brandId, version: row.version!, settings: parsed.data };
+    return { brandId, version: 0, settings: defaultProgramSettings(''), texts: NO_TEXTS };
+  return { brandId, version: row.version!, settings: parsed.data, texts: readTexts((row as { texts?: unknown }).texts) };
 }
 
 // A new card freezes the rules it was issued under; later setting changes apply to later cards.

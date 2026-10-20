@@ -169,6 +169,68 @@ Menuen **Loyalitet** har nu tre punkter: **Oversigt**, **Stempelkort** og **Kund
 
 mPanel-genveje: `orderfly.stamp_cards:overview` åbner oversigten, og `orderfly.customer_score:view` åbner kundescoren.
 
+## Standardtekster for samtykke og vilkår
+
+Plan: [standardtekster-analyse-og-plan.md](standardtekster-analyse-og-plan.md) (godkendt 2026-10-19).
+
+**Skabelonen** ligger i koden i `src/lib/loyalty/stamp-card/texts.ts` (`TEMPLATE_VERSIONS`).
+- Der er fire tekster: samtykketekst, forklaring under samtykket, accept af vilkår og vilkår.
+- En udgivet version ændres aldrig. En ændring tilføjes som en ny version sidst i listen og går gennem review.
+- En test låser hashen af hver udgivet version.
+- Platformens superuser ser alle versioner under System → **Stempelkort-tekster** (`/superadmin/settings/stamp-card-texts`): version, dato, ændring, status og hvor mange brands der bruger den. "Vis" åbner versionen. Siden kan kun læses.
+
+**Pladsholdere** udfyldes, når kunden ser teksten, så en ændret indstilling slår igennem med det samme.
+- Fra brandet (Brands → Rediger):
+  - `{brand_navn}` (navn)
+  - `{virksomhed_navn}` (juridisk navn)
+  - `{virksomhed_adresse}` (gade, postnr. og by)
+  - `{cvr}`
+  - `{kontakt_email}` (support-e-mail)
+  - `{privatlivspolitik_url}`
+- Fra stempelkortet: `{programnavn}`, `{minimumsbeløb}`, `{antal_stempler}`, `{belønning}`, `{belønning_gyldighed}`, `{stempel_gyldighed}`, `{stempler_pr_køb}`, `{maks_stempler_pr_dag}` og `{aldersgrænse}` (ny indstilling, standard 15 år).
+- Fra tekstversionen: `{version}` og `{gældende_fra}`.
+- `{opbevaring_efter_ophør}` findes ikke (ejerbeslutning 2026-10-19). Vilkårenes afsnit 8 beskriver i stedet deaktivering og sletning på anmodning.
+- Afsnit 10 lover ikke, at belønninger kan indløses i varslingsperioden, når programmet lukker, fordi "Deaktivér" stopper indløsning med det samme (ejerbeslutning 2026-10-20).
+
+**Betingede afsnit:** `{#hvis rabat_giver_stempel}…{/hvis}` og `{#hvis ikke …}`. `flere_stempler_pr_køb` er sand, når et køb giver mere end ét stempel. Standardteksten bruger da flertal: "Du får N stempler", "Stemplerne registreres" og "fjernes de stempler".
+- `dagsgrænse` er sand, når "maks. stempler pr. medlem pr. dag" er sat. Standardteksten nævner da grænsen.
+- Kanalerne afgør, hvilken af tre sætninger afsnit 3 bruger: `restaurant_og_takeaway`, `kun_restaurant` eller `kun_takeaway`.
+  - Restaurant er dine-in ved kassen.
+  - Takeaway er takeaway ved kassen. Orderfly-ordrer (afhentning/levering) giver endnu ikke stempler og nævnes derfor ikke. Når den automatiske stempling slås til, skal skabelonen og tekstnøglen udvides.
+  - Med begge kanaler er teksten den godkendte (ejerbeslutning 2026-10-20). `flere_afdelinger` er sand, når kortet gælder på tværs, og brandet har mere end én aktiv afdeling. Et betinget afsnit starter og slutter på samme linje. En linje, der bliver tom, fjernes.
+
+**I admin** (Stempelkort → Rediger → Tekster, rettigheden `orderfly.stamp_cards:settings`):
+- Et nyt stempelkort får en kopi af den aktuelle standardtekst.
+- **Gendan standardtekst** sætter de fire tekster tilbage efter en bekræftelse. Det gemmes først med "Gem indstillinger".
+- Kommer der en ny standardversion, vises en besked. Teksten opdateres aldrig automatisk.
+- Ukendte pladsholdere og ulukkede betingelser vises med det samme og afvises på serveren, også for et inaktivt program.
+- Mangler en værdi (fx CVR-nr.), vises den i en liste, og programmet kan ikke aktiveres (`texts_incomplete`).
+  - Brandfelter rettes under Brands. Linket vises kun for platformens superuser, som er den eneste, der kan redigere brands.
+  - Andre ser "Kontakt en platformsadministrator".
+- **Forhåndsvisning** bruger samme funktion som portalen og viser teksten, som den bliver, når programmet er aktivt og gemt.
+- Ændres teksterne eller en regel, som teksterne nævner, for et aktivt program, skal brugeren bekræfte en advarsel om 30 dages varsel (vilkårenes afsnit 10).
+
+**Versioner og samtykkelog:**
+- En ny tekstversion udgives, når et aktivt program gemmes med ændrede tekster eller ændrede regler, som teksterne nævner. Versionen gælder fra gemmetidspunktet.
+- Ændringer i brandets stamdata (fx adresse) giver ikke en ny version.
+- Hver version gemmes uforanderligt i `loyaltyTextVersions` og vises under fanen **Tekstversioner**: version, gældende fra, udgivet af, standardtekst og antal tilmeldte medlemmer. "Vis" viser præcis den udfyldte tekst.
+- **Ved tilmelding:**
+  - Samtykkeloggen gemmer den udfyldte samtykketekst inkl. forklaringen.
+  - Medlemmet får `textVersion` og `textHash`.
+  - De udfyldte tekster, kunden så, gemmes i `loyaltyRenderedTexts`. Er brandets oplysninger ændret siden udgivelsen, vises den variant også under versionen.
+- **Ny tekst undervejs:** Ændres den udfyldte tekst, mens kunden står på siden, afviser serveren tilmeldingen (`program_changed`), og kunden skal sætte flueben igen.
+
+**Kunden ser aldrig en uudfyldt pladsholder:** Mangler en brandoplysning i et aktivt program (fx hvis CVR-nr. slettes), lukkes tilmeldingen, og fejlen logges. Eksisterende medlemmer ser stadig deres kort.
+
+**Portalen:**
+- Tilmeldingen viser forklaringen under samtykkefeltet.
+- Ordet "vilkårene" i accept-teksten er et link til `/club/vilkaar`.
+- Profilen viser forklaringen ved ny tilmelding til nyhedsbrevet.
+
+**Drift før brug:** Udfyld juridisk navn, adresse, CVR-nr., support-e-mail og link til privatlivspolitik på brandet under Brands. Vilkårene bør gennemlæses juridisk før lancering.
+
+**Test:** `tests/unit/loyalty-stamp-card-texts.cjs` (skabelon, pladsholdere, betingelser, aktivering, versioner, samtykkelog, forhåndsvisning = portal og brandgrænser) og `tests/unit/loyalty-admin-browser.cjs` (forhåndsvisning, gendan, manglende oplysninger og advarsel om varsel ved 390 og 1440 px).
+
 ## Fase 2 – kundeportal
 
 Plan: [fase-2-analyse-og-plan.md](fase-2-analyse-og-plan.md).

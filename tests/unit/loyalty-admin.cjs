@@ -67,14 +67,14 @@ test('settings save a new version, log old and new values with the employee, and
   const read=await admin.readSettings(db,who('leder'),'brand');
   assert.equal(read.version,1);assert.deepEqual(read.products,[{id:'pizza',name:'Pizza'}]);
   const result=await admin.saveSettings(db,who('leder'),{brandId:'brand',version:1,settings:settings({stampsRequired:10,name:'Esmeralda Club'})},NOW);
-  assert.deepEqual(result,{version:2,changed:1});
+  assert.deepEqual(result,{version:2,changed:1,textVersion:1});
   const program=db.rows.get('loyaltyPrograms/brand');
   assert.equal(program.version,2);assert.equal(program.settings.stampsRequired,10);assert.equal(program.updatedByName,'Leder');
   assert.equal(db.rows.get('loyaltyProgramVersions/brand_2').settings.stampsRequired,10);
   const [event]=rows('loyaltyEvents');
   assert.equal(event.type,'settings_changed');assert.equal(event.actorName,'Leder');assert.equal(event.createdAt,NOW);
   assert.deepEqual(event.result.changes,[{field:'stampsRequired',from:2,to:10}]);
-  assert.deepEqual(await admin.saveSettings(db,who('leder'),{brandId:'brand',version:2,settings:settings({stampsRequired:10})},NOW),{version:2,changed:0});
+  assert.deepEqual(await admin.saveSettings(db,who('leder'),{brandId:'brand',version:2,settings:settings({stampsRequired:10})},NOW),{version:2,changed:0,textVersion:1});
   const log=await admin.listEvents(db,who('leder'),{brandIds:['brand'],from:'2026-10-20',to:'2026-10-20',type:'settings_changed',actorId:null,channel:null});
   assert.equal(log.rows[0].details,'stampsRequired: 2 → 10');
 });
@@ -104,7 +104,7 @@ test('the overview lists only created stamp cards per permitted brand and switch
   assert.deepEqual(await admin.listPrograms(db,who('fremmed'),['brand']),[]);
   assert.deepEqual(await admin.listPrograms(db,who('kasse'),['brand']),[]);
   const off=await admin.setProgramActive(db,who('leder'),{brandId:'brand',version:1,active:false},NOW);
-  assert.deepEqual(off,{version:2,changed:1});
+  assert.deepEqual(off,{version:2,changed:1,textVersion:0});
   assert.equal(db.rows.get('loyaltyPrograms/brand').settings.active,false);
   assert.deepEqual(rows('loyaltyEvents')[0].result.changes,[{field:'active',from:true,to:false}]);
   await rejects(admin.setProgramActive(db,who('leder'),{brandId:'brand',version:1,active:true},NOW),'record_changed');
