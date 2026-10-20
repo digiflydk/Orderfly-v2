@@ -1,6 +1,6 @@
 'use client';
 import { useCallback, useSyncExternalStore } from 'react';
-import { brandSlugFromHost, storefrontPath } from '@/lib/brand-subdomain';
+import { brandSlugFromHost, orderEntryUrl, storefrontPath } from '@/lib/brand-subdomain';
 
 const subscribe = () => () => {};
 
@@ -15,4 +15,9 @@ export function useStorefrontPath(slug: string | null | undefined) {
 // For event handlers (router.push), where the browser host is always known.
 export function browserStorefrontPath(slug: string, ...segments: string[]) {
   return storefrontPath(slug, brandSlugFromHost(window.location.host) === slug, ...segments);
+}
+
+// "Bestil nu": on orderfly.dk this is an absolute URL on the brand subdomain.
+export function browserOrderEntryUrl(slug: string, ...segments: string[]) {
+  return orderEntryUrl(window.location.host, slug, ...segments);
 }

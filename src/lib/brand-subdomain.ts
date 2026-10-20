@@ -112,3 +112,15 @@ export function storefrontSegments(pathname: string | null | undefined, slug: st
   const segments = (pathname ?? '').split('/').filter(Boolean);
   return segments[0] === slug ? segments.slice(1) : segments;
 }
+
+/**
+ * Where "Bestil nu" sends the customer (#282 follow-up). On orderfly.dk the
+ * storefront continues on the brand's own subdomain, so the address shows the
+ * short form from then on; every other host keeps the in-app path.
+ */
+export function orderEntryUrl(host: string | null | undefined, slug: string, ...segments: string[]): string {
+  const current = (host ?? '').trim().toLowerCase().replace(/:\d+$/, '');
+  const onApex = current === ROOT_DOMAIN || current === `www.${ROOT_DOMAIN}`;
+  if (!onApex || brandSlugError(slug)) return storefrontPath(slug, brandSlugFromHost(host) === slug, ...segments);
+  return `${brandSubdomainUrl(slug)}${storefrontPath(slug, true, ...segments)}`;
+}
