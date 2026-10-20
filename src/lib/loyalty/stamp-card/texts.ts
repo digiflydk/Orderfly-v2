@@ -29,6 +29,7 @@ export const PLACEHOLDERS = {
   stempel_gyldighed: 'Kortets gyldighed ved inaktivitet (måneder)',
   'aldersgrænse': 'Aldersgrænse',
   'stempler_pr_køb': 'Stempler pr. kvalificerende køb',
+  maks_stempler_pr_dag: 'Maks. stempler pr. medlem pr. dag',
   version: 'Tekstens versionsnummer',
   'gældende_fra': 'Tekstens gældende-fra-dato',
 } as const;
@@ -37,6 +38,10 @@ export type Placeholder = keyof typeof PLACEHOLDERS;
 export const CONDITIONS = {
   rabat_giver_stempel: 'Rabat- og kampagneordrer giver stempel',
   'flere_stempler_pr_køb': 'Et køb giver mere end ét stempel',
+  'dagsgrænse': 'Der er en grænse for stempler pr. dag',
+  restaurant_og_takeaway: 'Både køb i restauranten og takeaway giver stempel',
+  kun_restaurant: 'Kun køb i restauranten giver stempel',
+  kun_takeaway: 'Kun takeaway bestilt direkte giver stempel',
   flere_afdelinger: 'Kortet gælder på tværs af flere afdelinger',
 } as const;
 export type Condition = keyof typeof CONDITIONS;
@@ -126,6 +131,7 @@ export type BrandTextSource = Partial<Record<'name' | 'companyName' | 'street' |
 export type TextSettings = {
   name: string; minimumAmountOre: number; stampsRequired: number; rewardDescription: string; rewardValidityMonths: number;
   cardValidityMonths: number; minimumAge: number; discountedOrdersQualify: boolean; crossLocation: boolean; stampsPerPurchase: number;
+  counterChannels: readonly string[]; orderTypes: readonly string[]; maxStampsPerDay: number | null;
 };
 
 const str = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -149,17 +155,21 @@ export const lowerFirst = (text: string) => /^\p{Lu}\p{Ll}/u.test(text) ? text[0
 
 export function textValues(input: { brand: BrandTextSource; settings: TextSettings; activeLocations: number; version: number | null; effectiveFrom: number | null }): TextValues {
   const { brand, settings: s } = input, reward = s.rewardDescription.trim();
+  // The terms name the channels that give stamps: dine-in at the counter, and takeaway ordered
+  // directly (takeaway at the counter or an Orderfly pickup/delivery order).
+  const restaurant = s.counterChannels.includes('dine_in'), takeaway = s.counterChannels.includes('takeaway') || s.orderTypes.length > 0;
   return {
     values: {
       brand_navn: str(brand.name), programnavn: str(s.name), virksomhed_navn: str(brand.companyName), virksomhed_adresse: brandAddress(brand),
       cvr: str(brand.companyRegNo), kontakt_email: str(brand.supportEmail), privatlivspolitik_url: str(brand.privacyUrl),
       'minimumsbeløb': formatKr(s.minimumAmountOre), antal_stempler: String(s.stampsRequired), 'belønning': reward ? lowerFirst(reward) : null,
       'belønning_gyldighed': String(s.rewardValidityMonths), stempel_gyldighed: String(s.cardValidityMonths), 'aldersgrænse': String(s.minimumAge),
-      'stempler_pr_køb': String(s.stampsPerPurchase),
+      'stempler_pr_køb': String(s.stampsPerPurchase), maks_stempler_pr_dag: s.maxStampsPerDay === null ? null : String(s.maxStampsPerDay),
       version: input.version ? String(input.version) : null, 'gældende_fra': input.effectiveFrom ? danishDate(input.effectiveFrom) : null,
     },
     conditions: { rabat_giver_stempel: s.discountedOrdersQualify, flere_afdelinger: s.crossLocation && input.activeLocations > 1,
-      'flere_stempler_pr_køb': s.stampsPerPurchase > 1 },
+      'flere_stempler_pr_køb': s.stampsPerPurchase > 1, 'dagsgrænse': s.maxStampsPerDay !== null,
+      restaurant_og_takeaway: restaurant && takeaway, kun_restaurant: restaurant && !takeaway, kun_takeaway: takeaway && !restaurant },
   };
 }
 
@@ -169,7 +179,8 @@ export function textValues(input: { brand: BrandTextSource; settings: TextSettin
 export function textKey(settings: ProgramTexts & TextSettings) {
   const s = settings;
   return JSON.stringify([TEXT_FIELDS.map(f => s[f]), s.name, s.minimumAmountOre, s.stampsRequired, s.rewardDescription.trim(),
-    s.rewardValidityMonths, s.cardValidityMonths, s.minimumAge, s.discountedOrdersQualify, s.crossLocation, s.stampsPerPurchase]);
+    s.rewardValidityMonths, s.cardValidityMonths, s.minimumAge, s.discountedOrdersQualify, s.crossLocation, s.stampsPerPurchase,
+    [...s.counterChannels].sort(), [...s.orderTypes].sort(), s.maxStampsPerDay]);
 }
 
 type PublishedTexts = { version: number; effectiveFrom: number | null; key: string | null };
@@ -212,9 +223,11 @@ Medlemskab er gratis og personligt. Du skal være mindst {aldersgrænse} år for
 Medlemskab kræver, at du tilmelder dig vores nyhedsbrev. Afmelder du dig senere nyhedsbrevet, beholder du dit medlemskab, dine stempler og dine belønninger.
 
 3. Sådan optjener du stempler
-{#hvis ikke flere_stempler_pr_køb}Du får ét stempel{/hvis}{#hvis flere_stempler_pr_køb}Du får {stempler_pr_køb} stempler{/hvis}, hver gang du køber for mindst {minimumsbeløb} kr. hos {brand_navn}. Beløbet er det betalte beløb inkl. moms efter eventuel rabat.
+{#hvis ikke flere_stempler_pr_køb}Du får ét stempel{/hvis}{#hvis flere_stempler_pr_køb}Du får {stempler_pr_køb} stempler{/hvis}, hver gang du køber for mindst {minimumsbeløb} kr. hos {brand_navn}. Beløbet er det betalte beløb inkl. moms efter eventuel rabat.{#hvis dagsgrænse} Du kan højst få {maks_stempler_pr_dag} stempler pr. dag.{/hvis}
 
-Stempler gives ved køb i restauranten og ved takeaway, som du bestiller direkte hos os. Køb via Wolt, Uber Eats og andre udbydere giver ikke stempler.
+{#hvis restaurant_og_takeaway}Stempler gives ved køb i restauranten og ved takeaway, som du bestiller direkte hos os. Køb via Wolt, Uber Eats og andre udbydere giver ikke stempler.{/hvis}
+{#hvis kun_restaurant}Stempler gives ved køb i restauranten. Takeaway og køb via Wolt, Uber Eats og andre udbydere giver ikke stempler.{/hvis}
+{#hvis kun_takeaway}Stempler gives ved takeaway, som du bestiller direkte hos os. Køb i restauranten og køb via Wolt, Uber Eats og andre udbydere giver ikke stempler.{/hvis}
 {#hvis rabat_giver_stempel}Køb med rabatkode eller kampagnetilbud giver også stempler.{/hvis}
 {#hvis ikke rabat_giver_stempel}Køb med rabatkode eller kampagnetilbud giver ikke stempler.{/hvis}
 

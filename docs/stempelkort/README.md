@@ -187,11 +187,16 @@ Plan: [standardtekster-analyse-og-plan.md](standardtekster-analyse-og-plan.md) (
   - `{cvr}`
   - `{kontakt_email}` (support-e-mail)
   - `{privatlivspolitik_url}`
-- Fra stempelkortet: `{programnavn}`, `{minimumsbeløb}`, `{antal_stempler}`, `{belønning}`, `{belønning_gyldighed}`, `{stempel_gyldighed}`, `{stempler_pr_køb}` og `{aldersgrænse}` (ny indstilling, standard 15 år).
+- Fra stempelkortet: `{programnavn}`, `{minimumsbeløb}`, `{antal_stempler}`, `{belønning}`, `{belønning_gyldighed}`, `{stempel_gyldighed}`, `{stempler_pr_køb}`, `{maks_stempler_pr_dag}` og `{aldersgrænse}` (ny indstilling, standard 15 år).
 - Fra tekstversionen: `{version}` og `{gældende_fra}`.
 - `{opbevaring_efter_ophør}` findes ikke (ejerbeslutning 2026-10-19). Vilkårenes afsnit 8 beskriver i stedet deaktivering og sletning på anmodning.
 
-**Betingede afsnit:** `{#hvis rabat_giver_stempel}…{/hvis}` og `{#hvis ikke …}`. `flere_stempler_pr_køb` er sand, når et køb giver mere end ét stempel. Standardteksten siger da "Du får N stempler" i stedet for "Du får ét stempel". `flere_afdelinger` er sand, når kortet gælder på tværs, og brandet har mere end én aktiv afdeling. Et betinget afsnit starter og slutter på samme linje. En linje, der bliver tom, fjernes.
+**Betingede afsnit:** `{#hvis rabat_giver_stempel}…{/hvis}` og `{#hvis ikke …}`. `flere_stempler_pr_køb` er sand, når et køb giver mere end ét stempel. Standardteksten siger da "Du får N stempler" i stedet for "Du får ét stempel".
+- `dagsgrænse` er sand, når "maks. stempler pr. medlem pr. dag" er sat. Standardteksten nævner da grænsen.
+- Kanalerne afgør, hvilken af tre sætninger afsnit 3 bruger: `restaurant_og_takeaway`, `kun_restaurant` eller `kun_takeaway`.
+  - Restaurant er dine-in ved kassen.
+  - Takeaway er takeaway ved kassen eller en Orderfly-ordre (afhentning/levering).
+  - Med begge kanaler er teksten den godkendte (ejerbeslutning 2026-10-20). `flere_afdelinger` er sand, når kortet gælder på tværs, og brandet har mere end én aktiv afdeling. Et betinget afsnit starter og slutter på samme linje. En linje, der bliver tom, fjernes.
 
 **I admin** (Stempelkort → Rediger → Tekster, rettigheden `orderfly.stamp_cards:settings`):
 - Et nyt stempelkort får en kopi af den aktuelle standardtekst.
