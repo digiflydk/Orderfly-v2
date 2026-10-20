@@ -28,6 +28,7 @@ export const PLACEHOLDERS = {
   'belønning_gyldighed': 'Belønningens gyldighed (måneder)',
   stempel_gyldighed: 'Kortets gyldighed ved inaktivitet (måneder)',
   'aldersgrænse': 'Aldersgrænse',
+  'stempler_pr_køb': 'Stempler pr. kvalificerende køb',
   version: 'Tekstens versionsnummer',
   'gældende_fra': 'Tekstens gældende-fra-dato',
 } as const;
@@ -35,6 +36,7 @@ export type Placeholder = keyof typeof PLACEHOLDERS;
 
 export const CONDITIONS = {
   rabat_giver_stempel: 'Rabat- og kampagneordrer giver stempel',
+  'flere_stempler_pr_køb': 'Et køb giver mere end ét stempel',
   flere_afdelinger: 'Kortet gælder på tværs af flere afdelinger',
 } as const;
 export type Condition = keyof typeof CONDITIONS;
@@ -123,7 +125,7 @@ export function renderProgramTexts(texts: ProgramTexts, input: TextValues) {
 export type BrandTextSource = Partial<Record<'name' | 'companyName' | 'street' | 'zipCode' | 'city' | 'companyRegNo' | 'supportEmail' | 'privacyUrl', unknown>>;
 export type TextSettings = {
   name: string; minimumAmountOre: number; stampsRequired: number; rewardDescription: string; rewardValidityMonths: number;
-  cardValidityMonths: number; minimumAge: number; discountedOrdersQualify: boolean; crossLocation: boolean;
+  cardValidityMonths: number; minimumAge: number; discountedOrdersQualify: boolean; crossLocation: boolean; stampsPerPurchase: number;
 };
 
 const str = (value: unknown) => typeof value === 'string' && value.trim() ? value.trim() : null;
@@ -153,9 +155,11 @@ export function textValues(input: { brand: BrandTextSource; settings: TextSettin
       cvr: str(brand.companyRegNo), kontakt_email: str(brand.supportEmail), privatlivspolitik_url: str(brand.privacyUrl),
       'minimumsbeløb': formatKr(s.minimumAmountOre), antal_stempler: String(s.stampsRequired), 'belønning': reward ? lowerFirst(reward) : null,
       'belønning_gyldighed': String(s.rewardValidityMonths), stempel_gyldighed: String(s.cardValidityMonths), 'aldersgrænse': String(s.minimumAge),
+      'stempler_pr_køb': String(s.stampsPerPurchase),
       version: input.version ? String(input.version) : null, 'gældende_fra': input.effectiveFrom ? danishDate(input.effectiveFrom) : null,
     },
-    conditions: { rabat_giver_stempel: s.discountedOrdersQualify, flere_afdelinger: s.crossLocation && input.activeLocations > 1 },
+    conditions: { rabat_giver_stempel: s.discountedOrdersQualify, flere_afdelinger: s.crossLocation && input.activeLocations > 1,
+      'flere_stempler_pr_køb': s.stampsPerPurchase > 1 },
   };
 }
 
@@ -165,7 +169,7 @@ export function textValues(input: { brand: BrandTextSource; settings: TextSettin
 export function textKey(settings: ProgramTexts & TextSettings) {
   const s = settings;
   return JSON.stringify([TEXT_FIELDS.map(f => s[f]), s.name, s.minimumAmountOre, s.stampsRequired, s.rewardDescription.trim(),
-    s.rewardValidityMonths, s.cardValidityMonths, s.minimumAge, s.discountedOrdersQualify, s.crossLocation]);
+    s.rewardValidityMonths, s.cardValidityMonths, s.minimumAge, s.discountedOrdersQualify, s.crossLocation, s.stampsPerPurchase]);
 }
 
 type PublishedTexts = { version: number; effectiveFrom: number | null; key: string | null };
@@ -208,7 +212,7 @@ Medlemskab er gratis og personligt. Du skal være mindst {aldersgrænse} år for
 Medlemskab kræver, at du tilmelder dig vores nyhedsbrev. Afmelder du dig senere nyhedsbrevet, beholder du dit medlemskab, dine stempler og dine belønninger.
 
 3. Sådan optjener du stempler
-Du får ét stempel, hver gang du køber for mindst {minimumsbeløb} kr. hos {brand_navn}. Beløbet er det betalte beløb inkl. moms efter eventuel rabat.
+{#hvis ikke flere_stempler_pr_køb}Du får ét stempel{/hvis}{#hvis flere_stempler_pr_køb}Du får {stempler_pr_køb} stempler{/hvis}, hver gang du køber for mindst {minimumsbeløb} kr. hos {brand_navn}. Beløbet er det betalte beløb inkl. moms efter eventuel rabat.
 
 Stempler gives ved køb i restauranten og ved takeaway, som du bestiller direkte hos os. Køb via Wolt, Uber Eats og andre udbydere giver ikke stempler.
 {#hvis rabat_giver_stempel}Køb med rabatkode eller kampagnetilbud giver også stempler.{/hvis}

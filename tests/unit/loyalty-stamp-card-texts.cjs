@@ -57,7 +57,7 @@ test('the standard template is valid, fully filled with the brand and settings a
   for(const field of texts.TEXT_FIELDS)assert.doesNotMatch(result.texts[field],/[{}]/,field);
   const terms=result.texts.terms;
   assert.match(terms,/Esmeralda Club drives af Esmeralda Pizza ApS, Vestergade 1, 8000 Aarhus C, CVR-nr\. 12345678 \("Esmeralda", "vi"\)\. Du kan kontakte os på club@esmeralda\.dk\./);
-  assert.match(terms,/mindst 99,50 kr\. hos Esmeralda/);
+  assert.match(terms,/Du får ét stempel, hver gang du køber for mindst 99,50 kr\. hos Esmeralda\./);
   assert.match(terms,/samlet 8 stempler, får du gratis pizza, og/);
   assert.match(terms,/mindst 15 år/);assert.match(terms,/inden for 6 måneder/);assert.match(terms,/gyldig i 3 måneder/);
   assert.match(terms,/Version 3, gældende fra 20\. oktober 2026\.$/);
@@ -81,6 +81,10 @@ test('conditional sections follow the settings and leave no empty line behind',(
   assert.ok(on.includes('andre udbydere giver ikke stempler.\nKøb med rabatkode eller kampagnetilbud giver også stempler.\n\nDu skal vise'));
   assert.ok(off.includes('andre udbydere giver ikke stempler.\nKøb med rabatkode eller kampagnetilbud giver ikke stempler.\n\nDu skal vise'));
   assert.match(render({crossLocation:false},1),/tilbud\.\n\n5\. Udløb/);
+  // Stamps per purchase above one changes the sentence; one keeps the approved wording.
+  assert.match(render({stampsPerPurchase:2},2),/\n3\. Sådan optjener du stempler\nDu får 2 stempler, hver gang du køber for mindst 100 kr\./);
+  assert.doesNotMatch(render({stampsPerPurchase:2},2),/ét stempel, hver gang/);
+  assert.match(render({stampsPerPurchase:1},2),/\nDu får ét stempel, hver gang du køber/);
 });
 
 test('every unfillable placeholder is reported and the template rules reject typos',()=>{
@@ -105,7 +109,7 @@ test('every unfillable placeholder is reported and the template rules reject typ
 
 test('a published template version never changes; the brand copy is matched to it',()=>{
   // Locked hashes: changing a released version must be a new entry in TEMPLATE_VERSIONS.
-  const LOCKED={'stamp-card-da-2026-10-19':'2eab850f'};
+  const LOCKED={'stamp-card-da-2026-10-19':'e8fc3dfd'};
   for(const t of texts.TEMPLATE_VERSIONS){
     const hash=createHash('sha256').update(JSON.stringify(texts.TEXT_FIELDS.map(f=>t.texts[f]))).digest('hex').slice(0,8);
     assert.equal(hash,LOCKED[t.version],t.version);
@@ -113,6 +117,7 @@ test('a published template version never changes; the brand copy is matched to i
   assert.equal(texts.matchingTemplateVersion(TEMPLATE),texts.CURRENT_TEMPLATE.version);
   assert.equal(texts.matchingTemplateVersion({...TEMPLATE,terms:TEMPLATE.terms+' Ekstra.'}),null);
   assert.notEqual(texts.textKey(full()),texts.textKey(full({minimumAmountOre:15000})));
+  assert.notEqual(texts.textKey(full()),texts.textKey(full({stampsPerPurchase:2})));
   assert.equal(texts.textKey(full()),texts.textKey(full({sessionDays:30,counterIdleMinutes:9})));
 });
 

@@ -187,11 +187,11 @@ Plan: [standardtekster-analyse-og-plan.md](standardtekster-analyse-og-plan.md) (
   - `{cvr}`
   - `{kontakt_email}` (support-e-mail)
   - `{privatlivspolitik_url}`
-- Fra stempelkortet: `{programnavn}`, `{minimumsbeløb}`, `{antal_stempler}`, `{belønning}`, `{belønning_gyldighed}`, `{stempel_gyldighed}` og `{aldersgrænse}` (ny indstilling, standard 15 år).
+- Fra stempelkortet: `{programnavn}`, `{minimumsbeløb}`, `{antal_stempler}`, `{belønning}`, `{belønning_gyldighed}`, `{stempel_gyldighed}`, `{stempler_pr_køb}` og `{aldersgrænse}` (ny indstilling, standard 15 år).
 - Fra tekstversionen: `{version}` og `{gældende_fra}`.
 - `{opbevaring_efter_ophør}` findes ikke (ejerbeslutning 2026-10-19). Vilkårenes afsnit 8 beskriver i stedet deaktivering og sletning på anmodning.
 
-**Betingede afsnit:** `{#hvis rabat_giver_stempel}…{/hvis}` og `{#hvis ikke …}`. `flere_afdelinger` er sand, når kortet gælder på tværs, og brandet har mere end én aktiv afdeling. Et betinget afsnit starter og slutter på samme linje. En linje, der bliver tom, fjernes.
+**Betingede afsnit:** `{#hvis rabat_giver_stempel}…{/hvis}` og `{#hvis ikke …}`. `flere_stempler_pr_køb` er sand, når et køb giver mere end ét stempel. Standardteksten siger da "Du får N stempler" i stedet for "Du får ét stempel". `flere_afdelinger` er sand, når kortet gælder på tværs, og brandet har mere end én aktiv afdeling. Et betinget afsnit starter og slutter på samme linje. En linje, der bliver tom, fjernes.
 
 **I admin** (Stempelkort → Rediger → Tekster, rettigheden `orderfly.stamp_cards:settings`):
 - Et nyt stempelkort får en kopi af den aktuelle standardtekst.
