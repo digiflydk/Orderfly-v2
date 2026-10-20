@@ -1,3 +1,5 @@
+import { orderEntryUrl } from '@/lib/brand-subdomain';
+
 export const M3PIZZA_MENU_PATH = '/esmeralda/amager';
 
 export type M3PizzaDeliveryMethod = 'delivery' | 'pickup';
@@ -13,6 +15,16 @@ export function getM3PizzaMenuHref(
 ): string {
   const deliveryMethod = normalizeM3PizzaDeliveryMethod(value);
   return `${M3PIZZA_MENU_PATH}?deliveryMethod=${deliveryMethod}`;
+}
+
+// The order entry on orderfly.dk continues on the brand subdomain
+// (https://esmeralda.orderfly.dk/amager); other hosts keep the relative path.
+export function getM3PizzaOrderEntryUrl(
+  host: string | null | undefined,
+  value: string | null | undefined,
+): string {
+  const [, brandSlug, locationSlug] = M3PIZZA_MENU_PATH.split('/');
+  return `${orderEntryUrl(host, brandSlug, locationSlug)}?deliveryMethod=${normalizeM3PizzaDeliveryMethod(value)}`;
 }
 
 export function persistM3PizzaDeliveryMethod(

@@ -73,6 +73,13 @@ test('#12 middleware rewrites brand subdomains and keeps the apex and www behavi
   assert.equal(mw.resolveProductionRedirect(new URL('https://esmeralda.orderfly.dk/'), 'esmeralda.orderfly.dk', 'https'), null);
 });
 
+test('/m3pizza/order on orderfly.dk continues on esmeralda.orderfly.dk; local hosts stay relative', () => {
+  const { run } = middlewareFor();
+  assert.deepEqual(run('https://orderfly.dk/m3pizza/order?deliveryMethod=delivery'), { kind: 'redirect', url: 'https://esmeralda.orderfly.dk/amager?deliveryMethod=delivery', status: 308 });
+  assert.deepEqual(run('https://backend.internal/m3pizza/order', { 'x-forwarded-host': 'orderfly.dk' }), { kind: 'redirect', url: 'https://esmeralda.orderfly.dk/amager?deliveryMethod=pickup', status: 308 });
+  assert.deepEqual(run('http://localhost:3000/m3pizza/order?deliveryMethod=delivery'), { kind: 'redirect', url: 'http://localhost:3000/esmeralda/amager?deliveryMethod=delivery', status: 308 });
+});
+
 test('#12 reserved slugs are rejected and duplicates suggest free alternatives when saving', async () => {
   const f = fixture();
   const reserved = await f.brands.createOrUpdateBrand(null, formData({ ...brand, slug: 'admin', ownerName: 'QA Owner', ownerEmail: 'qa@example.test' }));

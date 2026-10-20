@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { getM3PizzaMenuHref } from '@/lib/m3pizza-order-flow';
+import { getM3PizzaOrderEntryUrl } from '@/lib/m3pizza-order-flow';
 import { brandSlugFromHost, brandSubdomainRewrite } from '@/lib/brand-subdomain';
 
 const CANONICAL_HOST = 'orderfly.dk';
@@ -60,7 +60,7 @@ export function middleware(request: NextRequest) {
   if (pathname === '/m3pizza/order') {
     const requestedMethod = request.nextUrl.searchParams.get('deliveryMethod');
     return NextResponse.redirect(
-      new URL(getM3PizzaMenuHref(requestedMethod), request.url),
+      new URL(getM3PizzaOrderEntryUrl(request.headers.get('x-forwarded-host') ?? request.headers.get('host'), requestedMethod), request.url),
       308,
     );
   }
