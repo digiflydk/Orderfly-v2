@@ -44,6 +44,8 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const [editor, setEditor] = useState<{ scope: string; item?: Item } | null>(null);
   const [sessionLost, setSessionLost] = useState(false);
   const sessionEpoch = useRef(0);
+  const readGeneration = useRef(0);
+  const readController = useRef<AbortController | null>(null);
   const [savedScope, setSavedScope] = useState('');
   const location = locations.find(row => row.id === locationId && row.brandId === brandId);
   const scope = JSON.stringify([brandId, location?.id || '']);
@@ -54,32 +56,41 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const loseSession = () => { sessionEpoch.current += 1; setSessionLost(true); setEditor(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
   const key = JSON.stringify([brandId, location?.id || '', after, refresh]);
   const current = result?.key === key ? result : null;
+  const openEditor = (item?: Item) => {
+    if (editor || !current?.page || sessionLost || (item ? !canEdit || item.configuration.state !== 'disabled' : !canCreate)) return;
+    // Invalidate synchronously, before React effects run: an older GET401 must
+    // never close a new editor or abort an already authenticated save.
+    readGeneration.current += 1; readController.current?.abort();
+    setSavedScope(''); setEditor({ scope, ...(item ? { item } : {}) });
+  };
 
   useEffect(() => {
     if (editor && (!location || editor.scope !== scope || (editor.item ? !canEdit : !canCreate))) setEditor(null);
   }, [editor, location, scope, canCreate, canEdit]);
 
   useEffect(() => {
-    if (!brandId || !locationId || !locations.some(row => row.id === locationId && row.brandId === brandId)) return;
-    const controller = new AbortController();
+    if (editor || !brandId || !locationId || !locations.some(row => row.id === locationId && row.brandId === brandId)) return;
+    const controller = new AbortController(); readController.current = controller;
+    const generation = ++readGeneration.current;
     let active = true;
     const epoch = sessionEpoch.current;
+    const isCurrent = () => active && !controller.signal.aborted && generation === readGeneration.current && epoch === sessionEpoch.current;
     const query = new URLSearchParams({ brandId, locationId, limit: '20', ...(after ? { after } : {}) });
     fetch('/api/merchant/printers?' + query, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal })
       .then(async response => {
-        if (response.status === 401 && active && scopeRef.current === scope && epoch === sessionEpoch.current) loseSession();
+        if (response.status === 401 && isCurrent() && scopeRef.current === scope) loseSession();
         if (!response.ok) throw Error(response.status === 401 ? 'Din session er udløbet. Log ind igen.'
           : response.status === 403 ? 'Du har ikke adgang til printerne på denne lokation.'
           : 'Printerne kunne ikke indlæses. Prøv igen.');
         return readPage(await response.json(), brandId, locationId, after);
       })
-      .then(page => { if (active && epoch === sessionEpoch.current) { setSessionLost(false); setResult({ key, page }); } })
+      .then(page => { if (isCurrent()) { setSessionLost(false); setResult({ key, page }); } })
       .catch(error => {
-        if (active && !controller.signal.aborted && epoch === sessionEpoch.current) setResult({ key, error: error instanceof Error && error.message !== 'invalid_response'
+        if (isCurrent()) setResult({ key, error: error instanceof Error && error.message !== 'invalid_response'
           && /^(Din session|Du har ikke adgang|Printerne kunne)/.test(error.message) ? error.message : 'Printerne kunne ikke indlæses. Prøv igen.' });
       });
-    return () => { active = false; controller.abort(); };
-  }, [brandId, locationId, after, refresh, key, locations]);
+    return () => { active = false; controller.abort(); if (readController.current === controller) readController.current = null; };
+  }, [brandId, locationId, after, refresh, key, locations, editor]);
 
   const stateLabels = { active: 'Aktiv', paused: 'På pause', disabled: 'Deaktiveret' };
   return <div className="space-y-6 min-w-0">
@@ -103,7 +114,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
     </div>
     {sessionLost && !current?.error && <p role="alert">Din session er udløbet. Log ind igen.</p>}
     {savedScope === scope && <p role="status">Printeropsætningen er gemt som deaktiveret.</p>}
-    {location && canCreate && !editor && <Button onClick={() => { setSavedScope(''); setEditor({ scope }); }}>Tilføj printer</Button>}
+    {location && canCreate && current?.page && !editor && <Button onClick={() => openEditor()}>Tilføj printer</Button>}
     {location && !sessionLost && editor?.scope === scope && (editor.item ? canEdit : canCreate) && <PrinterConfigurationForm
       key={JSON.stringify([scope, editor.item?.configuration.id || '', editor.item?.revision || 0])}
       brandId={brandId} locationId={location.id} item={editor.item}
@@ -128,14 +139,14 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
                     <dt className="text-muted-foreground">Papirbredde</dt><dd>{c.paperWidthMm} mm</dd>
                     <dt className="text-muted-foreground">Revision</dt><dd>{revision}</dd>
                   </dl>
-                  {canEdit && c.state === 'disabled' && <Button className="h-auto max-w-full whitespace-normal break-words text-left" variant="outline" disabled={!!editor} onClick={() => { setSavedScope(''); setEditor({ scope, item: { configuration: c, revision } }); }}>Rediger {c.name}</Button>}
+                  {canEdit && c.state === 'disabled' && <Button className="h-auto max-w-full whitespace-normal break-words text-left" variant="outline" disabled={!!editor} onClick={() => openEditor({ configuration: c, revision })}>Rediger {c.name}</Button>}
                   <p className="text-xs text-muted-foreground">Opsætningen viser ikke, om printeren er online eller har udskrevet en bon.</p>
                 </CardContent>
               </Card>)}
             </div>}
             <div className="flex flex-wrap gap-3">
-              {after && <Button variant="outline" onClick={() => setAfter('')}>Første side</Button>}
-              {current.page?.nextCursor && <Button variant="outline" onClick={() => setAfter(current.page!.nextCursor!)}>Næste side</Button>}
+              {after && <Button variant="outline" disabled={!!editor} onClick={() => setAfter('')}>Første side</Button>}
+              {current.page?.nextCursor && <Button variant="outline" disabled={!!editor} onClick={() => setAfter(current.page!.nextCursor!)}>Næste side</Button>}
             </div>
           </>}
       </section>}

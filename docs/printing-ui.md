@@ -88,7 +88,7 @@ revoked writes with continuing view access. `printing-ui-browser.cjs` additional
 executes actual React forms with intercepted fixture API calls:201 create and200
 revisioned edit at desktop/mobile widths, exact credential-free bodies,
 unsupported choices, pending submit,400/401/403/404/409/503 handling, view-only
-and disabled-state affordances, revoked metadata, late201/401 server-context and scope changes, foreign/wrong-revision success rejection, and a pre-expiry GET completing after mutation401.
+and disabled-state affordances, revoked metadata, late201/401 server-context and scope changes, foreign/wrong-revision success rejection, and initial-load gating and an obsolete GET401 racing either a successful201 or uncertain503 write.
 Screenshots use `printing-config-*.png`. Fixture writes never reach production.
 
 The configuration-write flag remains default-off. Live read-only login checks
@@ -101,3 +101,13 @@ option `disabled` property and exercise keyboard navigation to the last enabled
 choice, then verify the exact submitted HTTP/58mm DTO. Playwright's generic
 form-control disabled matcher does not establish native option disabledness.
 The stronger interaction check runs at both desktop and mobile fixture sizes.
+
+Overview reads cannot run concurrently with an editor/save. Create is offered
+only after a validated successful page; opening either editor synchronously
+invalidates the read generation and aborts any existing GET before React effects
+run. The read effect suspends while editing, including same-scope metadata
+refreshes, and both pagination controls are locked. Closing/settling then refreshing
+starts a new GET. An old read401 cannot close the form and abort a transaction
+that may commit. The fixture holds a background GET401 alongside a write and
+verifies both201 success and uncertain503 handling remain visible and the write
+settles before refresh, with no new reads while editing.

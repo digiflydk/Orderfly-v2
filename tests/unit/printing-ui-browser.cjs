@@ -281,19 +281,61 @@ test('foreign, wrong-revision or generic unavailable outcomes require refresh', 
   }
 });
 
-test('earlier GET success cannot repopulate rows after a mutation expires the session', async t => {
-  const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
-  let release, started; const pending = new Promise(resolve => { started = resolve; });
-  await page.route('**/api/merchant/printers**', async route => {
-    if (route.request().method() !== 'GET') return route.fulfill({ status: 401, json: { error: 'unauthorized' } });
-    started(); await new Promise(resolve => { release = resolve; });
-    await route.fulfill({ json: { items: [item('STALE')], nextCursor: null } });
-  });
-  await page.goto(origin + '?writes'); await choose(page); await pending; await fillNew(page);
-  await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click();
-  await expect(page.getByRole('alert')).toHaveText('Din session er udløbet. Log ind igen.');
-  release();
-  await expect(page.getByText('Køkken STALE', { exact: true })).toHaveCount(0);
-  await expect(page.getByRole('form', { name: 'Tilføj printer' })).toHaveCount(0);
-  await expect(page.getByRole('alert')).toHaveText('Din session er udløbet. Log ind igen.');
+test('initial reads gate create and an obsolete GET401 cannot interrupt write201 or uncertain503', async t => {
+  for (const writeStatus of [201, 503]) {
+    const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
+    let getCount = 0, releaseInitial, releaseOld, releaseWrite, initialStarted, oldStarted, writeStarted, oldSettled;
+    const initialPending = new Promise(resolve => { initialStarted = resolve; });
+    const oldPending = new Promise(resolve => { oldStarted = resolve; });
+    const writePending = new Promise(resolve => { writeStarted = resolve; });
+    const oldFinished = new Promise(resolve => { oldSettled = resolve; });
+    await page.route('**/api/merchant/printers**', async route => {
+      const request = route.request();
+      if (request.method() === 'GET') {
+        getCount++;
+        if (getCount === 1) {
+          initialStarted(); await new Promise(resolve => { releaseInitial = resolve; });
+          return route.fulfill({ json: { items: Array.from({ length: 20 }, (_, i) => item('p' + String(i + 1).padStart(2, '0'))), nextCursor: 'p20' } });
+        }
+        if (getCount === 2) {
+          oldStarted(); await new Promise(resolve => { releaseOld = resolve; });
+          await route.fulfill({ status: 401, json: { error: 'unauthorized' } }).catch(() => {}); oldSettled(); return;
+        }
+        return route.fulfill({ json: { items: [], nextCursor: null } });
+      }
+      const configuration = request.postDataJSON().configuration;
+      writeStarted(); await new Promise(resolve => { releaseWrite = resolve; });
+      return route.fulfill({ status: writeStatus, json: writeStatus === 201 ? { item: { configuration, revision: 1 } } : { error: 'printers_unavailable' } });
+    });
+    await page.goto(origin + '?writes'); await choose(page); await initialPending;
+    await expect(page.getByRole('status')).toHaveText('Indlæser printere…');
+    await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
+    releaseInitial(); await expect(page.getByText('Køkken p01', { exact: true })).toBeVisible();
+    // A same-scope server metadata refresh starts a background read while the
+    // last validated page is visible. Opening the editor must abort this read.
+    await page.evaluate(() => window.setPrinterWriteScopes([{ id: 'la', brandId: 'a' }])); await oldPending;
+    await fillNew(page);
+    await expect(page.getByRole('button', { name: 'Næste side', exact: true })).toBeDisabled();
+    await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click(); await writePending;
+    // New props while editing must not start any further GET or cancel POST.
+    await page.evaluate(() => window.setPrinterWriteScopes([{ id: 'la', brandId: 'a' }]));
+    releaseOld(); await oldFinished;
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    assert.equal(getCount, 2);
+    await expect(page.getByRole('form', { name: 'Tilføj printer' })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Gemmer…' })).toBeDisabled();
+    await expect(page.getByRole('alert')).toHaveCount(0);
+    releaseWrite();
+    if (writeStatus === 201) {
+      await expect(page.getByText('Printeropsætningen er gemt som deaktiveret.', { exact: true })).toBeVisible();
+      await expect(page.getByRole('form', { name: 'Tilføj printer' })).toHaveCount(0);
+    } else {
+      await expect(page.getByRole('alert')).toHaveText('Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.');
+      await expect(page.getByRole('form', { name: 'Tilføj printer' })).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Gem deaktiveret printer' })).toBeDisabled();
+      await page.getByRole('button', { name: 'Opdater oversigten', exact: true }).click();
+    }
+    await expect(page.getByText('Ingen printere på denne lokation.', { exact: true })).toBeVisible();
+    assert.equal(getCount, 3);
+  }
 });
