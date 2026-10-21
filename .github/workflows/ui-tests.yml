@@ -86,6 +86,9 @@ jobs:
       - name: Kitchen receipt preview regression
         run: node --test tests/unit/printing-receipts.cjs
 
+      - name: Kitchen PNG payload regression
+        run: node --test tests/unit/printing-kitchen-png.cjs
+
       - name: Combined print-intent batch regression
         run: node --test tests/unit/printing-outbox-batch.cjs
 
