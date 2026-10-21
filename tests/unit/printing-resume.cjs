@@ -138,12 +138,14 @@ test('competing same/different receipts have exactly one resume and all remainin
 
 test('receipt consumption, capability invalidation, printer update and audit all roll back on audit or commit failure', async () => {
   for (const failure of ['audit', 'commit']) {
-    const f = setup(), receipt = (await issue(f)).receipt;
+    const f = setup({ extra: [[queuePath, metadata()], ['locations/location/printerCapabilityVerifications/p1', { trusted: true }]] });
+    const receipt = (await issue(f)).receipt;
     const seeded = structuredClone([...f.records]);
     const broken = setup({ extra: seeded, ...(failure === 'audit' ? { failAudit: true } : { beforeCommit: () => { throw Error('PRIVATE_SENTINEL'); } }) });
     const before = structuredClone([...broken.records]); const r = await broken.request('POST', command(receipt));
     assert.equal(r.status, 503); assert.deepEqual(r.body, { error: 'printers_unavailable' });
     assert.deepEqual([...broken.records], before); assert.equal(broken.records.get(reviewPath(receipt)).consumedAt, null);
+    assert.deepEqual(broken.records.get('locations/location/printerCapabilityVerifications/p1'), { trusted: true });
     assert.equal(broken.commits.length, 0);
   }
 });
