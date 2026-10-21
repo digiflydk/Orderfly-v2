@@ -20,19 +20,25 @@ const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 export function SignupForm({ slug, base, program }: { slug: string; base: string; program: Program }) {
   const router = useRouter();
   const [name, setName] = useState(''), [email, setEmail] = useState('');
-  const [consent, setConsent] = useState(false), [terms, setTerms] = useState(false);
+  const acceptanceVersion = JSON.stringify([program.consentVersion, program.termsVersion, program.campaigns?.version ?? null]);
+  const [acceptance, setAcceptance] = useState({ version: acceptanceVersion, consent: false, terms: false });
+  // Bind ticks to the exact displayed text/offer in this render. A passive
+  // effect would leave a brief stale-acceptance window after refreshed props.
+  const consent = acceptance.version === acceptanceVersion && acceptance.consent;
+  const terms = acceptance.version === acceptanceVersion && acceptance.terms;
+  if (acceptance.version !== acceptanceVersion) setAcceptance({ version: acceptanceVersion, consent: false, terms: false });
+  const choose = (field: 'consent' | 'terms', value: boolean) => setAcceptance(previous => ({
+    version: acceptanceVersion,
+    consent: previous.version === acceptanceVersion && previous.consent,
+    terms: previous.version === acceptanceVersion && previous.terms,
+    [field]: value,
+  }));
   // The word "vilkårene" in the acceptance text links to the terms (shown in a new tab).
   const termsHref = `${base}/vilkaar`, at = program.termsAccept.indexOf('vilkårene');
   const linked = at < 0 ? null : [program.termsAccept.slice(0, at), program.termsAccept.slice(at + 'vilkårene'.length)] as const;
   const [errors, setErrors] = useState<Errors>({}), [busy, setBusy] = useState(false), [sentTo, setSentTo] = useState<string | null>(null);
-  const shown = useRef(program);
   const summary = useRef<HTMLParagraphElement>(null);
 
-  // New texts from the server (after "program_changed") require fresh ticks.
-  useEffect(() => {
-    if (shown.current.consentVersion === program.consentVersion && shown.current.termsVersion === program.termsVersion) return;
-    shown.current = program; setConsent(false); setTerms(false);
-  }, [program]);
   useEffect(() => { if (errors.form) summary.current?.focus(); }, [errors.form]);
 
   async function submit(event: React.FormEvent) {
@@ -49,11 +55,11 @@ export function SignupForm({ slug, base, program }: { slug: string; base: string
     }
     setBusy(true);
     const answer = await portalRequest(slug, 'signup', { name: name.trim(), email: email.trim(), newsletterConsent: true, termsAccepted: true,
-      consentVersion: program.consentVersion, termsVersion: program.termsVersion });
+      consentVersion: program.consentVersion, termsVersion: program.termsVersion, campaignVersion: program.campaigns?.version });
     setBusy(false);
     if (answer.ok) { setSentTo(email.trim()); return; }
     if (answer.error === 'program_changed') {
-      setErrors({ form: 'Teksterne er blevet opdateret. Læs dem igen, og sæt dine flueben.' });
+      setErrors({ form: 'Teksterne er blevet opdateret, eller kampagnefordelene har ændret sig. Læs dem igen, og sæt dine flueben.' });
       router.refresh();
       return;
     }
@@ -86,7 +92,7 @@ export function SignupForm({ slug, base, program }: { slug: string; base: string
       </div>
       <div className="flex flex-col gap-2">
         <div className="commerce-newsletter flex items-start gap-3 rounded-xl border p-4">
-          <Checkbox id="club-consent" checked={consent} onCheckedChange={value => setConsent(value === true)} className="mt-1 h-5 w-5"
+          <Checkbox id="club-consent" checked={consent} onCheckedChange={value => choose('consent', value === true)} className="mt-1 h-5 w-5"
             aria-invalid={!!errors.consent} aria-describedby={describedBy('consent')} />
           <Label htmlFor="club-consent" className="whitespace-pre-line text-base font-normal leading-relaxed">{program.consentText}</Label>
         </div>
@@ -95,7 +101,7 @@ export function SignupForm({ slug, base, program }: { slug: string; base: string
       </div>
       <div className="flex flex-col gap-2">
         <div className="flex items-start gap-3">
-          <Checkbox id="club-terms" checked={terms} onCheckedChange={value => setTerms(value === true)} className="mt-1 h-5 w-5"
+          <Checkbox id="club-terms" checked={terms} onCheckedChange={value => choose('terms', value === true)} className="mt-1 h-5 w-5"
             aria-invalid={!!errors.terms} aria-describedby={describedBy('terms')} />
           <Label htmlFor="club-terms" className="text-base font-normal leading-relaxed">
             {linked ? <>{linked[0]}<a href={termsHref} target="_blank" rel="noopener" className="underline underline-offset-4">vilkårene</a>{linked[1]}</> : program.termsAccept}

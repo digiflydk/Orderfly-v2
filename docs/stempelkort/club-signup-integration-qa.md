@@ -28,3 +28,11 @@ only; source corrections remain owned by their respective implementation tasks.
 This evidence is isolated service integration QA. It does not prove production
 Firebase transaction contention, checkout UI, payment-provider behavior, deployment
 or production live acceptance. Those remain separate coordinator release gates.
+
+Independent review added a two-offer regression: checkout selects `d2` while the
+standalone page advertises stable first offer `d1`. Changing `d2` must invalidate
+the campaign fingerprint both before preflight and between preflight and the
+signup transaction, with no customer, membership, consent, bonus or mail writes.
+The new case failed with “Missing expected rejection” on `5852c71d`; coordinator
+fix `d4c9dbb2` makes all 30 integration cases pass. This check used synthetic
+memory records only.

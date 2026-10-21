@@ -246,6 +246,26 @@ test('expiry of an advertised welcome offer changes its fingerprint before signu
  assert.deepEqual(snapshot(db),before);
 });
 
+test('checkout fingerprints every eligible Club offer when the best offer is not the standalone choice',async()=>{
+ for(const phase of ['preflight','commit']){
+  const db=fixture();
+  db.rows.set('discounts/d2',{...db.rows.get('discounts/d1'),discountValue:40});
+  const brand=await m.resolveBrand(db,'esmeralda'),shown=await m.programForPortal(db,brand,NOW);
+  assert.equal(shown.campaigns.discount.id,'d1','standalone projection retains its stable first offer');
+  const i=await input(db,{discountId:'d2',campaignVersion:shown.campaigns.version});
+  assert.equal((await checkout.validateClubCheckoutSignup(i)).eligible,true);
+  const change=()=>{db.rows.get('discounts/d2').discountValue=5};
+  if(phase==='preflight')change();
+  else{
+   const original=db.runTransaction;let changed=false;
+   db.runTransaction=fn=>{if(!changed){changed=true;change()}return original(fn)};
+  }
+  await rejects(checkout.prepareClubCheckoutSignup(i),'program_changed');
+  for(const collection of ['customers','loyaltyMembers','loyaltyCards','loyaltyBonusGrants','loyaltySignupDiscountClaims','marketingConsents','loyaltyMailOutbox'])
+   assert.equal(rows(db,collection).length,0,`${phase}: stale secondary offer cannot write ${collection}`);
+ }
+});
+
 test('a dotted valid phone uses the shared normalizer and qualifies for the configured profile bonus',async()=>{
  const {updateMemberProfile}=loadTs('src/lib/loyalty/stamp-card/profile.ts',mocks);
  const db=fixture();db.rows.get('loyaltyCampaigns/'+BRAND).settings.profile.enabled=true;await signup(db);
