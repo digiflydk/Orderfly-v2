@@ -37,6 +37,8 @@ before(async () => {
     import { ProfileSettings } from ${src('app/[brandSlug]/club/profil/profile-settings')};
     import { ClubNav } from ${src('app/[brandSlug]/club/club-nav')};
     import { HomeScreenHint } from ${src('app/[brandSlug]/club/home-screen-hint')};
+    import { PortalFrame, EsmeraldaClubFooter } from ${src('app/[brandSlug]/club/portal-frame')};
+    import { portalPreset } from ${src('app/[brandSlug]/club/brand-preset')};
     const view = location.pathname.slice(1);
     window.__pathname = new URLSearchParams(location.search).get('path') || '/club';
     const node = view === 'signup' ? React.createElement(SignupForm, { slug: 'esmeralda', base: '/club', program: ${JSON.stringify(program)} })
@@ -48,7 +50,12 @@ before(async () => {
       : view === 'hint' ? React.createElement(HomeScreenHint, { slug: 'esmeralda' })
       : view === 'tracking' ? React.createElement(BrandTracking, { brand: { id: 'b', slug: 'esmeralda', gtmContainerId: 'GTM-X' } })
       : React.createElement('h1', null, 'Mit stempelkort');
-    createRoot(document.getElementById('root')).render(node);`);
+    const slug = new URLSearchParams(location.search).get('brand') || 'esmeralda';
+    const signedIn = ['card', 'profile', 'nav', 'hint'].includes(view);
+    const frame = React.createElement(PortalFrame, { slug, base: '/club', preset: portalPreset({slug, name:'Test Restaurant'}), brandName: 'Test Restaurant', signedIn,
+      program: {...${JSON.stringify(program)}, active:true, stampsRequired:8, rewardDescription:'Gratis pizza'} }, node);
+    createRoot(document.getElementById('root')).render(React.createElement(React.Fragment, null, frame,
+      slug === 'esmeralda' && React.createElement(EsmeraldaClubFooter, {onOpenCookieSettings:()=>{window.__cookieSettingsOpened=true;}})));`);
   const loader = write('loader.js', `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   await new Promise((resolve, reject) => webpackModule.webpack({
     mode: 'development', devtool: false, entry, output: { path: dir, filename: 'bundle.js' },
@@ -59,12 +66,14 @@ before(async () => {
     module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }, { test: /loyalty-portal-.*[\\/](entry|navigation|tracking|analytics|link)\.js$/, use: [loader] }] },
   }).run((error, stats) => error ? reject(error) : stats.hasErrors() ? reject(Error(stats.toString({ all: false, errors: true }))) : resolve()));
   execFileSync(path.join(root, 'node_modules/.bin/tailwindcss'), ['-c', path.join(root, 'tailwind.config.ts'), '-i', path.join(root, 'src/app/globals.css'), '-o', path.join(dir, 'styles.css'), '--minify'], { cwd: root, stdio: 'pipe' });
-  const styles = fs.readFileSync(path.join(dir, 'styles.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/styles/commerce-ui.css'), 'utf8');
+  const styles = fs.readFileSync(path.join(dir, 'styles.css'), 'utf8') + '\n' + fs.readFileSync(path.join(root, 'src/styles/commerce-ui.css'), 'utf8')
+    + '\n' + fs.readFileSync(path.join(root, 'src/app/[brandSlug]/club/esmeralda-club.css'), 'utf8');
   server = http.createServer((req, res) => {
     if (req.url === '/bundle.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(dir, 'bundle.js'))); }
     if (req.url === '/styles.css') { res.setHeader('content-type', 'text/css'); return res.end(styles); }
     res.setHeader('content-type', 'text/html; charset=utf-8');
-    res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div data-commerce-root data-brand-slug="esmeralda"><div data-loyalty-portal class="mx-auto flex w-full max-w-md flex-col px-4"><main id="root"></main></div></div><script src="/bundle.js"></script></body></html>');
+    const brand = new URL(req.url, 'http://localhost').searchParams.get('brand') === 'other' ? 'other' : 'esmeralda';
+    res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><div data-commerce-root data-brand-slug="'+brand+'"><div id="root"></div></div><script src="/bundle.js"></script></body></html>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = 'http://127.0.0.1:' + server.address().port;
@@ -75,6 +84,14 @@ after(async () => { await browser?.close(); await new Promise(resolve => server?
 // Answers the phase 1 API; `answers[path]` is a list of [status, body] or 'abort', used in order.
 async function open(view, { width = 390, hash = '', answers = {}, clock, init, device = {} } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 900 }, ...device });
+  // Optional local copies of the unchanged published assets for offline visual QA.
+  // This never replaces application/API responses or alters the production asset URLs.
+  if (process.env.CLUB_REFERENCE_ASSET_DIR) await page.route('https://cdn.prod.website-files.com/**', route => {
+    const url = route.request().url();
+    const file = url.endsWith('esmeralda-logo.png') ? 'logo.png' : url.endsWith('bourtonbase.woff2') ? 'heading.woff2'
+      : url.endsWith('BrandonTextOffice-Regular.ttf') ? 'body.ttf' : null;
+    return file ? route.fulfill({ path: path.join(process.env.CLUB_REFERENCE_ASSET_DIR, file) }) : route.continue();
+  });
   if (clock) await page.clock.install({ time: clock });
   if (init) await page.addInitScript(init.fn, init.arg);
   const calls = [];
@@ -90,6 +107,61 @@ async function open(view, { width = 390, hash = '', answers = {}, clock, init, d
   return { page, calls };
 }
 const noOverflow = page => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+
+for (const width of [320, 390, 820, 1440]) for (const view of ['login', 'signup']) test(`Esmeralda ${view} matches the website frame without overflow at ${width}px`, async () => {
+  const { page, calls } = await open(view, { width });
+  try {
+    await page.getByRole('heading', { level: 1 }).waitFor();
+    assert.equal(await page.getByRole('main').count(), 1);
+    assert.equal(await page.getByRole('banner').count(), 1);
+    assert.equal(await page.getByRole('contentinfo').count(), 1);
+    const home = page.getByRole('link', { name: 'Esmeralda Pizza & Restaurant forside' });
+    assert.equal(await home.getAttribute('href'), 'https://www.esmeraldapizza.dk');
+    const colors = await page.locator('.es-club-form-panel').evaluate(panel => ({
+      background: getComputedStyle(panel).backgroundColor,
+      heading: getComputedStyle(panel.querySelector('h1')).fontFamily,
+      input: getComputedStyle(panel.querySelector('input')).backgroundColor,
+      button: getComputedStyle(panel.querySelector('button[data-ui-variant="brand"]')).backgroundColor,
+      ink: getComputedStyle(panel.querySelector('button[data-ui-variant="brand"]')).color,
+    }));
+    assert.equal(colors.background, 'rgb(29, 29, 29)');
+    assert.equal(colors.input, 'rgb(18, 18, 18)');
+    assert.equal(colors.button, 'rgb(245, 174, 37)');
+    assert.equal(colors.ink, 'rgb(17, 17, 17)');
+    assert.match(colors.heading, /Bourton Base/);
+    if (width <= 1150) {
+      assert.equal(await page.getByRole('navigation', { name: 'Primær navigation', exact: true }).isVisible(), false);
+      await page.locator('.es-club-mobile-menu summary').click();
+      const navigation = page.getByRole('navigation', { name: 'Mobil navigation' });
+      await navigation.getByRole('link', { name: 'Bestil bord', exact: true }).waitFor();
+      assert.equal(await navigation.getByRole('link', { name: 'Bestil bord', exact: true }).getAttribute('href'), 'https://www.esmeraldapizza.dk/bordbooking');
+      assert.equal(await navigation.getByRole('link', { name: 'Pizza Club' }).getAttribute('href'), '/club');
+      await page.locator('.es-club-mobile-menu summary').click();
+    } else {
+      await page.getByRole('navigation', { name: 'Primær navigation', exact: true }).getByRole('link', { name: 'Pizza Club' }).waitFor();
+    }
+    await page.getByRole('button', { name: 'Cookieindstillinger', exact: true }).click();
+    assert.equal(await page.evaluate(() => window.__cookieSettingsOpened), true);
+    assert.ok(await noOverflow(page));
+    assert.equal(calls.length, 0, 'viewing the branding must not request login or sign-up');
+    if (process.env.CLUB_SCREENSHOT_DIR && [390, 1440].includes(width)) {
+      await page.evaluate(() => document.fonts.ready);
+      fs.mkdirSync(process.env.CLUB_SCREENSHOT_DIR, { recursive: true });
+      await page.screenshot({ path: path.join(process.env.CLUB_SCREENSHOT_DIR, `${view}-${width}.png`), fullPage: true });
+    }
+  } finally { await page.close(); }
+});
+
+test('the Esmeralda frame does not replace another brand\'s portal', async () => {
+  const { page } = await open('login', { hash: '?brand=other', width: 390 });
+  try {
+    await page.getByRole('heading', { level: 1 }).waitFor();
+    assert.equal(await page.locator('[data-esmeralda-club]').count(), 0);
+    assert.equal(await page.locator('[data-esmeralda-club-footer]').count(), 0);
+    assert.equal(await page.getByRole('link', { name: 'Test Restaurant', exact: true }).getAttribute('href'), '/club');
+    assert.ok(await noOverflow(page));
+  } finally { await page.close(); }
+});
 
 for (const width of [390, 1440]) test(`sign-up needs both unticked boxes, sends the shown versions and answers neutrally at ${width}px`, async () => {
   const { page, calls } = await open('signup', { width });
