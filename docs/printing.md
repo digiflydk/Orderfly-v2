@@ -49,8 +49,9 @@ configuration DTOs, not authentication or database ownership. Callers must first
 authorize an actor, load an authoritative location, and project it to `{id, brandId}`.
 `validatePrinterConfiguration` checks that the location, authorized scope and
 submitted configuration all agree. Names accept Danish characters, trim outer
-spaces and have an 80-character limit; controls and malformed identifiers are
-rejected. Unknown fields (including credentials or claimed capabilities) are
+spaces and have an 80-character limit; Unicode controls/formatting, line/paragraph
+separators, unpaired surrogates and malformed identifiers are rejected. Unknown
+fields (including credentials or claimed capabilities) are
 rejected. Return only the fixed error code, never raw input/Zod errors to logs or
 clients. Printer credentials require a separate private server store later.
 

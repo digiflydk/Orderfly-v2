@@ -43,6 +43,17 @@ test('malformed inputs, unknown enums, identifiers, names and incompatible hardw
   assert.equal(validate({ ...config, name: 'x'.repeat(80) }, scope, location).ok, true);
 });
 
+test('printer names reject Unicode controls, invisible formatting and line separators', () => {
+  for (const hidden of ['\u2028', '\u2029', '\u202e', '\u202a', '\u2066', '\u200b', '\u200d', '\ufeff', '\ud800']) {
+    for (const name of [`Pizza${hidden}køkken`, `${hidden}Pizza`, `Pizza${hidden}`]) {
+      assert.deepEqual(validate({ ...config, name }, scope, location), { ok: false, code: 'invalid_configuration' });
+    }
+  }
+  for (const name of ['ÆØÅ æøå', 'Køkken 2', 'Cafe\u0301', '厨房']) {
+    assert.equal(validate({ ...config, name }, scope, location).ok, true);
+  }
+});
+
 test('authoritative scope and loaded location must all agree', () => {
   for (const [input, authorized, reference, code] of [
     [{ ...config, brandId: 'other' }, scope, location, 'scope_mismatch'],
