@@ -337,8 +337,8 @@ this internal helper is never a browser-callable payment/acceptance endpoint.
 It returns `{jobId, created, apply()}`. Finish **all** transaction reads before
 calling `apply()`, then stage the caller's writes in the same transaction. Throwing
 or a failed commit rolls back everything. Prepare once per printer per transaction;
-a future multi-intent batch for one printer needs a combined queue delta, not
-multiple independent plans. Re-run preparation on each Firestore retry. The helper
+multi-intent callers now use the combined batch API described under#317 below,
+never multiple independent plans against the same printer. Re-run preparation on each Firestore retry. The helper
 does not start or commit its own transaction and does not perform network side
 effects. Applying a creation plan twice throws. A duplicate plan performs no writes.
 
@@ -539,7 +539,7 @@ or turn on the flag to obtain unattended QA. Physical output remains off.
 
 ## Verification and release
 
-Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs tests/unit/printing-queue-summary.cjs tests/unit/printing-queue-review.cjs tests/unit/printing-resume.cjs`
+Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs tests/unit/printing-outbox-batch.cjs tests/unit/printing-queue-summary.cjs tests/unit/printing-queue-review.cjs tests/unit/printing-resume.cjs`
 and `npm run typecheck`.
 There is no changed browser flow in this delivery.
 Follow `AGENTS.md` for current-head CI, independent Codex review, merge and release
@@ -592,3 +592,56 @@ retries and atomic rollback. Their serialized transaction fixture does not prove
 live Firestore contention. Authenticated production success/scope/expiry/single-use
 QA remains **BLOCKED** until a safe existing session and controlled reversible
 scenario are available; unattended verification must not seed production data.
+
+## Combined original-intent batch (#317 / P1.8a)
+
+`prepareOriginalPrintIntents(db, tx, { intents, reservedWriteCount })` prepares one
+combined plan in the caller's existing write transaction. Each strict intent uses
+only native brand/location/printer/order IDs and `kind:kitchen|packing`. It still
+requires an already eligible **persisted** order. No Pending-to-Received/Paid
+transition, Stripe/pickup wiring, route, transport, dispatch or activation is supplied;
+#303 must provide the separately reviewed trusted transition adapter first.
+
+The input contains 1..64 intents across at most16 native printer scopes. Duplicate
+original revision0 identities are collapsed in first-seen order. For every printer
+the helper re-reads native brand/location, strict nondeleted printer, all referenced
+orders, the ledger and the complete canonical bounded501/max500 job collection.
+It rejects invalid, foreign, legacy, inconsistent, expired/unknown-state or unsafe
+clock records without repair. Paused printers accept durable intent, never dispatch.
+After all checks, `jobs` distinguishes existing valid duplicates from newly prepared
+jobs; `createdCount` and `writeCount` describe only this plan's effects.
+
+Capacity checks apply to the **combined** new jobs per printer. At499 jobs, two new
+kitchen/packing identities are rejected together; duplicate+one new can reach500.
+At500, valid duplicates remain a no-op. Existing jobs and histories are unchanged.
+Each changed printer's ledger advances its revision once per batch, adds the full
+new-job count and preserves the actual oldest creation time. Its ledger is written
+exactly once, avoiding independently prepared last-write-wins deltas.
+
+The trusted caller must declare **all other transaction writes**, including the
+order mutation, in `reservedWriteCount` (0..500). Before apply, actual new-job writes
+plus one ledger write per changed printer plus this reservation must fit the500
+write application limit. The batch itself can use at most80 writes (64 jobs plus16
+ledgers). `write_budget_exceeded` and capacity errors must propagate and abort the
+caller transaction; never accept the order after swallowing outbox failure. This
+is a write-count bound, not a guarantee against Firestore document/transaction byte
+or runtime limits. Every caller must also keep its own other work bounded.
+
+Finish all caller reads before `apply()`, then stage its mutation in the same
+transaction. Reusing a mutating plan throws; retry by rerunning the whole transaction
+and prepare, which revalidates orders, printer state and current queue capacity.
+No helper-owned transaction or commit exists. The backwards-compatible
+`prepareOriginalPrintIntent` facade retains its one-intent DTO and duplicate no-op,
+with zero reserved writes as before. It remains limited to **one call per printer
+per transaction**. Multi-intent callers must use one batch for the entire transaction;
+independent prepared plans against the same printer are not composable.
+
+`tests/unit/printing-outbox-batch.cjs` executes the real helper with isolated
+read-before-write-enforcing transaction I/O. It covers combined capacity, mixed
+new/duplicate jobs, native ownership, paused state, multi-printer budget, full
+canonical validation, contention/retries and caller/job/ledger/commit rollback.
+Serialized fixtures are not live Firestore contention or authenticated end-to-end
+order acceptance proof. There is no new live endpoint to exercise in this delivery.
+After qualifying serialized release, verify the deployed release SHA and read-only
+public smoke; internal behavior is validated locally/CI. Unattended production
+writes, rules/index changes and config/output flag activation remain prohibited.
