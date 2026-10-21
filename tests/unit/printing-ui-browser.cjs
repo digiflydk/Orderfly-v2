@@ -1,5 +1,6 @@
 // Render the actual superadmin React overview with production CSS. Only API data
 // and server-provided authorized selector metadata are synthetic, never a login.
+// Shell regressions compose the real SuperAdminLayoutClient/sidebar and overview.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -23,14 +24,24 @@ before(async () => {
   const entry = path.join(dir, 'entry.js');
   fs.writeFileSync(entry, `import React from 'react';import {createRoot} from 'react-dom/client';
     import {PrinterOverview} from ${JSON.stringify(path.join(root, 'src/app/superadmin/printers/printer-overview.tsx'))};
+    import {SuperAdminLayoutClient} from ${JSON.stringify(path.join(root, 'src/components/superadmin/superadmin-layout-client.tsx'))};
     const writes = new URLSearchParams(location.search).has('writes') ? [{id:'la',brandId:'a'}] : [];
     function Fixture(){const [catalog,setCatalog]=React.useState({brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)}});window.setPrinterReadCatalog=setCatalog;const [scopes,setScopes]=React.useState(writes);const [deleteScopes,setDeleteScopes]=React.useState(writes);const [identity,setIdentity]=React.useState(0);window.resetPrinterContext=()=>setIdentity(value=>value+1);window.setPrinterWriteScopes=value=>{setScopes(value);setDeleteScopes(value);};window.setPrinterDeleteScopes=setDeleteScopes;return React.createElement(PrinterOverview,{key:identity,brands:[...catalog.brands],locations:[...catalog.locations],createLocations:scopes,editLocations:scopes,deleteLocations:deleteScopes});}
-    createRoot(document.getElementById('root')).render(React.createElement(Fixture));`);
+    const overview=React.createElement(Fixture);
+    createRoot(document.getElementById('root')).render(location.pathname==='/shell' ? React.createElement(SuperAdminLayoutClient,{centralAdmin:true,access:{superuser:true,permissions:['orderfly.catalog:view']}},overview) : overview);`);
+  const navigation = path.join(dir, 'navigation.js');
+  fs.writeFileSync(navigation, `export const usePathname=()=>'/superadmin/printers';export const useRouter=()=>({push(){},refresh(){}});export const useSearchParams=()=>new URLSearchParams();`);
+  const auth = path.join(dir, 'auth.js');
+  fs.writeFileSync(auth, `export async function getSuperadminUserContext(){return null;}`);
+  const link = path.join(dir, 'link.js');
+  fs.writeFileSync(link, `import React from 'react';export default function Link({href,children,...props}){return React.createElement('a',{href,...props},children);}`);
+  const picture = path.join(dir, 'image.js');
+  fs.writeFileSync(picture, `import React from 'react';export default function Image({priority,fill,src,...props}){return React.createElement('img',{src:'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22232%22 height=%2254%22/%3E',...props});}`);
   const loader = path.join(dir, 'loader.js');
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   await new Promise((resolve, reject) => webpackModule.webpack({ mode: 'development', devtool: false, entry,
     output: { path: dir, filename: 'bundle.js' },
-    resolve: { alias: { '@': path.join(root, 'src') }, extensions: ['.tsx', '.ts', '.js'], modules: [path.join(root, 'node_modules'), 'node_modules'] },
+    resolve: { alias: { '@/components/superadmin/admin-link': link, '@/lib/auth/superadmin-context': auth, 'next/navigation': navigation, 'next/image': picture, '@': path.join(root, 'src') }, extensions: ['.tsx', '.ts', '.js'], modules: [path.join(root, 'node_modules'), 'node_modules'] },
     module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }] },
   }).run((error, stats) => error ? reject(error) : stats.hasErrors() ? reject(Error(stats.toString({ all: false, errors: true }))) : resolve()));
   execFileSync(path.join(root, 'node_modules/.bin/tailwindcss'), ['-c', path.join(root, 'tailwind.config.ts'), '-i', path.join(root, 'src/app/globals.css'), '-o', path.join(dir, 'styles.css'), '--minify'], { cwd: root, stdio: 'pipe' });
@@ -39,7 +50,7 @@ before(async () => {
     if (req.url === '/bundle.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(dir, 'bundle.js'))); }
     if (req.url === '/styles.css') { res.setHeader('content-type', 'text/css'); return res.end(styles); }
     res.setHeader('content-type', 'text/html; charset=utf-8');
-    res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><main class="admin-shell min-h-screen bg-background p-4 md:p-8"><div id="root" class="mx-auto max-w-6xl"></div></main><script src="/bundle.js"></script></body></html>');
+    res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body>' + (req.url.split('?')[0] === '/shell' ? '<div id="root"></div>' : '<main class="admin-shell min-h-screen bg-background p-4 md:p-8"><div id="root" class="mx-auto max-w-6xl"></div></main>') + '<script src="/bundle.js"></script></body></html>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = 'http://127.0.0.1:' + server.address().port;
@@ -593,3 +604,54 @@ test('empty table keeps headers and offers continuation after eight empty native
  assert.deepEqual(requests, Array.from({ length: 9 }, (_, i) => 'l' + i));
  await expect(page.getByRole('button', { name: 'Næste side', exact: true })).toHaveCount(0);
 });
+
+
+for (const [name, width, height] of [['desktop', 1348, 900], ['mobile', 375, 667]]) {
+  test(`real admin shell contains printer table scroll in loading, empty and populated states at ${name} width`, async t => {
+    const context = await browser.newContext({ viewport: { width, height } }); t.after(() => context.close());
+    const page = await context.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
+    let populated = false, release;
+    const pending = new Promise(resolve => { release = resolve; });
+    await page.route('**/api/merchant/printers?*', async route => {
+      await pending;
+      const url = new URL(route.request().url()), brand = url.searchParams.get('brandId'), location = url.searchParams.get('locationId');
+      await route.fulfill({ json: { items: populated ? [item('long_' + location, brand, location, { name: 'Køkken ' + 'langt'.repeat(14), state: 'disabled' })] : [], nextCursor: null } });
+    });
+    const assertContained = async state => {
+      const geometry = await page.getByRole('table', { name: 'Printere', exact: true }).evaluate(table => {
+        const scroll = table.parentElement, inset = document.querySelector('.admin-shell > main');
+        return { pageWidth: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth,
+          internalWidth: scroll.clientWidth, internalScroll: scroll.scrollWidth, tableWidth: table.getBoundingClientRect().width,
+          overflowX: getComputedStyle(scroll).overflowX, insetWidth: inset.getBoundingClientRect().width };
+      });
+      fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+      await page.screenshot({ path: path.join(root, 'test-results', `printing-overview-real-shell-${name}-${state}.png`), fullPage: true });
+      assert.ok(geometry.pageWidth <= geometry.viewport + 1, `${name}/${state} whole-page overflow: ${JSON.stringify(geometry)}`);
+      assert.ok(geometry.tableWidth >= 1100, `${name}/${state} preserves full readable table width`);
+      assert.ok(geometry.internalScroll > geometry.internalWidth, `${name}/${state} table owns horizontal scrolling`);
+      assert.equal(geometry.overflowX, 'auto');
+      const scrolled = await page.getByRole('table', { name: 'Printere', exact: true }).evaluate(table => {
+        const scroll = table.parentElement; scroll.scrollLeft = scroll.scrollWidth; return scroll.scrollLeft;
+      });
+      assert.ok(scrolled > 0, `${name}/${state} internal scroll is usable`);
+      await page.getByRole('table', { name: 'Printere', exact: true }).evaluate(table => { table.parentElement.scrollLeft = 0; });
+    };
+    await page.goto(origin + '/shell');
+    await expect(page.getByRole('heading', { name: 'Printere', exact: true })).toBeVisible();
+    if (name === 'desktop') await expect(page.locator('[data-sidebar="sidebar"]').first()).toBeVisible();
+    await expect(page.getByRole('status')).toHaveText('Indlæser printere…');
+    await assertContained('loading');
+    release(); await expect(page.getByText('Ingen printere matcher filtrene på denne side.', { exact: true })).toBeVisible();
+    await assertContained('empty');
+    populated = true;
+    await page.evaluate(() => window.setPrinterReadCatalog({ brands: [{ id: 'a', name: 'Nord ' + 'langt'.repeat(18) }, { id: 'b', name: 'Syd ' + 'langt'.repeat(18) }], locations: [{ id: 'la', name: 'Station ' + 'langt'.repeat(18), brandId: 'a' }, { id: 'lb', name: 'Torv ' + 'langt'.repeat(18), brandId: 'b' }] }));
+    await page.getByRole('button', { name: 'Opdater', exact: true }).click();
+    await expect(page.getByRole('button', { name: /^Rediger Køkken / })).toHaveCount(2);
+    await assertContained('populated');
+    for (const label of ['Aktiveringsdato', 'Brand', 'Lokation', 'Status', 'Last used', 'Total printers', 'Printer name', 'Handlinger'])
+      await expect(page.getByRole('columnheader', { name: label, exact: true })).toHaveCount(1);
+    fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+    await page.screenshot({ path: path.join(root, 'test-results', `printing-overview-real-shell-${name}.png`), fullPage: true });
+    assert.deepEqual(errors, []);
+  });
+}

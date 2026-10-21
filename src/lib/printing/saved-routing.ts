@@ -82,7 +82,8 @@ async function nativeScope(context: NativeTransactionContext, scope: Scope) {
   for (const row of [brand, location]) if (field(row, 'isActive') !== undefined && field(row, 'isActive') !== true) return fail('reference_unverified', 409);
 }
 function membership(row: Row, locationId: string, allowGlobal: boolean) {
-  const raw = field(row, 'locationIds');
+  const value = field(row, 'locationIds');
+  const raw = value === undefined && allowGlobal ? [] : value;
   if (!Array.isArray(raw) || raw.length > 100) return fail('reference_unverified', 409);
   const ids: string[] = [];
   for (let index = 0; index < raw.length; index++) {
@@ -187,8 +188,23 @@ export async function readSavedPrinterRouting(input: unknown) {
   const db = getAdminDb();
   return db.runTransaction(async transaction => {
     const context = { db, transaction };
-    await authorize(context, session.identity, parsed.data, 'orderfly.catalog:view');
-    return prepareSavedPrinterRouting(context, parsed.data);
+    const scope = parsed.data;
+    await authorize(context, session.identity, scope, 'orderfly.catalog:view');
+    // Management must retain the owned document's revision so stale catalog
+    // references can be replaced. Scope/schema failures are never recoverable.
+    await nativeScope(context, scope);
+    const saved = readStored(await transaction.get(savedRef(context, scope)), scope);
+    const rules = saved?.rules || [];
+    let printers: Awaited<ReturnType<typeof references>> = Object.freeze([]);
+    let referencesVerified = true;
+    try {
+      printers = await references(context, scope, rules);
+    } catch (error) {
+      if (!(error instanceof SavedPrinterRoutingError) || error.code !== 'reference_unverified' || error.status !== 409) throw error;
+      referencesVerified = false;
+    }
+    return Object.freeze({ scope: Object.freeze(scope), revision: saved?.revision ?? null,
+      rules: immutableRules(rules), printers, referencesVerified, dispatchAuthorized: false as const });
   }, { readOnly: true });
 }
 export async function writeSavedPrinterRouting(input: unknown) {
@@ -213,6 +229,6 @@ export async function writeSavedPrinterRouting(input: unknown) {
     const next = { schemaVersion: 1 as const, id: 'original' as const, ...scope, revision, rules, deletedAt: null,
       createdAt: previous?.createdAt ?? timestamp, updatedAt: timestamp };
     if (previous) transaction.set(ref, next); else transaction.create(ref, next);
-    return Object.freeze({ scope: Object.freeze(scope), revision, rules: immutableRules(rules), printers, dispatchAuthorized: false as const });
+    return Object.freeze({ scope: Object.freeze(scope), revision, rules: immutableRules(rules), printers, referencesVerified: true as const, dispatchAuthorized: false as const });
   });
 }

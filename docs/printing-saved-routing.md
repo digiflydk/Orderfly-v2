@@ -28,7 +28,8 @@ The location-owned record is:
 
 It has strict schema version 1, ID `original`, brand/location, revision, rules,
 `deletedAt: null` and opaque server timestamp metadata. Missing routing returns
-revision `null` and empty rules/printers. It never falls back to all printers.
+revision `null`, empty rules/printers and `referencesVerified: true`. It never
+falls back to all printers.
 PUT with expected revision 0 creates only an absent document. Updates require the
 exact current revision and increment it, preserving creation time. Invalid stored
 identity/schema/scope/tombstones cannot be overwritten as an absent record.
@@ -37,17 +38,44 @@ actor principal hash, before/after rules and server timestamp. A failed audit or
 commit leaves both unchanged. There are only two writes per successful save and
 all native/catalog reads happen before either write.
 
-Every referenced printer is read from the current location, checked with the
+Saving a replacement and native dispatch preparation require strict current
+references. Every referenced printer is read from the current location, checked with the
 canonical printer storage/configuration schema, and must have the exact native
 brand/location. Disabled printers may be saved as drafts. Saving routing does not
 activate printers or enable print intent. Every product must be active, native to
 the brand and applicable to the location; canonical synthetic-product exclusions
-are retained. Every referenced category, including products' categories, must be
+are retained. For products only, omitted `locationIds` and an explicit empty list
+mean global applicability, matching the storefront/catalog/checkout contracts.
+Only an absent value is normalized: null, non-arrays, malformed/oversized lists,
+duplicates and lists naming another location still reject. Categories always
+require an explicit valid nonempty location list; this compatibility never
+changes their native membership requirement. Every referenced category, including products' categories, must be
 active and explicitly include the native location in its bounded location list.
 The actual Category model uses location membership as ownership, so a stale
 legacy `brandId` is not treated as authority. Missing, deleted, corrupt or foreign
-references reject the complete operation. A user can replace rules with a valid
-new set at the correct revision if an old referenced catalog item was removed.
+references reject saves and native preparation. A user can replace rules with a
+valid new set at the correct revision if an old referenced catalog item was removed.
+
+Management GET first reauthorizes the current superuser/catalog-view grant, native
+brand/location ownership and the strict, bounded location-owned saved document.
+These checks remain outside reference recovery: corrupt saved scope/schema,
+duplicate rule identities, tombstones or revoked access still reject the read.
+Only an expected `reference_unverified` 409 while validating the saved rules
+returns recoverable management state: the owned stored rules and actual revision,
+`printers: []`, `referencesVerified: false` and `dispatchAuthorized: false`. No
+partial printer snapshots, native foreign details or diagnostic cause are returned.
+Provider failures remain unavailable errors. A successful current reference check
+returns `referencesVerified: true`; successful PUT responses do too.
+
+This structural management snapshot is not validated preview/intent input. A
+client with `referencesVerified: false` must disable preview until rules have been
+repaired and validated. PUT still verifies all replacement references in its own
+revision-checked transaction, preserving the original rules in its atomic audit;
+clearing rules or replacing stale references does not bypass concurrent revision
+checks, write gates or rollback. #353 must update its strict management-response
+schema and missing-selector recovery in its own dependent UI PR before release.
+`prepareSavedPrinterRouting` retains its exact strict contract, without this flag
+or fallback, and always rejects stale references on every native transaction attempt.
 
 `prepareSavedPrinterRouting(context, {brandId, locationId})` exposes the same
 native validation for a future trusted order integration. It runs in the caller's
@@ -73,7 +101,14 @@ node --test tests/unit/printing-saved-routing.cjs tests/unit/printing-routing.cj
 These tests cover successful audited draft saves/readback/clear, anonymous and
 merchant rejection, current superuser/native scope, malformed/bounded inputs,
 reference ownership, revisions/concurrent creates, transaction retries, rollback,
-immutability and no secret/output fields. No browser flow changes in this API
+immutability and no secret/output fields. Review finding4339745805 was first
+reproduced through exported HTTP GET returning 409 without a repair revision. New
+GET-to-PUT tests cover inactive/deleted products/categories/printers, clear and
+replacement repairs, concurrent revision conflict, preserved before-audit and
+rollback, immutable stale snapshots, native revocation/retries, corrupt scope and
+duplicate rejection, and provider/foreign-detail non-disclosure. The prior mixed
+missing-printer assertion now explicitly separates recoverable management state
+from unchanged strict native preparation rejection; no strict dispatch guard was removed. No browser flow changes in this API
 slice; #342's subsequent UI must add browser tests. Root #309 alone serializes
 fresh-main/current-head green CI and completed independent Codex review before
 merge/deploy. Live acceptance of authenticated success, native rejection, stale
@@ -86,3 +121,11 @@ CloudPRNT authenticated poll/claim/download/ack, durable retry/unknown-result
 handling and controlled activation/testprint still need delivery and verification.
 Physical paper output, Danish characters, width/cut, failure recovery and Wolt
 coexistence require the actual printer. Simulator success is separate evidence.
+
+
+Review finding4339848189 was first reproduced through exported HTTP PUT rejecting
+a canonical global product with omitted `locationIds`. The fix normalizes only
+undefined product membership to an empty global list. New PUT-to-GET-to-native
+preparation positives cover omitted and empty product lists, alongside strict
+product/native/synthetic/category and malformed-membership rejection matrices.
+The earlier stale-reference recovery and all original assertions remain intact.
