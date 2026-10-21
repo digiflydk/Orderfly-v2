@@ -9,7 +9,7 @@ const record = (id, patch = {}) => ({ schemaVersion: 1, configuration: configura
   deletedAt: null, createdAt: { seconds: 1 }, updatedAt: { seconds: 2 }, ...patch });
 
 function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, anonymous = false,
-  forbidden = false, failDatabase = false, identityStatus, authorityStatus } = {}) {
+  forbidden = false, failDatabase = false, identityStatus, authorityStatus, totalOverride } = {}) {
   const calls = [];
   const snapshot = (id, value) => ({ id, exists: value !== undefined, data: () => value });
   const database = { collection(name) {
@@ -23,18 +23,21 @@ function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, an
           doc(id) { return { async get() { calls.push(['detail', id]); if (failDatabase) throw Error('PRIVATE_SENTINEL'); return snapshot(id, rows[id]); } }; },
           where(field, op, value) {
             calls.push(['where', field, op, value]); assert.deepEqual([field, op, value], ['deletedAt', '==', null]);
-            let after = '', limit;
-            const query = {
-              orderBy(field) { calls.push(['orderBy', field]); assert.equal(field, '__name__'); return query; },
-              startAfter(cursor) { calls.push(['after', cursor]); after = cursor; return query; },
-              limit(count) { calls.push(['limit', count]); limit = count; assert.ok(count <= 51); return query; },
-              async get() {
-                calls.push(['list']); if (failDatabase) throw Error('PRIVATE_SENTINEL');
-                const ids = Object.keys(rows).sort().filter(id => id > after && rows[id].deletedAt === null).slice(0, limit);
-                return { docs: ids.map(id => snapshot(id, rows[id])) };
-              },
+            const makeQuery = (filters = [], after = '', limit) => {
+              const matching = () => Object.keys(rows).sort().filter(id => rows[id].deletedAt === null && filters.every(([field, value]) => field.split('.').reduce((row, key) => row?.[key], rows[id]) === value));
+              return {
+                where(field, op, value) { assert.equal(op, '=='); assert.ok(['configuration.model', 'configuration.brandId', 'configuration.locationId'].includes(field)); return makeQuery([...filters, [field, value]], after, limit); },
+                count() { return { get: async () => ({ data: () => ({ count: totalOverride === undefined ? matching().length : totalOverride }) }) }; },
+                orderBy(field) { calls.push(['orderBy', field]); assert.equal(field, '__name__'); return makeQuery(filters, after, limit); },
+                startAfter(cursor) { calls.push(['after', cursor]); return makeQuery(filters, cursor, limit); },
+                limit(count) { calls.push(['limit', count]); assert.ok(count <= 51); return makeQuery(filters, after, count); },
+                async get() {
+                  calls.push(['list']); if (failDatabase) throw Error('PRIVATE_SENTINEL');
+                  return { docs: matching().filter(id => id > after).slice(0, limit).map(id => snapshot(id, rows[id])) };
+                },
+              };
             };
-            return query;
+            return makeQuery();
           },
         };
       },
@@ -171,4 +174,30 @@ test('authority outages/configuration failures remain 503 rather than permission
       assert.equal(f.calls.some(call => ['location', 'printers', 'list', 'detail'].includes(call[0])), false);
     }
   }
+});
+
+ test('overview count is native scope total independent of server model filter and page', async () => {
+  const rows = Object.fromEntries(Array.from({ length: 24 }, (_, i) => { const key = 'p' + String(i).padStart(2, '0'); return [key, record(key, { configuration: configuration(key, { model: i < 21 ? 'mc-print3' : 'mc-print2', paperWidthMm: i < 21 ? 80 : 58 }) })]; }));
+  const f = fixture({ rows });
+  const first = await f.read('brandId=brand&locationId=location&overview=true&model=mc-print2&limit=2');
+  assert.equal(first.status, 200); assert.equal(first.body.totalPrinters, 24);
+  assert.deepEqual(first.body.items.map(row => row.configuration.id), ['p21', 'p22']); assert.equal(first.body.nextCursor, 'p22');
+  const second = await f.read('brandId=brand&locationId=location&overview=true&model=mc-print2&limit=2&after=p22');
+  assert.equal(second.body.totalPrinters, 24); assert.deepEqual(second.body.items.map(row => row.configuration.id), ['p23']); assert.equal(second.body.nextCursor, null);
+  for (const suffix of ['model=other', 'overview=false', 'printerId=p21&overview=true', 'printerId=p21&model=mc-print2']) assert.equal((await f.read('brandId=brand&locationId=location&' + suffix)).status, 400);
+ });
+
+test('overview count corruption fails closed without changing legacy/detail projections', async () => {
+ for (const totalOverride of [-1, 0, 1.1, Number.MAX_SAFE_INTEGER + 1, '1', null]) {
+  const f = fixture({ rows: { p1: record('p1') }, totalOverride });
+  const result = await f.read('brandId=brand&locationId=location&overview=true');
+  assert.equal(result.status, 503); assert.deepEqual(result.body, { error: 'printers_unavailable' });
+  assert.equal((await f.read()).status, 200);
+ }
+});
+
+test('overview aggregate excludes a foreign configuration even beyond the visible page', async () => {
+ const f = fixture({ rows: { p1: record('p1'), p2: record('p2'), p3: record('p3', { configuration: configuration('p3', { brandId: 'foreign' }) }) } });
+ const result = await f.read('brandId=brand&locationId=location&overview=true&limit=1');
+ assert.equal(result.status, 200); assert.equal(result.body.totalPrinters, 2); assert.equal(result.body.items[0].configuration.id, 'p1');
 });

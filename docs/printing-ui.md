@@ -88,3 +88,51 @@ success/delegated denial and controlled save/edit acceptance remain blocked unti
 safe access and an explicitly reversible scenario exist. Fixture success and
 public smoke do not prove live authenticated writes. Physical printer pilot and
 Wolt/hardware configuration remain separate and last.
+
+## Superadmin table slice (#341)
+
+`/superadmin/printers` remains under System and is still guarded by the platform
+superuser check before native catalog reads. The overview now uses one row per
+printer with activation date, brand, location, Active/Deactive status, last used,
+total printers, printer name, model/transport/width and actions. Paused printers
+are labelled `Deactive · På pause`, preserving their distinct backend state.
+The wide semantic table scrolls inside its container on small screens.
+
+Brand and location select the native authorized scope. Printer type is a server
+model filter (`model=mc-print2|mc-print3`) applied before ID pagination, so a matching
+printer after the first unfiltered page remains discoverable. The optional
+`overview=true` list projection adds a scoped Firestore aggregation count of all
+nondeleted printer records under the selected native location. This count ignores
+the model filter and continuation cursor and is never inferred from page length.
+The detail DTO and callers omitting `overview` retain their existing shape. Invalid
+count data and filtered foreign/malformed rows fail closed; aggregation/index
+outages use the existing generic unavailable state. No indexes or production
+records are created or changed by this slice.
+
+Activation and confirmed-use timestamps do not exist in the current authoritative
+read contract. Both cells explicitly show `Ikke registreret`; missing historical
+metadata is not proof of `Aldrig`. Follow-up #344 owns authoritative lifecycle and
+confirmed-ack history projection, with bounded reads and no invented dates.
+Therefore this slice does not complete all of #341's metadata acceptance.
+
+Edit preserves the existing disabled-only, revisioned configuration form.
+Deactivate and Delete require an explicit confirmation and use the existing
+same-origin lifecycle POST with captured native scope and exact revision. Delete
+has its own current native `catalog:delete` selector grant, distinct from edit.
+Existing server-side authorization, write feature gate, atomic audit, capability
+invalidation and soft-delete history remain unchanged. No resume or activation
+control is added. Pending mutations lock filters, cancellation and duplicate
+submits; changed native grants cannot abort an accepted request. Conflict,
+permission, missing or unknown outcomes require a deliberate refresh. A precise
+`writes_unavailable` response permits retry while making the default-off gate
+visible. Session loss clears rows and mutation controls.
+
+Validation: `npm run typecheck`; existing read/page/lifecycle/resume tests; actual
+React/CSS browser regression file `tests/unit/printing-ui-browser.cjs` now includes
+table columns, scope total versus type filtering, exact lifecycle commands,
+confirmation, independent delete permission, pending locks, conflict/default-off/
+unknown outcomes, session expiry and native grant revocation. Existing stale-read,
+create/edit and tenant isolation cases are retained. Synthetic browser fixtures
+are not authenticated live acceptance or a physical print. Root #309 owns fresh
+main/current-head CI and independent Codex review, serial deployment and read-only
+live checks; authenticated superadmin/merchant QA and #344 remain open.
