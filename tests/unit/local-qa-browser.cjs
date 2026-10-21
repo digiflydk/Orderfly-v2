@@ -77,7 +77,7 @@ test('login diagnostics persist only fixed substage/category and allowlisted loc
   d.response('admin', 'http://127.0.0.1:3100/api/admin/session', 'PRIVATE');
   d.alert('admin', 'PRIVATE reflected error'); d.clientError('admin', 'PRIVATE Local QA client configuration rejected');
   const result = d.snapshot({ name: 'TimeoutError', message: 'PRIVATE password/token/cookie' });
-  assert.deepEqual(result.admin, { loginPageStatus: 200, authSignInStatus: 400, sessionStatus: 503, uiError: 'other-ui-alert', clientError: 'client-configuration-rejected' });
+  assert.deepEqual(result.admin, { loginPageStatus: 200, authSignInStatus: 400, sessionStatus: 503, uiError: 'other-ui-alert', clientError: 'client-configuration-rejected', fieldDom: null });
   assert.equal(result.loginSubstage, 'admin-session-response'); assert.equal(result.failureCategory, 'timeout');
   assert.equal(JSON.stringify(result).includes('PRIVATE'), false);
   assert.throws(() => d.mark('PRIVATE', 'fields'), /rejected/); assert.throws(() => d.mark('admin', 'PRIVATE'), /rejected/);
@@ -92,4 +92,99 @@ test('Next global route announcer alone cannot become a login UI error', async (
   assert.equal(await loginAlert(page).isVisible(), false, 'empty global Next route announcer must not win the UI error race');
   formError = 'Kunne ikke logge ind. Prøv igen.';
   assert.equal(await loginAlert(page).isVisible(), true); assert.equal(await loginAlert(page).textContent(), formError);
+});
+
+function cdpFixture(failure) {
+  const { EventEmitter } = require('node:events');
+  const session = new EventEmitter(); session.calls = []; session.mode = 'none'; let resume;
+  session.send = async (method, parameters) => {
+    session.calls.push([method, parameters]);
+    if (failure === method) throw Error('PRIVATE protocol failure');
+    if (method === 'Debugger.setPauseOnExceptions') session.mode = parameters.state;
+    if (method === 'Debugger.resume' || method === 'Debugger.disable') { resume?.(); resume = undefined; }
+  };
+  session.detach = async () => { session.calls.push(['detach']); if (failure === 'detach') throw Error('PRIVATE detach'); };
+  session.caught = async description => {
+    if (session.mode !== 'all') return;
+    const released = new Promise(resolve => { resume = resolve; });
+    const payload = { reason: 'exception', data: { description } };
+    Object.defineProperty(payload, 'callFrames', { get() { assert.fail('observer must never inspect frames/locals'); } });
+    session.emit('Debugger.paused', payload); await released;
+  };
+  const page = Object.assign(new EventEmitter(), { context: () => ({ newCDPSession: async () => session }) });
+  return { page, session };
+}
+test('caught client exception is categorized without pageerror, resumed and detached without reflecting private data', async () => {
+  const { diagnostics } = require('../../scripts/local-qa/browser-diagnostics.cjs');
+  const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
+  const { page, session } = cdpFixture(); const d = diagnostics(); let pageErrors = 0;
+  page.on('pageerror', () => pageErrors++);
+  const value = await withCaughtLoginExceptions(page, d, 'admin', async () => {
+    await session.caught('Error: PRIVATE Local QA client configuration rejected');
+    try { throw Error('PRIVATE Local QA client configuration rejected'); } catch { return 'form-handled'; }
+  });
+  assert.equal(value, 'form-handled'); assert.equal(pageErrors, 0);
+  assert.equal(d.snapshot({}).admin.clientError, 'client-configuration-rejected');
+  assert.equal(JSON.stringify(d.snapshot({})).includes('PRIVATE'), false);
+  assert.ok(session.calls.some(([method]) => method === 'Debugger.resume'));
+  assert.ok(session.calls.some(([method, args]) => method === 'Debugger.setPauseOnExceptions' && args.state === 'none'));
+  assert.ok(session.calls.some(([method]) => method === 'Debugger.disable'));
+  assert.equal(session.calls.at(-1)[0], 'detach'); assert.equal(session.listenerCount('Debugger.paused'), 0);
+});
+
+test('observer resumes even if categorization rejects and always detaches after action failure', async () => {
+  const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
+  const first = cdpFixture();
+  await assert.rejects(withCaughtLoginExceptions(first.page, { clientError() { throw Error('PRIVATE sanitizer'); } }, 'admin', () => first.session.caught('PRIVATE')), error => error.name === 'QaObserverError' && !error.message.includes('PRIVATE'));
+  assert.ok(first.session.calls.some(([method]) => method === 'Debugger.resume')); assert.equal(first.session.calls.at(-1)[0], 'detach');
+  const second = cdpFixture(), original = Object.assign(Error('original scenario failed'), { name: 'TimeoutError' });
+  await assert.rejects(withCaughtLoginExceptions(second.page, { clientError() {} }, 'admin', async () => { throw original; }), error => error === original);
+  assert.equal(second.session.calls.at(-1)[0], 'detach'); assert.equal(second.session.listenerCount('Debugger.paused'), 0);
+});
+test('protocol setup, resume and detach failures fail closed with fixed errors and attempt every teardown', async () => {
+  const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
+  for (const failure of ['Debugger.enable', 'Debugger.setPauseOnExceptions', 'Debugger.resume', 'Debugger.disable', 'detach']) {
+    const { page, session } = cdpFixture(failure);
+    await assert.rejects(withCaughtLoginExceptions(page, { clientError() {} }, 'admin', () => session.caught('PRIVATE')), error => error.name === 'QaObserverError' && error.message === 'QA0 login observer failed');
+    assert.ok(session.calls.some(([method]) => method === 'Debugger.setPauseOnExceptions'));
+    assert.ok(session.calls.some(([method]) => method === 'Debugger.disable')); assert.equal(session.calls.at(-1)[0], 'detach');
+    assert.equal(session.listenerCount('Debugger.paused'), 0);
+  }
+});
+test('observer bounds a stalled protocol operation and exception storm without changing scenario deadlines', async () => {
+  const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
+  const stalled = cdpFixture(); const original = stalled.session.send;
+  stalled.session.send = (method, args) => method === 'Debugger.enable' ? new Promise(() => {}) : original(method, args);
+  await assert.rejects(withCaughtLoginExceptions(stalled.page, { clientError() {} }, 'admin', async () => assert.fail('setup never completed')), { name: 'QaObserverError' });
+  assert.equal(stalled.session.calls.at(-1)[0], 'detach');
+  const storm = cdpFixture();
+  await assert.rejects(withCaughtLoginExceptions(storm.page, { clientError() {} }, 'admin', async () => {
+    for (let i = 0; i < 17; i++) await storm.session.caught('PRIVATE');
+  }), { name: 'QaObserverError' });
+  assert.equal(storm.session.calls.at(-1)[0], 'detach');
+});
+test('field diagnostics read only exact fixed labels/toggle counts and visibility, never credential values', async () => {
+  const { diagnostics, fieldDom } = require('../../scripts/local-qa/browser-diagnostics.cjs');
+  const observed = [];
+  const locator = key => ({ count: async () => key === 'E-mail' ? 1 : 0, first: () => ({ isVisible: async () => key === 'E-mail' }), inputValue() { assert.fail('no values'); }, textContent() { assert.fail('no text'); } });
+  const page = { getByLabel: (label, options) => { assert.equal(options.exact, true); observed.push(label); return locator(label); },
+    getByRole: (role, options) => { assert.equal(role, 'button'); assert.deepEqual(options, { name: 'Log ind med Opsfly', exact: true }); observed.push(options.name); return locator(options.name); } };
+  const d = diagnostics(), value = await fieldDom(page); value.PRIVATE = 'PRIVATE';
+  d.fields('admin', value); d.mark('admin', 'fields-password');
+  const result = d.snapshot({ name: 'TimeoutError' });
+  assert.deepEqual(observed, ['E-mail', 'Adgangskode', 'Log ind med Opsfly']);
+  assert.deepEqual(result.admin.fieldDom, { email: { count: 1, visible: true }, password: { count: 0, visible: false }, opsflyToggle: { count: 0, visible: false } });
+  assert.equal(result.loginSubstage, 'admin-fields-password'); assert.equal(JSON.stringify(result).includes('PRIVATE'), false);
+  assert.throws(() => d.fields('admin', { ...value, email: { count: 'PRIVATE', visible: true } }), /rejected/);
+  assert.equal(d.snapshot({ name: 'QaObserverError', message: 'PRIVATE' }).failureCategory, 'login-observer-failed');
+});
+test('teardown waits for an in-flight resume instead of issuing a second concurrent resume', async () => {
+  const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
+  const { page, session } = cdpFixture(); const send = session.send; let resumes = 0;
+  session.send = async (method, args) => { if (method === 'Debugger.resume') { resumes++; await new Promise(resolve => setTimeout(resolve, 10)); } return send(method, args); };
+  const original = Error('scenario stopped');
+  await assert.rejects(withCaughtLoginExceptions(page, { clientError() {} }, 'admin', async () => {
+    void session.caught('PRIVATE'); throw original;
+  }), error => error === original);
+  assert.equal(resumes, 1); assert.equal(session.calls.at(-1)[0], 'detach');
 });

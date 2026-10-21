@@ -203,11 +203,35 @@ video or credential-screen screenshot is recorded. Screenshots are taken only
 of the authenticated synthetic printer table at desktop/mobile sizes. A failed scenario writes only a fixed stage label in `local-qa-browser-failure.json`;
 no raw error, request or credential data is stored. Diagnostic correction after
 the first real CI login failure adds fixed login substages (page-ready, toggle,
-fields, submit, session-response, navigation), safe error/UI/client categories and
+fields-email, fields-password, submit, session-response, navigation), safe error/UI/client categories and
 numeric statuses only for exact local login page, Auth signIn and session API
 pathnames. UI errors are scoped to the actual login form so Next's global route
 announcer cannot be mistaken for a login rejection (regression failed before
 scoping and passes after).
+The second actual CI run failed at the original combined `admin-fields` stage:
+login-page200, no Auth/session request, no UI/client enum. This is before submit
+and before the Firebase module import; it is not evidence of a client-binding
+product defect. The next diagnostic revision splits email/password preparation
+and records only counts/visibility of those exact labels and the exact post-switch
+Opsfly toggle, including a final read after a fill failure. It never reads input
+values, HTML or label text and does not retry or extend scenario timeouts.
+
+A separate valid review finding showed that `pageerror` cannot observe exceptions
+caught by the login form. The Chromium-only observer now attaches AFTER fields
+are filled and only wraps submit through the asserted session200, detaching before
+navigation. It uses CDP `Debugger.setPauseOnExceptions:all`, maps only known error
+descriptions to fixed enums in memory, and always resumes in a finally. It reads
+no frames, locals or object properties. Each protocol operation has a one-second
+deadline; more than16 pauses, failed setup/resume/disable/detach, or uncertain
+cleanup fails the proof with a fixed observer category. Teardown attempts pause
+mode none, any needed resume, disable and detach even after action failure. The
+original20-second page and60-second smoke deadlines and all acceptance assertions
+remain. This diagnostic observer is not a production change or successful login
+proof. A regression first failed with a handled exception and no `pageerror`,
+then passed using the caught-exception event; rejection, stall, storm and cleanup
+cases preserve nonreflection and teardown coverage. Protocol behavior follows the
+[official Playwright CDPSession API](https://playwright.dev/docs/api/class-cdpsession)
+and [Chrome Debugger protocol](https://chromedevtools.github.io/devtools-protocol/tot/Debugger/).
 URLs, queries, request/response bodies, headers, cookies and raw console/errors
 are never persisted. These labels classify a failing proof; they never make it
 a passed login or justify a product change without evidence. Browser
