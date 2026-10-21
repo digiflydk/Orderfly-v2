@@ -12,6 +12,7 @@ import { issueQrToken, LoyaltyError } from './counter';
 import {
   cardIsExpired, COLLECTIONS, hashKey, memberIdentityKey, readProgram, type CardDoc, type EventType, type LoyaltyEvent, type MemberDoc, type ProgramDoc, type RewardDoc,
 } from './model';
+import { profileFromCustomer } from './profile-rules';
 import { loadTextContext, renderedHash, renderedTextId, renderForProgram, type TextContext } from './program-texts';
 
 const DAY = 86_400_000;
@@ -243,12 +244,13 @@ const HISTORY_TYPES = new Set<EventType>(['stamp_added', 'stamp_removed', 'rewar
 // The customer's own card. Staff identities and reasons are never included.
 export async function memberView(db: Firestore, brand: ProgramBrand, session: MemberSession, now: number) {
   const { member, memberId } = session;
-  const [programSnap, cardSnap, rewards, events, ctx] = await Promise.all([
+  const [programSnap, cardSnap, rewards, events, ctx, customerSnap] = await Promise.all([
     db.collection(COLLECTIONS.programs).doc(brand.brandId).get(),
     member.currentCardId ? db.collection(COLLECTIONS.cards).doc(member.currentCardId).get() : Promise.resolve(null),
     db.collection(COLLECTIONS.rewards).where('memberId', '==', memberId).where('status', '==', 'available').get(),
     db.collection(COLLECTIONS.events).where('memberId', '==', memberId).orderBy('createdAt', 'desc').limit(100).get(),
     loadTextContext(db, brand.brandId),
+    db.collection('customers').doc(member.customerId).get(),
   ]);
   const program = readProgram(brand.brandId, programSnap.data()), texts = portalTexts(program, ctx);
   const card = cardSnap?.data() as CardDoc | undefined;
@@ -256,6 +258,7 @@ export async function memberView(db: Firestore, brand: ProgramBrand, session: Me
   return {
     program: { name: program.settings.name, active: program.settings.active, rewardDescription: program.settings.rewardDescription, terms: texts.ready ? texts.texts.terms : '' },
     member: { name: member.name, email: member.normalizedEmail, joinedAt: member.joinedAt },
+    profile: profileFromCustomer(customerSnap.data()?.brandId === brand.brandId && customerHasEmail(customerSnap.data()!, member.normalizedEmail) ? customerSnap.data() : undefined),
     card: { stamps: live?.stamps ?? 0, stampsRequired: live?.stampsRequired ?? program.settings.stampsRequired, expiresAt: live?.expiresAt ?? null,
       rewardDescription: live?.rewardDescription ?? program.settings.rewardDescription },
     rewards: rewards.docs.map(doc => ({ id: doc.id, ...(doc.data() as RewardDoc) }))
