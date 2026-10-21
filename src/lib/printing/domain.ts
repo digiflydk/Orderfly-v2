@@ -63,15 +63,15 @@ export function printJobId(identity: PrintJobIdentity): string {
   ])).digest('hex');
 }
 
-/** Transport selection still requires checking the printer's exact variant/firmware. */
-export function kitchenPrintEligibility(order: KitchenOrder, printer: PrinterConfiguration): PrintEligibility {
+/** Intent acceptance includes paused printers; this never authorizes dispatch. */
+export function kitchenPrintIntentEligibility(order: KitchenOrder, printer: PrinterConfiguration): PrintEligibility {
   if (!validScope(order) || !validScope(printer) || !validId(order.id) || !validId(printer.id)) {
     return { eligible: false, reason: 'invalid_scope' };
   }
   if (order.brandId !== printer.brandId || order.locationId !== printer.locationId) {
     return { eligible: false, reason: 'scope_mismatch' };
   }
-  if (printer.state !== 'active') return { eligible: false, reason: 'printer_inactive' };
+  if (!['active', 'paused'].includes(printer.state)) return { eligible: false, reason: 'printer_inactive' };
   // Terminal orders must never start old kitchen production after reconnecting.
   if (!['Received', 'In Progress', 'Ready'].includes(order.status)) {
     return { eligible: false, reason: 'order_not_in_production' };
@@ -83,4 +83,11 @@ export function kitchenPrintEligibility(order: KitchenOrder, printer: PrinterCon
         || (order.paymentStatus === 'Pending' && order.discountReservation === 'held')))
   );
   return eligible ? { eligible: true } : { eligible: false, reason: 'payment_not_eligible' };
+}
+
+/** Dispatch still requires capability, production flag and queue review gates. */
+export function kitchenPrintEligibility(order: KitchenOrder, printer: PrinterConfiguration): PrintEligibility {
+  const intent = kitchenPrintIntentEligibility(order, printer);
+  if (!intent.eligible) return intent;
+  return printer.state === 'active' ? intent : { eligible: false, reason: 'printer_inactive' };
 }
