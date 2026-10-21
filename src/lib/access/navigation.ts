@@ -23,6 +23,7 @@ const routes: Array<[string, string]> = [
   ['/superadmin/games', 'orderfly.website:view'],
   ['/superadmin/feedback', 'orderfly.feedback:view'],
   ['/superadmin/analytics', 'orderfly.analytics:view'],
+  ['/superadmin/qr-codes', 'orderfly.qr_codes:view'],
 ];
 
 const COUNTER = 'orderfly.stamp_cards:counter';
