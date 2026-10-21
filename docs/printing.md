@@ -478,9 +478,77 @@ run without writes. Authenticated summary acceptance needs safely available
 existing access and controlled existing records; absent access is **QA BLOCKED**,
 not passed. Do not seed production queues/printers for unattended verification.
 
+## Server-issued queue review receipt (#305 / P1.7b)
+
+`POST /api/merchant/printers/queue/review` accepts exactly
+`{brandId, locationId, printerId, printerRevision, queueRevision, decision}`.
+The only initial handling decision is **`resume_empty`**. It permits issuance only
+for an existing valid explicit zero-count/null-oldest ledger with no jobs.
+Even fresh valid queued jobs are rejected with `queue_not_empty`; nonempty/stale
+queue handling requires a separately designed policy. Nothing is replayed,
+discarded, marked fresh or silently repaired by this decision.
+
+The handler authenticates before CSRF/body parsing and requires same-origin JSON,
+no query parameters and at most8192 body bytes. The service independently verifies
+identity, strict input and the existing exact-true
+`ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED` gate (still false in production).
+Current `orderfly.catalog:edit` grants and native brand/location ownership, the
+strict nondeleted paused/disabled printer, both expected revisions, the complete
+bounded canonical job set and matching queue ledger are re-read in **one write
+transaction**. Active printers and exhausted revisions are rejected. Revocation,
+reassignment, configuration changes and queue changes on retry are rechecked.
+
+The shared internal `queue-snapshot.ts` validator accepts the caller's transaction;
+it never starts a second transaction. GET still owns an SDK read-only transaction
+and returns the same DTO as before. POST never calls GET or trusts its DTO, client
+clock/ages/counts/review flags, or a prior separately read snapshot as authority.
+All existing missing/legacy/foreign/corrupt/inconsistent/oversized/clock-invalid/
+expired/unknown-result blockers remain. Both services read the same canonical
+ledger and bounded501/max500 job set. All reads precede staged writes.
+
+On success the server returns a fresh256-bit random opaque `receipt`, scoped IDs,
+decision, printer/queue revisions, numeric `expiresAt`, and
+**`resumeAuthorized: false`**. The lifetime is120 seconds from server evaluation
+inside the successful transaction attempt. Unsafe server clocks/expiry overflow
+are blocked. Receipts can expire before a caller uses them; consumers must never
+extend TTL or trust the client clock. No actor/contact/job/order payload, credentials,
+raw database records or stored hash are returned. All responses use `no-store` and
+`Vary: Cookie`; unexpected errors are generic503 `queue_review_unavailable`.
+
+Only SHA-256(token) is used as the private document ID under
+`queueReviews/{tokenHash}`. The strict version1 record binds actor principal hash,
+native scope, paused/disabled state, printer and queue revisions, explicit decision,
+server issuedAt/expiresAt, consumedAt:null and commit createdAt. A separate immutable
+issuance event is created at `queueReviewAudit/{tokenHash}` in the same transaction.
+Receipt and audit are create-only, so collisions/failure cannot overwrite history;
+audit or commit failure rolls both back. No plaintext token is persisted or logged.
+No printer revision/state, jobs, ledger, capability evidence or old audit is changed.
+
+**This delivery issues receipts only; single-use consumption is not implemented
+or claimed yet.** #306 must load the hash-addressed record in its own authorized
+write transaction; verify strict record/document/hash, current actor/native scope,
+unconsumed status, decision, server time (`issuedAt <= now < expiresAt`), current
+printer state/revision and full canonical queue/revision/empty condition; then
+atomically consume the receipt with audited resume. Replay, expired/future tokens,
+actor/scope/state/revision changes and concurrent consumption must fail closed.
+Do not implement a separate consume-then-resume transaction or extend expiry.
+Multiple independently issued receipts do not grant multiple resumes: a successful
+future resume must change printer revision and invalidate remaining evidence.
+Existing lifecycle resume still always returns `queue_review_required`.
+
+No rules, indexes, production data or activation changes are part of this PR.
+Fixture tests exercise real authorization/HTTP/service logic with isolated storage
+I/O, rollback/retries and read-before-write enforcement. They are not live Firestore
+contention, production receipt creation, authenticated scope or physical print proof.
+Live QA after exact release can safely check anonymous/invalid-session auth-first
+rejection with empty bodies plus public release smoke. Authenticated gate and
+issuance/expiry/single-use end-to-end QA remain **BLOCKED** without a safe session
+and an explicitly controlled reversible scenario. Do not seed production records
+or turn on the flag to obtain unattended QA. Physical output remains off.
+
 ## Verification and release
 
-Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs tests/unit/printing-queue-summary.cjs`
+Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs tests/unit/printing-queue-summary.cjs tests/unit/printing-queue-review.cjs`
 and `npm run typecheck`.
 There is no changed browser flow in this delivery.
 Follow `AGENTS.md` for current-head CI, independent Codex review, merge and release
