@@ -17,9 +17,11 @@ a reliable description of current storage: the category writer deliberately
 omits `brandId`, and categories are owned through native `locationIds`. Shared
 categories may span brands. Projection requires explicit category membership of
 the selected native location, whose native `brandId` must match the request and
-persisted order/product. It never uses a cart category field as authority. If a
-legacy category also contains a contradictory `brandId`, this first conservative
-slice rejects that ambiguity rather than expanding its authority.
+persisted order/product. It never uses a cart category field as authority. A
+legacy category may retain a stale primary `brandId` because current writes merge
+`{...before, ...categoryData}`. That field is deliberately neither read nor used:
+a shared category remains valid across brands when native location membership
+matches. Missing membership still rejects, regardless of the stale brand value.
 
 The function reads the requested native order, brand and location in that
 transaction, then referenced products and categories. Every document must exist

@@ -120,9 +120,9 @@ export async function projectNativePrintCatalog(context: NativeTransactionContex
     if (categories.has(categoryId)) continue;
     const category = await read('categories', categoryId);
     // Actual category writers omit brandId; native location membership owns it.
-    // A contradictory legacy brand field is ambiguous and fails closed.
-    const legacyBrand = field(category, 'brandId');
-    if ((legacyBrand !== undefined && legacyBrand !== brandId) || field(category, 'isActive') !== true) fail('invalid_catalog');
+    // Older writers preserve a stale primary brandId even on shared categories.
+    // It is not ownership authority; only native location membership owns them.
+    if (field(category, 'isActive') !== true) fail('invalid_catalog');
     nativeLocations(category, locationId, false);
     categories.set(categoryId, category);
   }

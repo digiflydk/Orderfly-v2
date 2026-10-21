@@ -31,10 +31,16 @@ test('duplicate product rows keep distinct deterministic per-order line identiti
  assert.equal(f.reads.filter(x=>x==='products/p1').length,2,'one product read per invocation, not per row');
  f.order().productItems[0].toppings.push('Later change');assert.deepEqual(first.lines[0].modifiers,['Uden ost']);
 });
-test('actual location-owned category needs no brandId; optional conflicting legacy brand fails closed',async()=>{
+test('actual location-owned category ignores stale legacy brandId and still requires native location membership',async()=>{
  const f=fixture();assert.ok(await f.projectNativePrintCatalog(f.context,scope));
  f.rows.get('categories/c1').brandId='b1';assert.ok(await f.projectNativePrintCatalog(f.context,scope));
- f.rows.get('categories/c1').brandId='foreign';await rejected(f,'invalid_catalog');
+ f.rows.get('categories/c1').brandId='legacy-other-brand';
+ f.rows.get('categories/c1').locationIds=['l1','other-brand-location'];
+ const shared=await f.projectNativePrintCatalog(f.context,scope);assert.equal(shared.lines[0].categoryId,'c1');
+ f.rows.get('categories/c1').locationIds=['other-brand-location'];await rejected(f,'invalid_catalog');
+ f.rows.get('categories/c1').locationIds=['l1'];
+ Object.defineProperty(f.rows.get('categories/c1'),'brandId',{get(){assert.fail('stale brand must not be read as authority');}});
+ assert.ok(await f.projectNativePrintCatalog(f.context,scope));
 });
 test('product global location list is supported but category requires explicit location membership',async()=>{
  const f=fixture();f.rows.get('products/p1').locationIds=[];assert.ok(await f.projectNativePrintCatalog(f.context,scope));
