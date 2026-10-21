@@ -53,7 +53,7 @@ before(async () => {
       : view === 'hint' ? React.createElement(HomeScreenHint, { slug: 'esmeralda' })
       : view === 'tracking' ? React.createElement(BrandTracking, { brand: { id: 'b', slug: 'esmeralda', gtmContainerId: 'GTM-X' } })
       : React.createElement('h1', null, 'Mit stempelkort');
-    const signedIn = ['card', 'profile', 'history', 'nav', 'hint'].includes(view);
+    const signedIn = ['card', 'profile', 'history', 'nav', 'hint'].includes(view) || new URLSearchParams(location.search).get('signedIn') === 'yes';
     const frame = React.createElement(PortalFrame, { slug, base: '/club', preset: portalPreset({slug, name:'Test Restaurant'}), brandName: 'Test Restaurant', signedIn,
       program: {...${JSON.stringify(program)}, active:true, stampsRequired:8, rewardDescription:'Gratis pizza'},
       memberNavigation: signedIn && view !== 'nav' ? React.createElement(ClubNav, {base:'/club', programName:'Esmeralda Club'}) : undefined }, node);
@@ -558,6 +558,21 @@ test('another brand retains its compact member card and no Esmeralda progress',a
     assert.equal(await page.locator('[data-esmeralda-club]').count(),0);
     assert.equal(await page.getByRole('progressbar').count(),0);
     assert.equal(await page.locator('.club-member-card').evaluate(el=>getComputedStyle(el).display),'flex');
+    assert.ok(await noOverflow(page));
+  } finally {await page.close();}
+});
+
+for (const width of [390,1440]) for (const view of ['login','terms']) test(`signed-in ${view} keeps its existing panel at ${width}px`,async()=>{
+  const {page}=await open(view,{width,hash:'?signedIn=yes'});
+  try {
+    await page.getByRole('heading',{level:1}).waitFor();
+    const style=await page.locator('.es-club-form-panel').evaluate(el=>({
+      background:getComputedStyle(el).backgroundColor, padding:getComputedStyle(el).paddingLeft,
+      border:getComputedStyle(el).borderTopWidth, maxWidth:getComputedStyle(el.closest('main')).maxWidth,
+    }));
+    assert.equal(style.background,'rgb(29, 29, 29)');
+    assert.equal(style.padding,width<=760?'20px':'36px');
+    assert.equal(style.border,'1px'); assert.equal(style.maxWidth,'760px');
     assert.ok(await noOverflow(page));
   } finally {await page.close();}
 });

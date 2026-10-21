@@ -91,8 +91,8 @@
 }
 
 /* Signed-in member pages use the same restaurant palette, with a clear card/QR hierarchy. */
-[data-esmeralda-club] .es-club-content-member { max-width: 1120px; }
-[data-esmeralda-club] .es-club-content-member .es-club-form-panel { padding: 0; background: transparent; border: 0; }
+[data-esmeralda-club] .es-club-content-member:has(.club-member-card, .club-member-history, .club-member-profile) { max-width: 1120px; }
+[data-esmeralda-club] .es-club-content-member .es-club-form-panel:has(.club-member-card, .club-member-history, .club-member-profile) { padding: 0; background: transparent; border: 0; }
 [data-esmeralda-club] .club-member-nav { gap: 8px; padding: 6px; border: 1px solid #3d3d3d; border-radius: 14px; background: #1d1d1d; margin-bottom: 28px; }
 [data-esmeralda-club] .club-member-nav a { min-height: 48px; border: 0; border-radius: 9px; color: #ddd; }
 [data-esmeralda-club] .club-member-nav a:hover { color: #fff; background: #303030; }
