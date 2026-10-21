@@ -43,6 +43,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const [result, setResult] = useState<Result | null>(null);
   const [editor, setEditor] = useState<{ scope: string; item?: Item } | null>(null);
   const [sessionLost, setSessionLost] = useState(false);
+  const sessionEpoch = useRef(0);
   const [savedScope, setSavedScope] = useState('');
   const location = locations.find(row => row.id === locationId && row.brandId === brandId);
   const scope = JSON.stringify([brandId, location?.id || '']);
@@ -50,7 +51,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const canCreate = !sessionLost && createLocations.some(row => row.id === location?.id && row.brandId === brandId);
   const canEdit = !sessionLost && editLocations.some(row => row.id === location?.id && row.brandId === brandId);
   const closeAndRefresh = () => { setEditor(null); setAfter(''); setRefresh(value => value + 1); };
-  const loseSession = () => { setSessionLost(true); setEditor(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
+  const loseSession = () => { sessionEpoch.current += 1; setSessionLost(true); setEditor(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
   const key = JSON.stringify([brandId, location?.id || '', after, refresh]);
   const current = result?.key === key ? result : null;
 
@@ -58,18 +59,19 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
     if (!brandId || !locationId || !locations.some(row => row.id === locationId && row.brandId === brandId)) return;
     const controller = new AbortController();
     let active = true;
+    const epoch = sessionEpoch.current;
     const query = new URLSearchParams({ brandId, locationId, limit: '20', ...(after ? { after } : {}) });
     fetch('/api/merchant/printers?' + query, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal })
       .then(async response => {
-        if (response.status === 401 && active && scopeRef.current === scope) loseSession();
+        if (response.status === 401 && active && scopeRef.current === scope && epoch === sessionEpoch.current) loseSession();
         if (!response.ok) throw Error(response.status === 401 ? 'Din session er udløbet. Log ind igen.'
           : response.status === 403 ? 'Du har ikke adgang til printerne på denne lokation.'
           : 'Printerne kunne ikke indlæses. Prøv igen.');
         return readPage(await response.json(), brandId, locationId, after);
       })
-      .then(page => { if (active) setResult({ key, page }); })
+      .then(page => { if (active && epoch === sessionEpoch.current) { setSessionLost(false); setResult({ key, page }); } })
       .catch(error => {
-        if (active && !controller.signal.aborted) setResult({ key, error: error instanceof Error && error.message !== 'invalid_response'
+        if (active && !controller.signal.aborted && epoch === sessionEpoch.current) setResult({ key, error: error instanceof Error && error.message !== 'invalid_response'
           && /^(Din session|Du har ikke adgang|Printerne kunne)/.test(error.message) ? error.message : 'Printerne kunne ikke indlæses. Prøv igen.' });
       });
     return () => { active = false; controller.abort(); };

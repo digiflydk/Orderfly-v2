@@ -262,3 +262,20 @@ test('foreign or wrong-revision successful writes are uncertain and require refr
     await page.getByRole('button', { name: 'Opdater oversigten', exact: true }).click();
   }
 });
+
+test('earlier GET success cannot repopulate rows after a mutation expires the session', async t => {
+  const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
+  let release, started; const pending = new Promise(resolve => { started = resolve; });
+  await page.route('**/api/merchant/printers**', async route => {
+    if (route.request().method() !== 'GET') return route.fulfill({ status: 401, json: { error: 'unauthorized' } });
+    started(); await new Promise(resolve => { release = resolve; });
+    await route.fulfill({ json: { items: [item('STALE')], nextCursor: null } });
+  });
+  await page.goto(origin + '?writes'); await choose(page); await pending; await fillNew(page);
+  await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click();
+  await expect(page.getByRole('alert')).toHaveText('Din session er udløbet. Log ind igen.');
+  release();
+  await expect(page.getByText('Køkken STALE', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('form', { name: 'Tilføj printer' })).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveText('Din session er udløbet. Log ind igen.');
+});

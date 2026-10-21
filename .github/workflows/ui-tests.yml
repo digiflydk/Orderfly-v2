@@ -112,6 +112,7 @@ jobs:
           path: |
             test-results/admin-*.png
             test-results/printing-overview-*.png
+            test-results/printing-config-*.png
           if-no-files-found: ignore
           retention-days: 14
 

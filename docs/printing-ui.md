@@ -83,7 +83,7 @@ revoked writes with continuing view access. `printing-ui-browser.cjs` additional
 executes actual React forms with intercepted fixture API calls:201 create and200
 revisioned edit at desktop/mobile widths, exact credential-free bodies,
 unsupported choices, pending submit,400/401/403/404/409/503 handling, view-only
-and disabled-state affordances, revoked metadata, late201/401 scope changes, and foreign/wrong-revision success rejection.
+and disabled-state affordances, revoked metadata, late201/401 scope changes, foreign/wrong-revision success rejection, and a pre-expiry GET completing after mutation401.
 Screenshots use `printing-config-*.png`. Fixture writes never reach production.
 
 The configuration-write flag remains default-off. Live read-only login checks
