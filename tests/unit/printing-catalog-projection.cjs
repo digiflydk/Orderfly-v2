@@ -125,8 +125,8 @@ test('canonical native synthetic-product guard rejects active legacy QA names an
   {productName:'Pizza',description:'QA-62 synthetic test. DO NOT PREPARE. Temporary verification data.'},
   {productName:'Pizza',description:'do not prepare'},
  ]){const f=fixture();Object.assign(f.rows.get('products/p1'),patch);await rejected(f,'invalid_catalog');assert.deepEqual(f.writes,[]);}
- for(const description of [undefined,'Freshly prepared pizza']){
-  const f=fixture();Object.assign(f.rows.get('products/p1'),{productName:'Pizza ÆØÅ',description});
+ for(const description of [undefined,'Freshly prepared pizza','Test recipe for our normal pizza']){
+  const f=fixture();Object.assign(f.rows.get('products/p1'),{productName:description?.startsWith('Test')?'Test pizza':'Pizza ÆØÅ',description});
   const r=await f.projectNativePrintCatalog(f.context,scope);assert.equal(r.lines[0].name,'Pizza ÆØÅ');
  }
 });
