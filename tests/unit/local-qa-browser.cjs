@@ -280,3 +280,48 @@ test('first-click cleanup bounds stalled/throwing routes and context close, and 
     } finally { fs.rmSync(dir, { recursive:true, force:true }); }
   }
 });
+
+function loadActualLoginForReadiness(react = require('react')) {
+  const fs = require('node:fs'), path = require('node:path'), ts = require('typescript'), cache = new Map();
+  function load(filename) {
+    if (cache.has(filename)) return cache.get(filename).exports;
+    const mod = { exports: {} }; cache.set(filename, mod);
+    const code = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: {
+      module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true,
+    } }).outputText;
+    new Function('require', 'module', 'exports', code)(name => {
+      if (name === 'react') return react;
+      if (name === 'next/navigation') return { useSearchParams: () => new URLSearchParams() };
+      if (name.startsWith('@/')) {
+        const base = path.resolve('src', name.slice(2));
+        const target = [base + '.tsx', base + '.ts'].find(file => fs.existsSync(file));
+        assert.ok(target, 'actual UI dependency must resolve'); return load(target);
+      }
+      return require(name);
+    }, mod, mod.exports);
+    return mod.exports;
+  }
+  return load('src/app/admin-login/page.tsx').default;
+}
+test('actual login SSR and actual UI primitives disable both fields, submit and mode switch before client readiness', () => {
+  const React = require('react'), { renderToStaticMarkup } = require('react-dom/server');
+  const Login = loadActualLoginForReadiness();
+  const html = renderToStaticMarkup(React.createElement(Login));
+  const controls = html.match(/<(?:input|button)\b[^>]*>/g);
+  assert.equal(controls.length, 4);
+  for (const control of controls) assert.match(control, /\bdisabled=""/, 'SSR interactive control must not accept premature input');
+});
+test('actual login submit guard rejects a not-ready programmatic submission before reading form data or native auth', async () => {
+  const React = require('react');
+  const Login = loadActualLoginForReadiness({ ...React, useState: initial => [initial, () => {}], useEffect() {} });
+  const wrapper = Login(), tree = wrapper.props.children.type();
+  const findForm = element => {
+    if (!element || typeof element !== 'object') return null;
+    if (element.type === 'form') return element;
+    for (const child of React.Children.toArray(element.props?.children)) { const found = findForm(child); if (found) return found; }
+    return null;
+  };
+  let prevented = 0;
+  await findForm(tree).props.onSubmit({ preventDefault: () => { prevented++; }, get currentTarget() { assert.fail('not-ready submit must not read credentials or start auth'); } });
+  assert.equal(prevented, 1);
+});

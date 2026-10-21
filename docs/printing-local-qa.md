@@ -316,3 +316,30 @@ The existing official CI browser installation and isolated app/emulator step are
 reused; there is no new environment, install, port, seed or workflow change.
 Primary guidance: [Playwright hydration](https://playwright.dev/docs/navigations#hydration)
 and [Next15 useSearchParams](https://nextjs.org/docs/15/app/api-reference/functions/use-search-params).
+
+
+### #387 minimal login readiness correction (ninth extra task)
+
+The actual official CI first-click reproduction on4a52ecfa failed with
+`lost-first-enabled-click`: real NextDEV SSR control visible/enabled, seven
+scripts gated, ONE click before pageJS, scripts loaded without runtime failure,
+mode unchanged and cleanup verified. This is the retained actual RED baseline.
+
+The actual AdminLogin component now starts with client readiness false and sets
+it true in its mount effect. Existing two inputs, submit and method-toggle
+buttons remain disabled until ready, and while an existing request is pending.
+The submit handler independently rejects a not-ready submission before reading
+FormData or invoking auth. Provider selection, real auth/session requests,
+errors, cleanup, redirects and server/native authorization remain unchanged.
+A focused regression first failed on enabled SSR controls and premature form
+access, then checks the actual login/actual UI-primitives SSR and submit guard.
+Its controlled hook fixture covers only that guard; it is not browser readiness.
+
+The original actual-Next one-click preflight, old89 tests and Opsfly/Core/full
+browser assertions,20/60-second deadlines, observer, seed/runner, HTTP+WebSocket
+frontiers and workflow are retained. New actual CI must show the controlled
+first-click case GREEN, then still satisfy the entire two-principal browser/
+table/native persistence/cleanup proof. If the earlier observer failure returns,
+its FIRSToperation stays evidence and full-browser acceptance stays pending.
+No corrected GREEN, production SSR incident, deployment or full acceptance is
+claimed from the implementation/unit results alone.
