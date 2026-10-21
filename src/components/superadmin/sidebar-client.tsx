@@ -47,6 +47,7 @@ import {
   Stamp,
   ScanLine,
   Printer,
+  QrCode,
 } from 'lucide-react'
 import { getSuperadminUserContext, type SuperadminUser } from '@/lib/auth/superadmin-context'
 import { LogoutButton } from './logout-button'
@@ -132,6 +133,7 @@ export function SuperAdminSidebarClient({
         { href: '/superadmin/upsells', label: 'Upsells', icon: Bookmark },
         { href: '/superadmin/marketing', label: 'Newsletter & Omnisend', icon: Bookmark },
         { href: '/superadmin/games', label: 'Games', icon: Gamepad2 },
+        { href: '/superadmin/qr-codes', label: 'QR-koder', icon: QrCode },
         { href: '/merchant/redeem', label: 'Indløs kode', icon: TicketCheck },
         { href: '/superadmin/standard-discounts', label: 'Standard Discounts', icon: Percent },
       ],
