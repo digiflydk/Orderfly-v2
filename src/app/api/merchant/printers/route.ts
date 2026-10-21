@@ -19,7 +19,9 @@ export async function GET(request: Request) {
     return reply(await readPrinterConfigurations(Object.fromEntries(params)));
   } catch (error) {
     if (error instanceof AuthorityError) {
-      return reply({ error: error.status === 401 ? 'unauthorized' : 'forbidden' }, error.status === 401 ? 401 : 403);
+      if (error.status === 401) return reply({ error: 'unauthorized' }, 401);
+      if (error.status === 403) return reply({ error: 'forbidden' }, 403);
+      return reply({ error: 'printers_unavailable' }, 503);
     }
     if (error instanceof PrinterReadError) return reply({ error: error.code }, error.status);
     return reply({ error: 'printers_unavailable' }, 503);

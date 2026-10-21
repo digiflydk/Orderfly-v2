@@ -147,7 +147,9 @@ with generic 503, rather than silently hiding a configured printer or exposing
 its ID as a cursor. Detail returns the same 404 for missing, deleted, malformed
 and foreign records. An empty valid location returns an empty list.
 Authentication failure is 401, authorization failure 403, invalid query 400,
-and unexpected storage failure generic 503. All responses are `no-store` and
+and unexpected storage or authority-service/configuration failure generic 503.
+Only explicit 401/403 authority decisions become authentication/permission errors.
+All responses are `no-store` and
 vary by Cookie; errors are not logged with raw data. No rules, indexes,
 production data, UI, queue or printer transport are changed by this read-only
 delivery.

@@ -9,7 +9,7 @@ const record = (id, patch = {}) => ({ schemaVersion: 1, configuration: configura
   deletedAt: null, createdAt: { seconds: 1 }, updatedAt: { seconds: 2 }, ...patch });
 
 function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, anonymous = false,
-  forbidden = false, failDatabase = false } = {}) {
+  forbidden = false, failDatabase = false, identityStatus, authorityStatus } = {}) {
   const calls = [];
   const snapshot = (id, value) => ({ id, exists: value !== undefined, data: () => value });
   const database = { collection(name) {
@@ -44,10 +44,15 @@ function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, an
     'server-only': {}, '@/lib/firebase-admin': { getAdminDb: () => database },
     '@/lib/access/authority': { AuthorityError },
     '@/lib/access/orderfly-session': {
-      verifiedOrderflyIdentity: async () => { if (anonymous) throw new AuthorityError('unauthorized', 401); return { provider: 'firebase', subject: 'user' }; },
+      verifiedOrderflyIdentity: async () => {
+        if (identityStatus) throw new AuthorityError('PRIVATE_SENTINEL', identityStatus);
+        if (anonymous) throw new AuthorityError('unauthorized', 401);
+        return { provider: 'firebase', subject: 'user' };
+      },
       requireOrderflyAccess: async (brandId, locationIds, permission) => {
         calls.push(['authorize', brandId, locationIds, permission]);
         assert.equal(permission, 'orderfly.catalog:view');
+        if (authorityStatus) throw new AuthorityError('PRIVATE_SENTINEL', authorityStatus);
         if (forbidden || brandId !== 'brand' || locationIds.some(id => id !== 'location')) throw new AuthorityError('forbidden');
       },
     },
@@ -152,5 +157,18 @@ test('unexpected database failures are generic no-store errors without private d
   for (const query of ['brandId=brand&locationId=location', 'brandId=brand&locationId=location&printerId=p1']) {
     const result = await f.read(query);
     assert.deepEqual(result, { status: 503, body: { error: 'printers_unavailable' }, cache: 'no-store', vary: 'Cookie' });
+  }
+});
+
+test('authority outages/configuration failures remain 503 rather than permission denials', async () => {
+  for (const phase of ['identityStatus', 'authorityStatus']) {
+    for (const status of [400, 401, 403, 409, 500, 503]) {
+      const f = fixture({ [phase]: status });
+      const result = await f.read();
+      const expectedStatus = [401, 403].includes(status) ? status : 503;
+      const error = status === 401 ? 'unauthorized' : status === 403 ? 'forbidden' : 'printers_unavailable';
+      assert.deepEqual(result, { status: expectedStatus, body: { error }, cache: 'no-store', vary: 'Cookie' });
+      assert.equal(f.calls.some(call => ['location', 'printers', 'list', 'detail'].includes(call[0])), false);
+    }
   }
 });
