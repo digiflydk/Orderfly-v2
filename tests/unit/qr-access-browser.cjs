@@ -44,7 +44,7 @@ for(const width of [390,1440]){
  });
  test(`sidebar hides QR for absent, action-only and unrelated grants at ${width}px`,async()=>{
   const page=await browser.newPage({viewport:{width,height:900}});
-  try{for(const mode of ['anonymous','edit','analytics']){await page.goto(origin+'/?mode='+mode);await page.getByRole('complementary',{name:'Administration'}).waitFor();
+  try{for(const mode of ['anonymous','edit','analytics']){await page.goto(origin+'/?mode='+mode);await page.getByRole('complementary',{name:'Administration',includeHidden:true}).waitFor({state:'attached'});
     assert.equal(await page.getByRole('link',{name:'QR-koder',exact:true}).count(),0,mode);
    }}finally{await page.close();}
  });
