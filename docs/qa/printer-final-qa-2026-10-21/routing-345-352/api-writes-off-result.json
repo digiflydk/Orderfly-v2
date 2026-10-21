@@ -1,0 +1,121 @@
+{
+ "appHealthRelease": "9e1eef3003566aee56df54287a468fb44b08d0ca",
+ "repoHead": "9e1eef3003566aee56df54287a468fb44b08d0ca",
+ "appSourceDiffVsOriginMain": "none",
+ "observerLoaded": true,
+ "driverExit": 0,
+ "environment": "QA0a demo-orderfly-qa0, real Next app + Auth/Firestore emulators",
+ "writesFlag": "false",
+ "started": "2026-10-21T22:41:29.300Z",
+ "finished": "2026-10-21T22:41:34.342Z",
+ "total": 15,
+ "passed": 15,
+ "failed": 0,
+ "results": [
+  {
+   "id": "pass0 W0 environment write flag",
+   "issue": "345",
+   "expected": "false",
+   "actual": "false",
+   "pass": true
+  },
+  {
+   "id": "pass0 C0 emulator empty before run",
+   "issue": "345",
+   "expected": "[]",
+   "actual": "[]",
+   "pass": true
+  },
+  {
+   "id": "pass0 S1 GET empty saved routing",
+   "issue": "345",
+   "expected": "200 revision null, rules [], referencesVerified true, dispatchAuthorized false, strict keys",
+   "actual": "200 {\"scope\":{\"brandId\":\"qac-brand\",\"locationId\":\"qac-loc\"},\"revision\":null,\"rules\":[],\"printers\":[],\"referencesVerified\":true,\"dispatchAuthorized\":false}",
+   "pass": true
+  },
+  {
+   "id": "pass0 OFF1 PUT with writes flag OFF",
+   "issue": "345",
+   "expected": "503 writes_unavailable; no routing doc/audit",
+   "actual": "503 {\"error\":\"writes_unavailable\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 OFF2 invalid body still 400 before flag",
+   "issue": "345",
+   "expected": "400",
+   "actual": "400",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 ordinary merchant (catalog view/create/edit/delete) GET",
+   "issue": "345/352",
+   "expected": "403 forbidden",
+   "actual": "403 {\"error\":\"forbidden\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 anonymous GET",
+   "issue": "345/352",
+   "expected": "401",
+   "actual": "401",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 ordinary merchant (catalog view/create/edit/delete) PUT",
+   "issue": "345/352",
+   "expected": "403 forbidden",
+   "actual": "403 {\"error\":\"forbidden\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 anonymous PUT",
+   "issue": "345/352",
+   "expected": "401",
+   "actual": "401",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 ordinary merchant (catalog view/create/edit/delete) catalog",
+   "issue": "345/352",
+   "expected": "403 forbidden",
+   "actual": "403 {\"error\":\"forbidden\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 anonymous catalog",
+   "issue": "345/352",
+   "expected": "401",
+   "actual": "401",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 ordinary merchant (catalog view/create/edit/delete) preview",
+   "issue": "345/352",
+   "expected": "403 forbidden",
+   "actual": "403 {\"error\":\"forbidden\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 anonymous preview",
+   "issue": "345/352",
+   "expected": "401",
+   "actual": "401",
+   "pass": true
+  },
+  {
+   "id": "pass0 Z1 no-store + Vary Cookie on every API response",
+   "issue": "345",
+   "expected": "0 violations",
+   "actual": "0",
+   "pass": true
+  },
+  {
+   "id": "pass0 C1 cleanup: emulator root empty, Auth users removed",
+   "issue": "345",
+   "expected": "root [] users 0",
+   "actual": "root=[] users=0",
+   "pass": true
+  }
+ ]
+}

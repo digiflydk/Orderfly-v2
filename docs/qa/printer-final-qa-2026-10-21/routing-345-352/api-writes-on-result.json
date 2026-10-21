@@ -1,0 +1,373 @@
+{
+ "appHealthRelease": "9e1eef3003566aee56df54287a468fb44b08d0ca",
+ "repoHead": "9e1eef3003566aee56df54287a468fb44b08d0ca",
+ "appSourceDiffVsOriginMain": "none",
+ "observerLoaded": true,
+ "driverExit": 0,
+ "environment": "QA0a demo-orderfly-qa0, real Next app + Auth/Firestore emulators",
+ "writesFlag": "true",
+ "started": "2026-10-21T22:40:51.888Z",
+ "finished": "2026-10-21T22:41:15.461Z",
+ "total": 51,
+ "passed": 51,
+ "failed": 0,
+ "results": [
+  {
+   "id": "pass0 W0 environment write flag",
+   "issue": "345",
+   "expected": "true",
+   "actual": "true",
+   "pass": true
+  },
+  {
+   "id": "pass0 C0 emulator empty before run",
+   "issue": "345",
+   "expected": "[]",
+   "actual": "[]",
+   "pass": true
+  },
+  {
+   "id": "pass0 S1 GET empty saved routing",
+   "issue": "345",
+   "expected": "200 revision null, rules [], referencesVerified true, dispatchAuthorized false, strict keys",
+   "actual": "200 {\"scope\":{\"brandId\":\"qac-brand\",\"locationId\":\"qac-loc\"},\"revision\":null,\"rules\":[],\"printers\":[],\"referencesVerified\":true,\"dispatchAuthorized\":false}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S2 PUT create (expectedRevision 0)",
+   "issue": "345",
+   "expected": "200 rev1, referencesVerified true; native doc rev1 strict; audit/1 printer.routing.save actor super1 before null after rules",
+   "actual": "200 rev1",
+   "pass": true
+  },
+  {
+   "id": "pass0 S3 GET canonical readback",
+   "issue": "345",
+   "expected": "rev1, same rules, printers = referenced (qr-p-a, qr-p-b), verified",
+   "actual": "200 rev1 printers=qr-p-a,qr-p-b",
+   "pass": true
+  },
+  {
+   "id": "pass0 S4 create again with expectedRevision 0",
+   "issue": "345",
+   "expected": "409 record_conflict, unchanged",
+   "actual": "409 {\"error\":\"record_conflict\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S5 edit with current revision (incl. global product)",
+   "issue": "345",
+   "expected": "200 rev2; audit/2 before=rev1 rules, after=rev2 rules; createdAt preserved",
+   "actual": "200 rev2",
+   "pass": true
+  },
+  {
+   "id": "pass0 S6 stale expectedRevision",
+   "issue": "345",
+   "expected": "409, no overwrite",
+   "actual": "409",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7 concurrent PUTs at same revision (two superadmins)",
+   "issue": "345",
+   "expected": "one 200 + one 409; rev3; audits 1,2,3; winner rules persisted",
+   "actual": "409/200 rev3 audits 1,2,3",
+   "pass": true
+  },
+  {
+   "id": "pass0 S8 remove all rules",
+   "issue": "345",
+   "expected": "200 rev4; GET rules [] revision 4; audit/4 after []",
+   "actual": "200 rev4 rules=0",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: printer in other location",
+   "issue": "345",
+   "expected": "409, unchanged",
+   "actual": "409 reference_unverified",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: nonexistent printer",
+   "issue": "345",
+   "expected": "409, unchanged",
+   "actual": "409 reference_unverified",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: deleted (tombstoned) printer",
+   "issue": "345",
+   "expected": "409, unchanged",
+   "actual": "409 reference_unverified",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: foreign-brand product",
+   "issue": "345",
+   "expected": "409, unchanged",
+   "actual": "409 reference_unverified",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: product of other location",
+   "issue": "345",
+   "expected": "409, unchanged",
+   "actual": "409 reference_unverified",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: inactive product",
+   "issue": "345",
+   "expected": "409, unchanged",
+   "actual": "409 reference_unverified",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: category not in location",
+   "issue": "345",
+   "expected": "409, unchanged",
+   "actual": "409 reference_unverified",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: missing category",
+   "issue": "345",
+   "expected": "409, unchanged",
+   "actual": "409 reference_unverified",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: rule scope mismatch",
+   "issue": "345",
+   "expected": "400, unchanged",
+   "actual": "400 invalid_request",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: duplicate rule ids",
+   "issue": "345",
+   "expected": "400, unchanged",
+   "actual": "400 invalid_request",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: unknown rule field",
+   "issue": "345",
+   "expected": "400, unchanged",
+   "actual": "400 invalid_request",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: duplicate delivery types",
+   "issue": "345",
+   "expected": "400, unchanged",
+   "actual": "400 invalid_request",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: 17 distinct printers",
+   "issue": "345",
+   "expected": "400, unchanged",
+   "actual": "400 invalid_request",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: 257 rules",
+   "issue": "345",
+   "expected": "400, unchanged",
+   "actual": "400 invalid_request",
+   "pass": true
+  },
+  {
+   "id": "pass0 S9 reject: client dispatchAuthorized field",
+   "issue": "345",
+   "expected": "400",
+   "actual": "400",
+   "pass": true
+  },
+  {
+   "id": "pass0 S10 foreign Origin",
+   "issue": "345",
+   "expected": "403",
+   "actual": "403",
+   "pass": true
+  },
+  {
+   "id": "pass0 S10 non-JSON",
+   "issue": "345",
+   "expected": "400",
+   "actual": "400",
+   "pass": true
+  },
+  {
+   "id": "pass0 S10 query string on PUT",
+   "issue": "345",
+   "expected": "400",
+   "actual": "400",
+   "pass": true
+  },
+  {
+   "id": "pass0 S10 body > 32768 bytes",
+   "issue": "345",
+   "expected": "400",
+   "actual": "400",
+   "pass": true
+  },
+  {
+   "id": "pass0 S12 own brand + foreign location",
+   "issue": "345",
+   "expected": "4xx, no doc at FL",
+   "actual": "403 forbidden",
+   "pass": true
+  },
+  {
+   "id": "pass0 S12 GET own brand + foreign location",
+   "issue": "345",
+   "expected": "4xx",
+   "actual": "403 forbidden",
+   "pass": true
+  },
+  {
+   "id": "pass0 S13a GET with stale product reference",
+   "issue": "345",
+   "expected": "200 referencesVerified false; rules + revision 5 retained; printers []",
+   "actual": "200 verified=false rev5 rules=2 printers=0",
+   "pass": true
+  },
+  {
+   "id": "pass0 S13b re-saving stale reference rejected",
+   "issue": "345",
+   "expected": "409 reference_unverified, unchanged",
+   "actual": "409 reference_unverified",
+   "pass": true
+  },
+  {
+   "id": "pass0 S13c repair by removing stale rule",
+   "issue": "345",
+   "expected": "200 rev6; GET verified true, 1 rule",
+   "actual": "200 rev6 verified=true",
+   "pass": true
+  },
+  {
+   "id": "pass0 S14 corrupt stored routing doc",
+   "issue": "345",
+   "expected": "409 routing_unverified, no leak",
+   "actual": "409 {\"error\":\"routing_unverified\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S15 real commit rollback (audit/7 collision)",
+   "issue": "345",
+   "expected": "503; doc rev6 + audits unchanged",
+   "actual": "503 {\"error\":\"routing_unavailable\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S16 PUT retried by SDK under real contention commits once",
+   "issue": "345",
+   "expected": "attempts=2 committed; 200 rev7; audits 1..7 (one new)",
+   "actual": "reached=true obs=[{\"seq\":109,\"attempts\":2,\"matched\":true,\"barrier\":true,\"outcome\":\"committed\"}] 200 rev7",
+   "pass": true
+  },
+  {
+   "id": "pass0 S17 superuser revoked between attempts: retry re-authorizes and denies",
+   "issue": "345",
+   "expected": "attempts=2 error; 403; doc rev7 unchanged",
+   "actual": "reached=true obs=[{\"seq\":112,\"attempts\":2,\"matched\":true,\"barrier\":true,\"outcome\":\"error\",\"code\":\"forbidden\"}] 403",
+   "pass": true
+  },
+  {
+   "id": "pass0 S18 revoked superadmin GET",
+   "issue": "345",
+   "expected": "403",
+   "actual": "403",
+   "pass": true
+  },
+  {
+   "id": "pass0 S19 preview is sample-only and writes nothing",
+   "issue": "345/352",
+   "expected": "200 sampleOnly, dispatchAuthorized false, target qr-p-b; routing/printers unchanged",
+   "actual": "200 sampleOnly=true dispatch=false targets=qr-p-b",
+   "pass": true
+  },
+  {
+   "id": "pass0 S20 catalog picker: only applicable active own-brand products",
+   "issue": "352",
+   "expected": "qr-prod-g present; foreign/inactive/other-location absent; qr-prod-1 now inactive -> absent",
+   "actual": "200 qr-prod-g",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 ordinary merchant (catalog view/create/edit/delete) GET",
+   "issue": "345/352",
+   "expected": "403 forbidden",
+   "actual": "403 {\"error\":\"forbidden\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 anonymous GET",
+   "issue": "345/352",
+   "expected": "401",
+   "actual": "401",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 ordinary merchant (catalog view/create/edit/delete) PUT",
+   "issue": "345/352",
+   "expected": "403 forbidden",
+   "actual": "403 {\"error\":\"forbidden\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 anonymous PUT",
+   "issue": "345/352",
+   "expected": "401",
+   "actual": "401",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 ordinary merchant (catalog view/create/edit/delete) catalog",
+   "issue": "345/352",
+   "expected": "403 forbidden",
+   "actual": "403 {\"error\":\"forbidden\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 anonymous catalog",
+   "issue": "345/352",
+   "expected": "401",
+   "actual": "401",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 ordinary merchant (catalog view/create/edit/delete) preview",
+   "issue": "345/352",
+   "expected": "403 forbidden",
+   "actual": "403 {\"error\":\"forbidden\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S11 anonymous preview",
+   "issue": "345/352",
+   "expected": "401",
+   "actual": "401",
+   "pass": true
+  },
+  {
+   "id": "pass0 Z1 no-store + Vary Cookie on every API response",
+   "issue": "345",
+   "expected": "0 violations",
+   "actual": "0",
+   "pass": true
+  },
+  {
+   "id": "pass0 C1 cleanup: emulator root empty, Auth users removed",
+   "issue": "345",
+   "expected": "root [] users 0",
+   "actual": "root=[] users=0",
+   "pass": true
+  }
+ ]
+}

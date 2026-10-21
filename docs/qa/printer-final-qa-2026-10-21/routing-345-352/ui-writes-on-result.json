@@ -1,0 +1,149 @@
+{
+ "appHealthRelease": "9e1eef3003566aee56df54287a468fb44b08d0ca",
+ "repoHead": "9e1eef3003566aee56df54287a468fb44b08d0ca",
+ "appSourceDiffVsOriginMain": "none",
+ "observerLoaded": true,
+ "driverExit": 0,
+ "environment": "QA0a demo-orderfly-qa0 + Chromium; response-level fault injection with REAL request forwarding where stated",
+ "writesFlag": "true",
+ "started": "2026-10-21T22:47:19.804Z",
+ "finished": "2026-10-21T22:47:48.870Z",
+ "total": 19,
+ "passed": 19,
+ "failed": 0,
+ "results": [
+  {
+   "id": "V1 routing editor loads for superadmin with empty native routing",
+   "issue": "352",
+   "expected": "\"Ingen gemte regler\" + empty-state text",
+   "actual": "Ingen gemte regler",
+   "pass": true
+  },
+  {
+   "id": "V2 rules added locally are marked unsaved",
+   "issue": "352",
+   "expected": "\"Ugemte ændringer\"; 2 rows with native names",
+   "actual": "Ingen gemte regler · Ugemte ændringer | Ekspedition Alle produkter Medtag Alle Rediger regel Fjern regel / Kasse Pizza Medtag Afhentning Rediger regel Fjern regel",
+   "pass": true
+  },
+  {
+   "id": "V3 save creates revision 1 with canonical native rules + audit",
+   "issue": "352/345",
+   "expected": "PUT expectedRevision 0; native rev1 2 rules; audit/1 actor super1; \"Gemt version 1\"",
+   "actual": "put={\"e\":0,\"n\":2} rev1 Gemt version 1",
+   "pass": true
+  },
+  {
+   "id": "V4 preview uses candidate rules, writes nothing",
+   "issue": "352",
+   "expected": "active Ekspedition gets 1 × Margherita; disabled Kasse reported as deaktiveret (never receives); rev still 1, 1 audit",
+   "actual": "Ekspedition: 1 × Margherita En printer er deaktiveret og modtager ikke eksemplet.",
+   "pass": true
+  },
+  {
+   "id": "V5 reload shows canonical saved rules with names",
+   "issue": "352",
+   "expected": "\"Gemt version 1\"; rows Køkken/Alle produkter and Kasse/Pizza/Afhentning",
+   "actual": "Gemt version 1 | Ekspedition Alle produkter Medtag Alle Rediger regel Fjern regel Kasse Pizza Medtag Afhentning Rediger regel Fjern regel",
+   "pass": true
+  },
+  {
+   "id": "V6 edit rule and save",
+   "issue": "352",
+   "expected": "rev2; first rule exclude; audit/2 before include",
+   "actual": "rev2 effect=exclude",
+   "pass": true
+  },
+  {
+   "id": "V7 remove rule and save",
+   "issue": "352",
+   "expected": "rev3; 1 rule left",
+   "actual": "rev3 rules=1",
+   "pass": true
+  },
+  {
+   "id": "V8 pending PUT locks scope, reload, form and save; one request",
+   "issue": "352",
+   "expected": "all locked; 1 PUT; native rev4 committed while UI pending",
+   "actual": "{\"brand\":true,\"loc\":true,\"reload\":true,\"save\":true,\"fieldset\":true,\"puts\":1,\"committed\":true,\"stillPending\":true}",
+   "pass": true
+  },
+  {
+   "id": "V9 stale editor after another session saved -> 409, no overwrite, explicit reload",
+   "issue": "352/345",
+   "expected": "other 200; \"Opsætningen eller kataloget er ændret…\"; save blocked; native rev5 = other session rules",
+   "actual": "200 Opsætningen eller kataloget er ændret. Genindlæs før du gemmer igen. rev5 rule=other",
+   "pass": true
+  },
+  {
+   "id": "V10 reload shows native truth after conflict",
+   "issue": "352",
+   "expected": "\"Gemt version 5\"",
+   "actual": "Gemt version 5",
+   "pass": true
+  },
+  {
+   "id": "V11 save committed but response lost -> uncertainty, blocked, single commit",
+   "issue": "352",
+   "expected": "\"Det er uklart, om reglerne blev gemt…\"; save blocked; native rev6 + exactly 1 new audit; 1 PUT",
+   "actual": "Det er uklart, om reglerne blev gemt. Genindlæs før du prøver igen. rev6 newAudits=1 puts=1",
+   "pass": true
+  },
+  {
+   "id": "V12 manual reload reconciles to committed version",
+   "issue": "352",
+   "expected": "\"Gemt version 6\", no automatic retry",
+   "actual": "Gemt version 6 puts=1",
+   "pass": true
+  },
+  {
+   "id": "V13 malformed success response is not accepted",
+   "issue": "352",
+   "expected": "uncertainty message; blocked; no \"gemt\" notice",
+   "actual": "Det er uklart, om reglerne blev gemt. Genindlæs før du prøver igen.",
+   "pass": true
+  },
+  {
+   "id": "V14 stale product reference surfaced, preview disabled, rules retained",
+   "issue": "352",
+   "expected": "amber note; \"Produkt ikke tilgængeligt (gemt valg)\"; Vis fordeling disabled",
+   "actual": "Gemte regler har utilgængelige referencer. Fjern eller erstat dem, og gem igen før eksempelvisning. | Køkken Alle produkter Medtag Alle Rediger regel Fjern regel Køkken Produkt ikke tilgængeligt (gemt valg) Medtag Alle Rediger regel Fjern regel",
+   "pass": true
+  },
+  {
+   "id": "V15 repair by removing stale rule and saving",
+   "issue": "352/345",
+   "expected": "rev9; note gone; no product rule",
+   "actual": "rev9 note=0",
+   "pass": true
+  },
+  {
+   "id": "V16 375px: no page overflow",
+   "issue": "352",
+   "expected": "doc <= viewport",
+   "actual": "{\"doc\":375,\"vw\":375}",
+   "pass": true
+  },
+  {
+   "id": "V17 1366px: no page overflow",
+   "issue": "352",
+   "expected": "doc <= viewport",
+   "actual": "{\"doc\":1366,\"vw\":1366}",
+   "pass": true
+  },
+  {
+   "id": "V18 browser made no non-loopback requests",
+   "issue": "all",
+   "expected": "0",
+   "actual": "0",
+   "pass": true
+  },
+  {
+   "id": "V19 ordinary merchant /superadmin/printers/routing",
+   "issue": "352",
+   "expected": "Access Denied, no editor",
+   "actual": "true",
+   "pass": true
+  }
+ ]
+}

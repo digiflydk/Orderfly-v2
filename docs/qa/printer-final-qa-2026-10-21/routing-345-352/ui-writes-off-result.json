@@ -1,0 +1,51 @@
+{
+ "appHealthRelease": "9e1eef3003566aee56df54287a468fb44b08d0ca",
+ "repoHead": "9e1eef3003566aee56df54287a468fb44b08d0ca",
+ "appSourceDiffVsOriginMain": "none",
+ "observerLoaded": true,
+ "driverExit": 0,
+ "environment": "QA0a demo-orderfly-qa0 + Chromium; response-level fault injection with REAL request forwarding where stated",
+ "writesFlag": "false",
+ "started": "2026-10-21T22:48:02.213Z",
+ "finished": "2026-10-21T22:48:20.730Z",
+ "total": 5,
+ "passed": 5,
+ "failed": 0,
+ "results": [
+  {
+   "id": "V1 routing editor loads for superadmin with empty native routing",
+   "issue": "352",
+   "expected": "\"Ingen gemte regler\" + empty-state text",
+   "actual": "Ingen gemte regler",
+   "pass": true
+  },
+  {
+   "id": "OFF1 save with writes flag OFF (real 503)",
+   "issue": "352",
+   "expected": "\"Lagring er ikke tilgængelig…\"; save blocked; no routing doc",
+   "actual": "Lagring er ikke tilgængelig. Genindlæs før du prøver igen.",
+   "pass": true
+  },
+  {
+   "id": "OFF2 session lost (real 401) clears routing data",
+   "issue": "352",
+   "expected": "session message; rules section gone",
+   "actual": "rulesSection=0",
+   "pass": true
+  },
+  {
+   "id": "V18 browser made no non-loopback requests",
+   "issue": "all",
+   "expected": "0",
+   "actual": "0",
+   "pass": true
+  },
+  {
+   "id": "V19 ordinary merchant /superadmin/printers/routing",
+   "issue": "352",
+   "expected": "Access Denied, no editor",
+   "actual": "true",
+   "pass": true
+  }
+ ]
+}
