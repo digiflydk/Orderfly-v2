@@ -5,7 +5,7 @@ import { QrManager, type QrBrandChoice, type QrCapabilities, type QrCodeSummary,
 import { QrAnalytics, type QrAnalyticsFilter } from './qr-analytics';
 import type { QrMetrics } from '@/lib/qr/metrics';
 
-export type QrWorkspaceData = { brands: QrBrandChoice[]; codes: QrCodeSummary[]; capabilities: QrCapabilities; analytics: boolean; truncated: boolean };
+export type QrWorkspaceData = { brands: QrBrandChoice[]; codes: QrCodeSummary[]; capabilities: QrCapabilities; analytics: boolean; truncated: boolean; dynamicEnabled?: boolean };
 type RenderFile = { content: string; mime: string; encoding?: 'base64' | 'utf8'; filename: string };
 type AnalyticsResult = { metrics: QrMetrics; complete: boolean };
 const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
@@ -168,7 +168,7 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
     {data.analytics && <nav aria-label="QR-modul" className="flex flex-wrap gap-2"><button type="button" aria-current={tab === 'manage' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('manage')}>Administration</button><button type="button" aria-current={tab === 'analytics' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('analytics')}>Statistik</button></nav>}
     {data.truncated && <p role="alert">Oversigten er ufuldstændig. Flere QR-koder findes end de viste. Søgning og filtre gælder kun de indlæste koder.</p>}
     {refreshError && <p role="alert">Ændringen er gemt, men oversigten kunne ikke genindlæses. Den bekræftede kode er bevaret. Genindlæs siden for en ny oversigt.</p>}
-    <div hidden={tab !== 'manage'}><QrManager key={managerVersion} brands={data.brands} initialCodes={data.codes} capabilities={data.capabilities} api={api} /></div>
+    <div hidden={tab !== 'manage'}><QrManager key={managerVersion} brands={data.brands} initialCodes={data.codes} capabilities={data.capabilities} api={api} dynamicEnabled={data.dynamicEnabled === true} /></div>
     {tab === 'analytics' && data.analytics && <div className="space-y-3">
       <p className="text-sm text-muted-foreground">Vælg én QR-kode. Samlede tal på tværs af koder er endnu ikke tilgængelige.</p>
       {selectionError && <p role="alert">{selectionError}</p>}

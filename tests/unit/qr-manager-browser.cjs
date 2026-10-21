@@ -114,6 +114,22 @@ test('revision conflict retains input and allows safe cancellation', async () =>
   } finally { await page.close(); }
 });
 
+test('a denied replay cannot clear an earlier uncertain save and every retry keeps the first request', async () => {
+  const { page, calls } = await open({ answers: ['abort', [403, { code: 'forbidden' }]] });
+  try {
+    await page.getByRole('button', { name: 'Redigér Bord 1', exact: true }).click();
+    await page.getByRole('button', { name: 'Gem QR-kode', exact: true }).click();
+    await page.getByRole('button', { name: 'Prøv samme handling igen', exact: true }).waitFor();
+    await page.getByRole('button', { name: 'Prøv samme handling igen', exact: true }).click();
+    await page.getByRole('alert').filter({ hasText: 'Du har ikke adgang' }).waitFor();
+    assert.equal(await page.getByRole('button', { name: 'Annullér', exact: true }).isDisabled(), true);
+    assert.equal(await page.getByRole('button', { name: 'Opret QR-kode', exact: true }).isDisabled(), true);
+    await page.getByRole('button', { name: 'Prøv samme handling igen', exact: true }).click();
+    await page.getByRole('form', { name: 'Redigér QR-kode', exact: true }).waitFor({ state: 'detached' });
+    assert.equal(calls.length, 3); assert.deepEqual(calls[0], calls[1]); assert.deepEqual(calls[0], calls[2]);
+  } finally { await page.close(); }
+});
+
 test('duplicate opens an unsaved copy and archive requires confirmation', async () => {
   const { page, calls } = await open();
   try {
