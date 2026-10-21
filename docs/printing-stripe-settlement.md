@@ -130,7 +130,11 @@ any manifest, job or queue ledger. Missing notification jobs retain the original
 repair behavior, including no confirmation/marketing repair for Canceled orders.
 Session identity, native payment scope, currency and amount checks still run.
 
-The terminal decision is read again inside each settlement transaction attempt.
+The order is read before print policy or target preparation in both the read-only
+preflight and every settlement transaction attempt. A malformed policy or a
+missing/disabled target therefore cannot block terminal Paid notification repair;
+financial/session/scope/currency/amount checks remain authoritative. The decision
+is re-read on every reused SDK transaction retry.
 A terminal preflight cannot authorize printing if the order changes to a
 production state before that attempt. Active production-state Paid replays keep
 the existing strict immutable manifest/revision checks and no-backfill policy.

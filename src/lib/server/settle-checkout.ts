@@ -78,8 +78,10 @@ async function settleOrder(proof: PaymentProof) {
   let stripePrintProof: StripePrintPaymentProof | undefined;
   if (printIntentsEnabled) {
     const needsPrintProof = await db.runTransaction(async transaction => {
+      // Terminal Paid repair has no print dependency, including stale policy or targets.
+      if (isTerminalPaidReplay((await transaction.get(orderRef)).data())) return false;
       const preflight = await preparePrintIntentTargetPolicy({ db, transaction }, { brandId: metadata.brandId, locationId: metadata.locationId });
-      return preflight.enabled && !isTerminalPaidReplay((await transaction.get(orderRef)).data());
+      return preflight.enabled;
     }, { readOnly: true });
     if (needsPrintProof) stripePrintProof = await verifyStripePrintPayment(session!.id);
   }
@@ -247,10 +249,11 @@ async function settleOrder(proof: PaymentProof) {
   };
   const fulfilled = await db.runTransaction(async transaction => {
     const context: NativeTransactionContext = Object.freeze({ db, transaction });
-    const policy = printIntentsEnabled ? await preparePrintIntentTargetPolicy(context, { brandId: metadata.brandId, locationId: metadata.locationId }) : null;
-    // A completed Paid replay uses the original status-agnostic settlement repair.
-    // Re-read on every SDK attempt; it must never create or backfill print intent.
-    const printTransitionEnabled = policy?.enabled && !isTerminalPaidReplay((await transaction.get(orderRef)).data());
+    // Inspect the current order before any policy/target reads on every SDK attempt.
+    // Terminal Paid repair must survive malformed policy and never backfill intent.
+    const policy = printIntentsEnabled && !isTerminalPaidReplay((await transaction.get(orderRef)).data())
+      ? await preparePrintIntentTargetPolicy(context, { brandId: metadata.brandId, locationId: metadata.locationId }) : null;
+    const printTransitionEnabled = policy?.enabled;
     if (printTransitionEnabled && !stripePrintProof) throw new Error('Print policy changed; verified payment origin required');
     const transition = printTransitionEnabled ? await prepareStripePrintTransition(context, stripePrintProof!) : undefined;
     const prepared = await prepareSettlement(context, transition);

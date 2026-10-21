@@ -370,3 +370,58 @@ test('#349 terminal replay decision is re-read in the settlement transaction aft
   assert.equal(writes(f).length, priorWrites);
   assert.deepEqual([...f.records].filter(([path]) => /printIntents|\/printers\//.test(path)), originalPrint);
 });
+
+
+test('#349 terminal Paid replay ignores malformed or stale print policy before notification repair', async () => {
+  const corruptions = [
+    state => { state.records.get(policyPath).enabled = 'invalid'; },
+    state => { state.records.delete(printerPath('pizza')); },
+    state => { state.records.get(printerPath('pizza')).configuration.state = 'disabled'; },
+  ];
+  for (const status of ['Completed', 'Delivered', 'Error', 'Canceled']) {
+    for (const originallyPrinted of [false, true]) {
+      for (const corrupt of corruptions) {
+        const f = await fixture();
+        if (!originallyPrinted) process.env.ORDERFLY_PRINT_INTENTS_ENABLED = 'false';
+        try { assert.equal(await f.settle(), true); }
+        finally { process.env.ORDERFLY_PRINT_INTENTS_ENABLED = 'true'; }
+        f.order().status = status; corrupt(f);
+        const confirmationPath = [...f.records].find(([path, row]) => path.startsWith('orderNotificationJobs/') && row.kind === 'orderConfirmation')[0];
+        f.records.delete(confirmationPath);
+        const before = structuredClone([...f.records]), requestsBefore = f.requests.length, attemptsBefore = f.attempts.length;
+        assert.equal(await f.settle(), false);
+        assert.equal(f.records.has(confirmationPath), status !== 'Canceled');
+        assert.deepEqual([...f.records].filter(([path]) => path !== confirmationPath), before);
+        assert.equal(f.requests.length, requestsBefore);
+        assert.equal(f.attempts.slice(attemptsBefore).flatMap(attempt => attempt.events).some(event => event.method === 'get' && /printIntentPolicies|printerRouting|\/printers\//.test(event.path)), false, 'terminal replay must not read print policy or targets in either transaction');
+      }
+    }
+  }
+});
+
+test('#349 write transaction and SDK retry inspect fresh terminal order before malformed print policy', async () => {
+  let terminalize = false;
+  const f = await fixture({ afterPreflight: state => {
+    if (terminalize) { state.order().status = 'Delivered'; state.records.get(policyPath).enabled = 'invalid'; }
+  } });
+  assert.equal(await f.settle(), true);
+  const confirmationPath = [...f.records].find(([path, row]) => path.startsWith('orderNotificationJobs/') && row.kind === 'orderConfirmation')[0];
+  f.records.delete(confirmationPath); terminalize = true;
+  const requestsBefore = f.requests.length, attemptsBefore = f.attempts.length;
+  const printBefore = structuredClone([...f.records].filter(([path]) => /printIntents|\/printers\//.test(path)));
+  assert.equal(await f.settle(), false);
+  assert.equal(f.requests.length, requestsBefore + 1, 'nonterminal preflight may already request proof');
+  assert.equal(f.records.has(confirmationPath), true);
+  assert.deepEqual([...f.records].filter(([path]) => /printIntents|\/printers\//.test(path)), printBefore);
+  assert.equal(f.attempts.slice(attemptsBefore).filter(attempt => !attempt.readOnly).flatMap(attempt => attempt.events).some(event => /printIntentPolicies|printerRouting|\/printers\//.test(event.path)), false);
+
+  const retried = await fixture({ retry: true, onRetry: state => { state.records.get(policyPath).enabled = 'invalid'; } });
+  Object.assign(retried.order(), { paymentStatus: 'Paid', status: 'Completed' });
+  const retryBefore = structuredClone([...retried.records]);
+  assert.equal(await retried.settle(), false);
+  assert.equal(retried.attempts.filter(attempt => !attempt.readOnly).length, 2);
+  assert.equal(retried.requests.length, 0);
+  assert.equal(retried.attempts.flatMap(attempt => attempt.events).some(event => /printIntentPolicies|printerRouting|\/printers\//.test(event.path)), false);
+  assert.deepEqual([...retried.records].filter(([path]) => !path.startsWith('orderNotificationJobs/') && path !== policyPath), retryBefore.filter(([path]) => !path.startsWith('orderNotificationJobs/') && path !== policyPath));
+  assert.equal([...retried.records].filter(([path, row]) => path.startsWith('orderNotificationJobs/') && row.kind === 'orderConfirmation').length, 1);
+});
