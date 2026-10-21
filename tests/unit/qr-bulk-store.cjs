@@ -87,3 +87,11 @@ test('a request UUID already used by another QR operation conflicts without over
  const {db,store}=fixture();db.rows.set(`brands/brandA/qrRequests/${requestId}`,{signature:'different-action-signature',result:{id:'old'},createdAt:10});
  const before=[...db.rows];await rejects(()=>store.create(scope,command()),'request_conflict');assert.deepEqual([...db.rows],before);assert.equal(db.writeCount,0);
 });
+test('receipt replay also rechecks current QR scope after an administrator moves a code',async()=>{
+ const f=fixture(),input=command(['A,https://example.org/a,brandA,locA']);const restricted={...scope,locationIds:['locA']};
+ const created=await f.store.create(restricted,input),path=`brands/brandA/qrCodes/${created.records[0].id}`;
+ f.db.rows.set('locations/locC',{brandId:'brandA',isActive:true});f.db.rows.set(path,{...f.db.rows.get(path),locationId:'locC'});
+ await rejects(()=>f.store.create(restricted,input),'forbidden');
+ const replay=await f.store.create(scope,input);assert.deepEqual(replay,created);assert.ok(f.calls.some(call=>call[2]==='locC'));
+ f.db.rows.set('locations/locC',{brandId:'brandB',isActive:true});await rejects(()=>f.store.create(scope,input),'invalid_location');
+});

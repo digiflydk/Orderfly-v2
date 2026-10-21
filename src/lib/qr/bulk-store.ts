@@ -11,7 +11,7 @@ export type QrBulkStoreOptions = {
   now?: () => number;
   newId?: () => string;
 };
-const fail = (code: string, status = 400): never => { throw new QrStoreError(code, status); };
+function fail(code: string, status = 400): never { throw new QrStoreError(code, status); }
 const validId = (value: unknown): value is string => typeof value === 'string' && /^[A-Za-z0-9_-]{1,128}$/.test(value);
 const exactKeys = (value: object, keys: string[]) => Object.keys(value).sort().join(',') === keys.sort().join(',');
 const hash = (value: string) => createHash('sha256').update(value).digest('hex');
@@ -71,6 +71,25 @@ export function createQrBulkStore(db: QrDatabase, options: QrBulkStoreOptions) {
           const result = saved?.result as QrBulkResult;
           if (!result || result.requestId !== command.requestId || result.sha256 !== command.sha256 || !Array.isArray(result.records)
             || result.records.length !== entries.length || result.records.some((row, index) => !row || row.brandId !== scope.brandId || row.locationId !== entries[index].locationId)) fail('request_conflict', 409);
+          // A privileged edit may have moved a created code since the receipt was saved.
+          // The receipt must not expose it to an actor who no longer has its current scope.
+          const checkedLocations = new Set(locations);
+          for (const row of result.records) {
+            if (!validId(row.id)) fail('request_conflict', 409);
+            const current = await tx.get(brand.collection(QR_PATHS.codes).doc(row.id));
+            const value = current.data() as QrRecord | undefined;
+            if (!current.exists || !value || value.id !== row.id || value.brandId !== scope.brandId) fail('request_conflict', 409);
+            if (value.locationId !== null && !validId(value.locationId)) fail('request_conflict', 409);
+            if (scope.locationIds !== null && (value.locationId === null || !scope.locationIds.includes(value.locationId))) fail('forbidden', 403);
+            if (!checkedLocations.has(value.locationId)) {
+              await options.authorizeCreate(scope, value.locationId);
+              if (value.locationId !== null) {
+                const location = await tx.get(db.collection('locations').doc(value.locationId));
+                if (!location.exists || location.data()?.brandId !== scope.brandId || location.data()?.isActive !== true) fail('invalid_location', 403);
+              }
+              checkedLocations.add(value.locationId);
+            }
+          }
           return result;
         }
         const at = now();
