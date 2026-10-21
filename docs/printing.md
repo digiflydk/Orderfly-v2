@@ -264,7 +264,7 @@ no-store/Vary Cookie and generic error boundaries as configuration writes.
 | `pause` | active | paused | `orderfly.catalog:edit` |
 | `deactivate` | active or paused | disabled | `orderfly.catalog:edit` |
 | `delete` | active, paused or disabled | disabled with a server `deletedAt` tombstone | `orderfly.catalog:delete` |
-| `resume` | no state can resume in this delivery | 409 `queue_review_required`, no change | `orderfly.catalog:edit` |
+| `resume` | paused or disabled, with valid server receipt and verified empty queue | active configuration; capability invalidated, no dispatch | `orderfly.catalog:edit` |
 
 An already paused pause or already disabled deactivate is a 409
 `record_conflict`, not a new audit event. Stale/exhausted revisions also conflict.
@@ -294,13 +294,12 @@ semantics must follow the documented lifecycle policy; this endpoint itself has
 no queue side effects.
 
 Resume was split **before implementation**: #300 supplies durable job/outbox and
-authoritative queue-revision metadata; #301 supplies a server-controlled,
-actor/scope/printer/queue-revision-bound, expiring, single-use queue-age review
-and audited resume. Until then a valid `resume` command always fails closed
-after authorization and revision checks. Client booleans, counts, timestamps or
-fake review evidence are rejected as unknown fields. Missing queue metadata is
-never treated as a verified empty queue. None of these stop transitions can
-enable a printer or bypass review by setting state directly.
+authoritative queue-revision metadata; #301 supplies the read-only summary;
+#305 issues the scoped expiring receipt; #306 consumes it atomically with audited
+empty-queue resume (see below). Without a receipt, resume still fails closed
+after authorization and revision checks. Client booleans, counts, timestamps and
+fabricated evidence cannot bypass review. Missing queue metadata is never treated
+as a verified empty queue. Stop commands cannot set active state directly.
 
 Tests use the actual transaction authorization with isolated storage I/O, shared
 with the existing config-write fixture. They cover all allowed stops and grants,
@@ -460,11 +459,11 @@ physical readiness or delivery guarantee, and may become stale immediately after
 its read. It is information for review, not proof that replay is safe.
 
 The original #301 scope was split **before implementation**: #301 owns this
-read-only snapshot; #305 will create an actor/scope/printer/queue-revision-bound,
-expiring single-use review receipt after explicit handling; #306 will recheck and
-consume it atomically with audited resume. Each has its own <=60-active-minute
-issue/PR. Existing lifecycle resume still always rejects `queue_review_required`.
-No receipt writes, resume or dispatch are introduced here. The configuration-write
+read-only snapshot; #305 creates an actor/scope/printer/queue-revision-bound,
+expiring single-use review receipt after explicit handling; #306 rechecks and
+consumes it atomically with audited resume (see their sections below).
+Each has its own <=60-active-minute issue/PR. This GET snapshot itself introduces
+no receipt writes, resume or dispatch. The configuration-write
 flag stays false and this read requires no write-flag activation. Live output
 remains disabled until physical pilot. No rules/index/data migration is performed.
 
@@ -524,17 +523,9 @@ Receipt and audit are create-only, so collisions/failure cannot overwrite histor
 audit or commit failure rolls both back. No plaintext token is persisted or logged.
 No printer revision/state, jobs, ledger, capability evidence or old audit is changed.
 
-**This delivery issues receipts only; single-use consumption is not implemented
-or claimed yet.** #306 must load the hash-addressed record in its own authorized
-write transaction; verify strict record/document/hash, current actor/native scope,
-unconsumed status, decision, server time (`issuedAt <= now < expiresAt`), current
-printer state/revision and full canonical queue/revision/empty condition; then
-atomically consume the receipt with audited resume. Replay, expired/future tokens,
-actor/scope/state/revision changes and concurrent consumption must fail closed.
-Do not implement a separate consume-then-resume transaction or extend expiry.
-Multiple independently issued receipts do not grant multiple resumes: a successful
-future resume must change printer revision and invalidate remaining evidence.
-Existing lifecycle resume still always returns `queue_review_required`.
+Receipt issuance remains separate from the atomic consumption described below.
+The issuance API always returns `resumeAuthorized:false`; neither its response nor
+the read-only GET summary independently authorizes a lifecycle transition.
 
 No rules, indexes, production data or activation changes are part of this PR.
 Fixture tests exercise real authorization/HTTP/service logic with isolated storage
@@ -548,7 +539,7 @@ or turn on the flag to obtain unattended QA. Physical output remains off.
 
 ## Verification and release
 
-Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs tests/unit/printing-queue-summary.cjs tests/unit/printing-queue-review.cjs`
+Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs tests/unit/printing-queue-summary.cjs tests/unit/printing-queue-review.cjs tests/unit/printing-resume.cjs`
 and `npm run typecheck`.
 There is no changed browser flow in this delivery.
 Follow `AGENTS.md` for current-head CI, independent Codex review, merge and release
@@ -558,3 +549,46 @@ exposed features. The internal domain/capability foundations are not exposed as
 live operations; the printer read endpoint has its own live authorization checks.
 Local tests are not live end-to-end evidence.
 Do not mark final print acceptance as passed until actual printer output is proven.
+
+## Atomic reviewed empty-queue resume (#306 / P1.7c)
+
+`POST /api/merchant/printers/lifecycle` retains its existing stop command format.
+For `action:resume`, the caller additionally supplies `receipt` (the opaque
+43-character server token) and `queueRevision`. Both fields must be present
+together and are prohibited on stop commands. Resume without either retains
+`409 queue_review_required`; client booleans, counts, clocks and decisions remain
+invalid input. Existing same-origin/auth-first JSON, byte limit, no-store and
+default-off configuration write gate apply unchanged.
+
+The lifecycle service reauthorizes the current actor's `catalog:edit` grant and
+native brand/location ownership, validates the strict nondeleted printer and
+expected revision, then reads the SHA-256-addressed unconsumed receipt in the
+**same Firestore write transaction**. Strict schema/document/hash, actor, native
+scope, paused/disabled state, printer revision, queue revision and `resume_empty`
+decision must match. It re-reads the entire canonical bounded queue and ledger in
+that transaction, requires a verified empty queue at the receipt's revision, and
+checks server `issuedAt <= now < expiresAt`. Missing, legacy, foreign, corrupt,
+inconsistent, oversized, unknown-outcome, expired or clock-invalid queue data
+blocks consumption. Missing/invalid/bound-to-other-state receipt returns
+`queue_review_required`; canonical queue/time failure returns
+`queue_review_blocked`. Neither error consumes the receipt or changes the printer.
+
+Only after all reads succeed, one transaction consumes the private receipt,
+increments printer revision, changes configuration state to active, invalidates
+capability evidence and creates the normal immutable lifecycle audit. The audit
+records actor/server timestamp plus receipt hash, queue revision, decision and
+issued/expiry/consumption times, never the raw token. The separate issuance audit,
+queue ledger, jobs, credentials, original identity and older history are preserved.
+Other issued receipts become stale through the incremented printer revision.
+Retries repeat authorization, all bindings, queue and clock checks. Audit or
+commit failure rolls back consumption and all transition effects together.
+
+Configuration state `active` is not transport/output authorization: this endpoint
+does not dispatch, create jobs, activate capabilities or change production flags.
+Production configuration writes and live kitchen output remain off. Fixture tests
+exercise the actual issuance-to-resume path plus expiry boundary, fabricated and
+foreign/used receipts, grant/ownership/revision/queue changes, competing requests,
+retries and atomic rollback. Their serialized transaction fixture does not prove
+live Firestore contention. Authenticated production success/scope/expiry/single-use
+QA remains **BLOCKED** until a safe existing session and controlled reversible
+scenario are available; unattended verification must not seed production data.

@@ -71,7 +71,7 @@ function fixture({ existing, permissions, anonymous = false, identityStatus, ena
   const routes = loadTs(routePath, mocks);
   const service = loadTs('src/lib/printing/writes.ts', mocks);
   const lifecycle = loadTs('src/lib/printing/lifecycle.ts', mocks);
-  const review = target === 'review' ? loadTs('src/lib/printing/queue-review.ts', mocks) : null;
+  const review = loadTs('src/lib/printing/queue-review.ts', mocks);
   async function withFlag(run, flag = enabled ? 'true' : undefined) {
     const previous = process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;
     if (flag === undefined) delete process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;
