@@ -252,3 +252,24 @@ test('#349 corrupt stored manifest target/kind/text bounds reject before any rep
     assert.deepEqual([...f.records], before); assert.equal(writes(f).length, priorWrites); assert.equal(f.jobs().length, 2);
   }
 });
+
+test('#349 Paid replay requires each original job revision to match its immutable manifest and current printer', async () => {
+  for (const printerId of ['packing', 'pizza']) {
+    const f = await fixture(); await f.settle();
+    const originalJobs = structuredClone(f.jobs());
+    const originalManifest = structuredClone(f.records.get('orders/' + f.orderId + '/printIntents/original'));
+    const confirmationPath = [...f.records].find(([path, row]) => path.startsWith('orderNotificationJobs/') && row.kind === 'orderConfirmation')[0];
+    f.records.delete(confirmationPath);
+    assert.equal(await f.settle(), false, 'valid original revisions still permit the existing confirmation repair');
+    assert.deepEqual(f.jobs(), originalJobs);
+    assert.deepEqual(f.records.get('orders/' + f.orderId + '/printIntents/original'), originalManifest);
+    assert.equal(f.records.has(confirmationPath), true);
+    f.records.delete(confirmationPath);
+    const job = f.jobs().find(([, row]) => row.printerId === printerId)[1];
+    job.printerRevision += 1; // Still a valid stored queued-job shape; only immutable revision identity is inconsistent.
+    const before = structuredClone([...f.records]), priorWrites = writes(f).length;
+    await assert.rejects(f.settle(), /job_conflict/);
+    assert.deepEqual([...f.records], before); assert.equal(writes(f).length, priorWrites);
+    assert.equal(f.records.has(confirmationPath), false, 'conflicting original job must also block financial replay repairs');
+  }
+});

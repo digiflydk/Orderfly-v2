@@ -65,7 +65,8 @@ printer IDs, configuration hashes/revisions, kinds and routed line IDs. It conta
 no provider credentials or customer data and has no update/backfill API.
 
 Paid replay requires an existing matching manifest and every existing original
-job. It never creates a manifest for an older/default-OFF Paid order, expands a
+job. Each stored job printer revision must match its corresponding immutable
+manifest target and the current native printer configuration. It never creates a manifest for an older/default-OFF Paid order, expands a
 previous order to newly configured printers, or recreates a deleted original job.
 Changed rules, policy, catalog, configuration or target set fail closed. Manual
 reprint and historical repair are not implied. A later transport must preserve

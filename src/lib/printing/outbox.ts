@@ -65,7 +65,7 @@ export async function prepareOriginalPrintIntents(db: Firestore, tx: Transaction
 }
 
 type SettlementAuthority = { context: NativeTransactionContext; capability: StripeSettlementPrintCapability;
-  read: typeof readStripeSettlementPrintCapability };
+  read: typeof readStripeSettlementPrintCapability; manifestTargets: ReadonlyArray<z.infer<typeof manifestTargetSchema>> };
 /** Closed Stripe path: the fixed financial writer alone can mint this capability.
  * Lazy fixed import preserves module identity without an eager circular dependency.
  */
@@ -101,7 +101,7 @@ export async function prepareStripeSettlementPrintIntents(context: NativeTransac
   } else if (manifest.exists) throw new PrintOutboxError('job_conflict');
   // The private financial capability reserves its own writes plus exactly one
   // manifest create for a fresh transition. Replay can never create a manifest.
-  const plan = await prepareBatch(context.db, context.transaction, { intents: parsed.data.intents, reservedWriteCount: authority.writeCount }, { context, capability, read });
+  const plan = await prepareBatch(context.db, context.transaction, { intents: parsed.data.intents, reservedWriteCount: authority.writeCount }, { context, capability, read, manifestTargets: identity.targets });
   return { ...plan, writeCount: plan.writeCount + (authority.replay ? 0 : 1), apply() {
     read(context, capability, true);
     if (!authority.replay) context.transaction.create(manifestRef, { ...identity, createdAt: now });
@@ -175,7 +175,11 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
     const prepared = commands.map(c => {
       const identity = { ...c, revision: 0 as const }, jobId = printJobId(identity);
       const prior = existing.get(jobId);
-      if (settlement && settlement.read(settlement.context, settlement.capability).replay && !prior) throw new PrintOutboxError('job_conflict');
+      if (settlement && settlement.read(settlement.context, settlement.capability).replay) {
+        const target = settlement.manifestTargets.find(target => target.printerId === c.printerId);
+        if (!prior || !target || prior.printerRevision !== target.printerRevision
+          || prior.printerRevision !== config.data.revision) throw new PrintOutboxError('job_conflict');
+      }
       if (prior && (!current.success || prior.orderId !== c.orderId || prior.kind !== c.kind)) {
         throw new PrintOutboxError('job_conflict');
       }
