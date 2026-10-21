@@ -5,7 +5,7 @@ const {classifyQrRequest}=loadTs('src/lib/qr/metrics.ts');
 const DAY=86400000,NOW=Date.parse('2026-10-21T12:00:00Z');
 const scope={brandId:'own',locationIds:['l1'],actorId:'reader'};
 const classification=()=>classifyQrRequest({method:'GET',userAgent:'Mozilla/5.0 (iPhone) Version/17.0 Mobile Safari/604.1'});
-const row=(extra={})=>({brandId:'own',locationId:'l1',qrId:'code',timestamp:NOW-1000,classification:classification(),...extra});
+const row=(extra={})=>({brandId:'own',locationId:'l1',qrId:'code',timestamp:NOW-1000,expiresAt:new Date(NOW+90*DAY-1000),classification:classification(),...extra});
 function fixture(rows=[],overrides={}) {
  const trace=[],filters=[],orders=[];
  const code={id:'code',brandId:'own',locationId:'l1',name:'QR test',campaign:'Flyer',tags:['front'],...overrides.code};
@@ -80,6 +80,17 @@ test('TTL retention and future intervals are visibly incomplete even when the qu
  assert.equal(old.retentionLimited,true);assert.equal(old.complete,false);
  const future=await fixture().service.read(scope,'code',{from:NOW-DAY,to:NOW+1});assert.equal(future.futureLimited,true);assert.equal(future.complete,false);
  const empty=await fixture().service.read(scope,'code',range);assert.equal(empty.complete,true);assert.equal(empty.metrics.totalOpenings,0);
+});
+test('retention clamps native reads and excludes expired snapshots even before cleanup',async()=>{
+ const from=NOW-100*DAY,cutoff=NOW-90*DAY;
+ const f=fixture([row({timestamp:cutoff-1,expiresAt:new Date(NOW+DAY)}),row({timestamp:cutoff+1000,expiresAt:new Date(NOW+1000)}),row({expiresAt:new Date(NOW)}),row({expiresAt:{toMillis:()=>NOW+1000}})]);
+ const result=await f.service.read(scope,'code',{from,to:NOW});
+ assert.ok(f.filters.some(([field,op,value])=>field==='timestamp'&&op==='>='&&value===cutoff));
+ assert.equal(result.retainedFrom,cutoff);assert.equal(result.metrics.totalOpenings,2);assert.equal(result.retentionLimited,true);assert.equal(result.complete,false);assert.equal(result.discardedEvents,1);
+ const allExpired=fixture([row({timestamp:from})]);const empty=await allExpired.service.read(scope,'code',{from,to:cutoff});assert.equal(empty.metrics.totalOpenings,0);assert.equal(empty.complete,false);assert.equal(allExpired.trace.filter(([kind])=>kind==='events').length,0);
+ for(const expiresAt of [undefined,null,NaN,new Date('invalid'),{toMillis:()=>Infinity},{toMillis:()=>{throw Error('invalid');}}]){
+  const invalid=await fixture([row({expiresAt})]).service.read(scope,'code',range);assert.equal(invalid.metrics.totalOpenings,0);assert.equal(invalid.discardedEvents,1);assert.equal(invalid.complete,false);
+ }
 });
 test('foreign, malformed and contradictory persisted rows cannot leak and mark data incomplete',async()=>{
  const f=fixture([row({brandId:'foreign'}),row({locationId:'foreign'}),row({qrId:'foreign'}),row({classification:{...classification(),probableScan:true,opening:false}}),row({classification:{...classification(),browser:'injected-browser'}}),row()],{forceRows:true});

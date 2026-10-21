@@ -12,7 +12,7 @@ export type QrAnalyticsDatabase = { collection(name: string): Collection };
 export type QrAnalyticsResult = {
   code: QrAnalyticsCode; metrics: QrMetrics; complete: boolean; totalsAreExact: boolean;
   truncated: boolean; retentionLimited: boolean; futureLimited: boolean; discardedEvents: number; sampledEvents: number;
-  currentLocationOnly: boolean; dataAsOf: number; period: { from: number; to: number; timezone: 'Europe/Copenhagen' };
+  currentLocationOnly: boolean; dataAsOf: number; retainedFrom: number; period: { from: number; to: number; timezone: 'Europe/Copenhagen' };
 };
 export class QrAnalyticsError extends Error {
   constructor(public code: string, public status = 400) { super(code); }
@@ -72,6 +72,13 @@ function classification(value: unknown): QrRequestClassification | null {
   return { opening: c.opening, probableScan: c.probableScan, exclusion: c.exclusion, device: c.device, os: c.os, browser: c.browser,
     referrerOrigin: qrReferrerOrigin(c.referrerOrigin) };
 }
+function expiryMillis(value: unknown): number | null {
+  try {
+    const millis = value instanceof Date ? value.getTime() : value && typeof value === 'object' && 'toMillis' in value
+      && typeof value.toMillis === 'function' ? value.toMillis() : null;
+    return typeof millis === 'number' && Number.isSafeInteger(millis) ? millis : null;
+  } catch { return null; }
+}
 
 export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
   getCode: (scope: QrAnalyticsScope, id: string) => Promise<QrAnalyticsCode>; now?: () => number;
@@ -80,6 +87,10 @@ export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
   return {
     async read(scope: QrAnalyticsScope, id: string, range: { from: number; to: number }): Promise<QrAnalyticsResult> {
       scopeCheck(scope, id); interval(range);
+      const dataAsOf = now();
+      if (!Number.isSafeInteger(dataAsOf) || dataAsOf < 0 || !Number.isFinite(new Date(dataAsOf).getTime())) return fail('invalid_clock', 503);
+      const retainedFrom = Math.max(0, dataAsOf - QR_ANALYTICS_RETENTION_DAYS * DAY);
+      const queryFrom = Math.max(range.from, retainedFrom);
       // Mandatory stored-record lookup before constructing any events query.
       const found = await options.getCode(scope, id);
       if (!found || found.id !== id || found.brandId !== scope.brandId || (found.locationId !== null && !validKey(found.locationId))) return fail('not_found', 404);
@@ -91,25 +102,23 @@ export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
       let query = db.collection('brands').doc(scope.brandId).collection(QR_PATHS.codes).doc(id).collection(QR_PATHS.events)
         .where('brandId', '==', scope.brandId).where('qrId', '==', id);
       if (currentLocationOnly) query = query.where('locationId', '==', code.locationId);
-      const result = await query
-        .where('timestamp', '>=', range.from).where('timestamp', '<', range.to)
+      const result = queryFrom >= range.to ? { docs: [] } : await query
+        .where('timestamp', '>=', queryFrom).where('timestamp', '<', range.to)
         .orderBy('timestamp', 'asc').orderBy('__name__', 'asc').limit(QR_ANALYTICS_EVENT_LIMIT + 1).get();
       const truncated = result.docs.length > QR_ANALYTICS_EVENT_LIMIT, events: QrMetricEvent[] = [];
       let discardedEvents = 0;
       for (const snapshot of result.docs.slice(0, QR_ANALYTICS_EVENT_LIMIT)) {
-        const row = snapshot.data(), c = classification(row?.classification);
+        const row = snapshot.data(), c = classification(row?.classification), expiresAt = expiryMillis(row?.expiresAt);
         if (!row || row.brandId !== scope.brandId || row.qrId !== id || (row.locationId !== null && !validKey(row.locationId))
           || (currentLocationOnly && row.locationId !== code.locationId) || !Number.isSafeInteger(row.timestamp)
-          || (row.timestamp as number) < range.from || (row.timestamp as number) >= range.to || !c) { discardedEvents++; continue; }
+          || (row.timestamp as number) < queryFrom || (row.timestamp as number) >= range.to || !c || expiresAt === null || expiresAt <= dataAsOf) { discardedEvents++; continue; }
         // Identifiers are deliberately not projected. This release cannot estimate unique visitors.
         events.push({ timestamp: row.timestamp as number, qrId: id, classification: c });
       }
-      const dataAsOf = now();
-      if (!Number.isSafeInteger(dataAsOf) || dataAsOf < 0) return fail('invalid_clock', 503);
-      const retentionLimited = range.from < dataAsOf - QR_ANALYTICS_RETENTION_DAYS * DAY, futureLimited = range.to > dataAsOf;
+      const retentionLimited = range.from < retainedFrom, futureLimited = range.to > dataAsOf;
       const complete = !truncated && !retentionLimited && !futureLimited && discardedEvents === 0;
       return { code, metrics: aggregateQrMetrics(events, { ...range, qrId: id }), complete, totalsAreExact: complete,
-        truncated, retentionLimited, futureLimited, discardedEvents, sampledEvents: events.length, currentLocationOnly, dataAsOf,
+        truncated, retentionLimited, futureLimited, discardedEvents, sampledEvents: events.length, currentLocationOnly, dataAsOf, retainedFrom,
         period: { ...range, timezone: 'Europe/Copenhagen' } };
     },
   };
