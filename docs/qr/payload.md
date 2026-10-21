@@ -4,9 +4,9 @@ Implementation candidate only. These pure functions are not yet connected to any
 
 `src/lib/qr/payload.ts` exports:
 
-- `normalizeDestination(input, {blockedOrigins?})`: HTTPS only, no credentials, nonstandard ports, whitespace or backslash repair. Rejects local/private IPv4 literals, all IPv6 literals, local hostname suffixes and the Orderfly `/q` redirect namespace. Custom QR origins must be supplied through server-owned configuration to reject their `/q` namespace too.
+- `normalizeDestination(input, {blockedOrigins?})`: HTTPS only, no credentials, nonstandard ports, whitespace or backslash repair. Canonicalizes a terminal DNS dot before comparing own/custom origins. Rejects local/private IPv4 literals, all IPv6 literals, local hostname suffixes and the Orderfly `/q` redirect namespace. Custom QR origins must be supplied through server-owned configuration to reject their `/q` namespace too.
 - `applyUtm(destination, tags, options?)`: source, medium, campaign, term and content, maximum 200 characters each. Existing unrelated query parameters and fragment are preserved. Supplied tags replace only the same UTM parameter. Unknown tag names are rejected.
-- `buildStaticPayload(input, options?)`: discriminated `url`, `text`, `wifi`, `vcard`, `email`, `phone`, `sms` input. URL payloads use the same HTTPS policy. WiFi syntax and vCard fields are escaped. Mail subject/header and contact fields reject CRLF; mail/SMS bodies are encoded separately.
+- `buildStaticPayload(input, options?)`: discriminated `url`, `text`, `wifi`, `vcard`, `email`, `phone`, `sms` input. URL payloads use the same HTTPS policy. WiFi syntax and vCard fields are escaped. Mail subject/header and contact fields reject CRLF; mail/SMS bodies are encoded separately. Mailto headers use URI percent encoding (`%20` spaces, `%2B` literal plus), with body newlines normalized to CRLF before encoding.
 - `QrPayloadError`: stable code (`invalid_input`, `invalid_url`, `blocked_destination`, `payload_too_large`) and field, without echoing raw input. `MAX_QR_PAYLOAD_BYTES` is 2000 UTF-8 bytes, also checked after escaping/URL encoding.
 
 Static codes contain their payload directly, cannot change destination after printing and do not provide scan analytics. WiFi passwords/contact data in a static code are readable by anyone holding the code. UI must explain this and avoid logging payloads.

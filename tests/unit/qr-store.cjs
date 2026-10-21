@@ -70,6 +70,20 @@ test('same request with changed input or actor conflicts', async () => {
   await rejects(() => store.create({ ...scope, actorId: 'actorB' }, input, req(1)), 'request_conflict');
 });
 
+test('create and duplicate replay recheck the current target location after a privileged move', async () => {
+  const { db, store } = fixture(); db.rows.set('locations/locA2', { brandId: 'brandA', isActive: true });
+  const narrow = { ...scope, locationIds: ['locA'] }, original = { ...input, locationId: 'locA' };
+  const row = await store.create(narrow, original, req(1));
+  await store.update(scope, row.id, { ...original, locationId: 'locA2' }, 1, req(2));
+  await rejects(() => store.create(narrow, original, req(1)), 'forbidden');
+  const source = await store.create(narrow, original, req(3));
+  const copied = await store.duplicate(narrow, source.id, 'Copy', req(4));
+  await store.update(scope, copied.id, { ...original, name: 'Copy', locationId: 'locA2' }, 1, req(5));
+  await rejects(() => store.duplicate(narrow, source.id, 'Copy', req(4)), 'forbidden');
+  // Revocation of all location scope also denies the historical receipt.
+  await rejects(() => store.create({ ...scope, locationIds: [] }, original, req(3)), 'forbidden');
+});
+
 test('updates preserve index, increment revision and reject concurrent stale edits', async () => {
   const { db, store } = fixture(); const row = await store.create(scope, input, req(1));
   const outcomes = await Promise.allSettled([

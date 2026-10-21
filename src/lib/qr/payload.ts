@@ -49,9 +49,11 @@ export function normalizeDestination(input: string, options: DestinationOptions 
   let url: URL;
   try { url = new URL(input); } catch { throw new QrPayloadError('invalid_url', 'url'); }
   if (url.protocol !== 'https:' || url.username || url.password || (url.port && url.port !== '443')) throw new QrPayloadError('invalid_url', 'url');
+  // A terminal DNS dot names the same host; canonicalize before own-route checks.
+  url.hostname = url.hostname.replace(/\.$/, '');
   if (blockedHost(url.hostname)) throw new QrPayloadError('blocked_destination', 'url');
   const own = url.hostname === 'orderfly.dk' || url.hostname.endsWith('.orderfly.dk')
-    || (options.blockedOrigins ?? []).some(origin => { try { return new URL(origin).origin === url.origin; } catch { return false; } });
+    || (options.blockedOrigins ?? []).some(origin => { try { const blocked = new URL(origin); blocked.hostname = blocked.hostname.replace(/\.$/, ''); return blocked.origin === url.origin; } catch { return false; } });
   let path: string;
   try { path = decodeURIComponent(url.pathname); } catch { throw new QrPayloadError('invalid_url', 'url'); }
   if (own && /^\/+q(?:\/|$)/i.test(path)) throw new QrPayloadError('blocked_destination', 'url');
@@ -111,10 +113,11 @@ export function buildStaticPayload(input: QrStaticInput, options: DestinationOpt
       result = [...lines,'END:VCARD'].join('\r\n'); break;
     }
     case 'email': {
-      const params = new URLSearchParams();
-      if (input.subject !== undefined) params.set('subject', optional(input.subject, 'subject', 200));
-      if (input.body !== undefined) params.set('body', optional(input.body, 'body', 1500, true));
-      const query = params.toString();
+      // mailto headers use URI percent encoding, not form-urlencoded '+' spaces.
+      const params: string[] = [];
+      if (input.subject !== undefined) params.push(`subject=${encodeURIComponent(optional(input.subject, 'subject', 200))}`);
+      if (input.body !== undefined) params.push(`body=${encodeURIComponent(optional(input.body, 'body', 1500, true).replace(/\r\n|\r|\n/g, '\r\n'))}`);
+      const query = params.join('&');
       result = `mailto:${encodeURIComponent(email(input.to)).replace(/%40/g, '@')}${query ? `?${query}` : ''}`; break;
     }
     case 'phone': result = `tel:${phone(input.phone)}`; break;

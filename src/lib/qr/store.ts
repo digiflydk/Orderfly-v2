@@ -3,16 +3,18 @@ import { createHash, randomBytes } from 'node:crypto';
 /** Internal service only. Scope MUST come from current server-side native authorization. */
 export type QrScope = { brandId: string; locationIds: string[] | null; actorId: string };
 export type QrStatus = 'active' | 'paused' | 'archived';
-export type QrInput = { name: string; destination: string; locationId: string | null; campaign?: string; tags?: string[]; expiresAt?: number | null };
+export type QrDesign = { width: number; margin: number; dark: string; light: string; errorCorrectionLevel: 'L'|'M'|'Q'|'H' };
+export type QrInput = { name: string; destination: string; locationId: string | null; campaign?: string; tags?: string[]; expiresAt?: number | null; design?: QrDesign };
 export type QrRecord = { id: string; brandId: string; locationId: string | null; slug: string; name: string; destination: string;
-  campaign: string; tags: string[]; expiresAt: number | null; status: QrStatus; revision: number; createdAt: number; updatedAt: number };
+  campaign: string; tags: string[]; expiresAt: number | null; status: QrStatus; revision: number; createdAt: number; updatedAt: number; design?: QrDesign };
 type Snapshot = { exists: boolean; id: string; data(): Record<string, any> | undefined };
 type Reference = { path: string; collection(path: string): Collection };
-type Collection = { doc(id: string): Reference; where(field: string, op: string, value: unknown): Collection; limit(limit: number): Collection; get(): Promise<{ docs: Snapshot[] }> };
+type Query = { where(field: string, op: string, value: unknown): Query; limit(limit: number): Query; get(): Promise<{ docs: Snapshot[] }> };
+type Collection = Query & { doc(id: string): Reference };
 export type QrTransaction = { get(ref: Reference): Promise<Snapshot>; create(ref: Reference, data: unknown): void; set(ref: Reference, data: unknown): void };
 type Transaction = QrTransaction;
 export type QrResolvedTarget = { destination: string; brandId: string; codeId: string; locationId: string | null; revision: number; campaign: string; tags: string[] };
-export const QR_PATHS = { codes: 'qrCodes', publicCodes: 'qrPublicCodes', events: 'events', audit: 'audit', requests: 'qrRequests' } as const;
+export const QR_PATHS = { codes: 'qrCodes', publicCodes: 'qrPublicCodes', events: 'qrScanEvents', audit: 'audit', requests: 'qrRequests' } as const;
 export type QrDatabase = { collection(path: string): Collection; runTransaction<T>(body: (tx: Transaction) => Promise<T>): Promise<T> };
 export class QrStoreError extends Error { constructor(public code: string, public status = 400) { super(code); } }
 const fail = (code: string, status = 400): never => { throw new QrStoreError(code, status); };
@@ -42,8 +44,13 @@ export function createQrStore(db: QrDatabase, options: {
     const expiresAt = value.expiresAt ?? null;
     if (expiresAt !== null && (!Number.isSafeInteger(expiresAt) || expiresAt <= 0)) fail('invalid_expiry');
     if (value.tags !== undefined && (!Array.isArray(value.tags) || value.tags.length > 20)) fail('invalid_tags');
+    const design = value.design;
+    if (design && (!Number.isInteger(design.width) || design.width < 128 || design.width > 4096 || !Number.isInteger(design.margin)
+      || design.margin < 4 || design.margin > 32 || !/^#[a-f0-9]{6}$/i.test(design.dark) || !/^#[a-f0-9]{6}$/i.test(design.light)
+      || !['L','M','Q','H'].includes(design.errorCorrectionLevel))) fail('invalid_design');
     return { name: text(value.name, 160, true), destination: options.normalizeDestination(value.destination), locationId: value.locationId,
-      campaign: text(value.campaign ?? '', 160), tags: [...new Set((value.tags ?? []).map(t => text(t, 50, true)))], expiresAt };
+      campaign: text(value.campaign ?? '', 160), tags: [...new Set((value.tags ?? []).map(t => text(t, 50, true)))], expiresAt,
+      ...(design ? { design: { width:design.width, margin:design.margin, dark:design.dark, light:design.light, errorCorrectionLevel:design.errorCorrectionLevel } } : {}) };
   }
   function read(scope: QrScope, snapshot: Snapshot): QrRecord {
     if (!snapshot.exists) return fail('not_found', 404);
@@ -71,8 +78,11 @@ export function createQrStore(db: QrDatabase, options: {
       if (receipt.exists) {
         if (receipt.data()?.signature !== signature) return fail('request_conflict', 409);
         const result = receipt.data()?.result as QrRecord;
+        if (!result || result.brandId !== scope.brandId) return fail('request_conflict', 409);
+        // Create/duplicate have no command target ID. Their receipt must still
+        // reauthorize the CURRENT result record, which may have moved locations.
+        read(scope, await tx.get(recordRef(scope.brandId, result.id)));
         scopeCheck(scope, result.locationId);
-        if (result.brandId !== scope.brandId) return fail('request_conflict', 409);
         return result;
       }
       if (current && (current.revision !== revision || current.status === 'archived')) return fail('revision_conflict', 409);

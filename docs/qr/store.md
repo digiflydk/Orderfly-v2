@@ -87,10 +87,11 @@ paths and global lookup paths before activation.
 
 ## Verification
 
-`node --test tests/unit/qr-store.cjs`: eleven executable cases against an atomic
+`node --test tests/unit/qr-store.cjs`: twelve executable cases against an atomic
 transaction double cover success, replay, changed requests, simultaneous stale
 edits, foreign brand/location, restricted scope, lifecycle, expiry, inactive
-brand/location, corrupt index, in-transaction event composition, duplication, query scoping/truncation, validation
+brand/location, moved-location create/duplicate receipt replay, revoked location scope,
+corrupt index, in-transaction event composition, duplication, query scoping/truncation, validation
 and collision rollback. The double enforces read-before-write and create-only
 semantics. It does not prove behavior of a deployed Firestore service or rules.
 
