@@ -5,6 +5,7 @@ export type NavigationAccess = { superuser: boolean; permissions: string[] };
 const routes: Array<[string, string]> = [
   ['/merchant/orders', 'orderfly.orders:view'],
   ['/merchant/payments', 'orderfly.catalog:view'],
+  ['/merchant/printers', 'orderfly.catalog:view'],
   ['/superadmin/dashboard', 'orderfly.analytics:view'],
   ['/superadmin/brands/websites', 'orderfly.website:view'],
   ['/superadmin/sales/orders', 'orderfly.orders:view'],

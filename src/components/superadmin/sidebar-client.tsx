@@ -46,6 +46,7 @@ import {
   TicketCheck,
   Stamp,
   ScanLine,
+  Printer,
 } from 'lucide-react'
 import { getSuperadminUserContext, type SuperadminUser } from '@/lib/auth/superadmin-context'
 import { LogoutButton } from './logout-button'
@@ -105,6 +106,7 @@ export function SuperAdminSidebarClient({
       title: 'Commerce',
       items: [
         { href: merchantPortal ? '/merchant/orders' : '/superadmin/sales/orders', label: 'Sales & Orders', icon: ShoppingCart },
+        { href: '/merchant/printers', label: 'Printere', icon: Printer },
         { href: '/merchant/payments', label: 'Betalingsmetoder', icon: CreditCard },
         { href: '/superadmin/customers', label: 'Customers', icon: Users },
       ],
