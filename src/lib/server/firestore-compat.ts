@@ -1,6 +1,6 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { Timestamp, FieldValue } from 'firebase-admin/firestore';
+import { Timestamp, FieldValue, type Firestore, type Transaction as AdminTransaction } from 'firebase-admin/firestore';
 
 // Legacy server modules use the modular Firestore calling convention. Keep it
 // server-only while public browser access to the business database is retired.
@@ -14,7 +14,7 @@ export type Query = Reference;
 export type DocumentReference = Reference;
 export const collection = (parent: {path: string}, path: string): Reference => ({id:path.split('/').at(-1)!,path: [parent.path, path].filter(Boolean).join('/'), kind: 'collection'});
 export const doc = (parent: {path: string}, ...segments: string[]): Reference => {const path=[parent.path,...segments,...(segments.length?[]:[getAdminDb().collection(parent.path).doc().id])].filter(Boolean).join('/');return {id:path.split('/').at(-1)!,path,kind:'document'};};
-const native = (ref: Reference): any => ref.kind === 'document' ? getAdminDb().doc(ref.path) : (ref.constraints || []).reduce((query, apply) => apply(query), getAdminDb().collection(ref.path));
+const native = (ref: Reference, adminDb: Firestore = getAdminDb()): any => ref.kind === 'document' ? adminDb.doc(ref.path) : (ref.constraints || []).reduce((query, apply) => apply(query), adminDb.collection(ref.path));
 const snapshot = (saved: any) => ({ id: saved.id, ref: {id:saved.id,path:saved.ref.path,kind:'document'} as Reference, _snapshot:saved, exists: () => saved.exists, data: () => saved.data() });
 export const getDoc = async (ref: Reference) => snapshot(await native(ref).get());
 export const getDocs = async (ref: Reference) => { const saved = await native(ref).get(); const docs: Array<ReturnType<typeof snapshot>> = saved.docs.map(snapshot); return {docs, empty:saved.empty, size:saved.size, forEach:(fn:(doc:ReturnType<typeof snapshot>)=>void)=>docs.forEach(fn)}; };
@@ -33,13 +33,19 @@ export const arrayUnion = (...values: any[]) => FieldValue.arrayUnion(...values)
 export const deleteField = () => FieldValue.delete();
 export const documentId = () => '__name__';
 export type Transaction = { get(ref: Reference): Promise<ReturnType<typeof snapshot>>; set(ref: Reference, data: any, options?: any): unknown; update(ref: Reference, data: any): unknown; delete(ref: Reference): unknown };
-export async function runTransaction<T>(_db: unknown, run: (tx: Transaction) => Promise<T>): Promise<T> {
-  return getAdminDb().runTransaction(async tx => run({
-    get: async (ref: Reference) => snapshot(await tx.get(native(ref))),
-    set: (ref: Reference, data: any, options?: any) => options ? tx.set(native(ref), data, options) : tx.set(native(ref), data),
-    update: (ref: Reference, data: any) => tx.update(native(ref), data),
-    delete: (ref: Reference) => tx.delete(native(ref)),
-  }));
+/** Server-only plumbing, never authorization/payment proof. Use only in the current
+ * callback attempt; do not retain handles/plans across retries or return them as data.
+ */
+export type NativeTransactionContext = Readonly<{ db: Firestore; transaction: AdminTransaction }>;
+export async function runTransaction<T>(_db: unknown,
+  run: (tx: Transaction, context: NativeTransactionContext) => Promise<T>): Promise<T> {
+  const adminDb = getAdminDb();
+  return adminDb.runTransaction(async tx => run({
+    get: async (ref: Reference) => snapshot(await tx.get(native(ref, adminDb))),
+    set: (ref: Reference, data: any, options?: any) => options ? tx.set(native(ref, adminDb), data, options) : tx.set(native(ref, adminDb), data),
+    update: (ref: Reference, data: any) => tx.update(native(ref, adminDb), data),
+    delete: (ref: Reference) => tx.delete(native(ref, adminDb)),
+  }, Object.freeze({ db: adminDb, transaction: tx })));
 }
 export const writeBatch = (_db: unknown) => {
  const batch=getAdminDb().batch();
