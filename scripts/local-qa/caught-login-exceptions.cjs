@@ -47,8 +47,9 @@ async function withCaughtLoginExceptions(page, diagnostic, role, action) {
     if (session) {
       try { await bounded(() => Promise.all([...pending])); } catch { fail('settle'); }
       if (paused) { try { await bounded(() => session.send('Debugger.resume')); paused = false; } catch { fail('resume'); } }
-      try { await bounded(() => session.send('Debugger.setPauseOnExceptions', { state: 'none' })); } catch { fail('pauseMode'); }
-      try { await bounded(() => session.send('Debugger.disable')); } catch { fail('disable'); }
+      // After session200 the app navigates; renderer-bound Debugger commands then wait for
+      // the next route (seconds in Next DEV). Detaching is browser-side, ends this client's
+      // Debugger agent and pause-on-exceptions, and resumes any pause it owns.
       session.off('Debugger.paused', onPaused);
       try { await bounded(() => session.detach()); } catch { fail('detach'); }
     }

@@ -127,8 +127,7 @@ test('caught client exception is categorized without pageerror, resumed and deta
   assert.equal(d.snapshot({}).admin.clientError, 'client-configuration-rejected');
   assert.equal(JSON.stringify(d.snapshot({})).includes('PRIVATE'), false);
   assert.ok(session.calls.some(([method]) => method === 'Debugger.resume'));
-  assert.ok(session.calls.some(([method, args]) => method === 'Debugger.setPauseOnExceptions' && args.state === 'none'));
-  assert.ok(session.calls.some(([method]) => method === 'Debugger.disable'));
+  assert.equal(session.calls.some(([method, args]) => method === 'Debugger.disable' || method === 'Debugger.setPauseOnExceptions' && args.state === 'none'), false, 'teardown is browser-side detach only');
   assert.equal(session.calls.at(-1)[0], 'detach'); assert.equal(session.listenerCount('Debugger.paused'), 0);
 });
 
@@ -143,11 +142,11 @@ test('observer resumes even if categorization rejects and always detaches after 
 });
 test('protocol setup, resume and detach failures fail closed with fixed errors and attempt every teardown', async () => {
   const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
-  for (const failure of ['Debugger.enable', 'Debugger.setPauseOnExceptions', 'Debugger.resume', 'Debugger.disable', 'detach']) {
+  for (const failure of ['Debugger.enable', 'Debugger.setPauseOnExceptions', 'Debugger.resume', 'detach']) {
     const { page, session } = cdpFixture(failure);
-    await assert.rejects(withCaughtLoginExceptions(page, { clientError() {} }, 'admin', () => session.caught('PRIVATE')), error => error.name === 'QaObserverError' && error.message === 'QA0 login observer failed' && error.operation === ({ 'Debugger.enable':'enable', 'Debugger.setPauseOnExceptions':'pauseMode', 'Debugger.resume':'resume', 'Debugger.disable':'disable', detach:'detach' })[failure]);
-    assert.ok(session.calls.some(([method]) => method === 'Debugger.setPauseOnExceptions'));
-    assert.ok(session.calls.some(([method]) => method === 'Debugger.disable')); assert.equal(session.calls.at(-1)[0], 'detach');
+    await assert.rejects(withCaughtLoginExceptions(page, { clientError() {} }, 'admin', () => session.caught('PRIVATE')), error => error.name === 'QaObserverError' && error.message === 'QA0 login observer failed' && error.operation === ({ 'Debugger.enable':'enable', 'Debugger.setPauseOnExceptions':'pauseMode', 'Debugger.resume':'resume', detach:'detach' })[failure]);
+    assert.equal(session.calls.some(([method]) => method === 'Debugger.setPauseOnExceptions'), failure !== 'Debugger.enable');
+    assert.equal(session.calls.some(([method]) => method === 'Debugger.disable'), false); assert.equal(session.calls.at(-1)[0], 'detach');
     assert.equal(session.listenerCount('Debugger.paused'), 0);
   }
 });
@@ -326,7 +325,7 @@ test('actual login submit guard rejects a not-ready programmatic submission befo
   assert.equal(prevented, 1);
 });
 
-test('observer drains an in-flight explicit resume acknowledgement before changing pause mode', async () => {
+test('observer drains an in-flight explicit resume acknowledgement before detaching', async () => {
   const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
   const { page, session } = cdpFixture(), send = session.send, order = [];
   let vmStopped = true;
@@ -336,15 +335,24 @@ test('observer drains an in-flight explicit resume acknowledgement before changi
       await new Promise(resolve => setImmediate(resolve));
       const value = await send(method, args); vmStopped = false; order.push('resume-ack'); return value;
     }
-    if (method === 'Debugger.setPauseOnExceptions' && args.state === 'none') {
-      order.push('none-attempt');
-      assert.equal(vmStopped, false, 'cleanup must not configure a VM still awaiting explicit resume');
-    }
     return send(method, args);
   };
+  const detach = session.detach;
+  session.detach = async () => { order.push('detach-attempt'); assert.equal(vmStopped, false, 'cleanup must not detach a VM still awaiting explicit resume'); return detach(); };
   const result = await withCaughtLoginExceptions(page, { clientError() {} }, 'admin', async () => {
     void session.caught('PRIVATE handled exception'); return 200;
   });
-  assert.equal(result, 200); assert.deepEqual(order, ['resume-ack', 'none-attempt']);
+  assert.equal(result, 200); assert.deepEqual(order, ['resume-ack', 'detach-attempt']);
+  assert.equal(session.calls.at(-1)[0], 'detach'); assert.equal(session.listenerCount('Debugger.paused'), 0);
+});
+
+test('teardown after a successful submit never waits on renderer-bound Debugger commands during app navigation', async () => {
+  const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
+  const { page, session } = cdpFixture(), send = session.send; let navigating = false;
+  // Model actual Next DEV behaviour: after session200 the app navigates and the renderer
+  // answers Debugger commands only after the route compiles (observed 5.3s locally).
+  session.send = (method, args) => navigating && method !== 'Debugger.resume' ? new Promise(() => {}) : send(method, args);
+  const result = await withCaughtLoginExceptions(page, { clientError() {} }, 'admin', async () => { navigating = true; return 200; });
+  assert.equal(result, 200);
   assert.equal(session.calls.at(-1)[0], 'detach'); assert.equal(session.listenerCount('Debugger.paused'), 0);
 });

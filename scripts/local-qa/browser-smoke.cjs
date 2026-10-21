@@ -32,9 +32,11 @@ async function login(page, actor, role, diagnostic) {
     })]);
     if (result.rejected) throw Error('QA0 login UI rejected');
     assert.equal(result.response.status(), 200, 'actual browser login must establish a real native session');
+    // Observe through the app's own post-login navigation; teardown then runs on a loaded page.
+    diagnostic.mark(role, 'navigation');
+    await page.waitForURL(url => url.pathname !== '/admin-login');
+    await page.waitForLoadState('load');
   });
-  diagnostic.mark(role, 'navigation');
-  await page.waitForURL(url => url.pathname !== '/admin-login');
 }
 async function status(page, url) { return page.evaluate(async target => (await fetch(target)).status, url); }
 async function runBrowserSmoke({ admin, merchant, ids }) {
@@ -44,6 +46,12 @@ async function runBrowserSmoke({ admin, merchant, ids }) {
   const browser = await chromium.launch({ headless: true, args: ['--disable-background-networking', '--disable-component-update', '--no-pings'] });
   const contexts = []; const diagnostic = diagnostics(); let blocked = 0, stage = 'login-first-click';
   try {
+    // Next DEV compiles /admin-login on its first request; doing that while the held-script
+    // proof page is open raced an HMR reload/stale chunk. Precompile with one plain loopback
+    // GET (no browser, no credentials); the proof itself is unchanged.
+    stage = 'login-route-warmup';
+    assert.equal((await fetch(BASE + '/admin-login', { signal: AbortSignal.timeout(45000) })).status, 200);
+    stage = 'login-first-click';
     const firstClick = await runLoginFirstClickProof(browser, artifacts);
     stage = 'admin-login';
     const adminScope = await guardedContext(browser, { width: 1348, height: 900 }); contexts.push(adminScope);
@@ -63,7 +71,10 @@ async function runBrowserSmoke({ admin, merchant, ids }) {
     await form.getByRole('button', { name: 'Annuller', exact: true }).click(); await row.waitFor();
     stage = 'foreign-and-retired-boundaries';
     assert.equal(await status(page, '/api/merchant/printers?brandId=' + ids.brand + '&locationId=' + ids.foreignLocation), 403);
-    const retired = await page.goto(BASE + '/merchant/printers'); assert.equal(retired.status(), 404);
+    // Next streams this notFound() page (HTTP 200 in DEV); assert the actual not-found UI and record the status as observed.
+    const retired = await page.goto(BASE + '/merchant/printers'); const retiredStatus = retired.status();
+    assert.ok([200, 404].includes(retiredStatus)); await page.getByRole('heading', { name: '404', exact: true }).waitFor();
+    assert.equal(await page.getByRole('table', { name: 'Printere', exact: true }).count(), 0);
     await page.goto(BASE + '/superadmin/printers'); await row.waitFor();
     stage = 'desktop-mobile-layout';
     const geometry = () => page.evaluate(() => ({ doc: document.documentElement.scrollWidth, viewport: innerWidth }));
@@ -84,7 +95,7 @@ async function runBrowserSmoke({ admin, merchant, ids }) {
     assert.equal(await status(anonymousPage, '/api/merchant/printers?brandId=' + ids.brand + '&locationId=' + ids.location), 401);
     blocked = contexts.reduce((sum, scope) => sum + scope.blockedRequests(), 0);
     return { firstClick, browser: 'Chromium/Playwright1.62', browserVersion: browser.version(), realVisibleLoginsPerPass: 2, tableHeaders: headers.length, desktopWidth: 1348, mobileWidth: 375,
-      editCancel: true, merchantDenied: true, anonymousDenied: true, foreignScopeDenied: true, retiredRoute404: true, blockedExternalRequests: blocked };
+      editCancel: true, merchantDenied: true, anonymousDenied: true, foreignScopeDenied: true, retiredRouteNotFoundUi: true, retiredRouteHttpStatus: retiredStatus, blockedExternalRequests: blocked };
   } catch (error) {
     fs.writeFileSync(path.join(artifacts, 'local-qa-browser-failure.json'), JSON.stringify({ environment: 'QA0b2-local-browser', status: 'failed', stage, ...diagnostic.snapshot(error), productionAcceptance: false, physicalPrintVerified: false }), { mode: 0o600 });
     throw Error('QA0 real browser scenario failed');

@@ -190,7 +190,15 @@ the visible separate Orderfly-account login form for two actual Firebase users,
 then tests the real superadmin table (nine exact headers, unfiltered initial
 state, persisted Danish row), native edit-form load/cancel, desktop1348/mobile375
 containment and table scrolling, ordinary merchant UI/API denial, anonymous401,
-foreign native scope403 and retired merchant route404. Native disabled-printer
+foreign native scope403 and the retired merchant route's Next not-found page
+(visible 404 heading, no printer table; Next DEV streams it with HTTP 200, so the
+actual status is recorded as `retiredRouteHttpStatus`, never claimed as HTTP 404).
+The login observer stays attached through the app's own post-login navigation until
+the destination has loaded; its teardown then resumes any pause it owns and only
+detaches its CDP session (fixed 1s bound). Renderer-bound `setPauseOnExceptions`/
+`disable` sent mid-navigation waited for the DEV route compile (observed 5.3s) and
+failed that bound. Before the first-click proof, one plain loopback GET precompiles
+`/admin-login`, so a DEV compile/HMR reload cannot race the held page scripts. Native disabled-printer
 and empty-ledger readback and output-off checks remain in the shared backend
 proof. Broad mutation/race/TTL acceptance stays in #372/#373/#374.
 
