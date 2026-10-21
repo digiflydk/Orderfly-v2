@@ -408,9 +408,79 @@ After deployment verify exact release and public regression smoke; live creation
 of jobs remains **QA BLOCKED** without safe authorized access and a controlled
 reversible scenario. Configuration-write gate stays false; live output stays off.
 
+## Read-only scoped queue age snapshot (#301 / P1.7a)
+
+`GET /api/merchant/printers/queue?brandId=...&locationId=...&printerId=...`
+accepts exactly those three scoped IDs. The handler and service authenticate;
+duplicate, missing, malformed and unknown query keys (including client counts,
+clock or review flags) are rejected. Current `orderfly.catalog:view` policy,
+native brand/location ownership, strict nondeleted printer, queue metadata and
+jobs are read in one **SDK read-only Firestore transaction**. Catalog edit alone
+does not grant view. A missing/deleted/malformed/foreign printer gives the same404
+without reading its queue. Unauthenticated/forbidden callers get401/403 before
+queue access; identity/storage outages stay generic503 `queue_unavailable`.
+All responses, including errors, use `no-store` and `Vary: Cookie`.
+
+The service shares version1 schemas and the500-job limit with the insertion
+helper through `src/lib/printing/queue-storage.ts`. It reads at most501 jobs,
+without filters/orderBy that could hide malformed rows. Every row must match
+scope, strict queued-original schema, document ID and deterministic identity;
+ledger count/oldest must match the complete verified set. It never initializes,
+repairs or changes metadata, jobs, audit or printer state. An explicitly stored
+valid zero-count/null-oldest ledger with no jobs is verified empty; absent ledger
+remains blocked **even if no jobs exist**.
+
+A200 response contains scoped IDs, printer state/revision, server `evaluatedAt`,
+`status`, `reason`, `queueRevision`, `summary`, and **`resumeAuthorized: false`**.
+For a verified snapshot, summary contains pendingCount, oldest/newestCreatedAt
+and oldest/newestAgeMs derived only from server time. Empty queue ages/times are
+null. No order IDs, job IDs/payloads, customer data, credentials, device evidence,
+raw timestamps or raw validation errors are returned. The response carries no
+signed/opaque review token and cannot be submitted as resume evidence.
+
+| Block reason | Meaning |
+| --- | --- |
+| missing_metadata | No authoritative queue ledger; never guessed empty |
+| invalid_metadata | Legacy/malformed or foreign ledger |
+| queue_too_large | More than500 rows; a truncated page cannot prove coverage |
+| invalid_jobs | Malformed, foreign, wrong-ID or unsupported version/state job |
+| unknown_outcome_jobs | Otherwise canonical v1 shape with dispatching/uncertain state |
+| expired_jobs | Otherwise canonical v1 shape marked expired |
+| clock_invalid | Missing/unsafe server clock, zero or future job creation time |
+| inconsistent_metadata | Ledger count/oldest disagrees with complete canonical set |
+
+Blocked responses have null queueRevision/summary and grant no resume authority.
+Recognizing an unsafe state is not support for its transport lifecycle: insertion
+v1 only supports queued originals with zero attempts. Other malformed fields
+still block as invalid_jobs. No new cutoff/expiry/auto-release policy is invented;
+old but structurally valid queues report their actual age and still require an
+explicit later handling decision. Clock anomalies are blocked, never clipped to
+age zero or treated as fresh. This snapshot has no order-freshness, capability,
+physical readiness or delivery guarantee, and may become stale immediately after
+its read. It is information for review, not proof that replay is safe.
+
+The original #301 scope was split **before implementation**: #301 owns this
+read-only snapshot; #305 will create an actor/scope/printer/queue-revision-bound,
+expiring single-use review receipt after explicit handling; #306 will recheck and
+consume it atomically with audited resume. Each has its own <=60-active-minute
+issue/PR. Existing lifecycle resume still always rejects `queue_review_required`.
+No receipt writes, resume or dispatch are introduced here. The configuration-write
+flag stays false and this read requires no write-flag activation. Live output
+remains disabled until physical pilot. No rules/index/data migration is performed.
+
+Tests run actual transaction authorization and service/HTTP code with isolated
+storage I/O: success/verified-empty vs missing metadata, every row/capacity,
+revocation/native reassignment, unsafe states/clocks, strict projection/query,
+identity/storage errors and read-only/no-mutation enforcement. They are not live
+Firestore or authenticated production scope proof. After exact release verification,
+live anonymous/invalid-session boundary checks and public regression smoke may
+run without writes. Authenticated summary acceptance needs safely available
+existing access and controlled existing records; absent access is **QA BLOCKED**,
+not passed. Do not seed production queues/printers for unattended verification.
+
 ## Verification and release
 
-Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs`
+Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs tests/unit/printing-queue-summary.cjs`
 and `npm run typecheck`.
 There is no changed browser flow in this delivery.
 Follow `AGENTS.md` for current-head CI, independent Codex review, merge and release

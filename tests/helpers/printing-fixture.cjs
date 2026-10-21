@@ -24,21 +24,28 @@ function fixture({ existing, permissions, anonymous = false, identityStatus, ena
   ]);
   if (existing !== undefined) records.set(path, existing);
   const events = [], commits = []; let dbCalls = 0, queue = Promise.resolve(), retried = false;
-  function ref(path) { return { path, id: path.split('/').at(-1), collection: name => ({ doc: id => ref(`${path}/${name}/${id}`) }) }; }
+  function collection(path) { return { doc: id => ref(`${path}/${id}`), limit: count => ({ query: path, limit: count }) }; }
+  function ref(path) { return { path, id: path.split('/').at(-1), collection: name => collection(`${path}/${name}`) }; }
   const db = {
-    collection: name => ({ doc: id => ref(`${name}/${id}`) }),
-    runTransaction(run) {
+    collection,
+    runTransaction(run, options) {
+      if (target === 'queue') assert.deepEqual(options, { readOnly: true }, 'queue summary must use SDK read-only mode');
       const job = queue.then(async () => {
         for (;;) {
           const staged = new Map(structuredClone([...records])), writes = []; let writing = false;
           const tx = {
-            async get(ref) { assert.equal(writing, false, 'Firestore reads must precede writes'); events.push(['get', ref.path]);
+            async get(ref) { assert.equal(writing, false, 'Firestore reads must precede writes'); events.push(['get', ref.path || ref.query]);
+              if (ref.query) {
+                assert.equal(ref.limit, 501, 'queue scans must be bounded and detect overflow');
+                const rows = [...staged].filter(([key]) => key.startsWith(`${ref.query}/`) && !key.slice(ref.query.length + 1).includes('/')).slice(0, ref.limit);
+                return { size: rows.length, docs: rows.map(([key, value]) => ({ id: key.split('/').at(-1), data: () => structuredClone(value) })) };
+              }
               return { id: ref.id, exists: staged.has(ref.path), data: () => structuredClone(staged.get(ref.path)) }; },
-            delete(ref) { writing = true; writes.push(['delete', ref.path]); staged.delete(ref.path); },
-            create(ref, value) { writing = true; if (staged.has(ref.path)) throw Error('PRIVATE_SENTINEL conflict');
+            delete(ref) { assert.notEqual(target, 'queue', 'read-only queue must never delete'); writing = true; writes.push(['delete', ref.path]); staged.delete(ref.path); },
+            create(ref, value) { assert.notEqual(target, 'queue', 'read-only queue must never create'); writing = true; if (staged.has(ref.path)) throw Error('PRIVATE_SENTINEL conflict');
               if (failAudit && ref.path.includes('/audit/')) throw Error('PRIVATE_SENTINEL audit failed');
               writes.push(['create', ref.path]); staged.set(ref.path, structuredClone(value)); },
-            set(ref, value) { writing = true; writes.push(['set', ref.path]); staged.set(ref.path, structuredClone(value)); },
+            set(ref, value) { assert.notEqual(target, 'queue', 'read-only queue must never set'); writing = true; writes.push(['set', ref.path]); staged.set(ref.path, structuredClone(value)); },
           };
           const value = await run(tx);
           if (retry && !retried) { retried = true; retry(records); continue; }
@@ -59,7 +66,8 @@ function fixture({ existing, permissions, anonymous = false, identityStatus, ena
     '@/lib/url': { getOrigin: async () => 'https://orderfly.dk' },
     'firebase-admin/firestore': { FieldValue: { serverTimestamp: () => ({ serverTimestamp: true }) } },
   };
-  const routes = loadTs(target === 'lifecycle' ? 'src/app/api/merchant/printers/lifecycle/route.ts' : 'src/app/api/merchant/printers/route.ts', mocks);
+  const routePath = target === 'queue' ? 'src/app/api/merchant/printers/queue/route.ts' : target === 'lifecycle' ? 'src/app/api/merchant/printers/lifecycle/route.ts' : 'src/app/api/merchant/printers/route.ts';
+  const routes = loadTs(routePath, mocks);
   const service = loadTs('src/lib/printing/writes.ts', mocks);
   const lifecycle = loadTs('src/lib/printing/lifecycle.ts', mocks);
   async function withFlag(run, flag = enabled ? 'true' : undefined) {
@@ -76,9 +84,9 @@ function fixture({ existing, permissions, anonymous = false, identityStatus, ena
     direct: (operation, input, flag) => withFlag(() => service.writePrinterConfiguration(operation, input), flag),
     async request(method = 'POST', body = { configuration: config() }, options = {}) {
       return withFlag(async () => {
-        const request = new Request(`https://orderfly.dk/api/merchant/printers${target === 'lifecycle' ? '/lifecycle' : ''}${options.query || ''}`, {
+        const request = new Request(`https://orderfly.dk/api/merchant/printers${target === 'queue' ? '/queue' : target === 'lifecycle' ? '/lifecycle' : ''}${options.query || ''}`, {
           method, headers: { origin: 'https://orderfly.dk', 'content-type': 'application/json', ...options.headers },
-          body: options.raw === undefined ? JSON.stringify(body) : options.raw,
+          ...(method === 'GET' ? {} : { body: options.raw === undefined ? JSON.stringify(body) : options.raw }),
         });
         const response = await routes[method](request);
         return { status: response.status, body: await response.json(), cache: response.headers.get('cache-control'), vary: response.headers.get('vary') };
