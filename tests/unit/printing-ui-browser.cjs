@@ -45,8 +45,8 @@ before(async () => {
 });
 after(async () => { await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
 async function choose(page, brand = 'a', location = 'la') {
-  await page.getByLabel('Brand', { exact: true }).selectOption(brand);
-  await page.getByLabel('Lokation', { exact: true }).selectOption(location);
+  await page.getByRole('combobox', { name: 'Brand', exact: true }).selectOption(brand);
+  await page.getByRole('combobox', { name: 'Lokation', exact: true }).selectOption(location);
 }
 for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667]]) {
   test(`printer overview uses scoped GET pages and separates status at ${name} width`, async t => {
@@ -62,7 +62,7 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667
     await page.goto(origin);
     await expect(page.getByRole('heading', { name: 'Printere', exact: true })).toBeVisible();
     assert.equal(requests.length, 0);
-    await expect(page.getByLabel('Lokation', { exact: true })).toBeDisabled();
+    await expect(page.getByRole('combobox', { name: 'Lokation', exact: true })).toBeDisabled();
     await choose(page);
     await expect(page.getByText('Aktiv', { exact: true })).toBeVisible();
     await expect(page.getByText('Ikke verificeret', { exact: true })).toHaveCount(20);
@@ -79,10 +79,10 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667
     await page.getByRole('button', { name: 'Første side' }).click();
     await expect(page.getByRole('button', { name: 'Næste side' })).toBeVisible();
     assert.equal(requests[2].after, null);
-    await page.getByLabel('Brand', { exact: true }).selectOption('b');
+    await page.getByRole('combobox', { name: 'Brand', exact: true }).selectOption('b');
     await expect(page.getByText('Ikke verificeret', { exact: true })).toHaveCount(0);
-    assert.equal(await page.getByLabel('Lokation', { exact: true }).inputValue(), '');
-    await expect(page.getByLabel('Lokation', { exact: true }).locator('option[value="la"]')).toHaveCount(0);
+    assert.equal(await page.getByRole('combobox', { name: 'Lokation', exact: true }).inputValue(), '');
+    await expect(page.getByRole('combobox', { name: 'Lokation', exact: true }).locator('option[value="la"]')).toHaveCount(0);
     assert.deepEqual(errors, []);
   });
 }
