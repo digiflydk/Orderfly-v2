@@ -131,3 +131,43 @@ login and app UI flows, reusable acceptance fixtures and browser diagnostics. Th
 backend smoke does not implement all race/TTL/mutation acceptance scenarios.
 Neither QA0a nor QA0b constitutes authenticated production live QA or physical
 printer readiness. Keep #376 open until all THREE preparation criteria are verified.
+
+## QA0b1 browser client binding (issue #379)
+
+Preparation was split before implementation into **three** slices: QA0a backend,
+QA0b1 client binding, and future QA0b2 actual browser runtime/login proof. This
+supersedes the earlier provisional two-slice setup because client safety wiring
+plus missing browser provisioning and end-to-end proof could not fit one bounded
+60-active-minute slice. These are preparation tasks, separate from the provisional
+22 feature-sprint budget and conditional QA packages #372/#373/#374.
+
+QA0b1 adds `NEXT_PUBLIC_ORDERFLY_LOCAL_QA=true` only to the sanitized fixed-demo
+child environment. The server guard requires the public and private opt-ins to
+agree. The client validates that public opt-in, development mode, exact
+`http://127.0.0.1:3100` origin, fixed project/API key/auth domain/app ID, and absent
+storage/messaging configuration **before Firebase SDK initialization**. In a
+browser it checks the actual window origin, rather than trusting SITE_URL. An
+ordinary production configuration without opt-in retains the existing path;
+partial QA configuration, demo configuration without opt-in, wrong cached app,
+or production mode with opt-in fails closed.
+
+The actual app's existing Firebase import connects its singleton Auth to
+`http://127.0.0.1:9099` before the existing login form gets Auth or signs in, and
+connects client Firestore to `127.0.0.1:8088` before exposing the database. No login,
+ID-token, session-cookie or native authorization policy is replaced. A per-app
+WeakMap survives module hot reload, connects each emulator once, and rejects
+changed Firestore instances. Connection failures propagate; the QA client never
+falls through to an unbound SDK. This binding provides no native authorization,
+write grant, dispatch or physical-print authority. The deny-all client Firestore
+rules remain unchanged.
+
+`node --test tests/unit/local-qa-client.cjs` executes the production client module
+with only SDK boundaries observed to prove ordering, guard frontiers, exact
+emulator addresses, normal production behavior, cache/HMR behavior and failure
+handling. The malformed project regression first failed against the old module
+because it initialized the SDK without rejecting the claimed QA mode. These
+adapter tests are **not** actual browser login or authenticated UI acceptance.
+QA0b2 still owns official browser provisioning, browser-specific loopback network
+restrictions, shared in-memory seed/cleanup, real visible login and real app UI
+proof. No browser process, installer or server is started by QA0b1; parent #376
+remains open.
