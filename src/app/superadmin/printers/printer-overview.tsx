@@ -113,6 +113,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
     <header>
       <p className="text-sm font-semibold text-primary">Superadmin · Printerpilot</p>
       <h1 className="mt-1 text-3xl font-semibold tracking-tight">Printere</h1>
+      <a href="/superadmin/printers/routing" className="mt-2 inline-block text-sm text-primary underline">Routingregler</a>
       <p className="mt-2 text-sm text-muted-foreground">Administrer printeropsætning på tværs af brands og lokationer.</p>
     </header>
     <div className="admin-filter-bar flex flex-wrap items-end gap-3 p-4">
