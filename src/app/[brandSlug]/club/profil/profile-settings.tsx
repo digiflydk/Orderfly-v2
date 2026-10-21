@@ -1,7 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { profileSchema, type MemberProfile } from '@/lib/loyalty/stamp-card/profile-rules';
+import { copenhagenDay } from '@/lib/loyalty/stamp-card/day';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger,
@@ -11,17 +15,44 @@ import { portalErrorText, portalRequest } from '../portal-api';
 type Props = {
   slug: string; base: string; programName: string;
   member: { name: string; email: string };
+  profile?: MemberProfile;
   newsletter: { subscribed: boolean; consentVersion: string; consentText: string; consentHelp: string };
 };
 
 // Profile and settings (spec §4.5). Each change goes through the phase 1 API;
 // unsubscribing keeps the membership, stamps and rewards.
-export function ProfileSettings({ slug, base, programName, member, newsletter }: Props) {
+export function ProfileSettings({ slug, base, programName, member, newsletter, profile = { phone: '', birthDate: null, gender: null } }: Props) {
   const router = useRouter();
   const [subscribed, setSubscribed] = useState(newsletter.subscribed);
-  const [busy, setBusy] = useState<null | 'consent' | 'logout' | 'delete'>(null);
+  const [busy, setBusy] = useState<null | 'consent' | 'logout' | 'delete' | 'profile'>(null);
   const [message, setMessage] = useState<{ text: string; error: boolean } | null>(null);
   const [deleted, setDeleted] = useState(false);
+  const [phone, setPhone] = useState(profile.phone), [birthDate, setBirthDate] = useState(profile.birthDate ?? '');
+  const [gender, setGender] = useState<MemberProfile['gender']>(profile.gender);
+  const [profileError, setProfileError] = useState<{ field?: 'phone' | 'birthDate'; text: string } | null>(null);
+  const phoneRef = useRef<HTMLInputElement>(null), birthDateRef = useRef<HTMLInputElement>(null);
+
+  async function saveProfile(event: React.FormEvent) {
+    event.preventDefault(); setProfileError(null); setMessage(null);
+    const value = { phone, birthDate: birthDate || null, gender };
+    const parsed = profileSchema.safeParse(value);
+    const field = !parsed.success ? parsed.error.issues[0]?.path[0] : birthDate && birthDate > copenhagenDay(Date.now()) ? 'birthDate' : null;
+    if (field) {
+      const phoneInvalid = field === 'phone';
+      setProfileError({ field: phoneInvalid ? 'phone' : 'birthDate', text: phoneInvalid ? 'Skriv et gyldigt telefonnummer, eller lad feltet være tomt.' : 'Vælg en gyldig fødselsdato, som ikke ligger i fremtiden.' });
+      (phoneInvalid ? phoneRef : birthDateRef).current?.focus(); return;
+    }
+    setBusy('profile');
+    const answer = await portalRequest<{ profile: MemberProfile }>(slug, 'profile', value);
+    setBusy(null);
+    if (answer.ok) {
+      setPhone(answer.data.profile.phone); setBirthDate(answer.data.profile.birthDate ?? ''); setGender(answer.data.profile.gender);
+      setMessage({ text: 'Dine oplysninger er gemt.', error: false }); router.refresh(); return;
+    }
+    if (unauthorized(answer.error)) return;
+    setProfileError({ text: answer.error === 'customer_conflict' ? 'Telefonnummeret kan ikke gemmes. Kontakt restauranten for hjælp.'
+      : answer.error === 'invalid_request' ? 'Tjek dine profiloplysninger, og prøv igen.' : portalErrorText(answer.error) });
+  }
 
   const unauthorized = (error: string) => { if (error === 'unauthorized') { window.location.assign(`${base}/login`); return true; } return false; };
 
@@ -77,6 +108,31 @@ export function ProfileSettings({ slug, base, programName, member, newsletter }:
           <dt>Navn</dt><dd className="break-words">{member.name}</dd>
           <dt>E-mail</dt><dd className="break-all">{member.email}</dd>
         </dl>
+        <form aria-label="Rediger profiloplysninger" className="mt-4 flex flex-col gap-4" onSubmit={saveProfile} noValidate>
+          <p className="text-sm">Du kan tilføje eller rette dine oplysninger her. Felterne er valgfrie.</p>
+          {profileError && <p role="alert" id="club-profile-error">{profileError.text}</p>}
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="club-profile-phone">Telefonnummer</Label>
+            <Input ref={phoneRef} id="club-profile-phone" name="phone" type="tel" autoComplete="tel" maxLength={80} value={phone}
+              disabled={busy !== null} aria-invalid={profileError?.field === 'phone'} aria-describedby={profileError?.field === 'phone' ? 'club-profile-error' : undefined}
+              onChange={event => setPhone(event.target.value)} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="club-profile-birth-date">Fødselsdato</Label>
+            <Input ref={birthDateRef} id="club-profile-birth-date" name="birthDate" type="date" autoComplete="bday" min="1900-01-01" max={copenhagenDay(Date.now())} value={birthDate}
+              disabled={busy !== null} aria-invalid={profileError?.field === 'birthDate'} aria-describedby={profileError?.field === 'birthDate' ? 'club-profile-error' : undefined}
+              onChange={event => setBirthDate(event.target.value)} />
+          </div>
+          <div className="flex flex-col gap-2">
+            <Label htmlFor="club-profile-gender">Køn</Label>
+            <select id="club-profile-gender" name="gender" className="min-h-12 w-full rounded-md border bg-background px-3 py-3 text-base text-foreground" value={gender ?? ''}
+              disabled={busy !== null} onChange={event => setGender(event.target.value as MemberProfile['gender'] || null)}>
+              <option value="">Ikke udfyldt</option><option value="female">Kvinde</option><option value="male">Mand</option>
+              <option value="other">Andet</option><option value="prefer_not_to_say">Ønsker ikke at oplyse</option>
+            </select>
+          </div>
+          <Button type="submit" variant="brand" size="lg" className="min-h-12 text-base" disabled={busy !== null}>{busy === 'profile' ? 'Gemmer…' : 'Gem oplysninger'}</Button>
+        </form>
       </section>
 
       <section aria-labelledby="club-newsletter" className="flex flex-col gap-3 rounded-xl border p-4">

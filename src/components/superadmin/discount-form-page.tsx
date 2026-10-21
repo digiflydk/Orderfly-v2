@@ -52,7 +52,7 @@ const discountSchema = z.object({
   id: z.string().optional(),
   brandId: z.string().min(1, 'A brand must be selected.'),
   locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
-  applicationType: z.enum(['code', 'newsletter_signup']).default('code'),
+  applicationType: z.enum(['code', 'newsletter_signup', 'club_signup']).default('code'),
   code: z.string().transform(v => v.trim().toUpperCase()),
   description: z.string().optional(),
   discountType: z.enum(['percentage', 'fixed_amount']),
@@ -73,8 +73,8 @@ const discountSchema = z.object({
   allowStacking: z.boolean().default(false),
 }).superRefine((data, ctx) => {
   if (data.discountType === 'percentage' && data.discountValue > 100) ctx.addIssue({ code: 'custom', path: ['discountValue'], message: 'Procentrabatten må højst være 100 %.' });
-  if (data.applicationType === 'code' && data.code === 'NEWSLETTER_SIGNUP') {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['code'], message: 'Indtast en rabatkode. NEWSLETTER_SIGNUP er reserveret til nyhedsbrevsrabatter.' });
+  if (data.applicationType === 'code' && ['NEWSLETTER_SIGNUP', 'CLUB_SIGNUP'].includes(data.code)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['code'], message: 'Indtast en rabatkode. NEWSLETTER_SIGNUP og CLUB_SIGNUP er reserveret til tilmeldingskampagner.' });
   }
   if (data.applicationType === 'code' && data.code.length < 3) {
     ctx.addIssue({
@@ -199,8 +199,8 @@ export function DiscountFormPage({
 
 
   useEffect(() => {
-    if (applicationType === 'newsletter_signup') {
-      setValue('code', 'NEWSLETTER_SIGNUP', { shouldValidate: true });
+    if (applicationType === 'newsletter_signup' || applicationType === 'club_signup') {
+      setValue('code', applicationType === 'club_signup' ? 'CLUB_SIGNUP' : 'NEWSLETTER_SIGNUP', { shouldValidate: true });
     }
   }, [applicationType, setValue]);
 
@@ -317,6 +317,7 @@ export function DiscountFormPage({
                         <SelectContent>
                           <SelectItem value="code">Customer enters a discount code</SelectItem>
                           <SelectItem value="newsletter_signup">Automatic on newsletter signup</SelectItem>
+                          <SelectItem value="club_signup">Automatic on Club signup</SelectItem>
                         </SelectContent>
                       </Select>
                       <FormDescription>
@@ -327,14 +328,16 @@ export function DiscountFormPage({
                   )}
                 />
 
-                {applicationType === 'newsletter_signup' && (
+                {applicationType === 'club_signup' && <p className="text-sm text-muted-foreground">Personlig engangsrabat ved Club-tilmelding. Vælg Club i kampagnepanelet for at vise tilmelding i checkout. Gemning af rabatten ændrer ikke dette valg.</p>}
+
+                {(applicationType === 'newsletter_signup' || applicationType === 'club_signup') && (
                   <FormField
                     control={control as any}
                     name="allowStacking"
                     render={({ field }) => (
                       <FormItem className="flex items-start justify-between gap-4 rounded-lg border p-4">
                         <div className="space-y-1">
-                          <FormLabel>Tillad rabatstabling på nyhedsbrevsrabatten</FormLabel>
+                          <FormLabel>Tillad rabatstabling på tilmeldingsrabatten</FormLabel>
                           <FormDescription>
                             Giv rabat på alle varer efter varerabatter, inklusive tilvalg og menuer.
                             Pose, levering og gebyrer er ikke med. Når valget er slået fra,

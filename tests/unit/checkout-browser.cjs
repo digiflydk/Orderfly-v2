@@ -24,7 +24,7 @@ before(async()=>{
  import {basketTotals} from ${JSON.stringify(path.join(root,'src/lib/basket-totals.ts'))};
  const scenario=new URLSearchParams(window.location.search).get('case')||'success';
  const presentation=scenario.startsWith('presentation');
- const newsletter=scenario.startsWith('ui-newsletter');
+ const newsletter=scenario.startsWith('ui-newsletter')||scenario.startsWith('ui-club');
  export const brand={...${JSON.stringify(brand)},bagFee:presentation||newsletter?4:0}, location=${JSON.stringify(location)};
  const context=React.createContext(null);
  const item={id:'pizza',cartItemId:'pizza',productName:'Pizza',quantity:1,basePrice:100,price:100,toppings:[],itemType:'product',imageUrl:'/image.png'};
@@ -56,7 +56,8 @@ before(async()=>{
  const actions=fixture('actions',`
  import {scenario} from ${JSON.stringify(settings)};
  export const newsletterSyncAvailableAction=async()=>true;
- export const getNewsletterSignupDiscountAction=async(brand,location,subtotal,method,email)=>scenario.startsWith('ui-newsletter')&&email!=='existing@example.test'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:scenario.includes('minimum')?150:0,allowStacking:scenario.includes('stacking-on')}:null;
+ export const getCheckoutSignupAction=async()=>scenario.startsWith('ui-club')&&!scenario.includes('personal-newsletter')?{mode:'club',clubProgram:{active:true,name:'Fixture Club',consentText:'Ja tak, send mig nyhedsbrevet fra Fixture Club.',consentHelp:'Medlemskab kræver nyhedsbrevet.',termsAccept:'Jeg accepterer Club-vilkårene.',consentVersion:'club-consent-1',termsVersion:'club-terms-1',campaignVersion:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',welcomeStamps:1,termsUrl:'/brand/club/vilkaar'}}:{mode:'newsletter'};
+ export const getNewsletterSignupDiscountAction=async(brand,location,subtotal,method,email)=>scenario.startsWith('ui-club')?{id:'club',applicationType:'club_signup',discountType:'percentage',discountValue:15,minOrderValue:0,allowStacking:false,requiresSignup:!scenario.includes('personal')}:scenario.startsWith('ui-newsletter')&&email!=='existing@example.test'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:scenario.includes('minimum')?150:0,allowStacking:scenario.includes('stacking-on')}:null;
  export async function validateDiscountAction(){throw Error('discount network failed');}
  export async function createStripeCheckoutSessionAction(...args){
   window.checkoutArguments=args;
@@ -154,7 +155,7 @@ async function setup(t,scenario,email='test@example.test'){
  await page.getByPlaceholder('John Doe',{exact:true}).fill('Test Customer');
  await page.getByPlaceholder('john@example.com',{exact:true}).fill(email);
  await page.getByPlaceholder('+123456789',{exact:true}).fill('12345678');
- await page.getByRole('checkbox',{name:/Jeg accepterer|I accept the/}).first().check();
+ await page.locator('.commerce-terms').getByRole('checkbox').first().check();
  return page;
 }
 const pay=page=>page.getByRole('button',{name:/Gå til betaling/}).first().click();
@@ -428,4 +429,32 @@ test('QA209 cart-only upsell offer price, add, remove and dismiss never start ch
  await line.getByRole('button',{name:'Fjern Drink',exact:true}).click();await line.waitFor({state:'detached'});
  await offer.getByRole('button',{name:'Skjul anbefaling',exact:true}).click();await offer.waitFor({state:'hidden'});
  assert.deepEqual(errors,[]);assert.equal(requests.get('upsell-qa209')?.length||0,0);
+});
+
+for (const width of ['desktop','mobile']) test(`Club signup ${width}: requires two unticked consents and discounts this order`,async t=>{
+ const scenario='ui-club-new-'+width,page=await setup(t,scenario);
+ const card=page.locator('[data-club-signup-offer]');await card.getByRole('heading',{name:/Bliv medlem af Fixture Club og få 15%/}).waitFor();
+ assert.equal(await page.locator('[data-newsletter-offer]').count(),0);
+ const consent=card.getByRole('checkbox',{name:'Ja tak, send mig nyhedsbrevet fra Fixture Club.'});
+ const terms=card.getByRole('checkbox',{name:'Jeg accepterer Club-vilkårene.'});
+ assert.equal(await consent.isChecked(),false);assert.equal(await terms.isChecked(),false);
+ await consent.check();assert.equal(await card.getByText(/trukket fra denne ordre/).count(),0);
+ await pay(page);await card.getByText('Du skal acceptere Club-vilkårene for at blive medlem.').waitFor();assert.equal(requests.has(scenario),false);
+ await terms.check();await card.getByText(/Club-rabat: 15,00.*trukket fra/).waitFor();
+ assert.equal(await card.getByRole('link',{name:'Læs Club-vilkårene'}).getAttribute('href'),'/brand/club/vilkaar');
+ await pay(page);await page.waitForURL('**/stripe?*');
+ const args=requests.get(scenario)[0],customer=args[1];
+ assert.equal(customer.subscribeToClub,true);assert.equal(customer.subscribeToNewsletter,true);assert.equal(customer.clubTermsAccepted,true);
+ assert.equal(customer.clubConsentVersion,'club-consent-1');assert.equal(customer.clubTermsVersion,'club-terms-1');assert.equal(customer.clubCampaignVersion,'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+ assert.equal(customer.newsletterConsentVersion,undefined);assert.equal(args[6],'club');assert.equal(args[5].discountTotal,15);
+ assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth));
+});
+test('existing personal Club right can be used beside newsletter signup without signing up to Club again',async t=>{
+ const scenario='ui-club-personal-newsletter',page=await setup(t,scenario);
+ const card=page.locator('[data-club-personal-offer]');await card.getByText('Brug din personlige Club-rabat').waitFor();
+ assert.equal(await page.locator('[data-club-signup-offer]').count(),0);
+ await page.getByRole('checkbox',{name:'Få nyheder og tilbud'}).waitFor();
+ const use=card.getByRole('checkbox');assert.equal(await use.isChecked(),false);await use.check();
+ await card.getByText(/Club-rabat: 15,00.*trukket fra/).waitFor();await pay(page);await page.waitForURL('**/stripe?*');
+ const args=requests.get(scenario)[0];assert.equal(args[1].subscribeToClub,false);assert.equal(args[1].subscribeToNewsletter,false);assert.equal(args[6],'club');
 });

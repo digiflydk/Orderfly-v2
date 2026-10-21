@@ -10,7 +10,7 @@ import { requestHostedCheckout } from '@/lib/checkout-request';
 import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { basketTotals } from '@/lib/basket-totals';
 import { lineMoney, sumMoney } from '@/lib/money';
-import { newsletterAllowsStacking } from '@/lib/promotion-rules';
+import { newsletterAllowsStacking, isSignupDiscount } from '@/lib/promotion-rules';
 
 import * as React from 'react';
 import { useCart } from "@/context/cart-context";
@@ -24,8 +24,8 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { getNewsletterSignupDiscountAction, newsletterSyncAvailableAction, validateDiscountAction } from "@/app/checkout/actions";
-import type { NewsletterDiscountOffer } from "@/app/checkout/actions";
+import { getNewsletterSignupDiscountAction, getCheckoutSignupAction, newsletterSyncAvailableAction, validateDiscountAction } from "@/app/checkout/actions";
+import type { NewsletterDiscountOffer, CheckoutSignupConfig } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, X, Tag, Truck, Store, Clock, ShoppingCart, AlertTriangle, ArrowLeft } from "lucide-react";
 import { Badge } from "../ui/badge";
@@ -83,6 +83,8 @@ const checkoutSchema = z.object({
   zipCode: z.string().optional(),
   city: z.string().optional(),
   subscribeToNewsletter: z.boolean().default(false),
+  clubTermsAccepted: z.boolean().default(false),
+  useClubDiscount: z.boolean().default(false),
   acceptTerms: z.boolean().refine(val => val === true, {
     message: "Du skal acceptere handelsbetingelserne."
   }),
@@ -97,6 +99,8 @@ interface CheckoutFormValues {
   zipCode?: string;
   city?: string;
   subscribeToNewsletter?: boolean;
+  clubTermsAccepted?: boolean;
+  useClubDiscount?: boolean;
   acceptTerms: boolean;
 }
 
@@ -362,6 +366,8 @@ function CheckoutForm({ location }: { location: Location }) {
   const [isLoadingTimes, setIsLoadingTimes] = useState(true);
   const [isDiscountErrorOpen, setIsDiscountErrorOpen] = useState(false);
   const [discountErrorMessage, setDiscountErrorMessage] = useState('');
+  const [signupConfig, setSignupConfig] = useState<CheckoutSignupConfig>({mode:'none'});
+  const signupConfigRef = useRef<CheckoutSignupConfig>({mode:'none'});
   const [newsletterOffer, setNewsletterOffer] = useState<NewsletterDiscountOffer | null>(null);
   const [newsletterSyncAvailable, setNewsletterSyncAvailable] = useState<boolean | null>(null);
 
@@ -406,12 +412,35 @@ function CheckoutForm({ location }: { location: Location }) {
       zipCode: '',
       city: '',
       subscribeToNewsletter: false,
+      clubTermsAccepted: false,
+      useClubDiscount: false,
       acceptTerms: false
     }
   });
 
   const consentAttempt = React.useRef<{key:string;id:string}|null>(null);
-  const newsletterSelected = form.watch('subscribeToNewsletter');
+  const newsletterOptIn = form.watch('subscribeToNewsletter');
+  const clubTermsAccepted = form.watch('clubTermsAccepted');
+  const useClubDiscount = form.watch('useClubDiscount');
+  const personalClubOffer = newsletterOffer?.applicationType === 'club_signup' && newsletterOffer.requiresSignup === false;
+  const clubSignupShown = signupConfig.mode === 'club' && !!signupConfig.clubProgram && !personalClubOffer;
+  const newsletterSelected = personalClubOffer ? useClubDiscount : clubSignupShown ? newsletterOptIn && clubTermsAccepted : signupConfig.mode === 'newsletter' && newsletterOptIn;
+  useEffect(() => {
+    let current = true;
+    if (!brand?.id) { setSignupConfig({mode:'none'}); return; }
+    const refresh = () => { void getCheckoutSignupAction(brand.id).then(config => {
+      if (!current) return;
+      const previous = signupConfigRef.current;
+        if (previous.mode !== config.mode || previous.clubProgram?.consentVersion !== config.clubProgram?.consentVersion || previous.clubProgram?.termsVersion !== config.clubProgram?.termsVersion || previous.clubProgram?.campaignVersion !== config.clubProgram?.campaignVersion) {
+          form.setValue('subscribeToNewsletter', false); form.setValue('clubTermsAccepted', false); form.setValue('useClubDiscount', false);
+          setNewsletterOffer(null);
+        }
+        signupConfigRef.current = config;
+        setSignupConfig(config);
+    }).catch(() => { if (current) setSignupConfig({mode:'none'}); }); };
+    refresh(); window.addEventListener('focus', refresh);
+    return () => { current = false; window.removeEventListener('focus', refresh); };
+  }, [brand?.id, form]);
   const newsletterEmail = form.watch('email');
   useEffect(()=>{consentAttempt.current=null;},[newsletterSelected,newsletterEmail]);
   const newsletterStacking = newsletterAllowsStacking(newsletterOffer);
@@ -422,7 +451,7 @@ function CheckoutForm({ location }: { location: Location }) {
   const newsletterDiscount = useMemo<Discount | null>(() => {
     if (!newsletterOffer || !brand || !location || !deliveryType) return null;
     return {
-      ...newsletterOffer, brandId: brand.id, locationIds: [location.id], code: 'Nyhedsbrev',
+      ...newsletterOffer, brandId: brand.id, locationIds: [location.id], code: newsletterOffer.applicationType === 'club_signup' ? 'Club' : 'Nyhedsbrev',
       isActive: true, orderTypes: [deliveryType], activeDays: [], activeTimeSlots: [],
       usageLimit: 0, usedCount: 0, perCustomerLimit: 1, firstTimeCustomerOnly: false,
       allowStacking: newsletterOffer.allowStacking === true, createdAt: new Date(), updatedAt: new Date(),
@@ -435,9 +464,9 @@ function CheckoutForm({ location }: { location: Location }) {
     deliveryType, location, brand, includeBagFee,
   }).voucherDiscount : null, [newsletterDiscount, cartItems, standardDiscounts, deliveryType, location, brand, includeBagFee]);
   const newsletterBenefitAvailable = !!newsletterPreview &&
-    (!appliedDiscount || appliedDiscount.applicationType === 'newsletter_signup');
+    (!appliedDiscount || isSignupDiscount(appliedDiscount));
   const newsletterSavingApplied = newsletterBenefitAvailable && newsletterSelected && !!voucherDiscount?.amount &&
-    appliedDiscount?.applicationType === 'newsletter_signup' && appliedDiscount.id === newsletterOffer?.id;
+    isSignupDiscount(appliedDiscount) && appliedDiscount?.id === newsletterOffer?.id;
   const newsletterMinimumNotMet = !!newsletterOffer && newsletterBase < (newsletterOffer.minOrderValue || 0);
   const newsletterOfferLabel = newsletterOffer && (newsletterOffer.discountType === 'percentage'
     ? `${newsletterOffer.discountValue}%` : formatPrice(newsletterOffer.discountValue));
@@ -467,7 +496,7 @@ function CheckoutForm({ location }: { location: Location }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [brand, location, subtotal, deliveryType, newsletterEmail, standardDiscounts, cartItems, itemDiscount]);
+  }, [brand, location, subtotal, deliveryType, newsletterEmail, standardDiscounts, cartItems, itemDiscount, signupConfig.mode, signupConfig.clubProgram?.consentVersion, signupConfig.clubProgram?.termsVersion, signupConfig.clubProgram?.campaignVersion]);
 
   useEffect(() => {
     if (
@@ -475,7 +504,7 @@ function CheckoutForm({ location }: { location: Location }) {
       newsletterDiscount && newsletterBenefitAvailable
     ) {
       applyDiscount(newsletterDiscount);
-    } else if (appliedDiscount?.applicationType === 'newsletter_signup') {
+    } else if (isSignupDiscount(appliedDiscount)) {
       removeDiscount();
     }
   }, [newsletterSelected, newsletterDiscount, newsletterBenefitAvailable, appliedDiscount?.applicationType, applyDiscount, removeDiscount]);
@@ -599,7 +628,14 @@ function CheckoutForm({ location }: { location: Location }) {
 
       const minimalCartItems = checkoutItems(cartItems);
 
-      if(formValues.subscribeToNewsletter) {
+      const joiningClub = clubSignupShown && !!formValues.subscribeToNewsletter && !!formValues.clubTermsAccepted;
+      if (clubSignupShown && (formValues.subscribeToNewsletter || formValues.clubTermsAccepted) && !joiningClub) {
+        if (!formValues.subscribeToNewsletter) form.setError('subscribeToNewsletter', {message:'Du skal give samtykke til nyhedsbrevet for at blive Club-medlem.'});
+        if (!formValues.clubTermsAccepted) form.setError('clubTermsAccepted', {message:'Du skal acceptere Club-vilkårene for at blive medlem.'});
+        return;
+      }
+      const newsletterConsent = joiningClub || signupConfig.mode === 'newsletter' && !!formValues.subscribeToNewsletter;
+      if(newsletterConsent && !joiningClub) {
         const key=`${brand.id}/${formValues.email.trim().toLowerCase()}`;
         if(consentAttempt.current?.key!==key)consentAttempt.current={key,id:crypto.randomUUID()};
       }
@@ -608,8 +644,9 @@ function CheckoutForm({ location }: { location: Location }) {
       const customerInfo: CustomerInfo = {
         ...formValues,
         paymentMethod: paymentMethod || 'online',
-        subscribeToNewsletter: !!formValues.subscribeToNewsletter,
-        ...(formValues.subscribeToNewsletter && consentAttempt.current ? {newsletterConsentId:consentAttempt.current.id,newsletterConsentVersion:NEWSLETTER_CONSENT_VERSION}:{}),
+        subscribeToNewsletter: newsletterConsent,
+        ...(joiningClub && signupConfig.clubProgram ? {subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:signupConfig.clubProgram.consentVersion,clubTermsVersion:signupConfig.clubProgram.termsVersion,clubCampaignVersion:signupConfig.clubProgram.campaignVersion} : {subscribeToClub:false}),
+        ...(newsletterConsent && !joiningClub && consentAttempt.current ? {newsletterConsentId:consentAttempt.current.id,newsletterConsentVersion:NEWSLETTER_CONSENT_VERSION}:{}),
         ...(statisticsAllowed() && currentAnalyticsSession ? {analyticsSessionId: currentAnalyticsSession, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const, ...(analyticsAttribution ? { analyticsAttribution } : {})} : {})
       };
 
@@ -928,11 +965,11 @@ function CheckoutForm({ location }: { location: Location }) {
                     </>
                   )}
                   <Separator className="!mt-6" />
-                  <FormField
+                  {signupConfig.mode === 'newsletter' && <FormField
                     control={form.control}
                     name="subscribeToNewsletter"
                     render={({ field }) => (
-                      <FormItem data-newsletter-offer={newsletterBenefitAvailable} className="commerce-newsletter flex flex-row items-start gap-3 space-y-0 rounded-xl border p-5">
+                      <FormItem data-newsletter-offer={newsletterBenefitAvailable && newsletterOffer?.applicationType === 'newsletter_signup'} className="commerce-newsletter flex flex-row items-start gap-3 space-y-0 rounded-xl border p-5">
                         <FormControl>
                           <Checkbox
                             checked={!!field.value}
@@ -940,22 +977,22 @@ function CheckoutForm({ location }: { location: Location }) {
                           />
                         </FormControl>
                         <div className="space-y-1 leading-none">
-                          <FormLabel className="text-base font-semibold leading-relaxed">{newsletterBenefitAvailable ? `Få ${newsletterOfferLabel} ved tilmelding` : 'Få nyheder og tilbud'}</FormLabel>
+                          <FormLabel className="text-base font-semibold leading-relaxed">{newsletterBenefitAvailable && newsletterOffer?.applicationType === 'newsletter_signup' ? `Få ${newsletterOfferLabel} ved tilmelding` : 'Få nyheder og tilbud'}</FormLabel>
                           <FormDescription>
                             {newsletterConsentText(brand?.name || 'restauranten')}
                             {newsletterSyncAvailable === false && <span role="status" className="block mt-2 text-amber-800">Nyhedsbrevstjenesten afventer opsætning. Samtykket gemmes først, når du fortsætter med bestillingen. Tilmelding hos udbyderen afventer opsætning.</span>}
-                            {newsletterOffer && <span className="block mt-2">
+                            {newsletterOffer?.applicationType === 'newsletter_signup' && <span className="block mt-2">
                               {newsletterStacking
                                 ? `Nyhedsbrevsrabatten giver ${newsletterOfferLabel} på alle varer efter varerabatter, inklusive tilvalg og menuer. Pose, levering og gebyrer er ikke med.`
                                 : `Nyhedsbrevsrabatten giver ${newsletterOfferLabel} på varer uden anden rabat. Gælder ikke menuer eller gebyrer.`}
                               {!!newsletterOffer.minOrderValue && ` Kræver mindst ${formatPrice(newsletterOffer.minOrderValue)} i ${newsletterBaseLabel}.`}
                             </span>}
                             <span role="status" aria-live="polite" className="block mt-2">
-                              {newsletterSavingApplied
+                              {newsletterSavingApplied && newsletterOffer?.applicationType === 'newsletter_signup'
                                 ? <span className="font-semibold text-green-700">Nyhedsbrevsrabat: {formatPrice(voucherDiscount!.amount)} trukket fra denne ordre.</span>
-                                : newsletterBenefitAvailable
+                                : newsletterBenefitAvailable && newsletterOffer?.applicationType === 'newsletter_signup'
                                   ? `Vælg tilmelding for at få ${formatPrice(newsletterPreview!.amount)} i nyhedsbrevsrabat på denne ordre.`
-                                  : newsletterOffer && (newsletterMinimumNotMet
+                                  : newsletterOffer?.applicationType === 'newsletter_signup' && (newsletterMinimumNotMet
                                     ? `Du mangler ${formatPrice(sumMoney([newsletterOffer.minOrderValue || 0, -newsletterBase]))} i ${newsletterBaseLabel} for at bruge nyhedsbrevsrabatten.`
                                     : 'Dine nuværende rabatter eller menupriser bevares. Tilmelding giver ingen ekstra rabat på denne ordre.')}
                             </span>
@@ -963,13 +1000,33 @@ function CheckoutForm({ location }: { location: Location }) {
                         </div>
                       </FormItem>
                     )}
-                  />
+                  />}
+                  {clubSignupShown && signupConfig.clubProgram && <div className="commerce-newsletter flex flex-col gap-4 rounded-xl border p-5" data-club-signup-offer={newsletterBenefitAvailable && newsletterOffer?.applicationType === 'club_signup'}>
+                    <h3 className="text-base font-semibold">Bliv medlem af {signupConfig.clubProgram.name}{newsletterBenefitAvailable && newsletterOffer?.applicationType === 'club_signup' ? ` og få ${newsletterOfferLabel}` : ''}</h3>
+                    {!!signupConfig.clubProgram.welcomeStamps && <p>Du får {signupConfig.clubProgram.welcomeStamps} {signupConfig.clubProgram.welcomeStamps === 1 ? 'velkomststempel' : 'velkomststempler'} ved tilmelding.</p>}
+                    <FormField control={form.control} name="subscribeToNewsletter" render={({field}) => <FormItem className="flex items-start gap-3 space-y-0">
+                      <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                      <div><FormLabel className="font-normal leading-relaxed whitespace-pre-line">{signupConfig.clubProgram!.consentText}</FormLabel><FormDescription className="whitespace-pre-line">{signupConfig.clubProgram!.consentHelp}</FormDescription><FormMessage /></div>
+                    </FormItem>} />
+                    <FormField control={form.control} name="clubTermsAccepted" render={({field}) => <FormItem className="flex items-start gap-3 space-y-0">
+                      <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                      <div><FormLabel className="font-normal leading-relaxed">{signupConfig.clubProgram!.termsAccept}</FormLabel> <a className="underline" href={signupConfig.clubProgram!.termsUrl} target="_blank" rel="noopener noreferrer">Læs Club-vilkårene</a><FormMessage /></div>
+                    </FormItem>} />
+                    <p role="status" aria-live="polite" className="text-sm leading-relaxed">{newsletterOffer?.applicationType === 'club_signup' && (newsletterSavingApplied
+                      ? `Club-rabat: ${formatPrice(voucherDiscount!.amount)} trukket fra denne ordre.`
+                      : newsletterBenefitAvailable ? `Vælg begge felter for at få ${formatPrice(newsletterPreview!.amount)} i Club-rabat på denne ordre.`
+                      : 'Dine nuværende rabatter eller menupriser bevares. Club-tilmelding giver ingen ekstra rabat på denne ordre.')}</p>
+                  </div>}
+                  {personalClubOffer && <FormField control={form.control} name="useClubDiscount" render={({field}) => <FormItem className="commerce-newsletter flex items-start gap-3 space-y-0 rounded-xl border p-5" data-club-personal-offer={newsletterBenefitAvailable}>
+                    <FormControl><Checkbox checked={!!field.value} onCheckedChange={field.onChange} /></FormControl>
+                    <div><FormLabel>Brug din personlige Club-rabat</FormLabel><FormDescription>{newsletterSavingApplied ? `Club-rabat: ${formatPrice(voucherDiscount!.amount)} trukket fra denne ordre.` : newsletterBenefitAvailable ? `Du har ${formatPrice(newsletterPreview!.amount)} i Club-rabat til denne ordre. Du skal ikke tilmelde dig igen.` : 'Din personlige rabat giver ingen ekstra besparelse på den aktuelle kurv.'}</FormDescription></div>
+                  </FormItem>} />}
                 </div>
               </section>
 
-              <details open={appliedDiscount && appliedDiscount.applicationType!=='newsletter_signup' ? true : undefined} className="rounded-lg border p-4">
+              <details open={appliedDiscount && !isSignupDiscount(appliedDiscount) ? true : undefined} className="rounded-lg border p-4">
                 <summary className="cursor-pointer font-semibold min-h-11 flex items-center">Har du en rabatkode?</summary>
-                {appliedDiscount && appliedDiscount.applicationType !== 'newsletter_signup' ? (
+                {appliedDiscount && !isSignupDiscount(appliedDiscount) ? (
                   <div className="flex justify-between items-center text-green-600">
                     <div className="flex items-center gap-2">
                       <Tag className="h-4 w-4" />
