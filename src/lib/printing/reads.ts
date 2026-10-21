@@ -3,7 +3,8 @@ import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { requireOrderflyAccess, verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
 import { AuthorityError } from '@/lib/access/authority';
-import { printerConfigurationSchema, validatePrinterConfiguration } from './configuration';
+import { validatePrinterConfiguration } from './configuration';
+import { storedPrinterSchema } from './storage';
 
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const readSchema = z.object({
@@ -11,13 +12,6 @@ const readSchema = z.object({
   after: identifier.optional(),
   limit: z.string().regex(/^(?:[1-9]|[1-4][0-9]|50)$/).optional(),
 }).strict().refine(input => !input.printerId || (!input.after && !input.limit));
-
-// A dedicated versioned envelope, never a printer's private credential record.
-const storedPrinterSchema = z.object({
-  schemaVersion: z.literal(1), configuration: printerConfigurationSchema,
-  revision: z.number().int().positive().safe(), deletedAt: z.null(),
-  createdAt: z.unknown().optional(), updatedAt: z.unknown().optional(),
-}).strict();
 
 export class PrinterReadError extends Error {
   constructor(public code: 'invalid_request' | 'not_found' | 'printers_unavailable', public status: number) {
