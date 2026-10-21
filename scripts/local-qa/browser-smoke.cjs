@@ -5,6 +5,7 @@ const { chromium } = require('playwright');
 const { guardedContext } = require('./browser-boundary.cjs');
 const { diagnostics, loginAlert, fieldDom } = require('./browser-diagnostics.cjs');
 const { withCaughtLoginExceptions } = require('./caught-login-exceptions.cjs');
+const { runLoginFirstClickProof } = require('./login-first-click-proof.cjs');
 const BASE = 'http://127.0.0.1:3100';
 const headers = ['Aktiveringsdato', 'Brand', 'Lokation', 'Status', 'Last used', 'Total printers', 'Printer name', 'Printertype', 'Handlinger'];
 async function login(page, actor, role, diagnostic) {
@@ -41,8 +42,10 @@ async function runBrowserSmoke({ admin, merchant, ids }) {
     || Reflect.get(globalThis, Symbol.for('orderfly.qa0.loopback-guard')) !== true) throw Error('QA0 browser boundary missing');
   const artifacts = path.resolve(__dirname, '../../test-results'); fs.mkdirSync(artifacts, { recursive: true });
   const browser = await chromium.launch({ headless: true, args: ['--disable-background-networking', '--disable-component-update', '--no-pings'] });
-  const contexts = []; const diagnostic = diagnostics(); let blocked = 0, stage = 'admin-login';
+  const contexts = []; const diagnostic = diagnostics(); let blocked = 0, stage = 'login-first-click';
   try {
+    const firstClick = await runLoginFirstClickProof(browser, artifacts);
+    stage = 'admin-login';
     const adminScope = await guardedContext(browser, { width: 1348, height: 900 }); contexts.push(adminScope);
     const page = await adminScope.context.newPage(); page.setDefaultTimeout(20000);
     await login(page, admin, 'admin', diagnostic);
@@ -80,7 +83,7 @@ async function runBrowserSmoke({ admin, merchant, ids }) {
     const anonymousPage = await anonymousScope.context.newPage(); await anonymousPage.goto(BASE + '/admin-login');
     assert.equal(await status(anonymousPage, '/api/merchant/printers?brandId=' + ids.brand + '&locationId=' + ids.location), 401);
     blocked = contexts.reduce((sum, scope) => sum + scope.blockedRequests(), 0);
-    return { browser: 'Chromium/Playwright1.62', browserVersion: browser.version(), realVisibleLoginsPerPass: 2, tableHeaders: headers.length, desktopWidth: 1348, mobileWidth: 375,
+    return { firstClick, browser: 'Chromium/Playwright1.62', browserVersion: browser.version(), realVisibleLoginsPerPass: 2, tableHeaders: headers.length, desktopWidth: 1348, mobileWidth: 375,
       editCancel: true, merchantDenied: true, anonymousDenied: true, foreignScopeDenied: true, retiredRoute404: true, blockedExternalRequests: blocked };
   } catch (error) {
     fs.writeFileSync(path.join(artifacts, 'local-qa-browser-failure.json'), JSON.stringify({ environment: 'QA0b2-local-browser', status: 'failed', stage, ...diagnostic.snapshot(error), productionAcceptance: false, physicalPrintVerified: false }), { mode: 0o600 });

@@ -215,3 +215,68 @@ test('observer exposes only its FIRST fixed failure operation even when later cl
   const d = diagnostics();
   assert.equal(d.snapshot({ name: 'QaObserverError', operation: 'PRIVATE' }).observerFailureOperation, null);
 });
+
+test('first-click gate delays ONLY same-origin Next scripts and falls back through the original HTTP frontier', async () => {
+  const { isPageScript, installScriptGate } = require('../../scripts/local-qa/login-first-click-proof.cjs');
+  const request = (url, type = 'script') => ({ url: () => url, resourceType: () => type });
+  assert.equal(isPageScript(request('http://127.0.0.1:3100/_next/static/chunks/app/admin-login/page.js?PRIVATE')), true);
+  for (const input of [request('https://production.example/_next/a.js'), request('http://PRIVATE@127.0.0.1:3100/_next/a.js'), request('http://127.0.0.1:9099/_next/a.js'), request('http://127.0.0.1:3100/private.js'), request('http://127.0.0.1:3100/_next/a.js', 'fetch')]) assert.equal(isPageScript(input), false);
+  let handler, continued = 0, denied = 0;
+  const gate = await installScriptGate({ route: async (pattern, callback) => { assert.equal(pattern, '**/*'); handler = callback; } });
+  const route = input => ({ request: () => input, fallback: async () => { if (allowedRequest(input.url())) continued++; else denied++; }, continue() { assert.fail('must not bypass frontier'); } });
+  const pending = handler(route(request('http://127.0.0.1:3100/_next/page.js')));
+  assert.equal(gate.heldCount(), 1); assert.equal(continued, 0);
+  await handler(route(request('https://production.example/_next/page.js'))); assert.equal(denied, 1);
+  gate.release(); await pending; assert.equal(continued, 1); assert.equal(gate.failed(), false);
+  gate.stop(); gate.release();
+});
+function firstClickLifecycleFixture({ enabled = true, missingSSR = false, noGate = false, closeFailure = false, stalledClose = false, fallbackFailure = false, stalledFallback = false, scriptFailure = false } = {}) {
+  const routes = [], events = {}; let pending, released = false, changed = false, clicks = 0, closed = false, guarded = 0;
+  const request = { url: () => 'http://127.0.0.1:3100/_next/static/chunks/app/admin-login/page.js?PRIVATE', resourceType: () => 'script' };
+  const control = mode => ({ waitFor: async () => { if (missingSSR || (mode === 'firebase' && !changed)) throw Object.assign(Error('PRIVATE lifecycle fixture'), { name: 'TimeoutError' }); },
+    isEnabled: async () => enabled, click: async () => { clicks++; if (released) changed = true; } });
+  const page = { setDefaultTimeout: value => assert.equal(value, 20000), on(name, callback) { events[name] = callback; },
+    goto: async (url, options) => { assert.equal(url, 'http://127.0.0.1:3100/admin-login'); assert.deepEqual(options, { waitUntil: 'commit' });
+      if (!noGate) pending = routes[1]({ request: () => request, fallback: async () => { released = true; if (fallbackFailure) throw Error('PRIVATE fallback failure'); if (stalledFallback) await new Promise(() => {}); await routes[0]({ request: () => request, continue: () => { guarded++; }, abort: () => assert.fail('allowed script must remain allowed') }); } });
+      return { status: () => 200 }; },
+    waitForLoadState: async state => { assert.equal(state, 'load'); if (!stalledFallback) await pending; if (scriptFailure) events.requestfailed(request); },
+    locator: selector => { assert.equal(selector, 'form'); return control('ssr'); },
+    getByRole: (role, options) => control(role === 'button' && options.name === 'Log ind med Opsfly' ? 'firebase' : 'ssr'),
+    getByLabel: (_label, options) => { assert.equal(options.exact, true); return control('firebase'); },
+  };
+  const context = { route: async (_pattern, fn) => routes.push(fn), unroute: async (pattern, fn) => { assert.equal(pattern, '**/*'); assert.equal(fn, routes[1]); }, routeWebSocket: async () => {}, newPage: async () => page,
+    close: async () => { closed = true; if (stalledClose) await new Promise(() => {}); if (!stalledFallback) await pending; if (closeFailure) throw Error('PRIVATE close failure'); } };
+  return { browser: { newContext: async options => { assert.equal(options.serviceWorkers, 'block'); return context; } }, state: () => ({ clicks, closed, guarded }) };
+}
+test('first-click lifecycle fixtures preserve ONE click, release gates on failure and never replace actual Next evidence', async () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const { runLoginFirstClickProof } = require('../../scripts/local-qa/login-first-click-proof.cjs');
+  for (const [options, outcome, clicks] of [[{ enabled: true }, 'lost-first-enabled-click', 1], [{ enabled: false }, 'passed', 1],
+    [{ missingSSR: true }, 'missing-ssr-prerequisite', 0], [{ noGate: true }, 'missing-script-gate-prerequisite', 0], [{ enabled: false, closeFailure: true }, 'cleanup-failed', 1], [{ enabled: false, scriptFailure: true }, 'script-runtime-failed', 0]]) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qa0-first-click-unit-')), fixture = firstClickLifecycleFixture(options);
+    try {
+      if (outcome === 'passed') await runLoginFirstClickProof(fixture.browser, dir);
+      else await assert.rejects(runLoginFirstClickProof(fixture.browser, dir), /QA0 real first enabled login click proof failed/);
+      const proof = JSON.parse(fs.readFileSync(path.join(dir, 'local-qa-first-click.json'), 'utf8'));
+      assert.equal(proof.outcome, outcome); assert.equal(proof.clickCount, clicks); assert.equal(fixture.state().clicks, clicks);
+      assert.equal(fixture.state().closed, true); assert.equal(proof.productionAcceptance, false); assert.equal(JSON.stringify(proof).includes('PRIVATE'), false);
+      if (!options.noGate) { assert.equal(proof.scriptsReleased, true); assert.equal(fixture.state().guarded, 1); }
+      assert.equal(proof.cleanupVerified, !options.closeFailure);
+    } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+  }
+});
+
+test('first-click cleanup bounds stalled/throwing routes and context close, and attempts close after drain failure', async () => {
+  const fs = require('node:fs'), os = require('node:os'), path = require('node:path');
+  const { runLoginFirstClickProof } = require('../../scripts/local-qa/login-first-click-proof.cjs');
+  for (const options of [{ missingSSR: true, fallbackFailure: true }, { missingSSR: true, stalledFallback: true }, { missingSSR: true, stalledClose: true }]) {
+    const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'qa0-first-click-cleanup-')), fixture = firstClickLifecycleFixture(options);
+    try {
+      await assert.rejects(runLoginFirstClickProof(fixture.browser, dir), /QA0 real first enabled login click proof failed/);
+      const proof = JSON.parse(fs.readFileSync(path.join(dir, 'local-qa-first-click.json'), 'utf8'));
+      assert.equal(proof.outcome, 'cleanup-failed'); assert.equal(proof.cleanupVerified, false);
+      assert.equal(proof.scriptsReleased, true); assert.equal(fixture.state().closed, true); assert.equal(proof.clickCount, 0);
+      assert.equal(JSON.stringify(proof).includes('PRIVATE'), false);
+    } finally { fs.rmSync(dir, { recursive:true, force:true }); }
+  }
+});

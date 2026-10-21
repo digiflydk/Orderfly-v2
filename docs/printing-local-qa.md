@@ -277,3 +277,42 @@ runs this actual emulator/Next/browser proof. The existing artifact upload gains
 only the safe screenshot/JSON paths. CI success must mean the actual proof step
 ran and passed; skipped/pending checks do not establish browser readiness.
 Parent #376 stays open until that real evidence is inspected and accepted.
+
+
+### Genuine NextDEV first enabled click regression (eighth #381 task)
+
+The next reproduction-only task runs before credentials/CDP, using the actual
+QA0 Next15.5.9 DEV `/admin-login` document, not a `createRoot` component fixture.
+An extra context route holds only exact same-origin Next page-script requests;
+`fallback` retains the existing HTTP frontier, with the WebSocket guard and
+service-worker block unchanged. Navigation waits for commit because holding
+scripts could prevent the usual load/DOMContentLoaded milestone.
+
+Phase A requires the real SSR form, ADMINISTRATION heading and original login
+method toggle while the script gate is engaged. A Suspense fallback or missing
+gate is a prerequisite failure, never fabricated SSR. If that real control is
+enabled, the proof performs its ONE click before releasing scripts. Phase B
+releases scripts and asserts the actual Firebase labels/post-switch toggle,
+without a second click. If SSR instead disables the control, scripts are released
+before its only first enabled click. All original full login/table/role/two-pass
+assertions and20/60-second deadlines remain after this preflight.
+
+`local-qa-first-click.json` contains only fixed outcomes, booleans and counts.
+Missing prerequisites, script transport/runtime failure, single-click state
+failure and uncertain cleanup are separate outcomes. No credentials, HTML,
+queries, error messages or login screenshots are captured. Gate tasks are tracked;
+finally releases and removes ONLY that gate, drains pending fallbacks under a
+one-second cleanup bound, and independently attempts context close under the
+same bound even if draining failed. Uncertain cleanup fails the proof. Unit
+fixtures test those lifecycle/frontier/error cases; they are NOT Next acceptance.
+
+The expected current RED has NOT been executed yet: only actual official CI
+Chromium against this SSR runtime may establish it. A `lost-first-enabled-click`
+result establishes a state failure under controlled script delivery, not the
+cause of previous intermittent CI failures or proof of completed hydration.
+This is DEV-only evidence: Next's `useSearchParams`/Suspense can render differently
+in production static builds. No production SSR defect or product fix is claimed.
+The existing official CI browser installation and isolated app/emulator step are
+reused; there is no new environment, install, port, seed or workflow change.
+Primary guidance: [Playwright hydration](https://playwright.dev/docs/navigations#hydration)
+and [Next15 useSearchParams](https://nextjs.org/docs/15/app/api-reference/functions/use-search-params).
