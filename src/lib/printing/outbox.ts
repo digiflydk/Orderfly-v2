@@ -3,22 +3,11 @@ import { z } from 'zod';
 import { FieldValue, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import { kitchenPrintIntentEligibility, printJobId, type KitchenOrder } from './domain';
 import { storedPrinterSchema } from './storage';
+import { storedPrintQueueSchema as queueSchema, storedQueuedPrintJobSchema as jobSchema, PRINT_QUEUE_LIMIT } from './queue-storage';
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
-const integer = z.number().int().nonnegative().safe();
 const scope = { brandId: id, locationId: id, printerId: id };
 const commandSchema = z.object({ ...scope, orderId: id, kind: z.enum(['kitchen', 'packing']) }).strict();
-const queueSchema = z.object({
-  schemaVersion: z.literal(1), ...scope, revision: integer.positive(),
-  pendingCount: integer, oldestPendingAt: integer.nullable(),
-  updatedAt: z.unknown(),
-}).strict().refine(q => (q.pendingCount === 0) === (q.oldestPendingAt === null));
-const jobSchema = z.object({
-  schemaVersion: z.literal(1), ...scope, orderId: id, kind: z.enum(['kitchen', 'packing']),
-  revision: z.literal(0), id: z.string().regex(/^[a-f0-9]{64}$/),
-  printerRevision: integer.positive(), state: z.literal('queued'), attempts: z.literal(0),
-  createdAt: integer, updatedAt: z.unknown(),
-}).strict();
 const orderSchema = z.object({
   brandId: id, locationId: id, status: z.string(), paymentStatus: z.string(),
   paymentMethod: z.string(), deliveryType: z.string(), discountReservation: z.string().optional(),
@@ -66,8 +55,8 @@ export async function prepareOriginalPrintIntent(db: Firestore, tx: Transaction,
   const current = queueSchema.safeParse(queue.data());
   // V1 insertion-only backlog is bounded; never trust count/oldest aggregates
   // without validating EVERY counted row (orderBy would hide missing fields).
-  const rows = await tx.get(jobs.limit(501));
-  if (rows.size > 500) throw new PrintOutboxError('queue_unverified');
+  const rows = await tx.get(jobs.limit(PRINT_QUEUE_LIMIT + 1));
+  if (rows.size > PRINT_QUEUE_LIMIT) throw new PrintOutboxError('queue_unverified');
   let oldestAt: number | null = null;
   for (const row of rows.docs) {
     const stored = jobSchema.safeParse(row.data());
@@ -90,7 +79,7 @@ export async function prepareOriginalPrintIntent(db: Firestore, tx: Transaction,
   }
   const revision = current.success ? current.data.revision : 0;
   const pendingCount = current.success ? current.data.pendingCount : 0;
-  if (revision === Number.MAX_SAFE_INTEGER || pendingCount >= 500) throw new PrintOutboxError('queue_unverified');
+  if (revision === Number.MAX_SAFE_INTEGER || pendingCount >= PRINT_QUEUE_LIMIT) throw new PrintOutboxError('queue_unverified');
   // Clock is trusted server time; commit timestamp is retained separately. Age review
   // must reject future/implausible clocks, never interpret them as a fresh empty queue.
   const now = Date.now();
