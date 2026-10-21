@@ -70,8 +70,10 @@ verification and does not certify device support. Credentials, network identity,
 capability evidence, lifecycle changes and actual output are absent.
 
 Duplicate submit events are guarded before the pending render. Cancel is disabled
-while saving; the overview refresh and other edit buttons cannot replace an open
-form and race an in-flight server transaction. Ordinary400/503
+while saving; native scope selectors, overview refresh and other edit buttons
+cannot replace an open form and race an in-flight server transaction. Cancel
+before saving to switch scope. Authoritative permission revocation clears the
+editor; an actor-keyed server context change still unmounts and clears it. Ordinary400/503
 responses retain input, use safe messages and permit retry;503 explains that
 writes may be switched off. A403/404/409 or uncertain outcome requires an
 overview refresh before retry, rather than replaying a stale revision. Raw
@@ -85,7 +87,7 @@ revoked writes with continuing view access. `printing-ui-browser.cjs` additional
 executes actual React forms with intercepted fixture API calls:201 create and200
 revisioned edit at desktop/mobile widths, exact credential-free bodies,
 unsupported choices, pending submit,400/401/403/404/409/503 handling, view-only
-and disabled-state affordances, revoked metadata, late201/401 scope changes, foreign/wrong-revision success rejection, and a pre-expiry GET completing after mutation401.
+and disabled-state affordances, revoked metadata, late201/401 server-context and scope changes, foreign/wrong-revision success rejection, and a pre-expiry GET completing after mutation401.
 Screenshots use `printing-config-*.png`. Fixture writes never reach production.
 
 The configuration-write flag remains default-off. Live read-only login checks

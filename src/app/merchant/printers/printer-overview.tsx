@@ -56,6 +56,10 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const current = result?.key === key ? result : null;
 
   useEffect(() => {
+    if (editor && (!location || editor.scope !== scope || (editor.item ? !canEdit : !canCreate))) setEditor(null);
+  }, [editor, location, scope, canCreate, canEdit]);
+
+  useEffect(() => {
     if (!brandId || !locationId || !locations.some(row => row.id === locationId && row.brandId === brandId)) return;
     const controller = new AbortController();
     let active = true;
@@ -85,11 +89,11 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
       <p className="mt-2 text-sm text-muted-foreground">Se printeropsætningen for dit brand og din lokation.</p>
     </header>
     <div className="admin-filter-bar flex flex-wrap items-end gap-3 p-4">
-      <AdminSelectField label="Brand" value={brandId} onChange={event => { setBrandId(event.target.value); setLocationId(''); setAfter(''); setEditor(null); setSavedScope(''); }}>
+      <AdminSelectField label="Brand" value={brandId} disabled={!!editor} onChange={event => { setBrandId(event.target.value); setLocationId(''); setAfter(''); setEditor(null); setSavedScope(''); }}>
         <option value="">Vælg brand</option>
         {brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
       </AdminSelectField>
-      <AdminSelectField label="Lokation" value={locationId} disabled={!brandId} onChange={event => { setLocationId(event.target.value); setAfter(''); setEditor(null); setSavedScope(''); }}>
+      <AdminSelectField label="Lokation" value={locationId} disabled={!brandId || !!editor} onChange={event => { setLocationId(event.target.value); setAfter(''); setEditor(null); setSavedScope(''); }}>
         <option value="">Vælg lokation</option>
         {locations.filter(row => row.brandId === brandId).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
       </AdminSelectField>

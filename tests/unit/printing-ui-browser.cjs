@@ -24,7 +24,7 @@ before(async () => {
   fs.writeFileSync(entry, `import React from 'react';import {createRoot} from 'react-dom/client';
     import {PrinterOverview} from ${JSON.stringify(path.join(root, 'src/app/merchant/printers/printer-overview.tsx'))};
     const writes = new URLSearchParams(location.search).has('writes') ? [{id:'la',brandId:'a'}] : [];
-    function Fixture(){const [scopes,setScopes]=React.useState(writes);window.setPrinterWriteScopes=setScopes;return React.createElement(PrinterOverview,{brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)},createLocations:scopes,editLocations:scopes});}
+    function Fixture(){const [scopes,setScopes]=React.useState(writes);const [identity,setIdentity]=React.useState(0);window.resetPrinterContext=()=>setIdentity(value=>value+1);window.setPrinterWriteScopes=setScopes;return React.createElement(PrinterOverview,{key:identity,brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)},createLocations:scopes,editLocations:scopes});}
     createRoot(document.getElementById('root')).render(React.createElement(Fixture));`);
   const loader = path.join(dir, 'loader.js');
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
@@ -162,6 +162,8 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667
     await expect(page.getByRole('button', { name: 'Gemmer…' })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Annuller', exact: true })).toBeDisabled();
     await expect(page.getByRole('button', { name: 'Opdater', exact: true })).toBeDisabled();
+    await expect(page.getByRole('combobox', { name: 'Brand', exact: true })).toBeDisabled();
+    await expect(page.getByRole('combobox', { name: 'Lokation', exact: true })).toBeDisabled();
     assert.equal(mutations.length, 1);
     release(); await expect(page.getByText('Printeropsætningen er gemt som deaktiveret.', { exact: true })).toBeVisible();
     assert.deepEqual(mutations[0], { method: 'POST', body: { configuration: { id: 'new_printer', brandId: 'a', locationId: 'la', name: 'Køkken Østerbro', manufacturer: 'star', model: 'mc-print2', transport: 'cloudprnt-http', state: 'disabled', paperWidthMm: 58 } } });
@@ -218,7 +220,7 @@ test('view-only metadata and independently scoped grants never expose unauthoriz
   await expect(page.getByRole('button', { name: 'Rediger Køkken p2', exact: true })).toHaveCount(0);
   await choose(page, 'b', 'lb'); await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
 });
-for (const lateStatus of [201, 401]) test(`late ${lateStatus} mutation response cannot restore form or session state after scope change`, async t => {
+for (const lateStatus of [201, 401]) test(`late ${lateStatus} mutation response cannot restore form or session state after server context and scope change`, async t => {
   const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
   let release, started; const pending = new Promise(resolve => { started = resolve; });
   await page.route('**/api/merchant/printers**', async route => {
@@ -228,6 +230,8 @@ for (const lateStatus of [201, 401]) test(`late ${lateStatus} mutation response 
   });
   await page.goto(origin + '?writes'); await choose(page); await fillNew(page);
   await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click(); await pending;
+  await expect(page.getByRole('combobox', { name: 'Brand', exact: true })).toBeDisabled();
+  await page.evaluate(() => window.resetPrinterContext());
   await choose(page, 'b', 'lb'); release();
   await expect(page.getByRole('form', { name: 'Tilføj printer' })).toHaveCount(0);
   await expect(page.getByText('Printeropsætningen er gemt som deaktiveret.', { exact: true })).toHaveCount(0);
@@ -244,6 +248,7 @@ test('fresh revoked write metadata unmounts and clears a prepared form', async t
   await page.evaluate(() => window.setPrinterWriteScopes([]));
   await expect(page.getByRole('form', { name: 'Tilføj printer' })).toHaveCount(0);
   await page.evaluate(() => window.setPrinterWriteScopes([{ id: 'la', brandId: 'a' }]));
+  await page.getByRole('button', { name: 'Tilføj printer', exact: true }).click();
   await expect(page.getByRole('form', { name: 'Tilføj printer' })).toBeVisible();
   assert.equal(await page.getByRole('textbox', { name: 'Printernavn', exact: true }).inputValue(), '');
 });
