@@ -30,6 +30,7 @@ function fixture({ existing, permissions, anonymous = false, identityStatus, ena
     collection,
     runTransaction(run, options) {
       if (target === 'queue') assert.deepEqual(options, { readOnly: true }, 'queue summary must use SDK read-only mode');
+      if (target === 'review') assert.equal(options?.readOnly, undefined, 'review must own a write transaction');
       const job = queue.then(async () => {
         for (;;) {
           const staged = new Map(structuredClone([...records])), writes = []; let writing = false;
@@ -43,7 +44,7 @@ function fixture({ existing, permissions, anonymous = false, identityStatus, ena
               return { id: ref.id, exists: staged.has(ref.path), data: () => structuredClone(staged.get(ref.path)) }; },
             delete(ref) { assert.notEqual(target, 'queue', 'read-only queue must never delete'); writing = true; writes.push(['delete', ref.path]); staged.delete(ref.path); },
             create(ref, value) { assert.notEqual(target, 'queue', 'read-only queue must never create'); writing = true; if (staged.has(ref.path)) throw Error('PRIVATE_SENTINEL conflict');
-              if (failAudit && ref.path.includes('/audit/')) throw Error('PRIVATE_SENTINEL audit failed');
+              if (failAudit && (ref.path.includes('/audit/') || ref.path.includes('/queueReviewAudit/'))) throw Error('PRIVATE_SENTINEL audit failed');
               writes.push(['create', ref.path]); staged.set(ref.path, structuredClone(value)); },
             set(ref, value) { assert.notEqual(target, 'queue', 'read-only queue must never set'); writing = true; writes.push(['set', ref.path]); staged.set(ref.path, structuredClone(value)); },
           };
@@ -66,10 +67,11 @@ function fixture({ existing, permissions, anonymous = false, identityStatus, ena
     '@/lib/url': { getOrigin: async () => 'https://orderfly.dk' },
     'firebase-admin/firestore': { FieldValue: { serverTimestamp: () => ({ serverTimestamp: true }) } },
   };
-  const routePath = target === 'queue' ? 'src/app/api/merchant/printers/queue/route.ts' : target === 'lifecycle' ? 'src/app/api/merchant/printers/lifecycle/route.ts' : 'src/app/api/merchant/printers/route.ts';
+  const routePath = target === 'review' ? 'src/app/api/merchant/printers/queue/review/route.ts' : target === 'queue' ? 'src/app/api/merchant/printers/queue/route.ts' : target === 'lifecycle' ? 'src/app/api/merchant/printers/lifecycle/route.ts' : 'src/app/api/merchant/printers/route.ts';
   const routes = loadTs(routePath, mocks);
   const service = loadTs('src/lib/printing/writes.ts', mocks);
   const lifecycle = loadTs('src/lib/printing/lifecycle.ts', mocks);
+  const review = target === 'review' ? loadTs('src/lib/printing/queue-review.ts', mocks) : null;
   async function withFlag(run, flag = enabled ? 'true' : undefined) {
     const previous = process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;
     if (flag === undefined) delete process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED;
@@ -80,11 +82,12 @@ function fixture({ existing, permissions, anonymous = false, identityStatus, ena
     }
   }
   return { records, events, commits, get dbCalls() { return dbCalls; },
+    review: (input, flag) => withFlag(() => review.issuePrinterQueueReview(input), flag),
     transition: (input, flag) => withFlag(() => lifecycle.transitionPrinter(input), flag),
     direct: (operation, input, flag) => withFlag(() => service.writePrinterConfiguration(operation, input), flag),
     async request(method = 'POST', body = { configuration: config() }, options = {}) {
       return withFlag(async () => {
-        const request = new Request(`https://orderfly.dk/api/merchant/printers${target === 'queue' ? '/queue' : target === 'lifecycle' ? '/lifecycle' : ''}${options.query || ''}`, {
+        const request = new Request(`https://orderfly.dk/api/merchant/printers${target === 'review' ? '/queue/review' : target === 'queue' ? '/queue' : target === 'lifecycle' ? '/lifecycle' : ''}${options.query || ''}`, {
           method, headers: { origin: 'https://orderfly.dk', 'content-type': 'application/json', ...options.headers },
           ...(method === 'GET' ? {} : { body: options.raw === undefined ? JSON.stringify(body) : options.raw }),
         });
