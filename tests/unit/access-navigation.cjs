@@ -60,3 +60,11 @@ test('counter staff reach only the counter view; leaders and superusers keep bot
  assert.equal(counterOnly(redeemOnly),false);assert.equal(canNavigate('/merchant/stamp-card',redeemOnly),false);assert.equal(canNavigate('/merchant',redeemOnly),false);
  assert.equal(counterOnly(null),false);assert.equal(canNavigate('/merchant/stamp-card',{superuser:false,permissions:['orderfly.orders:view']}),false);
 });
+
+
+test('printer overview requires catalog view and is hidden from counter-only staff',()=>{
+ assert.equal(canNavigate('/merchant/printers',{superuser:false,permissions:['orderfly.catalog:view']}),true);
+ for(const permissions of [['orderfly.orders:view'],['orderfly.stamp_cards:counter'],['orderfly.catalog:edit']])
+  assert.equal(canNavigate('/merchant/printers',{superuser:false,permissions}),false);
+ assert.equal(canNavigate('/merchant/printers',{superuser:true,permissions:[]}),true);
+});

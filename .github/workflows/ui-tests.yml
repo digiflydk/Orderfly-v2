@@ -93,13 +93,13 @@ jobs:
         run: npx playwright install --with-deps chromium
 
       - name: Core browser regression
-        run: node --test tests/unit/merchant-payment-browser.cjs tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs tests/unit/customer-form-browser.cjs tests/unit/customer-sync-actions-browser.cjs tests/unit/loyalty-admin-browser.cjs tests/unit/loyalty-portal-browser.cjs tests/unit/loyalty-counter-browser.cjs
+        run: node --test tests/unit/printing-ui-browser.cjs tests/unit/merchant-payment-browser.cjs tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs tests/unit/customer-form-browser.cjs tests/unit/customer-sync-actions-browser.cjs tests/unit/loyalty-admin-browser.cjs tests/unit/loyalty-portal-browser.cjs tests/unit/loyalty-counter-browser.cjs
 
       - name: Games editor browser regression
         run: node --test tests/unit/games-editor-browser.cjs
 
       - name: Shared admin access and filter regression
-        run: node --test tests/unit/marketing-layout-boundary.cjs tests/unit/endpoint-audit.cjs tests/unit/settings-access.cjs tests/unit/system-cleanup.cjs tests/unit/access-navigation.cjs tests/unit/merchant-admin-portal.cjs tests/unit/admin-sales-filters.cjs tests/unit/admin-loading.cjs tests/unit/admin-mobile-header.cjs
+        run: node --test tests/unit/marketing-layout-boundary.cjs tests/unit/endpoint-audit.cjs tests/unit/settings-access.cjs tests/unit/system-cleanup.cjs tests/unit/access-navigation.cjs tests/unit/printing-ui-page.cjs tests/unit/merchant-admin-portal.cjs tests/unit/admin-sales-filters.cjs tests/unit/admin-loading.cjs tests/unit/admin-mobile-header.cjs
 
       - name: Shared admin visual regression
         run: node --test tests/unit/admin-overview-browser.cjs tests/unit/system-settings-browser.cjs
@@ -109,7 +109,9 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: admin-overview-visual-${{ github.run_attempt }}
-          path: test-results/admin-*.png
+          path: |
+            test-results/admin-*.png
+            test-results/printing-overview-*.png
           if-no-files-found: ignore
           retention-days: 14
 
