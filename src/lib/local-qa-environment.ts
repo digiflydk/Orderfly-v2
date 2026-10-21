@@ -3,10 +3,10 @@ export const LOCAL_QA_PROJECT = 'demo-orderfly-qa0';
 export function localQaEnvironment(env: NodeJS.ProcessEnv = process.env) {
   const enabled = env.ORDERFLY_LOCAL_QA;
   if (enabled === undefined) {
-    if (Object.hasOwn(env, 'FIRESTORE_EMULATOR_HOST') || Object.hasOwn(env, 'FIREBASE_AUTH_EMULATOR_HOST')) throw new Error('Local QA emulator mode is not explicitly enabled');
+    if (Object.hasOwn(env, 'FIRESTORE_EMULATOR_HOST') || Object.hasOwn(env, 'FIREBASE_AUTH_EMULATOR_HOST') || Object.hasOwn(env, 'NEXT_PUBLIC_ORDERFLY_LOCAL_QA')) throw new Error('Local QA emulator mode is not explicitly enabled');
     return null;
   }
-  if (enabled !== 'true' || env.NODE_ENV === 'production'
+  if (enabled !== 'true' || env.NEXT_PUBLIC_ORDERFLY_LOCAL_QA !== 'true' || env.NODE_ENV === 'production'
     || env.GCLOUD_PROJECT !== LOCAL_QA_PROJECT || env.GOOGLE_CLOUD_PROJECT !== LOCAL_QA_PROJECT
     || env.NEXT_PUBLIC_FIREBASE_PROJECT_ID !== LOCAL_QA_PROJECT
     || env.FIRESTORE_EMULATOR_HOST !== '127.0.0.1:8088' || env.FIREBASE_AUTH_EMULATOR_HOST !== '127.0.0.1:9099'
