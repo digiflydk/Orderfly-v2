@@ -11,8 +11,11 @@ test('HTTPS URL normalization preserves URL meaning and external query/hash', ()
 test('unsafe URLs, credentials, local/private literal hosts and own QR loops are rejected', () => {
   for (const url of ['http://example.org','javascript:alert(1)','https://a:b@example.org','https://example.org:8443','https://example.org/ space','https://example.org\\@other.org','https://example.org/\t']) rejects(() => normalizeDestination(url), 'invalid_url');
   for (const host of ['localhost','a.local','a.internal','127.1','2130706433','0x7f000001','10.2.3.4','172.31.0.1','192.168.1.1','169.254.169.254','100.64.0.1','198.18.0.1','224.0.0.1','[::1]','[::ffff:8.8.8.8]']) rejects(() => normalizeDestination(`https://${host}/`),'blocked_destination');
-  for (const url of ['https://orderfly.dk/q/a','https://esmeralda.orderfly.dk/q/a','https://orderfly.dk/%71/a','https://orderfly.dk/%2fq/a','https://orderfly.dk/a/../q/a']) rejects(() => normalizeDestination(url), 'blocked_destination');
+  for (const url of ['https://orderfly.dk/q/a','https://orderfly.dk./q/a','https://esmeralda.orderfly.dk./q/a','https://esmeralda.orderfly.dk/q/a','https://orderfly.dk/%71/a','https://orderfly.dk/%2fq/a','https://orderfly.dk/a/../q/a']) rejects(() => normalizeDestination(url), 'blocked_destination');
   rejects(() => normalizeDestination('https://qr.esmeraldapizza.dk/q/a',{blockedOrigins:['https://qr.esmeraldapizza.dk']}),'blocked_destination');
+  rejects(() => normalizeDestination('https://qr.esmeraldapizza.dk./q/a',{blockedOrigins:['https://qr.esmeraldapizza.dk']}),'blocked_destination');
+  rejects(() => normalizeDestination('https://qr.esmeraldapizza.dk/q/a',{blockedOrigins:['https://qr.esmeraldapizza.dk.']}),'blocked_destination');
+  assert.equal(normalizeDestination('https://example.org./menu'),'https://example.org/menu');
   assert.equal(normalizeDestination('https://example.org/q/a'), 'https://example.org/q/a');
 });
 test('UTM values replace supplied tags without losing existing query/hash or injecting keys', () => {
@@ -42,8 +45,11 @@ test('vCard escapes components and rejects CRLF field injection', () => {
 });
 test('email parameters encode separately; header injection and unsafe addresses fail', () => {
   const payload=buildStaticPayload({type:'email',to:'info+qr@example.org',subject:'Pizza & pasta',body:'Tak\nHej'});
-  assert.match(payload,/^mailto:info%2Bqr@example.org\?/);const params=new URLSearchParams(payload.split('?')[1]);
-  assert.equal(params.get('subject'),'Pizza & pasta');assert.equal(params.get('body'),'Tak\nHej');
+  assert.match(payload,/^mailto:info%2Bqr@example.org\?/);
+  const params=Object.fromEntries(payload.split('?')[1].split('&').map(field=>{const [key,value]=field.split('=');return [key,decodeURIComponent(value)];}));
+  assert.equal(params.subject,'Pizza & pasta');assert.equal(params.body,'Tak\r\nHej');
+  const encoded=buildStaticPayload({type:'email',to:'info@example.org',subject:'A + B',body:'Hello world\rAnother\r\nline\nlast'});
+  assert.ok(encoded.includes('subject=A%20%2B%20B'));assert.ok(encoded.includes('body=Hello%20world%0D%0AAnother%0D%0Aline%0D%0Alast'));
   rejects(() => buildStaticPayload({type:'email',to:'info@example.org?bcc=other@example.org'}),'invalid_input');
   rejects(() => buildStaticPayload({type:'email',to:'info@example.org',subject:'Hi\r\nBcc: other@example.org'}),'invalid_input');
 });
