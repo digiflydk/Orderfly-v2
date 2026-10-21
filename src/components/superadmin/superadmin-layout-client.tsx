@@ -39,7 +39,7 @@ export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmi
         }
       />
 
-      <S.SidebarInset className="bg-background">
+      <S.SidebarInset className="min-w-0 bg-background">
         <MobileHeader
           homeHref={merchantPortal ? '/merchant' : '/superadmin'}
           brandingSettings={
