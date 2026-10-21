@@ -106,7 +106,6 @@ export function SuperAdminSidebarClient({
       title: 'Commerce',
       items: [
         { href: merchantPortal ? '/merchant/orders' : '/superadmin/sales/orders', label: 'Sales & Orders', icon: ShoppingCart },
-        { href: '/superadmin/printers', label: 'Printere', icon: Printer },
         { href: '/merchant/payments', label: 'Betalingsmetoder', icon: CreditCard },
         { href: '/superadmin/customers', label: 'Customers', icon: Users },
       ],
@@ -192,6 +191,7 @@ export function SuperAdminSidebarClient({
       key: 'system',
       title: 'System',
       items: [
+        { href: '/superadmin/printers', label: 'Printere', icon: Printer },
         { href: '/superadmin/settings/cookie-texts', label: 'Cookies', icon: Cookie },
         { href: '/superadmin/settings/stamp-card-texts', label: 'Stempelkort-tekster', icon: ScrollText },
         { href: '/superadmin/settings', label: 'Settings', icon: SettingsIcon },
