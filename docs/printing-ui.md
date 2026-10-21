@@ -5,6 +5,7 @@ Printer administration is restricted to platform superusers at
 and the superadmin navigation policy before loading any native catalog data.
 Delegated catalog:view/create/edit roles cannot render the page. The merchant
 page remains retired as not-found, with no merchant navigation entry.
+The superadmin sidebar places Printere under System, not Commerce (#330).
 
 The existing `/api/merchant/printers` URLs remain for compatibility. All six
 administration HTTP operations retain `requirePlatformSuperuser` before parsing
