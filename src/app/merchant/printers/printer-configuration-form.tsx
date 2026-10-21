@@ -41,6 +41,8 @@ export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, o
       if (!mounted.current || controller.signal.aborted) return;
       if (response.status === 401) { onSessionLost(); return; }
       if (!response.ok) {
+        const writesOff = response.status === 503 && (await response.json().catch(() => null))?.error === 'writes_unavailable';
+        if (!mounted.current || controller.signal.aborted) return;
         const messages: Record<number, string> = {
           400: 'Opsætningen blev afvist. Kontrollér felterne og prøv igen.',
           403: 'Du har ikke adgang til at gemme printere på denne lokation.',
@@ -48,8 +50,8 @@ export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, o
           409: 'Printeren er ændret, eller ID er allerede brugt. Opdater oversigten før et nyt forsøg.',
           503: 'Lagring af printeropsætning er ikke tilgængelig. Funktionen kan være slået fra. Prøv igen senere.',
         };
-        setMessage(messages[response.status] || 'Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.');
-        setRefreshRequired([403, 404, 409].includes(response.status) || ![400, 503].includes(response.status));
+        setMessage((response.status === 503 && !writesOff ? undefined : messages[response.status]) || 'Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.');
+        setRefreshRequired([403, 404, 409].includes(response.status) || ![400, 503].includes(response.status) || (response.status === 503 && !writesOff));
         return;
       }
       const result = await response.json();

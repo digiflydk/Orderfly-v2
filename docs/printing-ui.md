@@ -73,9 +73,10 @@ Duplicate submit events are guarded before the pending render. Cancel is disable
 while saving; native scope selectors, overview refresh and other edit buttons
 cannot replace an open form and race an in-flight server transaction. Cancel
 before saving to switch scope. Authoritative permission revocation clears the
-editor; an actor-keyed server context change still unmounts and clears it. Ordinary400/503
-responses retain input, use safe messages and permit retry;503 explains that
-writes may be switched off. A403/404/409 or uncertain outcome requires an
+editor; an actor-keyed server context change still unmounts and clears it. Ordinary400 and explicit503 `writes_unavailable` responses retain input, use
+safe messages and permit retry; the latter explains that writes may be switched
+off. Other503 outcomes are uncertain and require refresh, since the server
+transaction may have committed. A403/404/409 or uncertain outcome requires an
 overview refresh before retry, rather than replaying a stale revision. Raw
 provider detail is never shown. Successful responses must match the exact scope,
 configuration and expected next revision before showing success. Aborted/late

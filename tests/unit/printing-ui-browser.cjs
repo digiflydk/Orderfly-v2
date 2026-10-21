@@ -187,7 +187,7 @@ test('write errors retain ordinary input, require fresh conflict data and clear 
   let status = 400, writes = 0;
   await page.route('**/api/merchant/printers**', route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: { items: [item('prior', 'a', 'la', { state: 'disabled' })], nextCursor: null } });
-    writes++; return route.fulfill({ status, json: { error: 'PRIVATE_PROVIDER_DETAIL' } });
+    writes++; return route.fulfill({ status, json: { error: status === 503 ? 'writes_unavailable' : 'PRIVATE_PROVIDER_DETAIL' } });
   });
   await page.goto(origin + '?writes'); await choose(page); await fillNew(page);
   for (const [code, text] of [[400, 'Opsætningen blev afvist. Kontrollér felterne og prøv igen.'], [503, 'Lagring af printeropsætning er ikke tilgængelig. Funktionen kan være slået fra. Prøv igen senere.']]) {
@@ -253,17 +253,18 @@ test('fresh revoked write metadata unmounts and clears a prepared form', async t
   assert.equal(await page.getByRole('textbox', { name: 'Printernavn', exact: true }).inputValue(), '');
 });
 
-test('foreign or wrong-revision successful writes are uncertain and require refresh', async t => {
+test('foreign, wrong-revision or generic unavailable outcomes require refresh', async t => {
   const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
-  let foreign = true;
+  let outcome = 'foreign';
   await page.route('**/api/merchant/printers**', route => {
     if (route.request().method() === 'GET') return route.fulfill({ json: { items: [], nextCursor: null } });
     const configuration = route.request().postDataJSON().configuration;
-    return route.fulfill({ status: 201, json: { item: { configuration: { ...configuration, ...(foreign ? { brandId: 'b', locationId: 'lb' } : {}) }, revision: foreign ? 1 : 9 } } });
+    if (outcome === 'unavailable') return route.fulfill({ status: 503, json: { error: 'PRIVATE_PROVIDER_DETAIL' } });
+    return route.fulfill({ status: 201, json: { item: { configuration: { ...configuration, ...(outcome === 'foreign' ? { brandId: 'b', locationId: 'lb' } : {}) }, revision: outcome === 'foreign' ? 1 : 9 } } });
   });
   await page.goto(origin + '?writes'); await choose(page);
-  for (const value of [true, false]) {
-    foreign = value; await fillNew(page); await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click();
+  for (const value of ['foreign', 'revision', 'unavailable']) {
+    outcome = value; await fillNew(page); await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click();
     await expect(page.getByRole('alert')).toHaveText('Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.');
     await expect(page.getByRole('button', { name: 'Gem deaktiveret printer' })).toBeDisabled();
     await expect(page.getByText('Printeropsætningen er gemt som deaktiveret.', { exact: true })).toHaveCount(0);
