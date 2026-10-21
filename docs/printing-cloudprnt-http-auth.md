@@ -64,3 +64,13 @@ are separate. Release depends on #359/PR360 actually reaching main, genuine fres
 main sync, own checks, current-head CI and completed independent Codex review,
 then root-only serialized release and applicable live QA. Config/intent/output
 flags remain OFF; no production data/secrets/env/rules/index/firmware/Wolt changes.
+
+P1 dependency correction: the canonical #359 verifier now validates brand/location
+authority before constructing or reading private printer paths. This branch
+genuinely merges that original fix; it does not duplicate or edit the verifier.
+Two actual-adapter regressions first failed on the old dependency (private read
+frontier and private provider failure influencing rejection), then passed after
+canonical propagation. Successful four-path and rotation/revocation checks remain;
+negative scope read counts are tightened to brand/location only with explicit
+path assertions. No private printer metadata or credential/provider error is read
+or exposed for a rejected foreign tenant.

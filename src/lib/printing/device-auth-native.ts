@@ -81,10 +81,10 @@ export async function verifyNativePrinterDevice(context: NativeTransactionContex
     if (!context || context.db !== getAdminDb() || !context.transaction || typeof context.transaction.get !== 'function') return reject();
     const { db, transaction } = context;
     const { brandId, locationId, printerId, secret } = command;
-    const locationRef = db.collection('locations').doc(locationId), printerRef = locationRef.collection('printers').doc(printerId);
-    const [brand, location, printer, credential] = await Promise.all([
-      transaction.get(db.collection('brands').doc(brandId)), transaction.get(locationRef), transaction.get(printerRef),
-      transaction.get(printerRef.collection('deviceCredentials').doc(PRINTER_DEVICE_CREDENTIAL_DOCUMENT)),
+    const locationRef = db.collection('locations').doc(locationId);
+    // Establish native tenant ownership before constructing or reading private paths.
+    const [brand, location] = await Promise.all([
+      transaction.get(db.collection('brands').doc(brandId)), transaction.get(locationRef),
     ]);
     const nativeBrand = nativeScope(brand, brandId);
     // Canonical Brand.status, not legacy isActive, owns tenant suspension.
@@ -92,6 +92,10 @@ export async function verifyNativePrinterDevice(context: NativeTransactionContex
     const brandStatus = field(nativeBrand, 'status');
     if (brandStatus !== 'active' && brandStatus !== 'pending' && brandStatus !== 'trialing') return reject();
     if (field(nativeScope(location, locationId), 'brandId') !== brandId) return reject();
+    const printerRef = locationRef.collection('printers').doc(printerId);
+    const [printer, credential] = await Promise.all([
+      transaction.get(printerRef), transaction.get(printerRef.collection('deviceCredentials').doc(PRINTER_DEVICE_CREDENTIAL_DOCUMENT)),
+    ]);
     const stored = printerData(nativeRow(printer, printerId)), config = stored.configuration;
     if (config.id !== printerId || config.brandId !== brandId || config.locationId !== locationId) return reject();
     const privateRecord = nativeRow(credential, PRINTER_DEVICE_CREDENTIAL_DOCUMENT);

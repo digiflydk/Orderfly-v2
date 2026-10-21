@@ -12,10 +12,11 @@ function fixture() {
     name: 'Pizza ÆØÅ', manufacturer: 'star', model: 'mc-print3', transport: 'cloudprnt-http', state: 'disabled', paperWidthMm: 80 } };
   const rows = new Map([['brands/b1', { status: 'active' }], ['locations/l1', { brandId: 'b1' }], [printerPath, printer], [credentialPath, draft.record]]);
   const reads = [], writes = [];
-  let adminCalls = 0, failure;
+  let adminCalls = 0, failure; const failures = new Map();
   const collection = path => ({ doc: id => ({ id, path: `${path}/${id}`, collection: name => collection(`${path}/${id}/${name}`) }) });
   const db = { collection }, transaction = { get: async ref => {
     reads.push(ref.path); if (failure) throw failure;
+    if (failures.has(ref.path)) throw failures.get(ref.path);
     const value = rows.get(ref.path); return { exists: value !== undefined, id: ref.id, data: () => value };
   }, create: () => writes.push('create'), set: () => writes.push('set'), update: () => writes.push('update'), delete: () => writes.push('delete') };
   // Only Admin I/O is isolated. loadTs recursively executes the actual adapter,
@@ -24,7 +25,7 @@ function fixture() {
     '@/lib/firebase-admin': { getAdminDb: () => { adminCalls++; return db; } } });
   const authorization = basic(draft.secret), context = { db, transaction };
   return { rows, reads, writes, draft, printer, db, transaction, context, api, authorization,
-    get adminCalls() { return adminCalls; }, fail(error) { failure = error; },
+    get adminCalls() { return adminCalls; }, fail(error) { failure = error; }, failOn(path, error) { failures.set(path, error); },
     verify(input = { ...scope, authorization }, caller = context) { return api.verifyCloudPrntHttpDevice(caller, input); } };
 }
 async function reject(f, input, code = 'invalid_cloudprnt_authorization', context = f.context) {
@@ -103,14 +104,14 @@ test('scope bounds, strict fields and hostile descriptors are rejected before pa
 });
 
 test('valid syntax never substitutes for native ownership, current credential, revision or canonical tenant status', async () => {
-  for (const mutate of [
-    f => f.rows.get('locations/l1').brandId = 'foreign', f => f.rows.get('brands/b1').status = 'suspended',
-    f => f.rows.delete(credentialPath), f => f.rows.set(credentialPath, { ...f.draft.record, revokedAt: Date.now() }),
-    f => f.rows.set(credentialPath, { ...f.draft.record, credentialRevision: 2 }),
-    f => f.printer.revision++, f => f.printer.deletedAt = 1, f => f.printer.configuration.brandId = 'other',
+  for (const [mutate, expectedReads] of [
+    [f => f.rows.get('locations/l1').brandId = 'foreign', 2], [f => f.rows.get('brands/b1').status = 'suspended', 2],
+    [f => f.rows.delete(credentialPath), 4], [f => f.rows.set(credentialPath, { ...f.draft.record, revokedAt: Date.now() }), 4],
+    [f => f.rows.set(credentialPath, { ...f.draft.record, credentialRevision: 2 }), 4],
+    [f => f.printer.revision++, 4], [f => f.printer.deletedAt = 1, 4], [f => f.printer.configuration.brandId = 'other', 4],
   ]) {
     const f = fixture(); mutate(f); await reject(f, { ...scope, authorization: f.authorization }, 'device_unverified');
-    assert.equal(f.reads.length, 4); assert.deepEqual(f.writes, []);
+    assert.equal(f.reads.length, expectedReads); if (expectedReads === 2) assert.deepEqual(f.reads, ['brands/b1', 'locations/l1']); assert.deepEqual(f.writes, []);
   }
   const f = fixture(), wrong = crypto.createPrinterDeviceCredentialDraft(binding);
   await reject(f, { ...scope, authorization: basic(wrong.secret) }, 'device_unverified');
@@ -129,7 +130,7 @@ test('reused SDK transaction rereads rotation/revoke/printer revision and cannot
   f.rows.set(credentialPath, revised.record); await reject(f, { ...scope, authorization: basic(revised.secret) }, 'device_unverified');
   f.printer.revision = 4; assert.equal((await f.verify({ ...scope, authorization: basic(revised.secret) })).printerRevision, 4);
   f.rows.get('locations/l1').brandId = 'reassigned'; await reject(f, { ...scope, authorization: basic(revised.secret) }, 'device_unverified');
-  assert.equal(f.transaction, tx); assert.equal(f.reads.length, 28); assert.deepEqual(f.writes, []);
+  assert.equal(f.transaction, tx); assert.equal(f.reads.length, 26); assert.deepEqual(f.reads.slice(-2), ['brands/b1', 'locations/l1']); assert.deepEqual(f.writes, []);
 });
 
 test('untrusted context and Admin/reflection errors return fixed bounded errors without credential or provider leakage', async () => {
@@ -140,4 +141,30 @@ test('untrusted context and Admin/reflection errors return fixed bounded errors 
   const g = fixture(); g.rows.set('brands/b1', new Proxy({}, { getPrototypeOf() { throw Error('PRIVATE_SENTINEL'); } }));
   await reject(g, { ...scope, authorization: g.authorization }, 'device_unavailable');
   assert.deepEqual(f.writes, []); assert.deepEqual(g.writes, []);
+});
+
+
+test('actual adapter rejects foreign native tenant before all printer/private credential reads', async () => {
+  const f = fixture();
+  f.rows.get('locations/l1').brandId = 'brand_B';
+  f.printer.configuration.brandId = 'brand_B';
+  const foreign = crypto.createPrinterDeviceCredentialDraft({ ...binding, brandId: 'brand_B' });
+  f.rows.set(credentialPath, foreign.record);
+  await reject(f, { ...scope, authorization: f.authorization }, 'device_unverified');
+  assert.deepEqual(f.reads, ['brands/b1', 'locations/l1']); assert.deepEqual(f.writes, []);
+});
+
+test('actual adapter foreign-private provider failure cannot change rejection or expose metadata', async () => {
+  const f = fixture(), foreign = crypto.createPrinterDeviceCredentialDraft({ ...binding, brandId: 'brand_B' });
+  f.rows.get('locations/l1').brandId = 'brand_B';
+  f.printer.configuration.brandId = 'brand_B'; f.printer.configuration.name = 'PRIVATE_FOREIGN_PRINTER';
+  f.rows.set(credentialPath, foreign.record);
+  f.failOn(printerPath, Error('PRIVATE_FOREIGN_PRINTER ' + foreign.secret));
+  f.failOn(credentialPath, Error('PRIVATE_FOREIGN_CREDENTIAL ' + foreign.secret));
+  await assert.rejects(f.verify(), error => {
+    assert.equal(error.code, 'device_unverified'); assert.equal(error.message, 'device_unverified');
+    for (const value of ['PRIVATE_FOREIGN', foreign.secret, foreign.record.secretDigest, f.authorization]) assert.equal((String(error) + JSON.stringify(error) + error.stack).includes(value), false);
+    return true;
+  });
+  assert.deepEqual(f.reads, ['brands/b1', 'locations/l1']); assert.deepEqual(f.writes, []);
 });
