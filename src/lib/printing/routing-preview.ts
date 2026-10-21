@@ -2,14 +2,14 @@ import { z } from 'zod';
 import { printerConfigurationSchema } from './configuration';
 
 /** Pure normalized-input preview, never an authorization, persisted rule or print intent. */
-export const PRINT_ROUTING_LIMITS = Object.freeze({ printers: 16, rules: 256, lines: 50, inputCodeUnits: 32768 });
+export const PRINT_ROUTING_LIMITS = Object.freeze({ printers: 16, rules: 256, lines: 50, modifiersPerLine: 8, deliveryTypesPerRule: 2, inputCodeUnits: 32768 });
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const text = (max: number) => z.string().min(1).max(max)
   .refine(value => !/[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(value))
   .refine(value => value.trim().length > 0);
 const scopeSchema = z.object({ brandId: id, locationId: id }).strict();
 const commonLine = { lineId: id, brandId: id, locationId: id, name: text(160), quantity: z.number().int().min(1).max(99),
-  modifiers: z.array(text(160)).max(8).optional(), kitchenNote: text(400).optional() };
+  modifiers: z.array(text(160)).max(PRINT_ROUTING_LIMITS.modifiersPerLine).optional(), kitchenNote: text(400).optional() };
 const productLine = z.object({ ...commonLine, itemType: z.literal('product'), productId: id, categoryId: id }).strict();
 const comboLine = z.object({ ...commonLine, itemType: z.literal('combo') }).strict();
 const selector = z.discriminatedUnion('type', [
@@ -20,7 +20,7 @@ const selector = z.discriminatedUnion('type', [
 const ruleSchema = z.object({
   id, brandId: id, locationId: id, printerId: id,
   match: selector, effect: z.enum(['include', 'exclude']),
-  deliveryTypes: z.array(z.enum(['Pickup', 'Delivery'])).min(1).max(2).optional(),
+  deliveryTypes: z.array(z.enum(['Pickup', 'Delivery'])).min(1).max(PRINT_ROUTING_LIMITS.deliveryTypesPerRule).optional(),
 }).strict();
 const inputSchema = z.object({
   scope: scopeSchema, deliveryType: z.enum(['Pickup', 'Delivery']),
@@ -52,6 +52,19 @@ export function previewPrinterRouting(input: unknown) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new PrinterRoutingError('invalid_input');
   for (const key of ['printers', 'rules', 'lines'] as const) {
     if (!Array.isArray(raw[key]) || raw[key].length > PRINT_ROUTING_LIMITS[key]) throw new PrinterRoutingError('invalid_input');
+  }
+  // Zod's array max reports an error but still parses every element. These
+  // outer collections are bounded above; inspect nested lengths without
+  // touching their elements before allowing any schema traversal.
+  for (const [collection, field, maximum] of [
+    [raw.lines, 'modifiers', PRINT_ROUTING_LIMITS.modifiersPerLine],
+    [raw.rules, 'deliveryTypes', PRINT_ROUTING_LIMITS.deliveryTypesPerRule],
+  ] as const) {
+    for (const entry of collection as unknown[]) {
+      if (!entry || typeof entry !== 'object' || Array.isArray(entry)) continue;
+      const nested = (entry as Record<string, unknown>)[field];
+      if (Array.isArray(nested) && nested.length > maximum) throw new PrinterRoutingError('invalid_input');
+    }
   }
   const parsed = inputSchema.safeParse(input);
   if (!parsed.success) throw new PrinterRoutingError('invalid_input');

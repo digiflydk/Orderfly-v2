@@ -73,7 +73,12 @@ routing decision. The maximum decision matrix is 16 printers × 50 lines.
 Upper bounds are 16 printers, 256 rules, 50 lines and 32,768 serialized input code
 units. Each product has at most eight modifiers. The aggregate budget may reject
 an input below individual collection maxima. Overflow fails without truncation
-or a partial plan. Names/notes reject printer controls, newlines, format/bidi
+or a partial plan. Outer collection lengths and nested modifier/fulfillment-filter
+array lengths are checked before Zod schema parsing, because Zod's array maximum
+does not stop traversal. Nested overflow is rejected without reading its elements;
+regressions use sparse million-entry arrays with throwing element accessors and
+earlier schema-field accessors to prove that schema parsing never starts.
+Names/notes reject printer controls, newlines, format/bidi
 controls and lone surrogates. Errors use fixed codes without input values.
 
 Run:

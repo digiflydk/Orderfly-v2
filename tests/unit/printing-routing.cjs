@@ -94,6 +94,27 @@ test('limits cap input collections and text budget without truncating or partial
   const input=fixture({rules:[],lines:Array.from({length:50},(_,i)=>line(`l${i}`,'p','c',{modifiers:Array(8).fill('x'.repeat(160)),kitchenNote:'y'.repeat(400)}))});
   invalid(input,'input_too_large');assert.equal(PRINT_ROUTING_LIMITS.lines,50);
 });
+test('oversized nested arrays reject before Zod reads any element or parses earlier fields',()=>{
+  const oversized = length => {
+    const values = new Array(length);
+    Object.defineProperty(values, '0', { get() { assert.fail('oversized nested elements must not be read'); } });
+    return values;
+  };
+  for (const modifiers of [oversized(9), oversized(1000000)]) {
+    const item = line('l','p','c',{modifiers});
+    Object.defineProperty(item, 'name', { get() { assert.fail('schema parsing must not start before nested preflight'); } });
+    invalid(fixture({lines:[item]}));
+  }
+  for (const deliveryTypes of [oversized(3), oversized(1000000)]) {
+    const candidate = rule('r','pizza',{type:'all'},'include',{deliveryTypes});
+    Object.defineProperty(candidate, 'id', { get() { assert.fail('schema parsing must not start before nested preflight'); } });
+    invalid(fixture({rules:[candidate]}));
+  }
+  // Exact maxima still reach normal validation and retain routing semantics.
+  const result=preview(fixture({lines:[line('l','p','c',{modifiers:Array(8).fill('Extra')})],
+    rules:[rule('r','pizza',{type:'all'},'include',{deliveryTypes:['Pickup','Delivery']})]}));
+  assert.equal(result.targets[0].lines[0].modifiers.length,8);
+});
 test('printer/rule ordering is canonical while original line order and quantities are retained',()=>{
  const input=fixture();const a=preview(input),b=preview({...input,printers:[...input.printers].reverse(),rules:[...input.rules].reverse()});
  assert.deepEqual(a,b);assert.equal(a.targets[1].lines[0].quantity,2);assert.equal(a.targets[1].lines[0].kitchenNote,'Skær i 8');
