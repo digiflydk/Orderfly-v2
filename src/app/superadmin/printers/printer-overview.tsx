@@ -1,29 +1,31 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Printer, RefreshCw } from 'lucide-react';
+import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { AdminSelectField } from '@/components/superadmin/admin-select-field';
 import { PrinterConfigurationForm } from './printer-configuration-form';
+import { PrinterLifecycleDialog } from './printer-lifecycle-dialog';
 import type { PrinterConfiguration } from '@/lib/printing/domain';
 
 type Brand = { id: string; name: string };
 type Location = { id: string; name: string; brandId: string };
 type Item = { configuration: PrinterConfiguration; revision: number };
-type Page = { items: Item[]; nextCursor: string | null };
+type Page = { items: Item[]; nextCursor: string | null; totalPrinters?: number };
 type Result = { key: string; page?: Page; error?: string };
 const id = /^[A-Za-z0-9_-]{1,128}$/;
 
 // Fail closed on malformed or foreign responses before rendering any row.
-function readPage(value: unknown, brandId: string, locationId: string, after: string): Page {
+function readPage(value: unknown, brandId: string, locationId: string, after: string, model: string): Page {
   const data = value as Page;
   if (!data || !Array.isArray(data.items) || data.items.length > 20
     || !(data.nextCursor === null || typeof data.nextCursor === 'string' && id.test(data.nextCursor) && data.nextCursor !== after)) throw Error('invalid_response');
+  if (data.totalPrinters !== undefined && (!Number.isSafeInteger(data.totalPrinters) || data.totalPrinters < data.items.length)) throw Error('invalid_response');
   const seen = new Set<string>();
   for (const item of data.items) {
     const c = item?.configuration;
-    if (!c || !id.test(c.id) || seen.has(c.id) || c.brandId !== brandId || c.locationId !== locationId
+    if (!c || !id.test(c.id) || seen.has(c.id) || (model && c.model !== model) || c.brandId !== brandId || c.locationId !== locationId
       || typeof c.name !== 'string' || !c.name.trim() || c.name.length > 80
       || c.manufacturer !== 'star' || !['mc-print2', 'mc-print3'].includes(c.model)
       || !['cloudprnt-http', 'cloudprnt-mqtt'].includes(c.transport) || !['active', 'paused', 'disabled'].includes(c.state)
@@ -35,13 +37,14 @@ function readPage(value: unknown, brandId: string, locationId: string, after: st
 }
 
 type Scope = { id: string; brandId: string };
-export function PrinterOverview({ brands, locations, createLocations = [], editLocations = [] }: { brands: Brand[]; locations: Location[]; createLocations?: Scope[]; editLocations?: Scope[] }) {
+export function PrinterOverview({ brands, locations, createLocations = [], editLocations = [], deleteLocations = [] }: { brands: Brand[]; locations: Location[]; createLocations?: Scope[]; editLocations?: Scope[]; deleteLocations?: Scope[] }) {
   const [brandId, setBrandId] = useState(brands.length === 1 ? brands[0].id : '');
   const [locationId, setLocationId] = useState('');
+  const [model, setModel] = useState('');
   const [after, setAfter] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
-  const [editor, setEditor] = useState<{ scope: string; brandId: string; locationId: string; item?: Item } | null>(null);
+  const [editor, setEditor] = useState<{ scope: string; brandId: string; locationId: string; item?: Item; action?: 'deactivate' | 'delete' } | null>(null);
   const [sessionLost, setSessionLost] = useState(false);
   const [savePending, setSavePending] = useState(false);
   const savePendingRef = useRef(false);
@@ -58,17 +61,18 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const scopeRef = useRef(scope); scopeRef.current = scope;
   const canCreate = !sessionLost && createLocations.some(row => row.id === location?.id && row.brandId === brandId);
   const canEdit = !sessionLost && editLocations.some(row => row.id === location?.id && row.brandId === brandId);
-  const editorAllowed = !!editor && !!location && editor.scope === scope && (editor.item ? canEdit : canCreate);
+  const canDelete = !sessionLost && deleteLocations.some(row => row.id === location?.id && row.brandId === brandId);
+  const editorAllowed = !!editor && !!location && editor.scope === scope && (editor.action === 'delete' ? canDelete : editor.item ? canEdit : canCreate);
   const closeAndRefresh = () => { setFeedback(null); readsAllowed.current = true; setEditor(null); setAfter(''); setRefresh(value => value + 1); };
   const loseSession = () => { setFeedback(null); readsAllowed.current = false; readGeneration.current += 1; readController.current?.abort(); sessionEpoch.current += 1; setSessionLost(true); setEditor(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
-  const key = JSON.stringify([brandId, location?.id || '', after, refresh]);
+  const key = JSON.stringify([brandId, location?.id || '', after, refresh, model]);
   const current = result?.key === key ? result : null;
-  const openEditor = (item?: Item) => {
-    if (editor || feedback?.requiresRefresh || !current?.page || sessionLost || (item ? !canEdit || item.configuration.state !== 'disabled' : !canCreate)) return;
+  const openEditor = (item?: Item, action?: 'deactivate' | 'delete') => {
+    if (editor || feedback?.requiresRefresh || !current?.page || sessionLost || (action === 'delete' ? !canDelete : item ? !canEdit || (action === 'deactivate' ? item.configuration.state === 'disabled' : item.configuration.state !== 'disabled') : !canCreate)) return;
     // Invalidate synchronously, before React effects run: an older GET401 must
     // never close a new editor or abort an already authenticated save.
     readGeneration.current += 1; readController.current?.abort();
-    setFeedback(null); setSavedScope(''); setEditor({ scope, brandId, locationId, ...(item ? { item } : {}) });
+    setFeedback(null); setSavedScope(''); setEditor({ scope, brandId, locationId, ...(item ? { item } : {}), ...(action ? { action } : {}) });
   };
 
   useEffect(() => {
@@ -84,14 +88,14 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
     let active = true;
     const epoch = sessionEpoch.current;
     const isCurrent = () => active && !controller.signal.aborted && generation === readGeneration.current && epoch === sessionEpoch.current;
-    const query = new URLSearchParams({ brandId, locationId, limit: '20', ...(after ? { after } : {}) });
+    const query = new URLSearchParams({ brandId, locationId, limit: '20', overview: 'true', ...(model ? { model } : {}), ...(after ? { after } : {}) });
     fetch('/api/merchant/printers?' + query, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal })
       .then(async response => {
         if (response.status === 401 && isCurrent() && scopeRef.current === scope) loseSession();
         if (!response.ok) throw Error(response.status === 401 ? 'Din session er udløbet. Log ind igen.'
           : response.status === 403 ? 'Du har ikke adgang til printerne på denne lokation.'
           : 'Printerne kunne ikke indlæses. Prøv igen.');
-        return readPage(await response.json(), brandId, locationId, after);
+        return readPage(await response.json(), brandId, locationId, after, model);
       })
       .then(page => { if (isCurrent()) { setSessionLost(false); setResult({ key, page }); } })
       .catch(error => {
@@ -102,9 +106,9 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
         }
       });
     return () => { active = false; controller.abort(); if (readController.current === controller) readController.current = null; };
-  }, [brandId, locationId, after, refresh, key, locations, editor]);
+  }, [brandId, locationId, after, refresh, key, locations, editor, model]);
 
-  const stateLabels = { active: 'Aktiv', paused: 'På pause', disabled: 'Deaktiveret' };
+  const stateLabels = { active: 'Active', paused: 'Deactive · På pause', disabled: 'Deactive' };
   return <div className="space-y-6 min-w-0">
     <header>
       <p className="text-sm font-semibold text-primary">Superadmin · Printerpilot</p>
@@ -112,13 +116,16 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
       <p className="mt-2 text-sm text-muted-foreground">Administrer printeropsætning på tværs af brands og lokationer.</p>
     </header>
     <div className="admin-filter-bar flex flex-wrap items-end gap-3 p-4">
-      <AdminSelectField label="Brand" value={brandId} disabled={!!editor} onChange={event => { setBrandId(event.target.value); setLocationId(''); setAfter(''); setEditor(null); setSavedScope(''); setFeedback(null); }}>
+      <AdminSelectField label="Brand" value={brandId} disabled={!!editor} onChange={event => { setBrandId(event.target.value); setLocationId(''); setModel(''); setAfter(''); setEditor(null); setSavedScope(''); setFeedback(null); }}>
         <option value="">Vælg brand</option>
         {brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
       </AdminSelectField>
       <AdminSelectField label="Lokation" value={locationId} disabled={!brandId || !!editor} onChange={event => { setLocationId(event.target.value); setAfter(''); setEditor(null); setSavedScope(''); setFeedback(null); }}>
         <option value="">Vælg lokation</option>
         {locations.filter(row => row.brandId === brandId).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
+      </AdminSelectField>
+      <AdminSelectField label="Printertype" value={model} disabled={!location || !!editor} onChange={event => { setModel(event.target.value); setAfter(''); setFeedback(null); }}>
+        <option value="">Alle printertyper</option><option value="mc-print2">Star mC-Print2</option><option value="mc-print3">Star mC-Print3</option>
       </AdminSelectField>
       <Button variant="outline" disabled={!location || !!editor} onClick={closeAndRefresh}>
         <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />Opdater
@@ -128,7 +135,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
     {savedScope && !editor && <p role="status">Printeropsætningen er gemt som deaktiveret.</p>}
     {feedback && !editor && <p role="alert">{feedback.message}</p>}
     {location && canCreate && !feedback?.requiresRefresh && current?.page && !editor && <Button onClick={() => openEditor()}>Tilføj printer</Button>}
-    {editor && !sessionLost && (editorAllowed || savePending) && <PrinterConfigurationForm
+    {editor && !editor.action && !sessionLost && (editorAllowed || savePending) && <PrinterConfigurationForm
       key={JSON.stringify([editor.scope, editor.item?.configuration.id || '', editor.item?.revision || 0])}
       brandId={editor.brandId} locationId={editor.locationId} item={editor.item} permitted={editorAllowed}
       onPendingChange={reportPending} onCancel={closeAndRefresh}
@@ -137,6 +144,12 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
         setFeedback({ message, requiresRefresh }); if (requiresRefresh) readsAllowed.current = false;
       } }}
       onSaved={() => { if (editorRef.current === editor) { setSavedScope(editor.scope); closeAndRefresh(); } }} />}
+    {editor?.item && editor.action && !sessionLost && (editorAllowed || savePending) && <PrinterLifecycleDialog
+      key={JSON.stringify([editor.scope, editor.item.configuration.id, editor.item.revision, editor.action])}
+      item={editor.item} action={editor.action} permitted={editorAllowed} onPendingChange={reportPending} onCancel={closeAndRefresh}
+      onSessionLost={() => { if (editorRef.current === editor) loseSession(); }}
+      onFeedback={(message, requiresRefresh) => { if (editorRef.current === editor) { setFeedback({ message, requiresRefresh }); if (requiresRefresh) readsAllowed.current = false; } }}
+      onSaved={() => { if (editorRef.current === editor) closeAndRefresh(); }} />}
     {!locations.length ? <p>Ingen lokationer med adgang til printeroversigten.</p>
       : !location ? <p>Vælg brand og lokation for at se printerne.</p>
       : <section aria-label="Printeroversigt" aria-busy={!current} className="space-y-4">
@@ -144,23 +157,25 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
         {!current ? <p role="status">Indlæser printere…</p>
           : current.error ? <p role="alert">{current.error}</p>
           : <>
-            {!current.page?.items.length ? <p>Ingen printere på denne lokation.</p> : <div className="grid gap-4 md:grid-cols-2">
-              {current.page.items.map(({ configuration: c, revision }) => <Card key={c.id} className="min-w-0">
-                <CardHeader><CardTitle className="flex items-start gap-2 text-lg"><Printer className="mt-1 h-5 w-5 shrink-0 text-primary" aria-hidden="true" /><span className="break-words min-w-0">{c.name}</span></CardTitle></CardHeader>
-                <CardContent className="space-y-3 text-sm">
-                  <dl className="grid grid-cols-2 gap-x-3 gap-y-2">
-                    <dt className="text-muted-foreground">Driftsstatus</dt><dd>{stateLabels[c.state]}</dd>
-                    <dt className="text-muted-foreground">Forbindelse</dt><dd>Ikke verificeret</dd>
-                    <dt className="text-muted-foreground">Model</dt><dd>Star {c.model === 'mc-print2' ? 'mC-Print2' : 'mC-Print3'}</dd>
-                    <dt className="text-muted-foreground">Transport</dt><dd>{c.transport === 'cloudprnt-http' ? 'CloudPRNT HTTP' : 'CloudPRNT MQTT'}</dd>
-                    <dt className="text-muted-foreground">Papirbredde</dt><dd>{c.paperWidthMm} mm</dd>
-                    <dt className="text-muted-foreground">Revision</dt><dd>{revision}</dd>
-                  </dl>
-                  {canEdit && c.state === 'disabled' && <Button className="h-auto max-w-full whitespace-normal break-words text-left" variant="outline" disabled={!!editor || !!feedback?.requiresRefresh} onClick={() => openEditor({ configuration: c, revision })}>Rediger {c.name}</Button>}
-                  <p className="text-xs text-muted-foreground">Opsætningen viser ikke, om printeren er online eller har udskrevet en bon.</p>
-                </CardContent>
-              </Card>)}
+            {!current.page?.items.length ? <p>{model ? 'Ingen printere af denne type på lokationen.' : 'Ingen printere på denne lokation.'}</p> : <div className="min-w-0 max-w-full rounded-lg border overflow-hidden">
+              <Table aria-label="Printere" className="min-w-[1100px]">
+                <TableHeader><TableRow>{['Aktiveringsdato', 'Brand', 'Lokation', 'Status', 'Last used', 'Total printers', 'Printer name', 'Printertype', 'Handlinger'].map(label => <TableHead key={label} scope="col">{label}</TableHead>)}</TableRow></TableHeader>
+                <TableBody>{current.page.items.map(({ configuration: c, revision }) => <TableRow key={c.id}>
+                  <TableCell>Ikke registreret</TableCell>
+                  <TableCell>{brands.find(row => row.id === c.brandId)?.name}</TableCell><TableCell>{location.name}</TableCell>
+                  <TableCell><span className="whitespace-nowrap">{stateLabels[c.state]}</span></TableCell>
+                  <TableCell>Ikke registreret</TableCell><TableCell>{current.page?.totalPrinters ?? 'Ikke registreret'}</TableCell>
+                  <TableCell className="max-w-[220px] break-words font-medium">{c.name}</TableCell>
+                  <TableCell className="text-muted-foreground"><span className="whitespace-nowrap">Star {c.model === 'mc-print2' ? 'mC-Print2' : 'mC-Print3'}</span><br />{c.transport === 'cloudprnt-http' ? 'CloudPRNT HTTP' : 'CloudPRNT MQTT'}<br />{c.paperWidthMm} mm</TableCell>
+                  <TableCell><div className="flex flex-wrap gap-2 min-w-[180px]">
+                    {canEdit && <Button aria-label={`Rediger ${c.name}`} size="sm" variant="outline" disabled={!!editor || !!feedback?.requiresRefresh || !canEdit || c.state !== 'disabled'} onClick={() => openEditor({ configuration: c, revision })}>Edit</Button>}
+                    {canEdit && <Button aria-label={`Deaktiver ${c.name}`} size="sm" variant="outline" disabled={!!editor || !!feedback?.requiresRefresh || !canEdit || c.state === 'disabled'} onClick={() => openEditor({ configuration: c, revision }, 'deactivate')}>Deactivate</Button>}
+                    {canDelete && <Button aria-label={`Slet ${c.name}`} size="sm" variant="outline" disabled={!!editor || !!feedback?.requiresRefresh || !canDelete} onClick={() => openEditor({ configuration: c, revision }, 'delete')}>Delete</Button>}
+                  </div></TableCell>
+                </TableRow>)}</TableBody>
+              </Table>
             </div>}
+            <p className="text-xs text-muted-foreground">Aktivering og seneste bekræftede print er ikke registreret i den nuværende historik. Status bekræfter ikke forbindelse eller udskrift. Total printers er alle ikke-slettede printere på det valgte brand og lokation, uanset printertype. Tabellen kan rulles vandret.</p>
             <div className="flex flex-wrap gap-3">
               {after && <Button variant="outline" disabled={!!editor} onClick={() => setAfter('')}>Første side</Button>}
               {current.page?.nextCursor && <Button variant="outline" disabled={!!editor} onClick={() => setAfter(current.page!.nextCursor!)}>Næste side</Button>}

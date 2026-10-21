@@ -24,7 +24,7 @@ before(async () => {
   fs.writeFileSync(entry, `import React from 'react';import {createRoot} from 'react-dom/client';
     import {PrinterOverview} from ${JSON.stringify(path.join(root, 'src/app/superadmin/printers/printer-overview.tsx'))};
     const writes = new URLSearchParams(location.search).has('writes') ? [{id:'la',brandId:'a'}] : [];
-    function Fixture(){const [scopes,setScopes]=React.useState(writes);const [identity,setIdentity]=React.useState(0);window.resetPrinterContext=()=>setIdentity(value=>value+1);window.setPrinterWriteScopes=setScopes;return React.createElement(PrinterOverview,{key:identity,brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)},createLocations:scopes,editLocations:scopes});}
+    function Fixture(){const [scopes,setScopes]=React.useState(writes);const [deleteScopes,setDeleteScopes]=React.useState(writes);const [identity,setIdentity]=React.useState(0);window.resetPrinterContext=()=>setIdentity(value=>value+1);window.setPrinterWriteScopes=value=>{setScopes(value);setDeleteScopes(value);};window.setPrinterDeleteScopes=setDeleteScopes;return React.createElement(PrinterOverview,{key:identity,brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)},createLocations:scopes,editLocations:scopes,deleteLocations:deleteScopes});}
     createRoot(document.getElementById('root')).render(React.createElement(Fixture));`);
   const loader = path.join(dir, 'loader.js');
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
@@ -66,23 +66,25 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667
     assert.equal(requests.length, 0);
     await expect(page.getByRole('combobox', { name: 'Lokation', exact: true })).toBeDisabled();
     await choose(page);
-    await expect(page.getByText('Aktiv', { exact: true })).toBeVisible();
-    await expect(page.getByText('Ikke verificeret', { exact: true })).toHaveCount(20);
-    await expect(page.getByText('CloudPRNT HTTP', { exact: true })).toHaveCount(20);
-    await expect(page.getByText('58 mm', { exact: true })).toHaveCount(20);
+    await expect(page.getByText('Active', { exact: true })).toBeVisible();
+    await expect(page.getByRole('table', { name: 'Printere', exact: true })).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: 'Aktiveringsdato', exact: true })).toBeVisible();
+    await expect(page.getByText('Ikke registreret', { exact: true })).toHaveCount(60);
+    await expect(page.getByText('CloudPRNT HTTP', { exact: false })).toHaveCount(20);
+    await expect(page.getByText(/58 mm/, { exact: false })).toHaveCount(20);
     assert.deepEqual(requests[0], { method: 'GET', brand: 'a', location: 'la', limit: '20', after: null });
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 1);
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
     await page.screenshot({ path: path.join(root, 'test-results', `printing-overview-${name}.png`), fullPage: true });
     await page.getByRole('button', { name: 'Næste side' }).click();
     await expect(page.getByText('Køkken p21', { exact: true })).toBeVisible();
-    await expect(page.getByText('Ikke verificeret', { exact: true })).toHaveCount(1);
+    await expect(page.getByText('Ikke registreret', { exact: true })).toHaveCount(3);
     assert.equal(requests[1].after, 'p20');
     await page.getByRole('button', { name: 'Første side' }).click();
     await expect(page.getByRole('button', { name: 'Næste side' })).toBeVisible();
     assert.equal(requests[2].after, null);
     await page.getByRole('combobox', { name: 'Brand', exact: true }).selectOption('b');
-    await expect(page.getByText('Ikke verificeret', { exact: true })).toHaveCount(0);
+    await expect(page.getByRole('table')).toHaveCount(0);
     assert.equal(await page.getByRole('combobox', { name: 'Lokation', exact: true }).inputValue(), '');
     await expect(page.getByRole('combobox', { name: 'Lokation', exact: true }).locator('option[value="la"]')).toHaveCount(0);
     assert.deepEqual(errors, []);
@@ -242,7 +244,7 @@ test('view-only metadata and independently scoped grants never expose unauthoriz
   await expect(page.getByRole('button', { name: /Rediger/ })).toHaveCount(0);
   await page.goto(origin + '?writes'); await choose(page);
   await expect(page.getByRole('button', { name: 'Rediger Køkken p1', exact: true })).toBeVisible();
-  await expect(page.getByRole('button', { name: 'Rediger Køkken p2', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Rediger Køkken p2', exact: true })).toBeDisabled();
   await choose(page, 'b', 'lb'); await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
 });
 for (const lateStatus of [201, 401]) test(`late ${lateStatus} mutation response cannot restore form or session state after server context and scope change`, async t => {
@@ -402,4 +404,97 @@ test('native write-grant revocation keeps pending POST and PATCH mounted through
       await expect(page.getByRole('alert')).toHaveCount(0);
     }
   }
+});
+
+
+test('server model filter finds printers beyond first unfiltered page and retains actual scope total', async t => {
+ const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage(), seen = [];
+ await page.route('**/api/merchant/printers?*', route => {
+   const url = new URL(route.request().url()); seen.push(Object.fromEntries(url.searchParams));
+   const filtered = url.searchParams.get('model') === 'mc-print3';
+   return route.fulfill({ json: { items: filtered ? [item('p21', 'a', 'la', { model: 'mc-print3', paperWidthMm: 80 })] : [item('p01')], nextCursor: null, totalPrinters: 24 } });
+ });
+ await page.goto(origin); await choose(page);
+ await expect(page.getByRole('table', { name: 'Printere' })).toBeVisible();
+ for (const name of ['Aktiveringsdato', 'Brand', 'Lokation', 'Status', 'Last used', 'Total printers', 'Printer name', 'Printertype', 'Handlinger']) await expect(page.getByRole('columnheader', { name, exact: true })).toBeVisible();
+ await expect(page.getByRole('cell', { name: '24', exact: true })).toHaveCount(1);
+ await expect(page.getByRole('cell', { name: 'Nord', exact: true })).toHaveCount(1);
+ await expect(page.getByText('Aldrig', { exact: true })).toHaveCount(0);
+ await page.getByRole('combobox', { name: 'Printertype', exact: true }).selectOption('mc-print3');
+ await expect(page.getByText('Køkken p21', { exact: true })).toBeVisible();
+ await expect(page.getByText('Køkken p01', { exact: true })).toHaveCount(0);
+ assert.deepEqual(seen[1], { brandId: 'a', locationId: 'la', limit: '20', overview: 'true', model: 'mc-print3' });
+ await expect(page.getByRole('cell', { name: '24', exact: true })).toHaveCount(1);
+});
+
+test('audited deactivate and soft-delete require confirmation and exact native revision; pending blocks context changes', async t => {
+ const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage(), mutations = [];
+ let saved = item('p1'), release, started; const pending = new Promise(resolve => { started = resolve; });
+ await page.route('**/api/merchant/printers**', async route => {
+  if (route.request().method() === 'GET') return route.fulfill({ json: { items: saved ? [saved] : [], nextCursor: null, totalPrinters: saved ? 1 : 0 } });
+  const input = route.request().postDataJSON(); mutations.push(input);
+  assert.equal(new URL(route.request().url()).pathname, '/api/merchant/printers/lifecycle');
+  if (input.action === 'deactivate') {
+   started(); await new Promise(resolve => { release = resolve; });
+   saved = { ...saved, configuration: { ...saved.configuration, state: 'disabled' }, revision: 4 };
+   return route.fulfill({ json: { item: saved } });
+  }
+  saved = null; return route.fulfill({ json: { deleted: true, printerId: input.printerId, revision: input.revision + 1 } });
+ });
+ await page.goto(origin + '?writes'); await choose(page);
+ await page.getByRole('button', { name: 'Deaktiver Køkken p1', exact: true }).click();
+ assert.equal(mutations.length, 0); await expect(page.getByRole('dialog', { name: 'Deaktiver printer' })).toBeVisible();
+ await page.getByRole('button', { name: 'Deaktiver printer', exact: true }).click(); await pending;
+ for (const name of ['Brand', 'Lokation', 'Printertype']) await expect(page.getByRole('combobox', { name, exact: true })).toBeDisabled();
+ await expect(page.getByRole('button', { name: 'Annuller', exact: true })).toBeDisabled();
+ await expect(page.getByRole('button', { name: 'Gemmer…', exact: true })).toBeDisabled(); assert.equal(mutations.length, 1);
+ release(); await expect(page.getByRole('dialog')).toHaveCount(0); await expect(page.getByText('Deactive', { exact: true })).toBeVisible();
+ assert.deepEqual(mutations[0], { brandId: 'a', locationId: 'la', printerId: 'p1', revision: 3, action: 'deactivate' });
+ await page.getByRole('button', { name: 'Slet Køkken p1', exact: true }).click();
+ await expect(page.getByText('Printeren fjernes fra oversigten. Historik og tidligere printjobs bevares.', { exact: true })).toBeVisible();
+ assert.equal(mutations.length, 1); await page.getByRole('button', { name: 'Slet printer', exact: true }).click();
+ await expect(page.getByText('Ingen printere på denne lokation.', { exact: true })).toBeVisible();
+ assert.deepEqual(mutations[1], { brandId: 'a', locationId: 'la', printerId: 'p1', revision: 4, action: 'delete' });
+ assert.equal(mutations.length, 2);
+});
+
+test('delete uses its own native grant; conflicts, output-off and uncertain lifecycle outcomes never silently replay', async t => {
+ const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage(); let status = 409, code = 'record_conflict', writes = 0;
+ await page.route('**/api/merchant/printers**', route => {
+  if (route.request().method() === 'GET') return route.fulfill({ json: { items: [item('p1')], nextCursor: null, totalPrinters: 1 } });
+  writes++; return route.fulfill({ status, json: { error: code } });
+ });
+ await page.goto(origin + '?writes'); await choose(page); await page.evaluate(() => window.setPrinterDeleteScopes([]));
+ await expect(page.getByRole('button', { name: 'Slet Køkken p1', exact: true })).toHaveCount(0);
+ await expect(page.getByRole('button', { name: 'Deaktiver Køkken p1', exact: true })).toBeEnabled();
+ await page.evaluate(() => window.setPrinterDeleteScopes([{ id: 'la', brandId: 'a' }]));
+ await page.getByRole('button', { name: 'Slet Køkken p1', exact: true }).click(); await page.getByRole('button', { name: 'Slet printer', exact: true }).click();
+ await expect(page.getByRole('alert')).toHaveText('Printeren er ændret. Opdater oversigten før et nyt forsøg.');
+ await expect(page.getByRole('button', { name: 'Slet printer', exact: true })).toBeDisabled(); assert.equal(writes, 1);
+ await page.getByRole('button', { name: 'Opdater oversigten', exact: true }).click(); status = 503; code = 'writes_unavailable';
+ await page.getByRole('button', { name: 'Slet Køkken p1', exact: true }).click(); await page.getByRole('button', { name: 'Slet printer', exact: true }).click();
+ await expect(page.getByRole('alert')).toHaveText('Printerændringer er slået fra. Prøv igen senere.');
+ await expect(page.getByRole('button', { name: 'Slet printer', exact: true })).toBeEnabled(); assert.equal(writes, 2);
+ code = 'PRIVATE_PROVIDER_DETAIL'; await page.getByRole('button', { name: 'Slet printer', exact: true }).click();
+ await expect(page.getByRole('alert')).toHaveText('Kunne ikke bekræfte printerhandlingen. Opdater oversigten før et nyt forsøg.');
+ await expect(page.getByRole('button', { name: 'Slet printer', exact: true })).toBeDisabled(); assert.equal(writes, 3);
+ assert.equal((await page.locator('body').innerText()).includes('PRIVATE_PROVIDER_DETAIL'), false);
+ await page.getByRole('button', { name: 'Opdater oversigten', exact: true }).click(); status = 401;
+ await page.getByRole('button', { name: 'Slet Køkken p1', exact: true }).click(); await page.getByRole('button', { name: 'Slet printer', exact: true }).click();
+ await expect(page.getByRole('alert')).toHaveText('Din session er udløbet. Log ind igen.'); await expect(page.getByRole('dialog')).toHaveCount(0); await expect(page.getByText('Køkken p1', { exact: true })).toHaveCount(0);
+});
+
+test('revoking a native delete grant retains pending lifecycle until response and preserves unknown-outcome refresh', async t => {
+ const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage(); let release, started;
+ const pending = new Promise(resolve => { started = resolve; });
+ await page.route('**/api/merchant/printers**', async route => {
+  if (route.request().method() === 'GET') return route.fulfill({ json: { items: [item('p1')], nextCursor: null } });
+  started(); await new Promise(resolve => { release = resolve; }); return route.fulfill({ status: 503, json: { error: 'printers_unavailable' } });
+ });
+ await page.goto(origin + '?writes'); await choose(page); await page.getByRole('button', { name: 'Slet Køkken p1', exact: true }).click();
+ await page.getByRole('button', { name: 'Slet printer', exact: true }).click(); await pending; await page.evaluate(() => window.setPrinterDeleteScopes([]));
+ await expect(page.getByRole('dialog')).toBeVisible(); await expect(page.getByRole('button', { name: 'Gemmer…', exact: true })).toBeDisabled();
+ release(); await expect(page.getByRole('dialog')).toHaveCount(0); await expect(page.getByRole('alert')).toHaveText('Kunne ikke bekræfte printerhandlingen. Opdater oversigten før et nyt forsøg.');
+ await page.evaluate(() => window.setPrinterDeleteScopes([{ id: 'la', brandId: 'a' }]));
+ await expect(page.getByRole('button', { name: 'Slet Køkken p1', exact: true })).toBeDisabled();
 });

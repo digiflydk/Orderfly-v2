@@ -9,9 +9,10 @@ import { storedPrinterSchema } from './storage';
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const readSchema = z.object({
   brandId: identifier, locationId: identifier, printerId: identifier.optional(),
-  after: identifier.optional(),
+  after: identifier.optional(), model: z.enum(['mc-print2', 'mc-print3']).optional(),
+  overview: z.literal('true').optional(),
   limit: z.string().regex(/^(?:[1-9]|[1-4][0-9]|50)$/).optional(),
-}).strict().refine(input => !input.printerId || (!input.after && !input.limit));
+}).strict().refine(input => !input.printerId || (!input.after && !input.limit && !input.model && !input.overview));
 
 export class PrinterReadError extends Error {
   constructor(public code: 'invalid_request' | 'not_found' | 'printers_unavailable', public status: number) {
@@ -49,11 +50,22 @@ export async function readPrinterConfigurations(input: unknown) {
   }
 
   const limit = query.limit ? Number(query.limit) : 20;
-  let page = printers.where('deletedAt', '==', null).orderBy('__name__');
+  const allPrinters = printers.where('deletedAt', '==', null);
+  let filtered = allPrinters;
+  if (query.model) filtered = filtered.where('configuration.model', '==', query.model);
+  let page = filtered.orderBy('__name__');
   if (query.after) page = page.startAfter(query.after);
   const snapshot = await page.limit(limit + 1).get();
   const items = snapshot.docs.map(project);
   // Never serialize a malformed row or use its foreign ID in a continuation token.
   if (items.some(item => item === null)) throw new PrinterReadError('printers_unavailable', 503);
-  return { items: items.slice(0, limit), nextCursor: snapshot.docs.length > limit ? snapshot.docs[limit - 1].id : null };
+  // The scope count is independent of model filtering, pagination and current page.
+  // It includes only nondeleted records with matching native scope, never an estimate from a partial page.
+  const totalPrinters = query.overview ? (await allPrinters.where('configuration.brandId', '==', query.brandId)
+    .where('configuration.locationId', '==', query.locationId).count().get()).data().count : undefined;
+  if (query.overview && (!Number.isSafeInteger(totalPrinters) || totalPrinters! < snapshot.docs.length)) {
+    throw new PrinterReadError('printers_unavailable', 503);
+  }
+  return { items: items.slice(0, limit), nextCursor: snapshot.docs.length > limit ? snapshot.docs[limit - 1].id : null,
+    ...(query.overview ? { totalPrinters } : {}) };
 }
