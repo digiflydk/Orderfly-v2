@@ -7,7 +7,7 @@ export type ClubDiscountSummary = {
   activeDays?: string[]; activeTimeSlots?: { start: string; end: string }[];
 };
 export type ProfileBonusCampaign = { stamps: number; requiredFields: string[] };
-export type SignupCampaigns = { welcomeStamps: number; profile: ProfileBonusCampaign | null; discount: ClubDiscountSummary | null };
+export type SignupCampaigns = { version?: string; welcomeStamps: number; profile: ProfileBonusCampaign | null; discount: ClubDiscountSummary | null };
 export type MemberCampaigns = { profile: ProfileBonusCampaign | null; profileBonusGranted: boolean; discount: ClubDiscountSummary | null };
 const FIELD_NAMES: Record<string, string> = { phone: 'telefonnummer', birthDate: 'fødselsdato', gender: 'køn' };
 const DAYS: Record<string, string> = { monday: 'mandag', tuesday: 'tirsdag', wednesday: 'onsdag', thursday: 'torsdag',

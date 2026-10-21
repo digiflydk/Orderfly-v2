@@ -8,6 +8,7 @@ The public program optionally includes `campaigns`:
 
 ```ts
 {
+  version?: string; // server fingerprint of the displayed campaign benefits
   welcomeStamps: number;
   profile: { stamps: number; requiredFields: string[] } | null;
   discount: ClubDiscountSummary | null;
@@ -40,3 +41,6 @@ The discount summary has `id`, `discountType` (`percentage` or `fixed_amount`), 
 `tests/unit/loyalty-benefits-browser.cjs` compiles the actual benefit, signup and member-card components with the production portal frame and CSS. It verifies absent campaigns, truthful signup/earned copy, all restrictions, claimed profile hiding, non-HTML merchant text, prefixed shop links and no overflow at320/390/1440px. Viewing benefit text does not make a bonus/profile/signup write. The existing portal-browser suite remains unchanged and verifies the original flows.
 
 This is isolated browser QA with synthetic server data. Coordinator integration, independent review/current-main CI, serial deployment, verified release and applicable live acceptance remain separate gates. No campaign is activated by this presentation-only change.
+
+## Stale campaign protection (#480)
+The public campaign projection can supply a version fingerprint. Standalone signup submits that displayed fingerprint as `campaignVersion`; legacy/no-campaign projections omit it. Root validates it in the signup transaction. A changed campaign fingerprint resets both consent checkboxes even if the consent and terms text versions did not change. The `program_changed` message explains that campaign benefits may have changed. Actual component browser coverage verifies the first fingerprint, a server rejection, refreshed benefit props, required fresh ticks and the next submitted fingerprint.

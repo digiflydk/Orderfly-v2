@@ -21,7 +21,10 @@ before(async()=>{
  import {PortalFrame,EsmeraldaClubFooter} from ${src('app/[brandSlug]/club/portal-frame')};
  import {portalPreset} from ${src('app/[brandSlug]/club/brand-preset')};
  const cfg=window.__config||{},view=location.pathname.slice(1),offer=cfg.campaigns;
- const node=view==='signup'?React.createElement(SignupForm,{slug:'esmeralda',base:'/club',program:{name:'Esmeralda Club',consentText:'Ja tak til nyhedsbrevet',consentHelp:'',termsAccept:'Jeg accepterer vilkårene.',consentVersion:'c',termsVersion:'t',campaigns:offer}})
+ function SignupFixture(){const [shownOffer,setShownOffer]=React.useState(offer);return React.createElement(React.Fragment,null,
+  React.createElement(SignupForm,{slug:'esmeralda',base:'/club',program:{name:'Esmeralda Club',consentText:'Ja tak til nyhedsbrevet',consentHelp:'',termsAccept:'Jeg accepterer vilkårene.',consentVersion:'c',termsVersion:'t',campaigns:shownOffer}}),
+  cfg.nextCampaigns&&React.createElement('button',{onClick:()=>setShownOffer(cfg.nextCampaigns)},'Opdater kampagne'));}
+ const node=view==='signup'?React.createElement(SignupFixture)
   :view==='member'?React.createElement(MemberCard,{slug:'esmeralda',base:cfg.base||'/club',member:{...${JSON.stringify(member)},campaigns:offer}})
   :view==='hint'?React.createElement(ProfileBonusHint,{campaign:offer?.profile,claimed:cfg.claimed,profileHref:'/club/profil'})
   :view==='earned'?React.createElement(MemberBenefits,{campaigns:offer,base:cfg.base||'/club'})
@@ -80,5 +83,27 @@ test('merchant text is escaped, fixed-amount and stacking terms are truthful and
   await benefit.getByText(d.description,{exact:true}).waitFor();assert.equal(await benefit.locator('img').count(),0);assert.equal(await page.evaluate(()=>window.__bad),undefined);
   await benefit.getByText(/30,00/).waitFor();await benefit.getByText(/inklusive tilvalg og menuer/).waitFor();await benefit.getByText('Gælder kun dit første køb.').waitFor();
   assert.equal(await page.getByRole('link',{name:'Bestil i webshoppen'}).getAttribute('href'),'/esmeralda');assert.ok(await noOverflow(page));
+ }finally{await page.close();}
+});
+
+
+test('standalone signup submits displayed campaign version and requires fresh ticks when only the offer changes',async()=>{
+ const first={...campaigns,version:'a'.repeat(64)},next={...campaigns,version:'b'.repeat(64),welcomeStamps:2};
+ const {page}=await open('signup',{campaigns:first,nextCampaigns:next});const sent=[];
+ await page.route('**/api/loyalty/esmeralda/signup',route=>{sent.push(route.request().postDataJSON());return route.fulfill({status:sent.length===1?409:200,contentType:'application/json',body:JSON.stringify(sent.length===1?{error:'program_changed'}:{ok:true})});});
+ try{
+  await page.getByLabel('Navn',{exact:true}).fill('Anna Hansen');await page.getByLabel('E-mail',{exact:true}).fill('anna@example.com');
+  const consent=page.getByRole('checkbox',{name:'Ja tak til nyhedsbrevet',exact:true}),terms=page.getByRole('checkbox',{name:'Jeg accepterer vilkårene.',exact:true});
+  await consent.click();await terms.click();await page.getByRole('button',{name:'Bliv medlem',exact:true}).click();
+  await page.getByRole('alert').filter({hasText:'kampagnefordelene har ændret sig'}).waitFor();
+  assert.equal(sent[0].campaignVersion,first.version);assert.equal(sent[0].consentVersion,'c');assert.equal(sent[0].termsVersion,'t');
+  await page.getByRole('button',{name:'Opdater kampagne',exact:true}).click();
+  await page.getByText('2 stempler',{exact:true}).waitFor();
+  assert.equal(await consent.getAttribute('aria-checked'),'false');assert.equal(await terms.getAttribute('aria-checked'),'false');
+  await page.getByRole('button',{name:'Bliv medlem',exact:true}).click();
+  await page.getByText('Du skal give samtykke til nyhedsbrevet for at blive medlem.').waitFor();assert.equal(sent.length,1);
+  await consent.click();await terms.click();await page.getByRole('button',{name:'Bliv medlem',exact:true}).click();
+  await page.getByRole('heading',{name:'Tjek din e-mail'}).waitFor();assert.equal(sent.length,2);assert.equal(sent[1].campaignVersion,next.version);
+  assert.equal(sent[1].consentVersion,'c');assert.equal(sent[1].termsVersion,'t');
  }finally{await page.close();}
 });

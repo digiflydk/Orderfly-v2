@@ -28,9 +28,10 @@ export function SignupForm({ slug, base, program }: { slug: string; base: string
   const shown = useRef(program);
   const summary = useRef<HTMLParagraphElement>(null);
 
-  // New texts from the server (after "program_changed") require fresh ticks.
+  // New text or advertised campaign versions from the server require fresh ticks.
   useEffect(() => {
-    if (shown.current.consentVersion === program.consentVersion && shown.current.termsVersion === program.termsVersion) return;
+    if (shown.current.consentVersion === program.consentVersion && shown.current.termsVersion === program.termsVersion
+      && shown.current.campaigns?.version === program.campaigns?.version) return;
     shown.current = program; setConsent(false); setTerms(false);
   }, [program]);
   useEffect(() => { if (errors.form) summary.current?.focus(); }, [errors.form]);
@@ -49,11 +50,11 @@ export function SignupForm({ slug, base, program }: { slug: string; base: string
     }
     setBusy(true);
     const answer = await portalRequest(slug, 'signup', { name: name.trim(), email: email.trim(), newsletterConsent: true, termsAccepted: true,
-      consentVersion: program.consentVersion, termsVersion: program.termsVersion });
+      consentVersion: program.consentVersion, termsVersion: program.termsVersion, campaignVersion: program.campaigns?.version });
     setBusy(false);
     if (answer.ok) { setSentTo(email.trim()); return; }
     if (answer.error === 'program_changed') {
-      setErrors({ form: 'Teksterne er blevet opdateret. Læs dem igen, og sæt dine flueben.' });
+      setErrors({ form: 'Teksterne er blevet opdateret, eller kampagnefordelene har ændret sig. Læs dem igen, og sæt dine flueben.' });
       router.refresh();
       return;
     }
