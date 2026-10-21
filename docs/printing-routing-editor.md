@@ -128,3 +128,6 @@ behavior. All original race/session/authorization/conflict safeguards remain.
 Own typecheck and122 affected production tests pass. Actual final browser CI,
 independent current-head Codex, screenshot review, deployed commit verification
 and authenticated live acceptance remain separate required gates.
+
+
+Review investigation (21 October 2026, PR353 finding4340248095): the production server schema emits match before effect, while the production client `validatedSaved` reparses the response with its own strict schema before comparison. An executable test of both actual parsers proves that key order is normalized to the submitted rule order and changed effect values remain unequal. No product-source change is justified by the raw JSON ordering observation alone. Browser fixture PUT responses now pass through the actual server `printerRoutingRuleSchema`; the original create/edit/save/readback scenarios remain, with a loaded-rule edit at revision9->10 and a genuinely changed canonical response that must remain uncertain and blocked. These new browser assertions still require actual CI before the review thread can be resolved. Local parser/service12 tests pass; unavailable local Chromium remains reported accurately.

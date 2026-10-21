@@ -141,3 +141,20 @@ test('catalog and native sample preview preserve canonical omitted global produc
   delete f.rows.get('products/pizza').locationIds; delete f.rows.get('categories/food').locationIds;
   assert.equal((await f.request('preview')).status, 409);
 });
+
+
+test('actual client saved parser recanonicalizes server rule keys and still distinguishes changed values', () => {
+  const source = fs.readFileSync('src/app/superadmin/printers/routing/routing-editor.tsx', 'utf8') + '\nexport { validatedSaved };';
+  const compiled = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
+  const mod = { exports: {} };
+  new Function('require', 'module', 'exports', compiled)(name => name.startsWith('@/components/') ? {} : require(name), mod, mod.exports);
+  const { printerRoutingRuleSchema } = loadTs('src/lib/printing/routing-preview.ts', { 'server-only': {} });
+  const submitted = { id: 'rule1', ...scope, printerId: 'p1', effect: 'include', match: { type: 'category', id: 'food' } };
+  const server = printerRoutingRuleSchema.parse(submitted);
+  assert.notEqual(JSON.stringify(server), JSON.stringify(submitted), 'real server emits match before effect');
+  const dto = { scope, revision: 1, rules: [server], printers: [{ configuration: config({ state: 'active' }), revision: 3 }], referencesVerified: true, dispatchAuthorized: false };
+  const parsed = mod.exports.validatedSaved(dto, scope);
+  assert.equal(JSON.stringify(parsed.rules), JSON.stringify([submitted]), 'actual client parser emits effect before match before save comparison');
+  const changed = mod.exports.validatedSaved({ ...dto, rules: [printerRoutingRuleSchema.parse({ ...submitted, effect: 'exclude' })] }, scope);
+  assert.notEqual(JSON.stringify(changed.rules), JSON.stringify([submitted]), 'real changed values still reject');
+});

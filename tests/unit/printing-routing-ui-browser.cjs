@@ -8,6 +8,10 @@ const path = require('node:path');
 const http = require('node:http');
 const { execFileSync } = require('node:child_process');
 const { chromium, expect } = require('@playwright/test');
+const { loadTs } = require('../helpers/load-ts.cjs');
+const { printerRoutingRuleSchema } = loadTs('src/lib/printing/routing-preview.ts', { 'server-only': {} });
+// Match actual PUT/GET serialization through the production server schema.
+const canonicalRules = rules => rules.map(rule => printerRoutingRuleSchema.parse(rule));
 const webpackModule = require('next/dist/compiled/webpack/webpack');
 webpackModule.init();
 const root = process.cwd();
@@ -66,7 +70,7 @@ function fixtureRoutes(page, controls = {}) {
     if (request.method() === 'GET') return route.fulfill({ json: saved && saved.scope.brandId === brandId ? saved : { scope, revision: null, rules: [], printers: [], referencesVerified: true, dispatchAuthorized: false } });
     if (request.method() === 'PUT') {
       writes.push(body);
-      saved = { scope, revision: body.expectedRevision + 1, rules: body.rules, printers: body.rules.length ? [printer] : [], referencesVerified: true, dispatchAuthorized: false };
+      saved = { scope, revision: body.expectedRevision + 1, rules: canonicalRules(body.rules), printers: body.rules.length ? [printer] : [], referencesVerified: true, dispatchAuthorized: false };
       return route.fulfill({ json: saved });
     }
     const included = body.rules.some(r => r.effect === 'include') && !body.rules.some(r => r.effect === 'exclude');
@@ -155,7 +159,7 @@ test('pending save locks scope and retains result after write grant revocation w
   const wait = new Promise(resolve => { started = resolve; });
   fixtureRoutes(page, { intercept: async ({ route, request, body, scope, printer }) => {
     if (request.method() !== 'PUT') return false; writes++; started(); await new Promise(resolve => { release = resolve; });
-    await route.fulfill({ json: { scope, revision: 1, rules: body.rules, printers: [printer], referencesVerified: true, dispatchAuthorized: false } }); return true;
+    await route.fulfill({ json: { scope, revision: 1, rules: canonicalRules(body.rules), printers: [printer], referencesVerified: true, dispatchAuthorized: false } }); return true;
   } });
   await page.goto(origin); await choose(page); await addCategoryRule(page);
   await page.getByRole('button', { name: 'Gem routingregler', exact: true }).click(); await wait;
@@ -201,7 +205,7 @@ for (const [size, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667
     const f = fixtureRoutes(page, { intercept: async ({ route, request, url, body, scope, printer }) => {
       if (url.pathname !== '/api/superadmin/printers/routing') return false;
       if (request.method() === 'GET') { await route.fulfill({ json: canonical || { scope, revision: 9, rules: [legacy], printers: [], referencesVerified: false, dispatchAuthorized: false } }); return true; }
-      if (request.method() === 'PUT') { mutations.push(body); canonical = { scope, revision: 10, rules: body.rules, printers: body.rules.length ? [printer] : [], referencesVerified: true, dispatchAuthorized: false };
+      if (request.method() === 'PUT') { mutations.push(body); canonical = { scope, revision: 10, rules: canonicalRules(body.rules), printers: body.rules.length ? [printer] : [], referencesVerified: true, dispatchAuthorized: false };
         await route.fulfill({ json: canonical }); return true; }
       return false;
     } });
@@ -257,9 +261,50 @@ test('an unverified PUT response is uncertain and requires manual refresh before
   const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage(); let writes = 0;
   fixtureRoutes(page, { intercept: async ({ route, request, body, scope }) => {
     if (request.method() !== 'PUT') return false; writes++;
-    await route.fulfill({ json: { scope, revision: 1, rules: body.rules, printers: [], referencesVerified: false, dispatchAuthorized: false } }); return true;
+    await route.fulfill({ json: { scope, revision: 1, rules: canonicalRules(body.rules), printers: [], referencesVerified: false, dispatchAuthorized: false } }); return true;
   } });
   await page.goto(origin); await choose(page); await addCategoryRule(page); await page.getByRole('button', { name: 'Gem routingregler', exact: true }).click();
   await expect(page.getByRole('alert')).toHaveText('Det er uklart, om reglerne blev gemt. Genindlæs før du prøver igen.');
   await expect(page.getByRole('button', { name: 'Gem routingregler', exact: true })).toBeDisabled(); assert.equal(writes, 1);
+});
+
+
+test('canonical server rule order preserves loaded edit success while changed rule values stay uncertain', async t => {
+  for (const changed of [false, true]) {
+    const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
+    const scope = { brandId: 'a', locationId: 'la' };
+    const stored = printerRoutingRuleSchema.parse({ id: 'loaded', ...scope, printerId: 'p1', effect: 'include', match: { type: 'category', id: 'food' } });
+    let canonical = { scope, revision: 9, rules: [stored], printers: [item('p1')], referencesVerified: true, dispatchAuthorized: false }, writes = 0;
+    fixtureRoutes(page, { intercept: async ({ route, request, url, body }) => {
+      if (url.pathname !== '/api/superadmin/printers/routing') return false;
+      if (request.method() === 'GET') { await route.fulfill({ json: canonical }); return true; }
+      if (request.method() === 'PUT') {
+        writes++; assert.equal(body.expectedRevision, 9);
+        const parsed = canonicalRules(body.rules);
+        assert.deepEqual(Object.keys(parsed[0]), ['id', 'brandId', 'locationId', 'printerId', 'match', 'effect']);
+        assert.ok(Object.keys(body.rules[0]).indexOf('effect') < Object.keys(body.rules[0]).indexOf('match'));
+        canonical = { ...canonical, revision: 10, rules: changed ? parsed.map(rule => ({ ...rule, effect: 'include' })) : parsed };
+        await route.fulfill({ json: canonical }); return true;
+      }
+      return false;
+    } });
+    await page.goto(origin); await choose(page);
+    await expect(page.getByText('Gemt version 9', { exact: true })).toBeVisible();
+    await page.getByRole('button', { name: 'Rediger regel', exact: true }).click();
+    await page.getByRole('combobox', { name: 'Handling', exact: true }).selectOption('exclude');
+    await page.getByRole('button', { name: 'Gem regelændring', exact: true }).click();
+    await page.getByRole('button', { name: 'Gem routingregler', exact: true }).click();
+    if (changed) {
+      await expect(page.getByRole('alert')).toHaveText('Det er uklart, om reglerne blev gemt. Genindlæs før du prøver igen.');
+      await expect(page.getByRole('button', { name: 'Gem routingregler', exact: true })).toBeDisabled();
+    } else {
+      await expect(page.getByRole('status')).toHaveText('Routingreglerne er gemt.');
+      await expect(page.getByRole('alert')).toHaveCount(0);
+      await expect(page.getByText('Gemt version 10', { exact: true })).toBeVisible();
+      await page.getByRole('button', { name: 'Genindlæs', exact: true }).click();
+      await expect(page.getByText('Gemt version 10', { exact: true })).toBeVisible();
+      await expect(page.getByRole('cell', { name: 'Udelad', exact: true })).toBeVisible();
+    }
+    assert.equal(writes, 1);
+  }
 });
