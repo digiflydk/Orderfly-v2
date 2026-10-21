@@ -12,15 +12,15 @@ export function MemberCard({ member, slug, base }: { member: PortalMember; slug:
   // Even rows: 8 stamps as 2 × 4, at most 5 per row on a phone.
   const columns = card.stampsRequired <= 5 ? card.stampsRequired : card.stampsRequired <= 10 ? Math.ceil(card.stampsRequired / 2) : 5;
   return (
-    <>
-      <section aria-labelledby="club-card" className="flex flex-col items-center gap-4 text-center">
+    <div className="club-member-card flex flex-col gap-6">
+      <section className="club-stamp-card flex flex-col items-center gap-4 text-center" aria-labelledby="club-card">
         <div>
           <h1 id="club-card" className="text-3xl">{program.name}</h1>
           <p>Hej {firstName(member.member.name)}</p>
         </div>
         {!program.active && <p className="rounded-md border p-3">Klubben giver ikke nye stempler lige nu. Dine stempler og belønninger er gemt.</p>}
-        <div role="img" aria-label={`${card.stamps} af ${card.stampsRequired} ${stampWord(card.stampsRequired)}`} data-stamps={card.stamps}
-          className="grid w-full justify-center gap-3 rounded-xl border p-4" style={{ gridTemplateColumns: `repeat(${columns}, 2.75rem)` }}>
+        <div className="club-stamp-grid grid w-full justify-center gap-3 rounded-xl border p-4" role="img" aria-label={`${card.stamps} af ${card.stampsRequired} ${stampWord(card.stampsRequired)}`} data-stamps={card.stamps}
+          style={{ gridTemplateColumns: `repeat(${columns}, ${slug === 'esmeralda' ? 'minmax(0, 2.75rem)' : '2.75rem'})` }}>
           {Array.from({ length: card.stampsRequired }, (_, i) => (
             <span key={i} aria-hidden="true" data-stamp={i < filled ? 'filled' : 'empty'}
               className={`flex h-11 w-11 items-center justify-center rounded-full border-2 border-primary ${i < filled ? 'bg-primary text-primary-foreground' : ''}`}>
@@ -28,14 +28,15 @@ export function MemberCard({ member, slug, base }: { member: PortalMember; slug:
             </span>
           ))}
         </div>
-        <p className="text-xl font-semibold">{card.stamps} af {card.stampsRequired} {stampWord(card.stampsRequired)}</p>
+        <p className="club-stamp-count text-xl font-semibold">{card.stamps} af {card.stampsRequired} {stampWord(card.stampsRequired)}</p>
         <p>{nextRewardText(card.stamps, card.stampsRequired, card.rewardDescription)}</p>
+        {slug === 'esmeralda' && <progress className="club-stamp-progress" aria-label="Fremdrift på dit stempelkort" value={filled} max={card.stampsRequired} />}
       </section>
 
       <MemberQr slug={slug} base={base} />
 
       {rewards.length > 0 && (
-        <section aria-labelledby="club-rewards" className="flex flex-col gap-3">
+        <section aria-labelledby="club-rewards" className="club-member-rewards flex flex-col gap-3">
           <h2 id="club-rewards" className="text-center text-2xl">Dine belønninger</h2>
           <ul className="flex flex-col gap-3">
             {rewards.map(reward => (
@@ -50,10 +51,10 @@ export function MemberCard({ member, slug, base }: { member: PortalMember; slug:
       )}
 
       {card.expiresAt && (
-        <p className="text-center">Dine stempler udløber, hvis du ikke har fået et nyt stempel inden {danishDate(card.expiresAt)}.</p>
+        <p className="club-card-expiry text-center">Dine stempler udløber, hvis du ikke har fået et nyt stempel inden {danishDate(card.expiresAt)}.</p>
       )}
 
       <HomeScreenHint slug={slug} />
-    </>
+    </div>
   );
 }

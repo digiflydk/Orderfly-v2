@@ -311,3 +311,12 @@ Alle tre PR'er er merget, men **fase 2 er ikke accepteret endnu**. Planen (C7) k
 - **Skilt til disken:** [skilt-qr-tilmelding.svg](skilt-qr-tilmelding.svg) er en QR-kode til `https://esmeralda.orderfly.dk/club/tilmeld` med høj fejlkorrektion, klar til tryk. Den virker først, når `*.orderfly.dk` er sat op.
 
 **Test:** `tests/unit/loyalty-portal-pages.cjs` (stier, tekster, datoer, brandudseende og serverlæsning) og `tests/unit/loyalty-portal-browser.cjs` (tilmelding, login, links fra mailen, tracking, kortet QR-kodens fornyelse, udløb, offline og forkert ur, profil, sletning, menu og hjemmeskærm-vejledningen i Chromium ved 390 og 1440 px). `loyalty-portal-pages.cjs` dækker også historiktekster, manifest, ikoner og skilt-QR'en.
+
+### Esmeraldas medlemsvisning efter login (#453)
+Medlemskort, QR, belønninger, historik og profil følger nu også restaurantens mørke/gyldne design. Kort og QR står side om side på større skærme og under hinanden på mobil. Den aktive medlemsfane er gylden; stempelantal og fremdrift kommer fortsat fra kortets snapshot. QR-feltet beholder sort kode på hvid baggrund og eksisterende quiet zone, udløb og fornyelse. Andre brands beholder den kompakte præsentation.
+
+`historik/history-view.tsx` er kun præsentation. Server-siden foretager stadig samme medlemskontrol og redirect, og der tilføjes ingen API- eller trackingkald. Profilens samtykke, logout og sletningsbekræftelse er uændrede.
+
+Browserregressioner bruger de faktiske komponenter og syntetiske svar: medlemskort/historik/profil ved 320/390/820/1440 px, ti stempler på smal skærm, tom historik, aktiv navigation, QR-kontrast, brand-isolation samt de eksisterende QR-, samtykke- og fejlforløb. Dette er isolerede browsertests, ikke produktionsdata- eller fysisk hardwareaccept.
+
+Live acceptance efter verificeret deployet release: log ind med autoriseret eksisterende medlemskonto, gennemgå Kort, Historik og Profil read-only, kontroller korrekt data og navigation samt QR-område uden at offentliggøre kode/token eller medlemsoplysninger. Undlad samtykkeændring, sletning og tildeling/indløsning af stempler. Engangs-loginlinks og QR-payloads må aldrig gemmes i GitHub eller screenshots. Autentificeret live acceptance skal dokumenteres særskilt før #453 lukkes.
