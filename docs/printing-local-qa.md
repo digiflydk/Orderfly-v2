@@ -343,3 +343,25 @@ table/native persistence/cleanup proof. If the earlier observer failure returns,
 its FIRSToperation stays evidence and full-browser acceptance stays pending.
 No corrected GREEN, production SSR incident, deployment or full acceptance is
 claimed from the implementation/unit results alone.
+
+
+### Resume acknowledgement before observer pause-mode cleanup
+
+Actual cf78 CI39675482928 made the controlled NextDEV first-click case GREEN:
+SSR controls disabled before scripts, seven scripts gated, ONE click after JS,
+mode changed and cleanup verified. The full browser case then reached real
+Auth200/session200 and failed at observer `pauseMode`. Since observation setup
+already completed before those requests, this identifies the cleanup
+`Debugger.setPauseOnExceptions({state:'none'})` operation. It does not expose
+whether the native command rejected or exceeded its one-second deadline.
+
+A focused conservative protocol-ordering regression FIRST failed when the action
+completed while a tracked explicit resume acknowledgement was still in flight:
+pause-mode configuration was attempted while the fixture's VM remained stopped.
+The minimal harness candidate drains tracked pause/resume work and performs any
+needed explicit resume BEFORE changing pause mode. All existing one-second
+bounds, maximum16 pauses, first-failure preservation, fail-closed behavior,
+closing checks, disable/detach cleanup and original assertions remain unchanged.
+The modeled regression passes after reordering. It is NOT proof of Chrome's
+actual failure cause; fresh real CI must validate the candidate and the full
+browser/native/two-pass acceptance, which remains pending.

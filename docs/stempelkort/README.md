@@ -1,5 +1,18 @@
 # Stempelkort (Esmeralda Club)
 
+## Esmeraldas hjemmesidedesign på club-siderne (#386)
+
+Esmeraldas eksisterende kundeportal tilpasses direkte i Orderfly. Den flyttes ikke til Webflow, så login, host-only sessionscookie og versioneret samtykke fortsat bruger de eksisterende sider og API'er.
+
+- Reference: den publicerede `https://www.esmeraldapizza.dk/bordbooking`, inspiceret 2026-10-21. Hvidt logo på sort navigation, Bourton/Brandon, mørk formularflade, gyldne knapper og hjemmesidens navigationslinks/footer.
+- `src/app/[brandSlug]/club/portal-frame.tsx` viser Esmeraldas fulde ramme, en formularflade og en informationskolonne. Kortet efter login beholder en smallere visning. Antal stempler og belønningstekst kommer fra programmet.
+- `esmeralda-club.css` afgrænser designet til Esmeraldas portal og footer. Andre brands beholder den kompakte portalramme. Webshoppen og admin får ikke club-styles.
+- Navigation til hjemmesiden bruger absolutte `esmeraldapizza.dk`-links. Interne club-links bruger den eksisterende `portalBase`, så sessionen bliver på samme host. På mobil bruges en tastaturbetjenelig menu uden nyt script eller tracking.
+- `BrandLayoutClient` vælger Esmeralda-footeren kun på Esmeraldas club-stier. Cookieindstillinger åbner stadig det eksisterende samtykkepanel. Der vises fortsat kun én `main`.
+- Formularernes validering, login-token, afkrydsninger, samtykkeversioner, fejlbeskeder og neutrale svar ændres ikke.
+
+Verifikation: portalens browser-fixture renderer den faktiske ramme og de eksisterende formularer. Den dækker 320/390/820/1440 px, mobilmenu, links, formularfarver, cookieknap, ingen utilsigtede API-kald og et andet brand, foruden de eksisterende login/tilmelding/QR/profil-regressioner. Fixture er ikke produktions-live-QA. Efter deployment kontrolleres release-SHA og login/tilmelding visuelt samt ufuldstændig formular uden at sende mail eller oprette et medlem.
+
 Specifikationer: [fase 1](fase-1-stempelkort-backend.md), [fase 2](fase-2-stempelkort-kundeportal.md) og [fase 3](fase-3-stempelkort-merchantportal.md).
 Godkendt analyse og plan: [fase 1](fase-1-analyse-og-plan.md), [fase 2](fase-2-analyse-og-plan.md) og [fase 3](fase-3-analyse-og-plan.md) (fase 3 bygges parallelt med fase 2 efter PM-beslutning 2026-10-17).
 

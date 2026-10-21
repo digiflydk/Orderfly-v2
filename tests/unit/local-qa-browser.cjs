@@ -325,3 +325,26 @@ test('actual login submit guard rejects a not-ready programmatic submission befo
   await findForm(tree).props.onSubmit({ preventDefault: () => { prevented++; }, get currentTarget() { assert.fail('not-ready submit must not read credentials or start auth'); } });
   assert.equal(prevented, 1);
 });
+
+test('observer drains an in-flight explicit resume acknowledgement before changing pause mode', async () => {
+  const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
+  const { page, session } = cdpFixture(), send = session.send, order = [];
+  let vmStopped = true;
+  session.send = async (method, args) => {
+    if (method === 'Debugger.resume') {
+      // Model an asynchronous native protocol acknowledgement, not a timing sleep.
+      await new Promise(resolve => setImmediate(resolve));
+      const value = await send(method, args); vmStopped = false; order.push('resume-ack'); return value;
+    }
+    if (method === 'Debugger.setPauseOnExceptions' && args.state === 'none') {
+      order.push('none-attempt');
+      assert.equal(vmStopped, false, 'cleanup must not configure a VM still awaiting explicit resume');
+    }
+    return send(method, args);
+  };
+  const result = await withCaughtLoginExceptions(page, { clientError() {} }, 'admin', async () => {
+    void session.caught('PRIVATE handled exception'); return 200;
+  });
+  assert.equal(result, 200); assert.deepEqual(order, ['resume-ack', 'none-attempt']);
+  assert.equal(session.calls.at(-1)[0], 'detach'); assert.equal(session.listenerCount('Debugger.paused'), 0);
+});
