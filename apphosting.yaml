@@ -1,4 +1,9 @@
 env:
+  # QR #449: merge only after documented index/access readiness and explicit activation acceptance.
+  - variable: QR_MODULE_ENABLED
+    value: "true"
+    availability:
+      - RUNTIME
   # Enable only after ACTIVE Firestore policy verification; no live print dispatch.
   - variable: ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED
     value: "false"
