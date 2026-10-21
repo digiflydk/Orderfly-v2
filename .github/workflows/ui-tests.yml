@@ -95,6 +95,9 @@ jobs:
       - name: Stripe print-transition origin proof regression
         run: node --test tests/unit/printing-stripe-transition-proof.cjs
 
+      - name: Printer routing preview regression
+        run: node --test tests/unit/printing-routing.cjs
+
       - name: Native and compatibility transaction bridge regression
         run: node --test tests/unit/firestore-compat-transaction.cjs
 
