@@ -12,7 +12,7 @@ const printer = (id = 'p1', patch = {}) => ({ schemaVersion: 1, revision: 3, del
     transport: 'cloudprnt-http', state: 'active', paperWidthMm: 80, ...patch } });
 
 function fixture({ saved = policy() } = {}) {
-  const rows = new Map([['brands/b1', {}], ['locations/l1', { brandId: 'b1' }],
+  const rows = new Map([['brands/b1', { status: 'active' }], ['locations/l1', { brandId: 'b1' }],
     ['locations/l1/printIntentPolicies/original', saved], ['locations/l1/printers/p1', printer()]]);
   const reads = [], writes = [];
   let failure = false, overrideId;
@@ -28,6 +28,40 @@ function fixture({ saved = policy() } = {}) {
     read(input = scope, context = { db, transaction }) { return api.preparePrintIntentTargetPolicy(context, input); } };
 }
 const rejects = (promise, code) => assert.rejects(promise, error => error.code === code && error.message === code);
+
+test('canonical brand lifecycle permits active/trialing only and leaves valid saved policy unchanged', async () => {
+  for (const status of ['active', 'trialing', 'pending', 'suspended', undefined, 'unknown', null, true]) {
+    const f = fixture();
+    if (status === undefined) delete f.rows.get('brands/b1').status;
+    else f.rows.get('brands/b1').status = status;
+    const before = structuredClone([...f.rows]);
+    const result = await f.read(), eligible = status === 'active' || status === 'trialing';
+    assert.equal(result.enabled, eligible, String(status));
+    assert.equal(result.targets.length, eligible ? 1 : 0, String(status));
+    assert.equal(result.policyRevision, 2); assert.equal(result.dispatchAuthorized, false);
+    assert.deepEqual([...f.rows], before); assert.deepEqual(f.writes, []);
+  }
+});
+
+test('ineligible brand does not hide corrupt policy or invalid selected native targets', async () => {
+  for (const saved of [policy({ enabled: false }), policy({ targets: [] }), policy({ revision: 0 }),
+    policy({ targets: [target(), target()] }), policy({ extra: true })]) {
+    const f = fixture({ saved }); f.rows.get('brands/b1').status = 'suspended';
+    await rejects(f.read(), 'policy_unverified'); assert.deepEqual(f.writes, []);
+  }
+  for (const patch of [{ revision: 99 }, { deletedAt: 1 }]) {
+    const f = fixture(); f.rows.get('brands/b1').status = 'pending';
+    Object.assign(f.rows.get('locations/l1/printers/p1'), patch);
+    await rejects(f.read(), 'target_unverified'); assert.deepEqual(f.writes, []);
+  }
+});
+
+test('same native context rereads canonical brand lifecycle and cannot retain an old enabled result', async () => {
+  const f = fixture(); assert.equal((await f.read()).enabled, true);
+  f.rows.get('brands/b1').status = 'suspended'; assert.equal((await f.read()).enabled, false);
+  f.rows.get('brands/b1').status = 'trialing'; assert.equal((await f.read()).enabled, true);
+  assert.equal(f.reads.filter(path => path === 'brands/b1').length, 3); assert.deepEqual(f.writes, []);
+});
 
 test('missing and explicit OFF policy return no targets, no printer scans and never authorize output', async () => {
   for (const saved of [undefined, policy({ enabled: false, targets: [] })]) {

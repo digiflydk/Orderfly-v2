@@ -11,6 +11,7 @@ const policyPath = 'locations/l/printIntentPolicies/original';
 const rulesPath = 'locations/l/printerRouting/original';
 async function fixture(options = {}) {
   const f = await paymentFixture();
+  f.records.get('brands/b').status = 'active';
   Object.assign(f.order(), { paymentMethod: 'Stripe', status: 'Pending', psp: { checkoutSessionId: 'cs_test_atomic_349_reference' } });
   f.records.set('categories/pizza', { isActive: true, locationIds: ['l'] });
   const printer = id => ({ schemaVersion: 1, configuration: { id, brandId: 'b', locationId: 'l', name: id,
@@ -88,6 +89,54 @@ test('#349 actual Stripe settlement commits Paid, routed original jobs and one d
 });
 
 const writes = f => f.attempts.flatMap(attempt => attempt.events.filter(event => event.method !== 'get'));
+
+test('#363 ineligible canonical brands settle received money once without print proof or intent writes', async () => {
+  for (const status of ['pending', 'suspended', undefined, 'unknown']) {
+    const f = await fixture();
+    if (status === undefined) delete f.records.get('brands/b').status; else f.records.get('brands/b').status = status;
+    assert.equal(await f.settle(), true); assert.equal(f.order().paymentStatus, 'Paid');
+    assert.equal(f.records.get('customers/' + f.order().customerDetails.id).totalOrders, 1);
+    assert.equal(f.requests.length, 0, 'ineligible preflight must not retrieve a print proof');
+    assert.equal(f.jobs().length, 0); assert.equal(f.ledgers().length, 0);
+    assert.equal(f.records.has('orders/' + f.orderId + '/printIntents/original'), false);
+    assert.equal(writes(f).some(event => /printIntents|\/printers\//.test(event.path)), false);
+    const before = structuredClone([...f.records]); assert.equal(await f.settle(), false); assert.deepEqual([...f.records], before);
+  }
+  const trial = await fixture(); trial.records.get('brands/b').status = 'trialing';
+  assert.equal(await trial.settle(), true); assert.equal(trial.jobs().length, 2); assert.equal(trial.requests.length, 1);
+});
+
+test('#363 suspension between preflight and financial transaction or SDK retry suppresses all print intent', async () => {
+  for (const options of [
+    { afterPreflight: f => { f.records.get('brands/b').status = 'suspended'; } },
+    { retry: true, onRetry: f => { f.records.get('brands/b').status = 'suspended'; } },
+  ]) {
+    const f = await fixture(options); assert.equal(await f.settle(), true);
+    assert.equal(f.order().paymentStatus, 'Paid'); assert.equal(f.requests.length, 1);
+    assert.equal(f.records.get('customers/' + f.order().customerDetails.id).totalOrders, 1);
+    assert.equal(f.jobs().length, 0); assert.equal(f.ledgers().length, 0);
+    assert.equal(f.records.has('orders/' + f.orderId + '/printIntents/original'), false);
+    const before = structuredClone([...f.records]); assert.equal(await f.settle(), false); assert.deepEqual([...f.records], before);
+  }
+});
+
+test('#363 reactivation after OFF preflight cannot invent payment proof or backfill a Paid order', async () => {
+  const f = await fixture({ afterPreflight: state => { state.records.get('brands/b').status = 'active'; } });
+  f.records.get('brands/b').status = 'pending';
+  await assert.rejects(f.settle(), /verified payment origin required/);
+  assert.equal(f.requests.length, 0); assert.equal(writes(f).length, 0); assert.equal(f.order().paymentStatus, 'Pending');
+  const late = await fixture(); late.records.get('brands/b').status = 'suspended';
+  assert.equal(await late.settle(), true); assert.equal(late.jobs().length, 0);
+  late.records.get('brands/b').status = 'active'; const before = structuredClone([...late.records]);
+  await assert.rejects(late.settle()); assert.deepEqual([...late.records], before); assert.equal(late.jobs().length, 0);
+});
+
+test('#363 suspended Paid replay preserves original immutable manifest jobs and ledgers', async () => {
+  const f = await fixture(); assert.equal(await f.settle(), true); assert.equal(f.jobs().length, 2);
+  f.records.get('brands/b').status = 'suspended'; const before = structuredClone([...f.records]);
+  assert.equal(await f.settle(), false); assert.deepEqual([...f.records], before);
+  assert.equal(f.requests.length, 1); assert.equal(f.jobs().length, 2); assert.equal(f.ledgers().length, 2);
+});
 
 test('#349 concurrent/repeated payment calls preserve one manifest and original per-printer jobs', async () => {
   const f = await fixture();

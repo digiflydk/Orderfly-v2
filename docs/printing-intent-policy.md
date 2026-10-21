@@ -74,6 +74,31 @@ generic `policy_unavailable`; validation failures have fixed safe codes. A
 prepared DTO has no expiry/freshness guarantee outside the current attempt:
 never retain it across retries or treat it as a permit to mutate data.
 
+## Canonical brand lifecycle (#363)
+
+Only native `Brand.status` values `active` and `trialing` can expose explicitly
+enabled policy targets. `pending`, `suspended`, missing, malformed and unknown
+status values produce effective OFF: `enabled: false`, no targets, and the valid
+saved policy revision is retained. No policy or printer record is changed. This
+uses the canonical brand field rather than legacy `isActive`; it does not add a
+blanket restriction to superadmin disabled-printer or saved-routing draft CRUD.
+
+Native scope, stored policy schema/revision, enabled/target consistency, duplicate
+identities and every selected native printer/revision are still validated before
+lifecycle OFF. Suspension does not hide corrupt or stale policy configuration.
+Each caller-owned transaction attempt rereads the brand status; an earlier
+enabled result cannot survive suspension across a Firestore retry.
+
+The actual #349 integration treats this as print eligibility, preserving ordinary
+financial settlement for money already received. An ineligible preflight retrieves
+no extra Stripe print proof. Suspension after preflight or during a retry creates
+no manifest, jobs or ledgers, while settlement commits once. Reactivation after
+an OFF preflight without a trusted proof still aborts the whole operation. Paid
+replay while suspended preserves existing original manifests/jobs/ledgers, and
+reactivation cannot backfill a Paid order that has no original manifest. Global
+OFF still adds zero print-related I/O. These are isolated integration tests, not
+production writes, payment-provider or physical-printer verification.
+
 ## Verification and release
 
 Run `npm run typecheck` and:

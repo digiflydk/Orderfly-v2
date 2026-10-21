@@ -101,3 +101,21 @@ separate gates. No unattended production data, rules, secrets, hardware or Wolt
 changes are performed. Printer administration remains System / superadmin only;
 configuration writes and physical output stay OFF. Authenticated live payment or
 physical output is not proven by these fixtures.
+
+## Canonical brand lifecycle correction (#363)
+
+Print eligibility additionally follows the fresh native `Brand.status` through
+`preparePrintIntentTargetPolicy`: only `active` or `trialing` may expose explicit
+ON targets; pending, suspended, absent or unknown lifecycle is effective OFF after
+all stored-policy and native-target validation. No saved policy is rewritten.
+This leaves received-money financial settlement intact and does not change
+superadmin draft administration. The existing global OFF path still performs
+zero additional print reads/provider requests.
+
+Actual exported-callsite regressions cover suspension before preflight (no print
+proof retrieval), between preflight and the financial transaction, and during a
+retry with the reused SDK transaction object. Financial effects commit once with
+no manifest/jobs/ledgers. Reactivation after an OFF preflight cannot invent proof;
+Paid replay preserves previously created originals, and no late Paid backfill is
+permitted. The tests first failed on the old production module, then passed with
+the policy correction. Configuration/intent/output remain OFF in production.
