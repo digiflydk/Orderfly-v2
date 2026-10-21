@@ -83,6 +83,7 @@ not a server endpoint, durable queue worker or actual device simulator/print.
 Fixture PNGs in `test-results/kitchen-png-{58,80}.png` support visual inspection;
 they are synthetic encoding proof only. No browser user flow changes.
 
+The required Orderfly CI workflow runs the dedicated kitchen PNG regression step.
 Exact-head independent Codex review and CI must pass before coordinator merge;
 changed main requires synchronization and renewed gates. Post-deploy health and
 public smoke establish release health, not live invocation of this encoder.
