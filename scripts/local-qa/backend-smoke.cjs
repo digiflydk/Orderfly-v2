@@ -31,7 +31,7 @@ async function printerRead(cookie, brand = ids.brand, location = ids.location) {
   return fetch(`${BASE}/api/merchant/printers?brandId=${brand}&locationId=${location}&overview=true`, { headers: { cookie } });
 }
 (async () => {
-  const counters = [];
+  const counters = []; let proof;
   try {
     for (const key of known) assert.equal((await db.doc(key).get()).exists, false, 'QA0 refuses to overwrite an existing seed');
     const [admin, merchant] = await Promise.all([user('superadmin'), user('merchant')]);
@@ -70,12 +70,21 @@ async function printerRead(cookie, brand = ids.brand, location = ids.location) {
     const queue = await fetch(`${BASE}/api/merchant/printers/queue?brandId=${ids.brand}&locationId=${ids.location}&printerId=${ids.printer}`, { headers: { cookie: adminCookie } });
     assert.equal(queue.status, 200); const summary = await queue.json(); assert.equal(summary.resumeAuthorized, false); counters.push('actual queue API validates native empty ledger without resume authority');
     assert.equal((await db.doc(printerPath).get()).data().configuration.state, 'disabled');
-    console.log(JSON.stringify({ environment: 'QA0a-local-backend', project: PROJECT, softwareOnly: true, checks: counters, productionAcceptance: false, physicalPrintVerified: false }));
+    proof = { environment: 'QA0a-local-backend', project: PROJECT, softwareOnly: true, checks: counters, productionAcceptance: false, physicalPrintVerified: false };
   } finally {
+    try {
     // Only fixed test project and explicit seed paths. Never delete arbitrary projects/data.
     for (const id of seeded ? [ids.location, ids.foreignLocation] : []) if ((await db.doc(`locations/${id}`).get()).exists) await db.recursiveDelete(db.doc(`locations/${id}`));
     for (const key of seeded ? known.filter(p => !p.startsWith('locations/')) : []) await db.doc(key).delete();
     for (const uid of accounts) { const response = await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:delete`, { method: 'POST', headers: { authorization: 'Bearer owner', 'content-type': 'application/json' }, body: JSON.stringify({localId:uid}) }); assert.equal(response.ok, true, 'QA0 removes only its created Auth user'); }
-    await db.terminate();
+    if (seeded) {
+      const paths = [...known, `locations/${ids.location}/printers/${ids.printer}`, `locations/${ids.location}/printers/${ids.printer}/queue/state`];
+      for (const key of paths) assert.equal((await db.doc(key).get()).exists, false, 'QA0 verifies every seeded native document was removed');
+    }
+    const lookup = await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:lookup`, { method: 'POST', headers: { authorization: 'Bearer owner', 'content-type': 'application/json' }, body: JSON.stringify({ localId: accounts }) });
+    assert.equal(lookup.ok, true, 'QA0 can verify created user cleanup');
+    assert.equal(((await lookup.json()).users ?? []).length, 0, 'QA0 verifies every created Auth user was removed');
+    } finally { await db.terminate(); }
   }
+  console.log(JSON.stringify({ ...proof, cleanupVerified: true }));
 })().catch(() => { console.error('QA0a backend smoke failed; inspect fixed assertions locally without credentials'); process.exitCode = 1; });

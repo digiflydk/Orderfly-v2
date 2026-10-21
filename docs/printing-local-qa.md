@@ -1,8 +1,11 @@
 # Printer QA0 local environment
 
-Issue: #376. QA0a is backend preparation, separate from the future QA0b browser
-login setup and the conditional acceptance packages #372, #373 and #374. These
-two preparation slices do not change the provisional 22 feature-sprint budget.
+Issue: #376. QA0a is backend preparation. QA0b was split before implementation
+into #379 (b1: guarded browser client emulator wiring) and future b2 (actual
+browser login/acceptance proof, not started). These THREE preparation slices are
+separate from the provisional 22 feature-sprint budget and the conditional
+acceptance packages #372, #373 and #374. This supersedes the earlier two-slice
+setup estimate; it is not a calendar promise.
 Local evidence does not establish production acceptance or physical printing.
 
 ## Runtime and start
@@ -41,7 +44,7 @@ node scripts/local-qa/run-backend.cjs
 The named environment is **QA0a-local-backend**, project **demo-orderfly-qa0**.
 It requires unused loopback ports 3100 (Next), 8088 (Firestore), 9099 (Auth),
 4400 (emulator hub), 4500 (emulator logging) and 9150 (Firestore websocket). It starts actual Next in
-development mode and actual Auth/Firestore emulators, runs the smoke and stops
+development mode and actual Auth/Firestore emulators, runs the smoke twice against the SAME live emulator/app and then stops
 its processes. Existing listeners are never reused or killed. Client Firestore
 rules deny all; actual native Admin persistence is used by server services.
 
@@ -76,10 +79,16 @@ printer administration still requires the platform superuser.
 
 Finally cleanup deletes only created user IDs and the explicit seeded document
 paths, including their printer subcollections. Cleanup is enabled only after the
-atomic seed succeeds. No broad project wipe is performed. A repeated successful
-run verifies seed reuse after cleanup. An interrupted process can leave data in
+atomic seed succeeds. No broad project wipe is performed. After each smoke, native document reads and an Auth lookup verify every seeded
+document and created user is absent. A second successful smoke against the SAME
+emulator/app lifetime verifies seed reuse before teardown. An interrupted process can leave data in
 its temporary emulator lifetime; stop that harness and restart the in-memory
 emulators, rather than applying this cleanup to another environment.
+
+Each smoke has a fixed 60-second deadline; a stalled child is killed and the
+harness fails with a fixed error. Native Firestore termination runs in a nested
+`finally` even if cleanup deletion or verification rejects. Failure and stalled
+child regressions preserve these resource boundaries.
 
 Only local printer configuration writes are enabled inside the isolated child
 environment. Print intent/output/dispatch flags and all payment/provider
@@ -89,7 +98,10 @@ are performed.
 
 ## Evidence and remaining work
 
-On 21 October 2026, two consecutive real local runs passed on the QA0a branch:
+On 21 October 2026, the corrected runner passed two consecutive real smokes
+inside ONE emulator/app lifetime. Earlier separate launcher runs used fresh
+in-memory emulators and did not prove repeatability after cleanup; that claim
+is superseded by this same-lifetime proof (review finding4340624141).
 
 | Scenario | Actual result |
 | --- | --- |
@@ -100,7 +112,8 @@ On 21 October 2026, two consecutive real local runs passed on the QA0a branch:
 | Own brand with foreign native location | 403 |
 | Anonymous printer administration | 401 |
 | Actual native queue API | 200, `resumeAuthorized:false`; printer remained disabled |
-| Repeated fixed seed and cleanup | Second complete run passed |
+| Native cleanup readback after each smoke | All seeded native documents absent; created Auth user lookup empty |
+| Repeated fixed seed before emulator teardown | Both complete smokes passed in the same live environment |
 
 The runner emits only a safe JSON summary and stores protected process logs in
 0600 temporary files inside a private 0700 directory. Emulator debug files also stay in that private directory. Tokens, session cookies and passwords are never printed.
@@ -112,8 +125,9 @@ prove failure occurs before credential access. That unit isolation is separate
 from the real emulator evidence above. Run `npm run typecheck` and relevant
 session/authority/identity tests for changes to the binding.
 
-QA0b is still required: browser Firebase emulator wiring, real interactive login
-and app UI flows, reusable acceptance fixtures and browser diagnostics. This
+QA0b1 #379 remains required for browser Firebase emulator wiring; its owner works
+in a separate branch. Future QA0b2 is not started and must prove real interactive
+login and app UI flows, reusable acceptance fixtures and browser diagnostics. This
 backend smoke does not implement all race/TTL/mutation acceptance scenarios.
 Neither QA0a nor QA0b constitutes authenticated production live QA or physical
-printer readiness. Keep #376 open until both preparation criteria are verified.
+printer readiness. Keep #376 open until all THREE preparation criteria are verified.

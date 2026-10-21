@@ -34,11 +34,20 @@ function launch(command, args, childEnv, label, cwd = root) {
   await ready('http://127.0.0.1:8088/', emulator);
   const app = launch(process.execPath, [path.join(root, 'node_modules/next/dist/bin/next'), 'dev', '-p', '3100', '-H', '127.0.0.1'], env, 'app');
   await ready('http://127.0.0.1:3100/api/health', app);
-  const smoke = spawn(process.execPath, [path.join(__dirname, 'backend-smoke.cjs')], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] }); children.push(smoke);
-  let summary = '', failed = ''; smoke.stdout.on('data', chunk => summary += chunk); smoke.stderr.on('data', chunk => failed += chunk);
-  const code = await new Promise(resolve => smoke.on('exit', resolve));
-  if (code !== 0) throw Error('QA0 backend proof failed');
-  console.log(summary.trim());
+  const summaries = [];
+  // Keep the SAME emulator and app alive: a second seed must observe any leak.
+  for (let pass = 0; pass < 2; pass++) {
+    const smoke = spawn(process.execPath, [path.join(__dirname, 'backend-smoke.cjs')], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] }); children.push(smoke);
+    let summary = ''; smoke.stdout.on('data', chunk => summary += chunk); smoke.stderr.on('data', () => {});
+    const code = await new Promise((resolve, reject) => {
+      const deadline = setTimeout(() => { reject(Error('QA0 backend proof timed out')); smoke.kill('SIGKILL'); }, 60000);
+      smoke.once('error', () => { clearTimeout(deadline); reject(Error('QA0 backend proof failed')); });
+      smoke.once('exit', code => { clearTimeout(deadline); resolve(code); });
+    });
+    if (code !== 0) throw Error('QA0 backend proof failed');
+    summaries.push(JSON.parse(summary));
+  }
+  console.log(JSON.stringify({ ...summaries[1], sameEmulatorPasses: summaries.length }));
 })().catch(error => { console.error(error.message); console.error('Protected local process logs:', logs.join(', ')); process.exitCode = 1; }).finally(async () => {
   for (const child of children.reverse()) if (child.exitCode === null) { try { process.kill(-child.pid, 'SIGTERM'); } catch { child.kill('SIGTERM'); } }
 });
