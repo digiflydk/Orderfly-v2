@@ -16,7 +16,7 @@ Add only `QR_MODULE_ENABLED="true"`, availability `RUNTIME`, to `apphosting.yaml
 
 ## Proposed controlled production acceptance
 
-Only after specific acceptance of this exact scenario and selected brand:
+Only after specific acceptance of this exact scenario and selected brand. First verify `/api/health` reports the reviewed deployed merge (or a later main containing it), before any production test record is created; repeat that release check after the scenario:
 
 1. Create one brand-wide QR via the authorized UI/API in existing Esmeralda brand `oeypKaMyYcQjIwaa1PtV`: name `QR release acceptance #389`, campaign `internal-release-389`, destination `https://example.com/qr-acceptance`. No customer/order/payment data is involved.
 2. Verify native stored record, immutable create audit/receipt, zero lifetime, and PNG decode to its permanent apex URL.
