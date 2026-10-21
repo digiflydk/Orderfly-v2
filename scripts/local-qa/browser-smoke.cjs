@@ -9,11 +9,13 @@ const BASE = 'http://127.0.0.1:3100';
 const headers = ['Aktiveringsdato', 'Brand', 'Lokation', 'Status', 'Last used', 'Total printers', 'Printer name', 'Printertype', 'Handlinger'];
 async function login(page, actor, role, diagnostic) {
   page.on('response', response => diagnostic.response(role, response.url(), response.status()));
+  page.on('pageerror', error => diagnostic.uncaught(role, error));
+  const fields = async point => { diagnostic.path(role, page.url()); diagnostic.fields(role, await fieldDom(page), point); };
   diagnostic.mark(role, 'page-ready');
   await page.goto(BASE + '/admin-login');
+  await fields('preClickDom');
   diagnostic.mark(role, 'toggle');
   await page.getByRole('button', { name: 'Log ind med en separat Orderfly-konto', exact: true }).click();
-  const fields = async () => diagnostic.fields(role, await fieldDom(page));
   await fields();
   diagnostic.mark(role, 'fields-email');
   try { await page.getByLabel('E-mail', { exact: true }).fill(actor.email); } catch (error) { await fields(); throw error; }

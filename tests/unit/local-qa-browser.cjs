@@ -77,7 +77,7 @@ test('login diagnostics persist only fixed substage/category and allowlisted loc
   d.response('admin', 'http://127.0.0.1:3100/api/admin/session', 'PRIVATE');
   d.alert('admin', 'PRIVATE reflected error'); d.clientError('admin', 'PRIVATE Local QA client configuration rejected');
   const result = d.snapshot({ name: 'TimeoutError', message: 'PRIVATE password/token/cookie' });
-  assert.deepEqual(result.admin, { loginPageStatus: 200, authSignInStatus: 400, sessionStatus: 503, uiError: 'other-ui-alert', clientError: 'client-configuration-rejected', fieldDom: null });
+  assert.deepEqual(result.admin, { loginPageStatus: 200, authSignInStatus: 400, sessionStatus: 503, uiError: 'other-ui-alert', clientError: 'client-configuration-rejected', fieldDom: null, preClickDom: null, pagePath: null, uncaughtError: null });
   assert.equal(result.loginSubstage, 'admin-session-response'); assert.equal(result.failureCategory, 'timeout');
   assert.equal(JSON.stringify(result).includes('PRIVATE'), false);
   assert.throws(() => d.mark('PRIVATE', 'fields'), /rejected/); assert.throws(() => d.mark('admin', 'PRIVATE'), /rejected/);
@@ -163,19 +163,30 @@ test('observer bounds a stalled protocol operation and exception storm without c
   }), { name: 'QaObserverError' });
   assert.equal(storm.session.calls.at(-1)[0], 'detach');
 });
-test('field diagnostics read only exact fixed labels/toggle counts and visibility, never credential values', async () => {
+test('field diagnostics read only fixed DOM counts/visibility, safe path enums and uncaught names', async () => {
   const { diagnostics, fieldDom } = require('../../scripts/local-qa/browser-diagnostics.cjs');
   const observed = [];
   const locator = key => ({ count: async () => key === 'E-mail' ? 1 : 0, first: () => ({ isVisible: async () => key === 'E-mail' }), inputValue() { assert.fail('no values'); }, textContent() { assert.fail('no text'); } });
-  const page = { getByLabel: (label, options) => { assert.equal(options.exact, true); observed.push(label); return locator(label); },
-    getByRole: (role, options) => { assert.equal(role, 'button'); assert.deepEqual(options, { name: 'Log ind med Opsfly', exact: true }); observed.push(options.name); return locator(options.name); } };
+  const fixedNames = ['Log ind med Opsfly', 'Log ind med en separat Orderfly-konto', 'ADMINISTRATION'];
+  const page = { getByLabel: (label, options) => { assert.equal(options.exact, true); assert.ok(['E-mail','Adgangskode'].includes(label)); observed.push(label); return locator(label); },
+    getByRole: (role, options) => { assert.ok(['button','heading'].includes(role)); assert.equal(options.exact, true); assert.ok(fixedNames.includes(options.name)); observed.push(options.name); return locator(options.name); },
+    locator: selector => { assert.equal(selector, 'form'); observed.push(selector); return locator(selector); },
+    getByText: (text, options) => { assert.equal(text, 'Indlæser login…'); assert.deepEqual(options, { exact: true }); observed.push(text); return locator(text); } };
   const d = diagnostics(), value = await fieldDom(page); value.PRIVATE = 'PRIVATE';
-  d.fields('admin', value); d.mark('admin', 'fields-password');
+  d.fields('admin', value, 'preClickDom'); d.fields('admin', value); d.mark('admin', 'fields-password');
+  d.path('admin', 'http://127.0.0.1:3100/admin-login?next=PRIVATE'); d.uncaught('admin', { name: 'TypeError', get message() { assert.fail('no error messages'); } });
   const result = d.snapshot({ name: 'TimeoutError' });
-  assert.deepEqual(observed, ['E-mail', 'Adgangskode', 'Log ind med Opsfly']);
-  assert.deepEqual(result.admin.fieldDom, { email: { count: 1, visible: true }, password: { count: 0, visible: false }, opsflyToggle: { count: 0, visible: false } });
+  assert.deepEqual(observed, ['E-mail', 'Adgangskode', 'Log ind med Opsfly', 'Log ind med en separat Orderfly-konto', 'form', 'ADMINISTRATION', 'Indlæser login…']);
+  assert.deepEqual(result.admin.fieldDom.email, { count: 1, visible: true });
+  assert.equal(Object.keys(result.admin.fieldDom).length, 7); assert.deepEqual(result.admin.preClickDom, result.admin.fieldDom);
+  assert.equal(result.admin.pagePath, 'admin-login'); assert.equal(result.admin.uncaughtError, 'TypeError');
   assert.equal(result.loginSubstage, 'admin-fields-password'); assert.equal(JSON.stringify(result).includes('PRIVATE'), false);
+  for (const [pathname, expected] of [['/superadmin/printers?PRIVATE','superadmin'], ['/merchant/x?PRIVATE','merchant'], ['/private?PRIVATE','other-local']]) { d.path('admin', 'http://127.0.0.1:3100' + pathname); assert.equal(d.snapshot({}).admin.pagePath, expected); }
+  d.path('admin', 'https://production.example/PRIVATE'); assert.equal(d.snapshot({}).admin.pagePath, 'other-local');
+  for (const name of ['ReferenceError','SyntaxError','ChunkLoadError','PRIVATE']) { d.uncaught('admin', { name, get message() { assert.fail('no error messages'); } }); assert.equal(d.snapshot({}).admin.uncaughtError, name === 'PRIVATE' ? 'other' : name); }
+  assert.equal(JSON.stringify(d.snapshot({})).includes('PRIVATE'), false);
   assert.throws(() => d.fields('admin', { ...value, email: { count: 'PRIVATE', visible: true } }), /rejected/);
+  assert.throws(() => d.fields('admin', value, 'PRIVATE'), /rejected/);
   assert.equal(d.snapshot({ name: 'QaObserverError', message: 'PRIVATE' }).failureCategory, 'login-observer-failed');
 });
 test('teardown waits for an in-flight resume instead of issuing a second concurrent resume', async () => {

@@ -216,6 +216,19 @@ and records only counts/visibility of those exact labels and the exact post-swit
 Opsfly toggle, including a final read after a fill failure. It never reads input
 values, HTML or label text and does not retry or extend scenario timeouts.
 
+The following actual CI revision failed specifically at `admin-fields-email`:
+all three expected post-switch controls had count0/visiblefalse, still with
+page200 and no Auth/session request. Cause remains unclassified. A separate
+bounded diagnostic task therefore records fixed pre-click and field-failure DOM
+counts/visibility for the original separate-account toggle, login form, exact
+ADMINISTRATION heading and existing `Indlæser login…` Suspense label too. It adds
+only a path enum (`admin-login`, `superadmin`, `merchant`, `other-local`) and
+uncaught error NAME enum (TypeError/ReferenceError/SyntaxError/ChunkLoadError/other).
+No URL/query, message, values, HTML, login screenshot, retry or timeout change is
+introduced. These extra fixed observations distinguish missing form, unchanged
+mode, navigation and uncaught script failure without assuming hydration is the
+cause. One further actual CI inspection is required before a product bug scope.
+
 A separate valid review finding showed that `pageerror` cannot observe exceptions
 caught by the login form. The Chromium-only observer now attaches AFTER fields
 are filled and only wraps submit through the asserted session200, detaching before

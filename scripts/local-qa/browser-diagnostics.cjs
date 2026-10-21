@@ -19,8 +19,8 @@ const clientErrors = new Map([
   ['auth/emulator-config-failed', 'auth-emulator-binding-rejected'],
 ]);
 function diagnostics() {
-  const state = { loginSubstage: null, admin: { loginPageStatus: null, authSignInStatus: null, sessionStatus: null, uiError: null, clientError: null, fieldDom: null },
-    merchant: { loginPageStatus: null, authSignInStatus: null, sessionStatus: null, uiError: null, clientError: null, fieldDom: null } };
+  const state = { loginSubstage: null, admin: { loginPageStatus: null, authSignInStatus: null, sessionStatus: null, uiError: null, clientError: null, fieldDom: null, preClickDom: null, pagePath: null, uncaughtError: null },
+    merchant: { loginPageStatus: null, authSignInStatus: null, sessionStatus: null, uiError: null, clientError: null, fieldDom: null, preClickDom: null, pagePath: null, uncaughtError: null } };
   const roleState = role => { if (!roles.has(role)) throw Error('QA0 diagnostic role rejected'); return state[role]; };
   return {
     mark(role, phase) { roleState(role); if (!phases.has(phase)) throw Error('QA0 diagnostic phase rejected'); state.loginSubstage = role + '-' + phase; },
@@ -34,15 +34,25 @@ function diagnostics() {
     },
     alert(role, text) { roleState(role).uiError = alerts.get(text) ?? 'other-ui-alert'; },
     clientError(role, message) { for (const [text, category] of clientErrors) if (typeof message === 'string' && message.includes(text)) roleState(role).clientError = category; },
-    fields(role, value) {
+    fields(role, value, point = 'fieldDom') {
+      if (!['fieldDom', 'preClickDom'].includes(point)) throw Error('QA0 field diagnostic point rejected');
       const target = roleState(role), safe = {};
-      for (const key of ['email', 'password', 'opsflyToggle']) {
+      for (const key of ['email', 'password', 'opsflyToggle', 'separateToggle', 'loginForm', 'adminHeading', 'loadingLabel']) {
         const item = value[key];
         if (!Number.isInteger(item?.count) || item.count < 0 || item.count > 1000 || typeof item.visible !== 'boolean') throw Error('QA0 field diagnostic rejected');
         safe[key] = { count: item.count, visible: item.visible };
       }
-      target.fieldDom = safe;
+      target[point] = safe;
     },
+    path(role, input) {
+      const target = roleState(role); let url;
+      try { url = new URL(input); } catch { return; }
+      if (url.origin !== 'http://127.0.0.1:3100' || url.username || url.password) return;
+      target.pagePath = url.pathname === '/admin-login' ? 'admin-login'
+        : url.pathname === '/superadmin' || url.pathname.startsWith('/superadmin/') ? 'superadmin'
+        : url.pathname === '/merchant' || url.pathname.startsWith('/merchant/') ? 'merchant' : 'other-local';
+    },
+    uncaught(role, error) { const name = error?.name; roleState(role).uncaughtError = ['TypeError', 'ReferenceError', 'SyntaxError', 'ChunkLoadError'].includes(name) ? name : 'other'; },
     snapshot(error) {
       let failureCategory = 'browser-scenario-failed';
       if (error?.name === 'TimeoutError') failureCategory = 'timeout';
@@ -59,6 +69,10 @@ async function fieldDom(page) {
     email: page.getByLabel('E-mail', { exact: true }),
     password: page.getByLabel('Adgangskode', { exact: true }),
     opsflyToggle: page.getByRole('button', { name: 'Log ind med Opsfly', exact: true }),
+    separateToggle: page.getByRole('button', { name: 'Log ind med en separat Orderfly-konto', exact: true }),
+    loginForm: page.locator('form'),
+    adminHeading: page.getByRole('heading', { name: 'ADMINISTRATION', exact: true }),
+    loadingLabel: page.getByText('Indlæser login…', { exact: true }),
   };
   const result = {};
   for (const [key, locator] of Object.entries(locators)) result[key] = { count: await locator.count(), visible: await locator.first().isVisible() };
