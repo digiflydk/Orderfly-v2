@@ -10,6 +10,7 @@ import { Footer } from '@/components/layout/footer';
 import { MenuHeader } from '@/components/layout/menu-header';
 import { isClubPath } from '@/lib/loyalty/portal-path';
 import { storefrontSegments } from '@/lib/brand-subdomain';
+import { EsmeraldaClubFooter } from './club/portal-frame';
 
 export function BrandLayoutClient({
   children,
@@ -51,7 +52,7 @@ export function BrandLayoutClient({
         <Content className="flex-1 w-full">
             {children}
         </Content>
-        {showFooter && (
+        {isClub && brand.slug === 'esmeralda' ? <EsmeraldaClubFooter onOpenCookieSettings={() => setIsCookieModalOpen(true)} /> : showFooter && (
           <Footer
             brand={brand}
             location={location ?? undefined}
