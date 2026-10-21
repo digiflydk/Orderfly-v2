@@ -5,6 +5,7 @@ import { requireOrderflyAccess, verifiedOrderflyIdentity } from '@/lib/access/or
 import { AuthorityError } from '@/lib/access/authority';
 import { validatePrinterConfiguration } from './configuration';
 import { storedPrinterSchema } from './storage';
+import { projectPrinterActivity } from './activity-metadata';
 
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const readSchema = z.object({
@@ -66,6 +67,12 @@ export async function readPrinterConfigurations(input: unknown) {
   if (query.overview && (!Number.isSafeInteger(totalPrinters) || totalPrinters! < snapshot.docs.length)) {
     throw new PrinterReadError('printers_unavailable', 503);
   }
-  return { items: items.slice(0, limit), nextCursor: snapshot.docs.length > limit ? snapshot.docs[limit - 1].id : null,
+  const visibleItems = await Promise.all(items.slice(0, limit).map(async item => {
+    if (!query.overview || !item) return item;
+    const activity = await printers.doc(item.configuration.id).collection('statusMetadata').doc('current').get();
+    return { ...item, activity: projectPrinterActivity(activity.exists ? activity.data() : undefined,
+      { ...scope, printerId: item.configuration.id }, item.revision) };
+  }));
+  return { items: visibleItems, nextCursor: snapshot.docs.length > limit ? snapshot.docs[limit - 1].id : null,
     ...(query.overview ? { totalPrinters } : {}) };
 }

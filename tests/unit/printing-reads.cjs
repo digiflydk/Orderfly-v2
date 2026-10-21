@@ -9,7 +9,7 @@ const record = (id, patch = {}) => ({ schemaVersion: 1, configuration: configura
   deletedAt: null, createdAt: { seconds: 1 }, updatedAt: { seconds: 2 }, ...patch });
 
 function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, anonymous = false,
-  forbidden = false, failDatabase = false, identityStatus, authorityStatus, totalOverride } = {}) {
+  forbidden = false, failDatabase = false, identityStatus, authorityStatus, totalOverride, activity = {} } = {}) {
   const calls = [];
   const snapshot = (id, value) => ({ id, exists: value !== undefined, data: () => value });
   const database = { collection(name) {
@@ -20,7 +20,14 @@ function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, an
         assert.equal(collection, 'printers');
         calls.push(['printers', locationId]);
         return {
-          doc(id) { return { async get() { calls.push(['detail', id]); if (failDatabase) throw Error('PRIVATE_SENTINEL'); return snapshot(id, rows[id]); } }; },
+          doc(id) { return {
+            async get() { calls.push(['detail', id]); if (failDatabase) throw Error('PRIVATE_SENTINEL'); return snapshot(id, rows[id]); },
+            collection(name) { assert.equal(name, 'statusMetadata'); return { doc(key) {
+              assert.equal(key, 'current'); return { async get() {
+                calls.push(['activity', id]); return snapshot(key, activity[id]);
+              } };
+            } }; },
+          }; },
           where(field, op, value) {
             calls.push(['where', field, op, value]); assert.deepEqual([field, op, value], ['deletedAt', '==', null]);
             const makeQuery = (filters = [], after = '', limit) => {
@@ -200,4 +207,29 @@ test('overview aggregate excludes a foreign configuration even beyond the visibl
  const f = fixture({ rows: { p1: record('p1'), p2: record('p2'), p3: record('p3', { configuration: configuration('p3', { brandId: 'foreign' }) }) } });
  const result = await f.read('brandId=brand&locationId=location&overview=true&limit=1');
  assert.equal(result.status, 200); assert.equal(result.body.totalPrinters, 2); assert.equal(result.body.items[0].configuration.id, 'p1');
+});
+
+test('overview activity is bounded to returned rows and preserves honest unknown/never/confirmed states', async () => {
+ const base = { schemaVersion: 1, brandId: 'brand', locationId: 'location', printerId: 'p1',
+  activatedAt: null, activationRevision: null, printHistory: 'never', lastConfirmedPrintAt: null, lastConfirmedJobId: null };
+ const f = fixture({ rows: { p1: record('p1'), p2: record('p2'), p3: record('p3') }, activity: { p1: base,
+  p3: { ...base, printerId: 'p3', activatedAt: 1000, activationRevision: 1,
+   printHistory: 'confirmed', lastConfirmedPrintAt: 2000, lastConfirmedJobId: 'a'.repeat(64) } } });
+ const page = await f.read('brandId=brand&locationId=location&overview=true&limit=2');
+ assert.deepEqual(page.body.items.map(row => row.activity), [
+  { activatedAt: null, lastConfirmedPrintAt: null, printHistory: 'never' },
+  { activatedAt: null, lastConfirmedPrintAt: null, printHistory: 'unknown' }]);
+ assert.deepEqual(f.calls.filter(c => c[0] === 'activity'), [['activity', 'p1'], ['activity', 'p2']]);
+ const next = await f.read('brandId=brand&locationId=location&overview=true&after=p2');
+ assert.deepEqual(next.body.items[0].activity, { activatedAt: 1000, lastConfirmedPrintAt: 2000, printHistory: 'confirmed' });
+ assert.doesNotMatch(JSON.stringify(next.body), /lastConfirmedJobId|activationRevision|schemaVersion/);
+});
+
+test('corrupt/foreign activity fails closed; denied native location never reads activity', async () => {
+ const f = fixture({ rows: { p1: record('p1') }, activity: { p1: { brandId: 'PRIVATE_SENTINEL' } } });
+ const result = await f.read('brandId=brand&locationId=location&overview=true');
+ assert.equal(result.status, 503); assert.deepEqual(result.body, { error: 'printers_unavailable' });
+ const denied = fixture({ rows: { p1: record('p1') }, locations: { location: { brandId: 'foreign' } } });
+ assert.equal((await denied.read('brandId=brand&locationId=location&overview=true')).status, 403);
+ assert.equal(denied.calls.some(c => c[0] === 'activity'), false);
 });
