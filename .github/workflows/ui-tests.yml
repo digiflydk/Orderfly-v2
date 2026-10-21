@@ -155,6 +155,9 @@ jobs:
         timeout-minutes: 8
         run: QA0_FIREBASE_BIN="$RUNNER_TEMP/orderfly-qa0-tools/node_modules/.bin/firebase" QA0_JAVA_BIN="$JAVA_HOME/bin/java" node scripts/local-qa/run-browser.cjs
 
+      - name: QR module behavior, scope and browser regression
+        run: node --test tests/unit/qr-*.cjs
+
       - name: Games editor browser regression
         run: node --test tests/unit/games-editor-browser.cjs
 

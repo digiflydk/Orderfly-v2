@@ -35,25 +35,28 @@ before(async () => {
     import { BrandTracking } from ${src('components/brand-tracking')};
     import { MemberCard } from ${src('app/[brandSlug]/club/member-card')};
     import { ProfileSettings } from ${src('app/[brandSlug]/club/profil/profile-settings')};
+    import { HistoryView } from ${src('app/[brandSlug]/club/historik/history-view')};
     import { ClubNav } from ${src('app/[brandSlug]/club/club-nav')};
     import { HomeScreenHint } from ${src('app/[brandSlug]/club/home-screen-hint')};
     import { PortalFrame, EsmeraldaClubFooter } from ${src('app/[brandSlug]/club/portal-frame')};
     import { portalPreset } from ${src('app/[brandSlug]/club/brand-preset')};
     const view = location.pathname.slice(1);
     window.__pathname = new URLSearchParams(location.search).get('path') || '/club';
+    const slug = new URLSearchParams(location.search).get('brand') || 'esmeralda';
     const node = view === 'signup' ? React.createElement(SignupForm, { slug: 'esmeralda', base: '/club', program: ${JSON.stringify(program)} })
       : view === 'login' ? React.createElement(LoginFlow, { slug: 'esmeralda', base: '/club', programName: 'Esmeralda Club', signedIn: false })
-      : view === 'card' ? React.createElement(MemberCard, { slug: 'esmeralda', base: '/club', member: window.__member || ${JSON.stringify(null)} })
+      : view === 'card' ? React.createElement(MemberCard, { slug, base: '/club', member: window.__member || ${JSON.stringify(null)} })
+      : view === 'history' ? React.createElement(HistoryView, { history: window.__member?.history || [] })
       : view === 'profile' ? React.createElement(ProfileSettings, { slug: 'esmeralda', base: '/club', programName: 'Esmeralda Club', member: { name: 'Anna Hansen', email: 'anna@example.com' },
           newsletter: { subscribed: new URLSearchParams(location.search).get('subscribed') !== 'no', consentVersion: 'consent-2', consentText: 'Ja tak til nyhedsbrevet på e-mail.' } })
       : view === 'nav' ? React.createElement(ClubNav, { base: '/club', programName: 'Esmeralda Club' })
       : view === 'hint' ? React.createElement(HomeScreenHint, { slug: 'esmeralda' })
       : view === 'tracking' ? React.createElement(BrandTracking, { brand: { id: 'b', slug: 'esmeralda', gtmContainerId: 'GTM-X' } })
       : React.createElement('h1', null, 'Mit stempelkort');
-    const slug = new URLSearchParams(location.search).get('brand') || 'esmeralda';
-    const signedIn = ['card', 'profile', 'nav', 'hint'].includes(view);
+    const signedIn = ['card', 'profile', 'history', 'nav', 'hint'].includes(view) || new URLSearchParams(location.search).get('signedIn') === 'yes';
     const frame = React.createElement(PortalFrame, { slug, base: '/club', preset: portalPreset({slug, name:'Test Restaurant'}), brandName: 'Test Restaurant', signedIn,
-      program: {...${JSON.stringify(program)}, active:true, stampsRequired:8, rewardDescription:'Gratis pizza'} }, node);
+      program: {...${JSON.stringify(program)}, active:true, stampsRequired:8, rewardDescription:'Gratis pizza'},
+      memberNavigation: signedIn && view !== 'nav' ? React.createElement(ClubNav, {base:'/club', programName:'Esmeralda Club'}) : undefined }, node);
     createRoot(document.getElementById('root')).render(React.createElement(React.Fragment, null, frame,
       slug === 'esmeralda' && React.createElement(EsmeraldaClubFooter, {onOpenCookieSettings:()=>{window.__cookieSettingsOpened=true;}})));`);
   const loader = write('loader.js', `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
@@ -296,13 +299,12 @@ for (const width of [390, 1440]) test(`the card shows stamps X of N, the next re
   const { page } = await open('card', { width, init: withMember(), answers: { qr: [qrAnswer('a'.repeat(64), NOW)] } });
   try {
     await page.getByRole('img', { name: '5 af 8 stempler' }).waitFor();
-    const contentLayout = await page.locator('[data-club-page-content]').evaluate(node => ({
-      display: getComputedStyle(node).display, direction: getComputedStyle(node).flexDirection,
-      gap: getComputedStyle(node).gap, sections: node.querySelectorAll(':scope > section').length,
+    const contentLayout = await page.locator('.club-member-card').evaluate(node => ({
+      display: getComputedStyle(node).display, gap: getComputedStyle(node).gap,
+      sections: node.querySelectorAll(':scope > section').length,
     }));
-    assert.equal(contentLayout.display, 'flex');
-    assert.equal(contentLayout.direction, 'column');
-    assert.equal(contentLayout.gap, '24px', 'card, QR and reward sections retain their original spacing');
+    assert.equal(contentLayout.display, 'grid');
+    assert.equal(contentLayout.gap, '24px', 'card, QR and reward sections retain visible spacing');
     assert.ok(contentLayout.sections >= 2);
     assert.equal(await page.locator('[data-stamp="filled"]').count(), 5);
     assert.equal(await page.locator('[data-stamp="empty"]').count(), 3);
@@ -499,4 +501,78 @@ test('the home-screen guide shows once on phones and stays closed', async () => 
     await desktop.page.waitForTimeout(200);
     assert.equal(await desktop.page.getByRole('heading', { name: 'Læg kortet på din hjemmeskærm' }).count(), 0);
   } finally { await desktop.page.close(); }
+});
+
+for (const width of [320, 390, 820, 1440]) for (const view of ['card', 'history', 'profile']) test(`signed-in Esmeralda ${view} follows the restaurant design at ${width}px`, async () => {
+  const data = {...member, card:{...member.card, stampsRequired:10}, history:[
+    {type:'stamp_added', quantity:1, channel:'dine_in', createdAt:NOW},
+    {type:'reward_redeemed', quantity:0, channel:null, createdAt:NOW},
+  ]};
+  const {page, calls} = await open(view, {width, hash:`?path=/club${view === 'card' ? '' : view === 'history' ? '/historik' : '/profil'}`,
+    init:withMember(data), answers:{qr:[qrAnswer('d'.repeat(64), NOW)]}});
+  try {
+    await page.getByRole('heading', {level:1}).waitFor();
+    const nav = page.getByRole('navigation', {name:'Menu for Esmeralda Club'});
+    const active = nav.locator('[aria-current="page"]');
+    assert.equal(await active.count(), 1);
+    assert.equal(await active.innerText(), view === 'card' ? 'Kort' : view === 'history' ? 'Historik' : 'Profil');
+    assert.equal(await active.evaluate(el=>getComputedStyle(el).backgroundColor), 'rgb(245, 174, 37)');
+    assert.equal(await active.evaluate(el=>getComputedStyle(el).color), 'rgb(17, 17, 17)');
+    assert.equal(await page.getByRole('main').count(),1);
+    if (view === 'card') {
+      const qr = page.getByRole('img', {name:'QR-kode til kassen'});
+      await qr.waitFor();
+      assert.equal(await qr.evaluate(el=>getComputedStyle(el).backgroundColor), 'rgb(255, 255, 255)');
+      assert.equal(await page.getByRole('progressbar', {name:'Fremdrift på dit stempelkort'}).getAttribute('max'),'10');
+      assert.equal(await page.getByRole('progressbar').getAttribute('value'),'5');
+      const boxes = await page.locator('.club-stamp-card, .club-member-qr').evaluateAll(nodes=>nodes.map(el=>{const r=el.getBoundingClientRect();return {x:r.x,y:r.y,width:r.width};}));
+      if (width<=760) assert.ok(boxes[1].y>boxes[0].y); else assert.ok(boxes[1].x>boxes[0].x);
+      assert.equal(await page.locator('[data-stamp="filled"]').first().evaluate(el=>getComputedStyle(el).backgroundColor),'rgb(245, 174, 37)');
+    } else if (view === 'history') {
+      await page.getByText('Spis her', {exact:true}).waitFor();
+      await page.getByText('Belønning indløst', {exact:true}).waitFor();
+    } else await page.getByRole('heading', {name:'Dine oplysninger'}).waitFor();
+    assert.ok(await noOverflow(page));
+    assert.ok(calls.every(c=>c.name==='qr'), 'viewing member design must not mutate profile, consent or membership');
+    if (process.env.CLUB_SCREENSHOT_DIR && [390,1440].includes(width)) {
+      await page.evaluate(()=>document.fonts.ready);
+      fs.mkdirSync(process.env.CLUB_SCREENSHOT_DIR,{recursive:true});
+      await page.screenshot({path:path.join(process.env.CLUB_SCREENSHOT_DIR,`${view}-${width}.png`),fullPage:true});
+    }
+  } finally {await page.close();}
+});
+
+test('empty member history remains readable without invented activity', async()=>{
+  const {page,calls}=await open('history',{width:320});
+  try {
+    await page.getByText('Du har ingen stempler eller belønninger endnu.').waitFor();
+    assert.equal(await page.getByRole('listitem').count(),0);
+    assert.ok(await noOverflow(page)); assert.equal(calls.length,0);
+  } finally {await page.close();}
+});
+
+test('another brand retains its compact member card and no Esmeralda progress',async()=>{
+  const {page}=await open('card',{hash:'?brand=other',init:withMember(),answers:{qr:[qrAnswer('d'.repeat(64),NOW)]}});
+  try {
+    await page.getByRole('img',{name:'5 af 8 stempler'}).waitFor();
+    assert.equal(await page.locator('[data-esmeralda-club]').count(),0);
+    assert.equal(await page.getByRole('progressbar').count(),0);
+    assert.equal(await page.locator('.club-member-card').evaluate(el=>getComputedStyle(el).display),'flex');
+    assert.ok(await noOverflow(page));
+  } finally {await page.close();}
+});
+
+for (const width of [390,1440]) for (const view of ['login','terms']) test(`signed-in ${view} keeps its existing panel at ${width}px`,async()=>{
+  const {page}=await open(view,{width,hash:'?signedIn=yes'});
+  try {
+    await page.getByRole('heading',{level:1}).waitFor();
+    const style=await page.locator('.es-club-form-panel').evaluate(el=>({
+      background:getComputedStyle(el).backgroundColor, padding:getComputedStyle(el).paddingLeft,
+      border:getComputedStyle(el).borderTopWidth, maxWidth:getComputedStyle(el.closest('main')).maxWidth,
+    }));
+    assert.equal(style.background,'rgb(29, 29, 29)');
+    assert.equal(style.padding,width<=760?'20px':'36px');
+    assert.equal(style.border,'1px'); assert.equal(style.maxWidth,'760px');
+    assert.ok(await noOverflow(page));
+  } finally {await page.close();}
 });

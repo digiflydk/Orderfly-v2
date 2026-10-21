@@ -85,7 +85,7 @@ export function MemberQr({ slug, base }: { slug: string; base: string }) {
   }, []);
 
   return (
-    <section aria-labelledby="club-qr" className="flex flex-col items-center gap-3 text-center">
+    <section aria-labelledby="club-qr" className="club-member-qr flex flex-col items-center gap-3 text-center">
       <h2 id="club-qr" className="text-2xl">Din QR-kode</h2>
       {code ? (
         <>

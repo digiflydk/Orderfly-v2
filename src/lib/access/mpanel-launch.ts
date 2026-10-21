@@ -41,6 +41,7 @@ const destinations=[
   ['orderfly.stamp_cards:members','/superadmin/loyalty/stamp-card?tab=members'],
   ['orderfly.stamp_cards:log','/superadmin/loyalty/stamp-card?tab=log'],
   ['orderfly.analytics:view','/superadmin/analytics/cust-funnel'],
+  ['orderfly.qr_codes:view','/superadmin/qr-codes'],
   ['orderfly.website:view','/superadmin/brands/websites'],
   ['orderfly.stamp_cards:counter','/merchant/stamp-card'],
 ] as const;
