@@ -236,3 +236,19 @@ test('#349 proof expiry after financial apply still aborts the shared transactio
     assert.equal(writes(f).some(event => event.path.includes('/jobs/')), false);
   } finally { Date.now = realTime; }
 });
+
+test('#349 corrupt stored manifest target/kind/text bounds reject before any replay write', async () => {
+  for (const mutate of [
+    manifest => { manifest.targets = Array.from({ length: 17 }, (_, i) => ({ ...manifest.targets[0], printerId: 'extra' + i })); },
+    manifest => { manifest.targets[0].kinds = ['kitchen', 'packing', 'kitchen']; },
+    manifest => { manifest.catalogHash = 'a'.repeat(1000000); },
+    manifest => { manifest.targets[0].printerId = 'a'.repeat(1000000); },
+    manifest => { for (let i = 0; i < 14; i++) manifest['unknown' + i] = true; },
+  ]) {
+    const f = await fixture(); await f.settle();
+    mutate(f.records.get('orders/' + f.orderId + '/printIntents/original'));
+    const before = structuredClone([...f.records]), priorWrites = writes(f).length;
+    await assert.rejects(f.settle(), /job_conflict/);
+    assert.deepEqual([...f.records], before); assert.equal(writes(f).length, priorWrites); assert.equal(f.jobs().length, 2);
+  }
+});
