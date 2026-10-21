@@ -98,6 +98,9 @@ jobs:
       - name: Printer routing preview regression
         run: node --test tests/unit/printing-routing.cjs
 
+      - name: Scoped print-intent target policy regression
+        run: node --test tests/unit/printing-intent-target-policy.cjs
+
       - name: Staff pickup print-origin proof regression
         run: node --test tests/unit/printing-pickup-transition-proof.cjs
 
