@@ -32,7 +32,8 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   records.set(key,saved);
  };
  records.set('products/p',{brandId:'b',locationIds:['l'],categoryId:'pizza',price:100,isActive:true,productName:'Pizza'});
- records.set('discounts/d',{...offer,id:'d',orderTypes:discountOrderTypes,applicationType:kind==='newsletter'?'newsletter_signup':'code',perCustomerLimit:1,usageLimit:1});
+ records.set('discounts/d',{...offer,id:'d',orderTypes:discountOrderTypes,applicationType:kind==='newsletter'?'newsletter_signup':kind==='club'?'club_signup':'code',perCustomerLimit:1,usageLimit:1});
+ if(kind==='club') records.set('loyaltyCampaigns/b',{brandId:'b',settings:{checkoutMode:'club'}});
  if(fault==='collision')records.set('orders/ORD-TEST',{paymentStatus:'Paid',brandId:'other',totalAmount:900});
  const record={id:'c',brandId:'b',email:'test@example.test',normalizedEmail:'test@example.test',phone:'12345678',normalizedPhone:'12345678',locationIds:['l'],marketingConsent:false};
  for (const [key, data] of seed) records.set(key,data);
@@ -44,6 +45,11 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
  if(existing) records.set('customers/c',record);
  const snap=snapshot(firestoreRef('customers','c'));
  Object.assign(mocks,{
+  '@/lib/loyalty/stamp-card/club-signup':{
+   getClubSignupDiscountEligibility:async()=>fault!=='club-ineligible',
+   validateClubCheckoutSignup:async input=>{events.push('club-preflight');assert.equal(input.newsletterConsent,true);assert.equal(input.termsAccepted,true);return{eligible:fault!=='club-ineligible'};},
+   prepareClubCheckoutSignup:async input=>{events.push('club-signup');if(fault==='club-signup')throw Error('Club signup unavailable');const row=[...records].find(([key,data])=>key.startsWith('customers/')&&data.brandId===input.brandId&&customerIdentity.customerHasEmail(data,input.email));assert.ok(row,'canonical checkout customer exists before Club signup');if(input.discountId)records.set(row[0],{...row[1],pendingClubDiscountId:input.discountId});return{customerId:row[1].id};},
+  },
   '@/lib/marketing/config':{marketingConfig:brandId=>marketingConfigured && brandId==='b'?{brandId:'b'}:null},
   'node:crypto':require('node:crypto'),
   '@/lib/firebase-admin':{getAdminDb:()=>marketingDb},
@@ -123,7 +129,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
  if(discountReaders) mocks['@/lib/server/checkout-discounts']=discountReaders;
  const api=load(path,mocks);
  if(createOnly) return {result:{},writes,events,records,actions:api};
- const result=await api.createStripeCheckoutSessionAction(items || [{id:'p',name:'Pizza',quantity:1,unitPrice:100,totalPrice:100,toppings:identityCleaner?[]:undefined}],{name:'Test',email:'test@example.test',phone:'12345678',subscribeToNewsletter:kind==='newsletter',acceptTerms:true,...customerOverrides,...(identityCleaner?{street:'',zipCode:'',city:''}:{})},deliveryType,'b','l',{subtotal:100,deliveryFee:0,discountTotal:0,tips:0,taxes:0,bagFee:4,cartDiscountName:undefined,...paymentOverrides},['code','newsletter'].includes(kind)?discountId:null,'brand','location',deliveryTime,anonymousConsentId || (fault?.startsWith('consent-')?'anon':undefined));
+ const result=await api.createStripeCheckoutSessionAction(items || [{id:'p',name:'Pizza',quantity:1,unitPrice:100,totalPrice:100,toppings:identityCleaner?[]:undefined}],{name:'Test',email:'test@example.test',phone:'12345678',subscribeToNewsletter:['newsletter','club'].includes(kind),...(kind==='club'?{subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:'consent-1',clubTermsVersion:'terms-1'}:{}),acceptTerms:true,...customerOverrides,...(identityCleaner?{street:'',zipCode:'',city:''}:{})},deliveryType,'b','l',{subtotal:100,deliveryFee:0,discountTotal:0,tips:0,taxes:0,bagFee:4,cartDiscountName:undefined,...paymentOverrides},['code','newsletter','club'].includes(kind)?discountId:null,'brand','location',deliveryTime,anonymousConsentId || (fault?.startsWith('consent-')?'anon':undefined));
  return {result,writes,events,coupon,records,patchCalls,persistenceError,sessionParams,actions:api};
 }
 
