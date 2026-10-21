@@ -536,8 +536,15 @@ test('default table combines native scopes, independent optional filters and exa
  await page.getByRole('combobox', { name: 'Lokation', exact: true }).selectOption('lb');
  await expect(page.getByRole('combobox', { name: 'Brand', exact: true })).toHaveValue('');
  await expect(page.getByText('Syd printer', { exact: true })).toBeVisible();
+ await page.getByRole('combobox', { name: 'Brand', exact: true }).selectOption('b');
+ await expect(page.getByRole('combobox', { name: 'Lokation', exact: true })).toHaveValue('lb');
+ await expect(page.getByText('Syd printer', { exact: true })).toBeVisible();
+ await page.getByRole('combobox', { name: 'Brand', exact: true }).selectOption('');
+ await expect(page.getByRole('combobox', { name: 'Lokation', exact: true })).toHaveValue('lb');
+ await expect(page.getByText('Syd printer', { exact: true })).toBeVisible();
  await page.getByRole('combobox', { name: 'Brand', exact: true }).selectOption('a');
  await expect(page.getByRole('combobox', { name: 'Printertype', exact: true })).toHaveValue('mc-print3');
+ await expect(page.getByRole('combobox', { name: 'Lokation', exact: true })).toHaveValue('');
  await expect(page.getByRole('table', { name: 'Printere', exact: true })).toBeVisible();
  await expect(page.getByRole('cell', { name: 'Ingen printere matcher filtrene på denne side.', exact: true })).toBeVisible();
  assert.equal(requests.at(-1).brand, 'a');

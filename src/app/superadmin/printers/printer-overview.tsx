@@ -145,7 +145,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
       <p className="mt-2 text-sm text-muted-foreground">Administrer printeropsætning på tværs af brands og lokationer.</p>
     </header>
     <div className="admin-filter-bar flex flex-wrap items-end gap-3 p-4">
-      <AdminSelectField label="Brand" value={brandId} disabled={!!editor} onChange={event => { setBrandId(event.target.value); setLocationId(''); setAfter(null); setEditor(null); setSavedScope(''); setFeedback(null); }}>
+      <AdminSelectField label="Brand" value={brandId} disabled={!!editor} onChange={event => { const nextBrand = event.target.value; setBrandId(nextBrand); if (nextBrand && !locations.some(row => row.id === locationId && row.brandId === nextBrand)) setLocationId(''); setAfter(null); setEditor(null); setSavedScope(''); setFeedback(null); }}>
         <option value="">Alle brands</option>
         {brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
       </AdminSelectField>
