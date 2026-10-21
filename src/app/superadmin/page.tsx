@@ -12,6 +12,7 @@ export default async function SuperadminPage() {
   ])
 
   const destinations = [
+    { href: '/superadmin/printers', label: 'Printere', description: 'Administrér printerpilot på tværs af brands og lokationer.' },
     { href: '/superadmin/dashboard', label: 'Salgsoverblik', description: 'Følg ordrer, omsætning og udvikling.' },
     { href: '/superadmin/sales/orders', label: 'Ordrer', description: 'Find og håndtér de seneste ordrer.' },
     { href: '/superadmin/products', label: 'Produkter', description: 'Vedligehold sortimentet på tværs af brands.' },

@@ -91,3 +91,45 @@ test('actual identity-service outage reaches the printer route as a generic 503'
   assert.equal(response.headers.get('cache-control'), 'no-store');
   assert.deepEqual(await response.json(), { error: 'printers_unavailable' });
 });
+
+test('all printer administration endpoints reject delegated merchants before service or input access', async () => {
+  const cases = [
+    ['src/app/api/merchant/printers/route.ts', ['GET','POST','PATCH']],
+    ['src/app/api/merchant/printers/lifecycle/route.ts', ['POST']],
+    ['src/app/api/merchant/printers/queue/route.ts', ['GET']],
+    ['src/app/api/merchant/printers/queue/review/route.ts', ['POST']],
+  ];
+  for (const superuser of [false,true]) {
+    let sessionChecks = 0, serviceCalls = 0;
+    const session = loadTs('src/lib/access/orderfly-session.ts', {
+      'server-only': {}, 'react': { cache: fn => fn },
+      'next/headers': { cookies: async () => ({ get: () => ({ value: 'synthetic-session' }) }) },
+      '@/lib/firebase-admin': { getAdminApp: () => ({ auth: () => ({ verifySessionCookie: async () => ({ uid: 'actor' }) }) }), getAdminDb: () => ({}) },
+      './authority': { AuthorityError, executeAuthority: async () => { sessionChecks++; return { actorId:'actor', superuser, permissions:['orderfly.catalog:view','orderfly.catalog:create','orderfly.catalog:edit'] }; } },
+    });
+    const allowedService = async () => { serviceCalls++; return { items: [] }; };
+    const mocks = {
+      'server-only': {}, '@/lib/access/authority': { AuthorityError }, '@/lib/access/orderfly-session': session,
+      '@/lib/printing/reads': { PrinterReadError: class extends Error {}, readPrinterConfigurations: allowedService },
+      '@/lib/printing/writes': { PrinterWriteError: class extends Error {}, writePrinterConfiguration: allowedService },
+      '@/lib/printing/lifecycle': { PrinterLifecycleError: class extends Error {}, transitionPrinter: allowedService },
+      '@/lib/printing/queue-summary': { PrinterQueueReadError: class extends Error {}, readPrinterQueueSummary: allowedService },
+      '@/lib/printing/queue-review': { PrinterQueueReviewError: class extends Error {}, issuePrinterQueueReview: allowedService },
+      '@/lib/url': { getOrigin: async () => 'https://orderfly.dk' },
+    };
+    for (const [path, methods] of cases) {
+      const routes = loadTs(path,mocks);
+      for (const method of methods) {
+        const response = await routes[method](new Request('https://orderfly.dk/api/merchant/printers', {
+          method, headers:{origin:'https://orderfly.dk','content-type':'application/json'}, ...(method==='GET'?{}:{body:'{}'})
+        }));
+        assert.equal(response.status,superuser?(path.endsWith('printers/route.ts')&&method==='POST'?201:200):403,`${path} ${method}`);
+        assert.equal(response.headers.get('cache-control'),'no-store');
+        assert.equal(response.headers.get('vary'),'Cookie');
+        if(!superuser)assert.deepEqual(await response.json(),{error:'forbidden'});
+      }
+    }
+    assert.equal(sessionChecks,6);
+    assert.equal(serviceCalls,superuser?6:0);
+  }
+});

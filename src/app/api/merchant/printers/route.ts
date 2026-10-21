@@ -1,5 +1,5 @@
 import { AuthorityError } from '@/lib/access/authority';
-import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
+import { verifiedOrderflyIdentity, requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { PrinterReadError, readPrinterConfigurations } from '@/lib/printing/reads';
 import { PrinterWriteError, writePrinterConfiguration } from '@/lib/printing/writes';
 import { getOrigin } from '@/lib/url';
@@ -23,6 +23,7 @@ function failure(error: unknown) {
 export async function GET(request: Request) {
   try {
     await verifiedOrderflyIdentity();
+    await requirePlatformSuperuser();
     const params = new URL(request.url).searchParams;
     if ([...params.keys()].some(key => params.getAll(key).length !== 1)) {
       return reply({ error: 'invalid_request' }, 400);
@@ -36,6 +37,7 @@ export async function GET(request: Request) {
 async function write(request: Request, operation: 'create' | 'edit') {
   try {
     await verifiedOrderflyIdentity();
+    await requirePlatformSuperuser();
     if (request.headers.get('origin') !== await getOrigin() || request.headers.get('sec-fetch-site') === 'cross-site') {
       return reply({ error: 'forbidden' }, 403);
     }

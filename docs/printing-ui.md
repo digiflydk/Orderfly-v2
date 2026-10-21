@@ -1,12 +1,17 @@
-# Printer overview (P4.1a, #310)
+# Printer overview (P4.1a, #310; superadmin pilot #325)
 
-`/merchant/printers` is a read-only merchant workspace. The merchant dashboard
-and shared sidebar expose it only with `orderfly.catalog:view` (or a superuser).
-The page independently checks the session/navigation policy and requests
-`nativeCatalog('orderfly.catalog:view')`. It does not reuse the union of scopes
-from unrelated features. Only brand/location IDs and display names reach the
-client. Native catalog and the existing read API both validate stored location
-ownership; the browser selection is not an authorization decision.
+PO scope correction 2026-10-21: printer administration is currently available
+only to platform superusers at `/superadmin/printers`. The superadmin dashboard
+and sidebar link here; merchant dashboards have no printer entry. The former
+`/merchant/printers` page returns not-found, including for superusers.
+The page checks `session.superuser` through navigation policy before loading
+native catalog metadata. Delegated catalog grants alone do not grant access.
+Existing `/api/merchant/printers` administration endpoints (GET/POST/PATCH,
+lifecycle, queue summary and queue review) retain their URLs for compatibility
+but now require `requirePlatformSuperuser` before parsing input or calling any
+printer service. Existing native brand/location and transactional authorization
+remain in force. Writes and physical output remain default-off. Future #318 UI
+must use the superadmin workspace and preserve this pilot restriction.
 
 After the user chooses one brand and one location, the overview calls
 `GET /api/merchant/printers?brandId=…&locationId=…&limit=20`. Reads use the current
@@ -45,6 +50,6 @@ an explicit state. Raw provider errors and payloads are never displayed.
   independent Codex review are required before the coordinator serializes merge
   and deploy under AGENTS.md. Public release smoke does not prove authenticated
   UI acceptance. After verifying the deployed commit, check the live
-  `/merchant/printers` login boundary read-only. Success/forbidden scope UI QA
+  `/superadmin/printers` login boundary read-only. Success/forbidden scope UI QA
   remains blocked until a safe authorized session is available. No unattended
   production data writes are required. Physical printer QA remains separate.
