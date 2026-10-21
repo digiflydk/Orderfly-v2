@@ -1,5 +1,6 @@
 // Render the actual superadmin React overview with production CSS. Only API data
 // and server-provided authorized selector metadata are synthetic, never a login.
+// Shell regressions compose the real SuperAdminLayoutClient/sidebar and overview.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -23,14 +24,24 @@ before(async () => {
   const entry = path.join(dir, 'entry.js');
   fs.writeFileSync(entry, `import React from 'react';import {createRoot} from 'react-dom/client';
     import {PrinterOverview} from ${JSON.stringify(path.join(root, 'src/app/superadmin/printers/printer-overview.tsx'))};
+    import {SuperAdminLayoutClient} from ${JSON.stringify(path.join(root, 'src/components/superadmin/superadmin-layout-client.tsx'))};
     const writes = new URLSearchParams(location.search).has('writes') ? [{id:'la',brandId:'a'}] : [];
-    function Fixture(){const [scopes,setScopes]=React.useState(writes);const [deleteScopes,setDeleteScopes]=React.useState(writes);const [identity,setIdentity]=React.useState(0);window.resetPrinterContext=()=>setIdentity(value=>value+1);window.setPrinterWriteScopes=value=>{setScopes(value);setDeleteScopes(value);};window.setPrinterDeleteScopes=setDeleteScopes;return React.createElement(PrinterOverview,{key:identity,brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)},createLocations:scopes,editLocations:scopes,deleteLocations:deleteScopes});}
-    createRoot(document.getElementById('root')).render(React.createElement(Fixture));`);
+    function Fixture(){const [catalog,setCatalog]=React.useState({brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)}});window.setPrinterReadCatalog=setCatalog;const [scopes,setScopes]=React.useState(writes);const [deleteScopes,setDeleteScopes]=React.useState(writes);const [identity,setIdentity]=React.useState(0);window.resetPrinterContext=()=>setIdentity(value=>value+1);window.setPrinterWriteScopes=value=>{setScopes(value);setDeleteScopes(value);};window.setPrinterDeleteScopes=setDeleteScopes;return React.createElement(PrinterOverview,{key:identity,brands:[...catalog.brands],locations:[...catalog.locations],createLocations:scopes,editLocations:scopes,deleteLocations:deleteScopes});}
+    const overview=React.createElement(Fixture);
+    createRoot(document.getElementById('root')).render(location.pathname==='/shell' ? React.createElement(SuperAdminLayoutClient,{centralAdmin:true,access:{superuser:true,permissions:['orderfly.catalog:view']}},overview) : overview);`);
+  const navigation = path.join(dir, 'navigation.js');
+  fs.writeFileSync(navigation, `export const usePathname=()=>'/superadmin/printers';export const useRouter=()=>({push(){},refresh(){}});export const useSearchParams=()=>new URLSearchParams();`);
+  const auth = path.join(dir, 'auth.js');
+  fs.writeFileSync(auth, `export async function getSuperadminUserContext(){return null;}`);
+  const link = path.join(dir, 'link.js');
+  fs.writeFileSync(link, `import React from 'react';export default function Link({href,children,...props}){return React.createElement('a',{href,...props},children);}`);
+  const picture = path.join(dir, 'image.js');
+  fs.writeFileSync(picture, `import React from 'react';export default function Image({priority,fill,src,...props}){return React.createElement('img',{src:'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%22232%22 height=%2254%22/%3E',...props});}`);
   const loader = path.join(dir, 'loader.js');
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   await new Promise((resolve, reject) => webpackModule.webpack({ mode: 'development', devtool: false, entry,
     output: { path: dir, filename: 'bundle.js' },
-    resolve: { alias: { '@': path.join(root, 'src') }, extensions: ['.tsx', '.ts', '.js'], modules: [path.join(root, 'node_modules'), 'node_modules'] },
+    resolve: { alias: { '@/components/superadmin/admin-link': link, '@/lib/auth/superadmin-context': auth, 'next/navigation': navigation, 'next/image': picture, '@': path.join(root, 'src') }, extensions: ['.tsx', '.ts', '.js'], modules: [path.join(root, 'node_modules'), 'node_modules'] },
     module: { rules: [{ test: /\.tsx?$/, exclude: /node_modules/, use: [loader] }] },
   }).run((error, stats) => error ? reject(error) : stats.hasErrors() ? reject(Error(stats.toString({ all: false, errors: true }))) : resolve()));
   execFileSync(path.join(root, 'node_modules/.bin/tailwindcss'), ['-c', path.join(root, 'tailwind.config.ts'), '-i', path.join(root, 'src/app/globals.css'), '-o', path.join(dir, 'styles.css'), '--minify'], { cwd: root, stdio: 'pipe' });
@@ -39,7 +50,7 @@ before(async () => {
     if (req.url === '/bundle.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(dir, 'bundle.js'))); }
     if (req.url === '/styles.css') { res.setHeader('content-type', 'text/css'); return res.end(styles); }
     res.setHeader('content-type', 'text/html; charset=utf-8');
-    res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body><main class="admin-shell min-h-screen bg-background p-4 md:p-8"><div id="root" class="mx-auto max-w-6xl"></div></main><script src="/bundle.js"></script></body></html>');
+    res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"></head><body>' + (req.url.split('?')[0] === '/shell' ? '<div id="root"></div>' : '<main class="admin-shell min-h-screen bg-background p-4 md:p-8"><div id="root" class="mx-auto max-w-6xl"></div></main>') + '<script src="/bundle.js"></script></body></html>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
   origin = 'http://127.0.0.1:' + server.address().port;
@@ -63,8 +74,9 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667
     });
     await page.goto(origin);
     await expect(page.getByRole('heading', { name: 'Printere', exact: true })).toBeVisible();
-    assert.equal(requests.length, 0);
-    await expect(page.getByRole('combobox', { name: 'Lokation', exact: true })).toBeDisabled();
+    await expect(page.getByRole('table', { name: 'Printere', exact: true })).toBeVisible();
+    await expect(page.getByRole('combobox', { name: 'Lokation', exact: true })).toBeEnabled();
+    await expect(page.getByRole('combobox', { name: 'Printertype', exact: true })).toBeEnabled();
     await choose(page);
     await expect(page.getByText('Active', { exact: true })).toBeVisible();
     await expect(page.getByRole('table', { name: 'Printere', exact: true })).toBeVisible();
@@ -72,19 +84,20 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667
     await expect(page.getByText('Ikke registreret', { exact: true })).toHaveCount(60);
     await expect(page.getByText('CloudPRNT HTTP', { exact: false })).toHaveCount(20);
     await expect(page.getByText(/58 mm/, { exact: false })).toHaveCount(20);
-    assert.deepEqual(requests[0], { method: 'GET', brand: 'a', location: 'la', limit: '20', after: null });
+    assert.ok(requests.some(row => row.method === 'GET' && row.brand === 'a' && row.location === 'la' && row.limit === '20' && row.after === null));
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 1);
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
     await page.screenshot({ path: path.join(root, 'test-results', `printing-overview-${name}.png`), fullPage: true });
     await page.getByRole('button', { name: 'Næste side' }).click();
     await expect(page.getByText('Køkken p21', { exact: true })).toBeVisible();
     await expect(page.getByText('Ikke registreret', { exact: true })).toHaveCount(3);
-    assert.equal(requests[1].after, 'p20');
+    assert.equal(requests.at(-1).after, 'p20');
     await page.getByRole('button', { name: 'Første side' }).click();
     await expect(page.getByRole('button', { name: 'Næste side' })).toBeVisible();
-    assert.equal(requests[2].after, null);
+    assert.equal(requests.at(-1).after, null);
     await page.getByRole('combobox', { name: 'Brand', exact: true }).selectOption('b');
-    await expect(page.getByRole('table')).toHaveCount(0);
+    await expect(page.getByRole('table', { name: 'Printere', exact: true })).toBeVisible();
+    await expect(page.getByText('Køkken p21', { exact: true })).toHaveCount(0);
     assert.equal(await page.getByRole('combobox', { name: 'Lokation', exact: true }).inputValue(), '');
     await expect(page.getByRole('combobox', { name: 'Lokation', exact: true }).locator('option[value="la"]')).toHaveCount(0);
     assert.deepEqual(errors, []);
@@ -241,7 +254,8 @@ test('view-only metadata and independently scoped grants never expose unauthoriz
   await page.route('**/api/merchant/printers**', route => route.fulfill({ json: { items: [item('p1', 'a', 'la', { state: 'disabled' }), item('p2')], nextCursor: null } }));
   await page.goto(origin); await choose(page); await expect(page.getByText('Køkken p1', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
-  await expect(page.getByRole('button', { name: /Rediger/ })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Rediger Køkken p1', exact: true })).toBeDisabled();
+  await expect(page.getByRole('button', { name: 'Slet Køkken p1', exact: true })).toBeDisabled();
   await page.goto(origin + '?writes'); await choose(page);
   await expect(page.getByRole('button', { name: 'Rediger Køkken p1', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Rediger Køkken p2', exact: true })).toBeDisabled();
@@ -311,11 +325,11 @@ test('initial reads gate create and an obsolete GET401 cannot interrupt write201
       const request = route.request();
       if (request.method() === 'GET') {
         getCount++;
-        if (getCount === 1) {
-          initialStarted(); await new Promise(resolve => { releaseInitial = resolve; });
+        if (getCount <= 2) {
+          if (getCount === 1) { initialStarted(); await new Promise(resolve => { releaseInitial = resolve; }); }
           return route.fulfill({ json: { items: Array.from({ length: 20 }, (_, i) => item('p' + String(i + 1).padStart(2, '0'))), nextCursor: 'p20' } });
         }
-        if (getCount === 2) {
+        if (getCount === 3) {
           oldStarted(); await new Promise(resolve => { releaseOld = resolve; });
           await route.fulfill({ status: 401, json: { error: 'unauthorized' } }).catch(() => {}); oldSettled(); return;
         }
@@ -325,10 +339,12 @@ test('initial reads gate create and an obsolete GET401 cannot interrupt write201
       writeStarted(); await new Promise(resolve => { releaseWrite = resolve; });
       return route.fulfill({ status: writeStatus, json: writeStatus === 201 ? { item: { configuration, revision: 1 } } : { error: 'printers_unavailable' } });
     });
-    await page.goto(origin + '?writes'); await choose(page); await initialPending;
+    await page.goto(origin + '?writes'); await initialPending;
     await expect(page.getByRole('status')).toHaveText('Indlæser printere…');
     await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
     releaseInitial(); await expect(page.getByText('Køkken p01', { exact: true })).toBeVisible();
+    await page.getByRole('combobox', { name: 'Lokation', exact: true }).selectOption('la');
+    await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toBeVisible();
     // A same-scope server metadata refresh starts a background read while the
     // last validated page is visible. Opening the editor must abort this read.
     await page.evaluate(() => window.setPrinterWriteScopes([{ id: 'la', brandId: 'a' }])); await oldPending;
@@ -339,7 +355,7 @@ test('initial reads gate create and an obsolete GET401 cannot interrupt write201
     await page.evaluate(() => window.setPrinterWriteScopes([{ id: 'la', brandId: 'a' }]));
     releaseOld(); await oldFinished;
     await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
-    assert.equal(getCount, 2);
+    assert.equal(getCount, 3);
     await expect(page.getByRole('form', { name: 'Tilføj printer' })).toBeVisible();
     await expect(page.getByRole('button', { name: 'Gemmer…' })).toBeDisabled();
     await expect(page.getByRole('alert')).toHaveCount(0);
@@ -354,7 +370,7 @@ test('initial reads gate create and an obsolete GET401 cannot interrupt write201
       await page.getByRole('button', { name: 'Opdater oversigten', exact: true }).click();
     }
     await expect(page.getByText('Ingen printere på denne lokation.', { exact: true })).toBeVisible();
-    assert.equal(getCount, 3);
+    assert.equal(getCount, 4);
   }
 });
 
@@ -423,7 +439,7 @@ test('server model filter finds printers beyond first unfiltered page and retain
  await page.getByRole('combobox', { name: 'Printertype', exact: true }).selectOption('mc-print3');
  await expect(page.getByText('Køkken p21', { exact: true })).toBeVisible();
  await expect(page.getByText('Køkken p01', { exact: true })).toHaveCount(0);
- assert.deepEqual(seen[1], { brandId: 'a', locationId: 'la', limit: '20', overview: 'true', model: 'mc-print3' });
+ assert.deepEqual(seen.at(-1), { brandId: 'a', locationId: 'la', limit: '20', overview: 'true', model: 'mc-print3' });
  await expect(page.getByRole('cell', { name: '24', exact: true })).toHaveCount(1);
 });
 
@@ -465,7 +481,7 @@ test('delete uses its own native grant; conflicts, output-off and uncertain life
   writes++; return route.fulfill({ status, json: { error: code } });
  });
  await page.goto(origin + '?writes'); await choose(page); await page.evaluate(() => window.setPrinterDeleteScopes([]));
- await expect(page.getByRole('button', { name: 'Slet Køkken p1', exact: true })).toHaveCount(0);
+ await expect(page.getByRole('button', { name: 'Slet Køkken p1', exact: true })).toBeDisabled();
  await expect(page.getByRole('button', { name: 'Deaktiver Køkken p1', exact: true })).toBeEnabled();
  await page.evaluate(() => window.setPrinterDeleteScopes([{ id: 'la', brandId: 'a' }]));
  await page.getByRole('button', { name: 'Slet Køkken p1', exact: true }).click(); await page.getByRole('button', { name: 'Slet printer', exact: true }).click();
@@ -498,3 +514,144 @@ test('revoking a native delete grant retains pending lifecycle until response an
  await page.evaluate(() => window.setPrinterDeleteScopes([{ id: 'la', brandId: 'a' }]));
  await expect(page.getByRole('button', { name: 'Slet Køkken p1', exact: true })).toBeDisabled();
 });
+
+test('default table combines native scopes, independent optional filters and exact row actions', async t => {
+ const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
+ const requests = [], writes = [];
+ await page.route('**/api/merchant/printers**', async route => {
+  const req = route.request(), url = new URL(req.url());
+  if (req.method() !== 'GET') { writes.push(req.postDataJSON()); return route.fulfill({ status: 503, json: { error: 'writes_unavailable' } }); }
+  const brand = url.searchParams.get('brandId'), loc = url.searchParams.get('locationId'), model = url.searchParams.get('model');
+  requests.push({ brand, loc, model });
+  assert.ok((brand === 'a' && loc === 'la') || (brand === 'b' && loc === 'lb'));
+  return route.fulfill({ json: { items: model === 'mc-print3' && brand === 'a' ? []
+    : [item('same_id', brand, loc, { name: brand === 'a' ? 'Nord printer' : 'Syd printer', model: brand === 'a' ? 'mc-print2' : 'mc-print3', state: 'disabled' })], nextCursor: null, totalPrinters: brand === 'a' ? 7 : 4 } });
+ });
+ await page.goto(origin + '?writes');
+ await expect(page.getByRole('table', { name: 'Printere', exact: true })).toBeVisible();
+ await expect(page.getByText('Nord printer', { exact: true })).toBeVisible();
+ await expect(page.getByText('Syd printer', { exact: true })).toBeVisible();
+ await expect(page.getByRole('cell', { name: '7', exact: true })).toHaveCount(1);
+ await expect(page.getByRole('cell', { name: '4', exact: true })).toHaveCount(1);
+ await expect(page.getByRole('button', { name: 'Rediger Syd printer', exact: true })).toBeDisabled();
+ await expect(page.getByRole('button', { name: 'Slet Syd printer', exact: true })).toBeDisabled();
+ await page.getByRole('button', { name: 'Slet Nord printer', exact: true }).click();
+ await expect(page.getByRole('dialog', { name: 'Slet printer' })).toBeVisible();
+ await page.getByRole('button', { name: 'Slet printer', exact: true }).click();
+ await expect(page.getByRole('alert')).toHaveText('Printerændringer er slået fra. Prøv igen senere.');
+ assert.deepEqual(writes, [{ brandId: 'a', locationId: 'la', printerId: 'same_id', revision: 3, action: 'delete' }]);
+ await page.getByRole('button', { name: 'Annuller', exact: true }).click();
+ await page.getByRole('combobox', { name: 'Printertype', exact: true }).selectOption('mc-print3');
+ await expect(page.getByText('Syd printer', { exact: true })).toBeVisible();
+ await expect(page.getByText('Nord printer', { exact: true })).toHaveCount(0);
+ await page.getByRole('combobox', { name: 'Lokation', exact: true }).selectOption('lb');
+ await expect(page.getByRole('combobox', { name: 'Brand', exact: true })).toHaveValue('');
+ await expect(page.getByText('Syd printer', { exact: true })).toBeVisible();
+ await page.getByRole('combobox', { name: 'Brand', exact: true }).selectOption('b');
+ await expect(page.getByRole('combobox', { name: 'Lokation', exact: true })).toHaveValue('lb');
+ await expect(page.getByText('Syd printer', { exact: true })).toBeVisible();
+ await page.getByRole('combobox', { name: 'Brand', exact: true }).selectOption('');
+ await expect(page.getByRole('combobox', { name: 'Lokation', exact: true })).toHaveValue('lb');
+ await expect(page.getByText('Syd printer', { exact: true })).toBeVisible();
+ await page.getByRole('combobox', { name: 'Brand', exact: true }).selectOption('a');
+ await expect(page.getByRole('combobox', { name: 'Printertype', exact: true })).toHaveValue('mc-print3');
+ await expect(page.getByRole('combobox', { name: 'Lokation', exact: true })).toHaveValue('');
+ await expect(page.getByRole('table', { name: 'Printere', exact: true })).toBeVisible();
+ await expect(page.getByRole('cell', { name: 'Ingen printere matcher filtrene på denne side.', exact: true })).toBeVisible();
+ assert.equal(requests.at(-1).brand, 'a');
+});
+
+test('cross-location page boundary neither loses nor duplicates printer rows', async t => {
+ const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage(), seen = [];
+ await page.route('**/api/merchant/printers?*', route => {
+  const url = new URL(route.request().url()), brand = url.searchParams.get('brandId'), loc = url.searchParams.get('locationId'), after = url.searchParams.get('after');
+  const all = Array.from({ length: brand === 'a' ? 15 : 20 }, (_, i) => item((brand === 'a' ? 'a' : 'b') + String(i).padStart(2, '0'), brand, loc));
+  const start = after ? all.findIndex(row => row.configuration.id === after) + 1 : 0;
+  seen.push({ brand, after });
+  return route.fulfill({ json: { items: all.slice(start, start + 20), nextCursor: null, totalPrinters: all.length } });
+ });
+ await page.goto(origin);
+ await expect(page.getByRole('row')).toHaveCount(21);
+ await expect(page.getByText('Køkken a00', { exact: true })).toBeVisible();
+ await expect(page.getByText('Køkken a14', { exact: true })).toBeVisible();
+ await expect(page.getByText('Køkken b04', { exact: true })).toBeVisible();
+ await expect(page.getByText('Køkken b05', { exact: true })).toHaveCount(0);
+ await page.getByRole('button', { name: 'Næste side', exact: true }).click();
+ await expect(page.getByRole('row')).toHaveCount(16);
+ await expect(page.getByText('Køkken b05', { exact: true })).toBeVisible();
+ await expect(page.getByText('Køkken b19', { exact: true })).toBeVisible();
+ await expect(page.getByText('Køkken b04', { exact: true })).toHaveCount(0);
+ await expect(page.getByRole('button', { name: 'Næste side', exact: true })).toHaveCount(0);
+ assert.deepEqual(seen, [{ brand: 'a', after: null }, { brand: 'b', after: null }, { brand: 'b', after: 'b04' }]);
+});
+
+test('empty table keeps headers and offers continuation after eight empty native scopes', async t => {
+ const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage(), requests = [];
+ await page.route('**/api/merchant/printers?*', route => {
+  const url = new URL(route.request().url()), loc = url.searchParams.get('locationId'); requests.push(loc);
+  return route.fulfill({ json: { items: loc === 'l8' ? [item('last', 'a', 'l8')] : [], nextCursor: null, totalPrinters: loc === 'l8' ? 1 : 0 } });
+ });
+ await page.goto(origin);
+ await expect(page.getByRole('table', { name: 'Printere', exact: true })).toBeVisible();
+ await expect(page.getByRole('cell', { name: 'Ingen printere matcher filtrene på denne side.', exact: true })).toBeVisible();
+ requests.length = 0;
+ await page.evaluate(() => window.setPrinterReadCatalog({ brands: [{ id: 'a', name: 'Nord' }], locations: Array.from({ length: 9 }, (_, i) => ({ id: 'l' + i, name: 'Station ' + i, brandId: 'a' })) }));
+ await expect(page.getByRole('button', { name: 'Næste side', exact: true })).toBeVisible();
+ await expect(page.getByRole('columnheader')).toHaveCount(9);
+ assert.deepEqual(requests, Array.from({ length: 8 }, (_, i) => 'l' + i));
+ await page.getByRole('button', { name: 'Næste side', exact: true }).click();
+ await expect(page.getByText('Køkken last', { exact: true })).toBeVisible();
+ assert.deepEqual(requests, Array.from({ length: 9 }, (_, i) => 'l' + i));
+ await expect(page.getByRole('button', { name: 'Næste side', exact: true })).toHaveCount(0);
+});
+
+
+for (const [name, width, height] of [['desktop', 1348, 900], ['mobile', 375, 667]]) {
+  test(`real admin shell contains printer table scroll in loading, empty and populated states at ${name} width`, async t => {
+    const context = await browser.newContext({ viewport: { width, height } }); t.after(() => context.close());
+    const page = await context.newPage(), errors = []; page.on('pageerror', error => errors.push(error.message));
+    let populated = false, release;
+    const pending = new Promise(resolve => { release = resolve; });
+    await page.route('**/api/merchant/printers?*', async route => {
+      await pending;
+      const url = new URL(route.request().url()), brand = url.searchParams.get('brandId'), location = url.searchParams.get('locationId');
+      await route.fulfill({ json: { items: populated ? [item('long_' + location, brand, location, { name: 'Køkken ' + 'langt'.repeat(14), state: 'disabled' })] : [], nextCursor: null } });
+    });
+    const assertContained = async state => {
+      const geometry = await page.getByRole('table', { name: 'Printere', exact: true }).evaluate(table => {
+        const scroll = table.parentElement, inset = document.querySelector('.admin-shell > main');
+        return { pageWidth: document.documentElement.scrollWidth, viewport: document.documentElement.clientWidth,
+          internalWidth: scroll.clientWidth, internalScroll: scroll.scrollWidth, tableWidth: table.getBoundingClientRect().width,
+          overflowX: getComputedStyle(scroll).overflowX, insetWidth: inset.getBoundingClientRect().width };
+      });
+      fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+      await page.screenshot({ path: path.join(root, 'test-results', `printing-overview-real-shell-${name}-${state}.png`), fullPage: true });
+      assert.ok(geometry.pageWidth <= geometry.viewport + 1, `${name}/${state} whole-page overflow: ${JSON.stringify(geometry)}`);
+      assert.ok(geometry.tableWidth >= 1100, `${name}/${state} preserves full readable table width`);
+      assert.ok(geometry.internalScroll > geometry.internalWidth, `${name}/${state} table owns horizontal scrolling`);
+      assert.equal(geometry.overflowX, 'auto');
+      const scrolled = await page.getByRole('table', { name: 'Printere', exact: true }).evaluate(table => {
+        const scroll = table.parentElement; scroll.scrollLeft = scroll.scrollWidth; return scroll.scrollLeft;
+      });
+      assert.ok(scrolled > 0, `${name}/${state} internal scroll is usable`);
+      await page.getByRole('table', { name: 'Printere', exact: true }).evaluate(table => { table.parentElement.scrollLeft = 0; });
+    };
+    await page.goto(origin + '/shell');
+    await expect(page.getByRole('heading', { name: 'Printere', exact: true })).toBeVisible();
+    if (name === 'desktop') await expect(page.locator('[data-sidebar="sidebar"]').first()).toBeVisible();
+    await expect(page.getByRole('status')).toHaveText('Indlæser printere…');
+    await assertContained('loading');
+    release(); await expect(page.getByText('Ingen printere matcher filtrene på denne side.', { exact: true })).toBeVisible();
+    await assertContained('empty');
+    populated = true;
+    await page.evaluate(() => window.setPrinterReadCatalog({ brands: [{ id: 'a', name: 'Nord ' + 'langt'.repeat(18) }, { id: 'b', name: 'Syd ' + 'langt'.repeat(18) }], locations: [{ id: 'la', name: 'Station ' + 'langt'.repeat(18), brandId: 'a' }, { id: 'lb', name: 'Torv ' + 'langt'.repeat(18), brandId: 'b' }] }));
+    await page.getByRole('button', { name: 'Opdater', exact: true }).click();
+    await expect(page.getByRole('button', { name: /^Rediger Køkken / })).toHaveCount(2);
+    await assertContained('populated');
+    for (const label of ['Aktiveringsdato', 'Brand', 'Lokation', 'Status', 'Last used', 'Total printers', 'Printer name', 'Handlinger'])
+      await expect(page.getByRole('columnheader', { name: label, exact: true })).toHaveCount(1);
+    fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+    await page.screenshot({ path: path.join(root, 'test-results', `printing-overview-real-shell-${name}.png`), fullPage: true });
+    assert.deepEqual(errors, []);
+  });
+}

@@ -83,6 +83,9 @@ jobs:
       - name: Private printer device credential regression
         run: node --test tests/unit/printing-device-auth.cjs
 
+      - name: Native printer device verification regression
+        run: node --test tests/unit/printing-device-auth-native.cjs
+
       - name: CloudPRNT protocol and simulator regression
         run: node --test tests/unit/printing-cloudprnt.cjs
 
@@ -106,6 +109,9 @@ jobs:
 
       - name: Native print catalog projection regression
         run: node --test tests/unit/printing-catalog-projection.cjs
+
+      - name: Saved printer routing API regression
+        run: node --test tests/unit/printing-saved-routing.cjs
 
       - name: Scoped print-intent target policy regression
         run: node --test tests/unit/printing-intent-target-policy.cjs
