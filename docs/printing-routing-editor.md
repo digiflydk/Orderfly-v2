@@ -96,10 +96,35 @@ Regression-first checkpoint: management fixtures now use the explicit
 production-CSS cases cover stale printer/product/category repair at desktop and
 mobile, exact revision save and canonical readback, malformed false DTO rejection
 and uncertain unverified PUT results. Existing assertions remain intact. The
-original client still rejects the new valid management DTO before adaptation, so
-actual browser CI must demonstrate this failure first. Local Chromium remains
-unavailable; missing executable is not an assertion result.
+regression-only head b7b7b925 first failed actual CI39647169281/job119385674841
+at17:55:40Z: all six desktop/mobile stale-reference cases failed the explicit
+owned-management-state assertion, and the own picker regression also failed.
+Actual React/CSS executed; this was not a bundle or browser-launch failure. Local
+Chromium remains unavailable, so no local browser pass is claimed.
 
-An added production-service unit test first reproduced the existing picker
-addition rejecting canonical products with omitted global membership. Its fix
-will be limited to the picker, preserving #351's API and both P2 fixes unchanged.
+An added production-service unit test first reproduced the own picker addition
+rejecting canonical products with omitted global membership. The picker now
+normalizes only undefined product membership to an empty global list, preserving
+#351 API and both P2 fixes byte-for-byte. Null/malformed/foreign membership and
+category membership remain strict; samples still validate current native data.
+
+
+The editor now requires the explicit management `referencesVerified` boolean. A
+true DTO must contain exactly the same-scope printer bindings used by its strict
+owned rules. False is accepted only with a positive saved revision, nonempty
+strict owned rules and an empty printers array; foreign/duplicate identities,
+malformed flags and hydrated false snapshots fail closed. The flag is display
+state, never native authority or a client-controlled write permission.
+
+False state displays a warning and unavailable saved selections, keeps removal
+and replacement controls and CAS save available to current native editors, and
+disables sample preview. Missing selections remain explicit disabled options;
+local editing cannot turn them into valid references. Only a validated true PUT
+response can mark a save successful; an unverified response is uncertain and
+requires manual refresh. Canonical saved readback supplies the new revision.
+Server PUT and sample preview keep their strict native validations and output-off
+behavior. All original race/session/authorization/conflict safeguards remain.
+
+Own typecheck and122 affected production tests pass. Actual final browser CI,
+independent current-head Codex, screenshot review, deployed commit verification
+and authenticated live acceptance remain separate required gates.

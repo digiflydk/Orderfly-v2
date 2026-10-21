@@ -17,7 +17,7 @@ const ruleSchema = z.object({ id, brandId: id, locationId: id, printerId: id, ef
 const printerSchema = z.object({ revision: z.number().int().positive().safe(), configuration: z.object({ id, brandId: id, locationId: id,
   name: name.refine(value => value.length <= 80), state: z.enum(['active', 'paused', 'disabled']), manufacturer: z.literal('star'), model: z.enum(['mc-print2', 'mc-print3']),
   transport: z.enum(['cloudprnt-http', 'cloudprnt-mqtt']), paperWidthMm: z.union([z.literal(58), z.literal(80)]) }).strict().refine(c => c.model !== 'mc-print2' || c.transport === 'cloudprnt-http' && c.paperWidthMm === 58) }).strict();
-const savedSchema = z.object({ scope: scopeSchema, revision: z.number().int().positive().safe().nullable(), rules: z.array(ruleSchema).max(256), printers: z.array(printerSchema).max(16), dispatchAuthorized: z.literal(false) }).strict();
+const savedSchema = z.object({ scope: scopeSchema, revision: z.number().int().positive().safe().nullable(), rules: z.array(ruleSchema).max(256), printers: z.array(printerSchema).max(16), referencesVerified: z.boolean(), dispatchAuthorized: z.literal(false) }).strict();
 const pageSchema = z.object({ items: z.array(printerSchema).max(20), nextCursor: id.nullable() }).strict();
 const choicesSchema = z.object({ scope: scopeSchema, kind: z.enum(['product', 'category']), items: z.array(z.object({ id, name, categoryId: id.optional() }).strict()).max(50), nextCursor: id.nullable() }).strict();
 const targetSchema = z.object({ printerId: id, state: z.enum(['active', 'paused']), dispatchAuthorized: z.literal(false), lines: z.array(z.object({ lineId: id, brandId: id, locationId: id, itemType: z.literal('product'), productId: id, categoryId: id, name, quantity: z.number().int().min(1).max(99) }).strict()).max(20) }).strict();
@@ -31,9 +31,13 @@ const api = '/api/superadmin/printers/routing';
 function same(a: { brandId: string; locationId: string }, b: { brandId: string; locationId: string }) { return a.brandId === b.brandId && a.locationId === b.locationId; }
 function validatedSaved(input: unknown, scope: { brandId: string; locationId: string }) {
   const result = savedSchema.parse(input);
-  const ids = result.printers.map(p => p.configuration.id);
+  const ids = result.printers.map(p => p.configuration.id), referenced = new Set(result.rules.map(r => r.printerId));
   if (!same(result.scope, scope) || new Set(ids).size !== ids.length || new Set(result.rules.map(r => r.id)).size !== result.rules.length
-    || result.printers.some(p => !same(p.configuration, scope)) || result.rules.some(r => !same(r, scope) || !ids.includes(r.printerId) || r.deliveryTypes && new Set(r.deliveryTypes).size !== r.deliveryTypes.length)) throw Error('invalid_response');
+    || referenced.size > 16 || result.revision === null && result.rules.length > 0
+    || result.printers.some(p => !same(p.configuration, scope))
+    || result.rules.some(r => !same(r, scope) || r.deliveryTypes && new Set(r.deliveryTypes).size !== r.deliveryTypes.length)
+    || (result.referencesVerified ? ids.length !== referenced.size || ids.some(id => !referenced.has(id)) || result.rules.some(r => !ids.includes(r.printerId))
+      : result.printers.length !== 0 || result.revision === null || result.rules.length === 0)) throw Error('invalid_response');
   return result;
 }
 async function json(response: Response) { const text = await response.text(); if (text.length > 131072) throw Error('invalid_response'); return JSON.parse(text); }
@@ -47,6 +51,7 @@ export function PrinterRoutingEditor({ brands, locations, editLocations }: { bra
   const [brandId, setBrand] = useState(brands.length === 1 ? brands[0].id : ''), [locationId, setLocation] = useState('');
   const [baseline, setBaseline] = useState('[]');
   const [loaded, setLoaded] = useState(false), [revision, setRevision] = useState<number | null>(null), [rules, setRules] = useState<PrinterRoutingRule[]>([]);
+  const [referencesVerified, setReferencesVerified] = useState(false);
   const [printers, setPrinters] = useState<Printer[]>([]), [products, setProducts] = useState<Choice[]>([]), [categories, setCategories] = useState<Choice[]>([]);
   const [cursors, setCursors] = useState<{ printer: string | null; product: string | null; category: string | null }>({ printer: null, product: null, category: null });
   const [pending, setPending] = useState(false), [busy, setBusy] = useState(false), [error, setError] = useState(''), [notice, setNotice] = useState(''), [blocked, setBlocked] = useState(false), [sessionLost, setSessionLost] = useState(false);
@@ -57,10 +62,10 @@ export function PrinterRoutingEditor({ brands, locations, editLocations }: { bra
   const scope = { brandId, locationId }, key = JSON.stringify(scope), current = useRef(key); current.current = key;
   const canEdit = !sessionLost && editLocations.some(row => same({ brandId: row.brandId, locationId: row.id }, scope));
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; generation.current++; loadController.current?.abort(); }; }, []);
-  const dropSession = () => { generation.current++; loadController.current?.abort(); setSessionLost(true); setLoaded(false); setRules([]); setPrinters([]); setProducts([]); setCategories([]); setPreview(null); setBlocked(true); setError(message(401)); };
+  const dropSession = () => { generation.current++; loadController.current?.abort(); setSessionLost(true); setLoaded(false); setReferencesVerified(false); setRules([]); setPrinters([]); setProducts([]); setCategories([]); setPreview(null); setBlocked(true); setError(message(401)); };
   useEffect(() => {
     if (sessionLost) return;
-    setBusy(false); setEditing(''); setBaseline('[]'); setLoaded(false); setRules([]); setPrinters([]); setProducts([]); setCategories([]); setPreview(null); setError(''); setNotice(''); setBlocked(false); setSample(''); setMatch(''); setNewPrinter('');
+    setBusy(false); setEditing(''); setBaseline('[]'); setLoaded(false); setReferencesVerified(false); setRules([]); setPrinters([]); setProducts([]); setCategories([]); setPreview(null); setError(''); setNotice(''); setBlocked(false); setSample(''); setMatch(''); setNewPrinter('');
     if (!brandId || !locations.some(row => row.id === locationId && row.brandId === brandId) || sessionLost) return;
     const version = ++generation.current, controller = new AbortController(); loadController.current = controller;
     const valid = () => mounted.current && !controller.signal.aborted && generation.current === version && current.current === key;
@@ -74,7 +79,7 @@ export function PrinterRoutingEditor({ brands, locations, editLocations }: { bra
         const saved = validatedSaved(savedRaw, scope), page = pageSchema.parse(printersRaw), productPage = choicesSchema.parse(productsRaw), categoryPage = choicesSchema.parse(categoriesRaw);
         if (page.items.some(p => !same(p.configuration, scope)) || !same(productPage.scope, scope) || !same(categoryPage.scope, scope) || productPage.kind !== 'product' || categoryPage.kind !== 'category'
           || productPage.items.some(p => !p.categoryId) || [page.items.map(p => p.configuration.id), productPage.items.map(p => p.id), categoryPage.items.map(p => p.id)].some(ids => new Set(ids).size !== ids.length) || page.nextCursor && (page.items.length !== 20 || page.items[19].configuration.id !== page.nextCursor)) throw Error('invalid_response');
-        setRevision(saved.revision); setRules(saved.rules); setBaseline(JSON.stringify(saved.rules)); setPrinters([...new Map([...saved.printers, ...page.items].map(p => [p.configuration.id, p])).values()]);
+        setRevision(saved.revision); setReferencesVerified(saved.referencesVerified); setRules(saved.rules); setBaseline(JSON.stringify(saved.rules)); setPrinters([...new Map([...saved.printers, ...page.items].map(p => [p.configuration.id, p])).values()]);
         setProducts(productPage.items); setCategories(categoryPage.items); setCursors({ printer: page.nextCursor, product: productPage.nextCursor, category: categoryPage.nextCursor }); setLoaded(true);
       }).catch(failure => { if (valid()) setError(failure instanceof Error && /^(Din session|Du har ikke adgang|Opsætningen|Routing kunne)/.test(failure.message) ? failure.message : 'Routing kunne ikke indlæses. Prøv igen.'); });
     return () => { controller.abort(); };
@@ -108,7 +113,7 @@ export function PrinterRoutingEditor({ brands, locations, editLocations }: { bra
     setRules(candidate); setEditing(''); setPreview(null); setNotice('');
   }
   async function submit(mode: 'save' | 'preview') {
-    if (action.current || busy || !loaded || blocked || sessionLost || editingId || mode === 'save' && !canEdit || mode === 'preview' && !sample) return;
+    if (action.current || busy || !loaded || blocked || sessionLost || editingId || mode === 'save' && !canEdit || mode === 'preview' && (!sample || !referencesVerified)) return;
     action.current = true; generation.current++; loadController.current?.abort(); setPending(true); setError(''); setNotice('');
     const submittedKey = key, submittedRules = JSON.stringify(rules), beforeRevision = revision;
     try {
@@ -120,8 +125,8 @@ export function PrinterRoutingEditor({ brands, locations, editLocations }: { bra
       const raw = await json(response);
       if (!mounted.current || current.current !== submittedKey) return;
       if (mode === 'save') { const saved = validatedSaved(raw, scope);
-        if (saved.revision !== (beforeRevision ?? 0) + 1 || JSON.stringify(saved.rules) !== submittedRules) throw Error('invalid_response');
-        setRevision(saved.revision); setRules(saved.rules); setBaseline(JSON.stringify(saved.rules)); setEditing(''); setNotice('Routingreglerne er gemt.'); }
+        if (!saved.referencesVerified || saved.revision !== (beforeRevision ?? 0) + 1 || JSON.stringify(saved.rules) !== submittedRules) throw Error('invalid_response');
+        setRevision(saved.revision); setReferencesVerified(saved.referencesVerified); setRules(saved.rules); setBaseline(JSON.stringify(saved.rules)); setEditing(''); setNotice('Routingreglerne er gemt.'); }
       else { const result = previewSchema.parse(raw);
         if (!same(result.scope, scope) || result.targets.some(t => t.lines.some(line => !same(line, scope))) || result.printers.some(p => !rules.some(r => r.printerId === p.id))
           || result.targets.some(t => !rules.some(r => r.printerId === t.printerId) || t.lines.some(line => line.productId !== sample || line.lineId !== 'sample-0'))
@@ -131,7 +136,7 @@ export function PrinterRoutingEditor({ brands, locations, editLocations }: { bra
     } catch { if (mounted.current && current.current === submittedKey) { setPreview(null); setError(mode === 'save' ? 'Det er uklart, om reglerne blev gemt. Genindlæs før du prøver igen.' : 'Eksempelvisningen kunne ikke beregnes. Prøv igen.'); if (mode === 'save') setBlocked(true); } }
     finally { action.current = false; if (mounted.current) setPending(false); }
   }
-  const selectedName = (rule: PrinterRoutingRule) => rule.match.type === 'all' ? 'Alle produkter' : (rule.match.type === 'product' ? products : categories).find(c => c.id === ('id' in rule.match ? rule.match.id : ''))?.name || 'Gemt valg (ikke indlæst på denne side)';
+  const selectedName = (rule: PrinterRoutingRule) => rule.match.type === 'all' ? 'Alle produkter' : (rule.match.type === 'product' ? products : categories).find(c => c.id === ('id' in rule.match ? rule.match.id : ''))?.name || (!referencesVerified ? rule.match.type === 'product' ? 'Produkt ikke tilgængeligt (gemt valg)' : 'Kategori ikke tilgængelig (gemt valg)' : 'Gemt valg (ikke indlæst på denne side)');
   return <div className="min-w-0 space-y-6 [&_label]:max-w-full [&_select]:max-w-full">
     <header><a href="/superadmin/printers" className="text-sm text-primary underline">Tilbage til printere</a><h1 className="mt-3 text-3xl font-semibold">Routingregler</h1><p className="mt-2 text-sm text-muted-foreground">Fordel produkter til de rigtige printere, og kontrollér en eksempelordre før du gemmer.</p></header>
     <div className="admin-filter-bar flex flex-wrap items-end gap-3 p-4">
@@ -141,13 +146,14 @@ export function PrinterRoutingEditor({ brands, locations, editLocations }: { bra
     </div>
     {error && <p role="alert" className="text-sm">{error}</p>}{notice && <p role="status">{notice}</p>}
     {!locationId ? <p>Vælg brand og lokation.</p> : !loaded && !error ? <p role="status">Indlæser routing…</p> : loaded && <>
+      {!referencesVerified && <p role="note" className="rounded-lg border border-amber-300 bg-amber-50 p-4 text-sm text-amber-950">Gemte regler har utilgængelige referencer. Fjern eller erstat dem, og gem igen før eksempelvisning.</p>}
       <section className="space-y-4 rounded-lg border p-4" aria-label="Regler">
         <div className="flex flex-wrap items-center justify-between gap-3"><h2 className="text-xl font-semibold">Regler</h2><span className="text-sm text-muted-foreground">{revision ? `Gemt version ${revision}` : 'Ingen gemte regler'}{JSON.stringify(rules) !== baseline ? ' · Ugemte ændringer' : ''}</span></div>
         {!rules.length ? <p>Ingen routingregler. Tilføj en regel for at fordele produkter.</p> : <div className="max-w-full overflow-x-auto"><table className="w-full text-sm"><thead><tr className="border-b text-left"><th className="p-2">Printer</th><th className="p-2">Valg</th><th className="p-2">Regel</th><th className="p-2">Ordretype</th><th className="p-2">Handling</th></tr></thead><tbody>{rules.map(r => <tr key={r.id} className="border-b"><td className="p-2">{printers.find(p => p.configuration.id === r.printerId)?.configuration.name || 'Printer ikke tilgængelig'}</td><td className="p-2">{selectedName(r)}</td><td className="p-2">{r.effect === 'include' ? 'Medtag' : 'Udelad'}</td><td className="p-2">{!r.deliveryTypes ? 'Alle' : r.deliveryTypes.map(t => t === 'Pickup' ? 'Afhentning' : 'Levering').join(', ')}</td><td className="p-2"><div className="flex flex-wrap gap-2"><Button variant="outline" disabled={pending || blocked || !canEdit} onClick={() => { setEditing(r.id); setNewPrinter(r.printerId); setKind(r.match.type); setMatch('id' in r.match ? r.match.id : ''); setEffect(r.effect); setFulfillment(r.deliveryTypes?.length === 1 ? r.deliveryTypes[0] : 'both'); }}>Rediger regel</Button><Button variant="outline" disabled={pending || blocked || !canEdit} onClick={() => { setRules(old => old.filter(rule => rule.id !== r.id)); setEditing(''); setPreview(null); setNotice(''); }}>Fjern regel</Button></div></td></tr>)}</tbody></table></div>}
         <fieldset disabled={pending || blocked || !canEdit} className="flex min-w-0 flex-wrap items-end gap-3"><legend className="mb-3 font-medium">{editingId ? 'Rediger regel' : 'Tilføj regel'}</legend>
-          <AdminSelectField label="Printer" value={newPrinter} onChange={e => setNewPrinter(e.target.value)}><option value="">Vælg printer</option>{printers.map(p => <option key={p.configuration.id} value={p.configuration.id}>{p.configuration.name}</option>)}</AdminSelectField>
+          <AdminSelectField label="Printer" value={newPrinter} onChange={e => setNewPrinter(e.target.value)}><option value="">Vælg printer</option>{newPrinter && !printers.some(p => p.configuration.id === newPrinter) && <option value={newPrinter} disabled>Printer ikke tilgængelig (gemt valg)</option>}{printers.map(p => <option key={p.configuration.id} value={p.configuration.id}>{p.configuration.name}</option>)}</AdminSelectField>
           <AdminSelectField label="Regeltype" value={kind} onChange={e => { setKind(e.target.value as typeof kind); setMatch(''); }}><option value="all">Alle produkter</option><option value="category">Kategori</option><option value="product">Produkt</option></AdminSelectField>
-          {kind !== 'all' && <AdminSelectField label={kind === 'product' ? 'Produkt' : 'Kategori'} value={matchId} onChange={e => setMatch(e.target.value)}><option value="">Vælg {kind === 'product' ? 'produkt' : 'kategori'}</option>{(kind === 'product' ? products : categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</AdminSelectField>}
+          {kind !== 'all' && <AdminSelectField label={kind === 'product' ? 'Produkt' : 'Kategori'} value={matchId} onChange={e => setMatch(e.target.value)}><option value="">Vælg {kind === 'product' ? 'produkt' : 'kategori'}</option>{matchId && !(kind === 'product' ? products : categories).some(c => c.id === matchId) && <option value={matchId} disabled>{kind === 'product' ? 'Produkt ikke tilgængeligt (gemt valg)' : 'Kategori ikke tilgængelig (gemt valg)'}</option>}{(kind === 'product' ? products : categories).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</AdminSelectField>}
           <AdminSelectField label="Handling" value={effect} onChange={e => setEffect(e.target.value as typeof effect)}><option value="include">Medtag</option><option value="exclude">Udelad</option></AdminSelectField>
           <AdminSelectField label="Ordretype" value={fulfillment} onChange={e => setFulfillment(e.target.value)}><option value="both">Alle ordretyper</option><option value="Pickup">Afhentning</option><option value="Delivery">Levering</option></AdminSelectField>
           <Button onClick={addRule} disabled={!editingId && rules.length >= 256 || !newPrinter || kind !== 'all' && !matchId}>{editingId ? 'Gem regelændring' : 'Tilføj regel'}</Button>{editingId && <Button variant="outline" onClick={() => setEditing('')}>Annuller regelændring</Button>}
@@ -158,7 +164,7 @@ export function PrinterRoutingEditor({ brands, locations, editLocations }: { bra
       <section aria-label="Eksempelordre" className="space-y-4 rounded-lg border p-4"><h2 className="text-xl font-semibold">Eksempelordre</h2><p className="text-sm text-muted-foreground">Viser fordelingen med dine aktuelle regler. Eksemplet udskriver ingen bon.</p>
         <div className="flex flex-wrap items-end gap-3"><AdminSelectField label="Eksempelprodukt" disabled={pending || blocked} value={sample} onChange={e => { setSample(e.target.value); setPreview(null); }}><option value="">Vælg produkt</option>{products.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}</AdminSelectField>
           <AdminSelectField label="Eksempelordretype" disabled={pending || blocked} value={deliveryType} onChange={e => { setDelivery(e.target.value as typeof deliveryType); setPreview(null); }}><option value="Pickup">Afhentning</option><option value="Delivery">Levering</option></AdminSelectField>
-          <Button variant="outline" disabled={pending || busy || blocked || !sample || !!editingId} onClick={() => submit('preview')}>Vis fordeling</Button></div>
+          <Button variant="outline" disabled={pending || busy || blocked || !referencesVerified || !sample || !!editingId} onClick={() => submit('preview')}>Vis fordeling</Button></div>
         {preview && <div aria-label="Fordeling" className="space-y-2 break-words">{preview.targets.map(target => <p key={target.printerId}><strong>{preview.printers.find(p => p.id === target.printerId)?.name}</strong>: {target.lines.map(l => `${l.quantity} × ${l.name}`).join(', ')}{target.state === 'paused' ? ' (på pause)' : ''}</p>)}
           {preview.unrouted.map(line => <p key={line.lineId}>{preview.lines.find(l => l.lineId === line.lineId)?.name}: Ingen printer valgt af reglerne.</p>)}
           {preview.decisions.some(d => d.outcome === 'printer_disabled') && <p>En printer er deaktiveret og modtager ikke eksemplet.</p>}</div>}

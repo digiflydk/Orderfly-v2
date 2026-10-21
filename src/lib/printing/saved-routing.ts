@@ -278,7 +278,8 @@ export async function readPrinterRoutingCatalog(input: unknown) {
       if (field(row, 'isActive') !== true || field(row, 'deletedAt') != null || field(row, 'deleted') === true || field(row, 'isDeleted') === true || field(row, 'isTestData') === true) continue;
       // A brand-owned product may belong to another location; omit that valid
       // non-applicable row while preserving the native query continuation.
-      const locationIds = field(row, 'locationIds');
+      const storedLocationIds = field(row, 'locationIds');
+      const locationIds = storedLocationIds === undefined && kind === 'product' ? [] : storedLocationIds;
       if (!Array.isArray(locationIds) || locationIds.length > 100) return fail('reference_unverified', 409);
       const ids: string[] = [];
       for (let index = 0; index < locationIds.length; index++) {
