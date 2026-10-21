@@ -3,11 +3,16 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { QrManager, type QrBrandChoice, type QrCapabilities, type QrCodeSummary, type QrManagerApi } from './qr-manager';
 import { QrAnalytics, type QrAnalyticsFilter } from './qr-analytics';
+import { QrBulkTools, type QrBulkToolsApi } from './qr-bulk-tools';
+import { QrPrintTools, type QrPrintToolsProps } from './qr-print-tools';
+import { QrLifetimeSummary } from './qr-lifetime-summary';
 import type { QrMetrics } from '@/lib/qr/metrics';
+import type { QrLifetime } from '@/lib/qr/lifetime';
 
-export type QrWorkspaceData = { brands: QrBrandChoice[]; codes: QrCodeSummary[]; capabilities: QrCapabilities; analytics: boolean; truncated: boolean; dynamicEnabled?: boolean };
-type RenderFile = { content: string; mime: string; encoding?: 'base64' | 'utf8'; filename: string };
-type AnalyticsResult = { metrics: QrMetrics; complete: boolean };
+export type QrWorkspaceData = { brands: QrBrandChoice[]; codes: QrCodeSummary[]; capabilities: QrCapabilities; analytics: boolean; truncated: boolean; dynamicEnabled?: boolean; allTime?: Record<string, QrLifetime | null> };
+type RenderFile = { content: string; mime: string; encoding?: 'base64' | 'utf8' | 'utf-8'; filename: string };
+type AnalyticsResult = { metrics: QrMetrics; complete: boolean; currentLocationOnly: boolean };
+const codeKey = (code: { brandId: string; id: string }) => `${code.brandId}/${code.id}`;
 const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 function isSummary(value: unknown): value is QrCodeSummary {
   if (!object(value) || !['id', 'revision', 'name', 'brandId', 'destination', 'campaign'].every(key => typeof value[key] === 'string')
@@ -70,10 +75,12 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
   const dataRef = useRef(data); dataRef.current = data;
   const [managerVersion, setManagerVersion] = useState(0);
   const [refreshError, setRefreshError] = useState(false);
-  const [tab, setTab] = useState<'manage' | 'analytics'>('manage');
+  const [tab, setTab] = useState<'manage' | 'analytics' | 'bulk'>('manage');
   const [filters, setFilters] = useState<QrAnalyticsFilter>(() => ({ ...initialPeriod(), qrId: '', campaign: '', placement: '' }));
   const [metrics, setMetrics] = useState<QrMetrics | null>(null);
   const [complete, setComplete] = useState(false);
+  const [currentLocationOnly, setCurrentLocationOnly] = useState<boolean | undefined>();
+  const [loadedQrKey, setLoadedQrKey] = useState('');
   const [loading, setLoading] = useState(false);
   const [analyticsError, setAnalyticsError] = useState<string | null>(null);
   const [selectionError, setSelectionError] = useState('');
@@ -104,26 +111,34 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
     const timer = setTimeout(() => { URL.revokeObjectURL(url); objectUrls.current.delete(url); timers.current.delete(timer); }, 60_000); timers.current.add(timer);
     return url;
   };
-  const confirmed = async (saved: QrCodeSummary) => {
-    if (!isSummary(saved)) throw new QrTransportError('unavailable');
-    if (!mounted.current) return saved;
-    const next = { ...dataRef.current, codes: [saved, ...dataRef.current.codes.filter(code => code.id !== saved.id)] };
-    dataRef.current = next; setData(next);
-    // A directory refresh failure must not turn a confirmed write into an
-    // uncertain write. Preserve the authoritative saved row and report separately.
+  const refreshDirectory = async () => {
     try {
       const refreshed = await command<QrWorkspaceData>({ action: 'list' });
       if (!isWorkspace(refreshed)) throw new QrTransportError('unavailable');
       if (mounted.current) { dataRef.current = refreshed; setData(refreshed); setManagerVersion(version => version + 1); setRefreshError(false); }
-    } catch { if (mounted.current) setRefreshError(true); }
+      return true;
+    } catch { if (mounted.current) setRefreshError(true); return false; }
+  };
+  const applyRecords = (records: QrCodeSummary[]) => {
+    const keys = new Set(records.map(codeKey));
+    const next = { ...dataRef.current, codes: [...records, ...dataRef.current.codes.filter(code => !keys.has(codeKey(code)))] };
+    dataRef.current = next; setData(next);
+  };
+  const confirmed = async (saved: QrCodeSummary) => {
+    if (!isSummary(saved)) throw new QrTransportError('unavailable');
+    if (!mounted.current) return saved;
+    applyRecords([saved]);
+    // A failed refresh does not invalidate a confirmed write receipt.
+    await refreshDirectory();
     return saved;
   };
   const api: QrManagerApi = {
     save: async (draft, context) => confirmed(await command<QrCodeSummary>({ action: 'save', draft, context })),
     setStatus: async (id, status, context) => {
-      const stored = dataRef.current.codes.find(code => code.id === id);
+      const candidates = dataRef.current.codes.filter(code => code.id === id && (!context.brandId || code.brandId === context.brandId));
+      const stored = candidates.length === 1 ? candidates[0] : undefined;
       if (!stored) throw new QrTransportError('forbidden', 403);
-      return confirmed(await command<QrCodeSummary>({ action: 'status', id, brandId: stored.brandId, locationId: stored.locationId, status, ...context }));
+      return confirmed(await command<QrCodeSummary>({ action: 'status', id, brandId: stored.brandId, locationId: stored.locationId, status, revision: context.revision, requestId: context.requestId }));
     },
     preview: (draft, context) => command({ action: 'render', draft, context, format: 'preview' }),
     download: async (draft, format, context) => {
@@ -131,8 +146,23 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
       return { url: assetUrl(file), filename: file.filename };
     },
   };
+  const bulkAllowed = data.capabilities.create && data.dynamicEnabled === true;
+  const bulkApi: QrBulkToolsApi = {
+    preview: (brandId, csv) => command({ action: 'bulk_preview', brandId, csv }),
+    commit: (brandId, input) => command({ action: 'bulk_commit', brandId, ...input }),
+  };
+  const afterBulk = async (records: QrCodeSummary[]) => {
+    if (!records.every(isSummary)) throw new QrTransportError('unavailable');
+    if (!mounted.current) return;
+    applyRecords(records);
+    if (!await refreshDirectory()) throw new QrTransportError('unavailable');
+  };
+  const renderPrint: QrPrintToolsProps['render'] = (draft, context, options) => {
+    if (!dataRef.current.capabilities.export || draft.kind === 'dynamic' && dataRef.current.dynamicEnabled !== true) throw new QrTransportError('forbidden', 403);
+    return command({ action: 'render', draft, context, format: options.format, ...(options.logoBase64 ? { logoBase64: options.logoBase64 } : {}) });
+  };
   const codeFor = (value: QrAnalyticsFilter) => {
-    const code = dataRef.current.codes.find(candidate => candidate.id === value.qrId);
+    const code = dataRef.current.codes.find(candidate => codeKey(candidate) === value.qrId);
     if (!code) throw new QrTransportError('select_code');
     const brand = dataRef.current.brands.find(candidate => candidate.id === code.brandId);
     const placement = brand?.locations.find(location => location.id === code.locationId)?.name || (code.locationId ? code.locationId : 'Hele brandet');
@@ -152,8 +182,8 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
     setLoading(true);
     try {
       const result = await command<AnalyticsResult>(body);
-      if (!isMetrics(result?.metrics) || typeof result.complete !== 'boolean') throw new QrTransportError('unavailable');
-      if (mounted.current && request === latestAnalytics.current) { setMetrics(result.metrics); setComplete(result.complete); }
+      if (!isMetrics(result?.metrics) || typeof result.complete !== 'boolean' || typeof result.currentLocationOnly !== 'boolean') throw new QrTransportError('unavailable');
+      if (mounted.current && request === latestAnalytics.current) { setMetrics(result.metrics); setComplete(result.complete); setCurrentLocationOnly(result.currentLocationOnly); setLoadedQrKey(value.qrId); }
     } catch { if (mounted.current && request === latestAnalytics.current) setAnalyticsError('unavailable'); }
     finally { if (mounted.current && request === latestAnalytics.current) setLoading(false); }
   };
@@ -165,16 +195,20 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
   };
 
   return <div className="space-y-6" style={{ minWidth: 0 }}>
-    {data.analytics && <nav aria-label="QR-modul" className="flex flex-wrap gap-2"><button type="button" aria-current={tab === 'manage' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('manage')}>Administration</button><button type="button" aria-current={tab === 'analytics' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('analytics')}>Statistik</button></nav>}
+    {(data.analytics || bulkAllowed) && <nav aria-label="QR-modul" className="flex flex-wrap gap-2"><button type="button" aria-current={tab === 'manage' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('manage')}>Administration</button>{data.analytics && <button type="button" aria-current={tab === 'analytics' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('analytics')}>Statistik</button>}{bulkAllowed && <button type="button" aria-current={tab === 'bulk' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('bulk')}>CSV-import</button>}</nav>}
     {data.truncated && <p role="alert">Oversigten er ufuldstændig. Flere QR-koder findes end de viste. Søgning og filtre gælder kun de indlæste koder.</p>}
     {refreshError && <p role="alert">Ændringen er gemt, men oversigten kunne ikke genindlæses. Den bekræftede kode er bevaret. Genindlæs siden for en ny oversigt.</p>}
-    <div hidden={tab !== 'manage'}><QrManager key={managerVersion} brands={data.brands} initialCodes={data.codes} capabilities={data.capabilities} api={api} dynamicEnabled={data.dynamicEnabled === true} /></div>
+    <div hidden={tab !== 'manage'}><QrManager key={managerVersion} brands={data.brands} initialCodes={data.codes} capabilities={data.capabilities} api={api} dynamicEnabled={data.dynamicEnabled === true}
+      renderExtras={(draft, context) => <QrPrintTools key={JSON.stringify([draft, context])} draft={draft} context={context} render={renderPrint} />} /></div>
+    <div hidden={tab !== 'bulk' || !bulkAllowed}><QrBulkTools brands={data.brands} api={bulkApi} onCommitted={afterBulk} disabled={!bulkAllowed} /></div>
     {tab === 'analytics' && data.analytics && <div className="space-y-3">
+      <QrLifetimeSummary codes={data.codes} brands={data.brands} allTime={data.allTime} />
       <p className="text-sm text-muted-foreground">Vælg én QR-kode. Samlede tal på tværs af koder er endnu ikke tilgængelige.</p>
       {selectionError && <p role="alert">{selectionError}</p>}
-      <QrAnalytics metrics={metrics} period={{ dateFrom: filters.dateFrom, dateTo: filters.dateTo }} selection={{ qrId: filters.qrId, campaign: filters.campaign, placement: filters.placement }}
-        codes={data.codes.filter(code => code.kind === 'dynamic').map(code => ({ id: code.id, name: code.name, campaign: code.campaign, placement: data.brands.find(brand => brand.id === code.brandId)?.locations.find(location => location.id === code.locationId)?.name || (code.locationId || 'Hele brandet') }))}
+      <QrAnalytics metrics={metrics ? { ...metrics, byQr: metrics.byQr.map(row => ({ ...row, key: loadedQrKey.endsWith('/' + row.key) ? loadedQrKey : row.key })) } : null} period={{ dateFrom: filters.dateFrom, dateTo: filters.dateTo }} selection={{ qrId: filters.qrId, campaign: filters.campaign, placement: filters.placement }}
+        codes={data.codes.filter(code => code.kind === 'dynamic').map(code => ({ id: codeKey(code), name: code.name, campaign: code.campaign, placement: data.brands.find(brand => brand.id === code.brandId)?.locations.find(location => location.id === code.locationId)?.name || (code.locationId || 'Hele brandet') }))}
         complete={metrics ? complete : true} loading={loading} error={analyticsError} canExport={data.capabilities.export && !selectionError}
+        currentLocationOnly={currentLocationOnly}
         onFilterChange={value => { void loadAnalytics(value); }} onRetry={() => { void loadAnalytics(filters); }} onExport={exportAnalytics} />
     </div>}
   </div>;

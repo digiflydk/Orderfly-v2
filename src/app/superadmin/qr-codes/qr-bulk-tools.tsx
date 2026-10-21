@@ -9,7 +9,7 @@ export type QrBulkToolsApi = {
   preview: (brandId: string, csv: string) => Promise<QrBulkToolsPreview>;
   commit: (brandId: string, input: { canonical: string; sha256: string; requestId: string }) => Promise<{ records: QrCodeSummary[] }>;
 };
-export type QrBulkToolsProps = { brands: QrBrandChoice[]; api: QrBulkToolsApi; onCommitted?: (records: QrCodeSummary[]) => void | Promise<void> };
+export type QrBulkToolsProps = { brands: QrBrandChoice[]; api: QrBulkToolsApi; onCommitted?: (records: QrCodeSummary[]) => void | Promise<void>; disabled?: boolean };
 const MAX_BYTES = 128 * 1024;
 const MAX_ROWS = 100;
 const inputClass = 'w-full rounded-md border bg-background px-3 py-2 text-sm';
@@ -43,7 +43,7 @@ async function checkedPreview(result: QrBulkToolsPreview, brand: QrBrandChoice):
 }
 
 /** Presentation only. Preview/commit authorization and atomicity are server gates. */
-export function QrBulkTools({ brands, api, onCommitted }: QrBulkToolsProps) {
+export function QrBulkTools({ brands, api, onCommitted, disabled = false }: QrBulkToolsProps) {
   const available = brands.filter(brand => brand.allowWholeBrand !== false || brand.locations.length > 0);
   const [brandId, setBrandId] = useState(available[0]?.id || '');
   const [csv, setCsv] = useState('');
@@ -58,13 +58,13 @@ export function QrBulkTools({ brands, api, onCommitted }: QrBulkToolsProps) {
   const generation = useRef(0);
   const pending = useRef<PendingCommit | null>(null);
   const brand = available.find(value => value.id === brandId);
-  const locked = busy || uncertain;
+  const locked = busy || uncertain || disabled;
   const reset = () => { generation.current++; setPreview(null); setConfirmed(false); setError(''); setNotice(''); setRefreshError(false); pending.current = null; };
-  const changeCsv = (value: string) => { if (running.current || uncertain) return; reset(); setCsv(value); };
+  const changeCsv = (value: string) => { if (running.current || uncertain || disabled) return; reset(); setCsv(value); };
   const template = `${HEADERS}\nBord 1,https://example.com/menu,${brandId},${brand?.allowWholeBrand === false ? brand.locations[0]?.id || '' : ''},Oktober,bord|restaurant,restaurant,qr,oktober,,bord-1\n`;
 
   const readFile = async (file: File | undefined) => {
-    if (!file || running.current || uncertain) return;
+    if (!file || running.current || uncertain || disabled) return;
     reset(); running.current = true; setBusy(true);
     try {
       if (!file.size || file.size > MAX_BYTES) throw new Error('file_size');
@@ -74,7 +74,7 @@ export function QrBulkTools({ brands, api, onCommitted }: QrBulkToolsProps) {
     finally { running.current = false; setBusy(false); }
   };
   const inspect = async () => {
-    if (running.current || uncertain) return;
+    if (running.current || uncertain || disabled) return;
     if (!brand || !csv.trim()) { setError('Vælg et brand og indsæt CSV-data før preview.'); return; }
     if (new TextEncoder().encode(csv).length > MAX_BYTES) { setError('CSV-data må højst fylde 128 KB.'); return; }
     const current = ++generation.current; running.current = true; setBusy(true); setError(''); setNotice(''); setPreview(null); setConfirmed(false); pending.current = null;
@@ -102,7 +102,7 @@ export function QrBulkTools({ brands, api, onCommitted }: QrBulkToolsProps) {
     } finally { running.current = false; setBusy(false); }
   };
   const commit = () => {
-    if (running.current || uncertain || !confirmed || !brand || !preview?.ok || preview.errors.length || !preview.plan) return;
+    if (running.current || uncertain || disabled || !confirmed || !brand || !preview?.ok || preview.errors.length || !preview.plan) return;
     const request: PendingCommit = { brandId: brand.id, canonical: preview.plan.canonical, sha256: preview.plan.sha256, requestId: crypto.randomUUID(), count: preview.plan.entries.length };
     pending.current = request; void performCommit(request);
   };
@@ -112,6 +112,7 @@ export function QrBulkTools({ brands, api, onCommitted }: QrBulkToolsProps) {
     <h2 className="text-xl font-semibold">Importér QR-koder fra CSV</h2>
     <p className="text-sm text-muted-foreground">Højst 100 dynamiske koder for ét brand pr. import. Hele importen afvises, hvis en række har fejl.</p>
     {!available.length && <p>Ingen brands med tilladt placering er tilgængelige.</p>}
+    {disabled && <p role="status">Nye importer er midlertidigt lukket. Et tidligere usikkert resultat skal stadig afklares med samme import.</p>}
     {error && <p role="alert">{error}</p>}
     {notice && <p role="status">{notice}</p>}
     {refreshError && <p role="alert">Koderne er oprettet, men oversigten kunne ikke opdateres. Importér ikke igen. Genindlæs oversigten.</p>}
