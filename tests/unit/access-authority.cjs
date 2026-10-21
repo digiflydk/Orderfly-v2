@@ -106,7 +106,7 @@ test('native tenant mapping cannot be substituted and duplicates cannot be saved
 
 test('Orderfly session verification checks revocation and fails closed for missing or rejected cookies',async()=>{
  let value,seen=[];
- const mod=loadTs('src/lib/access/orderfly-session.ts',{'server-only':{},'next/headers':{cookies:async()=>({get:()=>value?{value}:undefined})},'@/lib/firebase-admin':{getAdminApp:()=>({auth:()=>({verifySessionCookie:async(cookie,revoked)=>{seen.push([cookie,revoked]);if(cookie==='revoked')throw Error('revoked');return {uid:'real-user'};}})})}});
+ const mod=loadTs('src/lib/access/orderfly-session.ts',{'server-only':{},'next/headers':{cookies:async()=>({get:()=>value?{value}:undefined})},'@/lib/firebase-admin':{getAdminApp:()=>({auth:()=>({verifySessionCookie:async(cookie,revoked)=>{seen.push([cookie,revoked]);if(cookie==='revoked')throw Object.assign(Error('revoked'),{code:'auth/session-cookie-revoked'});return {uid:'real-user'};}})})}});
  await assert.rejects(mod.verifiedOrderflyIdentity(),/unauthorized/);assert.equal(seen.length,0);
  value='revoked';await assert.rejects(mod.verifiedOrderflyIdentity(),/unauthorized/);
  value='valid';assert.deepEqual(await mod.verifiedOrderflyIdentity(),{provider:'firebase',subject:'real-user'});

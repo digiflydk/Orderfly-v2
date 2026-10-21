@@ -154,6 +154,17 @@ vary by Cookie; errors are not logged with raw data. No rules, indexes,
 production data, UI, queue or printer transport are changed by this read-only
 delivery.
 
+The shared identity guard now distinguishes invalid sessions from unavailable
+identity infrastructure. Missing, expired, revoked, disabled or malformed sessions
+remain 401, with revocation checks enabled. Opsfly HTTP/network/throttling and
+missing signing-key failures, Firebase initialization/network errors, and unknown
+verification failures become generic `identity_unavailable`/503. The Admin SDK
+13 certificate-fetch path can use `auth/argument-error`; only recognized SDK
+token-validation messages under that code are classified as invalid credentials.
+Unknown messages remain unavailable and are never returned/logged. Tests exercise
+the real guard and Opsfly cookie/HTTP implementation with external I/O replaced,
+plus malformed-cookie rejection through the installed Firebase Admin SDK.
+
 Release QA must first verify the deployed `/api/health` commit, then check
 unauthenticated list/detail rejection on this live endpoint. Authenticated live
 scope/DTO checks require an existing safely accessible authorized session and
@@ -176,7 +187,7 @@ does not depend on physical printer availability.
 
 ## Verification and release
 
-Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs`
+Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs`
 and `npm run typecheck`.
 There is no changed browser flow in this delivery.
 Follow `AGENTS.md` for current-head CI, independent Codex review, merge and release

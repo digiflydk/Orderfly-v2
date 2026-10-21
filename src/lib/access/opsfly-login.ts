@@ -26,7 +26,7 @@ async function callNative(body: Record<string, unknown>, token?: string) {
       body: JSON.stringify({ ...body, organization_slug: 'esmeralda' }),
     });
   } catch { throw new OpsflyLoginError(503); }
-  if (!response.ok) throw new OpsflyLoginError(response.status === 429 ? 429 : response.status >= 500 ? 503 : 403);
+  if (!response.ok) throw new OpsflyLoginError([401, 403].includes(response.status) ? 403 : response.status === 429 ? 429 : 503);
   // Responses contain credentials at login: never log their bodies or errors.
   const reader = response.body?.getReader();
   const chunks: Uint8Array[] = []; let length = 0;
@@ -86,7 +86,10 @@ export function readOpsflyCookie(value: string): string {
     const data = z.object({ token: tokenSchema, expires: z.number().finite() }).strict().parse(JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')));
     if (data.expires <= Date.now() || data.expires > Date.now() + SESSION_SECONDS * 1000) throw new Error();
     return data.token;
-  } catch { throw new AuthorityError('unauthorized', 401); }
+  } catch (error) {
+    if (error instanceof OpsflyLoginError) throw error;
+    throw new AuthorityError('unauthorized', 401);
+  }
 }
 
 export async function verifyOpsflyCookie(value: string): Promise<VerifiedIdentity> {

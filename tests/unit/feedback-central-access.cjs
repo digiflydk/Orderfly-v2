@@ -1,10 +1,11 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {loadTs}=require('../helpers/load-ts.cjs');
+const opsfly=loadTs('src/lib/access/opsfly-login.ts',{'server-only':{}});
 function fixture({superuser=false,grants=[{tenantId:'brand-a',locationIds:null}],revoked=false,disabled=false,provider="firebase",missing=false}={}){
  const commands=[];
  const api=loadTs('src/lib/feedback/access.ts',{'server-only':{},'next/headers':{cookies:async()=>({get:()=>missing?undefined:({value:provider==='opsfly'?'opsfly.test-cookie':'verified-cookie'})})},
- '@/lib/firebase-admin':{getAdminDb:()=>({}),getAdminApp:()=>({auth:()=>({verifySessionCookie:async(cookie,checkRevoked)=>{assert.equal(checkRevoked,true);if(revoked)throw Error('revoked');return {uid:'native-uid'};}})})},
- './opsfly-login':{OPSFLY_COOKIE_PREFIX:'opsfly.',verifyOpsflyCookie:async()=>{if(revoked)throw Error('revoked');return {provider:'opsfly',subject:'native-uid',organizationId:'organization-a'};}},
+ '@/lib/firebase-admin':{getAdminDb:()=>({}),getAdminApp:()=>({auth:()=>({verifySessionCookie:async(cookie,checkRevoked)=>{assert.equal(checkRevoked,true);if(revoked)throw Object.assign(Error('revoked'),{code:'auth/session-cookie-revoked'});return {uid:'native-uid'};}})})},
+ './opsfly-login':{...opsfly,OPSFLY_COOKIE_PREFIX:'opsfly.',verifyOpsflyCookie:async()=>{if(revoked)throw new opsfly.OpsflyLoginError(403);return {provider:'opsfly',subject:'native-uid',organizationId:'organization-a'};}},
  '@/lib/access/authority':{executeAuthority:async(db,identity,command)=>{assert.equal(identity.subject,'native-uid');assert.equal(identity.provider,provider);if(provider==='opsfly')assert.equal(identity.organizationId,'organization-a');commands.push(command);if(disabled)throw Error('inactive principal');return command.action==='session'?{superuser,actorId:'opsfly:organization-a:native-uid'}:{grants};}}});
  return {api,commands};
 }
@@ -65,8 +66,8 @@ for (const provider of ['opsfly','firebase']) test(provider+' verifies once per 
  const internals=React.__SERVER_INTERNALS_DO_NOT_USE_OR_WARN_USERS_THEY_CANNOT_UPGRADE;
  const previous=internals.A;let checks=0,revoked=false;
  const beginRender=()=>{const values=new Map();internals.A={getCacheForType(factory){if(!values.has(factory))values.set(factory,factory());return values.get(factory);}};};
- const verify=async()=>{checks++;if(revoked)throw Error('revoked');return {uid:'native-uid',provider:'opsfly',subject:'native-uid',organizationId:'organization-a'};};
- const api=loadTs('src/lib/access/orderfly-session.ts',{'server-only':{},react:React,'next/headers':{cookies:async()=>({get:()=>({value:provider==='opsfly'?'opsfly.fixture':'firebase-fixture'})})},'@/lib/firebase-admin':{getAdminApp:()=>({auth:()=>({verifySessionCookie:async(value,checkRevoked)=>{assert.equal(checkRevoked,true);return verify();}})})},'./opsfly-login':{OPSFLY_COOKIE_PREFIX:'opsfly.',verifyOpsflyCookie:verify}});
+ const verify=async()=>{checks++;if(revoked)throw provider==='opsfly'?new opsfly.OpsflyLoginError(403):Object.assign(Error('revoked'),{code:'auth/session-cookie-revoked'});return {uid:'native-uid',provider:'opsfly',subject:'native-uid',organizationId:'organization-a'};};
+ const api=loadTs('src/lib/access/orderfly-session.ts',{'server-only':{},react:React,'next/headers':{cookies:async()=>({get:()=>({value:provider==='opsfly'?'opsfly.fixture':'firebase-fixture'})})},'@/lib/firebase-admin':{getAdminApp:()=>({auth:()=>({verifySessionCookie:async(value,checkRevoked)=>{assert.equal(checkRevoked,true);return verify();}})})},'./opsfly-login':{...opsfly,OPSFLY_COOKIE_PREFIX:'opsfly.',verifyOpsflyCookie:verify}});
  try {
   beginRender();await Promise.all([api.verifiedOrderflyIdentity(),api.verifiedOrderflyIdentity(),api.verifiedOrderflyIdentity()]);assert.equal(checks,1);
   revoked=true;beginRender();await assert.rejects(api.verifiedOrderflyIdentity());assert.equal(checks,2);

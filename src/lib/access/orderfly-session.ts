@@ -3,7 +3,18 @@ import { cache } from 'react';
 import { cookies } from 'next/headers';
 import { getAdminApp, getAdminDb } from '@/lib/firebase-admin';
 import { AuthorityError, executeAuthority, type VerifiedIdentity } from './authority';
-import { OPSFLY_COOKIE_PREFIX, verifyOpsflyCookie } from './opsfly-login';
+import { OPSFLY_COOKIE_PREFIX, OpsflyLoginError, verifyOpsflyCookie } from './opsfly-login';
+
+function rejectedFirebaseCookie(error: unknown): boolean {
+  const failure = error as { code?: unknown; message?: unknown } | null;
+  if (['auth/session-cookie-expired', 'auth/session-cookie-revoked', 'auth/user-disabled',
+    'auth/user-not-found', 'auth/invalid-session-cookie'].includes(String(failure?.code))) return true;
+  // Admin SDK 13 also wraps certificate-fetch failures as auth/argument-error.
+  // Only recognized token-validation messages mean invalid credentials; unknown
+  // errors stay unavailable. Never return/log the SDK message or token contents.
+  return failure?.code === 'auth/argument-error' && typeof failure.message === 'string'
+    && /^(Decoding Firebase session cookie failed\.|Firebase session cookie has |verifySessionCookie\(\) expects |First argument to verifySessionCookie\(\) must be )/.test(failure.message);
+}
 
 // React cache is scoped to a single server render, never shared across requests.
 // Repeated layout/page/helper checks reuse verification; the next request revalidates.
@@ -15,7 +26,12 @@ export const verifiedOrderflyIdentity = cache(async (): Promise<VerifiedIdentity
     // Check revocation and disabled accounts, not just the signed expiry.
     const token=await getAdminApp().auth().verifySessionCookie(session,true);
     return {provider:'firebase',subject:token.uid};
-  }catch{throw new AuthorityError('unauthorized',401);}
+  } catch (error) {
+    if (error instanceof AuthorityError && error.status === 401) throw new AuthorityError('unauthorized', 401);
+    if (error instanceof OpsflyLoginError && [401, 403].includes(error.status)) throw new AuthorityError('unauthorized', 401);
+    if (rejectedFirebaseCookie(error)) throw new AuthorityError('unauthorized', 401);
+    throw new AuthorityError('identity_unavailable', 503);
+  }
 });
 export async function requireOrderflyAccess(brandId:string,locationIds:string[]|null,permission:string) {
   const identity=await verifiedOrderflyIdentity();
