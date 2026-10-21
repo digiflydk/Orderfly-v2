@@ -72,8 +72,11 @@ export function createQrStore(db: QrDatabase, options: {
       if (receipt.exists) {
         if (receipt.data()?.signature !== signature) return fail('request_conflict', 409);
         const result = receipt.data()?.result as QrRecord;
+        if (!result || result.brandId !== scope.brandId) return fail('request_conflict', 409);
+        // Create/duplicate have no command target ID. Their receipt must still
+        // reauthorize the CURRENT result record, which may have moved locations.
+        read(scope, await tx.get(recordRef(scope.brandId, result.id)));
         scopeCheck(scope, result.locationId);
-        if (result.brandId !== scope.brandId) return fail('request_conflict', 409);
         return result;
       }
       if (current && (current.revision !== revision || current.status === 'archived')) return fail('revision_conflict', 409);
