@@ -83,6 +83,9 @@ jobs:
       - name: Private printer device credential regression
         run: node --test tests/unit/printing-device-auth.cjs
 
+      - name: Native printer credential provisioning regression
+        run: node --test tests/unit/printing-device-credentials-service.cjs
+
       - name: CloudPRNT protocol and simulator regression
         run: node --test tests/unit/printing-cloudprnt.cjs
 
