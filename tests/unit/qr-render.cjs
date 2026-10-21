@@ -3,7 +3,10 @@ const assert = require('node:assert/strict');
 const sharp = require('sharp');
 const jsQR = require('jsqr');
 const { loadTs } = require('../helpers/load-ts.cjs');
-const { renderQr, QrRenderError } = loadTs('src/lib/qr/render.ts');
+const { renderQr, QrRenderError } = loadTs('src/lib/qr/render.ts', {
+  sharp: { default: sharp }, jsqr: { default: jsQR },
+});
+const { qrPrintHtml } = loadTs('src/lib/qr/print.ts');
 
 async function decode(png) {
   const { data, info } = await sharp(png).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
@@ -46,11 +49,56 @@ test('style, colour and capacity refusals do not produce unsafe or unreadable do
   await rejects({ dark: '#ffffff', light: '#000000' }, 'insufficient_contrast');
   await rejects({ dark: '#999999', light: '#ffffff' }, 'insufficient_contrast');
   await rejects({ errorCorrectionLevel: 'X' });
-  await rejects({ logo: 'https://attacker.invalid/image' });
+  await rejects({ logo: 'https://attacker.invalid/image' }, 'invalid_logo');
   await rejects(null);
   await rejects([]);
   await rejects({ width: 128 }, 'payload_too_dense', 'https://example.com/' + 'long'.repeat(50));
   await rejects({}, 'payload_too_dense', 'a'.repeat(1800));
+});
+
+test('bounded PNG and JPEG logos decode in the actual final PNG and SVG exports', async () => {
+  const payload = 'https://esmeralda.orderfly.dk/club/tilmeld?utm_source=restaurant';
+  for (const format of ['png', 'jpeg']) {
+    const logo = await sharp({ create: { width: 80, height: 30, channels: 3, background: '#e55221' } })[format]().toBuffer();
+    for (const width of [256, 512, 1024]) {
+      const result = await renderQr(payload, { width, logo });
+      assert.equal(await decode(result.png), payload);
+      assert.equal(await decode(await sharp(Buffer.from(result.svg)).png().toBuffer()), payload);
+      assert.match(result.svg, /href="data:image\/png;base64,/);
+      assert.equal('logo' in result.style, false);
+    }
+  }
+});
+
+test('logo input refuses SVG, URLs, decompression dimensions and unsupported correction', async () => {
+  const payload = 'https://example.com';
+  const logo = await sharp({ create: { width: 30, height: 30, channels: 4, background: '#111111' } }).png().toBuffer();
+  const tooWide = await sharp({ create: { width: 2049, height: 1, channels: 3, background: '#ffffff' } }).png().toBuffer();
+  for (const bad of [Buffer.from('<svg></svg>'), 'https://example.com/logo.png', Buffer.alloc(2 * 1024 * 1024 + 1), tooWide,
+    Buffer.from([137, 80, 78, 71, 13, 10, 26, 10, 1, 2, 3])]) {
+    await assert.rejects(renderQr(payload, { logo: bad }), error => error.code === 'invalid_logo');
+  }
+  await assert.rejects(renderQr(payload, { logo, errorCorrectionLevel: 'M' }), error => error.code === 'invalid_logo');
+  const failedDecoder = loadTs('src/lib/qr/render.ts', { sharp: { default: sharp }, jsqr: { default: () => null } });
+  await assert.rejects(failedDecoder.renderQr(payload, { logo }), error => error.code === 'unreadable_logo');
+});
+
+test('print document escapes text, preserves quiet-zone image and bounds physical sizing', async () => {
+  const qr = await renderQr('https://example.com');
+  const title = '<img src=x onerror=alert(1)> & "title"';
+  const html = qrPrintHtml(qr, { title, caption: '</p><script>alert(1)</script>', sizeMm: 50 });
+  assert.ok(!html.includes('<script>'));
+  assert.ok(!html.includes('<img src=x'));
+  assert.ok(html.includes('&lt;img src=x onerror=alert(1)&gt; &amp; &quot;title&quot;'));
+  assert.ok(html.includes('width:50mm;height:50mm'));
+  assert.ok(html.includes(qr.png.toString('base64')));
+  assert.ok(html.includes('default-src \'none\''));
+  for (const options of [{ sizeMm: 0 }, { sizeMm: 151 }, { sizeMm: NaN }, { sizeMm: '50' },
+    { title: 'x'.repeat(251) }, { caption: 'x'.repeat(501) }, { unknown: true }, null]) {
+    assert.throws(() => qrPrintHtml(qr, options), /invalid_print_options/);
+  }
+  assert.throws(() => qrPrintHtml({ ...qr, moduleCount: 177 }, { sizeMm: 25 }), /invalid_print_options/);
+  assert.throws(() => qrPrintHtml({ ...qr, width: '\" onerror=\"alert(1)' }), /invalid_print_options/);
 });
 
 test('invalid and oversized payloads fail while valid Unicode remains exact', async () => {
