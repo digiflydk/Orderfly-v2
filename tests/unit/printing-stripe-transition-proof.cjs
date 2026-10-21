@@ -45,6 +45,31 @@ test('persisted scope/session/amount/payment/lifecycle and native seller ownersh
 test('already-paid replay preserves production state and original identity',async()=>{
  for(const status of ['Received','In Progress','Ready']){const f=fixture({order:{...goodOrder(),status,paymentStatus:'Paid'}});const proof=await f.verifyStripePrintPayment(reference);const handle=await f.prepareStripePrintTransition(f.context,proof);const p=f.stripePrintTransitionProjection(f.context,handle);assert.equal(p.replay,true);assert.equal(p.order.status,status);assert.equal(p.order.id,'o1');assert.deepEqual(f.writes,[]);}
 });
+test('recorded partial and full refunds reject every otherwise eligible paid replay',async()=>{
+ for(const status of ['Received','In Progress','Ready'])for(const refundedAmountOre of [1,15900]){
+  const f=fixture({order:{...goodOrder(),status,paymentStatus:'Paid',refundedAmountOre}});
+  const proof=await f.verifyStripePrintPayment(reference);
+  await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='transition_unverified');
+  assert.deepEqual(f.writes,[]);
+ }
+});
+test('refund state accepts legacy absence or explicit zero and rejects malformed values',async()=>{
+ for(const payment of [{status:'Pending',paymentStatus:'Pending'},{status:'Received',paymentStatus:'Paid'}]){
+  for(const refundedAmountOre of [undefined,0]){
+   const f=fixture({order:{...goodOrder(),...payment,...(refundedAmountOre===undefined?{}:{refundedAmountOre})}});
+   const proof=await f.verifyStripePrintPayment(reference);
+   const handle=await f.prepareStripePrintTransition(f.context,proof);
+   assert.equal(f.stripePrintTransitionProjection(f.context,handle).replay,payment.paymentStatus==='Paid');
+   assert.deepEqual(f.writes,[]);
+  }
+  for(const refundedAmountOre of [-1,0.5,'0',null,NaN,Infinity,{},Number.MAX_SAFE_INTEGER+1]){
+   const f=fixture({order:{...goodOrder(),...payment,refundedAmountOre}});
+   const proof=await f.verifyStripePrintPayment(reference);
+   await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='transition_unverified');
+   assert.deepEqual(f.writes,[]);
+  }
+ }
+});
 test('expired/future-dated proofs fail before native reads; context identity prevents cross-attempt projection reuse',async()=>{
  const f=fixture(),original=Date.now;let time=1000000;Date.now=()=>time;
  try {const proof=await f.verifyStripePrintPayment(reference);time+=300000;await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');time=999999;await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');assert.equal(f.calls.filter(x=>x[0]==='read').length,0);

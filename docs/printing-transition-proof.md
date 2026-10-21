@@ -40,6 +40,9 @@ must be the server's current Admin database. It reads the order, native brand an
 native location using that transaction. It requires matching native ownership,
 stored Stripe session identity, amount and eligible nonterminal order lifecycle.
 Canceled/completed/refunded/foreign/missing or malformed orders fail closed.
+The persisted `refundedAmountOre` must be absent for a legacy order or exactly
+numeric zero. Any partial or full refund rejects even if `paymentStatus` remains
+`Paid`; malformed refund values also reject rather than being stripped or coerced.
 Paid/Pending inconsistency is rejected. Evidence age is checked before and after
 reads. A Pending payment projection derives Paid and Pending status derives
 Received. Already-paid replay keeps the current production status and order ID.
@@ -76,8 +79,8 @@ runtime origin forgery, invalid provider state, unavailable keys/provider,
 native/session/amount/lifecycle mismatches, replay, expiry/clock movement,
 context separation, retry revalidation, immutable data projection and zero writes.
 Run `npm run typecheck` and affected printing/transaction regressions. There is no
-new UI flow requiring browser fixtures. Coordinator adds this dedicated unit suite
-to shared CI, serializes fresh-main exact-head CI and independent Codex review,
+new UI flow requiring browser fixtures. Shared CI runs this dedicated unit suite.
+The coordinator serializes fresh-main exact-head CI and independent Codex review,
 then verifies deployed release and applicable read-only boundaries. Internal
 fixture success is not production invocation, physical output or logged-in QA.
 All admin surfaces remain superadmin-only; all existing write/output flags remain

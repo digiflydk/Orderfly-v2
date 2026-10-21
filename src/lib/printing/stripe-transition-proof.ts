@@ -13,6 +13,8 @@ const persistedOrder = z.object({
   brandId: id, locationId: id, status: z.enum(['Pending', 'Received', 'In Progress', 'Ready']),
   paymentStatus: z.enum(['Pending', 'Paid']), paymentMethod: z.literal('Stripe'),
   deliveryType: z.enum(['Pickup', 'Delivery']), totalAmount: z.number().finite().positive(),
+  // Legacy orders may omit this field; any recorded or malformed refund fails closed.
+  refundedAmountOre: z.literal(0).optional(),
   psp: z.object({ checkoutSessionId: sessionId }),
 });
 const PROOF_TTL_MS = 300_000;

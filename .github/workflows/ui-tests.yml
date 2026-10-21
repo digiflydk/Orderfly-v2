@@ -89,6 +89,9 @@ jobs:
       - name: Combined print-intent batch regression
         run: node --test tests/unit/printing-outbox-batch.cjs
 
+      - name: Stripe print-transition origin proof regression
+        run: node --test tests/unit/printing-stripe-transition-proof.cjs
+
       - name: Native and compatibility transaction bridge regression
         run: node --test tests/unit/firestore-compat-transaction.cjs
 
