@@ -131,3 +131,13 @@ test('routing page denies merchant before catalog and projects only native named
     else { assert.match(html, /Routing/); assert.deepEqual(calls, ['orderfly.catalog:view', 'orderfly.catalog:edit']); assert.doesNotMatch(JSON.stringify(props), /PRIVATE|secret/); }
   }
 });
+
+
+test('catalog and native sample preview preserve canonical omitted global product membership', async () => {
+  const f = fixture(); delete f.rows.get('products/pizza').locationIds;
+  const catalog = await f.catalog(); assert.deepEqual(catalog.items, [{ id: 'pizza', name: 'Pizza ÆØÅ', categoryId: 'food' }]);
+  assert.equal((await f.preview()).targets.length, 1);
+  f.rows.get('products/pizza').locationIds = null; assert.equal((await f.request('catalog')).status, 409);
+  delete f.rows.get('products/pizza').locationIds; delete f.rows.get('categories/food').locationIds;
+  assert.equal((await f.request('preview')).status, 409);
+});

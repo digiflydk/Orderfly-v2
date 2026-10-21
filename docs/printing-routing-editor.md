@@ -83,3 +83,23 @@ enablement, order/queue mutations or printer transport. No secrets, rules, index
 production data or Wolt settings were changed. Device-auth CloudPRNT poll/claim/
 download/ack/retry, controlled activation/testprint and physical output remain
 separate pilot requirements. A sample or simulator cannot prove physical readiness.
+
+
+## Current-main management contract recovery (#352 continuation)
+
+This branch now genuinely includes #351 on main, the default cross-scope printer
+table and its optional filters/row actions, and the shared shell overflow fix.
+The overview changes only by its existing Routingregler link.
+
+Regression-first checkpoint: management fixtures now use the explicit
+`referencesVerified` boolean required by the deployed API. New actual React and
+production-CSS cases cover stale printer/product/category repair at desktop and
+mobile, exact revision save and canonical readback, malformed false DTO rejection
+and uncertain unverified PUT results. Existing assertions remain intact. The
+original client still rejects the new valid management DTO before adaptation, so
+actual browser CI must demonstrate this failure first. Local Chromium remains
+unavailable; missing executable is not an assertion result.
+
+An added production-service unit test first reproduced the existing picker
+addition rejecting canonical products with omitted global membership. Its fix
+will be limited to the picker, preserving #351's API and both P2 fixes unchanged.

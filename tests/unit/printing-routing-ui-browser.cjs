@@ -63,10 +63,10 @@ function fixtureRoutes(page, controls = {}) {
       const kind = url.searchParams.get('kind');
       return route.fulfill({ json: { scope, kind, items: kind === 'product' ? [{ id: 'pizza', name: 'Pizza Margherita', categoryId: 'food' }] : [{ id: 'food', name: 'Pizzaer' }], nextCursor: null } });
     }
-    if (request.method() === 'GET') return route.fulfill({ json: saved && saved.scope.brandId === brandId ? saved : { scope, revision: null, rules: [], printers: [], dispatchAuthorized: false } });
+    if (request.method() === 'GET') return route.fulfill({ json: saved && saved.scope.brandId === brandId ? saved : { scope, revision: null, rules: [], printers: [], referencesVerified: true, dispatchAuthorized: false } });
     if (request.method() === 'PUT') {
       writes.push(body);
-      saved = { scope, revision: body.expectedRevision + 1, rules: body.rules, printers: body.rules.length ? [printer] : [], dispatchAuthorized: false };
+      saved = { scope, revision: body.expectedRevision + 1, rules: body.rules, printers: body.rules.length ? [printer] : [], referencesVerified: true, dispatchAuthorized: false };
       return route.fulfill({ json: saved });
     }
     const included = body.rules.some(r => r.effect === 'include') && !body.rules.some(r => r.effect === 'exclude');
@@ -155,7 +155,7 @@ test('pending save locks scope and retains result after write grant revocation w
   const wait = new Promise(resolve => { started = resolve; });
   fixtureRoutes(page, { intercept: async ({ route, request, body, scope, printer }) => {
     if (request.method() !== 'PUT') return false; writes++; started(); await new Promise(resolve => { release = resolve; });
-    await route.fulfill({ json: { scope, revision: 1, rules: body.rules, printers: [printer], dispatchAuthorized: false } }); return true;
+    await route.fulfill({ json: { scope, revision: 1, rules: body.rules, printers: [printer], referencesVerified: true, dispatchAuthorized: false } }); return true;
   } });
   await page.goto(origin); await choose(page); await addCategoryRule(page);
   await page.getByRole('button', { name: 'Gem routingregler', exact: true }).click(); await wait;
@@ -170,7 +170,7 @@ test('foreign saved DTO fails closed before exposing or editing routing', async 
   const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
   fixtureRoutes(page, { intercept: async ({ route, request, url }) => {
     if (request.method() === 'GET' && url.pathname === '/api/superadmin/printers/routing') {
-      await route.fulfill({ json: { scope: { brandId: 'FOREIGN', locationId: 'FOREIGN' }, revision: null, rules: [], printers: [], dispatchAuthorized: false } }); return true;
+      await route.fulfill({ json: { scope: { brandId: 'FOREIGN', locationId: 'FOREIGN' }, revision: null, rules: [], printers: [], referencesVerified: true, dispatchAuthorized: false } }); return true;
     } return false;
   } });
   await page.goto(origin); await choose(page); await expect(page.getByRole('alert')).toHaveText('Routing kunne ikke indlæses. Prøv igen.');
@@ -188,4 +188,78 @@ test('malformed preview never displays injected provider details and keeps edita
   await expect(page.getByLabel('Fordeling', { exact: true })).toHaveCount(0);
   await expect(page.getByRole('cell', { name: 'Pizzaer', exact: true })).toBeVisible();
   assert.equal((await page.locator('body').innerText()).includes('PRIVATE_PROVIDER_DETAIL'), false);
+});
+
+
+const staleWarning = 'Gemte regler har utilgængelige referencer. Fjern eller erstat dem, og gem igen før eksempelvisning.';
+for (const [size, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667]]) for (const missing of ['printer', 'product', 'category']) {
+  test(`stale ${missing} management rules stay repairable with exact CAS and canonical readback at ${size}`, async t => {
+    const context = await browser.newContext({ viewport: { width, height } }); t.after(() => context.close());
+    const page = await context.newPage(), mutations = []; let canonical;
+    const legacy = { id: 'legacy', brandId: 'a', locationId: 'la', printerId: missing === 'printer' ? 'removed-printer' : 'p1', effect: 'include',
+      match: missing === 'printer' ? { type: 'all' } : { type: missing, id: 'removed-' + missing } };
+    const f = fixtureRoutes(page, { intercept: async ({ route, request, url, body, scope, printer }) => {
+      if (url.pathname !== '/api/superadmin/printers/routing') return false;
+      if (request.method() === 'GET') { await route.fulfill({ json: canonical || { scope, revision: 9, rules: [legacy], printers: [], referencesVerified: false, dispatchAuthorized: false } }); return true; }
+      if (request.method() === 'PUT') { mutations.push(body); canonical = { scope, revision: 10, rules: body.rules, printers: body.rules.length ? [printer] : [], referencesVerified: true, dispatchAuthorized: false };
+        await route.fulfill({ json: canonical }); return true; }
+      return false;
+    } });
+    await page.goto(origin); await choose(page);
+    await expect(page.getByText(staleWarning, { exact: true }).or(page.getByRole('alert'))).toBeVisible();
+    fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+    await page.screenshot({ path: path.join(root, 'test-results', `printing-overview-routing-stale-${missing}-${size}.png`), fullPage: true });
+    assert.equal(await page.getByText(staleWarning, { exact: true }).count(), 1, 'owned referencesVerified:false GET must expose repair state, not a generic load failure');
+    await expect(page.getByText(staleWarning, { exact: true })).toBeVisible();
+    await expect(page.getByText('Gemt version 9', { exact: true })).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Gem routingregler', exact: true })).toBeEnabled();
+    await page.getByRole('combobox', { name: 'Eksempelprodukt', exact: true }).selectOption('pizza');
+    await expect(page.getByRole('button', { name: 'Vis fordeling', exact: true })).toBeDisabled();
+    const unavailable = missing === 'printer' ? 'Printer ikke tilgængelig' : missing === 'product' ? 'Produkt ikke tilgængeligt (gemt valg)' : 'Kategori ikke tilgængelig (gemt valg)';
+    await expect(page.getByRole('cell', { name: unavailable, exact: true })).toBeVisible();
+    if (missing === 'category') await page.getByRole('button', { name: 'Fjern regel', exact: true }).click();
+    else {
+      await page.getByRole('button', { name: 'Rediger regel', exact: true }).click();
+      if (missing === 'printer') { await expect(page.getByRole('option', { name: 'Printer ikke tilgængelig (gemt valg)', exact: true })).toHaveCount(1); await page.getByRole('combobox', { name: 'Printer', exact: true }).selectOption('p1'); }
+      else { await expect(page.getByRole('option', { name: 'Produkt ikke tilgængeligt (gemt valg)', exact: true })).toHaveCount(1); await page.getByRole('combobox', { name: 'Produkt', exact: true }).selectOption('pizza'); }
+      await page.getByRole('button', { name: 'Gem regelændring', exact: true }).click();
+    }
+    await page.getByRole('button', { name: 'Gem routingregler', exact: true }).click();
+    await expect(page.getByRole('status')).toHaveText('Routingreglerne er gemt.');
+    await expect(page.getByText(staleWarning, { exact: true })).toHaveCount(0);
+    assert.equal(mutations.length, 1); assert.equal(mutations[0].expectedRevision, 9); assert.equal(mutations[0].referencesVerified, undefined);
+    assert.deepEqual(Object.keys(mutations[0]).sort(), ['brandId', 'expectedRevision', 'locationId', 'rules']);
+    assert.equal(mutations[0].rules.length, missing === 'category' ? 0 : 1);
+    if (missing !== 'category') assert.equal(mutations[0].rules[0].printerId, 'p1');
+    assert.equal(f.requests.filter(r => r.url.endsWith('/preview')).length, 0);
+    await page.getByRole('button', { name: 'Genindlæs', exact: true }).click();
+    await expect(page.getByText('Gemt version 10', { exact: true })).toBeVisible();
+    await expect(page.getByText(staleWarning, { exact: true })).toHaveCount(0);
+    if (missing === 'category') await expect(page.getByText('Ingen routingregler. Tilføj en regel for at fordele produkter.')).toBeVisible();
+    else await expect(page.getByRole('cell', { name: 'Køkken p1', exact: true })).toBeVisible();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 1);
+    fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+    await page.screenshot({ path: path.join(root, 'test-results', `printing-overview-routing-repair-${missing}-${size}.png`), fullPage: true });
+  });
+}
+test('management false DTO never admits hydrated printers, missing revisions or foreign/duplicate stored identities', async t => {
+  const scope = { brandId: 'a', locationId: 'la' }, legacy = { id: 'legacy', ...scope, printerId: 'missing', effect: 'include', match: { type: 'all' } };
+  for (const patch of [{ printers: [item('p1')] }, { revision: null }, { rules: [legacy, legacy] }, { rules: [{ ...legacy, brandId: 'foreign' }] }, { referencesVerified: 'false' }, { dispatchAuthorized: true }]) {
+    const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
+    fixtureRoutes(page, { intercept: async ({ route, request, url }) => {
+      if (request.method() === 'GET' && url.pathname === '/api/superadmin/printers/routing') { await route.fulfill({ json: { scope, revision: 9, rules: [legacy], printers: [], referencesVerified: false, dispatchAuthorized: false, ...patch } }); return true; } return false;
+    } });
+    await page.goto(origin); await choose(page); await expect(page.getByRole('alert')).toHaveText('Routing kunne ikke indlæses. Prøv igen.');
+    await expect(page.getByRole('button', { name: 'Gem routingregler', exact: true })).toHaveCount(0);
+  }
+});
+test('an unverified PUT response is uncertain and requires manual refresh before another save', async t => {
+  const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage(); let writes = 0;
+  fixtureRoutes(page, { intercept: async ({ route, request, body, scope }) => {
+    if (request.method() !== 'PUT') return false; writes++;
+    await route.fulfill({ json: { scope, revision: 1, rules: body.rules, printers: [], referencesVerified: false, dispatchAuthorized: false } }); return true;
+  } });
+  await page.goto(origin); await choose(page); await addCategoryRule(page); await page.getByRole('button', { name: 'Gem routingregler', exact: true }).click();
+  await expect(page.getByRole('alert')).toHaveText('Det er uklart, om reglerne blev gemt. Genindlæs før du prøver igen.');
+  await expect(page.getByRole('button', { name: 'Gem routingregler', exact: true })).toBeDisabled(); assert.equal(writes, 1);
 });
