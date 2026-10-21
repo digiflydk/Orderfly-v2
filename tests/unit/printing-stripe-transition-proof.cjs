@@ -70,16 +70,85 @@ test('refund state accepts legacy absence or explicit zero and rejects malformed
   }
  }
 });
-test('expired/future-dated proofs fail before native reads; context identity prevents cross-attempt projection reuse',async()=>{
- const f=fixture(),original=Date.now;let time=1000000;Date.now=()=>time;
- try {const proof=await f.verifyStripePrintPayment(reference);time+=300000;await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');time=999999;await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');assert.equal(f.calls.filter(x=>x[0]==='read').length,0);
- time=1000001;const handle=await f.prepareStripePrintTransition(f.context,proof);
- assert.throws(()=>f.stripePrintTransitionProjection({...f.context},handle),e=>e.code==='transition_unverified');assert.throws(()=>f.stripePrintTransitionProjection(f.context,{}),e=>e.code==='transition_unverified');
- time=1300000;assert.throws(()=>f.stripePrintTransitionProjection(f.context,handle),e=>e.code==='proof_expired');time=1000002;
- const retryContext={...f.context};f.rows.set('orders/o1',{...goodOrder(),status:'Canceled'});await assert.rejects(f.prepareStripePrintTransition(retryContext,proof),e=>e.code==='transition_unverified');
- }finally{Date.now=original;}
+test('legacy refund amount and timestamp markers reject before preparing any paid replay',async()=>{
+ const markers=[{refundedAmount:0.01},{refundedAmount:159},{refundedAt:'2026-10-21T11:00:00Z'},
+  {refundedAt:new Date('2026-10-21T11:00:00Z')},{refundedAt:{seconds:1792580400,nanoseconds:0}}];
+ for(const status of ['Received','In Progress','Ready'])for(const marker of markers){
+  const f=fixture({order:{...goodOrder(),status,paymentStatus:'Paid',...marker}});
+  const proof=await f.verifyStripePrintPayment(reference);
+  await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='transition_unverified');
+  assert.deepEqual(f.writes,[]);
+ }
+ for(const marker of [{refundedAmount:0},{refundedAt:null},{refundedAmountOre:0,refundedAmount:0,refundedAt:null}]){
+  const f=fixture({order:{...goodOrder(),...marker}}),proof=await f.verifyStripePrintPayment(reference);
+  assert.ok(await f.prepareStripePrintTransition(f.context,proof));
+ }
+ for(const marker of [{refundedAmount:-1},{refundedAmount:'0'},{refundedAmount:null},{refundedAmount:NaN},
+  {refundedAmount:Infinity},{refundedAt:false},{refundedAt:0},{refundedAt:''}]){
+  const f=fixture({order:{...goodOrder(),...marker}}),proof=await f.verifyStripePrintPayment(reference);
+  await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='transition_unverified');
+ }
+});
+test('expired or future-dated proofs fail before native reads and stay invalid after clock recovery',async()=>{
+ const original=Date.now;let time;Date.now=()=>time;
+ try {for(const observation of [1300000,999999]){
+  time=1000000;const f=fixture(),proof=await f.verifyStripePrintPayment(reference);
+  time=observation;await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');
+  time=1000001;await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');
+  assert.equal(f.calls.filter(x=>x[0]==='read').length,0);
+ }}finally{Date.now=original;}
+});
+test('context identity prevents cross-attempt projection reuse and retry rereads changed lifecycle',async()=>{
+ const f=fixture(),proof=await f.verifyStripePrintPayment(reference);
+ const handle=await f.prepareStripePrintTransition(f.context,proof);
+ assert.throws(()=>f.stripePrintTransitionProjection({...f.context},handle),e=>e.code==='transition_unverified');
+ assert.throws(()=>f.stripePrintTransitionProjection(f.context,{}),e=>e.code==='transition_unverified');
+ f.rows.set('orders/o1',{...goodOrder(),status:'Canceled'});
+ await assert.rejects(f.prepareStripePrintTransition({...f.context},proof),e=>e.code==='transition_unverified');
+});
+test('expiry observed through any handle permanently invalidates its origin and every sibling handle',async()=>{
+ const original=Date.now;let time;Date.now=()=>time;
+ try {for(const observation of ['prepare','projection']){
+  time=1000000;const f=fixture(),proof=await f.verifyStripePrintPayment(reference),otherContext={...f.context};
+  const first=await f.prepareStripePrintTransition(f.context,proof),second=await f.prepareStripePrintTransition(otherContext,proof);
+  time=1300000;
+  if(observation==='prepare')await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');
+  else assert.throws(()=>f.stripePrintTransitionProjection(f.context,first),e=>e.code==='proof_expired');
+  time=1000001;
+  for(const [context,handle]of [[f.context,first],[otherContext,second]])assert.throws(()=>f.stripePrintTransitionProjection(context,handle),e=>e.code==='proof_expired');
+  await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');
+  const independent=await f.verifyStripePrintPayment(reference);
+  assert.ok(await f.prepareStripePrintTransition(f.context,independent));assert.deepEqual(f.writes,[]);
+ }}finally{Date.now=original;}
+});
+test('backwards movement inside TTL invalidates all handles, including when observed after transaction reads',async()=>{
+ const original=Date.now;let time;Date.now=()=>time;
+ try {for(const observation of ['prepare','projection','after-read']){
+  time=1000000;const f=fixture(),proof=await f.verifyStripePrintPayment(reference),handle=await f.prepareStripePrintTransition(f.context,proof);
+  time=1000200;f.stripePrintTransitionProjection(f.context,handle);
+  if(observation==='after-read'){
+   time=1000300;const get=f.context.transaction.get;
+   f.context.transaction.get=async ref=>{const result=await get(ref);time=1000250;return result;};
+   await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');
+  }else{
+   time=1000100;
+   if(observation==='prepare')await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');
+   else assert.throws(()=>f.stripePrintTransitionProjection(f.context,handle),e=>e.code==='proof_expired');
+  }
+  time=1000400;assert.throws(()=>f.stripePrintTransitionProjection(f.context,handle),e=>e.code==='proof_expired');
+  await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');assert.deepEqual(f.writes,[]);
+ }}finally{Date.now=original;}
 });
 
+test('invalid observed server clock permanently invalidates already issued sibling handles',async()=>{
+ const original=Date.now;let time;Date.now=()=>time;
+ try {for(const invalidTime of [NaN,Infinity,0,-1,1000000.5]){
+  time=1000000;const f=fixture(),proof=await f.verifyStripePrintPayment(reference),handle=await f.prepareStripePrintTransition(f.context,proof);
+  time=invalidTime;assert.throws(()=>f.stripePrintTransitionProjection(f.context,handle),e=>e.code==='proof_unavailable');
+  time=1000001;assert.throws(()=>f.stripePrintTransitionProjection(f.context,handle),e=>e.code==='proof_expired');
+  await assert.rejects(f.prepareStripePrintTransition(f.context,proof),e=>e.code==='proof_expired');assert.deepEqual(f.writes,[]);
+ }}finally{Date.now=original;}
+});
 test('foreign native database contexts and missing order never produce a projection',async()=>{
  const f=fixture();const proof=await f.verifyStripePrintPayment(reference);
  await assert.rejects(f.prepareStripePrintTransition({...f.context,db:{}},proof),e=>e.code==='transition_unverified');

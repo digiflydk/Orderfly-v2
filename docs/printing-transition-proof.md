@@ -32,7 +32,12 @@ client flags, a type assertion, or a serialized object cannot mint a proof.
 Evidence is a frozen, process-local opaque handle tracked in a private WeakMap.
 It contains no enumerable payment/customer fields. No proof is persisted, logged,
 or sent to a browser. Provider/configuration errors are generic. Evidence expires
-at five minutes and rejects backwards server clock movement.
+at five minutes. Origin and all its derived handles share a last-observed server
+time and irreversible invalidation state. Any observed backwards clock movement,
+expiry or invalid server clock invalidates that origin and all sibling handles;
+rolling the clock back into the original TTL cannot revive them. Checks run before
+and after transaction reads and on projection. Independently retrieved proofs
+retain independent lifetime state.
 
 `prepareStripePrintTransition(context, proof)` uses a caller's native transaction
 context from the compatibility bridge or native server callback. The database
@@ -43,6 +48,9 @@ Canceled/completed/refunded/foreign/missing or malformed orders fail closed.
 The persisted `refundedAmountOre` must be absent for a legacy order or exactly
 numeric zero. Any partial or full refund rejects even if `paymentStatus` remains
 `Paid`; malformed refund values also reject rather than being stripped or coerced.
+Legacy `refundedAmount` likewise must be absent or numeric zero; `refundedAt` must
+be absent or null. Any legacy refund amount or timestamp and malformed marker
+reject. These recognized markers match the existing feedback refund boundary.
 Paid/Pending inconsistency is rejected. Evidence age is checked before and after
 reads. A Pending payment projection derives Paid and Pending status derives
 Received. Already-paid replay keeps the current production status and order ID.

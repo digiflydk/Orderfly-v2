@@ -15,21 +15,37 @@ const persistedOrder = z.object({
   deliveryType: z.enum(['Pickup', 'Delivery']), totalAmount: z.number().finite().positive(),
   // Legacy orders may omit this field; any recorded or malformed refund fails closed.
   refundedAmountOre: z.literal(0).optional(),
+  refundedAmount: z.literal(0).optional(),
+  refundedAt: z.null().optional(),
   psp: z.object({ checkoutSessionId: sessionId }),
 });
 const PROOF_TTL_MS = 300_000;
-type Origin = z.infer<typeof scope> & { sessionId: string; amountMinor: number; verifiedAt: number };
+type Origin = z.infer<typeof scope> & {
+  sessionId: string; amountMinor: number; verifiedAt: number; lastObservedAt: number; invalidated: boolean;
+};
 /** Opaque, nonserializable process-local evidence. Never persist or send to a browser. */
 export type StripePrintPaymentProof = Readonly<{ readonly stripePrintPaymentProof: unique symbol }>;
 export type StripePrintTransition = Readonly<{ readonly stripePrintTransition: unique symbol }>;
 type Projection = Readonly<{ order: Readonly<KitchenOrder>; previousPaymentStatus: 'Pending' | 'Paid'; replay: boolean }>;
 const origins = new WeakMap<object, Origin>();
-const transitions = new WeakMap<object, { context: NativeTransactionContext; value: Projection; verifiedAt: number }>();
+const transitions = new WeakMap<object, { context: NativeTransactionContext; value: Projection; origin: Origin }>();
 export class PrintTransitionProofError extends Error {
   constructor(readonly code: 'invalid_payment_reference' | 'payment_unverified' | 'proof_unavailable'
     | 'proof_expired' | 'transition_unverified') { super(code); }
 }
 const now = () => { const value = Date.now(); if (!Number.isSafeInteger(value) || value <= 0) throw new PrintTransitionProofError('proof_unavailable'); return value; };
+// All handles from one retrieval share irreversible expiry/clock state. Rejecting
+// one handle invalidates the origin and every sibling, even after a clock reset.
+function assertCurrent(origin: Origin): void {
+  if (origin.invalidated) throw new PrintTransitionProofError('proof_expired');
+  let time: number;
+  try { time = now(); } catch (error) { origin.invalidated = true; throw error; }
+  if (time < origin.lastObservedAt || time - origin.verifiedAt >= PROOF_TTL_MS) {
+    origin.invalidated = true;
+    throw new PrintTransitionProofError('proof_expired');
+  }
+  origin.lastObservedAt = time;
+}
 
 /** Retrieves independently from Stripe. A raw webhook/session object is NOT accepted.
  * Existing settlement entrypoints are unchanged; this origin boundary is unwired.
@@ -49,7 +65,9 @@ export async function verifyStripePrintPayment(input: unknown): Promise<StripePr
       throw new PrintTransitionProofError('payment_unverified');
     }
     const proof = Object.freeze({}) as StripePrintPaymentProof;
-    origins.set(proof, { ...native.data, sessionId: session.id, amountMinor: session.amount_total!, verifiedAt: now() });
+    const verifiedAt = now();
+    origins.set(proof, { ...native.data, sessionId: session.id, amountMinor: session.amount_total!,
+      verifiedAt, lastObservedAt: verifiedAt, invalidated: false });
     return proof;
   } catch (error) {
     if (error instanceof PrintTransitionProofError) throw error;
@@ -64,8 +82,7 @@ export async function verifyStripePrintPayment(input: unknown): Promise<StripePr
 export async function prepareStripePrintTransition(context: NativeTransactionContext, proof: StripePrintPaymentProof): Promise<StripePrintTransition> {
   const origin = proof && typeof proof === 'object' ? origins.get(proof) : undefined;
   if (!origin) throw new PrintTransitionProofError('payment_unverified');
-  const time = now();
-  if (time < origin.verifiedAt || time - origin.verifiedAt >= PROOF_TTL_MS) throw new PrintTransitionProofError('proof_expired');
+  assertCurrent(origin);
   if (!context || context.db !== getAdminDb() || !context.transaction) throw new PrintTransitionProofError('transition_unverified');
   const { db, transaction } = context;
   const [order, brand, location] = await Promise.all([
@@ -83,8 +100,7 @@ export async function prepareStripePrintTransition(context: NativeTransactionCon
   }
   // A Paid/Pending combination is inconsistent and must never invent acceptance.
   if (current.data.paymentStatus === 'Paid' && current.data.status === 'Pending') throw new PrintTransitionProofError('transition_unverified');
-  const preparedAt = now();
-  if (preparedAt < origin.verifiedAt || preparedAt - origin.verifiedAt >= PROOF_TTL_MS) throw new PrintTransitionProofError('proof_expired');
+  assertCurrent(origin);
   const value: Projection = Object.freeze({
     order: Object.freeze({ id: origin.orderId, brandId: origin.brandId, locationId: origin.locationId,
       status: current.data.status === 'Pending' ? 'Received' : current.data.status,
@@ -92,7 +108,7 @@ export async function prepareStripePrintTransition(context: NativeTransactionCon
     previousPaymentStatus: current.data.paymentStatus, replay: current.data.paymentStatus === 'Paid',
   });
   const handle = Object.freeze({}) as StripePrintTransition;
-  transitions.set(handle, { context, value, verifiedAt: origin.verifiedAt });
+  transitions.set(handle, { context, value, origin });
   return handle;
 }
 
@@ -103,7 +119,6 @@ export async function prepareStripePrintTransition(context: NativeTransactionCon
 export function stripePrintTransitionProjection(context: NativeTransactionContext, handle: StripePrintTransition): Projection {
   const entry = handle && typeof handle === 'object' ? transitions.get(handle) : undefined;
   if (!entry || entry.context !== context) throw new PrintTransitionProofError('transition_unverified');
-  const time = now();
-  if (time < entry.verifiedAt || time - entry.verifiedAt >= PROOF_TTL_MS) throw new PrintTransitionProofError('proof_expired');
+  assertCurrent(entry.origin);
   return entry.value;
 }
