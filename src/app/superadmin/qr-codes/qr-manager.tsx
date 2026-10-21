@@ -39,6 +39,20 @@ const STATIC_FIELDS: Record<QrStaticType, Array<[string, string, 'text' | 'email
 const STATIC_NAMES: Record<QrStaticType, string> = { url: 'Webadresse', text: 'Tekst', wifi: 'Wi-Fi', vcard: 'Kontaktkort', email: 'E-mail', phone: 'Telefon', sms: 'SMS' };
 const STATUS_NAMES: Record<QrStatus, string> = { active: 'Aktiv', paused: 'På pause', archived: 'Arkiveret' };
 const DEFAULT_STYLE: NonNullable<QrDraft['style']> = { width: 512, dark: '#000000', light: '#ffffff', errorCorrectionLevel: 'M', margin: 4 };
+const copenhagenDate = (at: number) => {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(at));
+  const part = (type: string) => parts.find(value => value.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+};
+function copenhagenMidnight(day: string): number {
+  const utc = Date.parse(day + 'T00:00:00Z');
+  for (const offset of [1, 2]) {
+    const candidate = utc - offset * 3_600_000;
+    const hour = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', hour: '2-digit', hourCycle: 'h23' }).format(new Date(candidate));
+    if (hour === '00' && copenhagenDate(candidate) === day) return candidate;
+  }
+  throw new Error('invalid_date');
+}
 const draftOf = (code: QrDraft): QrDraft => ({ name: code.name, brandId: code.brandId, locationId: code.locationId, kind: code.kind,
   destination: code.destination, staticType: code.staticType, fields: { ...code.fields }, campaign: code.campaign, tags: [...code.tags], utm: { ...code.utm },
   ...(code.expiresAt !== undefined ? { expiresAt: code.expiresAt } : {}), ...(code.style ? { style: { ...code.style } } : {}) });
@@ -149,7 +163,7 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
 
     <div style={gridStyle}>
       <label className="space-y-1">Søg QR-koder<input type="search" className={fieldClass} value={search} onChange={e => setSearch(e.target.value)} /></label>
-      <label className="space-y-1">Status<select className={fieldClass} value={status} onChange={e => setStatusFilter(e.target.value as typeof status)}><option value="all">Alle</option>{Object.entries(STATUS_NAMES).map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select></label>
+      <label className="space-y-1">Status<select aria-label="Status" className={fieldClass} value={status} onChange={e => setStatusFilter(e.target.value as typeof status)}><option value="all">Alle</option>{Object.entries(STATUS_NAMES).map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select></label>
     </div>
 
     {draft && <form aria-label={editing ? 'Redigér QR-kode' : 'Ny QR-kode'} className="space-y-4 rounded-lg border p-4" onSubmit={e => { e.preventDefault(); save(); }}>
@@ -157,21 +171,21 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
       <fieldset disabled={busy || uncertain} className="space-y-4" style={{ minWidth: 0 }}>
         <div style={gridStyle}>
           <label>Navn<input required maxLength={120} className={fieldClass} value={draft.name} onChange={e => change({ name: e.target.value })} /></label>
-          <label>Brand<select required className={fieldClass} disabled={!!editing} value={draft.brandId} onChange={e => change({ brandId: e.target.value, locationId: null })}>{brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label>
-          <label>Placering<select className={fieldClass} value={draft.locationId || ''} onChange={e => change({ locationId: e.target.value || null })}><option value="">Hele brandet</option>{selectedBrand?.locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
-          <label>Kodetype<select className={fieldClass} disabled={!!editing} value={draft.kind} onChange={e => change({ kind: e.target.value as QrKind })}><option value="dynamic">Dynamisk, med statistik</option><option value="static">Statisk, uden statistik</option></select></label>
-          {draft.kind === 'static' && <label>Indholdstype<select className={fieldClass} value={draft.staticType} onChange={e => change({ staticType: e.target.value as QrStaticType, fields: {} })}>{Object.entries(STATIC_NAMES).map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select></label>}
+          <label>Brand<select aria-label="Brand" required className={fieldClass} disabled={!!editing} value={draft.brandId} onChange={e => change({ brandId: e.target.value, locationId: null })}>{brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label>
+          <label>Placering<select aria-label="Placering" className={fieldClass} value={draft.locationId || ''} onChange={e => change({ locationId: e.target.value || null })}><option value="">Hele brandet</option>{selectedBrand?.locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
+          <label>Kodetype<select aria-label="Kodetype" className={fieldClass} disabled={!!editing} value={draft.kind} onChange={e => change({ kind: e.target.value as QrKind })}><option value="dynamic">Dynamisk, med statistik</option><option value="static">Statisk, uden statistik</option></select></label>
+          {draft.kind === 'static' && <label>Indholdstype<select aria-label="Indholdstype" className={fieldClass} value={draft.staticType} onChange={e => change({ staticType: e.target.value as QrStaticType, fields: {} })}>{Object.entries(STATIC_NAMES).map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select></label>}
         </div>
         {(draft.kind === 'dynamic' || draft.staticType === 'url') && <label className="block">Webadresse<input required type="url" maxLength={2000} placeholder="https://" className={fieldClass} value={draft.destination} onChange={e => change({ destination: e.target.value })} /></label>}
         {draft.kind === 'static' && <div style={gridStyle}>{STATIC_FIELDS[draft.staticType].map(([key, label, type]) => <label key={key}>{label}<input type={type} maxLength={2000} required={key === 'text' || key === 'ssid' || key === 'name' || key === 'to' || key === 'phone'} autoComplete={type === 'password' ? 'new-password' : 'off'} className={fieldClass} value={draft.fields[key] || ''} onChange={e => change({ fields: { ...draft.fields, [key]: e.target.value } })} /></label>)}</div>}
         <p className="text-sm text-muted-foreground">{draft.kind === 'dynamic' ? 'Destinationen kan ændres efter print. Statistik måler åbninger af QR-linket, ikke sikre personer eller kamerascanninger.' : 'Indholdet kan ikke ændres på en trykt kode. Statiske koder giver ingen scanningstatistik.'}</p>
         {draft.kind === 'static' && <p className="text-sm">Statiske koder genereres til download. Indholdet gemmes ikke i QR-oversigten.</p>}
-        {draft.kind === 'dynamic' && <label className="block">Udløbsdato<input type="date" className={fieldClass} value={draft.expiresAt ? new Date(draft.expiresAt).toISOString().slice(0, 10) : ''} onChange={e => change({ expiresAt: e.target.value ? Date.parse(e.target.value + 'T00:00:00Z') : null })} /><span className="text-xs">Valgfrit. Koden udløber ved starten af datoen i UTC.</span></label>}
+        {draft.kind === 'dynamic' && <label className="block">Udløbsdato<input type="date" className={fieldClass} value={draft.expiresAt ? copenhagenDate(draft.expiresAt) : ''} onChange={e => change({ expiresAt: e.target.value ? copenhagenMidnight(e.target.value) : null })} /><span className="text-xs">Valgfrit. Koden udløber kl. 00.00 dansk tid på den valgte dato.</span></label>}
         <details><summary>Udseende</summary><div style={gridStyle}>
-          <label>Størrelse i pixels<select className={fieldClass} value={(draft.style || DEFAULT_STYLE).width} onChange={e => change({ style: { ...(draft.style || DEFAULT_STYLE), width: Number(e.target.value) } })}>{[256, 512, 1024, 2048].map(size => <option key={size} value={size}>{size}</option>)}</select></label>
+          <label>Størrelse i pixels<select aria-label="Størrelse i pixels" className={fieldClass} value={(draft.style || DEFAULT_STYLE).width} onChange={e => change({ style: { ...(draft.style || DEFAULT_STYLE), width: Number(e.target.value) } })}>{[256, 512, 1024, 2048].map(size => <option key={size} value={size}>{size}</option>)}</select></label>
           <label>Kodefarve<input type="color" className={fieldClass} value={(draft.style || DEFAULT_STYLE).dark} onChange={e => change({ style: { ...(draft.style || DEFAULT_STYLE), dark: e.target.value } })} /></label>
           <label>Baggrundsfarve<input type="color" className={fieldClass} value={(draft.style || DEFAULT_STYLE).light} onChange={e => change({ style: { ...(draft.style || DEFAULT_STYLE), light: e.target.value } })} /></label>
-          <label>Fejlkorrektion<select className={fieldClass} value={(draft.style || DEFAULT_STYLE).errorCorrectionLevel} onChange={e => change({ style: { ...(draft.style || DEFAULT_STYLE), errorCorrectionLevel: e.target.value as 'L' | 'M' | 'Q' | 'H' } })}>{['L', 'M', 'Q', 'H'].map(level => <option key={level} value={level}>{level}</option>)}</select></label>
+          <label>Fejlkorrektion<select aria-label="Fejlkorrektion" className={fieldClass} value={(draft.style || DEFAULT_STYLE).errorCorrectionLevel} onChange={e => change({ style: { ...(draft.style || DEFAULT_STYLE), errorCorrectionLevel: e.target.value as 'L' | 'M' | 'Q' | 'H' } })}>{['L', 'M', 'Q', 'H'].map(level => <option key={level} value={level}>{level}</option>)}</select></label>
         </div><p className="text-xs">Minimum fire modulers lys kant bevares. Eksporten kontrollerer kontrast og læsbarhed.</p></details>
         <div style={gridStyle}>
           <label>Kampagne<input maxLength={120} className={fieldClass} value={draft.campaign} onChange={e => change({ campaign: e.target.value })} /></label>

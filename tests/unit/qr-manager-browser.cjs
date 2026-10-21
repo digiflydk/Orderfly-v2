@@ -39,6 +39,9 @@ after(async () => { await browser?.close(); if (server) await new Promise(resolv
 
 async function open({ width = 390, answers = [], readonly = false } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 900 } }), calls = [];
+  page.setDefaultTimeout(5000);
+  const browserErrors = [];
+  page.on('pageerror', error => browserErrors.push(error.message));
   await page.route('**/api/qr/test', async route => {
     const data = route.request().postDataJSON(); calls.push(data);
     const answer = answers.shift();
@@ -49,6 +52,7 @@ async function open({ width = 390, answers = [], readonly = false } = {}) {
     return route.fulfill({ status, contentType: 'application/json', body: JSON.stringify(body) });
   });
   await page.goto(origin + (readonly ? '/?readonly' : '/'));
+  assert.deepEqual(browserErrors, [], 'the component must mount without browser errors');
   await page.getByRole('heading', { name: 'QR-koder', exact: true }).waitFor();
   return { page, calls };
 }
@@ -61,10 +65,12 @@ for (const width of [390, 1440]) test(`create and edit carry selected scope and 
     await page.getByLabel('Brand', { exact: true }).selectOption('b2');
     await page.getByLabel('Placering', { exact: true }).selectOption('l2');
     await page.getByLabel('Webadresse', { exact: true }).fill('https://example.com/flyer');
+    await page.getByLabel('Udløbsdato', { exact: false }).fill('2026-10-25');
     assert.equal(await page.getByRole('button', { name: 'Download PNG' }).isDisabled(), true);
     await page.getByRole('button', { name: 'Gem QR-kode' }).click();
     await page.getByRole('status').filter({ hasText: 'QR-koden er gemt.' }).waitFor();
     assert.equal(calls[0].draft.brandId, 'b2'); assert.equal(calls[0].draft.locationId, 'l2'); assert.match(calls[0].context.requestId, /^[a-f0-9-]{36}$/);
+    assert.equal(calls[0].draft.expiresAt, Date.parse('2026-10-24T22:00:00Z'));
     assert.equal('id' in calls[0].context, false);
     await page.getByRole('button', { name: 'Redigér Flyer', exact: true }).click();
     assert.equal(await page.getByLabel('Brand', { exact: true }).isDisabled(), true);
