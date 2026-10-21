@@ -1,4 +1,5 @@
 'use strict';
+const observerOperations = new Set(['attach', 'enable', 'pauseMode', 'pauseLimit', 'closingPause', 'categorize', 'resume', 'settle', 'disable', 'detach']);
 const roles = new Set(['admin', 'merchant']);
 const phases = new Set(['page-ready', 'toggle', 'fields', 'fields-email', 'fields-password', 'submit', 'session-response', 'navigation']);
 const alerts = new Map([
@@ -59,7 +60,7 @@ function diagnostics() {
       else if (error?.name === 'QaObserverError') failureCategory = 'login-observer-failed';
       else if (error?.name === 'AssertionError') failureCategory = 'assertion-failed';
       else if (error?.message === 'QA0 login UI rejected') failureCategory = 'ui-login-rejected';
-      return { ...state, admin: { ...state.admin }, merchant: { ...state.merchant }, failureCategory };
+      return { ...state, admin: { ...state.admin }, merchant: { ...state.merchant }, observerFailureOperation: error?.name === 'QaObserverError' && observerOperations.has(error.operation) ? error.operation : null, failureCategory };
     },
   };
 }

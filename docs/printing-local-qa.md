@@ -224,6 +224,14 @@ counts/visibility for the original separate-account toggle, login form, exact
 ADMINISTRATION heading and existing `Indlæser login…` Suspense label too. It adds
 only a path enum (`admin-login`, `superadmin`, `merchant`, `other-local`) and
 uncaught error NAME enum (TypeError/ReferenceError/SyntaxError/ChunkLoadError/other).
+The next actual CI run switched the form and observed Auth200/session200, then
+failed closed in the observer; table/merchant/two-pass acceptance was not reached.
+A distinct bounded classification revision adds ONLY the FIRST fixed observer
+failure-operation enum (attach/enable/pauseMode/pauseLimit/closingPause/categorize/
+resume/settle/disable/detach). Later cleanup failures cannot replace that first
+category. No protocol error message or payload is captured, and observer flow,
+deadlines, cleanup and all acceptance assertions remain unchanged. This records
+where uncertainty arose; it does not establish a cause before the actual run.
 No URL/query, message, values, HTML, login screenshot, retry or timeout change is
 introduced. These extra fixed observations distinguish missing form, unchanged
 mode, navigation and uncaught script failure without assuming hydration is the

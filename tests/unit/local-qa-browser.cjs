@@ -135,7 +135,7 @@ test('caught client exception is categorized without pageerror, resumed and deta
 test('observer resumes even if categorization rejects and always detaches after action failure', async () => {
   const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
   const first = cdpFixture();
-  await assert.rejects(withCaughtLoginExceptions(first.page, { clientError() { throw Error('PRIVATE sanitizer'); } }, 'admin', () => first.session.caught('PRIVATE')), error => error.name === 'QaObserverError' && !error.message.includes('PRIVATE'));
+  await assert.rejects(withCaughtLoginExceptions(first.page, { clientError() { throw Error('PRIVATE sanitizer'); } }, 'admin', () => first.session.caught('PRIVATE')), error => error.name === 'QaObserverError' && error.operation === 'categorize' && !error.message.includes('PRIVATE'));
   assert.ok(first.session.calls.some(([method]) => method === 'Debugger.resume')); assert.equal(first.session.calls.at(-1)[0], 'detach');
   const second = cdpFixture(), original = Object.assign(Error('original scenario failed'), { name: 'TimeoutError' });
   await assert.rejects(withCaughtLoginExceptions(second.page, { clientError() {} }, 'admin', async () => { throw original; }), error => error === original);
@@ -145,7 +145,7 @@ test('protocol setup, resume and detach failures fail closed with fixed errors a
   const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
   for (const failure of ['Debugger.enable', 'Debugger.setPauseOnExceptions', 'Debugger.resume', 'Debugger.disable', 'detach']) {
     const { page, session } = cdpFixture(failure);
-    await assert.rejects(withCaughtLoginExceptions(page, { clientError() {} }, 'admin', () => session.caught('PRIVATE')), error => error.name === 'QaObserverError' && error.message === 'QA0 login observer failed');
+    await assert.rejects(withCaughtLoginExceptions(page, { clientError() {} }, 'admin', () => session.caught('PRIVATE')), error => error.name === 'QaObserverError' && error.message === 'QA0 login observer failed' && error.operation === ({ 'Debugger.enable':'enable', 'Debugger.setPauseOnExceptions':'pauseMode', 'Debugger.resume':'resume', 'Debugger.disable':'disable', detach:'detach' })[failure]);
     assert.ok(session.calls.some(([method]) => method === 'Debugger.setPauseOnExceptions'));
     assert.ok(session.calls.some(([method]) => method === 'Debugger.disable')); assert.equal(session.calls.at(-1)[0], 'detach');
     assert.equal(session.listenerCount('Debugger.paused'), 0);
@@ -155,12 +155,12 @@ test('observer bounds a stalled protocol operation and exception storm without c
   const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
   const stalled = cdpFixture(); const original = stalled.session.send;
   stalled.session.send = (method, args) => method === 'Debugger.enable' ? new Promise(() => {}) : original(method, args);
-  await assert.rejects(withCaughtLoginExceptions(stalled.page, { clientError() {} }, 'admin', async () => assert.fail('setup never completed')), { name: 'QaObserverError' });
+  await assert.rejects(withCaughtLoginExceptions(stalled.page, { clientError() {} }, 'admin', async () => assert.fail('setup never completed')), { name: 'QaObserverError', operation: 'enable' });
   assert.equal(stalled.session.calls.at(-1)[0], 'detach');
   const storm = cdpFixture();
   await assert.rejects(withCaughtLoginExceptions(storm.page, { clientError() {} }, 'admin', async () => {
     for (let i = 0; i < 17; i++) await storm.session.caught('PRIVATE');
-  }), { name: 'QaObserverError' });
+  }), { name: 'QaObserverError', operation: 'pauseLimit' });
   assert.equal(storm.session.calls.at(-1)[0], 'detach');
 });
 test('field diagnostics read only fixed DOM counts/visibility, safe path enums and uncaught names', async () => {
@@ -198,4 +198,20 @@ test('teardown waits for an in-flight resume instead of issuing a second concurr
     void session.caught('PRIVATE'); throw original;
   }), error => error === original);
   assert.equal(resumes, 1); assert.equal(session.calls.at(-1)[0], 'detach');
+});
+test('observer exposes only its FIRST fixed failure operation even when later cleanup also fails', async () => {
+  const { withCaughtLoginExceptions } = require('../../scripts/local-qa/caught-login-exceptions.cjs');
+  const { diagnostics } = require('../../scripts/local-qa/browser-diagnostics.cjs');
+  const { page, session } = cdpFixture('Debugger.enable');
+  session.detach = async () => { session.calls.push(['detach']); throw Error('PRIVATE later cleanup detail'); };
+  await assert.rejects(withCaughtLoginExceptions(page, { clientError() {} }, 'admin', async () => assert.fail('no action after setup failure')), error => {
+    assert.equal(error.operation, 'enable');
+    const result = diagnostics().snapshot(error);
+    assert.equal(result.observerFailureOperation, 'enable'); assert.equal(JSON.stringify(result).includes('PRIVATE'), false);
+    return true;
+  });
+  assert.equal(session.calls.at(-1)[0], 'detach');
+  await assert.rejects(withCaughtLoginExceptions({ context: () => ({ newCDPSession: async () => { throw Error('PRIVATE attach failure'); } }) }, { clientError() {} }, 'admin', async () => assert.fail('no action after attach failure')), error => error.operation === 'attach' && !error.message.includes('PRIVATE'));
+  const d = diagnostics();
+  assert.equal(d.snapshot({ name: 'QaObserverError', operation: 'PRIVATE' }).observerFailureOperation, null);
 });
