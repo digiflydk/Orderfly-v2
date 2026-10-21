@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { copenhagenDay } from './day';
 import { normalizeCustomerPhone } from '@/lib/customer-phone';
 
 export const PROFILE_GENDERS = ['male', 'female', 'other', 'prefer_not_to_say'] as const;
@@ -18,9 +19,9 @@ export const profileSchema = z.object({
 }).strict().refine(value => Object.keys(value).length > 0);
 export type ProfileInput = z.infer<typeof profileSchema>;
 
-export function profileFromCustomer(customer: Record<string, unknown> | undefined): MemberProfile {
+export function profileFromCustomer(customer: Record<string, unknown> | undefined, now = Date.now()): MemberProfile {
   const phone = typeof customer?.phone === 'string' ? customer.phone.trim() : '';
-  const birthDate = typeof customer?.birthDate === 'string' && validBirthDate(customer.birthDate) ? customer.birthDate : null;
+  const birthDate = typeof customer?.birthDate === 'string' && validBirthDate(customer.birthDate) && customer.birthDate <= copenhagenDay(now) ? customer.birthDate : null;
   const gender = PROFILE_GENDERS.includes(customer?.gender as typeof PROFILE_GENDERS[number]) ? customer!.gender as typeof PROFILE_GENDERS[number] : null;
   return { phone: normalizeCustomerPhone(phone) ? phone : '', birthDate, gender };
 }

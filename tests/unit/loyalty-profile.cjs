@@ -88,3 +88,22 @@ test('same phone on another brand is isolated; parallel same-brand phone claims 
  const results=await Promise.allSettled([update(db,session,{phone:'+4577778888'}),update(db,{sessionId:'s2',memberId:'m2',member:otherMember},{phone:'+4577778888'})]);
  assert.equal(results.filter(r=>r.status==='fulfilled').length,1);assert.equal(results.find(r=>r.status==='rejected').reason.code,'customer_conflict');
 });
+
+test('unindexed formatted legacy primary phones and aliases block a new identity reservation',async()=>{
+ for(const legacy of [{phone:'+45 55 55 66 66'},{phone:'0045 (55) 55-66-66'},{phoneAliases:['+45 55 55 66 66']}]){
+  const {db,session}=setup();db.rows.set('customers/legacy',{brandId:'b',email:'legacy@example.com',...legacy});
+  const before=structuredClone([...db.rows]);
+  await rejects(update(db,session,{phone:'+4555556666'}),'customer_conflict');assert.deepEqual([...db.rows],before);
+ }
+ const {db,session}=setup();db.rows.set('customers/otherbrand',{brandId:'other',phone:'+45 55 55 66 66'});
+ assert.equal((await update(db,session,{phone:'+4555556666'})).profile.phone,'+4555556666');
+});
+
+test('future persisted birth dates project empty on the Copenhagen calendar boundary',async()=>{
+ assert.equal(profileFromCustomer({birthDate:'2027-01-01'},NOW).birthDate,null);
+ assert.equal(profileFromCustomer({birthDate:'2026-10-23'},Date.parse('2026-10-22T23:30:00Z')).birthDate,'2026-10-23');
+ assert.equal(profileFromCustomer({birthDate:'2026-10-24'},Date.parse('2026-10-22T23:30:00Z')).birthDate,null);
+ const {db,session}=setup();db.rows.get('customers/c').birthDate='2999-01-01';
+ const result=await update(db,session,{gender:'male'});assert.equal(result.profile.birthDate,null);
+ assert.equal(db.rows.get('customers/c').birthDate,'2999-01-01','omitted malformed legacy value is not silently rewritten');
+});

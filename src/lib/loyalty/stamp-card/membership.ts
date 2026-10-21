@@ -258,7 +258,7 @@ export async function memberView(db: Firestore, brand: ProgramBrand, session: Me
   return {
     program: { name: program.settings.name, active: program.settings.active, rewardDescription: program.settings.rewardDescription, terms: texts.ready ? texts.texts.terms : '' },
     member: { name: member.name, email: member.normalizedEmail, joinedAt: member.joinedAt },
-    profile: profileFromCustomer(customerSnap.data()?.brandId === brand.brandId && customerHasEmail(customerSnap.data()!, member.normalizedEmail) ? customerSnap.data() : undefined),
+    profile: profileFromCustomer(customerSnap.data()?.brandId === brand.brandId && customerHasEmail(customerSnap.data()!, member.normalizedEmail) ? customerSnap.data() : undefined, now),
     card: { stamps: live?.stamps ?? 0, stampsRequired: live?.stampsRequired ?? program.settings.stampsRequired, expiresAt: live?.expiresAt ?? null,
       rewardDescription: live?.rewardDescription ?? program.settings.rewardDescription },
     rewards: rewards.docs.map(doc => ({ id: doc.id, ...(doc.data() as RewardDoc) }))
