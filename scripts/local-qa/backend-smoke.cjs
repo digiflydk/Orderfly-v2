@@ -18,9 +18,11 @@ let seeded = false;
 async function json(url, body) { const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   if (!r.ok) throw Error('QA0 emulator operation rejected'); return r.json(); }
 async function user(label) {
-  const response = await json(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=qa0-public-only`, {
-    email: `${label}@qa0.example.invalid`, password: randomBytes(24).toString('base64url'), returnSecureToken: true });
-  accounts.push(response.localId); return { uid: response.localId, idToken: response.idToken };
+  const email = `${label}@qa0.example.invalid`, password = randomBytes(24).toString('base64url');
+  const response = await json(`${AUTH}/identitytoolkit.googleapis.com/v1/accounts:signUp?key=qa0-public-only`, { email, password, returnSecureToken: true });
+  accounts.push(response.localId);
+  // Browser callback sees ephemeral credentials only in memory; accidental spreads omit them.
+  return Object.defineProperties({ uid: response.localId, idToken: response.idToken }, { email: { value: email }, password: { value: password } });
 }
 async function session(idToken) {
   const r = await fetch(BASE + '/api/admin/session', { method: 'POST', headers: { origin: BASE, 'content-type': 'application/json' }, body: JSON.stringify({ idToken }) });
@@ -70,7 +72,8 @@ async function printerRead(cookie, brand = ids.brand, location = ids.location) {
     const queue = await fetch(`${BASE}/api/merchant/printers/queue?brandId=${ids.brand}&locationId=${ids.location}&printerId=${ids.printer}`, { headers: { cookie: adminCookie } });
     assert.equal(queue.status, 200); const summary = await queue.json(); assert.equal(summary.resumeAuthorized, false); counters.push('actual queue API validates native empty ledger without resume authority');
     assert.equal((await db.doc(printerPath).get()).data().configuration.state, 'disabled');
-    proof = { environment: 'QA0a-local-backend', project: PROJECT, softwareOnly: true, checks: counters, productionAcceptance: false, physicalPrintVerified: false };
+    const browser = process.env.ORDERFLY_LOCAL_QA_BROWSER === 'true' ? await require('./browser-smoke.cjs').runBrowserSmoke({ admin, merchant, ids }) : undefined;
+    proof = { ...(browser ? { browser } : {}), environment: 'QA0a-local-backend', project: PROJECT, softwareOnly: true, checks: counters, productionAcceptance: false, physicalPrintVerified: false };
   } finally {
     try {
     // Only fixed test project and explicit seed paths. Never delete arbitrary projects/data.

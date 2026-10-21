@@ -171,3 +171,55 @@ QA0b2 still owns official browser provisioning, browser-specific loopback networ
 restrictions, shared in-memory seed/cleanup, real visible login and real app UI
 proof. No browser process, installer or server is started by QA0b1; parent #376
 remains open.
+
+## QA0b2 real browser proof (#381)
+
+This is the already planned THIRD preparation slice, using the single existing
+QA0a seed/cleanup and #379 client binding. No second environment or copied seed
+is created. The backend smoke retains all native/session/denial/cleanup checks
+and optionally calls the browser proof while its same ephemeral data is alive.
+The passwords are non-enumerable, memory-only callback values. A callback failure
+still enters the original verified cleanup and guaranteed native termination.
+
+With the same explicit tool paths shown above, run
+`node scripts/local-qa/run-browser.cjs`. It uses the existing launcher and fixed
+60-second smoke deadline twice before ONE emulator/app teardown. Browser smoke has its own process group so
+the deadline kills Chromium descendants as well as the smoke, and teardown tries
+every context and the browser even if one close rejects. Each pass uses
+the visible separate Orderfly-account login form for two actual Firebase users,
+then tests the real superadmin table (nine exact headers, unfiltered initial
+state, persisted Danish row), native edit-form load/cancel, desktop1348/mobile375
+containment and table scrolling, ordinary merchant UI/API denial, anonymous401,
+foreign native scope403 and retired merchant route404. Native disabled-printer
+and empty-ledger readback and output-off checks remain in the shared backend
+proof. Broad mutation/race/TTL acceptance stays in #372/#373/#374.
+
+Browser contexts block service workers and downloads. HTTP allows ONLY the three
+fixed `http://127.0.0.1` app3100/Auth9099/Firestore8088 origins; WebSocket allows
+ONLY app3100's exact Next HMR path. Both routes are installed before any page or
+credentials. External requests are aborted without logging URL/query/body. The
+Node guard remains active separately. No HAR, trace, storageState, cookie dump,
+video or credential-screen screenshot is recorded. Screenshots are taken only
+of the authenticated synthetic printer table at desktop/mobile sizes. A failed scenario writes only a fixed stage label in `local-qa-browser-failure.json`;
+no raw error, request or credential data is stored. Browser
+errors become a fixed failure message and never expose Playwright's credential
+call log.
+
+Safe screenshots are `test-results/local-qa-*-desktop.png` and `*-mobile.png`.
+Only after BOTH passes and all cleanup checks succeed does the launcher write
+`test-results/local-qa-summary.json` (0600), including checked-out source SHA,
+Next/Playwright versions, environment name, scenario results,
+`sameEmulatorPasses:2`, `cleanupVerified:true`, `productionAcceptance:false` and
+`physicalPrintVerified:false`. These are local isolated test artifacts, never
+production screenshots or physical-printer evidence.
+
+The ONE authorized local official Playwright1.62 Chromium1234 installation
+attempt on21October2026 FAILED: the official CDN archive was truncated/invalid
+ZIP. No alternate binary or second install command was attempted. Therefore
+local browser execution is BLOCKED and no browser pass is claimed from source
+or unit fixtures. CI reuses its existing successful official Chromium install,
+adds Java21 and pinned FirebaseCLI15.30.0 with sanitized tool-install env, then
+runs this actual emulator/Next/browser proof. The existing artifact upload gains
+only the safe screenshot/JSON paths. CI success must mean the actual proof step
+ran and passed; skipped/pending checks do not establish browser readiness.
+Parent #376 stays open until that real evidence is inspected and accepted.
