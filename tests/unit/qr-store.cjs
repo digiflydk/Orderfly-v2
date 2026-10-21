@@ -1,13 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const fs = require('node:fs');
-const path = require('node:path');
-const ts = require('typescript');
-const Module = require('node:module');
-const filename = path.resolve(__dirname, '../../src/lib/qr/store.ts');
-const compiled = ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } });
-const mod = new Module(filename, module); mod.paths = module.paths; mod._compile(compiled.outputText, filename);
-const { createQrStore, QrStoreError } = mod.exports;
+const { loadTs } = require('../helpers/load-ts.cjs');
+const { createQrStore, QrStoreError } = loadTs('src/lib/qr/store.ts');
 
 // Executable transaction double: atomic commits, create-only semantics and the
 // Firestore read-before-write rule. It is not a Firestore emulator integration.
