@@ -137,7 +137,7 @@ document path. Its brand/location must match the independently authorized scope
 and native location. The public projection contains only validated configuration
 and revision. Unknown envelope/configuration fields (including credential fields)
 are rejected; no raw document, timestamps, validation issues or error details are
-serialized. Future writes (#296) must use this envelope and keep credentials in
+serialized. Preparatory writes (#296) use this envelope and keep credentials in
 a separate private store, without enabling client Firestore access.
 
 Lists filter `deletedAt == null`, order by document ID and read at most
@@ -173,6 +173,83 @@ Use fixture tests for writes/data-corruption scenarios. Never seed production
 printers, fabricate credentials or treat a generic smoke test as authenticated
 API or physical printer evidence.
 
+### Audited preparatory writes (#296)
+
+`POST /api/merchant/printers` takes `{configuration: PrinterConfiguration}` and
+returns `{item: {configuration, revision: 1}}` with status 201. `PATCH` takes
+`{configuration: PrinterConfiguration, revision: number}` and returns the same
+projection with the next revision (status 200). These are full, strict DTOs;
+unknown keys, credentials, actor IDs, device evidence, invalid IDs and revisions
+are rejected. Query parameters are not accepted for writes.
+
+Both the submitted and any existing configuration must be **disabled**. This
+delivery prepares configuration only; active/paused printers cannot be edited
+through it. State changes, pause/deactivate/soft-delete and reviewed resume belong
+to #298, so a configuration edit cannot bypass a queue-age review. Duplicate
+creation conflicts even if the existing ID is a tombstone or corrupt record;
+deleted printer identities are never reused. There is no print worker/dispatch,
+customer/order mutation or printer credential provisioning in these operations.
+
+The existing `orderfly.catalog:create` and `orderfly.catalog:edit` permissions
+are checked by `authorizeTransaction` against the currently stored policy, brand
+and location in the **same Firestore transaction** as the mutation. The requested
+location must actually belong to the requested brand. The stored record must
+also match that scope and its document ID; it cannot be reparented by a request.
+The transaction reads authorization before exposing existence, and retries
+recheck grants, ownership and revision. A stale revision, exhausted safe integer
+or edit of an active/paused record gives generic 409 `record_conflict`. Missing,
+deleted, malformed or foreign stored records give the same 404 `not_found` on
+edit. Authentication/permission failures remain 401/403; unknown failures are
+generic 503 with no raw data logged or returned.
+
+Create persists server timestamps and revision 1. Edit preserves `createdAt`,
+sets a new server `updatedAt` and increments the revision. The transaction also
+creates an immutable-by-API `audit/{revision}` child document containing the
+verified identity's namespaced principal hash, action, before/after validated
+configuration, revision and server timestamp. The API accepts no audit actor or
+timestamp from the browser and offers no audit update/delete operation. Failed
+audit creation/commit rolls back the configuration change too.
+
+Trusted capability verification is a separate private record at
+`locations/{locationId}/printerCapabilityVerifications/{printerId}`. Every
+successful configuration revision deletes that evidence in the same transaction,
+conservatively requiring fresh verification even for a rename. Device model,
+transport and paper changes therefore cannot retain stale verified capability.
+Future verification/dispatch must use this private record and bind evidence to
+the current configuration revision. Credentials must remain in another private
+store and never appear in configuration, audit or public projections.
+
+Write HTTP handlers authenticate before reading the body, require same-origin
+JSON and reject cross-site fetches, query parameters, malformed JSON and bodies
+larger than 8192 streamed bytes (regardless of Content-Length). Every response is
+`no-store` and varies by Cookie, including errors.
+
+**Rollout gate:** `ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED` must equal exactly
+`true` to allow even these preparatory writes. The service itself enforces it,
+not only the HTTP route. `apphosting.yaml` explicitly sets it to `false`, and the
+absent/default value also fails closed with 503 `writes_unavailable` before
+database access. This is independent of future production-print activation.
+Do not enable it until the **active** Firestore release in data project
+`orderfly-39325` has been inspected and tested to deny unauthorized direct
+client reads/writes of printer, audit, capability and future credential records,
+including any broader recursive matches. Local rule files are not live proof.
+Read-only `node scripts/firestore-rules-release.mjs preview` requires available
+authorized Rules API credentials; missing credentials are a rollout blocker,
+not evidence of unsafe or safe production rules. Rules/index changes require
+their own reviewed release under `AGENTS.md`; unattended QA never writes rules
+or data and must not enable this gate.
+
+Fixture tests exercise actual transaction authorization and service/HTTP code
+with isolated database I/O, including atomic audit failure, competing revisions,
+transaction retry after revocation/location reassignment, malformed/foreign rows,
+default-off gate and lifecycle bypass rejection. They do **not** prove production
+write execution, active Firestore policy, authenticated live QA or physical
+print. After exact-head release verification, live checks may verify anonymous
+POST/PATCH rejection and existing GET behavior without mutations. Authenticated
+authorization/configuration checks require safe existing access; controlled
+production write QA needs a separately defined PO-approved reversible scenario.
+Keep missing access/rules/write QA explicitly blocked and the issue open.
+
 1. Validated printer configuration and authenticated scoped persistence/API.
 2. Transactional print-intent outbox and tests for payment/pickup idempotency.
 3. Printer management UI with overview, add/edit/pause/deactivate and test preview.
@@ -187,7 +264,7 @@ does not depend on physical printer availability.
 
 ## Verification and release
 
-Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs`
+Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs`
 and `npm run typecheck`.
 There is no changed browser flow in this delivery.
 Follow `AGENTS.md` for current-head CI, independent Codex review, merge and release
