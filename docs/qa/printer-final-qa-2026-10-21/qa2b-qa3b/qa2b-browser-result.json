@@ -1,0 +1,92 @@
+{
+ "appHealthRelease": "70e45fdee3eb551ae6361c21cc28b5975aea84c3",
+ "repoHead": "70e45fdee3eb551ae6361c21cc28b5975aea84c3",
+ "appSourceDiffVsOriginMain": "none",
+ "observerLoaded": true,
+ "driverExit": 0,
+ "environment": "QA0a demo-orderfly-qa0 + Chromium; response-level FAULT INJECTION with REAL request forwarding and REAL persistence",
+ "started": "2026-10-21T21:35:10.210Z",
+ "finished": "2026-10-21T21:35:37.385Z",
+ "total": 11,
+ "passed": 11,
+ "failed": 0,
+ "results": [
+  {
+   "id": "X1 pending response: controls locked, repeat submit ignored, then real success",
+   "issue": "373/318",
+   "expected": "Gemmer… disabled, Annuller disabled, fields + filters + Opdater locked; 1 request; native commit exists while UI pending; after release success + 1 audit",
+   "actual": "{\"save\":true,\"cancel\":true,\"fieldset\":true,\"brand\":true,\"refresh\":true,\"sent\":1,\"forwarded\":1,\"committedWhilePending\":true}",
+   "pass": true
+  },
+  {
+   "id": "X2 create committed but response lost: UI reports uncertainty, keeps input, blocks retry",
+   "issue": "373/318",
+   "expected": "\"Kunne ikke bekræfte…\"; Gem disabled; ID/name retained; \"Opdater oversigten\"; native rev1 + 1 audit; exactly 1 request",
+   "actual": "Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg. | commit=true rev1 audits=1 requests=1",
+   "pass": true
+  },
+  {
+   "id": "X3 explicit refresh reconciles to native truth (single commit)",
+   "issue": "373",
+   "expected": "row \"Svar tabt\" shown; still 1 audit, rev1; no automatic retry",
+   "actual": "addHiddenWhileUncertain=true audits=1 requests=1",
+   "pass": true
+  },
+  {
+   "id": "X4 edit committed but response lost",
+   "issue": "373/296",
+   "expected": "uncertainty message; input kept; save blocked; native rev2 + audit/2 exactly once",
+   "actual": "Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg. | rev2 audits=1",
+   "pass": true
+  },
+  {
+   "id": "X5 refresh after lost edit shows committed name; stale revision cannot be resubmitted",
+   "issue": "373",
+   "expected": "row \"Køkken lost\"",
+   "actual": "ok",
+   "pass": true
+  },
+  {
+   "id": "X6 delete committed but response lost",
+   "issue": "373/298",
+   "expected": "\"Kunne ikke bekræfte printerhandlingen…\"; confirm blocked; tombstone exists exactly once (rev2, audit 2 printer.delete)",
+   "actual": "Kunne ikke bekræfte printerhandlingen. Opdater oversigten før et nyt forsøg. | deletedAt=true rev2",
+   "pass": true
+  },
+  {
+   "id": "X7 refresh after lost delete removes row",
+   "issue": "373",
+   "expected": "row gone, tombstone retained",
+   "actual": "ok",
+   "pass": true
+  },
+  {
+   "id": "X8 generic 503 after commit = unknown outcome",
+   "issue": "373/318",
+   "expected": "not the writes-off text; \"Kunne ikke bekræfte…\"; save blocked; refresh required; native 1 commit",
+   "actual": "Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.",
+   "pass": true
+  },
+  {
+   "id": "X9 malformed success response after commit is not treated as success",
+   "issue": "373/318",
+   "expected": "\"Kunne ikke bekræfte…\"; no success banner; refresh required; native 1 commit",
+   "actual": "Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.",
+   "pass": true
+  },
+  {
+   "id": "X10 pending lifecycle dialog locks confirm and cancel, then completes",
+   "issue": "373/298",
+   "expected": "both disabled while pending; row removed after real response",
+   "actual": "{\"confirm\":true,\"cancel\":true}",
+   "pass": true
+  },
+  {
+   "id": "X11 browser made no non-loopback requests",
+   "issue": "all",
+   "expected": "0 blocked",
+   "actual": "0",
+   "pass": true
+  }
+ ]
+}
