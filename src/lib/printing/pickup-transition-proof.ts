@@ -108,7 +108,7 @@ export async function preparePickupPrintTransition(context: NativeTransactionCon
     || (parsed.data.id !== undefined && parsed.data.id !== origin.orderId)) throw new PickupPrintProofError('transition_unverified');
   const order = parsed.data;
   if (order.paymentStatus === 'Pending' ? order.discountReservation !== 'held' || order.paymentCollection != null
-    : !order.paymentCollection || order.paymentCollection.method !== origin.method) throw new PickupPrintProofError('transition_unverified');
+    : !['consumed', 'none'].includes(order.discountReservation || '') || !order.paymentCollection || order.paymentCollection.method !== origin.method) throw new PickupPrintProofError('transition_unverified');
   // Current stored policy/native scope are transaction reads, not captured session permissions.
   try { await authorizeTransaction(transaction, actor.identity, order, 'orderfly.orders:edit', 'location'); }
   catch { throw new PickupPrintProofError('pickup_unverified'); }

@@ -68,7 +68,7 @@ test('native seller existence/ownership/identity and deleted markers fail closed
 });
 test('all recognized legacy/current refunds and malformed markers reject pending and paid preparations',async()=>{
  const markers=[{refundedAmountOre:1},{refundedAmountOre:15900},{refundedAmountOre:'0'},{refundedAmountOre:-1},{refundedAmountOre:NaN},{refundedAmount:0.01},{refundedAmount:'0'},{refundedAmount:null},{refundedAt:'2026-10-21T12:00:00Z'},{refundedAt:new Date()},{refundedAt:0},{refundedAt:{seconds:123}}];
- for(const paid of [false,true])for(const patch of markers){const f=fixture({order:{...goodOrder(),...(paid?{paymentStatus:'Paid',paymentCollection:collected()}:{}),...patch}});await rejects(projected(f),'transition_unverified');assert.deepEqual(f.writes,[]);}
+ for(const paid of [false,true])for(const patch of markers){const f=fixture({order:{...goodOrder(),...(paid?{paymentStatus:'Paid',discountReservation:'consumed',paymentCollection:collected()}:{}),...patch}});await rejects(projected(f),'transition_unverified');assert.deepEqual(f.writes,[]);}
  assert.ok(await projected(fixture({order:{...goodOrder(),refundedAmountOre:0,refundedAmount:0,refundedAt:null}})));
 });
 test('paid replay preserves original order/status and requires matching recorded collection method',async()=>{
@@ -77,7 +77,17 @@ test('paid replay preserves original order/status and requires matching recorded
   assert.equal(p.replay,true);assert.equal(p.order.status,status);assert.equal(p.order.id,'order');assert.deepEqual(f.writes,[]);
  }
  for(const paymentCollection of [undefined,null,{},collected('card'),{...collected(),receivedAt:'yesterday'},{...collected(),employeeId:'forged'},{...collected(),method:'Stripe'}]){
-  const f=fixture({order:{...goodOrder(),paymentStatus:'Paid',paymentCollection}});await rejects(projected(f),'transition_unverified');
+  const f=fixture({order:{...goodOrder(),paymentStatus:'Paid',discountReservation:'consumed',paymentCollection}});await rejects(projected(f),'transition_unverified');
+ }
+});
+test('Paid replay rejects held or missing reservation and accepts only settled consumed/none lifecycle',async()=>{
+ for(const discountReservation of ['held',undefined,null,'invalid']){
+  const f=fixture({order:{...goodOrder(),paymentStatus:'Paid',paymentCollection:collected(),discountReservation}});
+  await rejects(projected(f),'transition_unverified');assert.deepEqual(f.writes,[]);
+ }
+ for(const discountReservation of ['consumed','none']){
+  const f=fixture({order:{...goodOrder(),paymentStatus:'Paid',paymentCollection:collected(),discountReservation}});
+  assert.equal((await projected(f)).replay,true);assert.deepEqual(f.writes,[]);
  }
 });
 test('context identity alone is not proof; foreign database, missing context and fabricated projection handles reject',async()=>{

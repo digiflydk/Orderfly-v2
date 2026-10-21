@@ -40,7 +40,8 @@ Preparation reads the native order, brand and location, checks document identity
 and current native ownership, and rejects missing/deleted/malformed records. Only
 `Received`, `In Progress` and `Ready` pickup orders are eligible. `Pending` payment
 requires `discountReservation: 'held'` and no recorded collection; Paid replay
-requires an existing valid collection timestamp/principal hash and the same
+requires settled `consumed`/`none` reservation state (never held or missing),
+an existing valid collection timestamp/principal hash and the same
 recorded cash/card method. An unaccepted `Pending` production status, terminal
 status, online/other payment method, non-null PSP, failed payment or inconsistent
 collection rejects. Recognized refund markers `refundedAmountOre`, legacy
