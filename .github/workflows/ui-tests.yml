@@ -140,6 +140,9 @@ jobs:
       - name: Core browser regression
         run: node --test tests/unit/printing-ui-browser.cjs tests/unit/merchant-payment-browser.cjs tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs tests/unit/customer-form-browser.cjs tests/unit/customer-sync-actions-browser.cjs tests/unit/loyalty-admin-browser.cjs tests/unit/loyalty-portal-browser.cjs tests/unit/loyalty-counter-browser.cjs
 
+      - name: QR module behavior, scope and browser regression
+        run: node --test tests/unit/qr-*.cjs
+
       - name: Games editor browser regression
         run: node --test tests/unit/games-editor-browser.cjs
 
