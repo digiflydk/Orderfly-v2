@@ -51,7 +51,7 @@ const req=(body,extra={})=>new Request('https://orderfly.dk/api/qr/admin',{metho
 test('HTTP rejects CSRF/content type/oversize/malformed JSON before invoking service',async()=>{
  let calls=0;const deps={origin:'https://orderfly.dk',execute:async()=>{calls++;return {};}};
  for(const request of [req({}, {origin:'https://evil.example'}),req({}, {'sec-fetch-site':'cross-site'}),req({}, {'content-type':'text/plain'})])assert.equal((await qrAdminHttp(request,deps)).status,403);
- assert.equal((await qrAdminHttp(req('not json'),deps)).status,400);assert.equal((await qrAdminHttp(req('x'.repeat(32769)),deps)).status,413);assert.equal(calls,0);
+ assert.equal((await qrAdminHttp(req('not json'),deps)).status,400);assert.equal((await qrAdminHttp(req('x'.repeat(3*1024*1024+1)),deps)).status,413);assert.equal(calls,0);
 });
 test('HTTP unknown write outcome is503, native errors stay deny and all responses no-store',async()=>{
  for(const [error,status] of [[new Error('secret credential'),503],[{code:'forbidden',status:403},403],[{code:'unauthorized',status:401},401]]){

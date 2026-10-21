@@ -14,7 +14,7 @@ export type QrDraft = {
   style?: { width: number; dark: string; light: string; errorCorrectionLevel: 'L' | 'M' | 'Q' | 'H'; margin: number };
 };
 export type QrCodeSummary = QrDraft & { id: string; revision: string; status: QrStatus; publicUrl?: string };
-export type QrBrandChoice = { id: string; name: string; locations: Array<{ id: string; name: string }> };
+export type QrBrandChoice = { id: string; name: string; locations: Array<{ id: string; name: string }>; allowWholeBrand?: boolean };
 export type QrCapabilities = { create: boolean; edit: boolean; archive: boolean; export: boolean };
 export type QrPreview = { imageUrl: string; payload: string };
 export type QrManagerApi = {
@@ -92,6 +92,7 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
   const retry = useRef<{ key: string; requestId: string } | null>(null);
   const generation = useRef(0);
   const retryOperation = useRef<(() => Promise<void>) | null>(null);
+  const defaultBrand = brands.find(brand => brand.allowWholeBrand !== false || brand.locations.length > 0);
   const requestId = (key: string) => {
     if (retry.current?.key !== key) retry.current = { key, requestId: crypto.randomUUID() };
     return retry.current.requestId;
@@ -100,7 +101,7 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
   const open = (code?: QrCodeSummary, duplicate = false) => {
     if (running.current || uncertain) return;
     generation.current++; retry.current = null; setPreview(null); setError(''); setNotice(''); setEditing(code && !duplicate ? code : null);
-    setDraft(code ? { ...draftOf(code), name: duplicate ? `${code.name} (kopi)` : code.name } : blank(brands[0]?.id));
+    setDraft(code ? { ...draftOf(code), name: duplicate ? `${code.name} (kopi)` : code.name } : { ...blank(defaultBrand?.id), locationId: defaultBrand?.allowWholeBrand === false ? defaultBrand.locations[0]?.id || null : null });
   };
   const close = () => { if (running.current || uncertain) return; generation.current++; setDraft(null); setEditing(null); setPreview(null); setError(''); retry.current = null; };
   const run = async (operation: () => Promise<void>, mutation = false, isRetry = false) => {
@@ -153,7 +154,7 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
 
   return <section aria-label="QR-koder" aria-busy={busy} className="space-y-6" style={{ minWidth: 0 }}>
     <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">QR-koder</h1><p className="text-sm text-muted-foreground">Opret koder til kampagner, borde og tryksager.</p></div>
-      {capabilities.create && <button type="button" className={buttonClass} disabled={busy || uncertain || !brands.length} onClick={() => open()}>Opret QR-kode</button>}
+      {capabilities.create && <button type="button" className={buttonClass} disabled={busy || uncertain || !defaultBrand} onClick={() => open()}>Opret QR-kode</button>}
     </header>
     {error && <p role="alert" className="rounded-md bg-destructive/10 p-3">{error}</p>}
     {notice && <p role="status" className="rounded-md border p-3">{notice}</p>}
@@ -171,13 +172,15 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
       <fieldset disabled={busy || uncertain} className="space-y-4" style={{ minWidth: 0 }}>
         <div style={gridStyle}>
           <label>Navn<input required maxLength={120} className={fieldClass} value={draft.name} onChange={e => change({ name: e.target.value })} /></label>
-          <label>Brand<select aria-label="Brand" required className={fieldClass} disabled={!!editing} value={draft.brandId} onChange={e => change({ brandId: e.target.value, locationId: null })}>{brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label>
-          <label>Placering<select aria-label="Placering" className={fieldClass} value={draft.locationId || ''} onChange={e => change({ locationId: e.target.value || null })}><option value="">Hele brandet</option>{selectedBrand?.locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
+          <label>Brand<select aria-label="Brand" required className={fieldClass} disabled={!!editing} value={draft.brandId} onChange={e => { const brand = brands.find(candidate => candidate.id === e.target.value); change({ brandId: e.target.value, locationId: brand?.allowWholeBrand === false ? brand.locations[0]?.id || null : null }); }}>{brands.filter(brand => brand.allowWholeBrand !== false || brand.locations.length > 0).map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label>
+          <label>Placering<select aria-label="Placering" className={fieldClass} value={draft.locationId || ''} onChange={e => change({ locationId: e.target.value || null })}>{selectedBrand?.allowWholeBrand !== false && <option value="">Hele brandet</option>}{selectedBrand?.locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
           <label>Kodetype<select aria-label="Kodetype" className={fieldClass} disabled={!!editing} value={draft.kind} onChange={e => change({ kind: e.target.value as QrKind })}><option value="dynamic">Dynamisk, med statistik</option><option value="static">Statisk, uden statistik</option></select></label>
-          {draft.kind === 'static' && <label>Indholdstype<select aria-label="Indholdstype" className={fieldClass} value={draft.staticType} onChange={e => change({ staticType: e.target.value as QrStaticType, fields: {} })}>{Object.entries(STATIC_NAMES).map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select></label>}
+          {draft.kind === 'static' && <label>Indholdstype<select aria-label="Indholdstype" className={fieldClass} value={draft.staticType} onChange={e => change({ staticType: e.target.value as QrStaticType, fields: e.target.value === 'wifi' ? { security: 'WPA' } : {} })}>{Object.entries(STATIC_NAMES).map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select></label>}
         </div>
         {(draft.kind === 'dynamic' || draft.staticType === 'url') && <label className="block">Webadresse<input required type="url" maxLength={2000} placeholder="https://" className={fieldClass} value={draft.destination} onChange={e => change({ destination: e.target.value })} /></label>}
-        {draft.kind === 'static' && <div style={gridStyle}>{STATIC_FIELDS[draft.staticType].map(([key, label, type]) => <label key={key}>{label}<input type={type} maxLength={2000} required={key === 'text' || key === 'ssid' || key === 'name' || key === 'to' || key === 'phone'} autoComplete={type === 'password' ? 'new-password' : 'off'} className={fieldClass} value={draft.fields[key] || ''} onChange={e => change({ fields: { ...draft.fields, [key]: e.target.value } })} /></label>)}</div>}
+        {draft.kind === 'static' && <div style={gridStyle}>{STATIC_FIELDS[draft.staticType].map(([key, label, type]) => <label key={key}>{label}{draft.staticType === 'wifi' && key === 'security'
+          ? <select aria-label={label} className={fieldClass} value={draft.fields.security || 'WPA'} onChange={e => change({ fields: { ...draft.fields, security: e.target.value, ...(e.target.value === 'nopass' ? { password: '' } : {}) } })}><option value="WPA">WPA / WPA2 / WPA3</option><option value="WEP">WEP</option><option value="nopass">Åbent netværk</option></select>
+          : <input type={type} maxLength={2000} disabled={draft.staticType === 'wifi' && key === 'password' && draft.fields.security === 'nopass'} required={key === 'text' || key === 'ssid' || key === 'name' || key === 'to' || key === 'phone'} autoComplete={type === 'password' ? 'new-password' : 'off'} className={fieldClass} value={draft.fields[key] || ''} onChange={e => change({ fields: { ...draft.fields, [key]: e.target.value } })} />}</label>)}</div>}
         <p className="text-sm text-muted-foreground">{draft.kind === 'dynamic' ? 'Destinationen kan ændres efter print. Statistik måler åbninger af QR-linket, ikke sikre personer eller kamerascanninger.' : 'Indholdet kan ikke ændres på en trykt kode. Statiske koder giver ingen scanningstatistik.'}</p>
         {draft.kind === 'static' && <p className="text-sm">Statiske koder genereres til download. Indholdet gemmes ikke i QR-oversigten.</p>}
         {draft.kind === 'dynamic' && <label className="block">Udløbsdato<input type="date" className={fieldClass} value={draft.expiresAt ? copenhagenDate(draft.expiresAt) : ''} onChange={e => change({ expiresAt: e.target.value ? copenhagenMidnight(e.target.value) : null })} /><span className="text-xs">Valgfrit. Koden udløber kl. 00.00 dansk tid på den valgte dato.</span></label>}

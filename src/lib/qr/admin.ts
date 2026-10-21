@@ -15,7 +15,7 @@ export const qrCommandSchema=z.discriminatedUnion('action',[
  z.object({action:z.literal('list')}).strict(),
  z.object({action:z.literal('save'),draft:qrDraftSchema,context}).strict(),
  z.object({action:z.literal('status'),brandId:id,id,locationId:id.nullable(),status:z.enum(['active','paused','archived']),revision:z.string().regex(/^[1-9][0-9]{0,9}$/),requestId:z.string().uuid()}).strict(),
- z.object({action:z.literal('render'),draft:qrDraftSchema,context,format:z.enum(['preview','png','svg','print'])}).strict(),
+ z.object({action:z.literal('render'),draft:qrDraftSchema,context,format:z.enum(['preview','png','svg','print']),logoBase64:z.string().max(2796204).regex(/^[A-Za-z0-9+/]+={0,2}$/).optional()}).strict(),
 ]);
 export type QrCommand=z.infer<typeof qrCommandSchema>;
 export type QrAction='view'|'create'|'edit'|'archive'|'export'|'analytics';
@@ -23,8 +23,8 @@ export type QrAdminDependencies={db:QrDatabase;actorId:string;authorize:(action:
  list:()=>Promise<unknown>};
 
 export function qrSummary(record:QrRecord) {
- const url=new URL(record.destination),tags:Record<string,string>={};
- for(const k of ['source','medium','campaign','content','term'])tags[k]=url.searchParams.get(`utm_${k}`)||'';
+ const url=new URL(record.destination),tags={source:'',medium:'',campaign:'',content:'',term:''};
+ for(const k of ['source','medium','campaign','content','term'] as const)tags[k]=url.searchParams.get(`utm_${k}`)||'';
  return {name:record.name,brandId:record.brandId,locationId:record.locationId,kind:'dynamic' as const,destination:record.destination,staticType:'url' as const,fields:{},campaign:record.campaign,tags:record.tags,utm:tags,
  expiresAt:record.expiresAt,style:record.design,id:record.id,revision:String(record.revision),status:record.status,publicUrl:`https://orderfly.dk/q/${record.slug}`};
 }
@@ -80,7 +80,9 @@ export function createQrAdminService(deps:QrAdminDependencies) {
    if(String(record.revision)!==c.context.revision||record.locationId!==draft.locationId)throw new QrStoreError('revision_conflict',409);
    payload=`https://orderfly.dk/q/${record.slug}`;
   }else payload=staticPayload(draft);
-  const rendered=await renderQr(payload,draft.style);
+  const logo=c.logoBase64?Buffer.from(c.logoBase64,'base64'):undefined;
+  if(logo&&(logo.byteLength>2097152||logo.toString('base64')!==c.logoBase64))throw new QrStoreError('invalid_input');
+  const rendered=await renderQr(payload,logo?{...draft.style,errorCorrectionLevel:'H',logo}:draft.style);
   if(c.format==='preview')return {payload,imageUrl:`data:image/png;base64,${rendered.png.toString('base64')}`};
   if(c.format==='print')return {content:qrPrintHtml(rendered,{title:draft.name}),mime:'text/html',filename:'qr-print.html'};
   return {content:c.format==='png'?rendered.png.toString('base64'):rendered.svg,mime:c.format==='png'?'image/png':'image/svg+xml',encoding:c.format==='png'?'base64':'utf8',filename:`qr-code.${c.format}`};

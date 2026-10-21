@@ -39,13 +39,13 @@ for(const width of [390,1440]){
   const page=await browser.newPage({viewport:{width,height:900}});
   try{await page.goto(origin+'/?mode=view');await page.getByRole('button',{name:'Promotions',exact:true}).click();
    const link=page.getByRole('link',{name:'QR-koder',exact:true});assert.equal(await link.getAttribute('href'),'/superadmin/qr-codes');assert.equal(await link.isVisible(),true);
-   assert.equal(await page.getByRole('link',{name:'Customers',exact:true}).count(),0);
+   assert.equal(await page.getByRole('link',{name:'Customers',exact:true,includeHidden:true}).count(),0);
   }finally{await page.close();}
  });
  test(`sidebar hides QR for absent, action-only and unrelated grants at ${width}px`,async()=>{
   const page=await browser.newPage({viewport:{width,height:900}});
   try{for(const mode of ['anonymous','edit','analytics']){await page.goto(origin+'/?mode='+mode);await page.getByRole('complementary',{name:'Administration',includeHidden:true}).waitFor({state:'attached'});
-    assert.equal(await page.getByRole('link',{name:'QR-koder',exact:true}).count(),0,mode);
+    assert.equal(await page.getByRole('link',{name:'QR-koder',exact:true,includeHidden:true}).count(),0,mode);
    }}finally{await page.close();}
  });
 }
