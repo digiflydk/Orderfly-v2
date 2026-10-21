@@ -19,7 +19,7 @@ HTTP 400/401/403/409 errors become known manager codes only when the status and 
 
 Preview uses the renderer's PNG data URL and the manager's same-origin asset guard. Download replies are `{content,mime,encoding,filename}`. PNG base64 is decoded to bytes; SVG stays text. The adapter accepts only expected MIME types and bounds reply content, then creates a local object URL. Filenames are sanitized by the manager. URLs are revoked after 60 seconds and all remaining URLs/timers are cleaned up on unmount. A late response after unmount cannot allocate a new object URL. No response HTML is injected and no arbitrary remote URL is opened.
 
-The print formatter exists in a separate slice; this adapter currently exposes PNG/SVG download, not a print button or a direct PDF download. Print/PDF acceptance must not be inferred from this page.
+The manager now renders the reviewed logo/print tools through a gated renderExtras hook. Export permission is required; a dynamic draft must be saved, unchanged and enabled. Static export remains available while dynamic redirects are disabled. The same-origin render command carries format and optional logoBase64. Print opens the trusted HTML blob in a separate window with opener severed; PDF remains the browser’s Save as PDF operation, not a direct PDF generation API. Changing the draft/context remounts the ephemeral export tools so a late old result cannot become the new draft’s export.
 
 ## Statistics integration
 
@@ -35,8 +35,21 @@ CSV uses the same submitted scope/date command with `export:true`. It is offered
 
 ## Validation boundaries
 
-`node --test tests/unit/qr-workspace-browser.cjs` renders the actual workspace, manager and dashboard in Chromium with an intercepted HTTP API. The server page is also executed against controlled runtime/auth mocks. Cases cover initial SSR data without a duplicate fetch; save/list at 390 and 1440 pixels; confirmed-save refresh failure; normalized 403; unchanged idempotent retry across tabs; stored brand/location status; PNG blob download and cleanup; exact scoped analytics/CSV; denied capability visibility; malformed-success preservation; and page 401/403/unavailable behavior. Eleven page/workspace tests and eight manager tests pass with a real local Chromium 153 executable. Successful API replies are also shape-checked before applying rows or metrics.
+`node --test tests/unit/qr-workspace-browser.cjs` renders the actual workspace, manager and dashboard in Chromium with an intercepted HTTP API. The server page is also executed against controlled runtime/auth mocks. Cases cover initial SSR data without a duplicate fetch; save/list at 390 and 1440 pixels; confirmed-save refresh failure; normalized 403; unchanged idempotent retry across tabs; stored brand/location status; PNG blob download and cleanup; exact scoped analytics/CSV; denied capability visibility; malformed-success preservation; and page 401/403/unavailable behavior. The later assembled integration checkpoint runs 19 page/workspace, nine manager, ten bulk and seven print cases (45 total) with a real local Chromium 153 executable. Successful API replies are also shape-checked before applying rows or metrics.
 
 This verifies transport and component behavior. It does not prove deployed Firestore policies, real authentication, production event collection, full application CSS, a physical scan, a printer or live release. Full repository typecheck, current-head CI and independent review, authenticated application QA, deployment SHA verification and production-safe live acceptance remain separate gates under #389. The coordinator owns their serial execution.
 
 `allowWholeBrand:false` on a server-projected brand choice hides the whole-brand location and defaults a new or brand-changed draft to its first permitted location. Brands with no available scope cannot be selected for a new draft. An absent flag retains compatibility with existing callers. Server-side action and scope validation still applies.
+
+
+## Integrated bulk commands and scope keys (#434)
+
+CSV-import is available only with projected create capability and dynamicEnabled===true. The always-mounted bulk component is hidden/disabled when unavailable; changing tabs never drops an uncertain commit. Its preview callback sends `{action:'bulk_preview',brandId,csv}`; commit sends `{action:'bulk_commit',brandId,canonical,sha256,requestId}`. A successful records receipt updates the scoped catalogue, then refreshes list. A refresh failure remains separate from a confirmed import. Server row authorization and atomic commit/idempotency remain authoritative.
+
+Catalogue replacement, row keys, status context and analytics choices use brandId/codeId, so identical IDs in different brands cannot select or replace each other. Status receives the selected row’s explicit brand context. Period metrics retain their server counts; the single selected raw QR key is translated only for display labels. No counts are added during that translation.
+
+## Lifetime projection and department boundary (#437)
+
+The optional allTime map uses explicit `${brandId}/${id}` keys. Only codes with an own map entry render in the lifetime table. A null legacy value displays Unknown; missing keys do not expose a row or fabricate zero. Known zero is displayed as zero, separately from unknown history. Counts come exclusively from the lifetime projection, never the selected period or a sum of estimates. The server limits this projection to current brand-wide analytics rights.
+
+Analytics replies must include a boolean currentLocationOnly before metrics can replace the previous result. The dashboard receives that exact validated boolean and explains whether prior departments are included. A malformed/missing boundary flag fails the query rather than implying broader history. Lifecycle totals, date-filtered event statistics, print styling and physical scan acceptance remain distinct.
