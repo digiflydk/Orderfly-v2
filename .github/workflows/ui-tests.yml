@@ -98,6 +98,9 @@ jobs:
       - name: Printer routing preview regression
         run: node --test tests/unit/printing-routing.cjs
 
+      - name: Native print catalog projection regression
+        run: node --test tests/unit/printing-catalog-projection.cjs
+
       - name: Scoped print-intent target policy regression
         run: node --test tests/unit/printing-intent-target-policy.cjs
 
