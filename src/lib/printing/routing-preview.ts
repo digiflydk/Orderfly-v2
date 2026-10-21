@@ -17,7 +17,7 @@ const selector = z.discriminatedUnion('type', [
   z.object({ type: z.literal('category'), id }).strict(),
   z.object({ type: z.literal('product'), id }).strict(),
 ]);
-const ruleSchema = z.object({
+export const printerRoutingRuleSchema = z.object({
   id, brandId: id, locationId: id, printerId: id,
   match: selector, effect: z.enum(['include', 'exclude']),
   deliveryTypes: z.array(z.enum(['Pickup', 'Delivery'])).min(1).max(PRINT_ROUTING_LIMITS.deliveryTypesPerRule).optional(),
@@ -25,11 +25,11 @@ const ruleSchema = z.object({
 const inputSchema = z.object({
   scope: scopeSchema, deliveryType: z.enum(['Pickup', 'Delivery']),
   printers: z.array(z.object({ configuration: printerConfigurationSchema, deleted: z.boolean() }).strict()).max(PRINT_ROUTING_LIMITS.printers),
-  rules: z.array(ruleSchema).max(PRINT_ROUTING_LIMITS.rules),
+  rules: z.array(printerRoutingRuleSchema).max(PRINT_ROUTING_LIMITS.rules),
   lines: z.array(z.discriminatedUnion('itemType', [productLine, comboLine])).min(1).max(PRINT_ROUTING_LIMITS.lines),
 }).strict();
 export type PrinterRoutingPreviewInput = z.input<typeof inputSchema>;
-export type PrinterRoutingRule = z.input<typeof ruleSchema>;
+export type PrinterRoutingRule = z.input<typeof printerRoutingRuleSchema>;
 export type PrinterRoutingLine = z.output<typeof productLine>;
 type Decision = {
   lineId: string; printerId: string;
