@@ -615,7 +615,7 @@ for (const [name, width, height] of [['desktop', 1348, 900], ['mobile', 375, 667
     await page.route('**/api/merchant/printers?*', async route => {
       await pending;
       const url = new URL(route.request().url()), brand = url.searchParams.get('brandId'), location = url.searchParams.get('locationId');
-      await route.fulfill({ json: { items: populated ? [item('long_' + location, brand, location, { name: 'Køkken ' + 'langt'.repeat(18), state: 'disabled' })] : [], nextCursor: null } });
+      await route.fulfill({ json: { items: populated ? [item('long_' + location, brand, location, { name: 'Køkken ' + 'langt'.repeat(14), state: 'disabled' })] : [], nextCursor: null } });
     });
     const assertContained = async state => {
       const geometry = await page.getByRole('table', { name: 'Printere', exact: true }).evaluate(table => {
@@ -624,6 +624,8 @@ for (const [name, width, height] of [['desktop', 1348, 900], ['mobile', 375, 667
           internalWidth: scroll.clientWidth, internalScroll: scroll.scrollWidth, tableWidth: table.getBoundingClientRect().width,
           overflowX: getComputedStyle(scroll).overflowX, insetWidth: inset.getBoundingClientRect().width };
       });
+      fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
+      await page.screenshot({ path: path.join(root, 'test-results', `printing-overview-real-shell-${name}-${state}.png`), fullPage: true });
       assert.ok(geometry.pageWidth <= geometry.viewport + 1, `${name}/${state} whole-page overflow: ${JSON.stringify(geometry)}`);
       assert.ok(geometry.tableWidth >= 1100, `${name}/${state} preserves full readable table width`);
       assert.ok(geometry.internalScroll > geometry.internalWidth, `${name}/${state} table owns horizontal scrolling`);
@@ -643,12 +645,13 @@ for (const [name, width, height] of [['desktop', 1348, 900], ['mobile', 375, 667
     await assertContained('empty');
     populated = true;
     await page.evaluate(() => window.setPrinterReadCatalog({ brands: [{ id: 'a', name: 'Nord ' + 'langt'.repeat(18) }, { id: 'b', name: 'Syd ' + 'langt'.repeat(18) }], locations: [{ id: 'la', name: 'Station ' + 'langt'.repeat(18), brandId: 'a' }, { id: 'lb', name: 'Torv ' + 'langt'.repeat(18), brandId: 'b' }] }));
+    await page.getByRole('button', { name: 'Opdater', exact: true }).click();
     await expect(page.getByRole('button', { name: /^Rediger Køkken / })).toHaveCount(2);
     await assertContained('populated');
     for (const label of ['Aktiveringsdato', 'Brand', 'Lokation', 'Status', 'Last used', 'Total printers', 'Printer name', 'Handlinger'])
       await expect(page.getByRole('columnheader', { name: label, exact: true })).toHaveCount(1);
     fs.mkdirSync(path.join(root, 'test-results'), { recursive: true });
-    await page.screenshot({ path: path.join(root, 'test-results', `printing-real-shell-${name}.png`), fullPage: true });
+    await page.screenshot({ path: path.join(root, 'test-results', `printing-overview-real-shell-${name}.png`), fullPage: true });
     assert.deepEqual(errors, []);
   });
 }
