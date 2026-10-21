@@ -42,6 +42,61 @@ or exactly-once physical output. Unknown print outcomes must not be blindly retr
 
 ## Following bounded deliveries
 
+### Validated setup and capabilities (#293)
+
+`src/lib/printing/configuration.ts` is server-only. It validates credential-free
+configuration DTOs, not authentication or database ownership. Callers must first
+authorize an actor, load an authoritative location, and project it to `{id, brandId}`.
+`validatePrinterConfiguration` checks that the location, authorized scope and
+submitted configuration all agree. Names accept Danish characters, trim outer
+spaces and have an 80-character limit; Unicode controls/formatting, line/paragraph
+separators, unpaired surrogates and malformed identifiers are rejected. Unknown
+fields (including credentials or claimed capabilities) are
+rejected. Return only the fixed error code, never raw input/Zod errors to logs or
+clients. Printer credentials require a separate private server store later.
+
+Transport selection is a request, not proof of device compatibility or readiness.
+Both models can be prepared without a printer. `printerTransportCapability` stays
+pending until separately trusted, scoped device evidence is supplied by a server
+verification workflow. Never pass evidence from the configuration request. HTTP
+needs firmware >=1.2; MQTT is disallowed for mC-Print2 and requires mC-Print3 variant
+MCP31CBI or MCP31CI with firmware >=5.1. Unknown variant remains pending; other
+verified variants are unsupported. Evidence is bound to printer ID, brand,
+location and model; device replacement/reconfiguration must invalidate evidence.
+Verified means transport compatibility only, not a connection, successful print,
+Wolt coexistence or physical pilot. Future dispatch must also check operational
+state, capability verification and the production feature flag; eligibility alone
+does not authorize dispatch.
+
+Paper widths are 58 mm for mC-Print2 and 58/80 mm for mC-Print3. Using 58 mm on
+mC-Print3 requires the physical guide and device print-width setting.
+Sources checked 2026-10-21:
+- [Star CloudPRNT supported printers and firmware](https://star-m.jp/products/s_print/sdk/StarCloudPRNT/manual/en/index.html)
+- [mC-Print2 paper specifications](https://www.star-m.jp/products/s_print/mcprint2/manual/en/basicOperations/installingPaper.htm)
+- [mC-Print3 paper guide and width setting](https://www.star-m.jp/products/s_print/mcprint3/manual/en/installing/installingAccessories.htm)
+
+Lifecycle policy is defined without persistence in this delivery:
+
+| State | Accept new jobs | Dispatch | Setup visibility | History |
+| --- | --- | --- | --- | --- |
+| Active | Yes | Subject to dispatch gates | Visible | Retained |
+| Paused | Hold in queue | No | Visible | Retained |
+| Disabled | No | No | Visible | Retained |
+| Soft-deleted | No | No | Hidden | Retained |
+
+Resume requires queue-age review before releasing held jobs. The earlier kitchen
+eligibility helper deliberately rejects paused printers; future outbox integration
+must distinguish order production eligibility/held-job creation from permission
+to dispatch. Neither helper currently enqueues or sends anything. Soft-delete is
+a lifecycle policy, not a new configurable device state or physical deletion.
+Job history/audit references must survive future deletion; queued jobs must be
+reviewed/canceled/rerouted explicitly, not silently purged or replayed.
+
+No API, database write, UI or printer connection is introduced in #293. Unit tests
+are not live API or hardware evidence. Follow-up persistence/API reads and writes
+must each have their own <=60-minute task, server authorization, tenant boundaries,
+tests and release/QA evidence.
+
 Each work item has at most 60 minutes of active work, its own issue/PR, explicit
 acceptance criteria and handover. Split before expanding scope.
 
@@ -59,7 +114,8 @@ does not depend on physical printer availability.
 
 ## Verification and release
 
-Run `node --test tests/unit/printing-domain.cjs` and `npm run typecheck`.
+Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs`
+and `npm run typecheck`.
 There is no changed browser flow in this delivery.
 Follow `AGENTS.md` for current-head CI, independent Codex review, merge and release
 verification. PO/PM has authorized qualifying merge/deploy without another prompt.
