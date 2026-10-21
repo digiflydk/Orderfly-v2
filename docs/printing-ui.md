@@ -136,3 +136,34 @@ create/edit and tenant isolation cases are retained. Synthetic browser fixtures
 are not authenticated live acceptance or a physical print. Root #309 owns fresh
 main/current-head CI and independent Codex review, serial deployment and read-only
 live checks; authenticated superadmin/merchant QA and #344 remain open.
+
+## Corrected default overview (#361)
+
+The superadmin System printer page opens directly as a table. Brand, location
+and printer type are optional filters, not prerequisites for seeing table
+headers. Headers remain visible during loading, errors and empty results.
+Location can be selected without first selecting a brand; changing a brand
+clears only its incompatible location selection and preserves printer type.
+
+All reads reuse the existing native-authorized per-location list API. Each table
+page contains at most 20 printers and traverses at most eight locations, ordered
+by brand/location identity. “Næste side” continues inside a location or through
+remaining locations, including an all-empty batch. Every API response must match
+its exact requested brand, location and model before any row is displayed. A
+failed scope rejects the entire page; partial success never looks complete.
+Counts remain the server aggregate for each row's brand/location, independent of
+printer type and pagination. This is neither an unbounded browser scan nor a
+new cross-tenant collection query.
+
+Each row displays Edit, Deactivate and Delete. Independent row-native grants
+control enabled state, with a disabled explanation when unavailable; filter
+selection is never mutation authority. Confirmation and exact row revision/scope,
+soft-delete, current-grant revocation, pending mutation locks and deliberate
+refresh after uncertain results are retained. Creation still requires selecting
+one native location. No output or configuration feature gate is enabled.
+
+Authoritative activation and last-confirmed-print timestamps are still owned by
+#344. Unknown historical values remain “Ikke registreret”, never created-at as
+activation or synthetic last use. #341 remains open until metadata and actual
+authenticated live acceptance are complete. React fixtures and public smoke do
+not establish authenticated live success or physical printer readiness.
