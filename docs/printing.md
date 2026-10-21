@@ -32,7 +32,8 @@ PSP record and either an accepted unpaid `held` reservation or paid state.
 Pending, canceled, error, completed and delivered orders fail closed. This is a
 production gate, not authorization: callers must load authoritative server data,
 authorize the actor and validate brand/location membership before invoking it.
-Paused/disabled printers and mismatched brand/location fail closed.
+Dispatch rejects paused/disabled printers. Intent acceptance includes paused printers,
+so pause holds new eligible jobs without losing intent. Both reject mismatched scope.
 
 Job keys hash a versioned JSON array of brand, location, order, printer, bon kind
 and explicit revision. Original production uses revision 0. Keys do not depend on
@@ -84,10 +85,9 @@ Lifecycle policy is defined without persistence in this delivery:
 | Disabled | No | No | Visible | Retained |
 | Soft-deleted | No | No | Hidden | Retained |
 
-Resume requires queue-age review before releasing held jobs. The earlier kitchen
-eligibility helper deliberately rejects paused printers; future outbox integration
-must distinguish order production eligibility/held-job creation from permission
-to dispatch. Neither helper currently enqueues or sends anything. Soft-delete is
+Resume requires queue-age review before releasing held jobs. `kitchenPrintEligibility` rejects paused printers for dispatch;
+`kitchenPrintIntentEligibility` accepts paused printers for durable held-job creation.
+Neither pure eligibility helper sends anything. Soft-delete is
 a lifecycle policy, not a new configurable device state or physical deletion.
 Job history/audit references must survive future deletion; queued jobs must be
 reviewed/canceled/rerouted explicitly, not silently purged or replayed.
@@ -325,9 +325,86 @@ reversible scenario are available.
 Actual production printing remains disabled until the pilot. Code/UI deployment
 does not depend on physical printer availability.
 
+## Durable original-intent transaction foundation (#300)
+
+`src/lib/printing/outbox.ts` is server-only and has no route, scheduler, event
+listener or transport. `prepareOriginalPrintIntent(db, tx, command)` accepts exactly
+`{brandId, locationId, printerId, orderId, kind}`. It reads the persisted order,
+brand, native location, strict printer envelope, original job and queue metadata
+inside the caller's Admin SDK transaction. Callers must authenticate/authorize
+server events or actors before invoking it. Scope IDs are selectors, not authority;
+this internal helper is never a browser-callable payment/acceptance endpoint.
+
+It returns `{jobId, created, apply()}`. Finish **all** transaction reads before
+calling `apply()`, then stage the caller's writes in the same transaction. Throwing
+or a failed commit rolls back everything. Prepare once per printer per transaction;
+a future multi-intent batch for one printer needs a combined queue delta, not
+multiple independent plans. Re-run preparation on each Firestore retry. The helper
+does not start or commit its own transaction and does not perform network side
+effects. Applying a creation plan twice throws. A duplicate plan performs no writes.
+
+This bounded foundation deliberately accepts only an **already eligible persisted
+order**. It cannot turn a client claim, Pending order or failed payment into a job.
+The actual integration sites inspected are `src/lib/server/settle-checkout.ts`
+(verified Stripe session or transaction-authorized pickup staff payment, capacity,
+Paid/Received + invoice + `orderNotificationJobs` atomically) and
+`src/app/checkout/actions.ts` (held pickup capacity plus current native location,
+Pending -> Received + pickup notification atomically). The matching prepare/apply
+pattern already exists in `src/lib/server/discount-capacity.ts`.
+A separate bounded integration task must provide a trusted **same-transaction
+transition adapter** for those Pending -> accepted/Paid transitions, after their
+server proofs, and wire print intent before the first write. Calling this helper
+in a second transaction after checkout would leave a loss window and is **not**
+the intended integration. No order/webhook code is changed here. Fixture atomicity
+with an already eligible order is not proof that checkout now creates print jobs.
+
+Canonical paths beneath `locations/{locationId}/printers/{printerId}`:
+
+| Path | Version 1 contents |
+| --- | --- |
+| `jobs/{printJobId}` | schemaVersion, brand/location/printer/order IDs, kind, original revision 0, deterministic ID, printerRevision, queued state, attempts 0, server-clock createdAt and commit updatedAt |
+| `queue/state` | schemaVersion, brand/location/printer IDs, monotonic revision, pendingCount, oldestPendingAt (null iff zero), commit updatedAt |
+
+No credentials, contact details, bon payload or client review evidence are stored.
+Routing identity is printer + kind + original revision 0, independent of payment
+events; later payment of an eligible pickup order reuses the original job. Active
+and paused printers accept intents; disabled, deleted, malformed, missing or foreign
+printers do not. A queued job does **not** authorize dispatch. Capability, liveprint
+flag, current state/tombstone, order freshness and reviewed resume remain separate
+dispatch gates. Queue age is the trusted server-clock creation time, independent
+of a future release/not-before time; scheduled order release is not implemented.
+
+Each new job and queue revision/count/oldest update commit together via `create`
+for unique original identity. Duplicate events validate the existing job and ledger
+and do not advance counters. Shared queue reads serialize competing transactions;
+Firestore retries must re-read current order/ownership/printer eligibility. Missing
+ledger is initialized only after an actual transactional count proves no canonical
+jobs exist. Legacy jobs without metadata, unsupported/corrupt metadata, count/oldest
+mismatch and exhausted revisions fail closed, never silently reconstruct or reset
+history. A transactional count plus oldest-document query verifies metadata;
+aggregate reads have cost proportional to stored entries and need measurement
+before transport-scale rollout. No new composite index is required or deployed.
+
+V1 is an insertion-only queue foundation: all recognized jobs are unresolved
+`queued` originals with zero attempts. There is no worker, completion, cancellation,
+retry, release or terminal-job mutation. A later worker must extend the versioned
+schema and maintain queue revision/count/oldest **atomically on every membership
+or review-relevant change**, retaining job history; it must not mutate job state
+using this insertion-only ledger unchanged. Missing/legacy metadata is not a valid
+empty-queue receipt for #301. Server-clock anomalies must block future age review.
+
+Tests replace storage I/O only, exercising actual helper/domain validation with
+transaction rollback, retry, serialized competitors, duplicates, pickup payment,
+pause acceptance, native ownership, invalid inputs and corrupt/legacy ledgers.
+They are isolated fixture tests, **not** live Firestore concurrency/production
+write, checkout end-to-end or printer evidence. No feature live endpoint exists.
+After deployment verify exact release and public regression smoke; live creation
+of jobs remains **QA BLOCKED** without safe authorized access and a controlled
+reversible scenario. Configuration-write gate stays false; live output stays off.
+
 ## Verification and release
 
-Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs`
+Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs`
 and `npm run typecheck`.
 There is no changed browser flow in this delivery.
 Follow `AGENTS.md` for current-head CI, independent Codex review, merge and release
