@@ -1,5 +1,6 @@
 import 'server-only';
 import type Stripe from 'stripe';
+import type { Transaction } from 'firebase-admin/firestore';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import { prepareAdminCapacitySettlement } from '@/lib/server/discount-capacity';
 import { trackServerEvent } from '@/lib/analytics-server';
@@ -41,7 +42,24 @@ async function settleOrder(proof: PaymentProof) {
   const piId = session ? typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id : undefined;
   let analytics: OrderDetail['analytics'];
   const issuedAt = new Date().toISOString();
-  const fulfilled = await db.runTransaction(async transaction => {
+  // Private plan owns the actual settlement writes. Nothing supplied by a caller
+  // can replace the mutation, projected state or apply callback. Rebuilt on retry.
+  const prepareSettlement = async (transaction: Transaction) => {
+    const writes: Array<() => void> = [];
+    let writeCount = 0;
+    const addWrite = (apply: () => void, count = 1) => {
+      if (!Number.isSafeInteger(count) || count < 1 || count > 500) throw new Error('Settlement write budget exceeded');
+      writes.push(apply); writeCount += count;
+    };
+    const finish = (fulfilled: boolean) => {
+      if (!Number.isSafeInteger(writeCount) || writeCount < 0 || writeCount > 500) throw new Error('Settlement write budget exceeded');
+      let applied = false;
+      return Object.freeze({ fulfilled, writeCount, apply: () => {
+        if (applied) throw new Error('Settlement plan already applied');
+        applied = true;
+        for (const write of writes) write();
+      } });
+    };
     const orderSnap = await transaction.get(orderRef);
     if (!orderSnap.exists) throw new Error('Order not found');
     const order = orderSnap.data()!;
@@ -71,19 +89,19 @@ async function settleOrder(proof: PaymentProof) {
       if (job.orderId !== metadata.orderId || job.brandId !== order.brandId || job.locationId !== order.locationId || job.customerId !== order.customerDetails.id || job.kind !== 'paidOrder') throw new Error('Marketing order scope mismatch');
     }
     const ensureConfirmation = () => {
-      if (!confirmation.exists && order.status !== 'Canceled') transaction.set(confirmationRef, {
+      if (!confirmation.exists && order.status !== 'Canceled') addWrite(() => transaction.set(confirmationRef, {
         orderId: metadata.orderId, brandId: order.brandId, locationId: order.locationId,
         kind: 'orderConfirmation', state: 'pending', eventId: randomUUID(), nextAttemptAt: Date.now(), attempts: 0, createdAt: Date.now(), updatedAt: Date.now(),
-      });
+      }));
     };
     const ensureMarketingOrder = (eventTime: string) => {
       if (!marketingEnabled) return;
       const customer = customerSnap.data();
       const customerEmail = typeof customer?.email === 'string' ? customer.email.trim().toLowerCase() : '';
-      if (!marketingOrder?.exists && order.status !== 'Canceled' && customerSnap.exists && customer?.brandId === order.brandId && customer?.marketingConsent === true && customerEmail && customerEmail === String(order.customerContact || '').trim().toLowerCase()) transaction.set(marketingOrderRef, {
+      if (!marketingOrder?.exists && order.status !== 'Canceled' && customerSnap.exists && customer?.brandId === order.brandId && customer?.marketingConsent === true && customerEmail && customerEmail === String(order.customerContact || '').trim().toLowerCase()) addWrite(() => transaction.set(marketingOrderRef, {
         orderId: metadata.orderId, brandId: order.brandId, locationId: order.locationId, customerId: order.customerDetails.id,
         kind: 'paidOrder', state: 'pending', eventId: randomUUID(), eventTime, nextAttemptAt: Date.now(), attempts: 0, createdAt: Date.now(), updatedAt: Date.now(),
-      });
+      }));
     };
     // A legacy path could mark Paid without the outbox job. Repair only this
     // verified session's missing job, without replaying financial accounting.
@@ -91,7 +109,7 @@ async function settleOrder(proof: PaymentProof) {
       if (session && order.psp?.checkoutSessionId !== session.id) throw new Error('Payment scope mismatch');
       ensureConfirmation();
       if (order.invoice) ensureMarketingOrder(order.invoice.issuedAt);
-      return false;
+      return finish(false);
     }
     const year = Number(issuedAt.slice(0, 4));
     const counterRef = db.collection('invoiceCounters').doc(invoiceCounterId(order.brandId, year));
@@ -127,48 +145,55 @@ async function settleOrder(proof: PaymentProof) {
       return {ref,snapshot:await transaction.get(ref)};
     }));
     const settleCapacity = await prepareAdminCapacitySettlement(db, transaction, order, true);
-    settleCapacity();
+    addWrite(settleCapacity, settleCapacity.writeCount);
     // Counters and Paid transition commit atomically. A repeated webhook takes
     // the Paid branch above and cannot count these offers again.
     for (const {ref,snapshot} of upsellRecords) {
       const offer = snapshot.data();
       if (snapshot.exists && offer && offer.brandId === order.brandId && Array.isArray(offer.locationIds) && offer.locationIds.includes(order.locationId)) {
-        transaction.update(ref,{conversions:Math.max(0,Number(offer.conversions)||0)+1});
+        addWrite(() => transaction.update(ref,{conversions:Math.max(0,Number(offer.conversions)||0)+1}));
       }
     }
     const customer = customerSnap.data() || {};
     const usage = { ...(customer.discountUsage || {}) };
     if (discountRef && discountSnap?.exists) {
       usage[discountId] = (usage[discountId] || 0) + 1;
-      transaction.update(discountRef, { usedCount: (discountSnap.data()?.usedCount || 0) + 1 });
+      addWrite(() => transaction.update(discountRef, { usedCount: (discountSnap.data()?.usedCount || 0) + 1 }));
     }
     if(gameVoucher?.exists||sharedPrize){
       const voucher=gameVoucher?.data();
-      transaction.create(db.collection('gameConversions').doc(createHash('sha256').update(JSON.stringify(['orderfly',order.brandId,metadata.orderId])).digest('hex')),{brandId:order.brandId,campaignId:voucher?.campaignId||sharedCampaign?.id||order.brandId,channel:'orderfly',orderId:metadata.orderId,playId:voucher?.playId||null,prizeName:voucher?.prizeName||sharedPrize?.name,codeMode:voucher?.codeMode||'shared',amount:Number(order.totalAmount),discountAmount:Number(order.paymentDetails?.discountTotal||0),currency:'DKK',status:'paid',createdAt:serverTimestamp()});
-      if(gameVoucherRef&&voucher?.state==='issued')transaction.update(gameVoucherRef,{state:'redeemed',redeemedAt:serverTimestamp(),redeemedOrderId:metadata.orderId});
+      addWrite(() => transaction.create(db.collection('gameConversions').doc(createHash('sha256').update(JSON.stringify(['orderfly',order.brandId,metadata.orderId])).digest('hex')),{brandId:order.brandId,campaignId:voucher?.campaignId||sharedCampaign?.id||order.brandId,channel:'orderfly',orderId:metadata.orderId,playId:voucher?.playId||null,prizeName:voucher?.prizeName||sharedPrize?.name,codeMode:voucher?.codeMode||'shared',amount:Number(order.totalAmount),discountAmount:Number(order.paymentDetails?.discountTotal||0),currency:'DKK',status:'paid',createdAt:serverTimestamp()}));
+      if(gameVoucherRef&&voucher?.state==='issued')addWrite(() => transaction.update(gameVoucherRef,{state:'redeemed',redeemedAt:serverTimestamp(),redeemedOrderId:metadata.orderId}));
     }
-    if (customerSnap.exists) transaction.update(customerRef, {
+    if (customerSnap.exists) addWrite(() => transaction.update(customerRef, {
       totalOrders: (customer.totalOrders || 0) + 1,
       totalSpend: (customer.totalSpend || 0) + order.totalAmount,
       lastOrderDate: serverTimestamp(),
       discountUsage: usage,
-    });
-    transaction.update(orderRef, {
+    }));
+    addWrite(() => transaction.update(orderRef, {
       discountReservation: discountId ? 'consumed' : 'none',
       fulfillmentWarnings: [!customerSnap.exists ? 'customer_deleted' : '', discountId && !discountSnap?.exists ? 'discount_deleted' : ''].filter(Boolean),
       ...(session ? { 'psp.checkoutSessionId': session.id, 'psp.paymentIntentId': piId || null } : { paymentCollection }),
       paymentStatus: 'Paid', status: order.status === 'Pending' ? 'Received' : order.status, paidAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       invoice,
-    });
-    if (proof.kind === 'pickup') transaction.create(db.collection('auditLogs').doc(createHash('sha256').update(JSON.stringify(['pickup-payment', order.brandId, metadata.orderId])).digest('hex')), {
+    }));
+    if (proof.kind === 'pickup') addWrite(() => transaction.create(db.collection('auditLogs').doc(createHash('sha256').update(JSON.stringify(['pickup-payment', order.brandId, metadata.orderId])).digest('hex')), {
       action: 'pickup_payment_received', brandId: order.brandId, locationId: order.locationId, orderId: metadata.orderId,
       actorId: proof.actor.actorId, actorName: proof.actor.name, method: proof.method, totalAmount: order.totalAmount, createdAt: serverTimestamp(),
-    });
-    transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true });
+    }));
+    addWrite(() => transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true }));
     ensureConfirmation();
     ensureMarketingOrder(invoice.issuedAt);
-    return true;
+    return finish(true);
+  };
+  const fulfilled = await db.runTransaction(async transaction => {
+    const prepared = await prepareSettlement(transaction);
+    // The future closed print adapter must finish its reads and reserve this
+    // exact writeCount here, before either plan writes. No print callsite yet.
+    prepared.apply();
+    return prepared.fulfilled;
   });
   if (fulfilled && session) {
     // Analytics are optional after an authoritative, idempotent settlement.

@@ -27,7 +27,7 @@ function fixture({paid=false,missingInvoice=false,job,fail=false,marketingConsen
   'stripe':{default:class{checkout={sessions:{retrieve:async()=>structuredClone(session)}}}},
   'next/server':{NextResponse:{json:(body,init)=>Response.json(body,init)}},
   '@/lib/analytics-server':{trackServerEvent:async()=>{analytics++;}},
-  '@/lib/server/discount-capacity':{prepareAdminCapacitySettlement:async(...args)=>{const commit=await loadTs('src/lib/server/discount-capacity.ts',{'server-only':{}}).prepareAdminCapacitySettlement(...args);return()=>{commit();capacity++;};}},
+  '@/lib/server/discount-capacity':{prepareAdminCapacitySettlement:async(...args)=>{const commit=await loadTs('src/lib/server/discount-capacity.ts',{'server-only':{}}).prepareAdminCapacitySettlement(...args);return Object.assign(()=>{commit();capacity++;},{writeCount:commit.writeCount});}},
   'firebase/firestore':{
    doc:(_,collection,id)=>collection+'/'+id,serverTimestamp:()=> 'now',getDoc:async ref=>snapshot(structuredClone(records[ref])),
    runTransaction:(_,fn)=>{
