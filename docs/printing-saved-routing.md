@@ -44,7 +44,12 @@ canonical printer storage/configuration schema, and must have the exact native
 brand/location. Disabled printers may be saved as drafts. Saving routing does not
 activate printers or enable print intent. Every product must be active, native to
 the brand and applicable to the location; canonical synthetic-product exclusions
-are retained. Every referenced category, including products' categories, must be
+are retained. For products only, omitted `locationIds` and an explicit empty list
+mean global applicability, matching the storefront/catalog/checkout contracts.
+Only an absent value is normalized: null, non-arrays, malformed/oversized lists,
+duplicates and lists naming another location still reject. Categories always
+require an explicit valid nonempty location list; this compatibility never
+changes their native membership requirement. Every referenced category, including products' categories, must be
 active and explicitly include the native location in its bounded location list.
 The actual Category model uses location membership as ownership, so a stale
 legacy `brandId` is not treated as authority. Missing, deleted, corrupt or foreign
@@ -116,3 +121,11 @@ CloudPRNT authenticated poll/claim/download/ack, durable retry/unknown-result
 handling and controlled activation/testprint still need delivery and verification.
 Physical paper output, Danish characters, width/cut, failure recovery and Wolt
 coexistence require the actual printer. Simulator success is separate evidence.
+
+
+Review finding4339848189 was first reproduced through exported HTTP PUT rejecting
+a canonical global product with omitted `locationIds`. The fix normalizes only
+undefined product membership to an empty global list. New PUT-to-GET-to-native
+preparation positives cover omitted and empty product lists, alongside strict
+product/native/synthetic/category and malformed-membership rejection matrices.
+The earlier stale-reference recovery and all original assertions remain intact.

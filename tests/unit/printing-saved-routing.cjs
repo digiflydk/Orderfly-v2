@@ -291,3 +291,45 @@ test('management GET retry reauthorizes scope instead of reusing a stale snapsho
   assert.equal(f.events.filter(event => event[0] === 'attempt').length, 2, 'management GET reruns its transaction after retry');
   assert.ok(f.events.filter(event => event[1] === 'locations/location').length >= 3, 'current native ownership is reread after retry');
 });
+
+
+test('canonical global products with omitted or empty locationIds save, read back and prepare through exported paths', async () => {
+  for (const omitted of [true, false]) {
+    const f = fixture();
+    if (omitted) delete f.rows.get('products/pizza').locationIds; else f.rows.get('products/pizza').locationIds = [];
+    const saved = await f.request('PUT');
+    assert.equal(saved.status, 200, 'canonical global product membership must be accepted');
+    assert.equal(saved.body.referencesVerified, true); assert.equal(saved.body.revision, 1);
+    const read = await f.request('GET'); assert.equal(read.status, 200); assert.deepEqual(read.body, saved.body);
+    const prepared = await f.prepare(); assert.deepEqual(prepared.rules, [rule()]); assert.equal(prepared.printers.length, 1);
+    assert.equal(prepared.dispatchAuthorized, false); assert.equal(prepared.referencesVerified, undefined);
+    assert.deepEqual(f.rows.get(`${path}/audit/1`).after, [rule()]); assert.equal(f.commits.length, 1);
+  }
+});
+test('omitted-global compatibility never accepts malformed product membership or relaxes native product guards', async () => {
+  const changes = [
+    product => { product.locationIds = null; }, product => { product.locationIds = {}; }, product => { product.locationIds = 'location'; },
+    product => { product.locationIds = ['other']; }, product => { product.locationIds = ['location', 'location']; },
+    product => { product.locationIds = Array.from({ length: 101 }, (_, i) => 'l' + i); },
+    product => { product.locationIds = ['../location']; }, product => { product.locationIds = ['location', null]; },
+    product => { product.brandId = 'foreign'; }, product => { product.isActive = false; },
+    product => { product.productName = 'QA-7-12 Product TEST'; }, product => { product.categoryId = 'missing'; },
+  ];
+  for (const mutate of changes) {
+    const f = fixture(); delete f.rows.get('products/pizza').locationIds; mutate(f.rows.get('products/pizza'));
+    const saved = await f.request('PUT'); assert.equal(saved.status, 409); assert.equal(f.commits.length, 0);
+    f.rows.set(path, { schemaVersion: 1, id: 'original', ...scope, revision: 1, deletedAt: null, rules: [rule()] });
+    await rejects(f.prepare(), 'reference_unverified');
+  }
+});
+test('global product compatibility keeps category location membership explicitly scoped and strict', async () => {
+  for (const value of [undefined, null, {}, 'location', [], ['other'], ['location', 'location'], ['../location'], ['location', null], Array.from({ length: 101 }, (_, i) => 'l' + i)]) {
+    const f = fixture(); delete f.rows.get('products/pizza').locationIds;
+    if (value === undefined) delete f.rows.get('categories/food').locationIds; else f.rows.get('categories/food').locationIds = value;
+    const saved = await f.request('PUT'); assert.equal(saved.status, 409); assert.equal(f.commits.length, 0);
+    f.rows.set(path, { schemaVersion: 1, id: 'original', ...scope, revision: 1, deletedAt: null, rules: [rule()] });
+    await rejects(f.prepare(), 'reference_unverified');
+    const read = await f.request('GET'); assert.equal(read.status, 200); assert.equal(read.body.referencesVerified, false);
+    assert.equal(read.body.revision, 1); assert.deepEqual(read.body.printers, []);
+  }
+});

@@ -82,7 +82,8 @@ async function nativeScope(context: NativeTransactionContext, scope: Scope) {
   for (const row of [brand, location]) if (field(row, 'isActive') !== undefined && field(row, 'isActive') !== true) return fail('reference_unverified', 409);
 }
 function membership(row: Row, locationId: string, allowGlobal: boolean) {
-  const raw = field(row, 'locationIds');
+  const value = field(row, 'locationIds');
+  const raw = value === undefined && allowGlobal ? [] : value;
   if (!Array.isArray(raw) || raw.length > 100) return fail('reference_unverified', 409);
   const ids: string[] = [];
   for (let index = 0; index < raw.length; index++) {
