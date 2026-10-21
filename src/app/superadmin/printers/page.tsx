@@ -8,11 +8,18 @@ export const dynamic = 'force-dynamic';
 
 export default async function PrintersPage() {
   const access = await orderflySession();
-  if (!canNavigate('/superadmin/printers', access)) return <AccessDeniedPage />;
+  if (!access.superuser || !canNavigate('/superadmin/printers', access)) return <AccessDeniedPage />;
   try {
     // Only catalog:view scopes, not the union of unrelated selector permissions.
     const catalog = await nativeCatalog('orderfly.catalog:view');
-    return <PrinterOverview brands={catalog.brands.map(({ id, name }) => ({ id, name }))}
+    const writableLocations = async (permission: string) => {
+      try { return (await nativeCatalog(permission)).locations.map(({ id, brandId }) => ({ id, brandId })); }
+      catch (error) { if ((error as { status?: number })?.status === 403) return []; throw error; }
+    };
+    const [createLocations, editLocations] = await Promise.all([
+      writableLocations('orderfly.catalog:create'), writableLocations('orderfly.catalog:edit'),
+    ]);
+    return <PrinterOverview key={access.actorId} createLocations={createLocations} editLocations={editLocations} brands={catalog.brands.map(({ id, name }) => ({ id, name }))}
       locations={catalog.locations.map(({ id, name, brandId }) => ({ id, name, brandId }))} />;
   } catch (error) {
     if ((error as { status?: number })?.status === 403) return <AccessDeniedPage />;

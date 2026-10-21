@@ -1,55 +1,89 @@
-# Printer overview (P4.1a, #310; superadmin pilot #325)
+# Superadmin printer pilot (#325, #318)
 
-PO scope correction 2026-10-21: printer administration is currently available
-only to platform superusers at `/superadmin/printers`. The superadmin dashboard
-and sidebar link here; merchant dashboards have no printer entry. The former
-`/merchant/printers` page returns not-found, including for superusers.
-The page checks `session.superuser` through navigation policy before loading
-native catalog metadata. Delegated catalog grants alone do not grant access.
-Existing `/api/merchant/printers` administration endpoints (GET/POST/PATCH,
-lifecycle, queue summary and queue review) retain their URLs for compatibility
-but now require `requirePlatformSuperuser` before parsing input or calling any
-printer service. Existing native brand/location and transactional authorization
-remain in force. Writes and physical output remain default-off. Future #318 UI
-must use the superadmin workspace and preserve this pilot restriction.
+Printer administration is restricted to platform superusers at
+`/superadmin/printers`. The server page explicitly requires `session.superuser`
+and the superadmin navigation policy before loading any native catalog data.
+Delegated catalog:view/create/edit roles cannot render the page. The merchant
+page remains retired as not-found, with no merchant navigation entry.
 
-After the user chooses one brand and one location, the overview calls
-`GET /api/merchant/printers?brandId=…&locationId=…&limit=20`. Reads use the current
-same-origin session and `cache: no-store`. There are no mutations or new backend
-read semantics. Pagination follows the API's bounded ID cursor, replaces the
-current page, and offers return to the first page. Refresh returns to the first
-page. Brand/location changes reset pagination and clear the previous display
-immediately. Aborted/late requests cannot replace a new scope's data. Foreign,
-malformed or oversized response pages are rejected before displaying any row.
+The existing `/api/merchant/printers` URLs remain for compatibility. All six
+administration HTTP operations retain `requirePlatformSuperuser` before parsing
+or service access, plus existing native brand/location and transactional grant
+checks. The UI never authorizes a write. Configuration writes and live output
+remain default-off; there are no credentials, new backend contracts or production
+data changes in this form work.
 
-The cards show name, operational state, model, configured transport, paper width
-and revision. **Operational state is not proof of connectivity or output.** The
-read API has no verified connection-status DTO, so the overview explicitly shows
-`Ikke verificeret` and explains that it cannot establish online state or a printed
-receipt. Transport is configuration, not verified firmware capability. No testprint,
-queue receipt, resume, configuration edit, credentials or output activation is
-included. All feature gates remain unchanged.
+## Scope and configuration
 
-Loading, no authorized locations, no selected scope, empty successful page,
-expired session, forbidden response and unavailable/malformed response each have
-an explicit state. Raw provider errors and payloads are never displayed.
+The page loads selectors only through native `catalog:view`. It independently
+loads native `catalog:create` and `catalog:edit` location metadata for form
+controls, and projects only IDs/names. All three reads happen behind the
+superuser gate; grants from unrelated features are never combined into selector
+or write scope. The actor-keyed client clears state after a new server identity.
+
+A selected brand/location loads a bounded20-row GET page, strict DTO validation,
+and ID cursor pagination. Foreign, malformed and oversized pages fail closed.
+Rows distinguish operational state from connectivity/output, which remain
+unverified. Loading, empty, denied and unavailable states are explicit; raw
+provider errors are never rendered.
+
+The new form creates a disabled printer or edits an existing disabled printer.
+POST sends `{ configuration }`; PATCH adds the expected revision. The exact
+configuration fields are ID, native brand/location, name, manufacturer `star`,
+model, transport, state `disabled` and paper width. Edit fixes ID/native scope.
+mC-Print2 permits only HTTP/58mm. mC-Print3 uses existing supported configuration
+choices; MQTT explicitly requires subsequent model/firmware verification.
+Configuration does not prove a connected device or a physical printed receipt.
+
+## Pending operations and recovery
+
+Submit is guarded before the pending render. Native scope selectors, pagination,
+overview refresh and competing edit controls cannot replace an open form;
+Cancel is disabled during save. Create requires a validated completed page.
+Opening either editor synchronously invalidates/aborts existing GETs, and reads
+suspend throughout editing, including same-scope metadata updates. A stale read401
+cannot interrupt a write that may already commit on the server.
+
+Native write-grant revocation disables new submissions immediately. Prepared
+input without an active request clears. An active save keeps its original form
+and scope snapshot mounted until the response settles. Its validated success or
+safe rejection/uncertain-outcome message survives revocation, so client abort
+cannot silently hide a server commit. An uncertain or stale outcome blocks new
+forms until deliberate refresh, even if the grant metadata is subsequently
+restored. The API still reauthorizes the actual transaction.
+
+Ordinary400 and explicit503 `writes_unavailable` retain input for retry. A403,
+404,409, generic503, network error or malformed successful response requires
+refresh before another attempt. Successful responses must match the submitted
+configuration/native scope and exact expected revision. No raw provider text is
+used. A401 clears input/rows and synchronously closes the read gate before editor
+removal; automatic rerenders cannot reauthenticate and restore controls. Only
+explicit `Opdater` or a fresh actor-keyed server context can initiate recovery.
 
 ## Verification and release
 
-- `node --test tests/unit/printing-ui-page.cjs tests/unit/access-navigation.cjs tests/unit/merchant-admin-portal.cjs`
-  exercises actual page rendering, permission denial, native catalog permission,
-  selector projection and unavailable/forbidden handling.
-- `node --test tests/unit/printing-ui-browser.cjs` bundles the actual client and
-  production CSS, with synthetic authorized selectors/API responses. It verifies
-  desktop and 375px mobile rendering, no horizontal overflow, scoped GET and
-  pagination, status separation, loading/errors/retry, empty/malformed/foreign
-  pages and late response protection. Screenshots are written under `test-results`.
-  These are fixture browser tests, not a real authenticated production session.
-- `npm run typecheck`; run existing printing read/navigation regressions.
-- CI runs the server/page tests and the Chromium browser test. Exact-head CI and
-  independent Codex review are required before the coordinator serializes merge
-  and deploy under AGENTS.md. Public release smoke does not prove authenticated
-  UI acceptance. After verifying the deployed commit, check the live
-  `/superadmin/printers` login boundary read-only. Success/forbidden scope UI QA
-  remains blocked until a safe authorized session is available. No unattended
-  production data writes are required. Physical printer QA remains separate.
+`printing-ui-page.cjs`, navigation and merchant portal tests verify platform
+superuser-only rendering, native metadata projection, delegated-role denial,
+retired merchant page and absent merchant navigation. Existing identity/route
+tests prove all six HTTP superuser guards precede services; their checks remain
+unchanged. Typecheck and affected read/write/lifecycle/queue/transaction tests
+remain required after main synchronization.
+
+`printing-ui-browser.cjs` bundles the actual superadmin components and production
+CSS with synthetic selectors and intercepted fixture APIs. Fifteen Chromium cases
+cover existing reads, desktop/mobile201 create+200 edit, exact credential-free
+DTOs/revisions, unsupported native options with DOM+keyboard+submitted-body proof,
+no overflow, pending controls,400/401/403/404/409/503, stale responses, explicit
+session recovery, initial-read gates and GET401/write201-or-uncertain503 races.
+The added revocation race keeps an actual pending request alive through metadata
+removal, then verifies success or uncertainty and blocked retry until refresh.
+Screenshots are retained as `printing-overview-*` and `printing-config-*` PNGs.
+All fixture mutations are intercepted locally; none reach production.
+
+Exact-current-head CI and independent Codex review precede the coordinator's
+serialized merge/deploy. Current deployed SHA and read-only live login/retired
+route/API boundaries require separate verification. Authenticated superadmin
+success/delegated denial and controlled save/edit acceptance remain blocked until
+safe access and an explicitly reversible scenario exist. Fixture success and
+public smoke do not prove live authenticated writes. Physical printer pilot and
+Wolt/hardware configuration remain separate and last.
