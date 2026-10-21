@@ -351,7 +351,7 @@ Paid/Received + invoice + `orderNotificationJobs` atomically) and
 `src/app/checkout/actions.ts` (held pickup capacity plus current native location,
 Pending -> Received + pickup notification atomically). The matching prepare/apply
 pattern already exists in `src/lib/server/discount-capacity.ts`.
-A separate bounded integration task must provide a trusted **same-transaction
+The separately planned #303 integration task must provide a trusted **same-transaction
 transition adapter** for those Pending -> accepted/Paid transitions, after their
 server proofs, and wire print intent before the first write. Calling this helper
 in a second transaction after checkout would leave a loss window and is **not**
@@ -378,11 +378,17 @@ Each new job and queue revision/count/oldest update commit together via `create`
 for unique original identity. Duplicate events validate the existing job and ledger
 and do not advance counters. Shared queue reads serialize competing transactions;
 Firestore retries must re-read current order/ownership/printer eligibility. Missing
-ledger is initialized only after an actual transactional count proves no canonical
+ledger is initialized only after an actual transactional complete bounded job query proves no canonical
 jobs exist. Legacy jobs without metadata, unsupported/corrupt metadata, count/oldest
 mismatch and exhausted revisions fail closed, never silently reconstruct or reset
-history. A transactional count plus oldest-document query verifies metadata;
-aggregate reads have cost proportional to stored entries and need measurement
+history. A transactional query reads at most 501 documents, validates **every** counted
+job (including ID/scope/schema) and computes count/oldest. V1 allows at most 500
+unresolved jobs per printer: a new insertion at capacity, or a larger/invalid
+existing queue, fails closed before any writes. The overflow row must never be
+treated as a complete truncated page. This is an explicit insertion-only foundation
+bound, not a production backpressure policy; #303 must handle it atomically with
+acceptance, and a later scalable worker/queue design must be reviewed before
+activation. Read cost scales with backlog (up to the bound), requiring measurement
 before transport-scale rollout. No new composite index is required or deployed.
 
 V1 is an insertion-only queue foundation: all recognized jobs are unresolved

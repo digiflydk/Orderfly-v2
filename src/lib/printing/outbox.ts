@@ -64,16 +64,20 @@ export async function prepareOriginalPrintIntent(db: Firestore, tx: Transaction,
   const sameScope = (q: { brandId: string; locationId: string; printerId: string }) =>
     q.brandId === command.brandId && q.locationId === command.locationId && q.printerId === command.printerId;
   const current = queueSchema.safeParse(queue.data());
-  // Count + oldest document validate ledger coverage, not a guessed empty queue.
-  // Missing/legacy metadata with any history requires explicit reconciliation.
-  const [jobCount, oldestJobs] = await Promise.all([tx.get(jobs.count()), tx.get(jobs.orderBy('createdAt').limit(1))]);
-  const count = jobCount.data().count;
-  const oldest = oldestJobs.docs[0] ? jobSchema.safeParse(oldestJobs.docs[0].data()) : null;
+  // V1 insertion-only backlog is bounded; never trust count/oldest aggregates
+  // without validating EVERY counted row (orderBy would hide missing fields).
+  const rows = await tx.get(jobs.limit(501));
+  if (rows.size > 500) throw new PrintOutboxError('queue_unverified');
+  let oldestAt: number | null = null;
+  for (const row of rows.docs) {
+    const stored = jobSchema.safeParse(row.data());
+    if (!stored.success || !sameScope(stored.data) || stored.data.id !== row.id
+      || printJobId(stored.data) !== row.id) throw new PrintOutboxError('queue_unverified');
+    oldestAt = oldestAt === null ? stored.data.createdAt : Math.min(oldestAt, stored.data.createdAt);
+  }
+  const count = rows.size;
   if ((!queue.exists && count !== 0) || (queue.exists && (!current.success || !sameScope(current.data)))
-    || (current.success && (current.data.pendingCount !== count
-      || (count > 0 && (!oldest?.success || !sameScope(oldest.data)
-        || oldest.data.id !== oldestJobs.docs[0].id
-        || printJobId(oldest.data) !== oldest.data.id || oldest.data.createdAt !== current.data.oldestPendingAt))))) {
+    || (current.success && (current.data.pendingCount !== count || current.data.oldestPendingAt !== oldestAt))) {
     throw new PrintOutboxError('queue_unverified');
   }
   if (job.exists) {
@@ -86,7 +90,7 @@ export async function prepareOriginalPrintIntent(db: Firestore, tx: Transaction,
   }
   const revision = current.success ? current.data.revision : 0;
   const pendingCount = current.success ? current.data.pendingCount : 0;
-  if (revision === Number.MAX_SAFE_INTEGER || pendingCount === Number.MAX_SAFE_INTEGER) throw new PrintOutboxError('queue_unverified');
+  if (revision === Number.MAX_SAFE_INTEGER || pendingCount >= 500) throw new PrintOutboxError('queue_unverified');
   // Clock is trusted server time; commit timestamp is retained separately. Age review
   // must reject future/implausible clocks, never interpret them as a fresh empty queue.
   const now = Date.now();

@@ -10,7 +10,7 @@ function fixture({ printer = record({ configuration: config({ state: 'active' })
   const service = loadTs('src/lib/printing/outbox.ts', { 'server-only': {}, 'firebase-admin/firestore': { FieldValue: { serverTimestamp: () => ({ serverTimestamp: true }) } } });
   let serial = Promise.resolve(), retried = false;
   function ref(path) { return { path, id: path.split('/').at(-1), collection: n => collection(`${path}/${n}`) }; }
-  function collection(path) { return { doc: n => ref(`${path}/${n}`), count: () => ({ aggregate: path }), orderBy: field => ({ limit: n => ({ query: path, limit: n, field }) }) }; }
+  function collection(path) { return { doc: n => ref(`${path}/${n}`), limit: n => ({ query: path, limit: n }) }; }
   const db = { collection, runTransaction(run) {
     const job = serial.then(async () => {
       for (;;) {
@@ -18,10 +18,9 @@ function fixture({ printer = record({ configuration: config({ state: 'active' })
         const tx = {
           async get(ref) {
             assert.equal(writing, false, 'all reads precede any writes');
-            if (ref.aggregate) return { data: () => ({ count: [...staged.keys()].filter(key => key.startsWith(`${ref.aggregate}/`) && !key.slice(ref.aggregate.length + 1).includes('/')).length }) };
             if (ref.query) {
-              const rows = [...staged].filter(([key]) => key.startsWith(`${ref.query}/`) && !key.slice(ref.query.length + 1).includes('/')).filter(([, value]) => value[ref.field] !== undefined).sort((a, b) => a[1][ref.field] - b[1][ref.field]).slice(0, ref.limit);
-              return { empty: !rows.length, docs: rows.map(([key, value]) => ({ id: key.split('/').at(-1), data: () => value })) };
+              const rows = [...staged].filter(([key]) => key.startsWith(`${ref.query}/`) && !key.slice(ref.query.length + 1).includes('/')).slice(0, ref.limit);
+              return { empty: !rows.length, size: rows.length, docs: rows.map(([key, value]) => ({ id: key.split('/').at(-1), data: () => value })) };
             }
             return { id: ref.id, exists: staged.has(ref.path), data: () => structuredClone(staged.get(ref.path)) };
           },
@@ -126,4 +125,44 @@ test('well-shaped but inconsistent queue count/oldest and legacy missing age fai
     const f = fixture(); await f.insert(); mutate(f); const before = structuredClone([...f.records]);
     await assert.rejects(f.insert(), /queue_unverified/); assert.deepEqual([...f.records], before);
   }
+});
+
+test('every later counted job is canonical: missing age, foreign scope, malformed fields and bad ID fail closed', async () => {
+  for (const patch of [{ createdAt: undefined }, { brandId: 'foreign' }, { state: 'confirmed' }, { id: 'a'.repeat(64) }, { attempts: -1 }]) {
+    const f = fixture(); const first = await f.insert(); f.records.set('orders/o2', order);
+    const second = await f.insert({ ...command, orderId: 'o2' });
+    // Make the corrupt row strictly later than the valid oldest job, preserving
+    // a plausible ledger count/oldest to reproduce the independent review finding.
+    const oldest = f.records.get(`${path}/jobs/${first.jobId}`).createdAt;
+    Object.assign(f.records.get(`${path}/jobs/${second.jobId}`), { createdAt: oldest + 100, ...patch });
+    f.records.get(queuePath).oldestPendingAt = oldest;
+    const before = structuredClone([...f.records]); await assert.rejects(f.insert(), /queue_unverified/);
+    assert.deepEqual([...f.records], before);
+  }
+});
+test('bounded queue rejects overflow without writes and never calls a truncated page complete', async () => {
+  const f = fixture(); const first = await f.insert();
+  const template = f.records.get(`${path}/jobs/${first.jobId}`);
+  const { printJobId } = loadTs('src/lib/printing/domain.ts');
+  for (let n = 2; n <= 501; n++) {
+    const identity = { ...command, orderId: `o${n}`, revision: 0 };
+    const key = printJobId(identity); f.records.set(`${path}/jobs/${key}`, { ...template, ...identity, id: key });
+  }
+  Object.assign(f.records.get(queuePath), { pendingCount: 501, revision: 501 });
+  const before = structuredClone([...f.records]); await assert.rejects(f.insert(), /queue_unverified/);
+  assert.deepEqual([...f.records], before);
+  const lastKey = printJobId({ ...command, orderId: 'o501', revision: 0 });
+  f.records.delete(`${path}/jobs/${lastKey}`);
+  Object.assign(f.records.get(queuePath), { pendingCount: 500, revision: 500 });
+  assert.deepEqual(await f.insert(), { jobId: first.jobId, created: false });
+  f.records.set('orders/o502', order);
+  const atCapacity = structuredClone([...f.records]);
+  await assert.rejects(f.insert({ ...command, orderId: 'o502' }), /queue_unverified/);
+  assert.deepEqual([...f.records], atCapacity);
+});
+test('transaction retry after another winning original insert becomes a no-op', async () => {
+  const winner = fixture(); const committed = await winner.insert();
+  const f = fixture({ retry: records => { for (const [key, value] of winner.records) records.set(key, structuredClone(value)); } });
+  assert.deepEqual(await f.insert(), { jobId: committed.jobId, created: false });
+  assert.equal(f.records.get(queuePath).pendingCount, 1); assert.equal(f.records.get(queuePath).revision, 1);
 });
