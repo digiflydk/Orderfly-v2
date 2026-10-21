@@ -2,7 +2,7 @@
 
 Promotion → Discounts includes a Club campaign panel. Select a brand and explicitly save the settings. Loading the panel does not write configuration or activate a campaign.
 
-The checkout selector stores exactly one mode: none, newsletter or Club. The percentage discount is still configured using the existing Promotion discount form. Welcome and profile bonuses each have their own enabled flag, stamp count and optional start/end time. Profile bonus criteria select one or more of phone, birth date and gender; “prefer not to say” is a valid gender answer. Times use the administrator browser's local time and are stored as epoch milliseconds.
+The checkout selector stores exactly one mode: none, newsletter or Club. The percentage discount is still configured using the existing Promotion discount form. Welcome and profile bonuses each have their own enabled flag, stamp count and optional start/end time. Profile bonus criteria select one or more of phone, birth date and gender; “prefer not to say” is a valid gender answer. All campaign times use Europe/Copenhagen, regardless of the administrator browser's timezone, and are stored as epoch milliseconds. Nonexistent Danish wall-clock times during the spring DST gap fail validation instead of shifting silently.
 
 An absent campaign document preserves the pre-existing newsletter checkout behavior and leaves bonus stamps disabled. An existing malformed or foreign document fails closed and cannot be silently overwritten by a default configuration. A saved `none` explicitly disables the checkout signup offer.
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useEffect, useRef, useState } from 'react';
+import { formatInTimeZone, fromZonedTime } from 'date-fns-tz';
 import { Button } from '@/components/ui/button';
 import { campaignSettingsSchema, PROFILE_BONUS_FIELDS, type CampaignDoc, type CampaignSettings } from '@/lib/loyalty/stamp-card/campaign-rules';
 import { loadClubCampaignAction, saveClubCampaignAction } from './club-campaign-actions';
@@ -11,12 +12,17 @@ const errorText = (code: string) => code === 'campaign_changed' ? 'Indstillinger
   : code === 'forbidden' || code === 'unauthorized' ? 'Du har ikke adgang til at administrere Club-kampagner for dette brand.'
     : code === 'campaign_invalid' ? 'Den gemte kampagne kan ikke læses. Kontakt en administrator.'
       : code === 'invalid_request' ? 'Kontrollér stempelantal, profilfelter og kampagneperioder.' : 'Kampagnen kunne ikke gemmes. Prøv igen.';
+const CAMPAIGN_TIMEZONE = 'Europe/Copenhagen';
 function dateInput(epoch: number | null) {
-  if (epoch === null || !Number.isFinite(epoch)) return '';
-  const date = new Date(epoch);
-  return new Date(epoch - date.getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
+  return epoch === null || !Number.isFinite(epoch) ? '' : formatInTimeZone(epoch, CAMPAIGN_TIMEZONE, "yyyy-MM-dd'T'HH:mm");
 }
-const dateValue = (value: string) => value ? new Date(value).getTime() : null;
+function dateValue(value: string) {
+  if (!value) return null;
+  const instant = fromZonedTime(value, CAMPAIGN_TIMEZONE).getTime();
+  // A spring DST gap has no matching Danish wall-clock instant. Keep it invalid
+  // rather than silently shifting the administrator's chosen campaign period.
+  return Number.isFinite(instant) && dateInput(instant) === value ? instant : Number.NaN;
+}
 
 export function ClubCampaignPanel({ brands }: { brands: Array<{ id: string; name: string }> }) {
   const [brandId, setBrandId] = useState(''), [campaign, setCampaign] = useState<CampaignDoc | null>(null);
@@ -59,7 +65,7 @@ export function ClubCampaignPanel({ brands }: { brands: Array<{ id: string; name
         <label className="block max-w-md space-y-1"><span>Tilmeldingstilbud i checkout</span><select className={inputClass} value={campaign.settings.checkoutMode} onChange={event => update({ ...campaign.settings, checkoutMode: event.target.value as CampaignSettings['checkoutMode'] })}>
           <option value="none">Ingen tilmeldingskampagne</option><option value="newsletter">Nyhedsbrev</option><option value="club">Club</option>
         </select></label>
-        <p className="text-sm text-muted-foreground">Tidspunkter vises i din lokale tid. Checkout viser højst én tilmeldingsmulighed. Club-tilmelding på Club-siden bruger samme personlige engangsfordel.</p>
+        <p className="text-sm text-muted-foreground">Alle tider er dansk tid. Checkout viser højst én tilmeldingsmulighed. Club-tilmelding på Club-siden bruger samme personlige engangsfordel.</p>
         {(['welcome', 'profile'] as const).map(kind => {
           const value = campaign.settings[kind];
           const patch = (changes: Partial<typeof value>) => update({ ...campaign.settings, [kind]: { ...value, ...changes } });

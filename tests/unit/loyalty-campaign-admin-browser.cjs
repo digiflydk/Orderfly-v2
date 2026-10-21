@@ -11,7 +11,7 @@ before(async()=>{
  export async function loadClubCampaignAction(brandId){
   await new Promise(resolve=>setTimeout(resolve,30));
   if(brandId==='denied')return {ok:false,error:'forbidden'};
-  return {ok:true,campaign:{brandId,version:0,updatedAt:null,settings:{...defaultCampaignSettings(),checkoutMode:'newsletter'}}};
+  return {ok:true,campaign:{brandId,version:0,updatedAt:null,settings:{...defaultCampaignSettings(),checkoutMode:'newsletter',welcome:{...defaultCampaignSettings().welcome,startsAt:new URLSearchParams(location.search).has('stored')?Date.parse('2026-10-22T08:30:00.000Z'):null}}}};
  }
  export async function saveClubCampaignAction(value){window.__calls=(window.__calls||[]).concat([value]);
   if(new URLSearchParams(location.search).has('conflict'))return {ok:false,error:'campaign_changed'};
@@ -69,5 +69,29 @@ test('denied brand reveals no campaign form or save control',async()=>{
  try{
   await page.goto(origin);await page.getByLabel('Brand for Club-kampagner').selectOption('denied');await page.getByRole('alert').filter({hasText:'ikke adgang'}).waitFor();
   assert.equal(await page.getByRole('form').count(),0);assert.equal(await page.getByRole('button',{name:'Gem Club-kampagner'}).count(),0);
+ }finally{await page.close();}
+});
+
+for(const timezoneId of ['UTC','America/Los_Angeles']) test(`campaign times render and save Danish wall clock in ${timezoneId}`,async()=>{
+ const page=await browser.newPage({timezoneId});page.setDefaultTimeout(5000);
+ try{
+  await page.goto(origin+'/?stored');await page.getByLabel('Brand for Club-kampagner').selectOption('brand');await page.getByRole('form').waitFor();
+  const start=page.getByLabel('Start på velkomstkampagne');
+  assert.equal(await start.inputValue(),'2026-10-22T10:30');
+  await page.getByText('Alle tider er dansk tid.',{exact:false}).waitFor();
+  await start.fill('2026-10-22T11:45');await page.getByRole('button',{name:'Gem Club-kampagner'}).click();
+  await page.getByRole('status').filter({hasText:'Club-kampagner er gemt.'}).waitFor();
+  assert.equal(await page.evaluate(()=>window.__calls[0].settings.welcome.startsAt),Date.parse('2026-10-22T09:45:00.000Z'));
+  assert.equal(await start.inputValue(),'2026-10-22T11:45');
+ }finally{await page.close();}
+});
+test('nonexistent Danish spring DST time is rejected instead of shifted',async()=>{
+ const page=await browser.newPage({timezoneId:'America/Los_Angeles'});page.setDefaultTimeout(5000);
+ try{
+  await page.goto(origin);await page.getByLabel('Brand for Club-kampagner').selectOption('brand');await page.getByRole('form').waitFor();
+  await page.getByLabel('Start på velkomstkampagne').fill('2026-03-29T02:30');
+  await page.getByRole('button',{name:'Gem Club-kampagner'}).click();
+  await page.getByRole('alert').filter({hasText:'Kontrollér'}).waitFor();
+  assert.equal(await page.evaluate(()=>window.__calls?.length||0),0);
  }finally{await page.close();}
 });
