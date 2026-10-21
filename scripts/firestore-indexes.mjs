@@ -24,6 +24,22 @@ const api = async (url, init = {}) => {
 };
 const key = fields => fields.filter(f => f.fieldPath !== '__name__').map(f => `${f.fieldPath}:${f.order || f.arrayConfig}`).join(',');
 
+// Read-only proof for a COLLECTION_GROUP __name__ override: the same document-name ordered query as the
+// collection-group sweep, at most one document name, no field values. Needs read access; an index-only
+// principal reports the denial without failing the run.
+async function probe() {
+  for (const override of overrides.filter(o => o.fieldPath === '__name__' && o.indexes.some(i => i.queryScope === 'COLLECTION_GROUP'))) {
+    const { status, body } = await api(`https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents:runQuery`, {
+      method: 'POST', body: JSON.stringify({ structuredQuery: { from: [{ collectionId: override.collectionGroup, allDescendants: true }],
+        select: { fields: [{ fieldPath: '__name__' }] }, orderBy: [{ field: { fieldPath: '__name__' }, direction: 'ASCENDING' }], limit: 1 } }),
+    });
+    const label = `query     ${override.collectionGroup} collection group ordered by __name__`;
+    if (status === 200) console.log(`${label}: OK (${(Array.isArray(body) ? body : []).filter(r => r.document).length} document name read)`);
+    else if (status === 403) console.log(`${label}: not run, principal has no read access (HTTP 403)`);
+    else throw new Error(`${label}: HTTP ${status} ${(Array.isArray(body) ? body[0] : body)?.error?.message || ''}`);
+  }
+}
+
 const wanted = files.flatMap(file => JSON.parse(readFileSync(file, 'utf8')).indexes);
 for (const index of wanted) {
   const { status, body } = await api(`${base}/${index.collectionGroup}/indexes`, {
@@ -36,9 +52,42 @@ for (const index of wanted) {
   else throw new Error(`${label}: HTTP ${status} ${body.error?.message || ''}`);
 }
 
+// Single-field overrides, e.g. a COLLECTION_GROUP __name__ index for a collection-group sweep.
+// Additive: the field's current effective indexes are kept and only missing ones are appended.
+const fieldUrl = override => `${base}/${override.collectionGroup}/fields/${encodeURIComponent(override.fieldPath)}`;
+const fieldKey = index => `${index.queryScope}:${index.order || index.arrayConfig}`;
+const fieldIndexes = body => (body.indexConfig?.indexes || []).map(index => ({
+  queryScope: index.queryScope, state: index.state,
+  ...(index.fields?.[0]?.order ? { order: index.fields[0].order } : { arrayConfig: index.fields?.[0]?.arrayConfig }),
+}));
+const overrides = files.flatMap(file => JSON.parse(readFileSync(file, 'utf8')).fieldOverrides || []);
+for (const override of overrides) {
+  const label = `${override.collectionGroup}.${override.fieldPath}`;
+  const current = await api(fieldUrl(override));
+  if (current.status !== 200) throw new Error(`${label}: HTTP ${current.status} ${current.body.error?.message || ''}`);
+  const existing = fieldIndexes(current.body);
+  const missing = override.indexes.filter(index => !existing.some(e => fieldKey(e) === fieldKey(index)));
+  if (!missing.length) { console.log(`exists    ${label} (${override.indexes.map(fieldKey).join(',')})`); continue; }
+  const indexes = [...existing, ...missing].map(index => ({ queryScope: index.queryScope,
+    fields: [{ fieldPath: override.fieldPath, ...(index.order ? { order: index.order } : { arrayConfig: index.arrayConfig }) }] }));
+  const { status, body } = await api(`${fieldUrl(override)}?updateMask=indexConfig`, { method: 'PATCH', body: JSON.stringify({ indexConfig: { indexes } }) });
+  if (status !== 200) throw new Error(`${label}: HTTP ${status} ${body.error?.message || ''}`);
+  console.log(`created   ${label} (${missing.map(fieldKey).join(',')}; kept ${existing.map(fieldKey).join(',') || 'none'})`);
+}
+
 // Index builds take a few minutes; report the final state of every listed index.
 for (let attempt = 0; attempt < 60; attempt++) {
   const states = [];
+  for (const override of overrides) {
+    const { status, body } = await api(fieldUrl(override));
+    if (status !== 200) throw new Error(`get ${override.collectionGroup}.${override.fieldPath}: HTTP ${status} ${body.error?.message || ''}`);
+    const existing = fieldIndexes(body);
+    for (const index of override.indexes) {
+      states.push([`${override.collectionGroup}.${override.fieldPath} (${fieldKey(index)})`, existing.find(e => fieldKey(e) === fieldKey(index))?.state
+        // An override is applied by a long-running operation; give it a minute to appear.
+        || (attempt < 3 ? 'PENDING' : 'MISSING')]);
+    }
+  }
   for (const group of [...new Set(wanted.map(i => i.collectionGroup))]) {
     const existing = [];
     for (let page = ''; ;) {
@@ -54,7 +103,7 @@ for (let attempt = 0; attempt < 60; attempt++) {
     }
   }
   const pending = states.filter(([, state]) => state !== 'READY');
-  if (!pending.length) { console.log(`All ${states.length} indexes are READY.`); process.exit(0); }
+  if (!pending.length) { console.log(`All ${states.length} indexes are READY.`); await probe(); process.exit(0); }
   if (pending.some(([, state]) => state === 'MISSING' || state === 'NEEDS_REPAIR')) throw new Error(`Not building: ${JSON.stringify(pending)}`);
   console.log(`waiting   ${pending.length} index(es) still building`);
   await new Promise(resolve => setTimeout(resolve, 20_000));
