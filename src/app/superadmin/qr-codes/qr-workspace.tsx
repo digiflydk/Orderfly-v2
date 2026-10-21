@@ -1,0 +1,181 @@
+'use client';
+
+import React, { useEffect, useRef, useState } from 'react';
+import { QrManager, type QrBrandChoice, type QrCapabilities, type QrCodeSummary, type QrManagerApi } from './qr-manager';
+import { QrAnalytics, type QrAnalyticsFilter } from './qr-analytics';
+import type { QrMetrics } from '@/lib/qr/metrics';
+
+export type QrWorkspaceData = { brands: QrBrandChoice[]; codes: QrCodeSummary[]; capabilities: QrCapabilities; analytics: boolean; truncated: boolean };
+type RenderFile = { content: string; mime: string; encoding?: 'base64' | 'utf8'; filename: string };
+type AnalyticsResult = { metrics: QrMetrics; complete: boolean };
+const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
+function isSummary(value: unknown): value is QrCodeSummary {
+  if (!object(value) || !['id', 'revision', 'name', 'brandId', 'destination', 'campaign'].every(key => typeof value[key] === 'string')
+    || value.kind !== 'dynamic' || value.staticType !== 'url' || !['active', 'paused', 'archived'].includes(String(value.status))
+    || value.locationId !== null && typeof value.locationId !== 'string' || !Array.isArray(value.tags) || !value.tags.every(tag => typeof tag === 'string') || !object(value.fields) || !object(value.utm)) return false;
+  return ['source', 'medium', 'campaign', 'content', 'term'].every(key => typeof (value.utm as Record<string, unknown>)[key] === 'string');
+}
+function isWorkspace(value: unknown): value is QrWorkspaceData {
+  if (!object(value) || !Array.isArray(value.codes) || !value.codes.every(isSummary) || !Array.isArray(value.brands) || !object(value.capabilities)
+    || typeof value.analytics !== 'boolean' || typeof value.truncated !== 'boolean') return false;
+  return ['create', 'edit', 'archive', 'export'].every(key => typeof (value.capabilities as Record<string, unknown>)[key] === 'boolean')
+    && value.brands.every(brand => object(brand) && typeof brand.id === 'string' && typeof brand.name === 'string' && Array.isArray(brand.locations)
+      && brand.locations.every(location => object(location) && typeof location.id === 'string' && typeof location.name === 'string'));
+}
+function isMetrics(value: unknown): value is QrMetrics {
+  const count = (number: unknown) => typeof number === 'number' && Number.isSafeInteger(number) && number >= 0;
+  const totals = (row: Record<string, unknown>) => ['totalOpenings', 'probableScans', 'excludedOpenings', 'knownUnique', 'unidentifiedScans'].every(key => count(row[key])) && (row.estimatedUnique === null || count(row.estimatedUnique));
+  if (!object(value) || value.timezone !== 'Europe/Copenhagen' || !['from', 'to'].every(key => typeof value[key] === 'number' && Number.isFinite(value[key]))
+    || (value.from as number) >= (value.to as number) || !totals(value)) return false;
+  return ['byDay', 'byHour', 'byQr'].every(key => Array.isArray(value[key]) && (value[key] as unknown[]).every(row => object(row) && typeof row.key === 'string' && totals(row)))
+    && ['byDevice', 'byOs', 'byBrowser', 'byReferrer'].every(key => Array.isArray(value[key]) && (value[key] as unknown[]).every(row => object(row) && typeof row.key === 'string' && count(row.count)));
+}
+class QrTransportError extends Error {
+  constructor(public code: string, public status?: number) { super(code); }
+}
+
+async function command<T>(value: unknown): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch('/api/qr/admin', { method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: { 'content-type': 'application/json' }, body: JSON.stringify(value) });
+  } catch { throw new QrTransportError('unavailable'); }
+  let result: unknown;
+  try {
+    if (!response.headers.get('content-type')?.includes('application/json')) throw new Error('not_json');
+    const text = await response.text();
+    if (text.length > 6_000_000) throw new Error('too_large');
+    result = JSON.parse(text);
+  } catch { throw new QrTransportError('unavailable', response.status); }
+  if (!response.ok) {
+    const supplied = typeof result === 'object' && result !== null && 'error' in result ? String(result.error) : '';
+    const known: Record<number, string[]> = { 400: ['invalid_input', 'invalid_destination'], 401: ['unauthorized'], 403: ['forbidden'], 409: ['revision_conflict', 'conflict'] };
+    throw new QrTransportError(known[response.status]?.includes(supplied) ? supplied : 'unavailable', response.status);
+  }
+  return result as T;
+}
+
+const dateInCopenhagen = (at: number) => {
+  const parts = new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Copenhagen', year: 'numeric', month: '2-digit', day: '2-digit' }).formatToParts(new Date(at));
+  const part = (type: string) => parts.find(value => value.type === type)?.value;
+  return `${part('year')}-${part('month')}-${part('day')}`;
+};
+function initialPeriod() {
+  const to = dateInCopenhagen(Date.now());
+  return { dateFrom: new Date(Date.parse(to + 'T12:00:00Z') - 6 * 86_400_000).toISOString().slice(0, 10), dateTo: to };
+}
+
+/** Transport and state only. The server rechecks every action and native scope. */
+export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
+  const [data, setData] = useState(initial);
+  const dataRef = useRef(data); dataRef.current = data;
+  const [managerVersion, setManagerVersion] = useState(0);
+  const [refreshError, setRefreshError] = useState(false);
+  const [tab, setTab] = useState<'manage' | 'analytics'>('manage');
+  const [filters, setFilters] = useState<QrAnalyticsFilter>(() => ({ ...initialPeriod(), qrId: '', campaign: '', placement: '' }));
+  const [metrics, setMetrics] = useState<QrMetrics | null>(null);
+  const [complete, setComplete] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [analyticsError, setAnalyticsError] = useState<string | null>(null);
+  const [selectionError, setSelectionError] = useState('');
+  const latestAnalytics = useRef(0);
+  const mounted = useRef(true);
+  const objectUrls = useRef(new Set<string>());
+  const timers = useRef(new Set<ReturnType<typeof setTimeout>>());
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false; latestAnalytics.current++;
+      for (const timer of timers.current) clearTimeout(timer);
+      for (const url of objectUrls.current) URL.revokeObjectURL(url);
+      objectUrls.current.clear();
+    };
+  }, []);
+
+  const assetUrl = (file: RenderFile) => {
+    if (!mounted.current) throw new QrTransportError('unavailable');
+    if (!file || !['image/png', 'image/svg+xml', 'text/csv;charset=utf-8'].includes(file.mime) || typeof file.content !== 'string' || file.content.length > 6_000_000) throw new QrTransportError('unavailable');
+    let content: BlobPart = file.content;
+    if (file.encoding === 'base64') {
+      if (file.mime !== 'image/png' || !/^[A-Za-z0-9+/]*={0,2}$/.test(file.content)) throw new QrTransportError('unavailable');
+      try { const binary = atob(file.content); content = Uint8Array.from(binary, character => character.charCodeAt(0)); }
+      catch { throw new QrTransportError('unavailable'); }
+    } else if (file.mime === 'image/png') throw new QrTransportError('unavailable');
+    const url = URL.createObjectURL(new Blob([content], { type: file.mime })); objectUrls.current.add(url);
+    const timer = setTimeout(() => { URL.revokeObjectURL(url); objectUrls.current.delete(url); timers.current.delete(timer); }, 60_000); timers.current.add(timer);
+    return url;
+  };
+  const confirmed = async (saved: QrCodeSummary) => {
+    if (!isSummary(saved)) throw new QrTransportError('unavailable');
+    if (!mounted.current) return saved;
+    const next = { ...dataRef.current, codes: [saved, ...dataRef.current.codes.filter(code => code.id !== saved.id)] };
+    dataRef.current = next; setData(next);
+    // A directory refresh failure must not turn a confirmed write into an
+    // uncertain write. Preserve the authoritative saved row and report separately.
+    try {
+      const refreshed = await command<QrWorkspaceData>({ action: 'list' });
+      if (!isWorkspace(refreshed)) throw new QrTransportError('unavailable');
+      if (mounted.current) { dataRef.current = refreshed; setData(refreshed); setManagerVersion(version => version + 1); setRefreshError(false); }
+    } catch { if (mounted.current) setRefreshError(true); }
+    return saved;
+  };
+  const api: QrManagerApi = {
+    save: async (draft, context) => confirmed(await command<QrCodeSummary>({ action: 'save', draft, context })),
+    setStatus: async (id, status, context) => {
+      const stored = dataRef.current.codes.find(code => code.id === id);
+      if (!stored) throw new QrTransportError('forbidden', 403);
+      return confirmed(await command<QrCodeSummary>({ action: 'status', id, brandId: stored.brandId, locationId: stored.locationId, status, ...context }));
+    },
+    preview: (draft, context) => command({ action: 'render', draft, context, format: 'preview' }),
+    download: async (draft, format, context) => {
+      const file = await command<RenderFile>({ action: 'render', draft, context, format });
+      return { url: assetUrl(file), filename: file.filename };
+    },
+  };
+  const codeFor = (value: QrAnalyticsFilter) => {
+    const code = dataRef.current.codes.find(candidate => candidate.id === value.qrId);
+    if (!code) throw new QrTransportError('select_code');
+    const brand = dataRef.current.brands.find(candidate => candidate.id === code.brandId);
+    const placement = brand?.locations.find(location => location.id === code.locationId)?.name || (code.locationId ? code.locationId : 'Hele brandet');
+    if (value.campaign && code.campaign !== value.campaign || value.placement && placement !== value.placement) throw new QrTransportError('filter_mismatch');
+    return code;
+  };
+  const analyticsCommand = (value: QrAnalyticsFilter, exporting = false) => {
+    const code = codeFor(value);
+    return { action: 'analytics', brandId: code.brandId, locationId: code.locationId, id: code.id, from: value.dateFrom, to: value.dateTo, ...(exporting ? { export: true } : {}) };
+  };
+  const loadAnalytics = async (value: QrAnalyticsFilter) => {
+    const request = ++latestAnalytics.current; setFilters(value); setSelectionError(''); setAnalyticsError(null);
+    if (!dataRef.current.analytics) return;
+    let body: unknown;
+    try { body = analyticsCommand(value); }
+    catch (error) { setLoading(false); setAnalyticsError('selection'); setSelectionError(error instanceof QrTransportError && error.code === 'filter_mismatch' ? 'Den valgte QR-kode matcher ikke kampagne eller placering.' : 'Vælg en bestemt QR-kode for at se statistik.'); return; }
+    setLoading(true);
+    try {
+      const result = await command<AnalyticsResult>(body);
+      if (!isMetrics(result?.metrics) || typeof result.complete !== 'boolean') throw new QrTransportError('unavailable');
+      if (mounted.current && request === latestAnalytics.current) { setMetrics(result.metrics); setComplete(result.complete); }
+    } catch { if (mounted.current && request === latestAnalytics.current) setAnalyticsError('unavailable'); }
+    finally { if (mounted.current && request === latestAnalytics.current) setLoading(false); }
+  };
+  const exportAnalytics = async () => {
+    if (!data.analytics || !data.capabilities.export || !complete || !metrics || loading || analyticsError || selectionError) return;
+    const result = await command<{ csv: string }>(analyticsCommand(filters, true));
+    if (typeof result?.csv !== 'string') throw new QrTransportError('unavailable');
+    const link = document.createElement('a'); link.href = assetUrl({ content: result.csv, mime: 'text/csv;charset=utf-8', filename: 'qr-statistik.csv' }); link.download = 'qr-statistik.csv'; document.body.append(link); link.click(); link.remove();
+  };
+
+  return <div className="space-y-6" style={{ minWidth: 0 }}>
+    {data.analytics && <nav aria-label="QR-modul" className="flex flex-wrap gap-2"><button type="button" aria-current={tab === 'manage' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('manage')}>Administration</button><button type="button" aria-current={tab === 'analytics' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('analytics')}>Statistik</button></nav>}
+    {data.truncated && <p role="alert">Oversigten er ufuldstændig. Flere QR-koder findes end de viste. Søgning og filtre gælder kun de indlæste koder.</p>}
+    {refreshError && <p role="alert">Ændringen er gemt, men oversigten kunne ikke genindlæses. Den bekræftede kode er bevaret. Genindlæs siden for en ny oversigt.</p>}
+    <div hidden={tab !== 'manage'}><QrManager key={managerVersion} brands={data.brands} initialCodes={data.codes} capabilities={data.capabilities} api={api} /></div>
+    {tab === 'analytics' && data.analytics && <div className="space-y-3">
+      <p className="text-sm text-muted-foreground">Vælg én QR-kode. Samlede tal på tværs af koder er endnu ikke tilgængelige.</p>
+      {selectionError && <p role="alert">{selectionError}</p>}
+      <QrAnalytics metrics={metrics} period={{ dateFrom: filters.dateFrom, dateTo: filters.dateTo }} selection={{ qrId: filters.qrId, campaign: filters.campaign, placement: filters.placement }}
+        codes={data.codes.filter(code => code.kind === 'dynamic').map(code => ({ id: code.id, name: code.name, campaign: code.campaign, placement: data.brands.find(brand => brand.id === code.brandId)?.locations.find(location => location.id === code.locationId)?.name || (code.locationId || 'Hele brandet') }))}
+        complete={metrics ? complete : true} loading={loading} error={analyticsError} canExport={data.capabilities.export && !selectionError}
+        onFilterChange={value => { void loadAnalytics(value); }} onRetry={() => { void loadAnalytics(filters); }} onExport={exportAnalytics} />
+    </div>}
+  </div>;
+}

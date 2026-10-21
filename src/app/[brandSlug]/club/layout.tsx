@@ -4,6 +4,8 @@ import { loadMember, loadPortal, portalBase } from './data';
 import { ClubNav } from './club-nav';
 import { portalPreset } from './brand-preset';
 import { homeScreenBrand } from './home-screen';
+import { PortalFrame } from './portal-frame';
+import './esmeralda-club.css';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,17 +37,9 @@ export default async function ClubLayout({ children, params }: Props) {
   const [{ brand, program }, member, storefrontBrand, base] = await Promise.all([loadPortal(brandSlug), loadMember(brandSlug), getBrandBySlug(brandSlug), portalBase(brandSlug)]);
   const preset = portalPreset({ slug: brandSlug, name: brand.brandName, logoUrl: storefrontBrand?.logoUrl });
   return (
-    <div data-loyalty-portal className="mx-auto flex w-full max-w-md flex-col px-4 pb-12 text-base">
-      {preset.fontCss && <style>{preset.fontCss}</style>}
-      <header className="flex justify-center py-6">
-        <a href={base} className="inline-flex min-h-11 items-center">
-          {preset.logoUrl
-            ? <img src={preset.logoUrl} alt={preset.logoAlt} className="h-16 w-auto max-w-[200px] object-contain" />
-            : <span className="text-xl font-semibold">{brand.brandName}</span>}
-        </a>
-      </header>
-      {member && <ClubNav base={base} programName={program.name} />}
-      <main className="flex flex-col gap-6">{children}</main>
-    </div>
+    <PortalFrame slug={brandSlug} base={base} preset={preset} brandName={brand.brandName} signedIn={!!member} program={program}
+      memberNavigation={member ? <ClubNav base={base} programName={program.name} /> : undefined}>
+      {children}
+    </PortalFrame>
   );
 }

@@ -20,6 +20,8 @@ An HTTP opening cannot establish use of a camera. Reports distinguish recorded G
 
 ## Candidate validation and remaining integration
 
+`firestore-indexes.json` describes only new QR query requirements. It has NOT been applied to production. Verify collection-group document-name index requirements with the actual emulator/provider before release; do not replace the project's complete index catalogue with this fragment. Existing deployed browser rules must deny all QR definitions, public-index direct access, scan records, receipts and maintenance records. No client ACL is inferred from server code. `QR_MODULE_ENABLED` currently defaults OFF for public redirects and retention; an activation needs coordinated runtime and index/readiness evidence.
+
 Payload/render/metric primitives and storage lifecycle have executable isolated tests. Admin component and dashboard have intercepted-browser tests. Full authenticated application integration, event recording/retention, bulk confirmation, CI inventories, exact-head independent review, deployed SHA and live acceptance remain required. No production records, roles, rules or secrets have been changed by implementation.
 
 See sibling documents for each slice's actual implementation and limitations. Parent #389 must remain open while acceptance or release evidence is missing.

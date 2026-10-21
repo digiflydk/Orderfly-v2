@@ -48,10 +48,20 @@ test('missing authorization, foreign stored brand and location prevent all event
   const f=fixture();await assert.rejects(f.service.read(bad,'code',range));assert.equal(f.trace.length,0);
  }
 });
-test('brand-wide analytics still uses explicit current location equality and rejects unsafe IDs',async()=>{
+test('brand-wide analytics covers historical locations and rejects unsafe IDs',async()=>{
  const f=fixture([row({locationId:null})],{code:{locationId:null}}),result=await f.service.read({...scope,locationIds:null},'code',range);
- assert.equal(result.metrics.totalOpenings,1);assert.ok(f.filters.some(v=>v[0]==='locationId'&&v[2]===null));
+ assert.equal(result.metrics.totalOpenings,1);assert.equal(result.currentLocationOnly,false);assert.equal(f.filters.some(v=>v[0]==='locationId'),false);
  const other=fixture();await assert.rejects(other.service.read(scope,'../code',range));assert.equal(other.trace.length,0);
+});
+test('moving a code preserves its full brand-wide history while a delegated reader sees only current location',async()=>{
+ const history=[row({locationId:'l1'}),row({locationId:'l2'})],options={code:{locationId:'l2'}};
+ const all=await fixture(history,options).service.read({...scope,locationIds:null},'code',range);
+ assert.equal(all.metrics.totalOpenings,2);assert.equal(all.currentLocationOnly,false);assert.equal(all.complete,true);
+ const delegated=await fixture(history,options).service.read({...scope,locationIds:['l2']},'code',range);
+ assert.equal(delegated.metrics.totalOpenings,1);assert.equal(delegated.currentLocationOnly,true);
+ const former=fixture(history,options);await assert.rejects(former.service.read(scope,'code',range));assert.equal(former.trace.filter(([kind])=>kind==='events').length,0);
+ const historical=await fixture([row({locationId:'retired-location'})],options).service.read({...scope,locationIds:null},'code',range);
+ assert.equal(historical.metrics.totalOpenings,1);assert.equal(historical.complete,true);
 });
 test('interval is half-open and analytics never reads beyond its requested range',async()=>{
  const f=fixture([row({timestamp:range.from-1}),row({timestamp:range.from}),row({timestamp:range.to-1}),row({timestamp:range.to})]);

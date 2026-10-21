@@ -12,7 +12,7 @@ export type QrAnalyticsDatabase = { collection(name: string): Collection };
 export type QrAnalyticsResult = {
   code: QrAnalyticsCode; metrics: QrMetrics; complete: boolean; totalsAreExact: boolean;
   truncated: boolean; retentionLimited: boolean; futureLimited: boolean; discardedEvents: number; sampledEvents: number;
-  currentLocationOnly: true; dataAsOf: number; period: { from: number; to: number; timezone: 'Europe/Copenhagen' };
+  currentLocationOnly: boolean; dataAsOf: number; period: { from: number; to: number; timezone: 'Europe/Copenhagen' };
 };
 export class QrAnalyticsError extends Error {
   constructor(public code: string, public status = 400) { super(code); }
@@ -85,16 +85,21 @@ export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
       if (!found || found.id !== id || found.brandId !== scope.brandId || (found.locationId !== null && !validKey(found.locationId))) return fail('not_found', 404);
       if (scope.locationIds !== null && (found.locationId === null || !scope.locationIds.includes(found.locationId))) return fail('forbidden', 403);
       const code: QrAnalyticsCode = { id: found.id, brandId: found.brandId, locationId: found.locationId, name: found.name, campaign: found.campaign, tags: [...found.tags] };
-      // Current-location equality prevents a moved code exposing historic events from a formerly assigned location.
-      const result = await db.collection('brands').doc(scope.brandId).collection(QR_PATHS.codes).doc(id).collection(QR_PATHS.events)
-        .where('brandId', '==', scope.brandId).where('qrId', '==', id).where('locationId', '==', code.locationId)
+      // Brand-wide callers retain the whole code history. Delegated readers see
+      // only its current location, never a former location's event history.
+      const currentLocationOnly = scope.locationIds !== null;
+      let query = db.collection('brands').doc(scope.brandId).collection(QR_PATHS.codes).doc(id).collection(QR_PATHS.events)
+        .where('brandId', '==', scope.brandId).where('qrId', '==', id);
+      if (currentLocationOnly) query = query.where('locationId', '==', code.locationId);
+      const result = await query
         .where('timestamp', '>=', range.from).where('timestamp', '<', range.to)
         .orderBy('timestamp', 'asc').orderBy('__name__', 'asc').limit(QR_ANALYTICS_EVENT_LIMIT + 1).get();
       const truncated = result.docs.length > QR_ANALYTICS_EVENT_LIMIT, events: QrMetricEvent[] = [];
       let discardedEvents = 0;
       for (const snapshot of result.docs.slice(0, QR_ANALYTICS_EVENT_LIMIT)) {
         const row = snapshot.data(), c = classification(row?.classification);
-        if (!row || row.brandId !== scope.brandId || row.qrId !== id || row.locationId !== code.locationId || !Number.isSafeInteger(row.timestamp)
+        if (!row || row.brandId !== scope.brandId || row.qrId !== id || (row.locationId !== null && !validKey(row.locationId))
+          || (currentLocationOnly && row.locationId !== code.locationId) || !Number.isSafeInteger(row.timestamp)
           || (row.timestamp as number) < range.from || (row.timestamp as number) >= range.to || !c) { discardedEvents++; continue; }
         // Identifiers are deliberately not projected. This release cannot estimate unique visitors.
         events.push({ timestamp: row.timestamp as number, qrId: id, classification: c });
@@ -104,7 +109,7 @@ export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
       const retentionLimited = range.from < dataAsOf - QR_ANALYTICS_RETENTION_DAYS * DAY, futureLimited = range.to > dataAsOf;
       const complete = !truncated && !retentionLimited && !futureLimited && discardedEvents === 0;
       return { code, metrics: aggregateQrMetrics(events, { ...range, qrId: id }), complete, totalsAreExact: complete,
-        truncated, retentionLimited, futureLimited, discardedEvents, sampledEvents: events.length, currentLocationOnly: true, dataAsOf,
+        truncated, retentionLimited, futureLimited, discardedEvents, sampledEvents: events.length, currentLocationOnly, dataAsOf,
         period: { ...range, timezone: 'Europe/Copenhagen' } };
     },
   };
