@@ -107,6 +107,9 @@ jobs:
       - name: Scoped print-intent target policy regression
         run: node --test tests/unit/printing-intent-target-policy.cjs
 
+      - name: Staff pickup print-origin proof regression
+        run: node --test tests/unit/printing-pickup-transition-proof.cjs
+
       - name: Native and compatibility transaction bridge regression
         run: node --test tests/unit/firestore-compat-transaction.cjs
 
