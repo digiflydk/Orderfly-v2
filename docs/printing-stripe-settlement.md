@@ -119,3 +119,18 @@ no manifest/jobs/ledgers. Reactivation after an OFF preflight cannot invent proo
 Paid replay preserves previously created originals, and no late Paid backfill is
 permitted. The tests first failed on the old production module, then passed with
 the policy correction. Configuration/intent/output remain OFF in production.
+
+
+## Terminal Paid webhook replay
+
+An already Paid order in Completed, Delivered, Error or Canceled uses the existing
+status-agnostic financial replay path. It does not request a new print proof,
+project production-state print transitions, load routing/catalog data or change
+any manifest, job or queue ledger. Missing notification jobs retain the original
+repair behavior, including no confirmation/marketing repair for Canceled orders.
+Session identity, native payment scope, currency and amount checks still run.
+
+The terminal decision is read again inside each settlement transaction attempt.
+A terminal preflight cannot authorize printing if the order changes to a
+production state before that attempt. Active production-state Paid replays keep
+the existing strict immutable manifest/revision checks and no-backfill policy.

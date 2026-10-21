@@ -322,3 +322,51 @@ test('#349 Paid replay requires each original job revision to match its immutabl
     assert.equal(f.records.has(confirmationPath), false, 'conflicting original job must also block financial replay repairs');
   }
 });
+
+test('#349 terminal Paid replays repair notifications without creating or changing print intents', async () => {
+  for (const status of ['Completed', 'Delivered', 'Error', 'Canceled']) {
+    for (const originallyPrinted of [false, true]) {
+      const f = await fixture();
+      if (!originallyPrinted) process.env.ORDERFLY_PRINT_INTENTS_ENABLED = 'false';
+      try { assert.equal(await f.settle(), true); }
+      finally { process.env.ORDERFLY_PRINT_INTENTS_ENABLED = 'true'; }
+      f.order().status = status;
+      const printRecords = structuredClone([...f.records].filter(([path]) => /printIntents|\/printers\//.test(path)));
+      const confirmationPath = [...f.records].find(([path, row]) => path.startsWith('orderNotificationJobs/') && row.kind === 'orderConfirmation')[0];
+      f.records.delete(confirmationPath);
+      const customerBefore = structuredClone(f.records.get('customers/' + f.order().customerDetails.id));
+      const providerRequests = f.requests.length;
+      assert.equal(await f.settle(), false);
+      assert.equal(f.requests.length, providerRequests, 'terminal replay needs no print proof retrieval');
+      assert.equal(f.records.has(confirmationPath), status !== 'Canceled');
+      assert.deepEqual([...f.records].filter(([path]) => /printIntents|\/printers\//.test(path)), printRecords);
+      assert.deepEqual(f.records.get('customers/' + f.order().customerDetails.id), customerBefore);
+      assert.equal(f.order().status, status); assert.equal(f.order().paymentStatus, 'Paid');
+      const before = structuredClone([...f.records]); assert.equal(await f.settle(), false); assert.deepEqual([...f.records], before);
+    }
+  }
+});
+
+test('#349 terminal Paid replay still rejects foreign sessions and payment amounts before any write', async () => {
+  for (const patch of [{ id: 'cs_test_foreign_reference' }, { amount_total: 1 }, { currency: 'eur' }, { metadata: { orderId: 'other', brandId: 'b', locationId: 'l' } }]) {
+    const f = await fixture(); assert.equal(await f.settle(), true); f.order().status = 'Completed';
+    Object.assign(f.session, patch); const before = structuredClone([...f.records]), priorWrites = writes(f).length;
+    await assert.rejects(f.settle()); assert.deepEqual([...f.records], before); assert.equal(writes(f).length, priorWrites);
+  }
+});
+
+
+test('#349 terminal replay decision is re-read in the settlement transaction after preflight', async () => {
+  let changeStatus;
+  const f = await fixture({ afterPreflight: state => { if (changeStatus) state.order().status = changeStatus; } });
+  assert.equal(await f.settle(), true);
+  changeStatus = 'Completed'; const originalPrint = structuredClone([...f.records].filter(([path]) => /printIntents|\/printers\//.test(path)));
+  assert.equal(await f.settle(), false);
+  assert.equal(f.order().status, 'Completed');
+  assert.deepEqual([...f.records].filter(([path]) => /printIntents|\/printers\//.test(path)), originalPrint);
+  // A terminal preflight cannot grant a print transition if the order changes.
+  changeStatus = 'Ready'; const priorWrites = writes(f).length;
+  await assert.rejects(f.settle(), /verified payment origin required/);
+  assert.equal(writes(f).length, priorWrites);
+  assert.deepEqual([...f.records].filter(([path]) => /printIntents|\/printers\//.test(path)), originalPrint);
+});

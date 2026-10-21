@@ -54,6 +54,10 @@ export async function settlePaidPickupOrder(orderId: string, method: RestaurantP
   return settleOrder({ kind: 'pickup', orderId, method, actor });
 }
 
+const isTerminalPaidReplay = (order: { paymentStatus?: unknown; status?: unknown } | undefined) =>
+  order?.paymentStatus === 'Paid' && typeof order.status === 'string'
+  && ['Completed', 'Delivered', 'Error', 'Canceled'].includes(order.status);
+
 type PaymentProof = { kind: 'stripe'; session: Stripe.Checkout.Session }
   | { kind: 'pickup'; orderId: string; method: RestaurantPaymentForm; actor: Awaited<ReturnType<typeof orderflySession>> };
 async function settleOrder(proof: PaymentProof) {
@@ -73,8 +77,11 @@ async function settleOrder(proof: PaymentProof) {
   const printIntentsEnabled = !!session && process.env.ORDERFLY_PRINT_INTENTS_ENABLED === 'true';
   let stripePrintProof: StripePrintPaymentProof | undefined;
   if (printIntentsEnabled) {
-    const preflight = await db.runTransaction(transaction => preparePrintIntentTargetPolicy({ db, transaction }, { brandId: metadata.brandId, locationId: metadata.locationId }), { readOnly: true });
-    if (preflight.enabled) stripePrintProof = await verifyStripePrintPayment(session!.id);
+    const needsPrintProof = await db.runTransaction(async transaction => {
+      const preflight = await preparePrintIntentTargetPolicy({ db, transaction }, { brandId: metadata.brandId, locationId: metadata.locationId });
+      return preflight.enabled && !isTerminalPaidReplay((await transaction.get(orderRef)).data());
+    }, { readOnly: true });
+    if (needsPrintProof) stripePrintProof = await verifyStripePrintPayment(session!.id);
   }
   // Private plan owns the actual settlement writes. Nothing supplied by a caller
   // can replace the mutation, projected state or apply callback. Rebuilt on retry.
@@ -241,11 +248,14 @@ async function settleOrder(proof: PaymentProof) {
   const fulfilled = await db.runTransaction(async transaction => {
     const context: NativeTransactionContext = Object.freeze({ db, transaction });
     const policy = printIntentsEnabled ? await preparePrintIntentTargetPolicy(context, { brandId: metadata.brandId, locationId: metadata.locationId }) : null;
-    if (policy?.enabled && !stripePrintProof) throw new Error('Print policy changed; verified payment origin required');
-    const transition = policy?.enabled ? await prepareStripePrintTransition(context, stripePrintProof!) : undefined;
+    // A completed Paid replay uses the original status-agnostic settlement repair.
+    // Re-read on every SDK attempt; it must never create or backfill print intent.
+    const printTransitionEnabled = policy?.enabled && !isTerminalPaidReplay((await transaction.get(orderRef)).data());
+    if (printTransitionEnabled && !stripePrintProof) throw new Error('Print policy changed; verified payment origin required');
+    const transition = printTransitionEnabled ? await prepareStripePrintTransition(context, stripePrintProof!) : undefined;
     const prepared = await prepareSettlement(context, transition);
     let printPlan: Awaited<ReturnType<typeof prepareStripeSettlementPrintIntents>> | undefined;
-    if (policy?.enabled) {
+    if (printTransitionEnabled && policy) {
       if (!prepared.capability) throw new Error('Missing private settlement print capability');
       const [catalog, saved] = await Promise.all([
         projectNativePrintCatalog(context, { orderId: metadata.orderId, brandId: metadata.brandId, locationId: metadata.locationId }),
