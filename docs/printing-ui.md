@@ -167,3 +167,28 @@ Authoritative activation and last-confirmed-print timestamps are still owned by
 activation or synthetic last use. #341 remains open until metadata and actual
 authenticated live acceptance are complete. React fixtures and public smoke do
 not establish authenticated live success or physical printer readiness.
+
+
+## Authenticated-shell overflow regression (#366)
+
+The default table exposed whole-page horizontal overflow inside the real desktop
+sidebar shell at a 1348px viewport, even though standalone overview fixtures fit.
+The browser regression now composes the actual `SuperAdminLayoutClient`, sidebar,
+`PrinterOverview`, Tailwind and admin CSS, mocking only navigation/session/API I/O.
+It checks 1348px desktop and 375px mobile in loading, empty and populated states
+with long names. The document must fit its viewport while the full-width table
+retains its own usable horizontal scroll and every column.
+
+The regression-only head `588639af` first failed actual CI run `39638555275`
+(job `119355724971`) at the intended document-width assertion: desktop document
+1422px versus viewport 1348px, and mobile document 1134px versus viewport 375px.
+All 133 original core browser assertions passed; only the two new shell cases
+failed. The shell inset now has `min-w-0`, so its flex content can shrink beside
+the sidebar and the unchanged 1100px table scrolls inside its own wrapper.
+No column, action, readable table width or access behavior is removed.
+
+The local official Chromium install failed because the downloaded archive was
+truncated; a missing executable is not a test result. Final actual CI must pass
+the complete existing browser suite and both shell cases after this fix.
+Authenticated live retesting on the deployed commit remains a separate release
+gate; fixture success does not complete parent #341 or metadata follow-up #344.
