@@ -16,10 +16,10 @@ export default async function PrintersPage() {
       try { return (await nativeCatalog(permission)).locations.map(({ id, brandId }) => ({ id, brandId })); }
       catch (error) { if ((error as { status?: number })?.status === 403) return []; throw error; }
     };
-    const [createLocations, editLocations] = await Promise.all([
-      writableLocations('orderfly.catalog:create'), writableLocations('orderfly.catalog:edit'),
+    const [createLocations, editLocations, deleteLocations] = await Promise.all([
+      writableLocations('orderfly.catalog:create'), writableLocations('orderfly.catalog:edit'), writableLocations('orderfly.catalog:delete'),
     ]);
-    return <PrinterOverview key={access.actorId} createLocations={createLocations} editLocations={editLocations} brands={catalog.brands.map(({ id, name }) => ({ id, name }))}
+    return <PrinterOverview key={access.actorId} createLocations={createLocations} editLocations={editLocations} deleteLocations={deleteLocations} brands={catalog.brands.map(({ id, name }) => ({ id, name }))}
       locations={catalog.locations.map(({ id, name, brandId }) => ({ id, name, brandId }))} />;
   } catch (error) {
     if ((error as { status?: number })?.status === 403) return <AccessDeniedPage />;
