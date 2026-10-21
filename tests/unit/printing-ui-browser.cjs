@@ -193,9 +193,9 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667
 }
 test('write errors retain ordinary input, require fresh conflict data and clear an expired session', async t => {
   const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
-  let status = 400, writes = 0;
+  let status = 400, writes = 0, reads = 0;
   await page.route('**/api/merchant/printers**', route => {
-    if (route.request().method() === 'GET') return route.fulfill({ json: { items: [item('prior', 'a', 'la', { state: 'disabled' })], nextCursor: null } });
+    if (route.request().method() === 'GET') { reads++; return route.fulfill({ json: { items: [item('prior', 'a', 'la', { state: 'disabled' })], nextCursor: null } }); }
     writes++; return route.fulfill({ status, json: { error: status === 503 ? 'writes_unavailable' : 'PRIVATE_PROVIDER_DETAIL' } });
   });
   await page.goto(origin + '?writes'); await choose(page); await fillNew(page);
@@ -211,12 +211,28 @@ test('write errors retain ordinary input, require fresh conflict data and clear 
     await expect(page.getByRole('button', { name: 'Gem deaktiveret printer' })).toBeDisabled();
     await page.getByRole('button', { name: 'Opdater oversigten', exact: true }).click(); await fillNew(page);
   }
+  const readsBeforeExpiry = reads;
   status = 401; await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click();
   await expect(page.getByRole('form', { name: 'Tilføj printer' })).toHaveCount(0);
   await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveText('Din session er udløbet. Log ind igen.');
   assert.equal((await page.locator('body').innerText()).includes('PRIVATE_PROVIDER_DETAIL'), false); assert.equal(writes, 6);
   await expect(page.getByText('Køkken prior', { exact: true })).toHaveCount(0);
+  // Clearing the editor and receiving fresh same-scope metadata must not
+  // silently authenticate again or restore write controls after a mutation401.
+  await page.evaluate(() => window.setPrinterWriteScopes([{ id: 'la', brandId: 'a' }]));
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  assert.equal(reads, readsBeforeExpiry);
+  await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveText('Din session er udløbet. Log ind igen.');
+  // A deliberate refresh can revalidate the current session through a fresh GET.
+  await page.getByRole('button', { name: 'Opdater', exact: true }).click();
+  await expect(page.getByText('Køkken prior', { exact: true })).toBeVisible();
+  assert.equal(reads, readsBeforeExpiry + 1);
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await page.getByRole('button', { name: 'Tilføj printer', exact: true }).click();
+  assert.equal(await page.getByRole('textbox', { name: 'Printernavn', exact: true }).inputValue(), '');
+  assert.equal(await page.getByRole('textbox', { name: 'Printer-ID', exact: true }).inputValue(), '');
 });
 test('view-only metadata and independently scoped grants never expose unauthorized write controls', async t => {
   const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();

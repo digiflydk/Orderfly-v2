@@ -45,6 +45,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const [sessionLost, setSessionLost] = useState(false);
   const sessionEpoch = useRef(0);
   const readGeneration = useRef(0);
+  const readsAllowed = useRef(true);
   const readController = useRef<AbortController | null>(null);
   const [savedScope, setSavedScope] = useState('');
   const location = locations.find(row => row.id === locationId && row.brandId === brandId);
@@ -52,8 +53,8 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const scopeRef = useRef(scope); scopeRef.current = scope;
   const canCreate = !sessionLost && createLocations.some(row => row.id === location?.id && row.brandId === brandId);
   const canEdit = !sessionLost && editLocations.some(row => row.id === location?.id && row.brandId === brandId);
-  const closeAndRefresh = () => { setEditor(null); setAfter(''); setRefresh(value => value + 1); };
-  const loseSession = () => { sessionEpoch.current += 1; setSessionLost(true); setEditor(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
+  const closeAndRefresh = () => { readsAllowed.current = true; setEditor(null); setAfter(''); setRefresh(value => value + 1); };
+  const loseSession = () => { readsAllowed.current = false; readGeneration.current += 1; readController.current?.abort(); sessionEpoch.current += 1; setSessionLost(true); setEditor(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
   const key = JSON.stringify([brandId, location?.id || '', after, refresh]);
   const current = result?.key === key ? result : null;
   const openEditor = (item?: Item) => {
@@ -69,7 +70,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   }, [editor, location, scope, canCreate, canEdit]);
 
   useEffect(() => {
-    if (editor || !brandId || !locationId || !locations.some(row => row.id === locationId && row.brandId === brandId)) return;
+    if (!readsAllowed.current || editor || !brandId || !locationId || !locations.some(row => row.id === locationId && row.brandId === brandId)) return;
     const controller = new AbortController(); readController.current = controller;
     const generation = ++readGeneration.current;
     let active = true;
@@ -86,8 +87,11 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
       })
       .then(page => { if (isCurrent()) { setSessionLost(false); setResult({ key, page }); } })
       .catch(error => {
-        if (isCurrent()) setResult({ key, error: error instanceof Error && error.message !== 'invalid_response'
+        if (isCurrent()) {
+          if (sessionLost) readsAllowed.current = false;
+          setResult({ key, error: error instanceof Error && error.message !== 'invalid_response'
           && /^(Din session|Du har ikke adgang|Printerne kunne)/.test(error.message) ? error.message : 'Printerne kunne ikke indlæses. Prøv igen.' });
+        }
       });
     return () => { active = false; controller.abort(); if (readController.current === controller) readController.current = null; };
   }, [brandId, locationId, after, refresh, key, locations, editor]);

@@ -111,3 +111,12 @@ starts a new GET. An old read401 cannot close the form and abort a transaction
 that may commit. The fixture holds a background GET401 alongside a write and
 verifies both201 success and uncertain503 handling remain visible and the write
 settles before refresh, with no new reads while editing.
+
+A session401 also synchronously closes the read gate and invalidates/aborts any
+read before clearing the editor. Editor removal and same-scope metadata rerenders
+cannot automatically refetch and restore write controls. Only a deliberate
+`Opdater` action opens the gate for a fresh read, or a new actor-keyed server
+context creates fresh state. A failed recovery read keeps the gate closed. The
+fixture asserts no extra GET after mutation401 or metadata replacement, then
+exactly one explicit recovery GET and empty prepared input after successful
+revalidation. Existing API authorization remains authoritative.
