@@ -130,6 +130,30 @@ test('reported errors block retry even after ready status returns; explicit resu
   assert.equal(sim.state, 'reported_failure');
 });
 
+test('only documented family widths classify status; unknown DELETE results remain uncertain', () => {
+  for (const code of ['199 Future', '2999 Future', '4999 Future', '5999 Future']) {
+    const parsed = p.parseCloudPrntPoll(poll({ statusCode: code }), 'application/json');
+    assert.equal(parsed.status.kind, 'unknown');
+    assert.deepEqual(p.cloudPrntPollResponse(parsed, { jobToken: 'job-1', mediaTypes: ['text/plain'] }), { jobReady: false });
+    assert.equal(p.parseCloudPrntConfirmation(query({ code })).outcome, 'uncertain');
+    const sim = make(); post(sim);
+    assert.equal(sim.request({ method: 'DELETE', query: query({ code }) }).status, 200);
+    assert.equal(sim.state, 'uncertain');
+    assert.equal(JSON.parse(post(sim).body).jobReady, false);
+    assert.equal(sim.request({ method: 'GET', query: query() }).status, 404);
+  }
+  for (const code of ['1000', '1202', '1999', '499', '599']) {
+    assert.equal(p.parseCloudPrntConfirmation(query({ code })).outcome, 'reported_failure');
+  }
+});
+
+test('mC-Print2/3 subset never advertises or accepts incompatible Star raster commands', () => {
+  const ready = p.parseCloudPrntPoll(poll(), 'application/json');
+  assert.deepEqual(p.cloudPrntMediaTypes, ['image/png', 'text/plain']);
+  assert.throws(() => p.cloudPrntPollResponse(ready, { jobToken: 'job-1', mediaTypes: ['application/vnd.star.raster'] }), /invalid_job/);
+  assert.throws(() => p.parseCloudPrntJobQuery(query({ type: 'application/vnd.star.raster' })), /invalid_query/);
+});
+
 test('HTTP-shaped harness rejects malformed polls and methods without mutating queued state', () => {
   const sim = make();
   assert.equal(sim.request({ method: 'POST', body: '{}'}).status, 400);

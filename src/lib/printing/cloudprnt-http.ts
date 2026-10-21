@@ -25,8 +25,8 @@ function parseStatus(value: string, urlEncoded: boolean): CloudPrntStatus | null
   if (!match) return null;
   const code = Number(match[1]);
   return { code, kind: code >= 220 && code <= 229 ? 'busy'
-    : String(code).startsWith('2') ? 'online'
-    : /^[145]/.test(String(code)) ? 'reported_error' : 'unknown' };
+    : /^2[0-9]{2}$/.test(match[1]) ? 'online'
+    : /^(?:[45][0-9]{2}|1[0-9]{3})$/.test(match[1]) ? 'reported_error' : 'unknown' };
 }
 
 /** All poll fields except statusCode can be missing/null per the Star specification. */
@@ -42,9 +42,9 @@ export function parseCloudPrntPoll(body: string, contentType: string) {
     printingInProgress: parsed.data.printingInProgress ?? null, jobToken: parsed.data.jobToken ?? null };
 }
 export type CloudPrntPoll = ReturnType<typeof parseCloudPrntPoll>;
-export const cloudPrntMediaTypes = ['image/png', 'text/plain', 'application/vnd.star.raster'] as const;
+export const cloudPrntMediaTypes = ['image/png', 'text/plain'] as const;
 export type CloudPrntMediaType = typeof cloudPrntMediaTypes[number];
-const jobSchema = z.object({ jobToken: token, mediaTypes: z.array(z.enum(cloudPrntMediaTypes)).min(1).max(3) }).strict();
+const jobSchema = z.object({ jobToken: token, mediaTypes: z.array(z.enum(cloudPrntMediaTypes)).min(1).max(2) }).strict();
 
 /** Caller must authorize/claim a job separately. This function only formats a response. */
 export function cloudPrntPollResponse(poll: CloudPrntPoll, job: unknown = null) {
