@@ -260,6 +260,30 @@ test('real bulk adapter sends preview, stable commit and catalogue refresh witho
   } finally { await page.close(); }
 });
 
+test('bulk success cannot erase an unresolved editor write or its original retry identity',async()=>{
+  const saved={...base,name:'Uncertain edit',revision:'2'};
+  const {page,calls}=await open({answers:['abort',[200,bulkPreview],[200,{records:[bulkRecord]}],[200,{...initial,codes:[base,bulkRecord]}],[200,saved],[200,{...initial,codes:[saved,bulkRecord]}]]});
+  try{
+    await page.getByRole('button',{name:'Redigér Bord 1',exact:true}).click();
+    await page.getByLabel('Navn',{exact:true}).fill(saved.name);
+    await page.getByRole('button',{name:'Gem QR-kode',exact:true}).click();
+    await page.getByRole('button',{name:'Prøv samme handling igen',exact:true}).waitFor();
+    await page.getByRole('button',{name:'CSV-import',exact:true}).click();
+    await page.getByLabel('CSV-data',{exact:true}).fill('name,destination,brand_id,location_id\nCSV bord,https://example.com/csv,b1,l1\n');
+    await page.getByRole('button',{name:'Kontrollér CSV',exact:true}).click();
+    await page.getByRole('checkbox',{name:'Jeg vil oprette 1 dynamiske QR-koder for Esmeralda.',exact:true}).check();
+    await page.getByRole('button',{name:'Opret 1 QR-koder',exact:true}).click();
+    await page.getByRole('status').filter({hasText:'1 QR-koder er oprettet.'}).waitFor();
+    await page.getByRole('button',{name:'Administration',exact:true}).click();
+    assert.equal(await page.getByLabel('Navn',{exact:true}).inputValue(),saved.name);
+    assert.equal(await page.getByLabel('Navn',{exact:true}).isDisabled(),true);
+    await page.getByRole('button',{name:'Prøv samme handling igen',exact:true}).click();
+    await page.getByRole('heading',{name:saved.name,exact:true}).waitFor();
+    assert.deepEqual(calls[4].body,calls[0].body);
+    await page.getByRole('heading',{name:'CSV bord',exact:true}).waitFor();
+  }finally{await page.close();}
+});
+
 test('bulk creation is unavailable while disabled or without create capability', async () => {
   for (const query of ['?off', '?exportonly']) {
     const { page, calls } = await open({ query });

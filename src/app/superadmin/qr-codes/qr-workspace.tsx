@@ -83,7 +83,6 @@ function initialPeriod() {
 export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
   const [data, setData] = useState(initial);
   const dataRef = useRef(data); dataRef.current = data;
-  const [managerVersion, setManagerVersion] = useState(0);
   const [refreshError, setRefreshError] = useState(false);
   const [tab, setTab] = useState<'manage' | 'analytics' | 'bulk' | 'history'>('manage');
   const [filters, setFilters] = useState<QrAnalyticsFilter>(() => ({ ...initialPeriod(), qrId: '', campaign: '', placement: '' }));
@@ -126,7 +125,7 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
     try {
       const refreshed = await command<QrWorkspaceData>({ action: 'list' });
       if (!isWorkspace(refreshed)) throw new QrTransportError('unavailable');
-      if (mounted.current) { dataRef.current = refreshed; setData(refreshed); setManagerVersion(version => version + 1); setRefreshError(false); }
+      if (mounted.current) { dataRef.current = refreshed; setData(refreshed); setRefreshError(false); }
       return true;
     } catch { if (mounted.current) setRefreshError(true); return false; }
   };
@@ -216,7 +215,7 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
     {<nav aria-label="QR-modul" className="flex flex-wrap gap-2"><button type="button" aria-current={tab === 'manage' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('manage')}>Administration</button>{data.analytics && <button type="button" aria-current={tab === 'analytics' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('analytics')}>Statistik</button>}{bulkAllowed && <button type="button" aria-current={tab === 'bulk' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('bulk')}>CSV-import</button>}<button type="button" aria-current={tab === 'history' ? 'page' : undefined} className="rounded-md border px-3 py-2" onClick={() => setTab('history')}>Historik</button></nav>}
     {data.truncated && <p role="alert">Oversigten er ufuldstændig. Flere QR-koder findes end de viste. Søgning og filtre gælder kun de indlæste koder.</p>}
     {refreshError && <p role="alert">Ændringen er gemt, men oversigten kunne ikke genindlæses. Den bekræftede kode er bevaret. Genindlæs siden for en ny oversigt.</p>}
-    <div hidden={tab !== 'manage'}><QrManager key={managerVersion} brands={data.brands} initialCodes={data.codes} capabilities={data.capabilities} api={api} dynamicEnabled={data.dynamicEnabled === true}
+    <div hidden={tab !== 'manage'}><QrManager brands={data.brands} initialCodes={data.codes} capabilities={data.capabilities} api={api} dynamicEnabled={data.dynamicEnabled === true}
       renderExtras={(draft, context) => <QrPrintTools key={JSON.stringify([draft, context])} draft={draft} context={context} render={renderPrint} />} /></div>
     <div hidden={tab !== 'bulk' || !bulkAllowed}><QrBulkTools brands={data.brands} api={bulkApi} onCommitted={afterBulk} disabled={!bulkAllowed} /></div>
     {tab === 'history' && <QrHistory codes={data.codes.map(code => ({ id: codeKey(code), name: `${data.brands.find(brand => brand.id === code.brandId)?.name || code.brandId} · ${code.name}` }))} load={loadHistory} />}

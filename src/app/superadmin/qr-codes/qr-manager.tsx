@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useRef, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 
 export type QrKind = 'dynamic' | 'static';
 export type QrStaticType = 'url' | 'text' | 'wifi' | 'vcard' | 'email' | 'phone' | 'sms';
@@ -78,6 +78,9 @@ function trustedAssetUrl(value: string, image = false): string {
 
 export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnabled = true, renderExtras }: QrManagerProps) {
   const [codes, setCodes] = useState(initialCodes);
+  // Refresh only catalogue rows. A sibling bulk refresh must never discard an
+  // unresolved editor operation, its original request key or draft.
+  useEffect(() => { setCodes(initialCodes); }, [initialCodes]);
   const [search, setSearch] = useState('');
   const [status, setStatusFilter] = useState<'all' | QrStatus>('all');
   const [draft, setDraft] = useState<QrDraft | null>(null);
