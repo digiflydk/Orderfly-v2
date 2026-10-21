@@ -9,7 +9,7 @@ import { isSuperuser, policySchema } from '@/lib/access/policy';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
 import { isSyntheticProduct } from '@/lib/synthetic-product';
 import { storedPrinterSchema } from './storage';
-import { PRINT_ROUTING_LIMITS, printerRoutingRuleSchema, type PrinterRoutingRule } from './routing-preview';
+import { PRINT_ROUTING_LIMITS, printerRoutingRuleSchema, previewPrinterRouting, type PrinterRoutingRule, type PrinterRoutingLine } from './routing-preview';
 import type { PrinterConfiguration } from './domain';
 
 const id = z.string().max(128).regex(/^[A-Za-z0-9_-]{1,128}$/);
@@ -231,4 +231,106 @@ export async function writeSavedPrinterRouting(input: unknown) {
     if (previous) transaction.set(ref, next); else transaction.create(ref, next);
     return Object.freeze({ scope: Object.freeze(scope), revision, rules: immutableRules(rules), printers, referencesVerified: true as const, dispatchAuthorized: false as const });
   });
+}
+
+const pickerSchema = scopeSchema.extend({ kind: z.enum(['product', 'category']), after: id.optional() }).strict();
+function displayText(value: unknown, maximum = 160): string {
+  if (typeof value !== 'string' || !value.trim() || value.length > maximum || /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(value)) return fail('reference_unverified', 409);
+  return value;
+}
+async function productForSample(context: NativeTransactionContext, scope: Scope, productId: string) {
+  const product = await native(context, 'products', productId);
+  if (field(product, 'brandId') !== scope.brandId || field(product, 'isActive') !== true) return fail('reference_unverified', 409);
+  membership(product, scope.locationId, true);
+  const name = displayText(field(product, 'productName'));
+  const description = field(product, 'description');
+  if (description !== undefined && (typeof description !== 'string' || description.length > 4096)
+    || isSyntheticProduct({ productName: name, description: description as string | undefined })) return fail('reference_unverified', 409);
+  const categoryId = field(product, 'categoryId');
+  if (typeof categoryId !== 'string' || categoryId.length > 128 || !id.safeParse(categoryId).success) return fail('reference_unverified', 409);
+  const category = await native(context, 'categories', categoryId);
+  if (field(category, 'isActive') !== true) return fail('reference_unverified', 409);
+  membership(category, scope.locationId, false);
+  return { id: productId, name, categoryId };
+}
+/** Bounded named choices, never a global catalog query or write authority. */
+export async function readPrinterRoutingCatalog(input: unknown) {
+  const session = await requirePlatformSuperuser();
+  const parsed = pickerSchema.safeParse(bounded(input));
+  if (!parsed.success) return fail('invalid_request');
+  const { brandId, locationId, kind, after } = parsed.data, scope = { brandId, locationId }, db = getAdminDb();
+  return db.runTransaction(async transaction => {
+    const context = { db, transaction };
+    await authorize(context, session.identity, scope, 'orderfly.catalog:view');
+    await nativeScope(context, scope);
+    let query = kind === 'product' ? db.collection('products').where('brandId', '==', brandId)
+      : db.collection('categories').where('locationIds', 'array-contains', locationId);
+    query = query.orderBy('__name__');
+    if (after) query = query.startAfter(after);
+    const saved = await transaction.get(query.limit(51));
+    if (saved.size > 51) return fail('routing_unavailable', 503);
+    const items: Array<{ id: string; name: string; categoryId?: string }> = [];
+    for (const doc of saved.docs.slice(0, 50)) {
+      if (!id.safeParse(doc.id).success) return fail('reference_unverified', 409);
+      const row = doc.data();
+      if (!row || typeof row !== 'object') return fail('reference_unverified', 409);
+      if (kind === 'product' && field(row, 'brandId') !== brandId) return fail('reference_unverified', 409);
+      if (field(row, 'isActive') !== true || field(row, 'deletedAt') != null || field(row, 'deleted') === true || field(row, 'isDeleted') === true || field(row, 'isTestData') === true) continue;
+      // A brand-owned product may belong to another location; omit that valid
+      // non-applicable row while preserving the native query continuation.
+      const storedLocationIds = field(row, 'locationIds');
+      const locationIds = storedLocationIds === undefined && kind === 'product' ? [] : storedLocationIds;
+      if (!Array.isArray(locationIds) || locationIds.length > 100) return fail('reference_unverified', 409);
+      const ids: string[] = [];
+      for (let index = 0; index < locationIds.length; index++) {
+        const descriptor = Object.getOwnPropertyDescriptor(locationIds, String(index));
+        const value = descriptor && 'value' in descriptor ? descriptor.value : undefined;
+        if (typeof value !== 'string' || value.length > 128 || !id.safeParse(value).success) return fail('reference_unverified', 409);
+        ids.push(value);
+      }
+      if (new Set(ids).size !== ids.length) return fail('reference_unverified', 409);
+      if (kind === 'product' && ids.length > 0 && !ids.includes(locationId)) continue;
+      membership(row, locationId, kind === 'product');
+      if (kind === 'product') {
+        const name = displayText(field(row, 'productName')), description = field(row, 'description');
+        if (description !== undefined && (typeof description !== 'string' || description.length > 4096)) return fail('reference_unverified', 409);
+        if (isSyntheticProduct({ productName: name, description: description as string | undefined })) continue;
+        items.push(await productForSample(context, scope, doc.id));
+      } else {
+        const checked = await native(context, 'categories', doc.id);
+        membership(checked, locationId, false);
+        items.push({ id: doc.id, name: displayText(field(checked, 'categoryName')) });
+      }
+    }
+    return { scope, kind, items, nextCursor: saved.docs.length > 50 ? saved.docs[49].id : null };
+  }, { readOnly: true });
+}
+const sampleSchema = scopeSchema.extend({ rules: rulesSchema, deliveryType: z.enum(['Pickup', 'Delivery']),
+  items: z.array(z.object({ productId: id, quantity: z.number().int().min(1).max(99) }).strict()).min(1).max(20) }).strict();
+/** Sample-only preview. Names/category IDs come from current native records;
+ * caller supplies no arbitrary order, payment or line labels. Never creates jobs.
+ */
+export async function previewPrinterRoutingSample(input: unknown) {
+  const session = await requirePlatformSuperuser();
+  const parsed = sampleSchema.safeParse(bounded(input));
+  if (!parsed.success) return fail('invalid_request');
+  const { brandId, locationId, rules, deliveryType, items } = parsed.data, scope = { brandId, locationId }, db = getAdminDb();
+  return db.runTransaction(async transaction => {
+    const context = { db, transaction };
+    await authorize(context, session.identity, scope, 'orderfly.catalog:view');
+    await nativeScope(context, scope);
+    const printers = await references(context, scope, rules);
+    const lines: PrinterRoutingLine[] = [];
+    for (const [index, item] of items.entries()) {
+      const product = await productForSample(context, scope, item.productId);
+      lines.push({ lineId: `sample-${index}`, ...scope, itemType: 'product', productId: product.id,
+        categoryId: product.categoryId, name: product.name, quantity: item.quantity });
+    }
+    const preview = previewPrinterRouting({ scope, deliveryType, rules, lines,
+      printers: printers.map(printer => ({ configuration: printer.configuration, deleted: false })) });
+    const result = { scope, sampleOnly: true as const, ...preview, lines: lines.map(({ lineId, name, quantity }) => ({ lineId, name, quantity })),
+      printers: printers.map(printer => ({ id: printer.configuration.id, name: printer.configuration.name })) };
+    if (JSON.stringify(result).length > 131072) return fail('invalid_request');
+    return result;
+  }, { readOnly: true });
 }
