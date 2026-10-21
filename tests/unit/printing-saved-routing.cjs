@@ -15,14 +15,16 @@ function fixture({ anonymous = false, merchant = false, enabled = true, retry, f
   const rows = new Map([['platformAdminControl/access-v1', policy], ['brands/brand', {}], ['locations/location', { brandId: 'brand' }],
     ['locations/location/printers/p1', record()], ['products/pizza', { brandId: 'brand', categoryId: 'food', productName: 'Pizza', isActive: true, locationIds: [] }],
     ['categories/food', { categoryName: 'Food', isActive: true, locationIds: ['location'], brandId: 'legacy-brand' }]]);
-  const events = [], commits = []; let dbCalls = 0, sessionCalls = 0, serial = Promise.resolve(), retried = false;
+  const events = [], commits = [], failReads = new Set(); let dbCalls = 0, sessionCalls = 0, serial = Promise.resolve(), retried = false;
   const collection = name => ({ doc: key => ref(`${name}/${key}`) });
   const ref = key => ({ path: key, id: key.split('/').at(-1), collection: name => collection(`${key}/${name}`) });
   const db = { collection, runTransaction(run, options) {
     const job = serial.then(async () => { for (;;) {
+      events.push(['attempt', 'transaction']);
       const staged = new Map(structuredClone([...rows])), writes = []; let writing = false;
       const tx = {
         async get(ref) { assert.equal(writing, false, 'all reads before writes'); events.push(['get', ref.path]);
+          if (failReads.has(ref.path)) throw Error('SECRET_SENTINEL');
           return { id: ref.id, exists: staged.has(ref.path), data: () => structuredClone(staged.get(ref.path)) }; },
         create(ref, data) { assert.notEqual(options?.readOnly, true); writing = true;
           if (staged.has(ref.path) || failAudit && ref.path.includes('/audit/')) throw Error('SECRET_SENTINEL');
@@ -52,7 +54,7 @@ function fixture({ anonymous = false, merchant = false, enabled = true, retry, f
     if (override === undefined) delete process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED; else process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED = override;
     try { return await run(); } finally { if (before === undefined) delete process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED; else process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED = before; }
   }
-  return { rows, events, commits, db, get dbCalls() { return dbCalls; }, get sessionCalls() { return sessionCalls; },
+  return { rows, events, commits, failReads, db, get dbCalls() { return dbCalls; }, get sessionCalls() { return sessionCalls; },
     read: input => service.readSavedPrinterRouting(input ?? scope),
     write: (input = command(), override) => flag(() => service.writeSavedPrinterRouting(input), override),
     prepare: input => service.prepareSavedPrinterRouting({ db, transaction: { get: async ref => ({ id: ref.id, exists: rows.has(ref.path), data: () => rows.get(ref.path) }) } }, input ?? scope),
@@ -70,7 +72,7 @@ const rejects = (run, code) => assert.rejects(run, error => error.code === code)
 
 test('missing routing is empty defaultOFF with no printer fallback or writes', async () => {
   const f = fixture(); const result = await f.read();
-  assert.deepEqual(result, { scope, revision: null, rules: [], printers: [], dispatchAuthorized: false });
+  assert.deepEqual(result, { scope, revision: null, rules: [], printers: [], referencesVerified: true, dispatchAuthorized: false });
   assert.deepEqual(f.commits, []); assert.equal(f.events.some(event => event[1].includes('/printers/')), false);
   assert.ok(Object.isFrozen(result) && Object.isFrozen(result.rules) && Object.isFrozen(result.scope));
 });
@@ -170,16 +172,23 @@ test('audit or commit failure rolls back all writes and returns generic unavaila
     assert.deepEqual([...f.rows], before); assert.equal(f.commits.length, 0);
   }
 });
-test('saved corrupt/foreign routing fails whole read and cannot be overwritten as a missing record', async () => {
+test('saved corrupt/foreign routing fails closed while a missing reference retains only management state', async () => {
   for (const patch of [{ brandId: 'foreign' }, { revision: 0 }, { deletedAt: 1 }, { token: 'SECRET' }, { rules: [rule(), rule()] }, { rules: [rule({ brandId: 'foreign' })] }, { rules: [rule({ printerId: 'missing' })] }]) {
     const f = fixture(); f.rows.set(path, { schemaVersion: 1, id: 'original', ...scope, revision: 1, deletedAt: null, rules: [rule()], ...patch });
-    const result = await f.request('GET'); assert.equal(result.status, 409); assert.doesNotMatch(JSON.stringify(result), /SECRET/);
+    const result = await f.request('GET'); assert.doesNotMatch(JSON.stringify(result), /SECRET/);
+    if (patch.rules?.[0]?.printerId === 'missing') {
+      // An owned, structurally valid stale rule is recoverable for management;
+      // native preparation still rejects it and never becomes dispatch proof.
+      assert.equal(result.status, 200); assert.equal(result.body.referencesVerified, false);
+      assert.equal(result.body.revision, 1); assert.deepEqual(result.body.printers, []);
+      await rejects(f.prepare(), 'reference_unverified');
+    } else assert.equal(result.status, 409);
     assert.equal((await f.request('PUT', command({ expectedRevision: 1 }))).status, patch.rules?.[0]?.printerId === 'missing' ? 200 : 409);
   }
 });
 test('caller-owned preparation rereads references and never authorizes writes or output', async () => {
   const f = fixture(); await f.write(); const first = await f.prepare();
-  assert.equal(first.rules.length, 1); assert.equal(first.dispatchAuthorized, false);
+  assert.equal(first.rules.length, 1); assert.equal(first.dispatchAuthorized, false); assert.equal(first.referencesVerified, undefined, 'native preparation contract is unchanged');
   f.rows.get('categories/food').locationIds = ['foreign']; await rejects(f.prepare(), 'reference_unverified');
   assert.equal(first.rules[0].match.id, 'pizza'); assert.equal(f.commits.length, 1);
 });
@@ -192,4 +201,93 @@ test('saved routing feeds canonical planner without turning disabled drafts into
     printers: saved.printers.map(p => ({ configuration: p.configuration, deleted: false })),
     lines: [{ lineId: 'line-0', ...scope, itemType: 'product', productId: 'pizza', categoryId: 'food', name: 'Pizza', quantity: 1 }] });
   assert.deepEqual(result.targets, []); assert.equal(result.decisions[0].outcome, 'printer_disabled'); assert.equal(result.dispatchAuthorized, false);
+});
+
+
+test('management GET preserves exact revision for stale references and HTTP PUT can clear or replace them atomically', async () => {
+  const stale = [
+    rows => { rows.get('products/pizza').isActive = false; },
+    rows => { rows.delete('products/pizza'); },
+    rows => { rows.get('categories/food').isActive = false; },
+    rows => { rows.delete('categories/food'); },
+    rows => { rows.delete('locations/location/printers/p1'); },
+    rows => { rows.set('locations/location/printers/p1', record({ deletedAt: 1 })); },
+  ];
+  for (const mutate of stale) for (const clear of [true, false]) {
+    const f = fixture(); assert.equal((await f.request()).status, 200); mutate(f.rows);
+    await rejects(f.prepare(), 'reference_unverified');
+    const read = await f.request('GET');
+    assert.equal(read.status, 200, 'management GET retains recoverable structural state');
+    assert.deepEqual(read.body, { scope, revision: 1, rules: [rule()], printers: [], referencesVerified: false, dispatchAuthorized: false });
+    assert.equal(read.cache, 'no-store'); assert.equal(read.vary, 'Cookie');
+    assert.equal((await f.request('PUT', command({ expectedRevision: read.body.revision }))).status, 409, 'stale rules cannot be saved unchanged');
+    assert.equal(f.commits.length, 1);
+    f.rows.set('locations/location/printers/p2', record({ configuration: config({ id: 'p2' }) }));
+    const replacement = clear ? [] : [rule({ printerId: 'p2', match: { type: 'all' } })];
+    const repaired = await f.request('PUT', command({ expectedRevision: read.body.revision, rules: replacement }));
+    assert.equal(repaired.status, 200); assert.equal(repaired.body.revision, 2); assert.equal(repaired.body.referencesVerified, true);
+    assert.deepEqual(repaired.body.rules, replacement); assert.equal(repaired.body.dispatchAuthorized, false);
+    assert.deepEqual(f.rows.get(`${path}/audit/2`).before, [rule()]); assert.deepEqual(f.rows.get(`${path}/audit/2`).after, replacement);
+    assert.equal(f.commits.length, 2); assert.equal(f.commits[1].length, 2);
+    const fresh = await f.request('GET'); assert.equal(fresh.status, 200); assert.equal(fresh.body.referencesVerified, true); assert.equal(fresh.body.revision, 2);
+    assert.deepEqual(fresh.body.rules, replacement); assert.equal((await f.request('PUT', command({ expectedRevision: 1, rules: [] }))).status, 409);
+  }
+});
+test('management stale reads do not downgrade native scope, current grants, corrupt saved data or duplicate identities', async () => {
+  const changes = [
+    rows => { rows.set('locations/location', { brandId: 'foreign' }); },
+    rows => { rows.set('brands/brand', { deletedAt: 1 }); },
+    rows => { rows.get('platformAdminControl/access-v1').memberships.find(m => m.id === 'owner').active = false; },
+    rows => { rows.get(path).brandId = 'foreign'; },
+    rows => { rows.get(path).rules = [rule(), rule()]; },
+    rows => { rows.get(path).rules = [rule({ locationId: 'foreign' })]; },
+    rows => { rows.get(path).token = 'PRIVATE_STORED_DETAIL'; },
+    rows => { rows.get(path).revision = 0; },
+  ];
+  for (const mutate of changes) {
+    const f = fixture(); await f.write(); f.rows.get('products/pizza').isActive = false; mutate(f.rows);
+    const read = await f.request('GET'); assert.ok([403, 409].includes(read.status));
+    assert.equal(read.body.referencesVerified, undefined); assert.equal(read.body.revision, undefined);
+    assert.doesNotMatch(JSON.stringify(read), /PRIVATE_STORED_DETAIL/);
+    assert.ok([403, 409].includes((await f.request('PUT', command({ expectedRevision: 1, rules: [] }))).status));
+    assert.equal(f.commits.length, 1);
+  }
+});
+test('management GET provider failure remains generic unavailable, without stored state or foreign native detail', async () => {
+  const f = fixture(); await f.write(); f.failReads.add('products/pizza');
+  const failed = await f.request('GET'); assert.equal(failed.status, 503); assert.deepEqual(failed.body, { error: 'routing_unavailable' });
+  assert.equal(f.commits.length, 1);
+  f.failReads.clear(); f.rows.set('products/pizza', { brandId: 'foreign', productName: 'PRIVATE_FOREIGN_NAME', isActive: true, locationIds: ['other'] });
+  const read = await f.request('GET'); assert.equal(read.status, 200); assert.equal(read.body.referencesVerified, false);
+  assert.equal(read.body.revision, 1); assert.deepEqual(read.body.rules, [rule()]); assert.deepEqual(read.body.printers, []);
+  assert.doesNotMatch(JSON.stringify(read), /PRIVATE|FOREIGN_NAME|other/);
+});
+test('management recovery uses exact revision and cannot overwrite a concurrent save', async () => {
+  const f = fixture(); await f.write(); f.rows.get('products/pizza').isActive = false;
+  const read = await f.request('GET'); assert.equal(read.status, 200); assert.equal(read.body.revision, 1);
+  f.rows.set(path, { ...f.rows.get(path), revision: 2, rules: [] });
+  const repair = await f.request('PUT', command({ expectedRevision: read.body.revision, rules: [] }));
+  assert.equal(repair.status, 409); assert.equal(f.rows.get(path).revision, 2); assert.equal(f.commits.length, 1);
+  assert.equal(f.rows.has(`${path}/audit/2`), false);
+});
+test('management recovery audit failure rolls back and stale direct snapshots stay immutable', async () => {
+  const f = fixture({ failAudit: true });
+  f.rows.set(path, { schemaVersion: 1, id: 'original', ...scope, revision: 1, deletedAt: null, rules: [rule()] });
+  f.rows.get('products/pizza').isActive = false;
+  const read = await f.read(); assert.equal(read.referencesVerified, false); assert.equal(read.revision, 1);
+  for (const value of [read, read.scope, read.rules, read.rules[0], read.rules[0].match, read.printers]) assert.ok(Object.isFrozen(value));
+  assert.equal(Reflect.set(read.rules[0].match, 'id', 'foreign'), false);
+  const before = structuredClone([...f.rows]);
+  const repair = await f.request('PUT', command({ expectedRevision: read.revision, rules: [] }));
+  assert.equal(repair.status, 503); assert.deepEqual(repair.body, { error: 'routing_unavailable' });
+  assert.deepEqual([...f.rows], before); assert.equal(f.commits.length, 0);
+});
+test('management GET retry reauthorizes scope instead of reusing a stale snapshot', async () => {
+  const f = fixture({ retry: rows => { rows.set('locations/location', { brandId: 'foreign' }); } });
+  f.rows.set(path, { schemaVersion: 1, id: 'original', ...scope, revision: 1, deletedAt: null, rules: [rule()] });
+  f.rows.get('products/pizza').isActive = false;
+  const read = await f.request('GET'); assert.ok([403, 409].includes(read.status));
+  assert.equal(read.body.revision, undefined); assert.equal(f.commits.length, 0);
+  assert.equal(f.events.filter(event => event[0] === 'attempt').length, 2, 'management GET reruns its transaction after retry');
+  assert.ok(f.events.filter(event => event[1] === 'locations/location').length >= 3, 'current native ownership is reread after retry');
 });
