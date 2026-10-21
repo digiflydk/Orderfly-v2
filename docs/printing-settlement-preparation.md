@@ -12,8 +12,9 @@ attempt. Preparation completes every read and captures the actual financial
 mutation operations before returning an immutable plan with `writeCount`,
 `fulfilled` and single-use `apply`. No preparation function or callback is exposed
 as a caller-supplied extension point. The count is checked against the shared
-500-write application limit before any mutation. Invalid component reservations
-also fail before writes. A later origin-specific print adapter can reserve this
+500-write application limit before any mutation. Missing, nonpositive or malformed component reservations
+also fail before writes; a missing capacity count cannot inherit the ordinary
+single-write default. A later origin-specific print adapter can reserve this
 exact count at the existing private transaction boundary and finish its own reads
 before either plan applies; it must not introduce a second Paid writer.
 

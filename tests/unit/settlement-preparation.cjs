@@ -48,7 +48,7 @@ async function fixture(kind = 'stripe', options = {}) {
     }
   };
   const mocks = { ...f.mocks, '@/lib/marketing/config': { paidOrderMarketingEnabled: () => !!options.marketing } };
-  if (options.capacityReservation !== undefined) {
+  if (Object.hasOwn(options, 'capacityReservation')) {
     const actual = loadTs('src/lib/server/discount-capacity.ts', { 'server-only': {} });
     mocks['@/lib/server/discount-capacity'] = { prepareAdminCapacitySettlement: async (...args) => {
       const apply = await actual.prepareAdminCapacitySettlement(...args);
@@ -143,7 +143,7 @@ test('#346 exact shared-budget sum accepts 500 and rejects 501 before the first 
 });
 
 test('#346 invalid budget preparation cannot apply partial writes', async () => {
-  for (const capacityReservation of [NaN, Infinity, -100, -1, 0, 0.5]) {
+  for (const capacityReservation of [undefined, NaN, Infinity, -100, -1, 0, 0.5]) {
     const f = await fixture('stripe', { capacityReservation }); const before = structuredClone([...f.records]);
     await assert.rejects(f.settle(), /Settlement write budget exceeded/); assert.equal(writes(f.attempts[0]).length, 0);
     assert.deepEqual([...f.records], before);

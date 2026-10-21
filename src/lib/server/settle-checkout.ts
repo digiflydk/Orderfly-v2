@@ -145,6 +145,9 @@ async function settleOrder(proof: PaymentProof) {
       return {ref,snapshot:await transaction.get(ref)};
     }));
     const settleCapacity = await prepareAdminCapacitySettlement(db, transaction, order, true);
+    // Capacity is a multi-write internal component. Missing metadata must not
+    // fall through addWrite's default for ordinary single writes.
+    if (!Number.isSafeInteger(settleCapacity.writeCount) || settleCapacity.writeCount < 1) throw new Error('Settlement write budget exceeded');
     addWrite(settleCapacity, settleCapacity.writeCount);
     // Counters and Paid transition commit atomically. A repeated webhook takes
     // the Paid branch above and cannot count these offers again.
