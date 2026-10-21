@@ -11,7 +11,7 @@ const root = process.cwd();
 let server, browser, origin;
 const draft = { name: 'Bord 1', brandId: 'b1', locationId: 'l1', kind: 'dynamic', destination: 'https://example.com/menu', staticType: 'url', fields: {}, campaign: 'Oktober', tags: ['bord'], utm: { source: 'restaurant', medium: 'qr', campaign: '', content: '', term: '' } };
 const row = { ...draft, id: 'qr1', revision: 'rev1', status: 'active', publicUrl: 'https://orderfly.dk/q/abc' };
-const brands = [{ id: 'b1', name: 'Esmeralda', locations: [{ id: 'l1', name: 'Amager' }] }, { id: 'b2', name: 'Andet brand', locations: [{ id: 'l2', name: 'Afdeling 2' }] }];
+const brands = [{ id: 'b1', name: 'Esmeralda', locations: [{ id: 'l1', name: 'Amager' }] }, { id: 'b2', name: 'Andet brand', allowWholeBrand: false, locations: [{ id: 'l2', name: 'Afdeling 2' }] }];
 const capabilities = { create: true, edit: true, archive: true, export: true };
 
 before(async () => {
@@ -63,6 +63,8 @@ for (const width of [390, 1440]) test(`create and edit carry selected scope and 
     await page.getByRole('button', { name: 'Opret QR-kode', exact: true }).click();
     await page.getByLabel('Navn', { exact: true }).fill('Flyer');
     await page.getByLabel('Brand', { exact: true }).selectOption('b2');
+    assert.equal(await page.getByLabel('Placering', { exact: true }).inputValue(), 'l2');
+    assert.equal(await page.getByLabel('Placering', { exact: true }).getByRole('option', { name: 'Hele brandet', exact: true }).count(), 0);
     await page.getByLabel('Placering', { exact: true }).selectOption('l2');
     await page.getByLabel('Webadresse', { exact: true }).fill('https://example.com/flyer');
     await page.getByLabel('Udløbsdato', { exact: false }).fill('2026-10-25');
@@ -136,11 +138,13 @@ test('static Wi-Fi preview passes structured fields, and readonly hides mutation
     await page.getByRole('button', { name: 'Opret QR-kode', exact: true }).click();
     await page.getByLabel('Kodetype', { exact: true }).selectOption('static');
     await page.getByLabel('Indholdstype', { exact: true }).selectOption('wifi');
+    assert.equal(await page.getByRole('combobox', { name: 'Sikkerhed (WPA, WEP eller nopass)', exact: true }).inputValue(), 'WPA');
     await page.getByLabel('Netværksnavn', { exact: true }).fill('Esmeralda');
     await page.getByLabel('Wi-Fi-adgangskode', { exact: true }).fill('not-a-real-password');
     await page.getByRole('button', { name: 'Vis eksempel', exact: true }).click();
     await page.getByRole('img', { name: 'Eksempel på QR-kode' }).waitFor();
     assert.equal(calls[0].draft.kind, 'static'); assert.equal(calls[0].draft.fields.ssid, 'Esmeralda');
+    assert.equal(calls[0].draft.fields.security, 'WPA');
   } finally { await page.close(); }
   const readonly = await open({ readonly: true });
   try { assert.equal(await readonly.page.getByRole('button').count(), 0); } finally { await readonly.page.close(); }
