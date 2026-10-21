@@ -64,7 +64,7 @@ export function PortalFrame({ slug, base, preset, brandName, signedIn, program, 
         <div className="es-club-columns">
           <div className="es-club-form-panel">
             {memberNavigation}
-            {children}
+            <div data-club-page-content className="flex flex-col gap-6">{children}</div>
           </div>
           {!signedIn && (
             <aside className="es-club-aside" aria-label="Om Esmeralda Club">

@@ -296,6 +296,14 @@ for (const width of [390, 1440]) test(`the card shows stamps X of N, the next re
   const { page } = await open('card', { width, init: withMember(), answers: { qr: [qrAnswer('a'.repeat(64), NOW)] } });
   try {
     await page.getByRole('img', { name: '5 af 8 stempler' }).waitFor();
+    const contentLayout = await page.locator('[data-club-page-content]').evaluate(node => ({
+      display: getComputedStyle(node).display, direction: getComputedStyle(node).flexDirection,
+      gap: getComputedStyle(node).gap, sections: node.querySelectorAll(':scope > section').length,
+    }));
+    assert.equal(contentLayout.display, 'flex');
+    assert.equal(contentLayout.direction, 'column');
+    assert.equal(contentLayout.gap, '24px', 'card, QR and reward sections retain their original spacing');
+    assert.ok(contentLayout.sections >= 2);
     assert.equal(await page.locator('[data-stamp="filled"]').count(), 5);
     assert.equal(await page.locator('[data-stamp="empty"]').count(), 3);
     await page.getByText('3 stempler til gratis pizza').waitFor();
