@@ -13,87 +13,141 @@ const orderSchema = z.object({
   paymentMethod: z.string(), deliveryType: z.string(), discountReservation: z.string().optional(),
   psp: z.unknown().optional(),
 });
+export const PRINT_INTENT_BATCH_LIMIT = 64;
+export const PRINT_INTENT_BATCH_PRINTER_LIMIT = 16;
+export const PRINT_TRANSACTION_WRITE_LIMIT = 500;
+const batchSchema = z.object({
+  intents: z.array(commandSchema).min(1).max(PRINT_INTENT_BATCH_LIMIT),
+  // The trusted caller must reserve ALL of its other transaction writes, including
+  // the order transition. The outbox never starts/commits its own transaction.
+  reservedWriteCount: z.number().int().nonnegative().max(PRINT_TRANSACTION_WRITE_LIMIT),
+}).strict();
+type Command = z.infer<typeof commandSchema>;
 
 export class PrintOutboxError extends Error {
-  constructor(readonly code: 'invalid_intent' | 'ineligible_intent' | 'queue_unverified' | 'job_conflict') {
+  constructor(readonly code: 'invalid_intent' | 'ineligible_intent' | 'queue_unverified' | 'job_conflict' | 'write_budget_exceeded') {
     super(code);
   }
 }
 
-/** Server-only prepare/apply helper, like prepareAdminCapacitySettlement.
- * Reads persisted order/native ownership before any writes. Caller must authorize
- * its server event/actor, call once per printer per transaction, finish ALL reads,
- * then apply together with its order mutation. No browser/payment claims accepted.
- * V1 supports already eligible persisted orders; Pending->accepted/paid transition
- * integration needs a separately reviewed trusted transition adapter, not a DTO override.
+/** Prepare ONE combined plan for every original intent in the caller's transaction.
+ * Caller must authorize its server event/actor, reserve its other writes, finish ALL
+ * reads, then apply atomically with its order mutation. Never prepare independent
+ * plans against the same printer in one transaction. Already-eligible persisted
+ * orders only; Pending->accepted/paid needs a separately reviewed trusted adapter.
+ */
+export async function prepareOriginalPrintIntents(db: Firestore, tx: Transaction, input: unknown) {
+  const parsed = batchSchema.safeParse(input);
+  if (!parsed.success) throw new PrintOutboxError('invalid_intent');
+  const groups = new Map<string, Command[]>();
+  const unique = new Map<string, Command>();
+  for (const command of parsed.data.intents) {
+    const jobId = printJobId({ ...command, revision: 0 });
+    if (unique.has(jobId)) continue;
+    unique.set(jobId, command);
+    const key = JSON.stringify([command.brandId, command.locationId, command.printerId]);
+    const commands = groups.get(key) || [];
+    commands.push(command); groups.set(key, commands);
+  }
+  if (groups.size > PRINT_INTENT_BATCH_PRINTER_LIMIT) throw new PrintOutboxError('invalid_intent');
+
+  const plans = await Promise.all([...groups.values()].map(async commands => {
+    const command = commands[0];
+    const printerRef = db.collection('locations').doc(command.locationId).collection('printers').doc(command.printerId);
+    const jobs = printerRef.collection('jobs'), queueRef = printerRef.collection('queue').doc('state');
+    const [brand, location, printer, queue, rows, orders] = await Promise.all([
+      tx.get(db.collection('brands').doc(command.brandId)),
+      tx.get(db.collection('locations').doc(command.locationId)), tx.get(printerRef), tx.get(queueRef),
+      tx.get(jobs.limit(PRINT_QUEUE_LIMIT + 1)),
+      Promise.all(commands.map(c => tx.get(db.collection('orders').doc(c.orderId)))),
+    ]);
+    const config = storedPrinterSchema.safeParse(printer.data());
+    if (!brand.exists || location.data()?.brandId !== command.brandId || !config.success
+      || config.data.configuration.id !== command.printerId
+      || config.data.configuration.brandId !== command.brandId || config.data.configuration.locationId !== command.locationId) {
+      throw new PrintOutboxError('ineligible_intent');
+    }
+    for (const order of orders) {
+      const saved = orderSchema.safeParse(order.data());
+      if (!saved.success || saved.data.brandId !== command.brandId || saved.data.locationId !== command.locationId
+        || !kitchenPrintIntentEligibility({ ...saved.data, id: order.id } as KitchenOrder, config.data.configuration).eligible) {
+        throw new PrintOutboxError('ineligible_intent');
+      }
+    }
+    const sameScope = (q: { brandId: string; locationId: string; printerId: string }) =>
+      q.brandId === command.brandId && q.locationId === command.locationId && q.printerId === command.printerId;
+    const current = queueSchema.safeParse(queue.data());
+    // No orderBy: missing fields must not disappear from the authoritative scan.
+    if (rows.size > PRINT_QUEUE_LIMIT) throw new PrintOutboxError('queue_unverified');
+    const now = Date.now();
+    if (!Number.isSafeInteger(now) || now <= 0) throw new PrintOutboxError('queue_unverified');
+    let oldestAt: number | null = null;
+    const existing = new Map<string, z.infer<typeof jobSchema>>();
+    for (const row of rows.docs) {
+      const stored = jobSchema.safeParse(row.data());
+      if (!stored.success || !sameScope(stored.data) || stored.data.id !== row.id
+        || printJobId(stored.data) !== row.id || stored.data.createdAt <= 0 || stored.data.createdAt > now) {
+        throw new PrintOutboxError('queue_unverified');
+      }
+      oldestAt = oldestAt === null ? stored.data.createdAt : Math.min(oldestAt, stored.data.createdAt);
+      existing.set(row.id, stored.data);
+    }
+    if ((!queue.exists && rows.size !== 0) || (queue.exists && (!current.success || !sameScope(current.data)))
+      || (current.success && (current.data.pendingCount !== rows.size || current.data.oldestPendingAt !== oldestAt))) {
+      throw new PrintOutboxError('queue_unverified');
+    }
+    const prepared = commands.map(c => {
+      const identity = { ...c, revision: 0 as const }, jobId = printJobId(identity);
+      const prior = existing.get(jobId);
+      if (prior && (!current.success || prior.orderId !== c.orderId || prior.kind !== c.kind)) {
+        throw new PrintOutboxError('job_conflict');
+      }
+      return { jobId, created: !prior, identity };
+    });
+    const additions = prepared.filter(p => p.created);
+    const revision = current.success ? current.data.revision : 0;
+    if (additions.length && (revision === Number.MAX_SAFE_INTEGER || rows.size + additions.length > PRINT_QUEUE_LIMIT)) {
+      throw new PrintOutboxError('queue_unverified');
+    }
+    return { prepared, additions, jobs, queueRef, queueExists: queue.exists,
+      revision, pendingCount: rows.size, oldestAt, now, printerRevision: config.data.revision, command };
+  }));
+  const createdCount = plans.reduce((n, p) => n + p.additions.length, 0);
+  const writeCount = createdCount + plans.filter(p => p.additions.length).length;
+  if (writeCount + parsed.data.reservedWriteCount > PRINT_TRANSACTION_WRITE_LIMIT) {
+    throw new PrintOutboxError('write_budget_exceeded');
+  }
+  const results = new Map(plans.flatMap(p => p.prepared.map(({ jobId, created }) => [jobId, { jobId, created }] as const)));
+  let applied = false;
+  return {
+    jobs: [...unique.keys()].map(jobId => results.get(jobId)!), createdCount, writeCount,
+    apply() {
+      if (applied) throw new PrintOutboxError('job_conflict');
+      if (!writeCount) return;
+      applied = true;
+      for (const plan of plans) {
+        if (!plan.additions.length) continue;
+        for (const { identity, jobId } of plan.additions) {
+          tx.create(plan.jobs.doc(jobId), { schemaVersion: 1, ...identity, id: jobId,
+            printerRevision: plan.printerRevision, state: 'queued', attempts: 0,
+            createdAt: plan.now, updatedAt: FieldValue.serverTimestamp() });
+        }
+        const next = { schemaVersion: 1, brandId: plan.command.brandId, locationId: plan.command.locationId,
+          printerId: plan.command.printerId, revision: plan.revision + 1,
+          pendingCount: plan.pendingCount + plan.additions.length,
+          oldestPendingAt: plan.oldestAt === null ? plan.now : Math.min(plan.oldestAt, plan.now),
+          updatedAt: FieldValue.serverTimestamp() };
+        if (plan.queueExists) tx.set(plan.queueRef, next); else tx.create(plan.queueRef, next);
+      }
+    },
+  };
+}
+
+/** Backwards-compatible single-intent facade. As before, call at most ONCE per
+ * printer/transaction. Multi-intent callers must use the combined batch API and
+ * reserve their other writes; independently prepared ledgers are not composable.
  */
 export async function prepareOriginalPrintIntent(db: Firestore, tx: Transaction, input: unknown) {
-  const parsed = commandSchema.safeParse(input);
-  if (!parsed.success) throw new PrintOutboxError('invalid_intent');
-  const command = parsed.data;
-  const identity = { ...command, revision: 0 as const };
-  const jobId = printJobId(identity);
-  const printerRef = db.collection('locations').doc(command.locationId).collection('printers').doc(command.printerId);
-  const jobs = printerRef.collection('jobs');
-  const jobRef = jobs.doc(jobId), queueRef = printerRef.collection('queue').doc('state');
-  const [brand, location, printer, order, job, queue] = await Promise.all([
-    tx.get(db.collection('brands').doc(command.brandId)),
-    tx.get(db.collection('locations').doc(command.locationId)), tx.get(printerRef),
-    tx.get(db.collection('orders').doc(command.orderId)), tx.get(jobRef), tx.get(queueRef),
-  ]);
-  const config = storedPrinterSchema.safeParse(printer.data());
-  const savedOrder = orderSchema.safeParse(order.data());
-  if (!brand.exists || location.data()?.brandId !== command.brandId || !config.success || !savedOrder.success
-    || config.data.configuration.id !== command.printerId
-    || config.data.configuration.brandId !== command.brandId || config.data.configuration.locationId !== command.locationId
-    || savedOrder.data.brandId !== command.brandId || savedOrder.data.locationId !== command.locationId
-    || !kitchenPrintIntentEligibility({ ...savedOrder.data, id: order.id } as KitchenOrder, config.data.configuration).eligible) {
-    throw new PrintOutboxError('ineligible_intent');
-  }
-  const sameScope = (q: { brandId: string; locationId: string; printerId: string }) =>
-    q.brandId === command.brandId && q.locationId === command.locationId && q.printerId === command.printerId;
-  const current = queueSchema.safeParse(queue.data());
-  // V1 insertion-only backlog is bounded; never trust count/oldest aggregates
-  // without validating EVERY counted row (orderBy would hide missing fields).
-  const rows = await tx.get(jobs.limit(PRINT_QUEUE_LIMIT + 1));
-  if (rows.size > PRINT_QUEUE_LIMIT) throw new PrintOutboxError('queue_unverified');
-  let oldestAt: number | null = null;
-  for (const row of rows.docs) {
-    const stored = jobSchema.safeParse(row.data());
-    if (!stored.success || !sameScope(stored.data) || stored.data.id !== row.id
-      || printJobId(stored.data) !== row.id) throw new PrintOutboxError('queue_unverified');
-    oldestAt = oldestAt === null ? stored.data.createdAt : Math.min(oldestAt, stored.data.createdAt);
-  }
-  const count = rows.size;
-  if ((!queue.exists && count !== 0) || (queue.exists && (!current.success || !sameScope(current.data)))
-    || (current.success && (current.data.pendingCount !== count || current.data.oldestPendingAt !== oldestAt))) {
-    throw new PrintOutboxError('queue_unverified');
-  }
-  if (job.exists) {
-    const prior = jobSchema.safeParse(job.data());
-    if (!prior.success || !sameScope(prior.data) || prior.data.id !== jobId
-      || prior.data.orderId !== command.orderId || prior.data.kind !== command.kind
-      || !current.success || current.data.pendingCount < 1
-      || current.data.oldestPendingAt! > prior.data.createdAt) throw new PrintOutboxError('job_conflict');
-    return { jobId, created: false, apply() {} };
-  }
-  const revision = current.success ? current.data.revision : 0;
-  const pendingCount = current.success ? current.data.pendingCount : 0;
-  if (revision === Number.MAX_SAFE_INTEGER || pendingCount >= PRINT_QUEUE_LIMIT) throw new PrintOutboxError('queue_unverified');
-  // Clock is trusted server time; commit timestamp is retained separately. Age review
-  // must reject future/implausible clocks, never interpret them as a fresh empty queue.
-  const now = Date.now();
-  let applied = false;
-  return { jobId, created: true, apply() {
-    if (applied) throw new PrintOutboxError('job_conflict');
-    applied = true;
-    tx.create(jobRef, { schemaVersion: 1, ...identity, id: jobId,
-      printerRevision: config.data.revision, state: 'queued', attempts: 0,
-      createdAt: now, updatedAt: FieldValue.serverTimestamp() });
-    const next = { schemaVersion: 1, brandId: command.brandId, locationId: command.locationId,
-      printerId: command.printerId, revision: revision + 1, pendingCount: pendingCount + 1,
-      oldestPendingAt: current.success && current.data.oldestPendingAt !== null ? Math.min(current.data.oldestPendingAt, now) : now,
-      updatedAt: FieldValue.serverTimestamp() };
-    if (queue.exists) tx.set(queueRef, next); else tx.create(queueRef, next);
-  } };
+  const plan = await prepareOriginalPrintIntents(db, tx, { intents: [input], reservedWriteCount: 0 });
+  return { ...plan.jobs[0], apply: plan.apply };
 }
