@@ -42,13 +42,57 @@ export class PrinterRoutingError extends Error {
 function unique(values: string[]) { return new Set(values).size === values.length; }
 const priority = { all: 0, category: 1, product: 2 } as const;
 
+/** Bound raw JSON-like work before Zod refinements or serialization can scan it. */
+function preflightInputBudget(input: unknown) {
+  let nodes = 0;
+  const visit = (value: unknown, depth: number): unknown => {
+    if (++nodes > 8192 || depth > 6) throw new PrinterRoutingError('invalid_input');
+    if (typeof value === 'string') {
+      // 400 is the largest accepted individual field (a kitchen note). Field-
+      // specific smaller maxima remain authoritative in the schema below.
+      if (value.length > 400) throw new PrinterRoutingError('invalid_input');
+      return value;
+    }
+    if (value === undefined || value === null || typeof value === 'boolean' || typeof value === 'number') return value;
+    if (typeof value !== 'object') throw new PrinterRoutingError('invalid_input');
+    if (Array.isArray(value)) {
+      if (value.length > PRINT_ROUTING_LIMITS.rules) throw new PrinterRoutingError('invalid_input');
+      const snapshot: unknown[] = [];
+      for (let index = 0; index < value.length; index++) {
+        const descriptor = Object.getOwnPropertyDescriptor(value, index);
+        if (!descriptor || !('value' in descriptor)) throw new PrinterRoutingError('invalid_input');
+        snapshot.push(visit(descriptor.value, depth + 1));
+      }
+      return snapshot;
+    }
+    if (Object.getPrototypeOf(value) !== Object.prototype && Object.getPrototypeOf(value) !== null) throw new PrinterRoutingError('invalid_input');
+    let keys = 0;
+    const snapshot: Record<string, unknown> = Object.create(null);
+    for (const key in value) {
+      if (++keys > 16 || key.length > 128) throw new PrinterRoutingError('invalid_input');
+      const descriptor = Object.getOwnPropertyDescriptor(value, key);
+      // DTOs contain data properties. Do not invoke getters, including unknown
+      // properties that a later strict schema would reject.
+      if (!descriptor || !('value' in descriptor)) throw new PrinterRoutingError('invalid_input');
+      snapshot[key] = visit(descriptor.value, depth + 1);
+    }
+    return snapshot;
+  };
+  const snapshot = visit(input, 0);
+  // Structural/string caps above make this serialization bounded, including
+  // unknown fields; enforce the aggregate budget before expensive validators.
+  if (JSON.stringify(snapshot)?.length > PRINT_ROUTING_LIMITS.inputCodeUnits) throw new PrinterRoutingError('input_too_large');
+  return snapshot;
+}
+
 /**
  * Caller supplies already scoped, server-projected product/category snapshots. There
  * is intentionally no arbitrary OrderDetail/CartItem adapter, lookup or I/O here.
  */
 export function previewPrinterRouting(input: unknown) {
+  const boundedInput = preflightInputBudget(input);
   // Reject gross collection overflow before Zod traverses every element.
-  const raw = input as Partial<Record<'printers' | 'rules' | 'lines', unknown>> | null;
+  const raw = boundedInput as Partial<Record<'printers' | 'rules' | 'lines', unknown>> | null;
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new PrinterRoutingError('invalid_input');
   for (const key of ['printers', 'rules', 'lines'] as const) {
     if (!Array.isArray(raw[key]) || raw[key].length > PRINT_ROUTING_LIMITS[key]) throw new PrinterRoutingError('invalid_input');
@@ -66,7 +110,7 @@ export function previewPrinterRouting(input: unknown) {
       if (Array.isArray(nested) && nested.length > maximum) throw new PrinterRoutingError('invalid_input');
     }
   }
-  const parsed = inputSchema.safeParse(input);
+  const parsed = inputSchema.safeParse(boundedInput);
   if (!parsed.success) throw new PrinterRoutingError('invalid_input');
   const data = parsed.data;
   if (JSON.stringify(data).length > PRINT_ROUTING_LIMITS.inputCodeUnits) throw new PrinterRoutingError('input_too_large');

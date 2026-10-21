@@ -115,6 +115,30 @@ test('oversized nested arrays reject before Zod reads any element or parses earl
     rules:[rule('r','pizza',{type:'all'},'include',{deliveryTypes:['Pickup','Delivery']})]}));
   assert.equal(result.targets[0].lines[0].modifiers.length,8);
 });
+test('all oversized strings and aggregate budgets reject before any Zod trim refinement',()=>{
+  const huge='x'.repeat(1000000);
+  const patches=[input=>input.scope.brandId=huge,input=>input.deliveryType=huge,
+    input=>input.printers[0].configuration.name=huge,input=>input.printers[0].configuration.id=huge,
+    input=>input.printers[0].configuration.model=huge,input=>input.rules[0].id=huge,
+    input=>input.rules[0].match.id=huge,input=>input.rules[0].match.type=huge,
+    input=>input.rules[0].deliveryTypes=[huge],input=>input.lines[0].name=huge,
+    input=>input.lines[0].lineId=huge,input=>input.lines[0].itemType=huge,
+    input=>input.lines[0].kitchenNote=huge,input=>input.lines[0].modifiers=[huge]];
+  const originalTrim=String.prototype.trim;
+  String.prototype.trim=function(){assert.fail('Zod text/config refinements must not run before budget rejection');};
+  try {
+    for(const patch of patches){const input=structuredClone(fixture());patch(input);invalid(input);}
+    invalid(fixture({rules:[],lines:Array.from({length:50},(_,i)=>line(`l${i}`,'p','c',
+      {modifiers:Array(8).fill('x'.repeat(160)),kitchenNote:'y'.repeat(400)}))}),'input_too_large');
+  } finally {String.prototype.trim=originalTrim;}
+});
+test('unknown structures cannot hide unbounded schema work or invoke accessors',()=>{
+  invalid(fixture({extra:{nested:{nested:{nested:{nested:{nested:{nested:{}}}}}}}}));
+  invalid(fixture({extra:new Array(1000000)}));
+  invalid(fixture({extra:Object.fromEntries(Array.from({length:17},(_,i)=>[`k${i}`,null]))}));
+  const unknown={};Object.defineProperty(unknown,'private',{enumerable:true,get(){assert.fail('unknown getter must not run');}});
+  invalid(fixture({extra:unknown}));
+});
 test('printer/rule ordering is canonical while original line order and quantities are retained',()=>{
  const input=fixture();const a=preview(input),b=preview({...input,printers:[...input.printers].reverse(),rules:[...input.rules].reverse()});
  assert.deepEqual(a,b);assert.equal(a.targets[1].lines[0].quantity,2);assert.equal(a.targets[1].lines[0].kitchenNote,'Skær i 8');

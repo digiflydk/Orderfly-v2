@@ -78,6 +78,17 @@ array lengths are checked before Zod schema parsing, because Zod's array maximum
 does not stop traversal. Nested overflow is rejected without reading its elements;
 regressions use sparse million-entry arrays with throwing element accessors and
 earlier schema-field accessors to prove that schema parsing never starts.
+Raw JSON-like input also receives a bounded structural preflight (plain data
+objects, maximum depth six, 16 fields per object, 8,192 nodes, and no string over
+400 code units). These caps include unknown properties, and accessors are
+rejected without invocation. Validation uses the bounded data-property snapshot,
+so subsequent parsing cannot invoke caller accessors or serialization hooks.
+Bounded serialization then enforces the full
+32,768-code-unit budget before Zod runs regex/trim refinements. Per-field schema
+limits still enforce the smaller identifier/name/enum maxima. Regressions replace
+`trim` with a throwing sentinel to show that oversized strings and aggregate
+overflow fail before any text/configuration refinement. This is a DTO boundary,
+not a sandbox for privileged JavaScript Proxy traps.
 Names/notes reject printer controls, newlines, format/bidi
 controls and lone surrogates. Errors use fixed codes without input values.
 
