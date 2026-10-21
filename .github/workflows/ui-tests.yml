@@ -86,8 +86,14 @@ jobs:
       - name: Kitchen receipt preview regression
         run: node --test tests/unit/printing-receipts.cjs
 
+      - name: Kitchen PNG payload regression
+        run: node --test tests/unit/printing-kitchen-png.cjs
+
       - name: Combined print-intent batch regression
         run: node --test tests/unit/printing-outbox-batch.cjs
+
+      - name: Printer routing preview regression
+        run: node --test tests/unit/printing-routing.cjs
 
       - name: Native and compatibility transaction bridge regression
         run: node --test tests/unit/firestore-compat-transaction.cjs

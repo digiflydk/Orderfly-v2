@@ -105,8 +105,9 @@ filters, paused/disabled candidates, no defaults, unresolved combos,
 foreign/deleted/orphan rejection, strict DTOs and collection/text limits.
 This is fixture coverage of the pure planner, not authenticated API, production
 order routing or physical printing. There is no browser flow or live endpoint
-for this internal slice. The coordinator adds the test command to shared CI,
-serializes release after exact-head CI/independent Codex review, verifies the
+for this internal slice. The dedicated test command runs in shared CI alongside
+the preserved PNG, receipt and batch regressions. The coordinator serializes
+release after exact-head CI/independent Codex review, verifies the
 deployed release and records the absence of a production invocation honestly.
 Existing administration remains superadmin-only; configuration writes and
 physical output remain off.
