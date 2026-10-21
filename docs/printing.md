@@ -184,8 +184,8 @@ are rejected. Query parameters are not accepted for writes.
 
 Both the submitted and any existing configuration must be **disabled**. This
 delivery prepares configuration only; active/paused printers cannot be edited
-through it. State changes, pause/deactivate/soft-delete and reviewed resume belong
-to #298, so a configuration edit cannot bypass a queue-age review. Duplicate
+through it. Stop transitions belong to #298 and reviewed resume to #301, so a
+configuration edit cannot bypass a queue-age review. Duplicate
 creation conflicts even if the existing ID is a tombstone or corrupt record;
 deleted printer identities are never reused. There is no print worker/dispatch,
 customer/order mutation or printer credential provisioning in these operations.
@@ -250,6 +250,69 @@ authorization/configuration checks require safe existing access; controlled
 production write QA needs a separately defined PO-approved reversible scenario.
 Keep missing access/rules/write QA explicitly blocked and the issue open.
 
+### Audited stop transitions (#298)
+
+`POST /api/merchant/printers/lifecycle` accepts exactly
+`{brandId, locationId, printerId, revision, action}`. IDs and positive safe integer
+revision are validated. This separate command endpoint cannot change name,
+model, scope or other configuration fields. It authenticates before reading the
+body and uses the same same-origin JSON, 8192 streamed-byte limit, no-query,
+no-store/Vary Cookie and generic error boundaries as configuration writes.
+
+| Action | Allowed current state | Result | Existing permission |
+| --- | --- | --- | --- |
+| `pause` | active | paused | `orderfly.catalog:edit` |
+| `deactivate` | active or paused | disabled | `orderfly.catalog:edit` |
+| `delete` | active, paused or disabled | disabled with a server `deletedAt` tombstone | `orderfly.catalog:delete` |
+| `resume` | no state can resume in this delivery | 409 `queue_review_required`, no change | `orderfly.catalog:edit` |
+
+An already paused pause or already disabled deactivate is a 409
+`record_conflict`, not a new audit event. Stale/exhausted revisions also conflict.
+Current policy, native brand/location ownership, stored printer ID/scope and
+revision are read in the same transaction as the mutation. Authorization happens
+before record existence is exposed. Missing, deleted, malformed and foreign
+records all return 404 `not_found`. Concurrent transactions and retries must
+recheck grants, ownership and revision, including revocation/reassignment.
+
+Each successful stop increments the revision, preserves `createdAt` and sets a
+server `updatedAt`; it creates `audit/{revision}` atomically with namespaced actor,
+action, validated before/after configuration, deletion indicator and timestamp.
+Like config edits, it invalidates the separately trusted capability record.
+Audit creation/commit failure rolls back the entire transition. Delete is always
+soft: the printer document/ID, audit children and every job identity/reference
+remain. No operation enumerates, changes, cancels, replays or deletes jobs or
+credentials. Existing list/detail projection excludes tombstones and create/edit
+cannot reuse or modify them. Future dispatch must independently recheck current
+printer state/tombstone immediately before delivery; changing a config state
+alone cannot prove stopping an already delivered job.
+
+These operations remain behind the unchanged, default-off
+`ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED` gate. This release does not verify active
+Firestore policy, enable that gate, connect hardware or activate live output.
+There is no lifecycle UI yet. Pause's future new-job acceptance and dispatch
+semantics must follow the documented lifecycle policy; this endpoint itself has
+no queue side effects.
+
+Resume was split **before implementation**: #300 supplies durable job/outbox and
+authoritative queue-revision metadata; #301 supplies a server-controlled,
+actor/scope/printer/queue-revision-bound, expiring, single-use queue-age review
+and audited resume. Until then a valid `resume` command always fails closed
+after authorization and revision checks. Client booleans, counts, timestamps or
+fake review evidence are rejected as unknown fields. Missing queue metadata is
+never treated as a verified empty queue. None of these stop transitions can
+enable a printer or bypass review by setting state directly.
+
+Tests use the actual transaction authorization with isolated storage I/O, shared
+with the existing config-write fixture. They cover all allowed stops and grants,
+no-op/stale/conflicting edits, current ownership/revocation during retry,
+soft-delete identity/history preservation, non-reuse, secret/unknown payloads,
+audit rollback and rejected blind resume. Fixture results are not production
+write-path or physical QA. After exact-head deployment, live anonymous/invalid
+session rejection may be checked with empty payloads (no possible record
+mutation), alongside the existing read API and public release smoke. Valid
+session/write QA remains blocked unless safe access and an explicitly controlled
+reversible scenario are available.
+
 1. Validated printer configuration and authenticated scoped persistence/API.
 2. Transactional print-intent outbox and tests for payment/pickup idempotency.
 3. Printer management UI with overview, add/edit/pause/deactivate and test preview.
@@ -264,7 +327,7 @@ does not depend on physical printer availability.
 
 ## Verification and release
 
-Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs`
+Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs`
 and `npm run typecheck`.
 There is no changed browser flow in this delivery.
 Follow `AGENTS.md` for current-head CI, independent Codex review, merge and release
