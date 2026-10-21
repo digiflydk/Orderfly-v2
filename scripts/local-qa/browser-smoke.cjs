@@ -3,16 +3,29 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs'), path = require('node:path');
 const { chromium } = require('playwright');
 const { guardedContext } = require('./browser-boundary.cjs');
+const { diagnostics, loginAlert } = require('./browser-diagnostics.cjs');
 const BASE = 'http://127.0.0.1:3100';
 const headers = ['Aktiveringsdato', 'Brand', 'Lokation', 'Status', 'Last used', 'Total printers', 'Printer name', 'Printertype', 'Handlinger'];
-async function login(page, actor) {
+async function login(page, actor, role, diagnostic) {
+  page.on('response', response => diagnostic.response(role, response.url(), response.status()));
+  page.on('pageerror', error => diagnostic.clientError(role, error.message));
+  diagnostic.mark(role, 'page-ready');
   await page.goto(BASE + '/admin-login');
+  diagnostic.mark(role, 'toggle');
   await page.getByRole('button', { name: 'Log ind med en separat Orderfly-konto', exact: true }).click();
+  diagnostic.mark(role, 'fields');
   await page.getByLabel('E-mail', { exact: true }).fill(actor.email);
   await page.getByLabel('Adgangskode', { exact: true }).fill(actor.password);
   const session = page.waitForResponse(response => response.url() === BASE + '/api/admin/session' && response.request().method() === 'POST');
+  diagnostic.mark(role, 'submit');
   await page.getByRole('button', { name: 'LOG IND', exact: true }).click();
-  assert.equal((await session).status(), 200, 'actual browser login must establish a real native session');
+  diagnostic.mark(role, 'session-response');
+  const result = await Promise.race([session.then(response => ({ response })), loginAlert(page).waitFor({ state: 'visible' }).then(async () => {
+    diagnostic.alert(role, await loginAlert(page).textContent()); return { rejected: true };
+  })]);
+  if (result.rejected) throw Error('QA0 login UI rejected');
+  assert.equal(result.response.status(), 200, 'actual browser login must establish a real native session');
+  diagnostic.mark(role, 'navigation');
   await page.waitForURL(url => url.pathname !== '/admin-login');
 }
 async function status(page, url) { return page.evaluate(async target => (await fetch(target)).status, url); }
@@ -21,11 +34,11 @@ async function runBrowserSmoke({ admin, merchant, ids }) {
     || Reflect.get(globalThis, Symbol.for('orderfly.qa0.loopback-guard')) !== true) throw Error('QA0 browser boundary missing');
   const artifacts = path.resolve(__dirname, '../../test-results'); fs.mkdirSync(artifacts, { recursive: true });
   const browser = await chromium.launch({ headless: true, args: ['--disable-background-networking', '--disable-component-update', '--no-pings'] });
-  const contexts = []; let blocked = 0, stage = 'admin-login';
+  const contexts = []; const diagnostic = diagnostics(); let blocked = 0, stage = 'admin-login';
   try {
     const adminScope = await guardedContext(browser, { width: 1348, height: 900 }); contexts.push(adminScope);
     const page = await adminScope.context.newPage(); page.setDefaultTimeout(20000);
-    await login(page, admin);
+    await login(page, admin, 'admin', diagnostic);
     stage = 'admin-table';
     await page.goto(BASE + '/superadmin/printers');
     const table = page.getByRole('table', { name: 'Printere', exact: true });
@@ -52,7 +65,7 @@ async function runBrowserSmoke({ admin, merchant, ids }) {
     await page.screenshot({ path: path.join(artifacts, `local-qa-${process.pid}-mobile.png`) });
     stage = 'merchant-login-and-denial';
     const merchantScope = await guardedContext(browser, { width: 1348, height: 900 }); contexts.push(merchantScope);
-    const memberPage = await merchantScope.context.newPage(); memberPage.setDefaultTimeout(20000); await login(memberPage, merchant);
+    const memberPage = await merchantScope.context.newPage(); memberPage.setDefaultTimeout(20000); await login(memberPage, merchant, 'merchant', diagnostic);
     await memberPage.goto(BASE + '/superadmin/printers'); await memberPage.getByText('Access Denied', { exact: true }).waitFor();
     assert.equal(await status(memberPage, '/api/merchant/printers?brandId=' + ids.brand + '&locationId=' + ids.location), 403);
     stage = 'anonymous-denial';
@@ -62,8 +75,8 @@ async function runBrowserSmoke({ admin, merchant, ids }) {
     blocked = contexts.reduce((sum, scope) => sum + scope.blockedRequests(), 0);
     return { browser: 'Chromium/Playwright1.62', browserVersion: browser.version(), realVisibleLoginsPerPass: 2, tableHeaders: headers.length, desktopWidth: 1348, mobileWidth: 375,
       editCancel: true, merchantDenied: true, anonymousDenied: true, foreignScopeDenied: true, retiredRoute404: true, blockedExternalRequests: blocked };
-  } catch {
-    fs.writeFileSync(path.join(artifacts, 'local-qa-browser-failure.json'), JSON.stringify({ environment: 'QA0b2-local-browser', status: 'failed', stage, productionAcceptance: false, physicalPrintVerified: false }), { mode: 0o600 });
+  } catch (error) {
+    fs.writeFileSync(path.join(artifacts, 'local-qa-browser-failure.json'), JSON.stringify({ environment: 'QA0b2-local-browser', status: 'failed', stage, ...diagnostic.snapshot(error), productionAcceptance: false, physicalPrintVerified: false }), { mode: 0o600 });
     throw Error('QA0 real browser scenario failed');
   }
   finally {

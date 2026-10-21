@@ -201,7 +201,16 @@ credentials. External requests are aborted without logging URL/query/body. The
 Node guard remains active separately. No HAR, trace, storageState, cookie dump,
 video or credential-screen screenshot is recorded. Screenshots are taken only
 of the authenticated synthetic printer table at desktop/mobile sizes. A failed scenario writes only a fixed stage label in `local-qa-browser-failure.json`;
-no raw error, request or credential data is stored. Browser
+no raw error, request or credential data is stored. Diagnostic correction after
+the first real CI login failure adds fixed login substages (page-ready, toggle,
+fields, submit, session-response, navigation), safe error/UI/client categories and
+numeric statuses only for exact local login page, Auth signIn and session API
+pathnames. UI errors are scoped to the actual login form so Next's global route
+announcer cannot be mistaken for a login rejection (regression failed before
+scoping and passes after).
+URLs, queries, request/response bodies, headers, cookies and raw console/errors
+are never persisted. These labels classify a failing proof; they never make it
+a passed login or justify a product change without evidence. Browser
 errors become a fixed failure message and never expose Playwright's credential
 call log.
 

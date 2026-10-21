@@ -65,3 +65,31 @@ test('a browser callback failure still removes only created seed/users and termi
   assert.deepEqual([...accounts], ['unrelated-user']);
   assert.ok(errors.length > 0); assert.ok(errors.every(value => !value.includes('PRIVATE')));
 });
+
+test('login diagnostics persist only fixed substage/category and allowlisted local numeric statuses', () => {
+  const { diagnostics } = require('../../scripts/local-qa/browser-diagnostics.cjs');
+  const d = diagnostics(); d.mark('admin', 'session-response');
+  d.response('admin', 'http://127.0.0.1:3100/admin-login?next=PRIVATE', 200);
+  d.response('admin', 'https://orderfly.dk/admin-login?PRIVATE', 503);
+  d.response('admin', 'http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=PRIVATE', 400);
+  d.response('admin', 'http://127.0.0.1:3100/api/admin/session?PRIVATE', 503);
+  for (const url of ['https://orderfly.dk/api/admin/session?PRIVATE', 'http://127.0.0.1:3100/private', 'http://PRIVATE@127.0.0.1:3100/api/admin/session']) d.response('admin', url, 201);
+  d.response('admin', 'http://127.0.0.1:3100/api/admin/session', 'PRIVATE');
+  d.alert('admin', 'PRIVATE reflected error'); d.clientError('admin', 'PRIVATE Local QA client configuration rejected');
+  const result = d.snapshot({ name: 'TimeoutError', message: 'PRIVATE password/token/cookie' });
+  assert.deepEqual(result.admin, { loginPageStatus: 200, authSignInStatus: 400, sessionStatus: 503, uiError: 'other-ui-alert', clientError: 'client-configuration-rejected' });
+  assert.equal(result.loginSubstage, 'admin-session-response'); assert.equal(result.failureCategory, 'timeout');
+  assert.equal(JSON.stringify(result).includes('PRIVATE'), false);
+  assert.throws(() => d.mark('PRIVATE', 'fields'), /rejected/); assert.throws(() => d.mark('admin', 'PRIVATE'), /rejected/);
+});
+
+test('Next global route announcer alone cannot become a login UI error', async () => {
+  const { loginAlert } = require('../../scripts/local-qa/browser-diagnostics.cjs');
+  let formError = null;
+  const locator = scope => ({ isVisible: async () => scope === 'form' ? formError !== null : true, textContent: async () => scope === 'form' ? formError : '' });
+  const page = { getByRole: role => { assert.equal(role, 'alert'); return locator('global-announcer'); },
+    locator: selector => { assert.equal(selector, 'form'); return { getByRole: role => { assert.equal(role, 'alert'); return locator('form'); } }; } };
+  assert.equal(await loginAlert(page).isVisible(), false, 'empty global Next route announcer must not win the UI error race');
+  formError = 'Kunne ikke logge ind. Prøv igen.';
+  assert.equal(await loginAlert(page).isVisible(), true); assert.equal(await loginAlert(page).textContent(), formError);
+});
