@@ -12,16 +12,17 @@ function fixture() {
   const draft = crypto.createPrinterDeviceCredentialDraft(binding);
   const rows = new Map([['brands/b1', { status: 'active' }], ['locations/l1', { brandId: 'b1' }], ['locations/l1/printers/p1', printer()], [credentialPath, draft.record]]);
   const reads = [], writes = [];
-  let broken = false, wrongId;
+  let broken = false, wrongId; const failures = new Map();
   const collection = path => ({ doc: id => ({ id, path: `${path}/${id}`, collection: name => collection(`${path}/${id}/${name}`) }) });
   const db = { collection }, transaction = { get: async ref => {
     reads.push(ref.path); if (broken) throw Error(`SECRET_${draft.secret}`);
+    if (failures.has(ref.path)) throw failures.get(ref.path);
     const value = rows.get(ref.path);
     return { exists: value !== undefined, id: wrongId ?? ref.id, data: () => value };
   }, create: () => writes.push('create'), set: () => writes.push('set'), update: () => writes.push('update'), delete: () => writes.push('delete') };
   const api = loadTs('src/lib/printing/device-auth-native.ts', { 'server-only': {}, '@/lib/firebase-admin': { getAdminDb: () => db } });
   return { ...api, rows, reads, writes, draft, db, transaction, context: { db, transaction },
-    fail() { broken = true; }, wrongId(id) { wrongId = id; },
+    fail() { broken = true; }, failOn(path, error) { failures.set(path, error); }, wrongId(id) { wrongId = id; },
     read(input = { ...scope, secret: draft.secret }, context = { db, transaction }) { return api.verifyNativePrinterDevice(context, input); } };
 }
 const rejects = (promise, code = 'device_unverified') => assert.rejects(promise, error => error.code === code && error.message === code);
@@ -51,7 +52,7 @@ test('canonical brand status rejects suspended scope and malformed lifecycle whi
     assert.equal(identity.dispatchAuthorized, false); assert.equal(identity.capabilityAuthorized, false);
     // The same native SDK transaction must reread suspension before another operation.
     f.rows.set('brands/b1', { status: 'suspended' }); await rejects(f.read());
-    assert.equal(f.reads.length, 8); assert.deepEqual(f.writes, []);
+    assert.equal(f.reads.length, 6); assert.deepEqual(f.reads.slice(-2), ['brands/b1', 'locations/l1']); assert.deepEqual(f.writes, []);
   }
 });
 
@@ -112,7 +113,7 @@ test('rotation/revocation and printer revision changes are reread on each reused
   f.rows.set('locations/l1/printers/p1', { ...printer(), revision: 4 });
   assert.equal((await f.read({ ...scope, secret: next.secret })).printerRevision, 4);
   f.rows.set('locations/l1', { brandId: 'reassigned' }); await rejects(f.read({ ...scope, secret: next.secret }));
-  assert.equal(f.transaction, tx); assert.equal(f.reads.length, 28); assert.deepEqual(f.writes, []);
+  assert.equal(f.transaction, tx); assert.equal(f.reads.length, 26); assert.deepEqual(f.reads.slice(-2), ['brands/b1', 'locations/l1']); assert.deepEqual(f.writes, []);
 });
 
 test('native reflective exceptions/accessors and Admin outage never leak secret values or raw errors', async () => {
@@ -130,4 +131,38 @@ test('native reflective exceptions/accessors and Admin outage never leak secret 
   const i = fixture();
   Object.defineProperty(i.rows.get('brands/b1'), 'status', { get() { invoked = true; throw Error('SECRET'); } });
   await rejects(i.read()); assert.equal(invoked, false);
+});
+
+
+test('native brand/location authority rejects before touching any foreign printer or private credential', async () => {
+  for (const mutate of [
+    f => f.rows.set('locations/l1', { brandId: 'brand_B' }),
+    f => f.rows.delete('locations/l1'),
+    f => f.rows.get('locations/l1').deletedAt = 1,
+    f => f.rows.get('brands/b1').status = 'suspended',
+    f => f.rows.delete('brands/b1'),
+  ]) {
+    const f = fixture(); mutate(f);
+    await rejects(f.read());
+    assert.deepEqual(f.reads, ['brands/b1', 'locations/l1'], 'scope rejection must precede ALL printer/private reads');
+    assert.deepEqual(f.writes, []);
+  }
+});
+
+test('foreign private credential provider failures and metadata cannot affect rejected tenant authentication', async () => {
+  const f = fixture();
+  f.rows.set('locations/l1', { brandId: 'brand_B' });
+  f.rows.set('locations/l1/printers/p1', printer({ brandId: 'brand_B', name: 'PRIVATE_FOREIGN_NAME' }));
+  const foreign = crypto.createPrinterDeviceCredentialDraft({ ...binding, brandId: 'brand_B' });
+  f.rows.set(credentialPath, foreign.record);
+  f.failOn('locations/l1/printers/p1', Error('PRIVATE_FOREIGN_NAME ' + foreign.secret));
+  f.failOn(credentialPath, Error('PRIVATE_FOREIGN_CREDENTIAL ' + foreign.secret));
+  await assert.rejects(f.read(), error => {
+    assert.equal(error.code, 'device_unverified'); assert.equal(error.message, 'device_unverified');
+    for (const privateValue of ['PRIVATE_FOREIGN', foreign.secret, foreign.record.secretDigest, f.draft.secret]) {
+      assert.equal((String(error) + JSON.stringify(error) + error.stack).includes(privateValue), false);
+    }
+    return true;
+  });
+  assert.deepEqual(f.reads, ['brands/b1', 'locations/l1']); assert.deepEqual(f.writes, []);
 });

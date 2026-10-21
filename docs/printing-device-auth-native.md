@@ -8,12 +8,21 @@ capability, transaction freshness guarantee, commit proof or dispatch permission
 The only request fields are bounded `brandId`, `locationId`, `printerId` and the
 canonical one-time secret. No stored credential, revision, MAC, UID or caller
 identity can be supplied as authority. Validation precedes all native paths.
-The exact four reads use the same caller-owned `NativeTransactionContext`:
+The exact four successful-path reads use the same caller-owned
+`NativeTransactionContext`, in two ownership-gated stages:
 
 1. `brands/{brandId}`.
 2. `locations/{locationId}`, whose native `brandId` must match.
 3. `locations/{locationId}/printers/{printerId}`.
 4. `locations/{locationId}/printers/{printerId}/deviceCredentials/current`.
+
+The first stage reads and validates native brand lifecycle/deletion and location
+ownership. Only after `location.brandId` matches the requested native brand does
+the second stage construct/read printer and private credential paths. A foreign,
+missing, deleted or suspended scope therefore never loads another tenant's printer
+or credential, and cannot expose whether those private records exist or fail.
+All four reads still belong to the same current transaction; no cached ownership
+proof is accepted, including on a reused SDK transaction retry.
 
 `current` is the canonical private credential document identity for subsequent
 provisioning work. Its contents are exactly the #356 digest-only record, with no
@@ -72,3 +81,11 @@ Root authorized one three-line CI step immediately after #356's existing step;
 all other workflow bytes/permissions stay unchanged. Current-head CI and completed
 independent Codex review precede root-only serialized merge/deploy and applicable
 read-only live QA. No authenticated endpoint/live-device success is claimed.
+
+The cross-tenant read-order P1 found during #370 review was first reproduced by
+actual native-service regressions: rejected scope still read both private paths,
+and a foreign credential provider failure changed the generic error to unavailable.
+The two-stage fix retains all positive four-path and revision/rotation/revocation
+checks, while new negative assertions require only brand/location reads. Existing
+retry read counts were tightened to this smaller rejection boundary, with explicit
+last-two-path assertions, rather than weakening lifecycle or credential checks.
