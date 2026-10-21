@@ -100,6 +100,79 @@ tests and release/QA evidence.
 Each work item has at most 60 minutes of active work, its own issue/PR, explicit
 acceptance criteria and handover. Split before expanding scope.
 
+### Authenticated printer reads (#295)
+
+`GET /api/merchant/printers?brandId=BRAND&locationId=LOCATION` lists a single
+authorized location. Optional `limit` is an integer from 1 to 50 (default 20);
+`after` is the last returned printer ID. The result is
+`{items: [{configuration, revision}], nextCursor: string | null}`. Pass the
+returned cursor with the same scope to continue. Add `printerId=ID` instead to
+read one record as `{item: {configuration, revision}}`; detail requests cannot
+include list pagination. Unknown/duplicate parameters and malformed IDs fail.
+
+The server requires a verified Orderfly session, the existing
+`orderfly.catalog:view` permission for the requested brand and location, and
+native brand/location ownership via `requireOrderflyAccess`. It rechecks the
+loaded location's brand before reading any printers. Supplying scope in a URL
+does not grant access. No cross-brand/global scan is performed. The existing
+catalogue read permission grants configuration visibility only, not access to
+future printer credentials or permission to send print jobs.
+
+Prepared records live at `locations/{locationId}/printers/{printerId}` in the
+production **data** project, using this versioned envelope:
+
+```ts
+{
+  schemaVersion: 1,
+  configuration: PrinterConfiguration,
+  revision: number, // positive safe integer, starting at 1
+  deletedAt: null, // a tombstone timestamp will hide future soft-deleted records
+  createdAt?: unknown, // private server timestamp metadata, never returned
+  updatedAt?: unknown
+}
+```
+
+The nested configuration is validated using #293 and its ID must match the
+document path. Its brand/location must match the independently authorized scope
+and native location. The public projection contains only validated configuration
+and revision. Unknown envelope/configuration fields (including credential fields)
+are rejected; no raw document, timestamps, validation issues or error details are
+serialized. Future writes (#296) must use this envelope and keep credentials in
+a separate private store, without enabling client Firestore access.
+
+Lists filter `deletedAt == null`, order by document ID and read at most
+`limit + 1` records. Missing/soft-deleted rows are not listed. A malformed,
+unsupported-version or foreign-scope record in a page makes the request fail
+with generic 503, rather than silently hiding a configured printer or exposing
+its ID as a cursor. Detail returns the same 404 for missing, deleted, malformed
+and foreign records. An empty valid location returns an empty list.
+Authentication failure is 401, authorization failure 403, invalid query 400,
+and unexpected storage or authority-service/configuration failure generic 503.
+Only explicit 401/403 authority decisions become authentication/permission errors.
+All responses are `no-store` and
+vary by Cookie; errors are not logged with raw data. No rules, indexes,
+production data, UI, queue or printer transport are changed by this read-only
+delivery.
+
+The shared identity guard now distinguishes invalid sessions from unavailable
+identity infrastructure. Missing, expired, revoked, disabled or malformed sessions
+remain 401, with revocation checks enabled. Opsfly HTTP/network/throttling and
+missing signing-key failures, Firebase initialization/network errors, and unknown
+verification failures become generic `identity_unavailable`/503. The Admin SDK
+13 certificate-fetch path can use `auth/argument-error`; only recognized SDK
+token-validation messages under that code are classified as invalid credentials.
+Unknown messages remain unavailable and are never returned/logged. Tests exercise
+the real guard and Opsfly cookie/HTTP implementation with external I/O replaced,
+plus malformed-cookie rejection through the installed Firebase Admin SDK.
+
+Release QA must first verify the deployed `/api/health` commit, then check
+unauthenticated list/detail rejection on this live endpoint. Authenticated live
+scope/DTO checks require an existing safely accessible authorized session and
+records; if unavailable, record that portion as **QA BLOCKED**, not passed.
+Use fixture tests for writes/data-corruption scenarios. Never seed production
+printers, fabricate credentials or treat a generic smoke test as authenticated
+API or physical printer evidence.
+
 1. Validated printer configuration and authenticated scoped persistence/API.
 2. Transactional print-intent outbox and tests for payment/pickup idempotency.
 3. Printer management UI with overview, add/edit/pause/deactivate and test preview.
@@ -114,12 +187,13 @@ does not depend on physical printer availability.
 
 ## Verification and release
 
-Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs`
+Run `node --test tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs`
 and `npm run typecheck`.
 There is no changed browser flow in this delivery.
 Follow `AGENTS.md` for current-head CI, independent Codex review, merge and release
 verification. PO/PM has authorized qualifying merge/deploy without another prompt.
 After deployment verify `/api/health` release and run issue-specific live QA for
-exposed features. For these unconnected internal foundations, record that there
-is no live domain endpoint yet; local tests are not live end-to-end evidence.
+exposed features. The internal domain/capability foundations are not exposed as
+live operations; the printer read endpoint has its own live authorization checks.
+Local tests are not live end-to-end evidence.
 Do not mark final print acceptance as passed until actual printer output is proven.
