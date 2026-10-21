@@ -2,6 +2,7 @@
 
 import { useEffect, useId, useState } from 'react';
 import type { QrMetrics, QrMetricBucket } from '@/lib/qr/metrics';
+import type { QrAttributionBucket, QrScanAttribution } from '@/lib/qr/analytics';
 
 export type QrAnalyticsFilter = { dateFrom: string; dateTo: string; qrId: string; campaign: string; placement: string };
 export type QrAnalyticsCode = { id: string; name: string; campaign?: string; placement?: string };
@@ -15,6 +16,7 @@ export type QrAnalyticsProps = {
   complete: boolean;
   /** Server report scope, never inferred from the current catalog or client permissions. */
   currentLocationOnly?: boolean;
+  attribution?: QrScanAttribution;
   canExport: boolean;
   onFilterChange?: (filters: QrAnalyticsFilter) => void;
   onExport?: () => void | Promise<void>;
@@ -39,6 +41,14 @@ function CountsTable({ title, values }: { title: string; values: Array<{ key: st
     </table></div>
     {!values.length && <p className="text-sm text-muted-foreground">Ingen hændelser i perioden.</p>}
   </section>;
+}
+
+function AttributionTable({ title, values, location }: { title: string; values: QrAttributionBucket[]; location?: boolean }) {
+  return <section className={box} style={{ minWidth: 0 }}><h3 className="font-medium">{title}</h3>
+    <div style={{ overflowX: 'auto' }}><table className="w-full text-sm" aria-label={title}>
+      <thead><tr><th scope="col" className="text-left">{location ? 'Registreret afdeling' : 'Registreret kampagne'}</th><th scope="col" className="text-right">Åbninger</th><th scope="col" className="text-right">Sandsynlige scanninger</th><th scope="col" className="text-right">Udeladte åbninger</th></tr></thead>
+      <tbody>{values.map(row => <tr key={row.key}><th scope="row" className="py-2 text-left font-normal" style={{ overflowWrap: 'anywhere' }}>{row.key ? location ? `Afdeling ${row.key}` : row.key : location ? 'Uden registreret afdeling' : 'Ukendt kampagne'}</th><td className="text-right">{number(row.openings)}</td><td className="text-right">{number(row.probableScans)}</td><td className="text-right">{number(row.excludedOpenings)}</td></tr>)}</tbody>
+    </table></div>{!values.length && <p className="text-sm text-muted-foreground">Ingen hændelser i perioden.</p>}</section>;
 }
 
 function Timeline({ values, hourly, complete }: { values: QrMetricBucket[]; hourly: boolean; complete: boolean }) {
@@ -68,7 +78,7 @@ function Timeline({ values, hourly, complete }: { values: QrMetricBucket[]; hour
 
 /** Presentation only. The parent owns authorization, query completeness and transport. */
 export function QrAnalytics({ metrics, period, codes = [], selection, loading = false, error, complete = false,
-  currentLocationOnly, canExport, onFilterChange, onExport, onRetry }: QrAnalyticsProps) {
+  currentLocationOnly, attribution, canExport, onFilterChange, onExport, onRetry }: QrAnalyticsProps) {
   const id = useId();
   const [filters, setFilters] = useState<QrAnalyticsFilter>({ ...period, qrId: selection?.qrId ?? '', campaign: selection?.campaign ?? '', placement: selection?.placement ?? '' });
   const [hourly, setHourly] = useState(false);
@@ -126,6 +136,10 @@ export function QrAnalytics({ metrics, period, codes = [], selection, loading = 
       <label htmlFor={`${id}-group`} className="flex flex-wrap items-center gap-2 text-sm">Tidsopdeling<select id={`${id}-group`} className={input} value={hourly ? 'hour' : 'day'} onChange={event => setHourly(event.target.value === 'hour')}><option value="day">Pr. dag</option><option value="hour">Pr. time</option></select></label>
       <Timeline values={hourly ? metrics.byHour : metrics.byDay} hourly={hourly} complete={complete} />
       <div className="grid gap-4 lg:grid-cols-2"><CountsTable title="Enheder" values={metrics.byDevice}/><CountsTable title="Operativsystemer" values={metrics.byOs}/><CountsTable title="Browsere" values={metrics.byBrowser}/><CountsTable title="Henvisende websites" values={metrics.byReferrer}/></div>
+      {attribution ? <section className="space-y-3" aria-label="Fordeling på scanningstidspunktet">
+        <p className="text-sm text-muted-foreground">Historisk fordeling for den valgte QR-kode: Kampagne og afdeling er gemt sammen med hændelsen på scanningstidspunktet. Fordelingen omfatter samme indlæste hændelser og periode som tallene ovenfor. Afdelinger vises med deres registrerede ID, også når deres navn er ændret eller afdelingen er lukket.</p>
+        <div className="grid gap-4 lg:grid-cols-2"><AttributionTable title="Kampagner ved scanning" values={attribution.byCampaign}/><AttributionTable title="Afdelinger ved scanning" values={attribution.byLocation} location/></div>
+      </section> : <p role="note" aria-label="Historisk fordeling" className="text-sm text-muted-foreground">Historisk kampagne- og afdelingsfordeling er ikke tilgængelig for de viste tal.</p>}
       <section className={box} style={{ minWidth: 0 }}><h3 className="font-medium">QR-koder, kampagner og placeringer</h3><div style={{ overflowX: 'auto' }}><table className="w-full text-sm" aria-label="QR-koder, kampagner og placeringer" aria-describedby={`${id}-metadata`}><thead><tr><th scope="col" className="text-left">QR-kode</th><th scope="col" className="text-left">Kampagne (aktuel)</th><th scope="col" className="text-left">Placering (aktuel)</th><th scope="col" className="text-right">Sandsynlige scanninger</th></tr></thead><tbody>{metrics.byQr.map(row => {
         const code = codes.find(candidate => candidate.id === row.key);
         return <tr key={row.key}><th scope="row" className="py-2 text-left font-normal" style={{ overflowWrap: 'anywhere' }}>{code?.name ?? row.key}</th><td>{code?.campaign || 'Ukendt'}</td><td>{code?.placement || 'Ukendt'}</td><td className="text-right">{number(row.probableScans)}</td></tr>;
