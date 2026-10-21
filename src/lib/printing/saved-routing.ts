@@ -93,11 +93,15 @@ function membership(row: Row, locationId: string, allowGlobal: boolean) {
   }
   if (new Set(ids).size !== ids.length || (!ids.length && !allowGlobal) || ids.length && !ids.includes(locationId)) return fail('reference_unverified', 409);
 }
-async function references(context: NativeTransactionContext, scope: Scope, rules: PrinterRoutingRule[]) {
+function ruleIdentities(scope: Scope, rules: PrinterRoutingRule[]) {
   if (new Set(rules.map(rule => rule.id)).size !== rules.length || rules.some(rule => rule.brandId !== scope.brandId || rule.locationId !== scope.locationId
     || rule.deliveryTypes && new Set(rule.deliveryTypes).size !== rule.deliveryTypes.length)) return fail('invalid_request');
   const printerIds = [...new Set(rules.map(rule => rule.printerId))];
   if (printerIds.length > PRINT_ROUTING_LIMITS.printers) return fail('invalid_request');
+  return printerIds;
+}
+async function references(context: NativeTransactionContext, scope: Scope, rules: PrinterRoutingRule[]) {
+  const printerIds = ruleIdentities(scope, rules);
   const printers: Array<Readonly<{ configuration: Readonly<PrinterConfiguration>; revision: number }>> = [];
   for (const printerId of printerIds.sort()) {
     const snapshot = await context.transaction.get(context.db.collection('locations').doc(scope.locationId).collection('printers').doc(printerId));
@@ -148,6 +152,7 @@ function readStored(snapshot: FirebaseFirestore.DocumentSnapshot, scope: Scope) 
       ...(Object.hasOwn(row, 'updatedAt') ? { updatedAt: field(row, 'updatedAt') } : {}) });
   } catch { return fail('routing_unverified', 409); }
   if (!parsed.success || snapshot.id !== 'original' || parsed.data.brandId !== scope.brandId || parsed.data.locationId !== scope.locationId) return fail('routing_unverified', 409);
+  try { ruleIdentities(scope, parsed.data.rules); } catch { return fail('routing_unverified', 409); }
   return parsed.data;
 }
 const savedRef = (context: NativeTransactionContext, scope: Scope) => context.db.collection('locations').doc(scope.locationId).collection('printerRouting').doc('original');

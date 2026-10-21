@@ -171,10 +171,10 @@ test('audit or commit failure rolls back all writes and returns generic unavaila
   }
 });
 test('saved corrupt/foreign routing fails whole read and cannot be overwritten as a missing record', async () => {
-  for (const patch of [{ brandId: 'foreign' }, { revision: 0 }, { deletedAt: 1 }, { token: 'SECRET' }, { rules: [rule({ printerId: 'missing' })] }]) {
+  for (const patch of [{ brandId: 'foreign' }, { revision: 0 }, { deletedAt: 1 }, { token: 'SECRET' }, { rules: [rule(), rule()] }, { rules: [rule({ brandId: 'foreign' })] }, { rules: [rule({ printerId: 'missing' })] }]) {
     const f = fixture(); f.rows.set(path, { schemaVersion: 1, id: 'original', ...scope, revision: 1, deletedAt: null, rules: [rule()], ...patch });
     const result = await f.request('GET'); assert.equal(result.status, 409); assert.doesNotMatch(JSON.stringify(result), /SECRET/);
-    assert.equal((await f.request('PUT', command({ expectedRevision: 1 }))).status, patch.rules ? 200 : 409);
+    assert.equal((await f.request('PUT', command({ expectedRevision: 1 }))).status, patch.rules?.[0]?.printerId === 'missing' ? 200 : 409);
   }
 });
 test('caller-owned preparation rereads references and never authorizes writes or output', async () => {
