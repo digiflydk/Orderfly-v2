@@ -50,7 +50,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const canCreate = !sessionLost && createLocations.some(row => row.id === location?.id && row.brandId === brandId);
   const canEdit = !sessionLost && editLocations.some(row => row.id === location?.id && row.brandId === brandId);
   const closeAndRefresh = () => { setEditor(null); setAfter(''); setRefresh(value => value + 1); };
-  const loseSession = () => { setSessionLost(true); setEditor(null); setSavedScope(''); };
+  const loseSession = () => { setSessionLost(true); setEditor(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
   const key = JSON.stringify([brandId, location?.id || '', after, refresh]);
   const current = result?.key === key ? result : null;
 
@@ -61,7 +61,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
     const query = new URLSearchParams({ brandId, locationId, limit: '20', ...(after ? { after } : {}) });
     fetch('/api/merchant/printers?' + query, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal })
       .then(async response => {
-        if (response.status === 401 && active) loseSession();
+        if (response.status === 401 && active && scopeRef.current === scope) loseSession();
         if (!response.ok) throw Error(response.status === 401 ? 'Din session er udløbet. Log ind igen.'
           : response.status === 403 ? 'Du har ikke adgang til printerne på denne lokation.'
           : 'Printerne kunne ikke indlæses. Prøv igen.');

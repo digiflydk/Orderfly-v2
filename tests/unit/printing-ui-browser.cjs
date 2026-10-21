@@ -181,7 +181,7 @@ test('write errors retain ordinary input, require fresh conflict data and clear 
   const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
   let status = 400, writes = 0;
   await page.route('**/api/merchant/printers**', route => {
-    if (route.request().method() === 'GET') return route.fulfill({ json: { items: [], nextCursor: null } });
+    if (route.request().method() === 'GET') return route.fulfill({ json: { items: [item('prior', 'a', 'la', { state: 'disabled' })], nextCursor: null } });
     writes++; return route.fulfill({ status, json: { error: 'PRIVATE_PROVIDER_DETAIL' } });
   });
   await page.goto(origin + '?writes'); await choose(page); await fillNew(page);
@@ -202,6 +202,7 @@ test('write errors retain ordinary input, require fresh conflict data and clear 
   await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
   await expect(page.getByRole('alert')).toHaveText('Din session er udløbet. Log ind igen.');
   assert.equal((await page.locator('body').innerText()).includes('PRIVATE_PROVIDER_DETAIL'), false); assert.equal(writes, 6);
+  await expect(page.getByText('Køkken prior', { exact: true })).toHaveCount(0);
 });
 test('view-only metadata and independently scoped grants never expose unauthorized write controls', async t => {
   const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
@@ -242,4 +243,22 @@ test('fresh revoked write metadata unmounts and clears a prepared form', async t
   await page.evaluate(() => window.setPrinterWriteScopes([{ id: 'la', brandId: 'a' }]));
   await expect(page.getByRole('form', { name: 'Tilføj printer' })).toBeVisible();
   assert.equal(await page.getByRole('textbox', { name: 'Printernavn', exact: true }).inputValue(), '');
+});
+
+test('foreign or wrong-revision successful writes are uncertain and require refresh', async t => {
+  const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
+  let foreign = true;
+  await page.route('**/api/merchant/printers**', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { items: [], nextCursor: null } });
+    const configuration = route.request().postDataJSON().configuration;
+    return route.fulfill({ status: 201, json: { item: { configuration: { ...configuration, ...(foreign ? { brandId: 'b', locationId: 'lb' } : {}) }, revision: foreign ? 1 : 9 } } });
+  });
+  await page.goto(origin + '?writes'); await choose(page);
+  for (const value of [true, false]) {
+    foreign = value; await fillNew(page); await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click();
+    await expect(page.getByRole('alert')).toHaveText('Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.');
+    await expect(page.getByRole('button', { name: 'Gem deaktiveret printer' })).toBeDisabled();
+    await expect(page.getByText('Printeropsætningen er gemt som deaktiveret.', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: 'Opdater oversigten', exact: true }).click();
+  }
 });

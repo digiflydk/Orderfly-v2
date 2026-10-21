@@ -58,7 +58,7 @@ and `nativeCatalog('orderfly.catalog:edit')` for write affordances, projecting o
 native brand/location IDs. A session permission name alone never grants a
 location; create/edit grants are not combined with each other or with selectors.
 The existing POST/PATCH API remains the authority and reauthorizes in its write
-transaction. Actor-keyed page identity and a 401 response clear prepared input.
+transaction. Actor-keyed page identity and a401 response clear prepared input;401 also removes prior overview rows.
 
 The form sends only the existing `{ configuration }` or
 `{ configuration, revision }` envelope. Configuration fields are ID, native scope,
@@ -83,7 +83,7 @@ revoked writes with continuing view access. `printing-ui-browser.cjs` additional
 executes actual React forms with intercepted fixture API calls:201 create and200
 revisioned edit at desktop/mobile widths, exact credential-free bodies,
 unsupported choices, pending submit,400/401/403/404/409/503 handling, view-only
-and disabled-state affordances, revoked metadata, and late201/401 scope changes.
+and disabled-state affordances, revoked metadata, late201/401 scope changes, and foreign/wrong-revision success rejection.
 Screenshots use `printing-config-*.png`. Fixture writes never reach production.
 
 The configuration-write flag remains default-off. Live read-only login checks
