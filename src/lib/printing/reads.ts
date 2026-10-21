@@ -28,14 +28,15 @@ export async function readPrinterConfigurations(input: unknown) {
   if (!parsed.success) throw new PrinterReadError('invalid_request', 400);
   const query = parsed.data;
   await requireOrderflyAccess(query.brandId, [query.locationId], 'orderfly.catalog:view');
-  const locationRef = getAdminDb().collection('locations').doc(query.locationId);
-  const location = await locationRef.get();
-  if (!location.exists || location.data()?.brandId !== query.brandId) throw new AuthorityError('forbidden');
+  const database = getAdminDb();
+  const locationRef = database.collection('locations').doc(query.locationId);
   const scope = { brandId: query.brandId, locationId: query.locationId };
-  const locationScope = { id: location.id, brandId: location.data()!.brandId };
-  const printers = locationRef.collection('printers');
 
-  const project = (doc: FirebaseFirestore.DocumentSnapshot) => {
+  const readLocationScope = (location: FirebaseFirestore.DocumentSnapshot) => {
+    if (!location.exists || location.data()?.brandId !== query.brandId) throw new AuthorityError('forbidden');
+    return { id: location.id, brandId: location.data()!.brandId };
+  };
+  const project = (doc: FirebaseFirestore.DocumentSnapshot, locationScope: { id: string; brandId: string }) => {
     const record = storedPrinterSchema.safeParse(doc.data());
     if (!record.success || record.data.configuration.id !== doc.id) return null;
     const checked = validatePrinterConfiguration(record.data.configuration, scope, locationScope);
@@ -43,36 +44,57 @@ export async function readPrinterConfigurations(input: unknown) {
   };
 
   if (query.printerId) {
+    const locationScope = readLocationScope(await locationRef.get());
+    const printers = locationRef.collection('printers');
     const doc = await printers.doc(query.printerId).get();
-    const item = doc.exists ? project(doc) : null;
+    const item = doc.exists ? project(doc, locationScope) : null;
     // Missing, deleted, corrupt and foreign documents have the same public result.
     if (!item) throw new PrinterReadError('not_found', 404);
     return { item };
   }
 
   const limit = query.limit ? Number(query.limit) : 20;
-  const allPrinters = printers.where('deletedAt', '==', null);
-  let filtered = allPrinters;
-  if (query.model) filtered = filtered.where('configuration.model', '==', query.model);
-  let page = filtered.orderBy('__name__');
-  if (query.after) page = page.startAfter(query.after);
-  const snapshot = await page.limit(limit + 1).get();
-  const items = snapshot.docs.map(project);
-  // Never serialize a malformed row or use its foreign ID in a continuation token.
-  if (items.some(item => item === null)) throw new PrinterReadError('printers_unavailable', 503);
-  // The scope count is independent of model filtering, pagination and current page.
-  // It includes only nondeleted records with matching native scope, never an estimate from a partial page.
-  const totalPrinters = query.overview ? (await allPrinters.where('configuration.brandId', '==', query.brandId)
-    .where('configuration.locationId', '==', query.locationId).count().get()).data().count : undefined;
-  if (query.overview && (!Number.isSafeInteger(totalPrinters) || totalPrinters! < snapshot.docs.length)) {
-    throw new PrinterReadError('printers_unavailable', 503);
+  const buildQueries = () => {
+    const printers = locationRef.collection('printers');
+    const allPrinters = printers.where('deletedAt', '==', null);
+    let filtered = allPrinters;
+    if (query.model) filtered = filtered.where('configuration.model', '==', query.model);
+    let page = filtered.orderBy('__name__');
+    if (query.after) page = page.startAfter(query.after);
+    return { printers, allPrinters, pageQuery: page.limit(limit + 1) };
+  };
+
+  if (query.overview) {
+    return database.runTransaction(async transaction => {
+      const locationScope = readLocationScope(await transaction.get(locationRef));
+      const { printers, allPrinters, pageQuery } = buildQueries();
+      const snapshot = await transaction.get(pageQuery);
+      const items = snapshot.docs.map(doc => project(doc, locationScope));
+      // Never serialize a malformed row or use its foreign ID in a continuation token.
+      if (items.some(item => item === null)) throw new PrinterReadError('printers_unavailable', 503);
+      // Count, page and activity documents share one native read snapshot. A concurrent resume can therefore
+      // never mix a pre-resume printer revision with post-resume activation metadata.
+      const countSnapshot = await transaction.get(allPrinters.where('configuration.brandId', '==', query.brandId)
+        .where('configuration.locationId', '==', query.locationId).count());
+      const totalPrinters = countSnapshot.data().count;
+      if (!Number.isSafeInteger(totalPrinters) || totalPrinters < snapshot.docs.length) {
+        throw new PrinterReadError('printers_unavailable', 503);
+      }
+      const visibleItems = items.slice(0, limit);
+      const activityRefs = visibleItems.map(item => printers.doc(item!.configuration.id)
+        .collection('statusMetadata').doc('current'));
+      const activitySnapshots = activityRefs.length ? await transaction.getAll(...activityRefs) : [];
+      return { items: visibleItems.map((item, index) => ({ ...item!,
+        activity: projectPrinterActivity(activitySnapshots[index]?.exists ? activitySnapshots[index].data() : undefined,
+          { ...scope, printerId: item!.configuration.id }, item!.revision) })),
+      nextCursor: snapshot.docs.length > limit ? snapshot.docs[limit - 1].id : null, totalPrinters };
+    }, { readOnly: true });
   }
-  const visibleItems = await Promise.all(items.slice(0, limit).map(async item => {
-    if (!query.overview || !item) return item;
-    const activity = await printers.doc(item.configuration.id).collection('statusMetadata').doc('current').get();
-    return { ...item, activity: projectPrinterActivity(activity.exists ? activity.data() : undefined,
-      { ...scope, printerId: item.configuration.id }, item.revision) };
-  }));
-  return { items: visibleItems, nextCursor: snapshot.docs.length > limit ? snapshot.docs[limit - 1].id : null,
-    ...(query.overview ? { totalPrinters } : {}) };
+
+  const locationScope = readLocationScope(await locationRef.get());
+  const { pageQuery } = buildQueries();
+  const snapshot = await pageQuery.get();
+  const items = snapshot.docs.map(doc => project(doc, locationScope));
+  if (items.some(item => item === null)) throw new PrinterReadError('printers_unavailable', 503);
+  return { items: items.slice(0, limit), nextCursor: snapshot.docs.length > limit ? snapshot.docs[limit - 1].id : null };
 }
