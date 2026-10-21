@@ -1,0 +1,52 @@
+# QR isolated QA0 acceptance (#429, #401, #389)
+
+This harness uses the existing fixed **demo-orderfly-qa0** environment and unchanged `scripts/local-qa/environment.cjs`, `network-guard.cjs`, deny-all client rules and emulator configuration. It does not run the printer seed or change printer acceptance assertions. It adds only QR-specific fixtures and orchestration under `tests/local-qa/qr-*`.
+
+## Verified prerequisites
+
+On 21 October 2026 the local machine already had Firebase CLI 15.30.0 at `/tmp/orderfly-qa0-tools/node_modules/.bin/firebase`, Firestore emulator 1.22.0, and Temurin Java 21.0.12.1 at `/tmp/orderfly-qa0-jre/jdk-21.0.12.1+1-jre/bin/java`. The JRE archive SHA-256 matches `2413149700df0f7d440500a84a8f764c535f21e5a5e87d38328b64eec2c5b500`. Global Java 17 is insufficient; the runner requires the explicit Java 21 path. A locally provisioned Chromium 153 at `/tmp/qr-chromium-153` has independently passed component browser suites. No tool install or new repository dependency was needed for this harness.
+
+The checkout must have normal locked dependencies installed and no development dotenv files. Ports 3100, 8088, 9099, 4400, 4500 and 9150 must all be unused. The runner refuses existing listeners, never reuses or kills them, and never reads cloud credentials. Its child environment is the existing allowlist plus `QR_MODULE_ENABLED=true`; printer configuration writes are removed. This local feature flag is not production activation.
+
+```sh
+QA0_FIREBASE_BIN=/tmp/orderfly-qa0-tools/node_modules/.bin/firebase \
+QA0_JAVA_BIN=/tmp/orderfly-qa0-jre/jdk-21.0.12.1+1-jre/bin/java \
+CART_CHROMIUM_PATH=/tmp/qr-chromium-153 \
+node tests/local-qa/qr-run.cjs
+```
+
+`--api-only` runs the actual native API/redirect/analytics portion without claiming browser acceptance. The complete runner executes two successful seed/acceptance/cleanup passes inside the **same** emulator/app lifetime before reporting repeatability. A failing pass stops that lifetime; it cannot be reported as a successful acceptance run.
+
+## Fixture and network boundaries
+
+`qr-fixture.cjs` atomically creates only `qa0-qr-*` brands/locations and its explicitly owned `platformAdminControl/access-v1` policy, refusing any existing seed paths. Real emulator Auth users have in-memory random passwords and real ID tokens. A scoped manager has the six QR permissions only for its own native location. A separate viewer has view/analytics and no create/edit/archive/export grants. The foreign brand/location has no membership for either user. No production identity, fake session cookie or mocked Firestore is used.
+
+The native session API verifies real emulator ID tokens. Full browser mode also uses the real `/admin-login` Firebase form and real session cookies, then the assembled `/superadmin/qr-codes` page. It requires the page/API adapter from #416; the independent component fixtures do not substitute for that route.
+
+App and fixture processes run under the unchanged loopback guard. Browser contexts block service workers and every HTTP request outside fixed loopback app/Auth/Firestore ports. WebSockets are restricted to the loopback app port. Chromium additionally disables background networking and external DNS resolution. This is a bounded local acceptance harness, not a general OS sandbox. No QR destination is followed to the internet: redirect assertions use `redirect:manual` and inspect the response locally.
+
+Cleanup runs in `finally` and deletes only the fixture's created Auth user IDs, explicit seeded paths, owned QR brand subcollections and public indices whose stored brand matches those newly seeded fixture brands. It verifies documents and Auth users are absent before the second pass. No broad emulator/project wipe is used. Failure tears down only child processes started by this runner. Logs are private 0600 files in a 0700 temporary directory; safe output contains fixed phase codes/check names, never passwords, cookies, tokens, raw requests or arbitrary browser errors.
+
+## Acceptance contract
+
+| Area | Required evidence |
+|---|---|
+| Native create/replay | One persisted QR record after the same create request ID is replayed |
+| Native edit/conflict | Persisted changed destination/name and revision; stale revision rejected |
+| Access/CSRF | Anonymous, foreign brand, foreign native location and wrong origin rejected |
+| Public resolver | Active local QR redirects with no-store; HEAD creates no event; mobile/bot GETs create exactly two native events |
+| Analytics | Actual API totals equal native stored events; probable scan excludes bot; unique identity remains unknown |
+| Export authorization | Viewer export rejected on the server, not merely hidden in the UI |
+| Pause | Public redirect unavailable after pause, with no new event |
+| Actual browser | Real visible login, assembled QR edit and native readback; viewer mutation/export controls absent |
+| Cleanup/reuse | Two successful passes within one app/emulator lifetime, with verified cleanup after each |
+
+## Current evidence and concrete blockers
+
+The first guarded actual-Next run on local integration source `620904a4` reached successful native create/replay, persisted edit, stale-revision rejection, anonymous/foreign-brand/foreign-location/CSRF rejection and real session verification. It then failed: an active freshly persisted QR with verified public index returned **404 to HEAD** on `http://127.0.0.1:3100/q/{code}`. No successful redirect/event/analytics/browser acceptance is claimed from that failed run. Follow-up probes verified the native record is active, unexpired and index-consistent, and the real scoped store resolves the same destination against the same emulator. Actual Next HEAD and GET both return 404; a fixed localhost Host-alias diagnostic also returns 404. This isolates the failure to the public request boundary/feature activation path, but does not prove which internal Next URL/Host value caused it. Host overrides are diagnostics only and never acceptance or policy bypasses.
+
+The coordinator authorized a temporary local-only four-field diagnostic: actual Next constructed request origin `http://localhost:3100`, direct Host `127.0.0.1:3100`, environment `development`, flag enabled `true`. No path, query, cookie, token or other headers were logged. The diagnostic source was restored byte-for-byte (SHA-256 `b38e42417b8c8868d7ef25b01cfb8efefc080c22dab6a8b39b88aef7e03af51d`) before acceptance was rerun. The coordinator's product fix permits only development HTTP same-port loopback aliases; production strict HTTPS host policy is unchanged.
+
+**Actual native API acceptance now passes** on clean local `2690e16d` (integration `620904a4` plus the coordinator's loopback fix and this QR harness), with no instrumentation. Two complete passes inside one emulator/app lifetime prove real Auth sessions; one native code after create replay; persisted edit/stale-revision rejection; anonymous/foreign-brand/foreign-location/CSRF denial; actual redirect with two persisted GET events (one probable mobile scan, one excluded bot); HEAD without counting; native analytics matching those events; viewer CSV denial; paused-code rejection without extra events; and native document/Auth cleanup between passes. The safe summary explicitly states `browserAcceptance:false`, `productionAcceptance:false` and `physicalScanVerified:false`.
+
+The real page adapter from #416 remains required before full browser acceptance. This API proof is local server-backed integration evidence for its named source, not a final assembled release head, production acceptance, deployed-index proof or physical print/phone scanning. The task stays open for actual page/login/browser acceptance on the assembled candidate. Component fixtures, emulator server integration, production live QA and physical scanning remain distinct categories.
