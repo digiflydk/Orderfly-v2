@@ -1,6 +1,8 @@
 import 'server-only';
 import { z } from 'zod';
 import { FieldValue, type Firestore, type Transaction } from 'firebase-admin/firestore';
+import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
+import type { StripeSettlementPrintCapability, readStripeSettlementPrintCapability } from '@/lib/server/settle-checkout';
 import { kitchenPrintIntentEligibility, printJobId, type KitchenOrder } from './domain';
 import { storedPrinterSchema } from './storage';
 import { storedPrintQueueSchema as queueSchema, storedQueuedPrintJobSchema as jobSchema, PRINT_QUEUE_LIMIT } from './queue-storage';
@@ -23,6 +25,28 @@ const batchSchema = z.object({
   reservedWriteCount: z.number().int().nonnegative().max(PRINT_TRANSACTION_WRITE_LIMIT),
 }).strict();
 type Command = z.infer<typeof commandSchema>;
+const manifestTargetSchema = z.object({ printerId: id, printerRevision: z.number().int().positive().safe(),
+  configurationHash: z.string().regex(/^[a-f0-9]{64}$/), kinds: z.array(z.enum(['kitchen', 'packing'])).min(1).max(2),
+  lineIds: z.array(id).min(1).max(50) }).strict();
+const manifestIdentitySchema = z.object({ schemaVersion: z.literal(1), id: z.literal('original'),
+  orderId: id, brandId: id, locationId: id, originalRevision: z.literal(0),
+  policyRevision: z.number().int().positive().safe(), routingRevision: z.number().int().positive().safe(),
+  rulesHash: z.string().regex(/^[a-f0-9]{64}$/), catalogHash: z.string().regex(/^[a-f0-9]{64}$/),
+  targets: z.array(manifestTargetSchema).min(1).max(16) }).strict();
+const storedManifestSchema = manifestIdentitySchema.extend({ createdAt: z.number().int().positive().safe() });
+function boundedManifest(value: unknown): boolean {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const row = value as Record<string, unknown>;
+  if (Reflect.ownKeys(row).length > 13 || !Array.isArray(row.targets) || row.targets.length > 16) return false;
+  for (const field of ['orderId', 'brandId', 'locationId', 'rulesHash', 'catalogHash']) if (typeof row[field] !== 'string' || (row[field] as string).length > 128) return false;
+  return row.targets.every(target => target && typeof target === 'object' && !Array.isArray(target)
+    && Reflect.ownKeys(target).length <= 5 && typeof target.printerId === 'string' && target.printerId.length <= 128
+    && typeof target.configurationHash === 'string' && target.configurationHash.length <= 64
+    && Array.isArray(target.kinds) && target.kinds.length <= 2 && target.kinds.every((kind: unknown) => typeof kind === 'string' && kind.length <= 7)
+    && Array.isArray(target.lineIds) && target.lineIds.length <= 50 && target.lineIds.every((id: unknown) => typeof id === 'string' && id.length <= 128));
+}
+
+
 
 export class PrintOutboxError extends Error {
   constructor(readonly code: 'invalid_intent' | 'ineligible_intent' | 'queue_unverified' | 'job_conflict' | 'write_budget_exceeded') {
@@ -37,6 +61,55 @@ export class PrintOutboxError extends Error {
  * orders only; Pending->accepted/paid needs a separately reviewed trusted adapter.
  */
 export async function prepareOriginalPrintIntents(db: Firestore, tx: Transaction, input: unknown) {
+  return prepareBatch(db, tx, input);
+}
+
+type SettlementAuthority = { context: NativeTransactionContext; capability: StripeSettlementPrintCapability;
+  read: typeof readStripeSettlementPrintCapability };
+/** Closed Stripe path: the fixed financial writer alone can mint this capability.
+ * Lazy fixed import preserves module identity without an eager circular dependency.
+ */
+export async function prepareStripeSettlementPrintIntents(context: NativeTransactionContext, capability: StripeSettlementPrintCapability, input: unknown) {
+  const read = (await import('@/lib/server/settle-checkout')).readStripeSettlementPrintCapability;
+  const authority = read(context, capability);
+  const raw = input as { intents?: unknown; identity?: { targets?: unknown } } | null;
+  const targets = raw?.identity?.targets;
+  if (!raw || !Array.isArray(raw.intents) || raw.intents.length > PRINT_INTENT_BATCH_LIMIT
+    || !Array.isArray(targets) || targets.length > 16 || !boundedManifest(raw.identity)
+    || targets.some(target => !target || !Array.isArray(target.kinds) || target.kinds.length > 2
+      || !Array.isArray(target.lineIds) || target.lineIds.length > 50)) throw new PrintOutboxError('invalid_intent');
+  const parsed = z.object({ intents: z.array(commandSchema).min(1).max(PRINT_INTENT_BATCH_LIMIT), identity: manifestIdentitySchema }).strict().safeParse(input);
+  if (!parsed.success || parsed.data.intents.some(intent => intent.orderId !== authority.order.id
+    || intent.brandId !== authority.order.brandId || intent.locationId !== authority.order.locationId)) throw new PrintOutboxError('ineligible_intent');
+  const identity = parsed.data.identity;
+  if (identity.orderId !== authority.order.id || identity.brandId !== authority.order.brandId || identity.locationId !== authority.order.locationId
+    || new Set(identity.targets.map(target => target.printerId)).size !== identity.targets.length
+    || identity.targets.some(target => new Set(target.kinds).size !== target.kinds.length || new Set(target.lineIds).size !== target.lineIds.length)) throw new PrintOutboxError('invalid_intent');
+  const expected = identity.targets.flatMap(target => target.kinds.map(kind => JSON.stringify([target.printerId, kind]))).sort();
+  const actual = [...new Set(parsed.data.intents.map(intent => JSON.stringify([intent.printerId, intent.kind])))].sort();
+  if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new PrintOutboxError('invalid_intent');
+  const manifestRef = context.db.collection('orders').doc(identity.orderId).collection('printIntents').doc('original');
+  const manifest = await context.transaction.get(manifestRef);
+  const now = Date.now();
+  if (!Number.isSafeInteger(now) || now <= 0) throw new PrintOutboxError('queue_unverified');
+  if (authority.replay) {
+    if (!boundedManifest(manifest.data())) throw new PrintOutboxError('job_conflict');
+    const saved = storedManifestSchema.safeParse(manifest.data());
+    if (!manifest.exists || manifest.id !== 'original' || !saved.success || saved.data.createdAt > now) throw new PrintOutboxError('job_conflict');
+    const { createdAt: _createdAt, ...prior } = saved.data;
+    if (JSON.stringify(prior) !== JSON.stringify(identity)) throw new PrintOutboxError('job_conflict');
+  } else if (manifest.exists) throw new PrintOutboxError('job_conflict');
+  // The private financial capability reserves its own writes plus exactly one
+  // manifest create for a fresh transition. Replay can never create a manifest.
+  const plan = await prepareBatch(context.db, context.transaction, { intents: parsed.data.intents, reservedWriteCount: authority.writeCount }, { context, capability, read });
+  return { ...plan, writeCount: plan.writeCount + (authority.replay ? 0 : 1), apply() {
+    read(context, capability, true);
+    if (!authority.replay) context.transaction.create(manifestRef, { ...identity, createdAt: now });
+    plan.apply();
+  } };
+}
+
+async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, settlement?: SettlementAuthority) {
   const parsed = batchSchema.safeParse(input);
   if (!parsed.success) throw new PrintOutboxError('invalid_intent');
   const groups = new Map<string, Command[]>();
@@ -69,8 +142,11 @@ export async function prepareOriginalPrintIntents(db: Firestore, tx: Transaction
     }
     for (const order of orders) {
       const saved = orderSchema.safeParse(order.data());
+      const authority = settlement ? settlement.read(settlement.context, settlement.capability) : null;
+      const candidate = authority?.order;
       if (!saved.success || saved.data.brandId !== command.brandId || saved.data.locationId !== command.locationId
-        || !kitchenPrintIntentEligibility({ ...saved.data, id: order.id } as KitchenOrder, config.data.configuration).eligible) {
+        || candidate && (candidate.id !== order.id || candidate.brandId !== saved.data.brandId || candidate.locationId !== saved.data.locationId)
+        || !kitchenPrintIntentEligibility(candidate || { ...saved.data, id: order.id } as KitchenOrder, config.data.configuration).eligible) {
         throw new PrintOutboxError('ineligible_intent');
       }
     }
@@ -99,6 +175,7 @@ export async function prepareOriginalPrintIntents(db: Firestore, tx: Transaction
     const prepared = commands.map(c => {
       const identity = { ...c, revision: 0 as const }, jobId = printJobId(identity);
       const prior = existing.get(jobId);
+      if (settlement && settlement.read(settlement.context, settlement.capability).replay && !prior) throw new PrintOutboxError('job_conflict');
       if (prior && (!current.success || prior.orderId !== c.orderId || prior.kind !== c.kind)) {
         throw new PrintOutboxError('job_conflict');
       }
@@ -123,6 +200,7 @@ export async function prepareOriginalPrintIntents(db: Firestore, tx: Transaction
     jobs: [...unique.keys()].map(jobId => results.get(jobId)!), createdCount, writeCount,
     apply() {
       if (applied) throw new PrintOutboxError('job_conflict');
+      if (settlement) settlement.read(settlement.context, settlement.capability, true);
       if (!writeCount) return;
       applied = true;
       for (const plan of plans) {

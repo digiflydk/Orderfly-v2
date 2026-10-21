@@ -1,5 +1,6 @@
 import 'server-only';
 import type Stripe from 'stripe';
+import type { Transaction } from 'firebase-admin/firestore';
 import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
 import { prepareAdminCapacitySettlement } from '@/lib/server/discount-capacity';
 import { trackServerEvent } from '@/lib/analytics-server';
@@ -11,6 +12,32 @@ import { scratchCardDraftSchema } from '@/lib/games/scratch-card';
 import { orderflySession } from '@/lib/access/orderfly-session';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import type { RestaurantPaymentForm } from '@/lib/merchant-payment-methods';
+import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
+import type { KitchenOrder } from '@/lib/printing/domain';
+import { verifyStripePrintPayment, prepareStripePrintTransition, stripePrintTransitionProjection,
+  type StripePrintPaymentProof, type StripePrintTransition } from '@/lib/printing/stripe-transition-proof';
+import { preparePrintIntentTargetPolicy } from '@/lib/printing/intent-target-policy';
+import { projectNativePrintCatalog } from '@/lib/printing/catalog-line-projection';
+import { prepareSavedPrinterRouting } from '@/lib/printing/saved-routing';
+import { previewPrinterRouting } from '@/lib/printing/routing-preview';
+import { prepareStripeSettlementPrintIntents } from '@/lib/printing/outbox';
+
+/** Minted only by the private ACTUAL financial plan, never by an origin/DTO caller. */
+export type StripeSettlementPrintCapability = Readonly<{ readonly stripeSettlementPrintCapability: unique symbol }>;
+const stripeSettlementPlans = new WeakMap<object, { context: NativeTransactionContext;
+  transition: StripePrintTransition; order: Readonly<KitchenOrder>; writeCount: number; financialApplied: boolean }>();
+/** Fixed read/assert boundary for the outbox. No mint or mutation callback is exported.
+ * Applied means financial mutations queued in THIS transaction, not committed yet.
+ */
+export function readStripeSettlementPrintCapability(context: NativeTransactionContext, capability: StripeSettlementPrintCapability, requireApplied = false) {
+  const entry = capability && typeof capability === 'object' ? stripeSettlementPlans.get(capability) : undefined;
+  if (!entry || entry.context !== context || context.db !== getAdminDb() || (requireApplied && !entry.financialApplied)) throw new Error('Unverified settlement print capability');
+  const proof = stripePrintTransitionProjection(context, entry.transition); // Irreversible lifetime check.
+  if (proof.order.id !== entry.order.id || proof.order.brandId !== entry.order.brandId || proof.order.locationId !== entry.order.locationId) throw new Error('Settlement print scope mismatch');
+  return Object.freeze({ order: entry.order, writeCount: entry.writeCount + (proof.replay ? 0 : 1),
+    replay: proof.replay, financialApplied: entry.financialApplied });
+}
+
 
 // Only call with a signed webhook or a session retrieved server-to-server from Stripe.
 export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session) {
@@ -41,7 +68,45 @@ async function settleOrder(proof: PaymentProof) {
   const piId = session ? typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id : undefined;
   let analytics: OrderDetail['analytics'];
   const issuedAt = new Date().toISOString();
-  const fulfilled = await db.runTransaction(async transaction => {
+  // Disabled installations retain the old settlement path without print reads or
+  // an extra provider request. Native policy is authoritative whenever enabled.
+  const printIntentsEnabled = !!session && process.env.ORDERFLY_PRINT_INTENTS_ENABLED === 'true';
+  let stripePrintProof: StripePrintPaymentProof | undefined;
+  if (printIntentsEnabled) {
+    const preflight = await db.runTransaction(transaction => preparePrintIntentTargetPolicy({ db, transaction }, { brandId: metadata.brandId, locationId: metadata.locationId }), { readOnly: true });
+    if (preflight.enabled) stripePrintProof = await verifyStripePrintPayment(session!.id);
+  }
+  // Private plan owns the actual settlement writes. Nothing supplied by a caller
+  // can replace the mutation, projected state or apply callback. Rebuilt on retry.
+  const prepareSettlement = async (context: NativeTransactionContext, transition?: StripePrintTransition) => {
+    const transaction: Transaction = context.transaction;
+    const writes: Array<() => void> = [];
+    let writeCount = 0;
+    const addWrite = (apply: () => void, count = 1) => {
+      if (!Number.isSafeInteger(count) || count < 1 || count > 500) throw new Error('Settlement write budget exceeded');
+      writes.push(apply); writeCount += count;
+    };
+    const finish = (fulfilled: boolean) => {
+      if (!Number.isSafeInteger(writeCount) || writeCount < 0 || writeCount > 500) throw new Error('Settlement write budget exceeded');
+      let capability: StripeSettlementPrintCapability | undefined;
+      if (transition) {
+        const projection = stripePrintTransitionProjection(context, transition);
+        const expectedStatus = order.status === 'Pending' ? 'Received' : order.status;
+        if (proof.kind !== 'stripe' || projection.order.id !== orderSnap.id || projection.order.brandId !== order.brandId
+          || projection.order.locationId !== order.locationId || projection.order.status !== expectedStatus
+          || projection.order.paymentMethod !== order.paymentMethod || projection.order.deliveryType !== order.deliveryType
+          || projection.replay !== !fulfilled || (fulfilled ? order.paymentStatus !== 'Pending' : order.paymentStatus !== 'Paid')) throw new Error('Settlement print transition mismatch');
+        capability = Object.freeze({}) as StripeSettlementPrintCapability;
+        stripeSettlementPlans.set(capability, { context, transition, order: projection.order, writeCount, financialApplied: false });
+      }
+      let applied = false;
+      return Object.freeze({ fulfilled, writeCount, capability, apply: () => {
+        if (applied) throw new Error('Settlement plan already applied');
+        applied = true;
+        for (const write of writes) write();
+        if (capability) stripeSettlementPlans.get(capability)!.financialApplied = true;
+      } });
+    };
     const orderSnap = await transaction.get(orderRef);
     if (!orderSnap.exists) throw new Error('Order not found');
     const order = orderSnap.data()!;
@@ -71,19 +136,19 @@ async function settleOrder(proof: PaymentProof) {
       if (job.orderId !== metadata.orderId || job.brandId !== order.brandId || job.locationId !== order.locationId || job.customerId !== order.customerDetails.id || job.kind !== 'paidOrder') throw new Error('Marketing order scope mismatch');
     }
     const ensureConfirmation = () => {
-      if (!confirmation.exists && order.status !== 'Canceled') transaction.set(confirmationRef, {
+      if (!confirmation.exists && order.status !== 'Canceled') addWrite(() => transaction.set(confirmationRef, {
         orderId: metadata.orderId, brandId: order.brandId, locationId: order.locationId,
         kind: 'orderConfirmation', state: 'pending', eventId: randomUUID(), nextAttemptAt: Date.now(), attempts: 0, createdAt: Date.now(), updatedAt: Date.now(),
-      });
+      }));
     };
     const ensureMarketingOrder = (eventTime: string) => {
       if (!marketingEnabled) return;
       const customer = customerSnap.data();
       const customerEmail = typeof customer?.email === 'string' ? customer.email.trim().toLowerCase() : '';
-      if (!marketingOrder?.exists && order.status !== 'Canceled' && customerSnap.exists && customer?.brandId === order.brandId && customer?.marketingConsent === true && customerEmail && customerEmail === String(order.customerContact || '').trim().toLowerCase()) transaction.set(marketingOrderRef, {
+      if (!marketingOrder?.exists && order.status !== 'Canceled' && customerSnap.exists && customer?.brandId === order.brandId && customer?.marketingConsent === true && customerEmail && customerEmail === String(order.customerContact || '').trim().toLowerCase()) addWrite(() => transaction.set(marketingOrderRef, {
         orderId: metadata.orderId, brandId: order.brandId, locationId: order.locationId, customerId: order.customerDetails.id,
         kind: 'paidOrder', state: 'pending', eventId: randomUUID(), eventTime, nextAttemptAt: Date.now(), attempts: 0, createdAt: Date.now(), updatedAt: Date.now(),
-      });
+      }));
     };
     // A legacy path could mark Paid without the outbox job. Repair only this
     // verified session's missing job, without replaying financial accounting.
@@ -91,7 +156,7 @@ async function settleOrder(proof: PaymentProof) {
       if (session && order.psp?.checkoutSessionId !== session.id) throw new Error('Payment scope mismatch');
       ensureConfirmation();
       if (order.invoice) ensureMarketingOrder(order.invoice.issuedAt);
-      return false;
+      return finish(false);
     }
     const year = Number(issuedAt.slice(0, 4));
     const counterRef = db.collection('invoiceCounters').doc(invoiceCounterId(order.brandId, year));
@@ -127,48 +192,91 @@ async function settleOrder(proof: PaymentProof) {
       return {ref,snapshot:await transaction.get(ref)};
     }));
     const settleCapacity = await prepareAdminCapacitySettlement(db, transaction, order, true);
-    settleCapacity();
+    // Capacity is a multi-write internal component. Missing metadata must not
+    // fall through addWrite's default for ordinary single writes.
+    if (!Number.isSafeInteger(settleCapacity.writeCount) || settleCapacity.writeCount < 1) throw new Error('Settlement write budget exceeded');
+    addWrite(settleCapacity, settleCapacity.writeCount);
     // Counters and Paid transition commit atomically. A repeated webhook takes
     // the Paid branch above and cannot count these offers again.
     for (const {ref,snapshot} of upsellRecords) {
       const offer = snapshot.data();
       if (snapshot.exists && offer && offer.brandId === order.brandId && Array.isArray(offer.locationIds) && offer.locationIds.includes(order.locationId)) {
-        transaction.update(ref,{conversions:Math.max(0,Number(offer.conversions)||0)+1});
+        addWrite(() => transaction.update(ref,{conversions:Math.max(0,Number(offer.conversions)||0)+1}));
       }
     }
     const customer = customerSnap.data() || {};
     const usage = { ...(customer.discountUsage || {}) };
     if (discountRef && discountSnap?.exists) {
       usage[discountId] = (usage[discountId] || 0) + 1;
-      transaction.update(discountRef, { usedCount: (discountSnap.data()?.usedCount || 0) + 1 });
+      addWrite(() => transaction.update(discountRef, { usedCount: (discountSnap.data()?.usedCount || 0) + 1 }));
     }
     if(gameVoucher?.exists||sharedPrize){
       const voucher=gameVoucher?.data();
-      transaction.create(db.collection('gameConversions').doc(createHash('sha256').update(JSON.stringify(['orderfly',order.brandId,metadata.orderId])).digest('hex')),{brandId:order.brandId,campaignId:voucher?.campaignId||sharedCampaign?.id||order.brandId,channel:'orderfly',orderId:metadata.orderId,playId:voucher?.playId||null,prizeName:voucher?.prizeName||sharedPrize?.name,codeMode:voucher?.codeMode||'shared',amount:Number(order.totalAmount),discountAmount:Number(order.paymentDetails?.discountTotal||0),currency:'DKK',status:'paid',createdAt:serverTimestamp()});
-      if(gameVoucherRef&&voucher?.state==='issued')transaction.update(gameVoucherRef,{state:'redeemed',redeemedAt:serverTimestamp(),redeemedOrderId:metadata.orderId});
+      addWrite(() => transaction.create(db.collection('gameConversions').doc(createHash('sha256').update(JSON.stringify(['orderfly',order.brandId,metadata.orderId])).digest('hex')),{brandId:order.brandId,campaignId:voucher?.campaignId||sharedCampaign?.id||order.brandId,channel:'orderfly',orderId:metadata.orderId,playId:voucher?.playId||null,prizeName:voucher?.prizeName||sharedPrize?.name,codeMode:voucher?.codeMode||'shared',amount:Number(order.totalAmount),discountAmount:Number(order.paymentDetails?.discountTotal||0),currency:'DKK',status:'paid',createdAt:serverTimestamp()}));
+      if(gameVoucherRef&&voucher?.state==='issued')addWrite(() => transaction.update(gameVoucherRef,{state:'redeemed',redeemedAt:serverTimestamp(),redeemedOrderId:metadata.orderId}));
     }
-    if (customerSnap.exists) transaction.update(customerRef, {
+    if (customerSnap.exists) addWrite(() => transaction.update(customerRef, {
       totalOrders: (customer.totalOrders || 0) + 1,
       totalSpend: (customer.totalSpend || 0) + order.totalAmount,
       lastOrderDate: serverTimestamp(),
       discountUsage: usage,
-    });
-    transaction.update(orderRef, {
+    }));
+    addWrite(() => transaction.update(orderRef, {
       discountReservation: discountId ? 'consumed' : 'none',
       fulfillmentWarnings: [!customerSnap.exists ? 'customer_deleted' : '', discountId && !discountSnap?.exists ? 'discount_deleted' : ''].filter(Boolean),
       ...(session ? { 'psp.checkoutSessionId': session.id, 'psp.paymentIntentId': piId || null } : { paymentCollection }),
       paymentStatus: 'Paid', status: order.status === 'Pending' ? 'Received' : order.status, paidAt: serverTimestamp(),
       updatedAt: serverTimestamp(),
       invoice,
-    });
-    if (proof.kind === 'pickup') transaction.create(db.collection('auditLogs').doc(createHash('sha256').update(JSON.stringify(['pickup-payment', order.brandId, metadata.orderId])).digest('hex')), {
+    }));
+    if (proof.kind === 'pickup') addWrite(() => transaction.create(db.collection('auditLogs').doc(createHash('sha256').update(JSON.stringify(['pickup-payment', order.brandId, metadata.orderId])).digest('hex')), {
       action: 'pickup_payment_received', brandId: order.brandId, locationId: order.locationId, orderId: metadata.orderId,
       actorId: proof.actor.actorId, actorName: proof.actor.name, method: proof.method, totalAmount: order.totalAmount, createdAt: serverTimestamp(),
-    });
-    transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true });
+    }));
+    addWrite(() => transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true }));
     ensureConfirmation();
     ensureMarketingOrder(invoice.issuedAt);
-    return true;
+    return finish(true);
+  };
+  const fulfilled = await db.runTransaction(async transaction => {
+    const context: NativeTransactionContext = Object.freeze({ db, transaction });
+    const policy = printIntentsEnabled ? await preparePrintIntentTargetPolicy(context, { brandId: metadata.brandId, locationId: metadata.locationId }) : null;
+    if (policy?.enabled && !stripePrintProof) throw new Error('Print policy changed; verified payment origin required');
+    const transition = policy?.enabled ? await prepareStripePrintTransition(context, stripePrintProof!) : undefined;
+    const prepared = await prepareSettlement(context, transition);
+    let printPlan: Awaited<ReturnType<typeof prepareStripeSettlementPrintIntents>> | undefined;
+    if (policy?.enabled) {
+      if (!prepared.capability) throw new Error('Missing private settlement print capability');
+      const [catalog, saved] = await Promise.all([
+        projectNativePrintCatalog(context, { orderId: metadata.orderId, brandId: metadata.brandId, locationId: metadata.locationId }),
+        prepareSavedPrinterRouting(context, { brandId: metadata.brandId, locationId: metadata.locationId }),
+      ]);
+      if (saved.revision === null || !saved.rules.length) throw new Error('Saved printer routing required');
+      const routing = previewPrinterRouting({ scope: catalog.scope, deliveryType: catalog.deliveryType, lines: catalog.lines,
+        rules: saved.rules, printers: saved.printers.map(row => ({ configuration: row.configuration, deleted: false })) });
+      if (routing.unrouted.length || !routing.targets.length) throw new Error('Order has unrouted print lines');
+      const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+      const manifestTargets: Array<{ printerId: string; printerRevision: number; configurationHash: string; kinds: Array<'kitchen' | 'packing'>; lineIds: string[] }> = [];
+      const intents = routing.targets.flatMap(target => {
+        const selected = policy.targets.find(row => row.configuration.id === target.printerId);
+        const current = saved.printers.find(row => row.configuration.id === target.printerId);
+        if (!selected || !current || selected.printerRevision !== current.revision) throw new Error('Routing target is not enabled by current print policy');
+        manifestTargets.push({ printerId: target.printerId, printerRevision: selected.printerRevision,
+          configurationHash: fingerprint(selected.configuration), kinds: [...selected.kinds].sort(), lineIds: target.lines.map(line => line.lineId) });
+        return selected.kinds.map(kind => ({ brandId: metadata.brandId, locationId: metadata.locationId,
+          orderId: metadata.orderId, printerId: target.printerId, kind }));
+      });
+      printPlan = await prepareStripeSettlementPrintIntents(context, prepared.capability, { intents, identity: {
+        schemaVersion: 1, id: 'original', orderId: metadata.orderId, brandId: metadata.brandId, locationId: metadata.locationId,
+        originalRevision: 0, policyRevision: policy.policyRevision, routingRevision: saved.revision,
+        rulesHash: fingerprint(saved.rules), catalogHash: fingerprint(catalog), targets: manifestTargets,
+      } });
+    }
+    // Every native read is complete before either plan writes. The outbox's
+    // intrinsic capability check requires this exact financial plan to apply.
+    prepared.apply();
+    printPlan?.apply();
+    return prepared.fulfilled;
   });
   if (fulfilled && session) {
     // Analytics are optional after an authoritative, idempotent settlement.

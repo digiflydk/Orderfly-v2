@@ -101,6 +101,9 @@ jobs:
       - name: Native print catalog projection regression
         run: node --test tests/unit/printing-catalog-projection.cjs
 
+      - name: Saved printer routing API regression
+        run: node --test tests/unit/printing-saved-routing.cjs
+
       - name: Scoped print-intent target policy regression
         run: node --test tests/unit/printing-intent-target-policy.cjs
 
@@ -109,6 +112,12 @@ jobs:
 
       - name: Native and compatibility transaction bridge regression
         run: node --test tests/unit/firestore-compat-transaction.cjs
+
+      - name: Atomic Stripe routed print-intent integration
+        run: node --test tests/unit/printing-stripe-settlement-integration.cjs
+
+      - name: Private settlement preparation regression
+        run: node --test tests/unit/settlement-preparation.cjs
 
       - name: Checkout, customer and order mail regression
         run: node --test tests/unit/checkout-reliability.cjs tests/unit/checkout-recovery-regressions.cjs tests/unit/checkout-attempt.cjs tests/unit/checkout-route.cjs tests/unit/checkout-price-validation.cjs tests/unit/checkout-session-persistence.cjs tests/unit/consent-delivery.cjs tests/unit/promotion-review.cjs tests/unit/cart-restore.cjs tests/unit/commerce-p1.cjs tests/unit/commerce-p2.cjs tests/unit/merchant-payment-methods.cjs tests/unit/payment-confirmation-job.cjs tests/unit/omnisend-paid-order.cjs tests/unit/storefront-performance.cjs
