@@ -58,7 +58,10 @@ function snapshot(input: unknown, content: boolean): unknown {
     }
     return result;
   }
-  return copy(input, 0);
+  // Reflection itself may execute a Proxy trap (including on nested values).
+  // Never propagate its arbitrary error text, type, stack or revoked-proxy error.
+  try { return copy(input, 0); }
+  catch { return fail(content ? 'invalid_content' : 'invalid_binding'); }
 }
 function binding(input: unknown): z.output<typeof bindingSchema> {
   const parsed = bindingSchema.safeParse(snapshot(input, false));

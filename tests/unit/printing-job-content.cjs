@@ -110,3 +110,27 @@ test('accessors, prototype pollution, arrays, symbols, deep data and errors neve
     {...content,raster:{...content.raster,nested:{too:{deep:'PRIVATE'}}}}]) rejected(()=>read(value,target()));
   assert.throws(()=>read({...content,secret:'PRIVATE'},target()),error=>!error.message.includes('PRIVATE'));
 });
+
+test('throwing reflection traps and revoked proxies produce only fixed binding/content errors',()=>{
+  const content=create(target());
+  for(const trap of ['ownKeys','getPrototypeOf','getOwnPropertyDescriptor']) {
+    const hostile=value=>new Proxy(value,{[trap](){throw new Error('PRIVATE attacker controlled trap');}});
+    for(const fn of [()=>create(hostile(target())),()=>read(content,hostile(target()))]) {
+      assert.throws(fn,error=>error instanceof PrintJobContentError && error.code==='invalid_binding'
+        && error.message==='invalid_binding');
+    }
+    for(const fn of [()=>read(hostile(clone(content)),target()),
+      ()=>read({...content,binding:hostile(target())},target()),
+      ()=>read({...content,raster:hostile(clone(content.raster))},target())]) {
+      assert.throws(fn,error=>error instanceof PrintJobContentError && error.code==='invalid_content'
+        && error.message==='invalid_content');
+    }
+  }
+  const revoked=Proxy.revocable({},{});revoked.revoke();
+  rejected(()=>create(revoked.proxy),'invalid_binding');
+  rejected(()=>read(content,revoked.proxy),'invalid_binding');
+  rejected(()=>read(revoked.proxy,target()));
+  // Proxies that do not throw remain plain data and preserve the normal success path.
+  assert.deepEqual(read(new Proxy(clone(content),{}),new Proxy(target(),{})).payload,
+    read(content,target()).payload);
+});

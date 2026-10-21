@@ -17,7 +17,9 @@ PNG; mC-Print2 is restricted to 58 mm. Physical fit remains explicitly unverifie
 `readSyntheticTestBonContent(envelope, expectedBinding)` snapshots bounded own data
 properties before validation and rejects getters, exotic objects, extra/private
 fields, invalid versions, scope/revision/profile mismatches, invalid lengths,
-noncanonical base64 and corrupt digests. It also regenerates this version's fixed
+noncanonical base64 and corrupt digests. Throwing reflection traps and revoked
+proxies, including nested values, are translated to fixed binding/content errors
+without propagating arbitrary exception text. It also regenerates this version's fixed
 synthetic PNG and verifies exact content/raster equality: an attacker recomputing
 a digest over arbitrary substituted PNG content does not pass. Every successful
 read returns its own Buffer, so modifying one result cannot change later reads.
@@ -39,7 +41,7 @@ real Sharp. The existing CI workflow adds one root-authorized three-line dedicat
 test step immediately after Kitchen PNG payload regression; all other workflow
 content and permissions remain unchanged. Tests cover both widths/models, Danish text, immutability/copying,
 serialization/readback, every binding/version/profile field, hostile/oversized
-input and content substitution even with a recomputed digest. No browser flow
+input, throwing/reflected/revoked proxies and content substitution even with a recomputed digest. No browser flow
 changes; CI/review/deployment and applicable release QA remain separate gates.
 
 Before a controlled single-printer pilot, private device credential provisioning,
