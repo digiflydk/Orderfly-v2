@@ -83,6 +83,9 @@ jobs:
       - name: CloudPRNT protocol and simulator regression
         run: node --test tests/unit/printing-cloudprnt.cjs
 
+      - name: Kitchen receipt preview regression
+        run: node --test tests/unit/printing-receipts.cjs
+
       - name: Combined print-intent batch regression
         run: node --test tests/unit/printing-outbox-batch.cjs
 
