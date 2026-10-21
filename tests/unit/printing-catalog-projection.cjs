@@ -3,7 +3,7 @@ const assert=require('node:assert/strict');
 const {loadTs}=require('../helpers/load-ts.cjs');
 const scope={orderId:'o1',brandId:'b1',locationId:'l1'};
 const item=(patch={})=>({id:'p1',itemType:'product',name:'Pizza ÆØÅ',quantity:2,toppings:['Uden ost'],toppingIds:['t1'],unitPrice:99,totalPrice:198,...patch});
-function fixture(){
+function fixture(mocks={}){
  const rows=new Map([
   ['orders/o1',{id:'o1',brandId:'b1',locationId:'l1',deliveryType:'Pickup',productItems:[item()],customerName:'PRIVATE',customerDetails:{address:'SECRET'},psp:{checkoutSessionId:'SECRET'}}],
   ['brands/b1',{name:'Brand'}],['locations/l1',{brandId:'b1'}],
@@ -13,7 +13,7 @@ function fixture(){
  const reads=[],writes=[];
  const db={collection:name=>({doc:id=>({id,path:name+'/'+id})})};
  const transaction={get:async ref=>{reads.push(ref.path);const value=rows.get(ref.path);return {id:ref.id,exists:value!==undefined,data:()=>value};},set:()=>writes.push('set'),create:()=>writes.push('create'),update:()=>writes.push('update'),delete:()=>writes.push('delete')};
- const api=loadTs('src/lib/printing/catalog-line-projection.ts',{'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db}});
+ const api=loadTs('src/lib/printing/catalog-line-projection.ts',{'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>db},...mocks});
  return {...api,rows,reads,writes,context:{db,transaction},order:()=>rows.get('orders/o1')};
 }
 const rejected=async(f,code)=>assert.rejects(f.projectNativePrintCatalog(f.context,scope),e=>e instanceof f.PrintCatalogProjectionError&&(!code||e.code===code)&&e.message===e.code);
@@ -116,4 +116,23 @@ test('projected snapshot feeds the actual routing preview using native category 
   printers:[{configuration:{id:'pr1',brandId:'b1',locationId:'l1',name:'Kitchen',manufacturer:'star',model:'mc-print3',transport:'cloudprnt-http',state:'paused',paperWidthMm:80},deleted:false}],
   rules:[{id:'rule1',brandId:'b1',locationId:'l1',printerId:'pr1',match:{type:'category',id:'c1'},effect:'include'}]});
  assert.equal(preview.targets.length,1);assert.equal(preview.targets[0].lines[0].categoryId,'c1');assert.equal(preview.targets[0].dispatchAuthorized,false);
+});
+
+test('canonical native synthetic-product guard rejects active legacy QA names and DO NOT PREPARE descriptions',async()=>{
+ for(const patch of [
+  {productName:'QA-62-20260908090721822 Product TEST'},
+  {productName:'QA-62-20260908090721822 Product TEST',isTestData:false},
+  {productName:'Pizza',description:'QA-62 synthetic test. DO NOT PREPARE. Temporary verification data.'},
+  {productName:'Pizza',description:'do not prepare'},
+ ]){const f=fixture();Object.assign(f.rows.get('products/p1'),patch);await rejected(f,'invalid_catalog');assert.deepEqual(f.writes,[]);}
+ for(const description of [undefined,'Freshly prepared pizza']){
+  const f=fixture();Object.assign(f.rows.get('products/p1'),{productName:'Pizza ÆØÅ',description});
+  const r=await f.projectNativePrintCatalog(f.context,scope);assert.equal(r.lines[0].name,'Pizza ÆØÅ');
+ }
+});
+test('native synthetic-check strings are bounded before canonical regex work',async()=>{
+ for(const patch of [{productName:'x'.repeat(1000000)},{description:'x'.repeat(1000000)},{productName:42},{description:{}},{productName:undefined}]){
+  const f=fixture({'@/lib/synthetic-product':{isSyntheticProduct(){assert.fail('malformed or oversized strings must fail before guard regexes');}}});
+  Object.assign(f.rows.get('products/p1'),patch);await rejected(f,'invalid_catalog');assert.deepEqual(f.writes,[]);
+ }
 });

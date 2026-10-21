@@ -28,6 +28,11 @@ transaction, then referenced products and categories. Every document must exist
 with its exact requested snapshot identity. An optional stored `id` must agree.
 Known `deleted`/`isDeleted`/`isTestData` markers must be absent or false and
 `deletedAt` absent or null. Products and categories must be explicitly active.
+The canonical `isSyntheticProduct` storefront/checkout guard also rejects active
+legacy QA titles and `DO NOT PREPARE` descriptions even when `isTestData` is
+absent or false. Both selected native strings are type/length checked before the
+guard regexes run (name at most 160, optional description at most 4,096 code
+units); neither native description nor current name is returned.
 Native brand/location `isActive`, if present, must be true. A product must belong
 to the selected brand; its native category must exist and include the selected
 location. Product `locationIds: []` retains the existing company-wide product
@@ -101,7 +106,8 @@ node --test tests/unit/printing-catalog-projection.cjs tests/unit/printing-routi
 The dedicated tests execute the actual module with only Admin database I/O
 isolated. They cover valid scoped projection, historical Danish display text,
 location-owned categories, distinct duplicate-product rows, global products,
-missing/deleted/foreign/inactive/malformed native rows, combo rejection,
+missing/deleted/foreign/inactive/malformed native rows, legacy synthetic-product
+exclusion using the canonical guard with bounded strings, combo rejection,
 bounded collections/strings/aggregate work, injection controls, private-field
 omission, immutable results, retry revalidation, no writes and consumption by
 the actual routing preview. One dedicated CI step is added without changing

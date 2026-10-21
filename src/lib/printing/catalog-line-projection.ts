@@ -1,10 +1,11 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
+import { isSyntheticProduct } from '@/lib/synthetic-product';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
 import type { PrinterRoutingLine } from './routing-preview';
 
 /** Native reads only. This snapshot is not actor, payment, write or commit authority. */
-export const PRINT_CATALOG_PROJECTION_LIMITS = Object.freeze({ lines: 50, modifiers: 8, locations: 100, outputCodeUnits: 32768 });
+export const PRINT_CATALOG_PROJECTION_LIMITS = Object.freeze({ lines: 50, modifiers: 8, locations: 100, nativeNameCodeUnits: 160, nativeDescriptionCodeUnits: 4096, outputCodeUnits: 32768 });
 export class PrintCatalogProjectionError extends Error {
   constructor(readonly code: 'invalid_reference' | 'invalid_catalog' | 'invalid_order' | 'combo_requires_projection' | 'projection_too_large') { super(code); }
 }
@@ -111,6 +112,14 @@ export async function projectNativePrintCatalog(context: NativeTransactionContex
   for (const id of new Set(prepared.map(line => line.productId))) {
     const product = await read('products', id);
     if (field(product, 'brandId') !== brandId || field(product, 'isActive') !== true) fail('invalid_catalog');
+    // Canonical storefront/checkout exclusion also covers legacy active QA rows
+    // without isTestData. Bound both selected strings before its regexes run.
+    const productName = field(product, 'productName'), description = field(product, 'description');
+    if (typeof productName !== 'string' || !productName.length
+      || productName.length > PRINT_CATALOG_PROJECTION_LIMITS.nativeNameCodeUnits
+      || (description !== undefined && (typeof description !== 'string'
+        || description.length > PRINT_CATALOG_PROJECTION_LIMITS.nativeDescriptionCodeUnits))) fail('invalid_catalog');
+    if (isSyntheticProduct({ productName: productName as string, description: description as string | undefined })) fail('invalid_catalog');
     nativeLocations(product, locationId, true);
     products.set(id, product);
   }
