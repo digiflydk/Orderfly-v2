@@ -159,7 +159,10 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 1);
     await page.screenshot({ path: path.join(root, 'test-results', `printing-config-${name}.png`), fullPage: true });
     await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click(); await pending;
-    await expect(page.getByRole('button', { name: 'Gemmer…' })).toBeDisabled(); assert.equal(mutations.length, 1);
+    await expect(page.getByRole('button', { name: 'Gemmer…' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Annuller', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Opdater', exact: true })).toBeDisabled();
+    assert.equal(mutations.length, 1);
     release(); await expect(page.getByText('Printeropsætningen er gemt som deaktiveret.', { exact: true })).toBeVisible();
     assert.deepEqual(mutations[0], { method: 'POST', body: { configuration: { id: 'new_printer', brandId: 'a', locationId: 'la', name: 'Køkken Østerbro', manufacturer: 'star', model: 'mc-print2', transport: 'cloudprnt-http', state: 'disabled', paperWidthMm: 58 } } });
     await page.getByRole('button', { name: 'Rediger Køkken Østerbro', exact: true }).click();

@@ -91,7 +91,7 @@ export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, o
     {message && <p role="alert" className="text-sm break-words">{message}</p>}
     <div className="flex flex-wrap gap-3">
       <Button type="submit" disabled={pending || refreshRequired}>{pending ? 'Gemmer…' : 'Gem deaktiveret printer'}</Button>
-      <Button type="button" variant="outline" onClick={onCancel}>{refreshRequired ? 'Opdater oversigten' : 'Annuller'}</Button>
+      <Button type="button" variant="outline" disabled={pending} onClick={onCancel}>{refreshRequired ? 'Opdater oversigten' : 'Annuller'}</Button>
     </div>
   </form>;
 }

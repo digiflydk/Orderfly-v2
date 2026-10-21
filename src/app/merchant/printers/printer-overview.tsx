@@ -93,7 +93,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
         <option value="">Vælg lokation</option>
         {locations.filter(row => row.brandId === brandId).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
       </AdminSelectField>
-      <Button variant="outline" disabled={!location} onClick={closeAndRefresh}>
+      <Button variant="outline" disabled={!location || !!editor} onClick={closeAndRefresh}>
         <RefreshCw className="mr-2 h-4 w-4" aria-hidden="true" />Opdater
       </Button>
     </div>
@@ -124,7 +124,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
                     <dt className="text-muted-foreground">Papirbredde</dt><dd>{c.paperWidthMm} mm</dd>
                     <dt className="text-muted-foreground">Revision</dt><dd>{revision}</dd>
                   </dl>
-                  {canEdit && c.state === 'disabled' && <Button className="h-auto max-w-full whitespace-normal break-words text-left" variant="outline" onClick={() => { setSavedScope(''); setEditor({ scope, item: { configuration: c, revision } }); }}>Rediger {c.name}</Button>}
+                  {canEdit && c.state === 'disabled' && <Button className="h-auto max-w-full whitespace-normal break-words text-left" variant="outline" disabled={!!editor} onClick={() => { setSavedScope(''); setEditor({ scope, item: { configuration: c, revision } }); }}>Rediger {c.name}</Button>}
                   <p className="text-xs text-muted-foreground">Opsætningen viser ikke, om printeren er online eller har udskrevet en bon.</p>
                 </CardContent>
               </Card>)}

@@ -69,7 +69,9 @@ configuration choices. MQTT selection explicitly requires later model/firmware
 verification and does not certify device support. Credentials, network identity,
 capability evidence, lifecycle changes and actual output are absent.
 
-Duplicate submit events are guarded before the pending render. Ordinary400/503
+Duplicate submit events are guarded before the pending render. Cancel is disabled
+while saving; the overview refresh and other edit buttons cannot replace an open
+form and race an in-flight server transaction. Ordinary400/503
 responses retain input, use safe messages and permit retry;503 explains that
 writes may be switched off. A403/404/409 or uncertain outcome requires an
 overview refresh before retry, rather than replaying a stale revision. Raw
