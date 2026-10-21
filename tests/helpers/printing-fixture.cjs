@@ -60,7 +60,7 @@ function fixture({ existing, permissions, anonymous = false, identityStatus, ena
   const mocks = {
     'server-only': {}, '@/lib/firebase-admin': { getAdminDb: () => { dbCalls++; return db; } },
     '@/lib/access/authority': authority, './authority': authority,
-    '@/lib/access/orderfly-session': { verifiedOrderflyIdentity: async () => {
+    '@/lib/access/orderfly-session': { requirePlatformSuperuser: async () => ({ superuser: true }), verifiedOrderflyIdentity: async () => {
       if (identityStatus) throw new authority.AuthorityError('PRIVATE_SENTINEL', identityStatus);
       if (anonymous) throw new authority.AuthorityError('unauthorized', 401); return identity;
     } },

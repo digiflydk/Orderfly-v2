@@ -43,7 +43,7 @@ function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, an
   const { GET } = loadTs('src/app/api/merchant/printers/route.ts', {
     'server-only': {}, '@/lib/firebase-admin': { getAdminDb: () => database },
     '@/lib/access/authority': { AuthorityError },
-    '@/lib/access/orderfly-session': {
+    '@/lib/access/orderfly-session': { requirePlatformSuperuser: async () => ({ superuser: true }),
       verifiedOrderflyIdentity: async () => {
         if (identityStatus) throw new AuthorityError('PRIVATE_SENTINEL', identityStatus);
         if (anonymous) throw new AuthorityError('unauthorized', 401);

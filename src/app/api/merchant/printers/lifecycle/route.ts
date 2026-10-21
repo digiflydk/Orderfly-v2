@@ -1,5 +1,5 @@
 import { AuthorityError } from '@/lib/access/authority';
-import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
+import { verifiedOrderflyIdentity, requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { PrinterLifecycleError, transitionPrinter } from '@/lib/printing/lifecycle';
 import { getOrigin } from '@/lib/url';
 
@@ -12,6 +12,7 @@ const reply = (body: unknown, status = 200) => Response.json(body, {
 export async function POST(request: Request) {
   try {
     await verifiedOrderflyIdentity();
+    await requirePlatformSuperuser();
     if (request.headers.get('origin') !== await getOrigin() || request.headers.get('sec-fetch-site') === 'cross-site') {
       return reply({ error: 'forbidden' }, 403);
     }

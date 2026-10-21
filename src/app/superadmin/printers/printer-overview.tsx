@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Printer, RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -41,8 +41,13 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const [after, setAfter] = useState('');
   const [refresh, setRefresh] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
-  const [editor, setEditor] = useState<{ scope: string; item?: Item } | null>(null);
+  const [editor, setEditor] = useState<{ scope: string; brandId: string; locationId: string; item?: Item } | null>(null);
   const [sessionLost, setSessionLost] = useState(false);
+  const [savePending, setSavePending] = useState(false);
+  const savePendingRef = useRef(false);
+  const editorRef = useRef(editor); editorRef.current = editor;
+  const [feedback, setFeedback] = useState<{ message: string; requiresRefresh: boolean } | null>(null);
+  const reportPending = useCallback((pending: boolean) => { savePendingRef.current = pending; setSavePending(pending); }, []);
   const sessionEpoch = useRef(0);
   const readGeneration = useRef(0);
   const readsAllowed = useRef(true);
@@ -53,21 +58,24 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const scopeRef = useRef(scope); scopeRef.current = scope;
   const canCreate = !sessionLost && createLocations.some(row => row.id === location?.id && row.brandId === brandId);
   const canEdit = !sessionLost && editLocations.some(row => row.id === location?.id && row.brandId === brandId);
-  const closeAndRefresh = () => { readsAllowed.current = true; setEditor(null); setAfter(''); setRefresh(value => value + 1); };
-  const loseSession = () => { readsAllowed.current = false; readGeneration.current += 1; readController.current?.abort(); sessionEpoch.current += 1; setSessionLost(true); setEditor(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
+  const editorAllowed = !!editor && !!location && editor.scope === scope && (editor.item ? canEdit : canCreate);
+  const closeAndRefresh = () => { setFeedback(null); readsAllowed.current = true; setEditor(null); setAfter(''); setRefresh(value => value + 1); };
+  const loseSession = () => { setFeedback(null); readsAllowed.current = false; readGeneration.current += 1; readController.current?.abort(); sessionEpoch.current += 1; setSessionLost(true); setEditor(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
   const key = JSON.stringify([brandId, location?.id || '', after, refresh]);
   const current = result?.key === key ? result : null;
   const openEditor = (item?: Item) => {
-    if (editor || !current?.page || sessionLost || (item ? !canEdit || item.configuration.state !== 'disabled' : !canCreate)) return;
+    if (editor || feedback?.requiresRefresh || !current?.page || sessionLost || (item ? !canEdit || item.configuration.state !== 'disabled' : !canCreate)) return;
     // Invalidate synchronously, before React effects run: an older GET401 must
     // never close a new editor or abort an already authenticated save.
     readGeneration.current += 1; readController.current?.abort();
-    setSavedScope(''); setEditor({ scope, ...(item ? { item } : {}) });
+    setFeedback(null); setSavedScope(''); setEditor({ scope, brandId, locationId, ...(item ? { item } : {}) });
   };
 
   useEffect(() => {
-    if (editor && (!location || editor.scope !== scope || (editor.item ? !canEdit : !canCreate))) setEditor(null);
-  }, [editor, location, scope, canCreate, canEdit]);
+    // A revoked grant blocks new submits immediately, but an accepted server
+    // transaction must settle before its form can be removed.
+    if (editor && !editorAllowed && !savePendingRef.current) setEditor(null);
+  }, [editor, editorAllowed, savePending]);
 
   useEffect(() => {
     if (!readsAllowed.current || editor || !brandId || !locationId || !locations.some(row => row.id === locationId && row.brandId === brandId)) return;
@@ -99,16 +107,16 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const stateLabels = { active: 'Aktiv', paused: 'På pause', disabled: 'Deaktiveret' };
   return <div className="space-y-6 min-w-0">
     <header>
-      <p className="text-sm font-semibold text-primary">Restaurantens udstyr</p>
+      <p className="text-sm font-semibold text-primary">Superadmin · Printerpilot</p>
       <h1 className="mt-1 text-3xl font-semibold tracking-tight">Printere</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Se printeropsætningen for dit brand og din lokation.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Administrer printeropsætning på tværs af brands og lokationer.</p>
     </header>
     <div className="admin-filter-bar flex flex-wrap items-end gap-3 p-4">
-      <AdminSelectField label="Brand" value={brandId} disabled={!!editor} onChange={event => { setBrandId(event.target.value); setLocationId(''); setAfter(''); setEditor(null); setSavedScope(''); }}>
+      <AdminSelectField label="Brand" value={brandId} disabled={!!editor} onChange={event => { setBrandId(event.target.value); setLocationId(''); setAfter(''); setEditor(null); setSavedScope(''); setFeedback(null); }}>
         <option value="">Vælg brand</option>
         {brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}
       </AdminSelectField>
-      <AdminSelectField label="Lokation" value={locationId} disabled={!brandId || !!editor} onChange={event => { setLocationId(event.target.value); setAfter(''); setEditor(null); setSavedScope(''); }}>
+      <AdminSelectField label="Lokation" value={locationId} disabled={!brandId || !!editor} onChange={event => { setLocationId(event.target.value); setAfter(''); setEditor(null); setSavedScope(''); setFeedback(null); }}>
         <option value="">Vælg lokation</option>
         {locations.filter(row => row.brandId === brandId).map(row => <option key={row.id} value={row.id}>{row.name}</option>)}
       </AdminSelectField>
@@ -117,13 +125,18 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
       </Button>
     </div>
     {sessionLost && !current?.error && <p role="alert">Din session er udløbet. Log ind igen.</p>}
-    {savedScope === scope && <p role="status">Printeropsætningen er gemt som deaktiveret.</p>}
-    {location && canCreate && current?.page && !editor && <Button onClick={() => openEditor()}>Tilføj printer</Button>}
-    {location && !sessionLost && editor?.scope === scope && (editor.item ? canEdit : canCreate) && <PrinterConfigurationForm
-      key={JSON.stringify([scope, editor.item?.configuration.id || '', editor.item?.revision || 0])}
-      brandId={brandId} locationId={location.id} item={editor.item}
-      onCancel={closeAndRefresh} onSessionLost={() => { if (scopeRef.current === scope) loseSession(); }}
-      onSaved={() => { if (scopeRef.current === scope) { setSavedScope(scope); closeAndRefresh(); } }} />}
+    {savedScope && !editor && <p role="status">Printeropsætningen er gemt som deaktiveret.</p>}
+    {feedback && !editor && <p role="alert">{feedback.message}</p>}
+    {location && canCreate && !feedback?.requiresRefresh && current?.page && !editor && <Button onClick={() => openEditor()}>Tilføj printer</Button>}
+    {editor && !sessionLost && (editorAllowed || savePending) && <PrinterConfigurationForm
+      key={JSON.stringify([editor.scope, editor.item?.configuration.id || '', editor.item?.revision || 0])}
+      brandId={editor.brandId} locationId={editor.locationId} item={editor.item} permitted={editorAllowed}
+      onPendingChange={reportPending} onCancel={closeAndRefresh}
+      onSessionLost={() => { if (editorRef.current === editor) loseSession(); }}
+      onFeedback={(message, requiresRefresh) => { if (editorRef.current === editor) {
+        setFeedback({ message, requiresRefresh }); if (requiresRefresh) readsAllowed.current = false;
+      } }}
+      onSaved={() => { if (editorRef.current === editor) { setSavedScope(editor.scope); closeAndRefresh(); } }} />}
     {!locations.length ? <p>Ingen lokationer med adgang til printeroversigten.</p>
       : !location ? <p>Vælg brand og lokation for at se printerne.</p>
       : <section aria-label="Printeroversigt" aria-busy={!current} className="space-y-4">
@@ -143,7 +156,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
                     <dt className="text-muted-foreground">Papirbredde</dt><dd>{c.paperWidthMm} mm</dd>
                     <dt className="text-muted-foreground">Revision</dt><dd>{revision}</dd>
                   </dl>
-                  {canEdit && c.state === 'disabled' && <Button className="h-auto max-w-full whitespace-normal break-words text-left" variant="outline" disabled={!!editor} onClick={() => openEditor({ configuration: c, revision })}>Rediger {c.name}</Button>}
+                  {canEdit && c.state === 'disabled' && <Button className="h-auto max-w-full whitespace-normal break-words text-left" variant="outline" disabled={!!editor || !!feedback?.requiresRefresh} onClick={() => openEditor({ configuration: c, revision })}>Rediger {c.name}</Button>}
                   <p className="text-xs text-muted-foreground">Opsætningen viser ikke, om printeren er online eller har udskrevet en bon.</p>
                 </CardContent>
               </Card>)}

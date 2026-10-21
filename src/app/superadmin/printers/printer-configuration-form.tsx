@@ -7,10 +7,10 @@ import { AdminSelectField } from '@/components/superadmin/admin-select-field';
 import type { PrinterConfiguration } from '@/lib/printing/domain';
 
 type Item = { configuration: PrinterConfiguration; revision: number };
-type Props = { brandId: string; locationId: string; item?: Item; onSaved: () => void; onCancel: () => void; onSessionLost: () => void };
+type Props = { brandId: string; locationId: string; item?: Item; onSaved: () => void; onCancel: () => void; onSessionLost: () => void; permitted: boolean; onPendingChange: (pending: boolean) => void; onFeedback: (message: string, requiresRefresh: boolean) => void };
 const identifier = /^[A-Za-z0-9_-]{1,128}$/;
 
-export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, onCancel, onSessionLost }: Props) {
+export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, onCancel, onSessionLost, permitted, onPendingChange, onFeedback }: Props) {
   const [printerId, setPrinterId] = useState(item?.configuration.id || '');
   const [name, setName] = useState(item?.configuration.name || '');
   const [model, setModel] = useState<PrinterConfiguration['model']>(item?.configuration.model || 'mc-print2');
@@ -23,17 +23,21 @@ export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, o
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; request.current?.abort(); }; }, []);
 
+  function reportFailure(message: string, needsRefresh: boolean) {
+    setMessage(message); setRefreshRequired(needsRefresh); onFeedback(message, needsRefresh);
+  }
+
   async function submit(event: FormEvent) {
     event.preventDefault();
     // Ref guards duplicate events before React has rendered the pending state.
-    if (request.current || refreshRequired) return;
+    if (request.current || refreshRequired || !permitted) return;
     if (!identifier.test(printerId) || !name.trim() || name.trim().length > 80 || name.length > 160
       || /[\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]/u.test(name)
       || (model === 'mc-print2' && (transport !== 'cloudprnt-http' || paperWidthMm !== 58))) {
       setMessage('Kontrollér printer-ID, navn, model, transport og papirbredde.'); return;
     }
     const configuration: PrinterConfiguration = { id: printerId, brandId, locationId, name: name.trim(), manufacturer: 'star', model, transport, state: 'disabled', paperWidthMm };
-    const controller = new AbortController(); request.current = controller; setPending(true); setMessage('');
+    const controller = new AbortController(); request.current = controller; onPendingChange(true); setPending(true); setMessage('');
     try {
       const response = await fetch('/api/merchant/printers', { method: item ? 'PATCH' : 'POST', credentials: 'same-origin', cache: 'no-store',
         headers: { 'Content-Type': 'application/json' }, signal: controller.signal,
@@ -50,8 +54,8 @@ export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, o
           409: 'Printeren er ændret, eller ID er allerede brugt. Opdater oversigten før et nyt forsøg.',
           503: 'Lagring af printeropsætning er ikke tilgængelig. Funktionen kan være slået fra. Prøv igen senere.',
         };
-        setMessage((response.status === 503 && !writesOff ? undefined : messages[response.status]) || 'Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.');
-        setRefreshRequired([403, 404, 409].includes(response.status) || ![400, 503].includes(response.status) || (response.status === 503 && !writesOff));
+        reportFailure((response.status === 503 && !writesOff ? undefined : messages[response.status]) || 'Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.',
+          [403, 404, 409].includes(response.status) || ![400, 503].includes(response.status) || (response.status === 503 && !writesOff));
         return;
       }
       const result = await response.json();
@@ -64,18 +68,18 @@ export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, o
       onSaved();
     } catch {
       if (mounted.current && !controller.signal.aborted) {
-        setMessage('Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.'); setRefreshRequired(true);
+        reportFailure('Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.', true);
       }
     } finally {
       if (request.current === controller) request.current = null;
-      if (mounted.current) setPending(false);
+      if (mounted.current) { setPending(false); onPendingChange(false); }
     }
   }
 
   return <form onSubmit={submit} aria-label={item ? 'Rediger printer' : 'Tilføj printer'} className="rounded-lg border bg-card p-4 space-y-4 min-w-0">
     <h2 className="text-lg font-semibold">{item ? 'Rediger printer' : 'Tilføj printer'}</h2>
     <p className="text-sm text-muted-foreground">Gemmer kun en deaktiveret opsætning. Forbindelse og udskrift skal verificeres særskilt.</p>
-    <fieldset disabled={pending} className="grid gap-4 sm:grid-cols-2 min-w-0">
+    <fieldset disabled={pending || !permitted} className="grid gap-4 sm:grid-cols-2 min-w-0">
       <label className="grid gap-1.5 text-sm font-medium">Printer-ID<Input required maxLength={128} value={printerId} disabled={!!item} onChange={event => setPrinterId(event.target.value)} autoComplete="off" /></label>
       <label className="grid gap-1.5 text-sm font-medium">Printernavn<Input required maxLength={80} value={name} onChange={event => setName(event.target.value)} autoComplete="off" /></label>
       <AdminSelectField className="w-full max-w-full" label="Printermodel" value={model} onChange={event => {
@@ -92,7 +96,7 @@ export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, o
     </fieldset>
     {message && <p role="alert" className="text-sm break-words">{message}</p>}
     <div className="flex flex-wrap gap-3">
-      <Button type="submit" disabled={pending || refreshRequired}>{pending ? 'Gemmer…' : 'Gem deaktiveret printer'}</Button>
+      <Button type="submit" disabled={pending || refreshRequired || !permitted}>{pending ? 'Gemmer…' : 'Gem deaktiveret printer'}</Button>
       <Button type="button" variant="outline" disabled={pending} onClick={onCancel}>{refreshRequired ? 'Opdater oversigten' : 'Annuller'}</Button>
     </div>
   </form>;

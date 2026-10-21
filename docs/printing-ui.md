@@ -1,122 +1,89 @@
-# Printer overview (P4.1a, #310)
+# Superadmin printer pilot (#325, #318)
 
-`/merchant/printers` is a read-only merchant workspace. The merchant dashboard
-and shared sidebar expose it only with `orderfly.catalog:view` (or a superuser).
-The page independently checks the session/navigation policy and requests
-`nativeCatalog('orderfly.catalog:view')`. It does not reuse the union of scopes
-from unrelated features. Only brand/location IDs and display names reach the
-client. Native catalog and the existing read API both validate stored location
-ownership; the browser selection is not an authorization decision.
+Printer administration is restricted to platform superusers at
+`/superadmin/printers`. The server page explicitly requires `session.superuser`
+and the superadmin navigation policy before loading any native catalog data.
+Delegated catalog:view/create/edit roles cannot render the page. The merchant
+page remains retired as not-found, with no merchant navigation entry.
 
-After the user chooses one brand and one location, the overview calls
-`GET /api/merchant/printers?brandId=…&locationId=…&limit=20`. Reads use the current
-same-origin session and `cache: no-store`. There are no mutations or new backend
-read semantics. Pagination follows the API's bounded ID cursor, replaces the
-current page, and offers return to the first page. Refresh returns to the first
-page. Brand/location changes reset pagination and clear the previous display
-immediately. Aborted/late requests cannot replace a new scope's data. Foreign,
-malformed or oversized response pages are rejected before displaying any row.
+The existing `/api/merchant/printers` URLs remain for compatibility. All six
+administration HTTP operations retain `requirePlatformSuperuser` before parsing
+or service access, plus existing native brand/location and transactional grant
+checks. The UI never authorizes a write. Configuration writes and live output
+remain default-off; there are no credentials, new backend contracts or production
+data changes in this form work.
 
-The cards show name, operational state, model, configured transport, paper width
-and revision. **Operational state is not proof of connectivity or output.** The
-read API has no verified connection-status DTO, so the overview explicitly shows
-`Ikke verificeret` and explains that it cannot establish online state or a printed
-receipt. Transport is configuration, not verified firmware capability. No testprint,
-queue receipt, resume, configuration edit, credentials or output activation is
-included. All feature gates remain unchanged.
+## Scope and configuration
 
-Loading, no authorized locations, no selected scope, empty successful page,
-expired session, forbidden response and unavailable/malformed response each have
-an explicit state. Raw provider errors and payloads are never displayed.
+The page loads selectors only through native `catalog:view`. It independently
+loads native `catalog:create` and `catalog:edit` location metadata for form
+controls, and projects only IDs/names. All three reads happen behind the
+superuser gate; grants from unrelated features are never combined into selector
+or write scope. The actor-keyed client clears state after a new server identity.
+
+A selected brand/location loads a bounded20-row GET page, strict DTO validation,
+and ID cursor pagination. Foreign, malformed and oversized pages fail closed.
+Rows distinguish operational state from connectivity/output, which remain
+unverified. Loading, empty, denied and unavailable states are explicit; raw
+provider errors are never rendered.
+
+The new form creates a disabled printer or edits an existing disabled printer.
+POST sends `{ configuration }`; PATCH adds the expected revision. The exact
+configuration fields are ID, native brand/location, name, manufacturer `star`,
+model, transport, state `disabled` and paper width. Edit fixes ID/native scope.
+mC-Print2 permits only HTTP/58mm. mC-Print3 uses existing supported configuration
+choices; MQTT explicitly requires subsequent model/firmware verification.
+Configuration does not prove a connected device or a physical printed receipt.
+
+## Pending operations and recovery
+
+Submit is guarded before the pending render. Native scope selectors, pagination,
+overview refresh and competing edit controls cannot replace an open form;
+Cancel is disabled during save. Create requires a validated completed page.
+Opening either editor synchronously invalidates/aborts existing GETs, and reads
+suspend throughout editing, including same-scope metadata updates. A stale read401
+cannot interrupt a write that may already commit on the server.
+
+Native write-grant revocation disables new submissions immediately. Prepared
+input without an active request clears. An active save keeps its original form
+and scope snapshot mounted until the response settles. Its validated success or
+safe rejection/uncertain-outcome message survives revocation, so client abort
+cannot silently hide a server commit. An uncertain or stale outcome blocks new
+forms until deliberate refresh, even if the grant metadata is subsequently
+restored. The API still reauthorizes the actual transaction.
+
+Ordinary400 and explicit503 `writes_unavailable` retain input for retry. A403,
+404,409, generic503, network error or malformed successful response requires
+refresh before another attempt. Successful responses must match the submitted
+configuration/native scope and exact expected revision. No raw provider text is
+used. A401 clears input/rows and synchronously closes the read gate before editor
+removal; automatic rerenders cannot reauthenticate and restore controls. Only
+explicit `Opdater` or a fresh actor-keyed server context can initiate recovery.
 
 ## Verification and release
 
-- `node --test tests/unit/printing-ui-page.cjs tests/unit/access-navigation.cjs tests/unit/merchant-admin-portal.cjs`
-  exercises actual page rendering, permission denial, native catalog permission,
-  selector projection and unavailable/forbidden handling.
-- `node --test tests/unit/printing-ui-browser.cjs` bundles the actual client and
-  production CSS, with synthetic authorized selectors/API responses. It verifies
-  desktop and 375px mobile rendering, no horizontal overflow, scoped GET and
-  pagination, status separation, loading/errors/retry, empty/malformed/foreign
-  pages and late response protection. Screenshots are written under `test-results`.
-  These are fixture browser tests, not a real authenticated production session.
-- `npm run typecheck`; run existing printing read/navigation regressions.
-- CI runs the server/page tests and the Chromium browser test. Exact-head CI and
-  independent Codex review are required before the coordinator serializes merge
-  and deploy under AGENTS.md. Public release smoke does not prove authenticated
-  UI acceptance. After verifying the deployed commit, check the live
-  `/merchant/printers` login boundary read-only. Success/forbidden scope UI QA
-  remains blocked until a safe authorized session is available. No unattended
-  production data writes are required. Physical printer QA remains separate.
+`printing-ui-page.cjs`, navigation and merchant portal tests verify platform
+superuser-only rendering, native metadata projection, delegated-role denial,
+retired merchant page and absent merchant navigation. Existing identity/route
+tests prove all six HTTP superuser guards precede services; their checks remain
+unchanged. Typecheck and affected read/write/lifecycle/queue/transaction tests
+remain required after main synchronization.
 
-## Disabled configuration forms (P4.2a, #318)
+`printing-ui-browser.cjs` bundles the actual superadmin components and production
+CSS with synthetic selectors and intercepted fixture APIs. Fifteen Chromium cases
+cover existing reads, desktop/mobile201 create+200 edit, exact credential-free
+DTOs/revisions, unsupported native options with DOM+keyboard+submitted-body proof,
+no overflow, pending controls,400/401/403/404/409/503, stale responses, explicit
+session recovery, initial-read gates and GET401/write201-or-uncertain503 races.
+The added revocation race keeps an actual pending request alive through metadata
+removal, then verifies success or uncertainty and blocked retry until refresh.
+Screenshots are retained as `printing-overview-*` and `printing-config-*` PNGs.
+All fixture mutations are intercepted locally; none reach production.
 
-The overview can prepare a new **disabled** configuration or edit an existing
-**disabled** configuration. The page still selects locations exclusively through
-`catalog:view`. It separately resolves `nativeCatalog('orderfly.catalog:create')`
-and `nativeCatalog('orderfly.catalog:edit')` for write affordances, projecting only
-native brand/location IDs. A session permission name alone never grants a
-location; create/edit grants are not combined with each other or with selectors.
-The existing POST/PATCH API remains the authority and reauthorizes in its write
-transaction. Actor-keyed page identity and a401 response clear prepared input;401 also removes prior overview rows.
-
-The form sends only the existing `{ configuration }` or
-`{ configuration, revision }` envelope. Configuration fields are ID, native scope,
-name, manufacturer `star`, model, transport, state `disabled` and paper width.
-Edit keeps ID/native scope immutable and carries the displayed revision.
-mC-Print2 restricts input to HTTP and58mm; mC-Print3 permits the existing
-configuration choices. MQTT selection explicitly requires later model/firmware
-verification and does not certify device support. Credentials, network identity,
-capability evidence, lifecycle changes and actual output are absent.
-
-Duplicate submit events are guarded before the pending render. Cancel is disabled
-while saving; native scope selectors, overview refresh and other edit buttons
-cannot replace an open form and race an in-flight server transaction. Cancel
-before saving to switch scope. Authoritative permission revocation clears the
-editor; an actor-keyed server context change still unmounts and clears it. Ordinary400 and explicit503 `writes_unavailable` responses retain input, use
-safe messages and permit retry; the latter explains that writes may be switched
-off. Other503 outcomes are uncertain and require refresh, since the server
-transaction may have committed. A403/404/409 or uncertain outcome requires an
-overview refresh before retry, rather than replaying a stale revision. Raw
-provider detail is never shown. Successful responses must match the exact scope,
-configuration and expected next revision before showing success. Aborted/late
-responses cannot change a new scope's form, success message or session state.
-Changing scope, session or revoking write metadata unmounts prepared input.
-
-`printing-ui-page.cjs` verifies the independent native create/edit scopes and
-revoked writes with continuing view access. `printing-ui-browser.cjs` additionally
-executes actual React forms with intercepted fixture API calls:201 create and200
-revisioned edit at desktop/mobile widths, exact credential-free bodies,
-unsupported choices, pending submit,400/401/403/404/409/503 handling, view-only
-and disabled-state affordances, revoked metadata, late201/401 server-context and scope changes, foreign/wrong-revision success rejection, and initial-load gating and an obsolete GET401 racing either a successful201 or uncertain503 write.
-Screenshots use `printing-config-*.png`. Fixture writes never reach production.
-
-The configuration-write flag remains default-off. Live read-only login checks
-can verify the deployed boundary; authenticated save/edit acceptance remains
-blocked without safe access and an explicitly controlled reversible scenario.
-Synthetic201/200 results do not establish live write or hardware acceptance.
-
-The mC-Print2 unsupported-option browser assertions inspect the actual native
-option `disabled` property and exercise keyboard navigation to the last enabled
-choice, then verify the exact submitted HTTP/58mm DTO. Playwright's generic
-form-control disabled matcher does not establish native option disabledness.
-The stronger interaction check runs at both desktop and mobile fixture sizes.
-
-Overview reads cannot run concurrently with an editor/save. Create is offered
-only after a validated successful page; opening either editor synchronously
-invalidates the read generation and aborts any existing GET before React effects
-run. The read effect suspends while editing, including same-scope metadata
-refreshes, and both pagination controls are locked. Closing/settling then refreshing
-starts a new GET. An old read401 cannot close the form and abort a transaction
-that may commit. The fixture holds a background GET401 alongside a write and
-verifies both201 success and uncertain503 handling remain visible and the write
-settles before refresh, with no new reads while editing.
-
-A session401 also synchronously closes the read gate and invalidates/aborts any
-read before clearing the editor. Editor removal and same-scope metadata rerenders
-cannot automatically refetch and restore write controls. Only a deliberate
-`Opdater` action opens the gate for a fresh read, or a new actor-keyed server
-context creates fresh state. A failed recovery read keeps the gate closed. The
-fixture asserts no extra GET after mutation401 or metadata replacement, then
-exactly one explicit recovery GET and empty prepared input after successful
-revalidation. Existing API authorization remains authoritative.
+Exact-current-head CI and independent Codex review precede the coordinator's
+serialized merge/deploy. Current deployed SHA and read-only live login/retired
+route/API boundaries require separate verification. Authenticated superadmin
+success/delegated denial and controlled save/edit acceptance remain blocked until
+safe access and an explicitly reversible scenario exist. Fixture success and
+public smoke do not prove live authenticated writes. Physical printer pilot and
+Wolt/hardware configuration remain separate and last.

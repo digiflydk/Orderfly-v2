@@ -1,4 +1,4 @@
-// Render the actual read-only React overview with production CSS. Only API data
+// Render the actual superadmin React overview with production CSS. Only API data
 // and server-provided authorized selector metadata are synthetic, never a login.
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
@@ -22,7 +22,7 @@ before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'printing-ui-browser-'));
   const entry = path.join(dir, 'entry.js');
   fs.writeFileSync(entry, `import React from 'react';import {createRoot} from 'react-dom/client';
-    import {PrinterOverview} from ${JSON.stringify(path.join(root, 'src/app/merchant/printers/printer-overview.tsx'))};
+    import {PrinterOverview} from ${JSON.stringify(path.join(root, 'src/app/superadmin/printers/printer-overview.tsx'))};
     const writes = new URLSearchParams(location.search).has('writes') ? [{id:'la',brandId:'a'}] : [];
     function Fixture(){const [scopes,setScopes]=React.useState(writes);const [identity,setIdentity]=React.useState(0);window.resetPrinterContext=()=>setIdentity(value=>value+1);window.setPrinterWriteScopes=setScopes;return React.createElement(PrinterOverview,{key:identity,brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)},createLocations:scopes,editLocations:scopes});}
     createRoot(document.getElementById('root')).render(React.createElement(Fixture));`);
@@ -353,5 +353,53 @@ test('initial reads gate create and an obsolete GET401 cannot interrupt write201
     }
     await expect(page.getByText('Ingen printere på denne lokation.', { exact: true })).toBeVisible();
     assert.equal(getCount, 3);
+  }
+});
+
+test('native write-grant revocation keeps pending POST and PATCH mounted through success or uncertainty', async t => {
+  for (const operation of ['create', 'edit']) for (const fails of [false, true]) {
+    const context = await browser.newContext(); t.after(() => context.close());
+    const page = await context.newPage(), failures = []; let release, started, mutations = 0;
+    let saved = operation === 'edit' ? item('existing', 'a', 'la', { state: 'disabled' }) : null;
+    const pending = new Promise(resolve => { started = resolve; });
+    page.on('requestfailed', request => { if (['POST', 'PATCH'].includes(request.method())) failures.push(request.failure()?.errorText); });
+    await page.route('**/api/merchant/printers**', async route => {
+      const request = route.request();
+      if (request.method() === 'GET') return route.fulfill({ json: { items: saved ? [saved] : [], nextCursor: null } });
+      mutations++; const { configuration, revision } = request.postDataJSON();
+      assert.equal(request.method(), operation === 'edit' ? 'PATCH' : 'POST');
+      if (operation === 'edit') { assert.equal(configuration.id, 'existing'); assert.equal(revision, 3); }
+      started(); await new Promise(resolve => { release = resolve; });
+      if (!fails) saved = { configuration, revision: revision ? revision + 1 : 1 };
+      return route.fulfill({ status: fails ? 503 : operation === 'edit' ? 200 : 201, json: fails
+        ? { error: 'printers_unavailable' } : { item: saved } });
+    });
+    await page.goto(origin + '?writes'); await choose(page);
+    if (operation === 'edit') await page.getByRole('button', { name: 'Rediger Køkken existing', exact: true }).click();
+    else await fillNew(page);
+    await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click(); await pending;
+    await page.evaluate(() => window.setPrinterWriteScopes([]));
+    await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+    const form = page.getByRole('form', { name: operation === 'edit' ? 'Rediger printer' : 'Tilføj printer', exact: true });
+    await expect(form).toBeVisible();
+    await expect(page.getByRole('button', { name: 'Gemmer…' })).toBeDisabled();
+    await expect(page.getByRole('textbox', { name: 'Printernavn', exact: true })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'Annuller', exact: true })).toBeDisabled();
+    assert.deepEqual(failures, []); assert.equal(mutations, 1);
+    release();
+    if (!fails) await expect(page.getByText('Printeropsætningen er gemt som deaktiveret.', { exact: true })).toBeVisible();
+    else await expect(page.getByRole('alert')).toHaveText('Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.');
+    await expect(form).toHaveCount(0);
+    await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
+    assert.deepEqual(failures, []); assert.equal(mutations, 1);
+    if (fails) {
+      await page.evaluate(() => window.setPrinterWriteScopes([{ id: 'la', brandId: 'a' }]));
+      await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
+      await expect(page.getByRole('alert')).toHaveText('Kunne ikke bekræfte, om opsætningen blev gemt. Opdater oversigten før et nyt forsøg.');
+      if (operation === 'edit') await expect(page.getByRole('button', { name: 'Rediger Køkken existing', exact: true })).toBeDisabled();
+      await page.getByRole('button', { name: 'Opdater', exact: true }).click();
+      await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toBeVisible();
+      await expect(page.getByRole('alert')).toHaveCount(0);
+    }
   }
 });

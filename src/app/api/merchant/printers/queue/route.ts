@@ -1,5 +1,5 @@
 import { AuthorityError } from '@/lib/access/authority';
-import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
+import { verifiedOrderflyIdentity, requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { PrinterQueueReadError, readPrinterQueueSummary } from '@/lib/printing/queue-summary';
 
 export const runtime = 'nodejs';
@@ -11,6 +11,7 @@ const reply = (body: unknown, status = 200) => Response.json(body, {
 export async function GET(request: Request) {
   try {
     await verifiedOrderflyIdentity();
+    await requirePlatformSuperuser();
     const params = new URL(request.url).searchParams;
     if ([...params.keys()].some(key => params.getAll(key).length !== 1)) return reply({ error: 'invalid_request' }, 400);
     return reply(await readPrinterQueueSummary(Object.fromEntries(params)));
