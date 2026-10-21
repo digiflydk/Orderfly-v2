@@ -24,6 +24,17 @@ test('strict activity projection binds scope/revision/time and strips private co
   }
 });
 
+test('stored server activity tolerates only a small bounded cross-instance clock skew', () => {
+  const now = 100000;
+  const atBoundary = { ...initialPrinterActivity(scope, false), activatedAt: now + 30000, activationRevision: 2,
+    printHistory: 'confirmed', lastConfirmedPrintAt: now + 30000, lastConfirmedJobId: 'a'.repeat(64) };
+  assert.deepEqual(readStoredPrinterActivity(atBoundary, scope, 2, now), atBoundary);
+  for (const patch of [{ activatedAt: now + 30001 }, { lastConfirmedPrintAt: now + 30001 }]) {
+    assert.throws(() => readStoredPrinterActivity({ ...atBoundary, ...patch }, scope, 2, now),
+      /^Error: printer_activity_unavailable$/);
+  }
+});
+
 test('native create atomically records never-used, edits preserve it and metadata collision rolls back', async () => {
   const f = fixture();
   assert.equal((await f.request()).status, 201);
