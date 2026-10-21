@@ -154,8 +154,17 @@ for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667
       await route.fulfill({ status: req.method() === 'POST' ? 201 : 200, json: { item: saved } });
     });
     await page.goto(origin + '?writes'); await choose(page); await fillNew(page);
-    await expect(page.getByRole('option', { name: '80 mm', exact: true })).toBeDisabled();
-    await expect(page.getByRole('option', { name: /CloudPRNT MQTT/ })).toBeDisabled();
+    // Playwright's form-control enabled matcher does not model native<option>
+    // disabledness. Assert the browser DOM property, then exercise real select
+    // keyboard navigation; the subsequent exact POST proves only HTTP/58 is sent.
+    assert.equal(await page.getByRole('option', { name: '80 mm', exact: true }).evaluate(option => option.disabled), true);
+    assert.equal(await page.getByRole('option', { name: /CloudPRNT MQTT/ }).evaluate(option => option.disabled), true);
+    const widthSelect = page.getByRole('combobox', { name: 'Papirbredde', exact: true });
+    await widthSelect.focus(); await widthSelect.press('End');
+    await expect(widthSelect).toHaveValue('58');
+    const transportSelect = page.getByRole('combobox', { name: 'Printtransport', exact: true });
+    await transportSelect.focus(); await transportSelect.press('End');
+    await expect(transportSelect).toHaveValue('cloudprnt-http');
     assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 1);
     await page.screenshot({ path: path.join(root, 'test-results', `printing-config-${name}.png`), fullPage: true });
     await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click(); await pending;

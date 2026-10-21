@@ -95,3 +95,9 @@ The configuration-write flag remains default-off. Live read-only login checks
 can verify the deployed boundary; authenticated save/edit acceptance remains
 blocked without safe access and an explicitly controlled reversible scenario.
 Synthetic201/200 results do not establish live write or hardware acceptance.
+
+The mC-Print2 unsupported-option browser assertions inspect the actual native
+option `disabled` property and exercise keyboard navigation to the last enabled
+choice, then verify the exact submitted HTTP/58mm DTO. Playwright's generic
+form-control disabled matcher does not establish native option disabledness.
+The stronger interaction check runs at both desktop and mobile fixture sizes.
