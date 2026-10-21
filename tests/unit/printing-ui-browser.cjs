@@ -23,7 +23,9 @@ before(async () => {
   const entry = path.join(dir, 'entry.js');
   fs.writeFileSync(entry, `import React from 'react';import {createRoot} from 'react-dom/client';
     import {PrinterOverview} from ${JSON.stringify(path.join(root, 'src/app/merchant/printers/printer-overview.tsx'))};
-    createRoot(document.getElementById('root')).render(React.createElement(PrinterOverview,{brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)}}));`);
+    const writes = new URLSearchParams(location.search).has('writes') ? [{id:'la',brandId:'a'}] : [];
+    function Fixture(){const [scopes,setScopes]=React.useState(writes);window.setPrinterWriteScopes=setScopes;return React.createElement(PrinterOverview,{brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)},createLocations:scopes,editLocations:scopes});}
+    createRoot(document.getElementById('root')).render(React.createElement(Fixture));`);
   const loader = path.join(dir, 'loader.js');
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   await new Promise((resolve, reject) => webpackModule.webpack({ mode: 'development', devtool: false, entry,
@@ -131,4 +133,113 @@ test('old in-flight location response cannot overwrite a new scope', async t => 
   await choose(page, 'b', 'lb'); await expect(page.getByText('Køkken NEW', { exact: true })).toBeVisible();
   release(); await expect(page.getByText('Køkken OLD', { exact: true })).toHaveCount(0);
   await expect(page.getByText('Køkken NEW', { exact: true })).toBeVisible();
+});
+
+async function fillNew(page, printerId = 'new_printer') {
+  await page.getByRole('button', { name: 'Tilføj printer', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Printer-ID', exact: true }).fill(printerId);
+  await page.getByRole('textbox', { name: 'Printernavn', exact: true }).fill('Køkken Østerbro');
+}
+for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 667]]) {
+  test(`disabled create and revisioned edit use exact credential-free DTO at ${name} width`, async t => {
+    const context = await browser.newContext({ viewport: { width, height } }); t.after(() => context.close());
+    const page = await context.newPage(), mutations = []; let saved, release, started;
+    const pending = new Promise(resolve => { started = resolve; });
+    await page.route('**/api/merchant/printers**', async route => {
+      const req = route.request();
+      if (req.method() === 'GET') return route.fulfill({ json: { items: saved ? [saved] : [], nextCursor: null } });
+      const body = req.postDataJSON(); mutations.push({ method: req.method(), body });
+      if (req.method() === 'POST') { started(); await new Promise(resolve => { release = resolve; }); }
+      saved = { configuration: body.configuration, revision: body.revision ? body.revision + 1 : 1 };
+      await route.fulfill({ status: req.method() === 'POST' ? 201 : 200, json: { item: saved } });
+    });
+    await page.goto(origin + '?writes'); await choose(page); await fillNew(page);
+    await expect(page.getByRole('option', { name: '80 mm', exact: true })).toBeDisabled();
+    await expect(page.getByRole('option', { name: /CloudPRNT MQTT/ })).toBeDisabled();
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 1);
+    await page.screenshot({ path: path.join(root, 'test-results', `printing-config-${name}.png`), fullPage: true });
+    await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click(); await pending;
+    await expect(page.getByRole('button', { name: 'Gemmer…' })).toBeDisabled(); assert.equal(mutations.length, 1);
+    release(); await expect(page.getByText('Printeropsætningen er gemt som deaktiveret.', { exact: true })).toBeVisible();
+    assert.deepEqual(mutations[0], { method: 'POST', body: { configuration: { id: 'new_printer', brandId: 'a', locationId: 'la', name: 'Køkken Østerbro', manufacturer: 'star', model: 'mc-print2', transport: 'cloudprnt-http', state: 'disabled', paperWidthMm: 58 } } });
+    await page.getByRole('button', { name: 'Rediger Køkken Østerbro', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Printer-ID', exact: true })).toBeDisabled();
+    assert.equal(await page.getByRole('textbox', { name: 'Printer-ID', exact: true }).inputValue(), 'new_printer');
+    await page.getByRole('combobox', { name: 'Printermodel', exact: true }).selectOption('mc-print3');
+    await page.getByRole('combobox', { name: 'Printtransport', exact: true }).selectOption('cloudprnt-mqtt');
+    await page.getByRole('combobox', { name: 'Papirbredde', exact: true }).selectOption('80');
+    await expect(page.getByText(/MQTT/).filter({ hasText: 'model-' })).toHaveCount(1);
+    await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click();
+    await expect(page.getByRole('button', { name: 'Rediger Køkken Østerbro', exact: true })).toBeVisible();
+    assert.equal(mutations[1].method, 'PATCH'); assert.equal(mutations[1].body.revision, 1);
+    assert.deepEqual(mutations[1].body.configuration, { ...mutations[0].body.configuration, model: 'mc-print3', transport: 'cloudprnt-mqtt', paperWidthMm: 80 });
+    assert.equal(/credential|token|password|secret|email|phone|MAC|firmware/.test(JSON.stringify(mutations)), false);
+    assert.ok(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth) <= 1);
+  });
+}
+test('write errors retain ordinary input, require fresh conflict data and clear an expired session', async t => {
+  const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
+  let status = 400, writes = 0;
+  await page.route('**/api/merchant/printers**', route => {
+    if (route.request().method() === 'GET') return route.fulfill({ json: { items: [], nextCursor: null } });
+    writes++; return route.fulfill({ status, json: { error: 'PRIVATE_PROVIDER_DETAIL' } });
+  });
+  await page.goto(origin + '?writes'); await choose(page); await fillNew(page);
+  for (const [code, text] of [[400, 'Opsætningen blev afvist. Kontrollér felterne og prøv igen.'], [503, 'Lagring af printeropsætning er ikke tilgængelig. Funktionen kan være slået fra. Prøv igen senere.']]) {
+    status = code; await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click();
+    await expect(page.getByRole('alert')).toHaveText(text);
+    assert.equal(await page.getByRole('textbox', { name: 'Printernavn', exact: true }).inputValue(), 'Køkken Østerbro');
+    await expect(page.getByRole('button', { name: 'Gem deaktiveret printer' })).toBeEnabled();
+  }
+  for (const [code, text] of [[409, /Printeren er ændret/], [403, /Du har ikke adgang til at gemme/], [404, /Printeren findes ikke længere/]]) {
+    status = code; await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click();
+    await expect(page.getByRole('alert')).toHaveText(text);
+    await expect(page.getByRole('button', { name: 'Gem deaktiveret printer' })).toBeDisabled();
+    await page.getByRole('button', { name: 'Opdater oversigten', exact: true }).click(); await fillNew(page);
+  }
+  status = 401; await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click();
+  await expect(page.getByRole('form', { name: 'Tilføj printer' })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('alert')).toHaveText('Din session er udløbet. Log ind igen.');
+  assert.equal((await page.locator('body').innerText()).includes('PRIVATE_PROVIDER_DETAIL'), false); assert.equal(writes, 6);
+});
+test('view-only metadata and independently scoped grants never expose unauthorized write controls', async t => {
+  const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
+  await page.route('**/api/merchant/printers**', route => route.fulfill({ json: { items: [item('p1', 'a', 'la', { state: 'disabled' }), item('p2')], nextCursor: null } }));
+  await page.goto(origin); await choose(page); await expect(page.getByText('Køkken p1', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: /Rediger/ })).toHaveCount(0);
+  await page.goto(origin + '?writes'); await choose(page);
+  await expect(page.getByRole('button', { name: 'Rediger Køkken p1', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: 'Rediger Køkken p2', exact: true })).toHaveCount(0);
+  await choose(page, 'b', 'lb'); await expect(page.getByRole('button', { name: 'Tilføj printer', exact: true })).toHaveCount(0);
+});
+for (const lateStatus of [201, 401]) test(`late ${lateStatus} mutation response cannot restore form or session state after scope change`, async t => {
+  const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
+  let release, started; const pending = new Promise(resolve => { started = resolve; });
+  await page.route('**/api/merchant/printers**', async route => {
+    const req = route.request(); if (req.method() === 'GET') return route.fulfill({ json: { items: [], nextCursor: null } });
+    const configuration = req.postDataJSON().configuration; started(); await new Promise(resolve => { release = resolve; });
+    await route.fulfill({ status: lateStatus, json: { item: { configuration, revision: 1 } } }).catch(() => {});
+  });
+  await page.goto(origin + '?writes'); await choose(page); await fillNew(page);
+  await page.getByRole('button', { name: 'Gem deaktiveret printer' }).click(); await pending;
+  await choose(page, 'b', 'lb'); release();
+  await expect(page.getByRole('form', { name: 'Tilføj printer' })).toHaveCount(0);
+  await expect(page.getByText('Printeropsætningen er gemt som deaktiveret.', { exact: true })).toHaveCount(0);
+  await expect(page.getByText('Ingen printere på denne lokation.', { exact: true })).toBeVisible();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await choose(page); await page.getByRole('button', { name: 'Tilføj printer', exact: true }).click();
+  assert.equal(await page.getByRole('textbox', { name: 'Printernavn', exact: true }).inputValue(), '');
+});
+
+test('fresh revoked write metadata unmounts and clears a prepared form', async t => {
+  const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
+  await page.route('**/api/merchant/printers**', route => route.fulfill({ json: { items: [], nextCursor: null } }));
+  await page.goto(origin + '?writes'); await choose(page); await fillNew(page);
+  await page.evaluate(() => window.setPrinterWriteScopes([]));
+  await expect(page.getByRole('form', { name: 'Tilføj printer' })).toHaveCount(0);
+  await page.evaluate(() => window.setPrinterWriteScopes([{ id: 'la', brandId: 'a' }]));
+  await expect(page.getByRole('form', { name: 'Tilføj printer' })).toBeVisible();
+  assert.equal(await page.getByRole('textbox', { name: 'Printernavn', exact: true }).inputValue(), '');
 });

@@ -48,3 +48,45 @@ an explicit state. Raw provider errors and payloads are never displayed.
   `/merchant/printers` login boundary read-only. Success/forbidden scope UI QA
   remains blocked until a safe authorized session is available. No unattended
   production data writes are required. Physical printer QA remains separate.
+
+## Disabled configuration forms (P4.2a, #318)
+
+The overview can prepare a new **disabled** configuration or edit an existing
+**disabled** configuration. The page still selects locations exclusively through
+`catalog:view`. It separately resolves `nativeCatalog('orderfly.catalog:create')`
+and `nativeCatalog('orderfly.catalog:edit')` for write affordances, projecting only
+native brand/location IDs. A session permission name alone never grants a
+location; create/edit grants are not combined with each other or with selectors.
+The existing POST/PATCH API remains the authority and reauthorizes in its write
+transaction. Actor-keyed page identity and a 401 response clear prepared input.
+
+The form sends only the existing `{ configuration }` or
+`{ configuration, revision }` envelope. Configuration fields are ID, native scope,
+name, manufacturer `star`, model, transport, state `disabled` and paper width.
+Edit keeps ID/native scope immutable and carries the displayed revision.
+mC-Print2 restricts input to HTTP and58mm; mC-Print3 permits the existing
+configuration choices. MQTT selection explicitly requires later model/firmware
+verification and does not certify device support. Credentials, network identity,
+capability evidence, lifecycle changes and actual output are absent.
+
+Duplicate submit events are guarded before the pending render. Ordinary400/503
+responses retain input, use safe messages and permit retry;503 explains that
+writes may be switched off. A403/404/409 or uncertain outcome requires an
+overview refresh before retry, rather than replaying a stale revision. Raw
+provider detail is never shown. Successful responses must match the exact scope,
+configuration and expected next revision before showing success. Aborted/late
+responses cannot change a new scope's form, success message or session state.
+Changing scope, session or revoking write metadata unmounts prepared input.
+
+`printing-ui-page.cjs` verifies the independent native create/edit scopes and
+revoked writes with continuing view access. `printing-ui-browser.cjs` additionally
+executes actual React forms with intercepted fixture API calls:201 create and200
+revisioned edit at desktop/mobile widths, exact credential-free bodies,
+unsupported choices, pending submit,400/401/403/404/409/503 handling, view-only
+and disabled-state affordances, revoked metadata, and late201/401 scope changes.
+Screenshots use `printing-config-*.png`. Fixture writes never reach production.
+
+The configuration-write flag remains default-off. Live read-only login checks
+can verify the deployed boundary; authenticated save/edit acceptance remains
+blocked without safe access and an explicitly controlled reversible scenario.
+Synthetic201/200 results do not establish live write or hardware acceptance.
