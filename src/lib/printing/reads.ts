@@ -60,8 +60,9 @@ export async function readPrinterConfigurations(input: unknown) {
   // Never serialize a malformed row or use its foreign ID in a continuation token.
   if (items.some(item => item === null)) throw new PrinterReadError('printers_unavailable', 503);
   // The scope count is independent of model filtering, pagination and current page.
-  // It includes all nondeleted records, never an estimate from a partial page.
-  const totalPrinters = query.overview ? (await allPrinters.count().get()).data().count : undefined;
+  // It includes only nondeleted records with matching native scope, never an estimate from a partial page.
+  const totalPrinters = query.overview ? (await allPrinters.where('configuration.brandId', '==', query.brandId)
+    .where('configuration.locationId', '==', query.locationId).count().get()).data().count : undefined;
   if (query.overview && (!Number.isSafeInteger(totalPrinters) || totalPrinters! < snapshot.docs.length)) {
     throw new PrinterReadError('printers_unavailable', 503);
   }

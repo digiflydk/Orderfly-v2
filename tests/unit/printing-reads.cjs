@@ -23,20 +23,21 @@ function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, an
           doc(id) { return { async get() { calls.push(['detail', id]); if (failDatabase) throw Error('PRIVATE_SENTINEL'); return snapshot(id, rows[id]); } }; },
           where(field, op, value) {
             calls.push(['where', field, op, value]); assert.deepEqual([field, op, value], ['deletedAt', '==', null]);
-            let after = '', limit, model;
-            const query = {
-              where(field, op, value) { assert.deepEqual([field, op], ['configuration.model', '==']); model = value; return query; },
-              count() { return { get: async () => ({ data: () => ({ count: totalOverride === undefined ? Object.values(rows).filter(row => row.deletedAt === null).length : totalOverride }) }) }; },
-              orderBy(field) { calls.push(['orderBy', field]); assert.equal(field, '__name__'); return query; },
-              startAfter(cursor) { calls.push(['after', cursor]); after = cursor; return query; },
-              limit(count) { calls.push(['limit', count]); limit = count; assert.ok(count <= 51); return query; },
-              async get() {
-                calls.push(['list']); if (failDatabase) throw Error('PRIVATE_SENTINEL');
-                const ids = Object.keys(rows).sort().filter(id => id > after && rows[id].deletedAt === null && (!model || rows[id].configuration.model === model)).slice(0, limit);
-                return { docs: ids.map(id => snapshot(id, rows[id])) };
-              },
+            const makeQuery = (filters = [], after = '', limit) => {
+              const matching = () => Object.keys(rows).sort().filter(id => rows[id].deletedAt === null && filters.every(([field, value]) => field.split('.').reduce((row, key) => row?.[key], rows[id]) === value));
+              return {
+                where(field, op, value) { assert.equal(op, '=='); assert.ok(['configuration.model', 'configuration.brandId', 'configuration.locationId'].includes(field)); return makeQuery([...filters, [field, value]], after, limit); },
+                count() { return { get: async () => ({ data: () => ({ count: totalOverride === undefined ? matching().length : totalOverride }) }) }; },
+                orderBy(field) { calls.push(['orderBy', field]); assert.equal(field, '__name__'); return makeQuery(filters, after, limit); },
+                startAfter(cursor) { calls.push(['after', cursor]); return makeQuery(filters, cursor, limit); },
+                limit(count) { calls.push(['limit', count]); assert.ok(count <= 51); return makeQuery(filters, after, count); },
+                async get() {
+                  calls.push(['list']); if (failDatabase) throw Error('PRIVATE_SENTINEL');
+                  return { docs: matching().filter(id => id > after).slice(0, limit).map(id => snapshot(id, rows[id])) };
+                },
+              };
             };
-            return query;
+            return makeQuery();
           },
         };
       },
@@ -193,4 +194,10 @@ test('overview count corruption fails closed without changing legacy/detail proj
   assert.equal(result.status, 503); assert.deepEqual(result.body, { error: 'printers_unavailable' });
   assert.equal((await f.read()).status, 200);
  }
+});
+
+test('overview aggregate excludes a foreign configuration even beyond the visible page', async () => {
+ const f = fixture({ rows: { p1: record('p1'), p2: record('p2'), p3: record('p3', { configuration: configuration('p3', { brandId: 'foreign' }) }) } });
+ const result = await f.read('brandId=brand&locationId=location&overview=true&limit=1');
+ assert.equal(result.status, 200); assert.equal(result.body.totalPrinters, 2); assert.equal(result.body.items[0].configuration.id, 'p1');
 });
