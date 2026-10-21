@@ -21,3 +21,5 @@ This slice does not grant stamps, change campaign settings or advertise a profil
 `tests/unit/loyalty-profile.cjs` covers schema/date boundaries, persisted session and brand/customer ownership, partial clearing, alias preservation, identity conflicts and competing phone claims. `tests/unit/loyalty-profile-browser.cjs` runs the actual profile component at 320/390/1440 pixels and covers saving, persisted values, invalid/future input, clearing, network/conflict errors and expired sessions. Existing membership, page/layout and portal browser regressions must continue to pass.
 
 These tests use synthetic data and isolated HTTP/Firestore fixtures. They are not production live QA. Merge/deploy remains owned by the coordinator after current-head CI, independent Codex review, documentation and release gates. Verify the deployed release, then run the issue's approved acceptance scenario before closing. No production profile writes are authorized by this implementation task.
+
+When replacing or clearing a legacy phone, valid identities from both the displayed phone and normalizedPhone are retained as historical aliases, even if those fields disagree.

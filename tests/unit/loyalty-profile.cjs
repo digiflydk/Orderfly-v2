@@ -107,3 +107,15 @@ test('future persisted birth dates project empty on the Copenhagen calendar boun
  const result=await update(db,session,{gender:'male'});assert.equal(result.profile.birthDate,null);
  assert.equal(db.rows.get('customers/c').birthDate,'2999-01-01','omitted malformed legacy value is not silently rewritten');
 });
+
+
+test('changing or clearing legacy phone retains both displayed and stale normalized identities',async()=>{
+ for(const normalizedPhone of ['', 'invalid', '+4577778888'])for(const phone of ['', '+4555556666']){
+  const {db,session}=setup();db.rows.get('customers/c').normalizedPhone=normalizedPhone;
+  await update(db,session,{phone});
+  const aliases=db.rows.get('customers/c').phoneAliases;
+  assert.ok(aliases.includes('+4511112222'),'displayed legacy identity must survive');
+  if(normalizedPhone==='+4577778888')assert.ok(aliases.includes(normalizedPhone),'valid stale normalized identity must survive');
+  assert.equal(aliases.includes('invalid'),false);assert.equal(aliases.includes(''),false);
+ }
+});

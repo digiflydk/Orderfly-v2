@@ -44,10 +44,10 @@ export async function updateMemberProfile(db: Firestore, brand: ProgramBrand, se
     if (values.phone !== undefined) {
       // Retain historical aliases/reservations for the shared customer matcher.
       // They are not displayed as the customer's current phone number.
-      const oldPhone = normalizeCustomerPhone(typeof customer.normalizedPhone === 'string' ? customer.normalizedPhone : typeof customer.phone === 'string' ? customer.phone : '');
+      const oldPhones = [customer.phone, customer.normalizedPhone].map(value => normalizeCustomerPhone(typeof value === 'string' ? value : ''));
       const aliases = Array.isArray(customer.phoneAliases) ? customer.phoneAliases.filter((value): value is string => typeof value === 'string') : [];
       changes.phone = next.phone; changes.normalizedPhone = phone;
-      changes.phoneAliases = [...new Set([...aliases.map(normalizeCustomerPhone), oldPhone].filter((value): value is string => !!value && value !== phone))];
+      changes.phoneAliases = [...new Set([...aliases.map(normalizeCustomerPhone), ...oldPhones].filter((value): value is string => !!value && value !== phone))];
       if (phoneRef && phone) tx.set(phoneRef, { brandId: brand.brandId, customerId: member.customerId, phoneHash: customerIdentityKey(brand.brandId, phone),
         source: 'loyalty_profile', updatedAt: ctx.now, ...(phoneKnown ? {} : { createdAt: ctx.now }) }, { merge: true });
     }
