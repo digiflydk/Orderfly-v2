@@ -27,11 +27,11 @@ function fixture({ permissions = ['orderfly.catalog:view'], failure, catalogs = 
 }
 test('superuser printer page projects independent native view/create/edit metadata', async () => {
   const f = fixture(); assert.match(await f.render(), /Printers/);
-  assert.deepEqual(f.calls, ['orderfly.catalog:view', 'orderfly.catalog:create', 'orderfly.catalog:edit']);
-  assert.deepEqual(f.props, [{ createLocations: [{ id: 'la', brandId: 'a' }], editLocations: [{ id: 'la', brandId: 'a' }], brands: [{ id: 'a', name: 'Nord' }], locations: [{ id: 'la', name: 'Station', brandId: 'a' }] }]);
+  assert.deepEqual(f.calls, ['orderfly.catalog:view', 'orderfly.catalog:create', 'orderfly.catalog:edit', 'orderfly.catalog:delete']);
+  assert.deepEqual(f.props, [{ createLocations: [{ id: 'la', brandId: 'a' }], editLocations: [{ id: 'la', brandId: 'a' }], deleteLocations: [{ id: 'la', brandId: 'a' }], brands: [{ id: 'a', name: 'Nord' }], locations: [{ id: 'la', name: 'Station', brandId: 'a' }] }]);
 });
 test('denied page does not read native location or printer data', async () => {
-  for (const permissions of [['orderfly.catalog:view'], ['orderfly.catalog:view', 'orderfly.catalog:create', 'orderfly.catalog:edit'], ['orderfly.orders:view'], ['orderfly.stamp_cards:counter'], ['orderfly.catalog:edit']]) {
+  for (const permissions of [['orderfly.catalog:view'], ['orderfly.catalog:view', 'orderfly.catalog:create', 'orderfly.catalog:edit', 'orderfly.catalog:delete'], ['orderfly.orders:view'], ['orderfly.stamp_cards:counter'], ['orderfly.catalog:edit']]) {
     const f = fixture({ permissions, superuser: false }); assert.match(await f.render(), /Denied/); assert.deepEqual(f.calls, []); assert.deepEqual(f.props, []);
   }
 });
@@ -45,12 +45,12 @@ test('catalog outages show safe unavailable state, not an empty successful overv
 });
 
 test('write affordances use independent native create/edit scopes, never session permission union', async () => {
-  const f = fixture({ permissions: ['orderfly.catalog:view', 'orderfly.catalog:create', 'orderfly.catalog:edit'], catalogs: {
+  const f = fixture({ permissions: ['orderfly.catalog:view', 'orderfly.catalog:create', 'orderfly.catalog:edit', 'orderfly.catalog:delete'], catalogs: {
     'orderfly.catalog:create': { brands: [], locations: [{ id: 'la', brandId: 'a', privateData: 'secret' }] },
     'orderfly.catalog:edit': { brands: [], locations: [{ id: 'lb', brandId: 'b', privateData: 'secret' }] },
   } });
   assert.match(await f.render(), /Printers/);
-  assert.deepEqual(f.calls, ['orderfly.catalog:view', 'orderfly.catalog:create', 'orderfly.catalog:edit']);
+  assert.deepEqual(f.calls, ['orderfly.catalog:view', 'orderfly.catalog:create', 'orderfly.catalog:edit', 'orderfly.catalog:delete']);
   assert.deepEqual(f.props[0].createLocations, [{ id: 'la', brandId: 'a' }]);
   assert.deepEqual(f.props[0].editLocations, [{ id: 'lb', brandId: 'b' }]);
 });
@@ -63,7 +63,7 @@ test('revoked write scope hides only that affordance without weakening view perm
 });
 test('superuser still resolves write scope using current native catalog', async () => {
   const f = fixture({ superuser: true, permissions: [] }); assert.match(await f.render(), /Printers/);
-  assert.deepEqual(f.calls, ['orderfly.catalog:view', 'orderfly.catalog:create', 'orderfly.catalog:edit']);
+  assert.deepEqual(f.calls, ['orderfly.catalog:view', 'orderfly.catalog:create', 'orderfly.catalog:edit', 'orderfly.catalog:delete']);
 });
 
 test('retired merchant printer page never loads printer data', () => {
@@ -71,4 +71,10 @@ test('retired merchant printer page never loads printer data', () => {
  const mod={exports:{}};
  new Function('require','module','exports',code)(name=>{assert.equal(name,'next/navigation');return {notFound:()=>{throw Error('NOT_FOUND');}};},mod,mod.exports);
  assert.throws(()=>mod.exports.default(),/NOT_FOUND/);
+});
+
+test('delete selector grants are independently resolved and revoked without hiding edit', async () => {
+ const f = fixture({ catalogs: { 'orderfly.catalog:delete': Object.assign(Error('PRIVATE'), { status: 403 }) } });
+ assert.match(await f.render(), /Printers/); assert.deepEqual(f.props[0].deleteLocations, []);
+ assert.deepEqual(f.props[0].editLocations, [{ id: 'la', brandId: 'a' }]);
 });
