@@ -1,4 +1,6 @@
 import { createHash, randomBytes } from 'node:crypto';
+import { emptyQrLifetime, incrementQrLifetime, readQrLifetime, type QrLifetime } from './lifetime';
+import type { QrRequestClassification } from './metrics';
 
 /** Internal service only. Scope MUST come from current server-side native authorization. */
 export type QrScope = { brandId: string; locationIds: string[] | null; actorId: string };
@@ -6,7 +8,25 @@ export type QrStatus = 'active' | 'paused' | 'archived';
 export type QrDesign = { width: number; margin: number; dark: string; light: string; errorCorrectionLevel: 'L'|'M'|'Q'|'H' };
 export type QrInput = { name: string; destination: string; locationId: string | null; campaign?: string; tags?: string[]; expiresAt?: number | null; design?: QrDesign };
 export type QrRecord = { id: string; brandId: string; locationId: string | null; slug: string; name: string; destination: string;
-  campaign: string; tags: string[]; expiresAt: number | null; status: QrStatus; revision: number; createdAt: number; updatedAt: number; design?: QrDesign };
+  campaign: string; tags: string[]; expiresAt: number | null; status: QrStatus; revision: number; createdAt: number; updatedAt: number; design?: QrDesign;
+  /** Absent/null on legacy codes is unknown history, never a claimed backfill. */
+  lifetime?: QrLifetime | null };
+export type QrAuditSnapshot = Pick<QrRecord, 'id' | 'brandId' | 'locationId' | 'slug' | 'name' | 'destination' | 'campaign' | 'tags' | 'expiresAt' | 'status' | 'revision' | 'createdAt' | 'updatedAt' | 'design'>;
+/** Immutable audit projection. Never copy lifetime, secrets or future unrelated fields. */
+export function qrAuditSnapshot(record: QrRecord): QrAuditSnapshot {
+  return { id: record.id, brandId: record.brandId, locationId: record.locationId, slug: record.slug, name: record.name,
+    destination: record.destination, campaign: record.campaign, tags: [...record.tags], expiresAt: record.expiresAt,
+    status: record.status, revision: record.revision, createdAt: record.createdAt, updatedAt: record.updatedAt,
+    ...(record.design ? { design: { width: record.design.width, margin: record.design.margin, dark: record.design.dark,
+      light: record.design.light, errorCorrectionLevel: record.design.errorCorrectionLevel } } : {}) };
+}
+/** Command receipts freeze business results, never an obsolete scan-counter snapshot. */
+export function qrReceiptWithCurrentLifetime(result: QrRecord, current: QrRecord): QrRecord {
+  const { lifetime: _oldLifetime, ...businessResult } = result;
+  return { ...businessResult, ...(current.lifetime === undefined ? {} : {
+    lifetime: current.lifetime === null ? null : readQrLifetime(current.lifetime),
+  }) };
+}
 type Snapshot = { exists: boolean; id: string; data(): Record<string, any> | undefined };
 type Reference = { path: string; collection(path: string): Collection };
 type Query = { where(field: string, op: string, value: unknown): Query; limit(limit: number): Query; get(): Promise<{ docs: Snapshot[] }> };
@@ -81,14 +101,15 @@ export function createQrStore(db: QrDatabase, options: {
         if (!result || result.brandId !== scope.brandId) return fail('request_conflict', 409);
         // Create/duplicate have no command target ID. Their receipt must still
         // reauthorize the CURRENT result record, which may have moved locations.
-        read(scope, await tx.get(recordRef(scope.brandId, result.id)));
+        const liveResult = read(scope, await tx.get(recordRef(scope.brandId, result.id)));
         scopeCheck(scope, result.locationId);
-        return result;
+        return qrReceiptWithCurrentLifetime(result, liveResult);
       }
       if (current && (current.revision !== revision || current.status === 'archived')) return fail('revision_conflict', 409);
       const at = now(), next = await make(tx, current, at);
       scopeCheck(scope, next.locationId);
-      const audit = { actorId: scope.actorId, action, at, revision: next.revision, previousRevision: current?.revision ?? null };
+      const audit = { actorId: scope.actorId, action, at, revision: next.revision, previousRevision: current?.revision ?? null,
+        before: current ? qrAuditSnapshot(current) : null, after: qrAuditSnapshot(next) };
       if (current) tx.set(recordRef(scope.brandId, next.id), next);
       else {
         tx.create(recordRef(scope.brandId, next.id), next);
@@ -104,7 +125,7 @@ export function createQrStore(db: QrDatabase, options: {
     return mutate(scope, null, 'create', parsed, requestId, null, async (tx, _, at) => {
       await checkLocation(tx, scope.brandId, parsed.locationId);
       if (parsed.expiresAt !== null && parsed.expiresAt <= at) return fail('invalid_expiry');
-      return { ...parsed, id: key(newId()), slug: newSlug(), brandId: scope.brandId, status: 'active', revision: 1, createdAt: at, updatedAt: at };
+      return { ...parsed, id: key(newId()), slug: newSlug(), brandId: scope.brandId, status: 'active', revision: 1, createdAt: at, updatedAt: at, lifetime: emptyQrLifetime() };
     });
   }
   function newSlug() { const slug = newId(); if (!/^[a-f0-9]{32}$/.test(slug)) fail('invalid_slug_source', 500); return slug; }
@@ -136,7 +157,7 @@ export function createQrStore(db: QrDatabase, options: {
       const source = read(scope, await tx.get(recordRef(scope.brandId, id)));
       if (source.status === 'archived' || source.expiresAt !== null && source.expiresAt <= at) return fail('source_unavailable', 409);
       await checkLocation(tx, scope.brandId, source.locationId);
-      return { ...source, name: text(name, 160, true), id: key(newId()), slug: newSlug(), status: 'paused', revision: 1, createdAt: at, updatedAt: at };
+      return { ...source, name: text(name, 160, true), id: key(newId()), slug: newSlug(), status: 'paused', revision: 1, createdAt: at, updatedAt: at, lifetime: emptyQrLifetime() };
     });
   }
   /** Internal transaction read phase for B2: append the event only AFTER this returns. */
@@ -156,7 +177,17 @@ export function createQrStore(db: QrDatabase, options: {
   async function resolve(slug: string): Promise<string> {
     return db.runTransaction(async tx => (await resolveInTransaction(tx, slug)).destination);
   }
+  /** Internal GET writer. Call after every other transaction read and before event/limiter writes. */
+  async function recordLifetimeInTransaction(tx: QrTransaction, brandId: string, codeId: string, classification: QrRequestClassification, at: number): Promise<void> {
+    if (!classification.opening) return;
+    const ref = recordRef(brandId, codeId), snapshot = await tx.get(ref), row = snapshot.data() as QrRecord | undefined;
+    if (!snapshot.exists || !row || row.brandId !== brandId || row.id !== codeId) return fail('not_found', 404);
+    // An absent legacy counter has unknown prehistory. Never promote a partial post-upgrade count to all-time.
+    if (row.lifetime == null) return;
+    const lifetime = incrementQrLifetime(row.lifetime, classification, at);
+    tx.set(ref, { ...row, lifetime });
+  }
   return { create, update, get, list, duplicate, pause: (s: QrScope, id: string, revision: number, requestId: string) => status(s, id, 'paused', revision, requestId),
     activate: (s: QrScope, id: string, revision: number, requestId: string) => status(s, id, 'active', revision, requestId),
-    archive: (s: QrScope, id: string, revision: number, requestId: string) => status(s, id, 'archived', revision, requestId), resolve, resolveInTransaction };
+    archive: (s: QrScope, id: string, revision: number, requestId: string) => status(s, id, 'archived', revision, requestId), resolve, resolveInTransaction, recordLifetimeInTransaction };
 }

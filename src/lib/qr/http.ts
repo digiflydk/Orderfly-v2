@@ -3,6 +3,7 @@ import { QrStoreError } from './store';
 import { QrPayloadError } from './payload';
 import { QrRenderError } from './render';
 import { QrAnalyticsError } from './analytics';
+import { QrHistoryError } from './history';
 
 const reply=(body:unknown,status=200)=>Response.json(body,{status,headers:{'Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer'}});
 export async function qrAdminHttp(request:Request,deps:{origin:string;execute:(command:unknown)=>Promise<unknown>}) {
@@ -19,7 +20,7 @@ export async function qrAdminHttp(request:Request,deps:{origin:string;execute:(c
  try{return reply(await deps.execute(raw));}
  catch(error){
   if(error instanceof z.ZodError||error instanceof QrPayloadError||error instanceof QrRenderError)return reply({error:'invalid_input'},400);
-  if(error instanceof QrStoreError||error instanceof QrAnalyticsError)return reply({error:error.status===400?'invalid_input':error.status===403?'forbidden':error.code},error.status);
+  if(error instanceof QrStoreError||error instanceof QrAnalyticsError||error instanceof QrHistoryError)return reply({error:error.status===400?'invalid_input':error.status===403?'forbidden':error.code},error.status);
   const e=error as {name?:string;status?:number;code?:string};
   if(e.name==='AuthorityError'||['unauthorized','forbidden','identity_unavailable'].includes(e.code||''))return reply({error:e.status===401?'unauthorized':e.status===403?'forbidden':'unavailable'},e.status===401?401:e.status===403?403:503);
   return reply({error:'unavailable'},503);

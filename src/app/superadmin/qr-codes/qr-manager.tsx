@@ -23,7 +23,7 @@ export type QrManagerApi = {
   preview: (draft: QrDraft, context: { id?: string; revision?: string }) => Promise<QrPreview>;
   download: (draft: QrDraft, format: 'png' | 'svg', context: { id?: string; revision?: string }) => Promise<{ url: string; filename: string }>;
 };
-export type QrManagerProps = { brands: QrBrandChoice[]; initialCodes: QrCodeSummary[]; capabilities: QrCapabilities; api: QrManagerApi };
+export type QrManagerProps = { brands: QrBrandChoice[]; initialCodes: QrCodeSummary[]; capabilities: QrCapabilities; api: QrManagerApi; dynamicEnabled?: boolean };
 
 const blank = (brandId = ''): QrDraft => ({ name: '', brandId, locationId: null, kind: 'dynamic', destination: '', staticType: 'url', fields: {}, campaign: '', tags: [], utm: { source: '', medium: 'qr', campaign: '', content: '', term: '' } });
 const fieldClass = 'w-full rounded-md border bg-background px-3 py-2 text-sm';
@@ -75,7 +75,7 @@ function trustedAssetUrl(value: string, image = false): string {
   return url.href;
 }
 
-export function QrManager({ brands, initialCodes, capabilities, api }: QrManagerProps) {
+export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnabled = true }: QrManagerProps) {
   const [codes, setCodes] = useState(initialCodes);
   const [search, setSearch] = useState('');
   const [status, setStatusFilter] = useState<'all' | QrStatus>('all');
@@ -101,7 +101,7 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
   const open = (code?: QrCodeSummary, duplicate = false) => {
     if (running.current || uncertain) return;
     generation.current++; retry.current = null; setPreview(null); setError(''); setNotice(''); setEditing(code && !duplicate ? code : null);
-    setDraft(code ? { ...draftOf(code), name: duplicate ? `${code.name} (kopi)` : code.name } : { ...blank(defaultBrand?.id), locationId: defaultBrand?.allowWholeBrand === false ? defaultBrand.locations[0]?.id || null : null });
+    setDraft(code ? { ...draftOf(code), name: duplicate ? `${code.name} (kopi)` : code.name } : { ...blank(defaultBrand?.id), kind: dynamicEnabled ? 'dynamic' : 'static', locationId: defaultBrand?.allowWholeBrand === false ? defaultBrand.locations[0]?.id || null : null });
   };
   const close = () => { if (running.current || uncertain) return; generation.current++; setDraft(null); setEditing(null); setPreview(null); setError(''); retry.current = null; };
   const run = async (operation: () => Promise<void>, mutation = false, isRetry = false) => {
@@ -111,13 +111,15 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
     try { await operation(); setUncertain(false); retryOperation.current = null; } catch (failure) {
       setError(errorText(failure));
       const code = typeof failure === 'object' && failure !== null && 'code' in failure ? String(failure.code) : '';
-      if (mutation) setUncertain(!['revision_conflict', 'conflict', 'forbidden', 'unauthorized', 'invalid_input', 'invalid_destination'].includes(code));
+      // A later denial does not prove the first unknown request was never
+      // committed. Only a successful same-request receipt settles a replay.
+      if (mutation) setUncertain(isRetry || !['revision_conflict', 'conflict', 'forbidden', 'unauthorized', 'invalid_input', 'invalid_destination'].includes(code));
     }
     finally { running.current = false; setBusy(false); }
   };
   const replace = (code: QrCodeSummary) => setCodes(current => [code, ...current.filter(row => row.id !== code.id)]);
   const save = () => {
-    if (!draft || draft.kind !== 'dynamic' || !(editing ? capabilities.edit : capabilities.create)) return;
+    if (!draft || !dynamicEnabled || draft.kind !== 'dynamic' || !(editing ? capabilities.edit : capabilities.create)) return;
     const value = draft, key = JSON.stringify(['save', editing?.id, editing?.revision, value]);
     void run(async () => {
       const saved = await api.save(value, { ...(editing ? { id: editing.id, revision: editing.revision } : {}), requestId: requestId(key) });
@@ -132,7 +134,7 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
     }, true);
   };
   const renderPreview = () => {
-    if (!draft) return;
+    if (!draft || draft.kind === 'dynamic' && !dynamicEnabled) return;
     const value = draft, current = generation.current;
     void run(async () => {
       const result = await api.preview(value, editing ? { id: editing.id, revision: editing.revision } : {});
@@ -140,7 +142,7 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
     });
   };
   const download = (format: 'png' | 'svg') => {
-    if (!draft || !capabilities.export) return;
+    if (!draft || !capabilities.export || draft.kind === 'dynamic' && !dynamicEnabled) return;
     const value = draft;
     void run(async () => {
       const result = await api.download(value, format, editing ? { id: editing.id, revision: editing.revision } : {}), link = document.createElement('a');
@@ -150,12 +152,13 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
   };
   const visible = codes.filter(code => (status === 'all' || code.status === status) && `${code.name} ${code.campaign} ${code.tags.join(' ')}`.toLocaleLowerCase('da').includes(search.toLocaleLowerCase('da')));
   const selectedBrand = brands.find(brand => brand.id === draft?.brandId);
-  const dynamicNeedsSave = draft?.kind === 'dynamic' && (!editing || JSON.stringify(draft) !== JSON.stringify(draftOf(editing)));
+  const dynamicNeedsSave = draft?.kind === 'dynamic' && (!dynamicEnabled || !editing || JSON.stringify(draft) !== JSON.stringify(draftOf(editing)));
 
   return <section aria-label="QR-koder" aria-busy={busy} className="space-y-6" style={{ minWidth: 0 }}>
     <header className="flex flex-wrap items-center justify-between gap-3"><div><h1 className="text-2xl font-bold">QR-koder</h1><p className="text-sm text-muted-foreground">Opret koder til kampagner, borde og tryksager.</p></div>
-      {capabilities.create && <button type="button" className={buttonClass} disabled={busy || uncertain || !defaultBrand} onClick={() => open()}>Opret QR-kode</button>}
+      {(capabilities.create || !dynamicEnabled && capabilities.export) && <button type="button" className={buttonClass} disabled={busy || uncertain || !defaultBrand} onClick={() => open()}>{dynamicEnabled ? 'Opret QR-kode' : 'Generér statisk QR-kode'}</button>}
     </header>
+    {!dynamicEnabled && <p role="status" className="rounded-md border p-3">Dynamiske QR-koder er ikke aktiveret. Du kan generere statiske koder. Gemning, preview og download af dynamiske koder er midlertidigt lukket.</p>}
     {error && <p role="alert" className="rounded-md bg-destructive/10 p-3">{error}</p>}
     {notice && <p role="status" className="rounded-md border p-3">{notice}</p>}
     {busy && <p role="status">Arbejder…</p>}
@@ -174,7 +177,7 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
           <label>Navn<input required maxLength={120} className={fieldClass} value={draft.name} onChange={e => change({ name: e.target.value })} /></label>
           <label>Brand<select aria-label="Brand" required className={fieldClass} disabled={!!editing} value={draft.brandId} onChange={e => { const brand = brands.find(candidate => candidate.id === e.target.value); change({ brandId: e.target.value, locationId: brand?.allowWholeBrand === false ? brand.locations[0]?.id || null : null }); }}>{brands.filter(brand => brand.allowWholeBrand !== false || brand.locations.length > 0).map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label>
           <label>Placering<select aria-label="Placering" className={fieldClass} value={draft.locationId || ''} onChange={e => change({ locationId: e.target.value || null })}>{selectedBrand?.allowWholeBrand !== false && <option value="">Hele brandet</option>}{selectedBrand?.locations.map(location => <option key={location.id} value={location.id}>{location.name}</option>)}</select></label>
-          <label>Kodetype<select aria-label="Kodetype" className={fieldClass} disabled={!!editing} value={draft.kind} onChange={e => change({ kind: e.target.value as QrKind })}><option value="dynamic">Dynamisk, med statistik</option><option value="static">Statisk, uden statistik</option></select></label>
+          <label>Kodetype<select aria-label="Kodetype" className={fieldClass} disabled={!!editing} value={draft.kind} onChange={e => change({ kind: e.target.value as QrKind })}><option value="dynamic" disabled={!dynamicEnabled}>Dynamisk, med statistik</option><option value="static">Statisk, uden statistik</option></select></label>
           {draft.kind === 'static' && <label>Indholdstype<select aria-label="Indholdstype" className={fieldClass} value={draft.staticType} onChange={e => change({ staticType: e.target.value as QrStaticType, fields: e.target.value === 'wifi' ? { security: 'WPA' } : {} })}>{Object.entries(STATIC_NAMES).map(([key, text]) => <option key={key} value={key}>{text}</option>)}</select></label>}
         </div>
         {(draft.kind === 'dynamic' || draft.staticType === 'url') && <label className="block">Webadresse<input required type="url" maxLength={2000} placeholder="https://" className={fieldClass} value={draft.destination} onChange={e => change({ destination: e.target.value })} /></label>}
@@ -196,12 +199,12 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
         </div>
         {(draft.kind === 'dynamic' || draft.staticType === 'url') && <details><summary>Kampagnesporing (UTM)</summary><div style={gridStyle}>{(['source', 'medium', 'campaign', 'content', 'term'] as const).map(key => <label key={key}>UTM {key}<input maxLength={120} className={fieldClass} value={draft.utm[key]} onChange={e => change({ utm: { ...draft.utm, [key]: e.target.value } })} /></label>)}</div></details>}
         <div className="flex flex-wrap gap-2">
-          {draft.kind === 'dynamic' && (editing ? capabilities.edit : capabilities.create) && <button type="submit" className={buttonClass}>Gem QR-kode</button>}
+          {draft.kind === 'dynamic' && (editing ? capabilities.edit : capabilities.create) && <button type="submit" disabled={!dynamicEnabled} className={buttonClass}>Gem QR-kode</button>}
           <button type="button" className={buttonClass} disabled={dynamicNeedsSave} onClick={renderPreview}>Vis eksempel</button>
           {capabilities.export && <><button type="button" className={buttonClass} disabled={dynamicNeedsSave} onClick={() => download('png')}>Download PNG</button><button type="button" className={buttonClass} disabled={dynamicNeedsSave} onClick={() => download('svg')}>Download SVG</button></>}
           <button type="button" className={buttonClass} onClick={close}>Annullér</button>
         </div>
-        {dynamicNeedsSave && <p className="text-sm">Gem koden og åbn den igen før preview eller download. Det sikrer, at printet bruger det permanente link.</p>}
+        {dynamicNeedsSave && dynamicEnabled && <p className="text-sm">Gem koden og åbn den igen før preview eller download. Det sikrer, at printet bruger det permanente link.</p>}
       </fieldset>
       {preview && <figure className="space-y-2"><img src={preview.imageUrl} alt="Eksempel på QR-kode" width={256} height={256} style={{ maxWidth: '100%', height: 'auto' }} /><figcaption className="break-all text-xs">{draft.kind === 'dynamic' ? 'Preview. Brug den gemte kodes permanente link ved print.' : preview.payload}</figcaption></figure>}
     </form>}
@@ -211,7 +214,7 @@ export function QrManager({ brands, initialCodes, capabilities, api }: QrManager
       {visible.map(code => <li key={code.id} className="rounded-lg border p-4" style={{ overflowWrap: 'anywhere' }}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{code.name}</h2><p className="text-sm">{brands.find(brand => brand.id === code.brandId)?.name || code.brandId} · {STATUS_NAMES[code.status]} · {code.kind === 'dynamic' ? 'Dynamisk' : 'Statisk'}</p><p className="text-sm text-muted-foreground">{code.campaign}{code.tags.length ? ` · ${code.tags.join(', ')}` : ''}</p></div><div className="flex flex-wrap gap-2">
         {capabilities.edit && code.status !== 'archived' && <button type="button" className={buttonClass} disabled={busy || uncertain} aria-label={`Redigér ${code.name}`} onClick={() => open(code)}>Redigér</button>}
         {!capabilities.edit && capabilities.export && code.status !== 'archived' && <button type="button" className={buttonClass} disabled={busy || uncertain} aria-label={`Vis ${code.name}`} onClick={() => open(code)}>Vis</button>}
-        {capabilities.create && code.kind === 'dynamic' && <button type="button" className={buttonClass} disabled={busy || uncertain} aria-label={`Duplikér ${code.name}`} onClick={() => open(code, true)}>Duplikér</button>}
+        {capabilities.create && dynamicEnabled && code.kind === 'dynamic' && <button type="button" className={buttonClass} disabled={busy || uncertain} aria-label={`Duplikér ${code.name}`} onClick={() => open(code, true)}>Duplikér</button>}
         {capabilities.edit && code.kind === 'dynamic' && code.status !== 'archived' && <button type="button" className={buttonClass} disabled={busy || uncertain} aria-label={`${code.status === 'active' ? 'Sæt på pause' : 'Aktivér'} ${code.name}`} onClick={() => updateStatus(code, code.status === 'active' ? 'paused' : 'active')}>{code.status === 'active' ? 'Sæt på pause' : 'Aktivér'}</button>}
         {capabilities.archive && code.kind === 'dynamic' && code.status !== 'archived' && <button type="button" className={buttonClass} disabled={busy || uncertain} aria-label={`Arkivér ${code.name}`} onClick={() => { setPendingArchive(code); setError(''); }}>Arkivér</button>}
       </div></div></li>)}

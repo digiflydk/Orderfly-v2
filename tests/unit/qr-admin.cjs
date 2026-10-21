@@ -6,11 +6,12 @@ const {qrAdminHttp}=loadTs('src/lib/qr/http.ts');
 const draft={name:'Bord 1',brandId:'brandA',locationId:'locA',kind:'dynamic',destination:'https://esmeraldapizza.dk/menu',staticType:'url',fields:{},campaign:'table',tags:[],utm:{source:'poster',medium:'qr',campaign:'',term:'',content:''}};
 const saved={id:'codeA',slug:'a'.repeat(32),brandId:'brandA',locationId:'locA',name:'Bord 1',destination:draft.destination,campaign:'table',tags:[],expiresAt:null,status:'active',revision:1,createdAt:1,updatedAt:1};
 const requestId='00000000-0000-4000-8000-000000000001';
-function fixture(denied){
+function fixture(denied,dynamicEnabled=true){
  const calls=[];
  const store={get:async(scope,id)=>{calls.push(['get',scope,id]);return saved;},create:async(scope,input,key)=>{calls.push(['create',scope,input,key]);return {...saved,...input};},update:async()=>{throw new Error('not used');},pause:async()=>saved,activate:async()=>saved,archive:async()=>saved};
+ store.update=async(scope,id,input,revision,key)=>{calls.push(['update',scope,input,key]);return {...saved,...input,revision:revision+1};};
  const api=loadTs('src/lib/qr/admin.ts',{'./store':{createQrStore:()=>store,QrStoreError}});
- const execute=api.createQrAdminService({db:{},actorId:'actorA',list:async()=>({brands:[],codes:[]}),authorize:async(action,brandId,locationId)=>{
+ const execute=api.createQrAdminService({db:{},actorId:'actorA',dynamicEnabled,list:async()=>({brands:[],codes:[]}),authorize:async(action,brandId,locationId)=>{
   calls.push(['authorize',action,brandId,locationId]);if(denied===action)throw new QrStoreError('forbidden',403);
   return {brandId,locationIds:['locA'],actorId:'actorA'};
  }});
@@ -30,6 +31,21 @@ test('dynamic creation preserves native scope, UTM and original idempotency key'
 test('invalid contrast is rejected before storing any dynamic definition',async()=>{
  const {execute,calls}=fixture();await assert.rejects(()=>execute({action:'save',draft:{...draft,style:{width:512,margin:4,dark:'#ffffff',light:'#ffffff',errorCorrectionLevel:'H'}},context:{requestId}}));
  assert.equal(calls.some(x=>x[0]==='create'),false);
+});
+test('full-form UTM clearing removes all managed old tags and preserves unrelated query and fragment',async()=>{
+ const {execute,calls}=fixture();
+ const empty={source:'',medium:'',campaign:'',content:'',term:''};
+ const result=await execute({action:'save',draft:{...draft,destination:'https://esmeraldapizza.dk/menu?keep=1&utm_source=old&utm_campaign=summer#menu',utm:empty},context:{id:'codeA',revision:'1',requestId}});
+ const stored=calls.find(c=>c[0]==='update')[2].destination;
+ assert.equal(stored,'https://esmeraldapizza.dk/menu?keep=1#menu');assert.deepEqual(result.utm,empty);
+ const preview=await execute({action:'render',draft:{...draft,kind:'static',destination:'https://esmeraldapizza.dk/?utm_source=old&keep=1#x',utm:empty},context:{},format:'preview'});
+ assert.equal(preview.payload,'https://esmeraldapizza.dk/?keep=1#x');
+});
+test('OFF module cannot create or export dynamic dead links, while static generation remains available',async()=>{
+ const {execute,calls}=fixture(undefined,false);
+ for(const command of [{action:'save',draft,context:{requestId}},{action:'render',draft,context:{id:'codeA',revision:'1'},format:'png'}])await assert.rejects(()=>execute(command),e=>e.code==='feature_disabled');
+ assert.equal(calls.length,0);
+ const result=await execute({action:'render',draft:{...draft,kind:'static'},context:{},format:'preview'});assert.match(result.imageUrl,/^data:image/);
 });
 test('static confidential payloads are never saved; immediate preview has no DB call',async()=>{
  const {execute,calls}=fixture(),wifi={...draft,kind:'static',staticType:'wifi',fields:{ssid:'Guest',password:'private-pass',security:'WPA'}};

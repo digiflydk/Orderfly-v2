@@ -9,10 +9,13 @@ type Query = { where(field: string, op: string, value: unknown): Query; orderBy(
 type Collection = Query & { doc(id: string): Reference };
 type Reference = { collection(name: string): Collection };
 export type QrAnalyticsDatabase = { collection(name: string): Collection };
+export type QrAttributionBucket = { key: string; openings: number; probableScans: number; excludedOpenings: number };
+export type QrScanAttribution = { byCampaign: QrAttributionBucket[]; byLocation: QrAttributionBucket[] };
 export type QrAnalyticsResult = {
   code: QrAnalyticsCode; metrics: QrMetrics; complete: boolean; totalsAreExact: boolean;
   truncated: boolean; retentionLimited: boolean; futureLimited: boolean; discardedEvents: number; sampledEvents: number;
-  currentLocationOnly: true; dataAsOf: number; period: { from: number; to: number; timezone: 'Europe/Copenhagen' };
+  currentLocationOnly: boolean; dataAsOf: number; retainedFrom: number; period: { from: number; to: number; timezone: 'Europe/Copenhagen' };
+  attribution?: QrScanAttribution;
 };
 export class QrAnalyticsError extends Error {
   constructor(public code: string, public status = 400) { super(code); }
@@ -72,6 +75,23 @@ function classification(value: unknown): QrRequestClassification | null {
   return { opening: c.opening, probableScan: c.probableScan, exclusion: c.exclusion, device: c.device, os: c.os, browser: c.browser,
     referrerOrigin: qrReferrerOrigin(c.referrerOrigin) };
 }
+function expiryMillis(value: unknown): number | null {
+  try {
+    const millis = value instanceof Date ? value.getTime() : value && typeof value === 'object' && 'toMillis' in value
+      && typeof value.toMillis === 'function' ? value.toMillis() : null;
+    return typeof millis === 'number' && Number.isSafeInteger(millis) ? millis : null;
+  } catch { return null; }
+}
+function snapshotCampaign(value: unknown): string {
+  return typeof value === 'string' && value.length <= 160 && !/[\u0000-\u001f\u007f]/.test(value) ? value.trim() : '';
+}
+function addAttribution(map: Map<string, QrAttributionBucket>, key: string, event: QrMetricEvent): void {
+  let row = map.get(key);
+  if (!row) { row = { key, openings: 0, probableScans: 0, excludedOpenings: 0 }; map.set(key, row); }
+  if (event.classification.opening) row.openings++;
+  if (event.classification.probableScan) row.probableScans++;
+  row.excludedOpenings = row.openings - row.probableScans;
+}
 
 export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
   getCode: (scope: QrAnalyticsScope, id: string) => Promise<QrAnalyticsCode>; now?: () => number;
@@ -80,31 +100,43 @@ export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
   return {
     async read(scope: QrAnalyticsScope, id: string, range: { from: number; to: number }): Promise<QrAnalyticsResult> {
       scopeCheck(scope, id); interval(range);
+      const dataAsOf = now();
+      if (!Number.isSafeInteger(dataAsOf) || dataAsOf < 0 || !Number.isFinite(new Date(dataAsOf).getTime())) return fail('invalid_clock', 503);
+      const retainedFrom = Math.max(0, dataAsOf - QR_ANALYTICS_RETENTION_DAYS * DAY);
+      const queryFrom = Math.max(range.from, retainedFrom);
       // Mandatory stored-record lookup before constructing any events query.
       const found = await options.getCode(scope, id);
       if (!found || found.id !== id || found.brandId !== scope.brandId || (found.locationId !== null && !validKey(found.locationId))) return fail('not_found', 404);
       if (scope.locationIds !== null && (found.locationId === null || !scope.locationIds.includes(found.locationId))) return fail('forbidden', 403);
       const code: QrAnalyticsCode = { id: found.id, brandId: found.brandId, locationId: found.locationId, name: found.name, campaign: found.campaign, tags: [...found.tags] };
-      // Current-location equality prevents a moved code exposing historic events from a formerly assigned location.
-      const result = await db.collection('brands').doc(scope.brandId).collection(QR_PATHS.codes).doc(id).collection(QR_PATHS.events)
-        .where('brandId', '==', scope.brandId).where('qrId', '==', id).where('locationId', '==', code.locationId)
-        .where('timestamp', '>=', range.from).where('timestamp', '<', range.to)
+      // Brand-wide callers retain the whole code history. Delegated readers see
+      // only its current location, never a former location's event history.
+      const currentLocationOnly = scope.locationIds !== null;
+      let query = db.collection('brands').doc(scope.brandId).collection(QR_PATHS.codes).doc(id).collection(QR_PATHS.events)
+        .where('brandId', '==', scope.brandId).where('qrId', '==', id);
+      if (currentLocationOnly) query = query.where('locationId', '==', code.locationId);
+      const result = queryFrom >= range.to ? { docs: [] } : await query
+        .where('timestamp', '>=', queryFrom).where('timestamp', '<', range.to)
         .orderBy('timestamp', 'asc').orderBy('__name__', 'asc').limit(QR_ANALYTICS_EVENT_LIMIT + 1).get();
       const truncated = result.docs.length > QR_ANALYTICS_EVENT_LIMIT, events: QrMetricEvent[] = [];
+      const byCampaign = new Map<string, QrAttributionBucket>(), byLocation = new Map<string, QrAttributionBucket>();
       let discardedEvents = 0;
       for (const snapshot of result.docs.slice(0, QR_ANALYTICS_EVENT_LIMIT)) {
-        const row = snapshot.data(), c = classification(row?.classification);
-        if (!row || row.brandId !== scope.brandId || row.qrId !== id || row.locationId !== code.locationId || !Number.isSafeInteger(row.timestamp)
-          || (row.timestamp as number) < range.from || (row.timestamp as number) >= range.to || !c) { discardedEvents++; continue; }
+        const row = snapshot.data(), c = classification(row?.classification), expiresAt = expiryMillis(row?.expiresAt);
+        if (!row || row.brandId !== scope.brandId || row.qrId !== id || (row.locationId !== null && !validKey(row.locationId))
+          || (currentLocationOnly && row.locationId !== code.locationId) || !Number.isSafeInteger(row.timestamp)
+          || (row.timestamp as number) < queryFrom || (row.timestamp as number) >= range.to || !c || expiresAt === null || expiresAt <= dataAsOf) { discardedEvents++; continue; }
         // Identifiers are deliberately not projected. This release cannot estimate unique visitors.
-        events.push({ timestamp: row.timestamp as number, qrId: id, classification: c });
+        const event: QrMetricEvent = { timestamp: row.timestamp as number, qrId: id, classification: c };
+        events.push(event);
+        addAttribution(byCampaign, snapshotCampaign(row.campaign), event);
+        addAttribution(byLocation, row.locationId === null ? '' : row.locationId as string, event);
       }
-      const dataAsOf = now();
-      if (!Number.isSafeInteger(dataAsOf) || dataAsOf < 0) return fail('invalid_clock', 503);
-      const retentionLimited = range.from < dataAsOf - QR_ANALYTICS_RETENTION_DAYS * DAY, futureLimited = range.to > dataAsOf;
+      const retentionLimited = range.from < retainedFrom, futureLimited = range.to > dataAsOf;
       const complete = !truncated && !retentionLimited && !futureLimited && discardedEvents === 0;
       return { code, metrics: aggregateQrMetrics(events, { ...range, qrId: id }), complete, totalsAreExact: complete,
-        truncated, retentionLimited, futureLimited, discardedEvents, sampledEvents: events.length, currentLocationOnly: true, dataAsOf,
+        truncated, retentionLimited, futureLimited, discardedEvents, sampledEvents: events.length, currentLocationOnly, dataAsOf, retainedFrom,
+        attribution: { byCampaign: [...byCampaign.values()].sort((a,b) => a.key.localeCompare(b.key)), byLocation: [...byLocation.values()].sort((a,b) => a.key.localeCompare(b.key)) },
         period: { ...range, timezone: 'Europe/Copenhagen' } };
     },
   };
@@ -122,5 +154,7 @@ export function exportQrAnalyticsCsv(result: QrAnalyticsResult): string {
     for (const bucket of buckets) rows.push([dimension, bucket.key, bucket.totalOpenings, bucket.probableScans, bucket.excludedOpenings, bucket.estimatedUnique, null, ...suffix]);
   for (const [dimension, buckets] of [['device', m.byDevice], ['os', m.byOs], ['browser', m.byBrowser], ['referrer', m.byReferrer]] as const)
     for (const bucket of buckets) rows.push([dimension, bucket.key, null, null, null, null, bucket.count, ...suffix]);
+  for (const [dimension, buckets, unknown] of [['campaign_at_scan', result.attribution?.byCampaign ?? [], 'Ukendt kampagne'], ['location_at_scan', result.attribution?.byLocation ?? [], 'Uden registreret afdeling']] as const)
+    for (const bucket of buckets) rows.push([dimension, bucket.key || unknown, bucket.openings, bucket.probableScans, bucket.excludedOpenings, null, null, ...suffix]);
   return serializeQrCsv(rows);
 }

@@ -115,6 +115,11 @@ test('canonical URL and direct host validation denies spoofing, subdomains, port
   ]) assert.equal((await handleQrRedirect(request('GET', headers, url), slug, f.options)).status, 404);
   assert.equal(f.db.transactions, 0);
   assert.equal((await handleQrRedirect(request('GET', {}, `http://localhost:3000/q/${slug}`), slug, { ...f.options, environment: 'development' })).status, 302);
+  const localUrl=`http://localhost:3100/q/${slug}`;
+  assert.equal((await handleQrRedirect(request('HEAD',{host:'127.0.0.1:3100'},localUrl),slug,{...f.options,environment:'development'})).status,302);
+  for(const host of ['127.0.0.1:3101','evil.example:3100','localhost:3100@evil.example','localhost:3100/path'])
+    assert.equal((await handleQrRedirect(request('HEAD',{host},localUrl),slug,{...f.options,environment:'development'})).status,404);
+  assert.equal((await handleQrRedirect(request('HEAD',{host:'127.0.0.1:3100'},localUrl),slug,{...f.options,environment:'production'})).status,404);
 });
 
 test('invalid slug/method never reach DB, and database failures cannot produce false redirects or leak detail', async () => {

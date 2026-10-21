@@ -11,7 +11,7 @@ const root = process.cwd();
 const componentDir = path.join(root, 'src/app/superadmin/qr-codes');
 const transpile = source => ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
 const base = { name: 'Bord 1', brandId: 'b1', locationId: 'l1', kind: 'dynamic', destination: 'https://example.com/menu', staticType: 'url', fields: {}, campaign: 'Oktober', tags: [], utm: { source: '', medium: 'qr', campaign: '', content: '', term: '' }, id: 'qr1', revision: '1', status: 'active' };
-const initial = { brands: [{ id: 'b1', name: 'Esmeralda', locations: [{ id: 'l1', name: 'Amager' }] }], codes: [base], capabilities: { create: true, edit: true, archive: true, export: true }, analytics: true, truncated: false };
+const initial = { brands: [{ id: 'b1', name: 'Esmeralda', locations: [{ id: 'l1', name: 'Amager' }] }], codes: [base], capabilities: { create: true, edit: true, archive: true, export: true }, analytics: true, truncated: false, dynamicEnabled: true };
 const metrics = { from: Date.parse('2026-10-20T22:00:00Z'), to: Date.parse('2026-10-21T22:00:00Z'), timezone: 'Europe/Copenhagen', totalOpenings: 4, probableScans: 3, excludedOpenings: 1, knownUnique: 0, unidentifiedScans: 3, estimatedUnique: null, byDay: [], byHour: [], byQr: [], byDevice: [], byOs: [], byBrowser: [], byReferrer: [] };
 let server, browser, origin;
 
@@ -29,6 +29,8 @@ before(async () => {
     const props=${JSON.stringify(initial)},params=new URLSearchParams(location.search);
     if(params.has('denied')){props.analytics=false;props.capabilities={create:false,edit:false,archive:false,export:false};}
     if(params.has('truncated'))props.truncated=true;
+    if(params.has('off'))props.dynamicEnabled=false;
+    if(params.has('missingflag'))delete props.dynamicEnabled;
     const app=ReactDOM.createRoot(document.getElementById('root'));
     window.__unmount=()=>app.unmount();app.render(React.createElement(modules['qr-workspace'].QrWorkspace,{initial:props}));`;
   server = http.createServer((req, res) => {
@@ -171,6 +173,37 @@ test('analytics export uses same scoped filter and is hidden without permission'
   } finally { await page.close(); }
   const denied = await open({ query: '?denied' });
   try { assert.equal(await denied.page.getByRole('button', { name: 'Statistik', exact: true }).count(), 0); assert.equal(denied.calls.length, 0); } finally { await denied.page.close(); }
+});
+
+test('disabled dynamic runtime cannot save or print dynamic codes, while static generator works', async () => {
+  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+cCuoAAAAASUVORK5CYII=';
+  const { page, calls } = await open({ query: '?off', answers: [[200, { imageUrl: 'data:image/png;base64,' + png, payload: 'hello' }]] });
+  try {
+    await page.getByRole('status').filter({ hasText: 'Dynamiske QR-koder er ikke aktiveret.' }).waitFor();
+    await page.getByRole('button', { name: 'Redigér Bord 1', exact: true }).click();
+    for (const name of ['Gem QR-kode', 'Vis eksempel', 'Download PNG', 'Download SVG']) assert.equal(await page.getByRole('button', { name, exact: true }).isDisabled(), true);
+    assert.equal(calls.length, 0);
+    await page.getByRole('button', { name: 'Annullér', exact: true }).click();
+    await page.getByRole('button', { name: 'Generér statisk QR-kode', exact: true }).click();
+    assert.equal(await page.getByRole('combobox', { name: 'Kodetype', exact: true }).inputValue(), 'static');
+    assert.equal(await page.getByRole('combobox', { name: 'Kodetype', exact: true }).getByRole('option', { name: 'Dynamisk, med statistik', exact: true }).evaluate(option => option.disabled), true);
+    await page.getByRole('combobox', { name: 'Kodetype', exact: true }).focus(); await page.keyboard.press('Home');
+    assert.equal(await page.getByRole('combobox', { name: 'Kodetype', exact: true }).inputValue(), 'static');
+    await page.getByRole('combobox', { name: 'Indholdstype', exact: true }).selectOption('text');
+    await page.getByLabel('Tekst', { exact: true }).fill('hello'); await page.getByRole('button', { name: 'Vis eksempel', exact: true }).click();
+    await page.getByRole('img', { name: 'Eksempel på QR-kode', exact: true }).waitFor();
+    assert.equal(calls.length, 1); assert.equal(calls[0].body.action, 'render'); assert.equal(calls[0].body.draft.kind, 'static'); assert.deepEqual(calls[0].body.context, {});
+    assert.equal(await page.getByRole('button', { name: 'Statistik', exact: true }).count(), 1);
+  } finally { await page.close(); }
+});
+
+test('missing runtime flag is disabled in the real workspace', async () => {
+  const { page, calls } = await open({ query: '?missingflag' });
+  try {
+    assert.equal(await page.getByRole('button', { name: 'Opret QR-kode', exact: true }).count(), 0);
+    assert.equal(await page.getByRole('button', { name: 'Generér statisk QR-kode', exact: true }).count(), 1);
+    assert.equal(await page.getByRole('button', { name: 'Duplikér Bord 1', exact: true }).count(), 0); assert.equal(calls.length, 0);
+  } finally { await page.close(); }
 });
 
 test('server page guards unauthorized, forbidden and unavailable before rendering data', async () => {

@@ -19,7 +19,7 @@ export const qrCommandSchema=z.discriminatedUnion('action',[
 ]);
 export type QrCommand=z.infer<typeof qrCommandSchema>;
 export type QrAction='view'|'create'|'edit'|'archive'|'export'|'analytics';
-export type QrAdminDependencies={db:QrDatabase;actorId:string;authorize:(action:QrAction,brandId:string,locationId:string|null)=>Promise<QrScope>;
+export type QrAdminDependencies={db:QrDatabase;actorId:string;dynamicEnabled:boolean;authorize:(action:QrAction,brandId:string,locationId:string|null)=>Promise<QrScope>;
  list:()=>Promise<unknown>};
 
 export function qrSummary(record:QrRecord) {
@@ -30,7 +30,7 @@ export function qrSummary(record:QrRecord) {
 }
 function staticPayload(draft:QrAdminDraft):string {
  const f=draft.fields;
- const data:QrStaticInput=draft.staticType==='url'?{type:'url',url:draft.destination,utm:cleanUtm(draft.utm)}
+ const data:QrStaticInput=draft.staticType==='url'?{type:'url',url:formDestination(draft.destination,draft.utm)}
   :draft.staticType==='text'?{type:'text',text:f.text}
   :draft.staticType==='wifi'?{type:'wifi',ssid:f.ssid,password:f.password,security:f.security as 'WPA'|'WEP'|'nopass'}
   :draft.staticType==='vcard'?{type:'vcard',firstName:f.name,lastName:'',organization:f.organization,phone:f.phone||undefined,email:f.email||undefined}
@@ -39,6 +39,12 @@ function staticPayload(draft:QrAdminDraft):string {
  return buildStaticPayload(data);
 }
 const cleanUtm=(tags:QrAdminDraft['utm']):UtmTags=>Object.fromEntries(Object.entries(tags).filter(([,v])=>v!==''));
+// This is a complete editor form, not applyUtm's partial-update contract.
+function formDestination(destination:string,tags:QrAdminDraft['utm']):string {
+ const url=new URL(normalizeDestination(destination));
+ for(const key of ['source','medium','campaign','term','content'])url.searchParams.delete(`utm_${key}`);
+ return applyUtm(url.toString(),cleanUtm(tags));
+}
 
 /** Native session/action authorization is mandatory for EVERY request, including receipt replay. */
 export function createQrAdminService(deps:QrAdminDependencies) {
@@ -59,6 +65,7 @@ export function createQrAdminService(deps:QrAdminDependencies) {
    return qrSummary(await run(scope,c.id,Number(c.revision),c.requestId));
   }
   const draft=c.draft;
+  if(draft.kind==='dynamic'&&!deps.dynamicEnabled)throw new QrStoreError('feature_disabled',400);
   if(c.action==='save'){
    if(draft.kind!=='dynamic'||!c.context.requestId||!!c.context.id!==!!c.context.revision)throw new QrStoreError('invalid_input');
    const scope=await scoped(c.context.id?'edit':'create',draft.brandId,draft.locationId);
@@ -68,7 +75,7 @@ export function createQrAdminService(deps:QrAdminDependencies) {
    }
    // Validate styles against the fixed-length permanent link before persisting.
    await renderQr(`https://orderfly.dk/q/${'0'.repeat(32)}`,draft.style);
-   const input={name:draft.name,destination:applyUtm(draft.destination,cleanUtm(draft.utm)),locationId:draft.locationId,campaign:draft.campaign,tags:draft.tags,expiresAt:draft.expiresAt,design:draft.style};
+   const input={name:draft.name,destination:formDestination(draft.destination,draft.utm),locationId:draft.locationId,campaign:draft.campaign,tags:draft.tags,expiresAt:draft.expiresAt,design:draft.style};
    const row=c.context.id?await store.update(scope,c.context.id,input,Number(c.context.revision),c.context.requestId):await store.create(scope,input,c.context.requestId);
    return qrSummary(row);
   }
@@ -85,6 +92,6 @@ export function createQrAdminService(deps:QrAdminDependencies) {
   const rendered=await renderQr(payload,logo?{...draft.style,errorCorrectionLevel:'H',logo}:draft.style);
   if(c.format==='preview')return {payload,imageUrl:`data:image/png;base64,${rendered.png.toString('base64')}`};
   if(c.format==='print')return {content:qrPrintHtml(rendered,{title:draft.name}),mime:'text/html',filename:'qr-print.html'};
-  return {content:c.format==='png'?rendered.png.toString('base64'):rendered.svg,mime:c.format==='png'?'image/png':'image/svg+xml',encoding:c.format==='png'?'base64':'utf8',filename:`qr-code.${c.format}`};
+  return {content:c.format==='png'?rendered.png.toString('base64'):rendered.svg,mime:c.format==='png'?'image/png':'image/svg+xml',encoding:c.format==='png'?'base64':'utf-8',filename:`qr-code.${c.format}`};
  };
 }

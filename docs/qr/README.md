@@ -20,8 +20,18 @@ An HTTP opening cannot establish use of a camera. Reports distinguish recorded G
 
 ## Candidate validation and remaining integration
 
-`firestore-indexes.json` describes only new QR query requirements. It has NOT been applied to production. Verify collection-group document-name index requirements with the actual emulator/provider before release; do not replace the project's complete index catalogue with this fragment. Existing deployed browser rules must deny all QR definitions, public-index direct access, scan records, receipts and maintenance records. No client ACL is inferred from server code. `QR_MODULE_ENABLED` currently defaults OFF for public redirects and retention; an activation needs coordinated runtime and index/readiness evidence.
+`docs/qr-firestore-indexes.json` describes only new QR query requirements. It has NOT been applied to production. Verify collection-group document-name index requirements with the actual emulator/provider before release; do not replace the project's complete index catalogue with this fragment. Existing deployed browser rules must deny all QR definitions, public-index direct access, scan records, receipts and maintenance records. No client ACL is inferred from server code. `QR_MODULE_ENABLED` currently defaults OFF for public redirects and retention; an activation needs coordinated runtime and index/readiness evidence.
 
 Payload/render/metric primitives and storage lifecycle have executable isolated tests. Admin component and dashboard have intercepted-browser tests. Full authenticated application integration, event recording/retention, bulk confirmation, CI inventories, exact-head independent review, deployed SHA and live acceptance remain required. No production records, roles, rules or secrets have been changed by implementation.
 
 See sibling documents for each slice's actual implementation and limitations. Parent #389 must remain open while acceptance or release evidence is missing.
+
+## Activation and measurement contract
+
+With `QR_MODULE_ENABLED` absent/false, public redirects and retention do not run, and dynamic creation, bulk import and dynamic image exports are rejected. Existing definitions remain viewable and may be paused, archived or reactivated by their independently authorized administrators; reactivation does not override the public switch. Static generation remains available. This permits preparation and incident management without producing new disabled printed links.
+
+Detailed analytics covers at most the retained 90-day event interval and reports truncation, expired/invalid events and future intervals. A brand-wide analytics grant can read a code's former-location events; a delegated location grant can read only its current location. Catalogue campaign and placement filters select current definitions, not historical attribution. Scan-time campaign/location are recorded on events; conversion attribution, geography, and cross-code campaign reports remain separately scoped follow-up work, not accepted capabilities.
+
+Lifetime counters are non-identifying permanent aggregates on newly created codes. Missing legacy counters are unknown, never reconstructed from a partial retained interval. Global counters must only be projected to a current brand-wide analytics grant because they can span former locations. Detailed event cleanup must preserve these aggregates.
+
+The existing additive index workflow accepts `docs/qr-firestore-indexes.json` for its three composites only. That script does not apply `fieldOverrides`; collection-group document-name query readiness must be verified separately. This manifest is a reviewed candidate, not an instruction to run a production write.

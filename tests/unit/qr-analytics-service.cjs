@@ -5,7 +5,7 @@ const {classifyQrRequest}=loadTs('src/lib/qr/metrics.ts');
 const DAY=86400000,NOW=Date.parse('2026-10-21T12:00:00Z');
 const scope={brandId:'own',locationIds:['l1'],actorId:'reader'};
 const classification=()=>classifyQrRequest({method:'GET',userAgent:'Mozilla/5.0 (iPhone) Version/17.0 Mobile Safari/604.1'});
-const row=(extra={})=>({brandId:'own',locationId:'l1',qrId:'code',timestamp:NOW-1000,classification:classification(),...extra});
+const row=(extra={})=>({brandId:'own',locationId:'l1',qrId:'code',timestamp:NOW-1000,expiresAt:new Date(NOW+90*DAY-1000),classification:classification(),...extra});
 function fixture(rows=[],overrides={}) {
  const trace=[],filters=[],orders=[];
  const code={id:'code',brandId:'own',locationId:'l1',name:'QR test',campaign:'Flyer',tags:['front'],...overrides.code};
@@ -48,10 +48,20 @@ test('missing authorization, foreign stored brand and location prevent all event
   const f=fixture();await assert.rejects(f.service.read(bad,'code',range));assert.equal(f.trace.length,0);
  }
 });
-test('brand-wide analytics still uses explicit current location equality and rejects unsafe IDs',async()=>{
+test('brand-wide analytics covers historical locations and rejects unsafe IDs',async()=>{
  const f=fixture([row({locationId:null})],{code:{locationId:null}}),result=await f.service.read({...scope,locationIds:null},'code',range);
- assert.equal(result.metrics.totalOpenings,1);assert.ok(f.filters.some(v=>v[0]==='locationId'&&v[2]===null));
+ assert.equal(result.metrics.totalOpenings,1);assert.equal(result.currentLocationOnly,false);assert.equal(f.filters.some(v=>v[0]==='locationId'),false);
  const other=fixture();await assert.rejects(other.service.read(scope,'../code',range));assert.equal(other.trace.length,0);
+});
+test('moving a code preserves its full brand-wide history while a delegated reader sees only current location',async()=>{
+ const history=[row({locationId:'l1'}),row({locationId:'l2'})],options={code:{locationId:'l2'}};
+ const all=await fixture(history,options).service.read({...scope,locationIds:null},'code',range);
+ assert.equal(all.metrics.totalOpenings,2);assert.equal(all.currentLocationOnly,false);assert.equal(all.complete,true);
+ const delegated=await fixture(history,options).service.read({...scope,locationIds:['l2']},'code',range);
+ assert.equal(delegated.metrics.totalOpenings,1);assert.equal(delegated.currentLocationOnly,true);
+ const former=fixture(history,options);await assert.rejects(former.service.read(scope,'code',range));assert.equal(former.trace.filter(([kind])=>kind==='events').length,0);
+ const historical=await fixture([row({locationId:'retired-location'})],options).service.read({...scope,locationIds:null},'code',range);
+ assert.equal(historical.metrics.totalOpenings,1);assert.equal(historical.complete,true);
 });
 test('interval is half-open and analytics never reads beyond its requested range',async()=>{
  const f=fixture([row({timestamp:range.from-1}),row({timestamp:range.from}),row({timestamp:range.to-1}),row({timestamp:range.to})]);
@@ -71,6 +81,17 @@ test('TTL retention and future intervals are visibly incomplete even when the qu
  const future=await fixture().service.read(scope,'code',{from:NOW-DAY,to:NOW+1});assert.equal(future.futureLimited,true);assert.equal(future.complete,false);
  const empty=await fixture().service.read(scope,'code',range);assert.equal(empty.complete,true);assert.equal(empty.metrics.totalOpenings,0);
 });
+test('retention clamps native reads and excludes expired snapshots even before cleanup',async()=>{
+ const from=NOW-100*DAY,cutoff=NOW-90*DAY;
+ const f=fixture([row({timestamp:cutoff-1,expiresAt:new Date(NOW+DAY)}),row({timestamp:cutoff+1000,expiresAt:new Date(NOW+1000)}),row({expiresAt:new Date(NOW)}),row({expiresAt:{toMillis:()=>NOW+1000}})]);
+ const result=await f.service.read(scope,'code',{from,to:NOW});
+ assert.ok(f.filters.some(([field,op,value])=>field==='timestamp'&&op==='>='&&value===cutoff));
+ assert.equal(result.retainedFrom,cutoff);assert.equal(result.metrics.totalOpenings,2);assert.equal(result.retentionLimited,true);assert.equal(result.complete,false);assert.equal(result.discardedEvents,1);
+ const allExpired=fixture([row({timestamp:from})]);const empty=await allExpired.service.read(scope,'code',{from,to:cutoff});assert.equal(empty.metrics.totalOpenings,0);assert.equal(empty.complete,false);assert.equal(allExpired.trace.filter(([kind])=>kind==='events').length,0);
+ for(const expiresAt of [undefined,null,NaN,new Date('invalid'),{toMillis:()=>Infinity},{toMillis:()=>{throw Error('invalid');}}]){
+  const invalid=await fixture([row({expiresAt})]).service.read(scope,'code',range);assert.equal(invalid.metrics.totalOpenings,0);assert.equal(invalid.discardedEvents,1);assert.equal(invalid.complete,false);
+ }
+});
 test('foreign, malformed and contradictory persisted rows cannot leak and mark data incomplete',async()=>{
  const f=fixture([row({brandId:'foreign'}),row({locationId:'foreign'}),row({qrId:'foreign'}),row({classification:{...classification(),probableScan:true,opening:false}}),row({classification:{...classification(),browser:'injected-browser'}}),row()],{forceRows:true});
  const result=await f.service.read(scope,'code',range);assert.equal(result.discardedEvents,5);assert.equal(result.complete,false);assert.equal(result.metrics.totalOpenings,1);
@@ -87,4 +108,24 @@ test('known bots are counted as openings but not probable scans and database err
  const result=await fixture([row({classification:classifyQrRequest({method:'GET',userAgent:'Googlebot/2.1'})}),row()]).service.read(scope,'code',range);
  assert.equal(result.metrics.totalOpenings,2);assert.equal(result.metrics.probableScans,1);assert.equal(result.metrics.excludedOpenings,1);
  await assert.rejects(fixture([],{error:true}).service.read(scope,'code',range),/database_unavailable/);
+});
+
+test('scan-time attribution preserves changed campaigns and retired locations with consistent sample totals',async()=>{
+ const data=[row({campaign:'Old campaign',locationId:'retired'}),row({campaign:'New campaign',locationId:'l1'}),row({campaign:'New campaign',locationId:'l1',classification:classifyQrRequest({method:'GET',userAgent:'Googlebot'})}),row({campaign:undefined,locationId:null}),row({campaign:'x'.repeat(161),locationId:null}),row({campaign:'bad\nvalue',locationId:null})];
+ const result=await fixture(data).service.read({...scope,locationIds:null},'code',range);
+ assert.deepEqual(result.attribution.byCampaign,[{key:'',openings:3,probableScans:3,excludedOpenings:0},{key:'New campaign',openings:2,probableScans:1,excludedOpenings:1},{key:'Old campaign',openings:1,probableScans:1,excludedOpenings:0}]);
+ assert.deepEqual(result.attribution.byLocation.map(x=>x.key),['','l1','retired']);
+ for(const dimension of Object.values(result.attribution)){
+  assert.equal(dimension.reduce((n,x)=>n+x.openings,0),result.metrics.totalOpenings);assert.equal(dimension.reduce((n,x)=>n+x.probableScans,0),result.metrics.probableScans);assert.equal(dimension.reduce((n,x)=>n+x.excludedOpenings,0),result.metrics.excludedOpenings);
+ }
+ assert.equal(result.code.campaign,'Flyer');assert.equal(result.attribution.byCampaign.some(x=>x.key==='Flyer'),false);
+});
+test('attribution respects delegated scope, expiry and malformed-row rejection before grouping',async()=>{
+ const f=fixture([row({campaign:'Former',locationId:'l2'}),row({campaign:'Expired',expiresAt:new Date(NOW)}),row({campaign:'Current'}),row({campaign:'Foreign',brandId:'foreign'}),row({campaign:'Invalid',locationId:'../bad'})],{forceRows:true});
+ const result=await f.service.read(scope,'code',range);assert.deepEqual(result.attribution.byCampaign,[{key:'Current',openings:1,probableScans:1,excludedOpenings:0}]);assert.deepEqual(result.attribution.byLocation,[{key:'l1',openings:1,probableScans:1,excludedOpenings:0}]);assert.equal(result.discardedEvents,4);
+});
+test('attribution CSV is explicitly scan-time, preserves unknown labels and neutralizes snapshot formulas',async()=>{
+ const result=await fixture([row({campaign:'=SUM(1,2)',locationId:null}),row({campaign:undefined,locationId:null})]).service.read({...scope,locationIds:null},'code',range);
+ const csv=exportQrAnalyticsCsv(result);assert.ok(csv.includes('"campaign_at_scan","\'=SUM(1,2)"'));assert.ok(csv.includes('"campaign_at_scan","Ukendt kampagne"'));assert.ok(csv.includes('"location_at_scan","Uden registreret afdeling"'));
+ const legacy={...result};delete legacy.attribution;assert.equal(exportQrAnalyticsCsv(legacy).includes('campaign_at_scan'),false);
 });

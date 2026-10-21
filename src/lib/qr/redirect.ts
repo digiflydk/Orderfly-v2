@@ -26,9 +26,20 @@ function errorResponse(status: number, extra?: Record<string, string>) {
 /** Request URL and direct Host must agree. Forwarded host/geo/IP are never authority here. */
 export function isQrCanonicalRequest(request: Request, environment?: string): boolean {
   const url = new URL(request.url), directHost = request.headers.get('host')?.toLowerCase();
+  // Next dev constructs a localhost URL even when its fixed QA listener and
+  // incoming Host use 127.0.0.1. Accept only same-port loopback aliases in dev;
+  // production keeps exact URL/Host agreement and the canonical HTTPS origin.
+  const loopback = (host: string) => ['localhost', '127.0.0.1', '[::1]'].includes(host.toLowerCase());
+  if (environment === 'development' && url.protocol === 'http:' && loopback(url.hostname)) {
+    if (!directHost) return true;
+    try {
+      const incoming = new URL(`http://${directHost}`);
+      return incoming.host === directHost && !incoming.username && !incoming.password && loopback(incoming.hostname) && incoming.port === url.port;
+    } catch { return false; }
+  }
   if (directHost && directHost !== url.host.toLowerCase()) return false;
   if (url.protocol === 'https:' && url.host.toLowerCase() === 'orderfly.dk') return true;
-  return environment === 'development' && url.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(url.hostname.toLowerCase());
+  return false;
 }
 
 /** Public endpoint. Every counted opening and its rate-limit increment commit atomically. */
@@ -59,6 +70,7 @@ async function executeQrRedirect(request: Request, slug: string, dependencies: Q
       const event: QrStoredMetricEvent = { timestamp: at, qrId: target.codeId, classification,
         brandId: target.brandId, locationId: target.locationId, campaign: target.campaign, tags: target.tags,
         expiresAt: new Date(at + QR_EVENT_RETENTION_DAYS * DAY) };
+      await store.recordLifetimeInTransaction(tx, target.brandId, target.codeId, classification, at);
       tx.set(limitRef, { brandId: target.brandId, qrId: target.codeId, count: count + 1, expiresAt: new Date((minute + 1) * 60_000 + DAY) });
       tx.create(codeRef.collection(QR_PATHS.events).doc(eventId!), event);
       return target.destination;
