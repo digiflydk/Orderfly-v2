@@ -101,6 +101,9 @@ jobs:
       - name: Native print catalog projection regression
         run: node --test tests/unit/printing-catalog-projection.cjs
 
+      - name: Scoped print-intent target policy regression
+        run: node --test tests/unit/printing-intent-target-policy.cjs
+
       - name: Native and compatibility transaction bridge regression
         run: node --test tests/unit/firestore-compat-transaction.cjs
 
