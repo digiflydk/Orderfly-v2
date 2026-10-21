@@ -14,7 +14,6 @@ export default async function MerchantOverview() {
     {href:'/merchant/stamp-card',label:'Kassevisning',description:'Scan kundens stempelkort, giv stempel og indløs belønninger.'},
     {href:'/merchant/redeem',label:'Indløs kode',description:'Find en gæsts gevinst og registrér indløsning i restauranten.'},
     {href:'/merchant/orders',label:'Ordrer',description:'Klargør dine ordrer og registrér betaling ved afhentning.'},
-    {href:'/merchant/printers',label:'Printere',description:'Se printeropsætning og driftsstatus pr. restaurant.'},
     {href:'/merchant/payments',label:'Betalingsmetoder',description:'Vælg onlinebetaling og betaling ved afhentning pr. restaurant.'},
     {href:'/superadmin/products',label:'Produkter',description:'Vedligehold dit sortiment.'},
     {href:'/superadmin/discounts',label:'Rabatter',description:'Administrér rabatkoder for dit brand.'},

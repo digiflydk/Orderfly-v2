@@ -106,7 +106,7 @@ export function SuperAdminSidebarClient({
       title: 'Commerce',
       items: [
         { href: merchantPortal ? '/merchant/orders' : '/superadmin/sales/orders', label: 'Sales & Orders', icon: ShoppingCart },
-        { href: '/merchant/printers', label: 'Printere', icon: Printer },
+        { href: '/superadmin/printers', label: 'Printere', icon: Printer },
         { href: '/merchant/payments', label: 'Betalingsmetoder', icon: CreditCard },
         { href: '/superadmin/customers', label: 'Customers', icon: Users },
       ],

@@ -5,7 +5,6 @@ export type NavigationAccess = { superuser: boolean; permissions: string[] };
 const routes: Array<[string, string]> = [
   ['/merchant/orders', 'orderfly.orders:view'],
   ['/merchant/payments', 'orderfly.catalog:view'],
-  ['/merchant/printers', 'orderfly.catalog:view'],
   ['/superadmin/dashboard', 'orderfly.analytics:view'],
   ['/superadmin/brands/websites', 'orderfly.website:view'],
   ['/superadmin/sales/orders', 'orderfly.orders:view'],
@@ -38,6 +37,8 @@ export function counterOnly(access?: NavigationAccess | null): boolean {
 
 export function canNavigate(href: string, access?: NavigationAccess | null): boolean {
   if (!access) return false;
+  if (href === '/merchant/printers' || href.startsWith('/merchant/printers/')) return false;
+  if (href === '/superadmin/printers' || href.startsWith('/superadmin/printers/')) return access.superuser;
   if (href === '/merchant/redeem') return access.superuser || access.permissions.includes('orderfly.games:view');
   if (href === '/merchant/stamp-card') return access.superuser || access.permissions.includes(COUNTER);
   if (href === '/merchant') return access.superuser || access.permissions.includes(COUNTER) || access.permissions.some(p => p.startsWith('orderfly.') && p.endsWith(':view'));

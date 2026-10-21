@@ -47,3 +47,10 @@ test('counter-only staff are sent straight to the counter view',async()=>{
   await assert.rejects(loadOverview({superuser:false,permissions:['orderfly.stamp_cards:counter','orderfly.stamp_cards:redeem']},redirects)(),/redirected/);
   assert.deepEqual(redirects,['/merchant/stamp-card']);
 });
+
+test('merchant dashboard never exposes printer pilot even to a platform superuser',async()=>{
+ for(const superuser of [false,true]) {
+  const markup=renderToStaticMarkup(await loadOverview({superuser,permissions:['orderfly.catalog:view','orderfly.catalog:create','orderfly.catalog:edit']})());
+  assert.doesNotMatch(markup,/Printere|\/merchant\/printers|\/superadmin\/printers/);
+ }
+});

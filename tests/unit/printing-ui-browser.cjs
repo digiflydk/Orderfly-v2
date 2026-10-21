@@ -22,7 +22,7 @@ before(async () => {
   dir = fs.mkdtempSync(path.join(os.tmpdir(), 'printing-ui-browser-'));
   const entry = path.join(dir, 'entry.js');
   fs.writeFileSync(entry, `import React from 'react';import {createRoot} from 'react-dom/client';
-    import {PrinterOverview} from ${JSON.stringify(path.join(root, 'src/app/merchant/printers/printer-overview.tsx'))};
+    import {PrinterOverview} from ${JSON.stringify(path.join(root, 'src/app/superadmin/printers/printer-overview.tsx'))};
     createRoot(document.getElementById('root')).render(React.createElement(PrinterOverview,{brands:${JSON.stringify(brands)},locations:${JSON.stringify(locations)}}));`);
   const loader = path.join(dir, 'loader.js');
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
