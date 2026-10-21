@@ -131,6 +131,9 @@ jobs:
       - name: Install Chromium for brand-owner regression
         run: npx playwright install --with-deps chromium
 
+      - name: Printer routing editor and sample preview regression
+        run: node --test tests/unit/printing-routing-editor.cjs tests/unit/printing-routing-ui-browser.cjs
+
       - name: Core browser regression
         run: node --test tests/unit/printing-ui-browser.cjs tests/unit/merchant-payment-browser.cjs tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs tests/unit/customer-form-browser.cjs tests/unit/customer-sync-actions-browser.cjs tests/unit/loyalty-admin-browser.cjs tests/unit/loyalty-portal-browser.cjs tests/unit/loyalty-counter-browser.cjs
 
