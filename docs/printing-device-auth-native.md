@@ -27,6 +27,13 @@ corrupt and unknown credentials share the generic `device_unverified` error.
 External/Admin errors become `device_unavailable`; request errors are generic.
 No error or returned snapshot includes the secret, digest, raw record or headers.
 
+The native brand's canonical `status` is required: `suspended`, missing, unknown
+or malformed values reject even if legacy `isActive` is true. `active`, `pending`
+and `trialing` may verify identity for onboarding/status only; none grants output.
+This matches the Brand lifecycle enum used by superadmin brand management, rather
+than substituting the legacy activity flag for suspension. Suspension is reread
+on each operation/retry alongside the other current scope fields.
+
 Disabled, paused and active nondeleted printers can verify identity, allowing
 controlled onboarding/status before activation. The result reports the current
 state and revisions but always includes `dispatchAuthorized: false`,
@@ -57,7 +64,10 @@ Run `npm run typecheck` and
 Tests execute the production native helper and real #356 crypto, isolating only
 Admin I/O. They cover all three onboarding states, exact four paths/no writes,
 scope/current schema/revision, rotation/revocation/reused SDK retries, bounds,
-reassignment, malformed/proxy/accessor rejection and secret-free generic errors.
+reassignment, canonical brand suspension/onboarding states, malformed/proxy/accessor
+rejection and secret-free generic errors. The suspension regression first failed
+on the previous implementation with `Missing expected rejection`, then passed
+after the canonical status check. Original assertions remain in place.
 Root authorized one three-line CI step immediately after #356's existing step;
 all other workflow bytes/permissions stay unchanged. Current-head CI and completed
 independent Codex review precede root-only serialized merge/deploy and applicable

@@ -86,7 +86,11 @@ export async function verifyNativePrinterDevice(context: NativeTransactionContex
       transaction.get(db.collection('brands').doc(brandId)), transaction.get(locationRef), transaction.get(printerRef),
       transaction.get(printerRef.collection('deviceCredentials').doc(PRINTER_DEVICE_CREDENTIAL_DOCUMENT)),
     ]);
-    nativeScope(brand, brandId);
+    const nativeBrand = nativeScope(brand, brandId);
+    // Canonical Brand.status, not legacy isActive, owns tenant suspension.
+    // Pending/trialing may identify during onboarding; this grants no dispatch.
+    const brandStatus = field(nativeBrand, 'status');
+    if (brandStatus !== 'active' && brandStatus !== 'pending' && brandStatus !== 'trialing') return reject();
     if (field(nativeScope(location, locationId), 'brandId') !== brandId) return reject();
     const stored = printerData(nativeRow(printer, printerId)), config = stored.configuration;
     if (config.id !== printerId || config.brandId !== brandId || config.locationId !== locationId) return reject();

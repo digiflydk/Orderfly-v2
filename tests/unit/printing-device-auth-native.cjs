@@ -10,7 +10,7 @@ const printer = (patch = {}) => ({ schemaVersion: 1, revision: 3, deletedAt: nul
     name: 'Pizza ÆØÅ', manufacturer: 'star', model: 'mc-print3', transport: 'cloudprnt-http', state: 'disabled', paperWidthMm: 80, ...patch } });
 function fixture() {
   const draft = crypto.createPrinterDeviceCredentialDraft(binding);
-  const rows = new Map([['brands/b1', {}], ['locations/l1', { brandId: 'b1' }], ['locations/l1/printers/p1', printer()], [credentialPath, draft.record]]);
+  const rows = new Map([['brands/b1', { status: 'active' }], ['locations/l1', { brandId: 'b1' }], ['locations/l1/printers/p1', printer()], [credentialPath, draft.record]]);
   const reads = [], writes = [];
   let broken = false, wrongId;
   const collection = path => ({ doc: id => ({ id, path: `${path}/${id}`, collection: name => collection(`${path}/${id}/${name}`) }) });
@@ -39,6 +39,22 @@ test('native identity reads exact four authoritative paths, including disabled o
   }
 });
 
+test('canonical brand status rejects suspended scope and malformed lifecycle while allowing identity-only onboarding', async () => {
+  for (const status of ['suspended', undefined, 'unknown', '', null, true, 'ACTIVE', 'x'.repeat(1000000)]) {
+    const f = fixture(); f.rows.set('brands/b1', { status, isActive: true });
+    await rejects(f.read()); assert.deepEqual(f.writes, []);
+  }
+  for (const status of ['active', 'pending', 'trialing']) {
+    const f = fixture(); f.rows.set('brands/b1', { status });
+    const identity = await f.read();
+    assert.equal(identity.deviceVerifiedForAttempt, true);
+    assert.equal(identity.dispatchAuthorized, false); assert.equal(identity.capabilityAuthorized, false);
+    // The same native SDK transaction must reread suspension before another operation.
+    f.rows.set('brands/b1', { status: 'suspended' }); await rejects(f.read());
+    assert.equal(f.reads.length, 8); assert.deepEqual(f.writes, []);
+  }
+});
+
 test('invalid request bounds and caller-supplied credential/revision authority are rejected before native paths', async () => {
   const f = fixture();
   for (const input of [null, {}, [], { ...scope, secret: 'short' }, { ...scope, secret: 'x'.repeat(1000000) },
@@ -56,7 +72,7 @@ test('invalid request bounds and caller-supplied credential/revision authority a
 
 test('missing, deleted, inactive, foreign and reassigned native scope cannot authenticate', async () => {
   for (const [path, value] of [['brands/b1', undefined], ['locations/l1', undefined], ['locations/l1', { brandId: 'foreign' }],
-    ...['brands/b1', 'locations/l1'].flatMap(path => [{ id: 'foreign' }, { deletedAt: 1 }, { deleted: true }, { isDeleted: true }, { isActive: false }, { isTestData: true }].map(patch => [path, { brandId: 'b1', ...patch }]))]) {
+    ...['brands/b1', 'locations/l1'].flatMap(path => [{ id: 'foreign' }, { deletedAt: 1 }, { deleted: true }, { isDeleted: true }, { isActive: false }, { isTestData: true }].map(patch => [path, { status: 'active', brandId: 'b1', ...patch }]))]) {
     const f = fixture(); f.rows.set(path, value); await rejects(f.read()); assert.deepEqual(f.writes, []);
   }
   const f = fixture(); f.wrongId('foreign'); await rejects(f.read());
@@ -111,4 +127,7 @@ test('native reflective exceptions/accessors and Admin outage never leak secret 
   const h = fixture(); h.rows.get('brands/b1').isActive = true;
   Object.defineProperty(h.rows.get('brands/b1'), 'isActive', { get() { invoked = true; throw Error('SECRET'); } });
   await rejects(h.read()); assert.equal(invoked, false);
+  const i = fixture();
+  Object.defineProperty(i.rows.get('brands/b1'), 'status', { get() { invoked = true; throw Error('SECRET'); } });
+  await rejects(i.read()); assert.equal(invoked, false);
 });
