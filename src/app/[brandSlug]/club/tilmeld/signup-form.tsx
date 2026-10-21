@@ -6,10 +6,11 @@ import { Button } from '@/components/ui/button';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { SignupBenefits, type SignupCampaigns } from '../club-benefits';
 import { CheckEmail } from '../check-email';
 import { portalErrorText, portalRequest } from '../portal-api';
 
-type Program = { name: string; consentText: string; consentHelp: string; termsAccept: string; consentVersion: string; termsVersion: string };
+type Program = { name: string; consentText: string; consentHelp: string; termsAccept: string; consentVersion: string; termsVersion: string; campaigns?: SignupCampaigns | null };
 type Errors = Partial<Record<'name' | 'email' | 'consent' | 'terms' | 'form', string>>;
 
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
@@ -69,6 +70,7 @@ export function SignupForm({ slug, base, program }: { slug: string; base: string
       <div className="text-center">
         <h1 id="club-signup" className="text-3xl">Bliv medlem af {program.name}</h1>
       </div>
+      <SignupBenefits campaigns={program.campaigns} />
       {errors.form && <p ref={summary} tabIndex={-1} role="alert" className="rounded-md border border-destructive p-3 text-destructive outline-none">{errors.form}</p>}
       <div className="flex flex-col gap-2">
         <Label htmlFor="club-name" className="text-base">Navn</Label>
