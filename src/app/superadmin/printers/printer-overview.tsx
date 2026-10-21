@@ -11,7 +11,8 @@ import type { PrinterConfiguration } from '@/lib/printing/domain';
 
 type Brand = { id: string; name: string };
 type Location = { id: string; name: string; brandId: string };
-type Item = { configuration: PrinterConfiguration; revision: number };
+type Activity = { activatedAt: number | null; lastConfirmedPrintAt: number | null; printHistory: 'unknown' | 'never' | 'confirmed' };
+type Item = { configuration: PrinterConfiguration; revision: number; activity?: Activity };
 type Page = { items: Item[]; nextCursor: string | null; totalPrinters?: number };
 type Cursor = { locationKey: string; after: string };
 type OverviewItem = Item & { totalPrinters?: number };
@@ -19,6 +20,21 @@ type OverviewPage = { items: OverviewItem[]; nextCursor: Cursor | null };
 type Result = { key: string; page?: OverviewPage; error?: string };
 const locationKey = (row: { brandId: string; id: string }) => JSON.stringify([row.brandId, row.id]);
 const id = /^[A-Za-z0-9_-]{1,128}$/;
+const activityDate = new Intl.DateTimeFormat('da-DK', { dateStyle: 'short', timeStyle: 'short', timeZone: 'Europe/Copenhagen' });
+const validTimestamp = (value: unknown) => value === null || typeof value === 'number'
+  && Number.isSafeInteger(value) && value >= 0 && value <= 8_640_000_000_000_000;
+function validActivity(value: unknown): value is Activity {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+  const activity = value as Activity;
+  return Object.keys(value).sort().join(',') === 'activatedAt,lastConfirmedPrintAt,printHistory'
+    && validTimestamp(activity.activatedAt) && validTimestamp(activity.lastConfirmedPrintAt)
+    && ['unknown', 'never', 'confirmed'].includes(activity.printHistory)
+    && (activity.printHistory === 'confirmed') === (activity.lastConfirmedPrintAt !== null);
+}
+function ActivityTime({ value }: { value: number | null | undefined }) {
+  return value == null ? <>Ikke registreret</>
+    : <time dateTime={new Date(value).toISOString()} className="whitespace-nowrap">{activityDate.format(value)}</time>;
+}
 
 // Fail closed on malformed or foreign responses before rendering any row.
 function readPage(value: unknown, brandId: string, locationId: string, after: string, model: string): Page {
@@ -33,7 +49,8 @@ function readPage(value: unknown, brandId: string, locationId: string, after: st
       || typeof c.name !== 'string' || !c.name.trim() || c.name.length > 80
       || c.manufacturer !== 'star' || !['mc-print2', 'mc-print3'].includes(c.model)
       || !['cloudprnt-http', 'cloudprnt-mqtt'].includes(c.transport) || !['active', 'paused', 'disabled'].includes(c.state)
-      || ![58, 80].includes(c.paperWidthMm) || !Number.isSafeInteger(item.revision) || item.revision < 1) throw Error('invalid_response');
+      || ![58, 80].includes(c.paperWidthMm) || !Number.isSafeInteger(item.revision) || item.revision < 1
+      || (item.activity !== undefined && !validActivity(item.activity))) throw Error('invalid_response');
     seen.add(c.id);
   }
   if (data.nextCursor && (data.items.length !== 20 || data.items[19].configuration.id !== data.nextCursor)) throw Error('invalid_response');
@@ -191,14 +208,15 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
                 ? 'Ingen lokationer med adgang til printeroversigten.' : location
                   ? model ? 'Ingen printere af denne type på lokationen.' : 'Ingen printere på denne lokation.'
                   : 'Ingen printere matcher filtrene på denne side.'}</TableCell></TableRow>
-              : current.page.items.map(({ configuration: c, revision, totalPrinters }) => {
+              : current.page.items.map(({ configuration: c, revision, totalPrinters, activity }) => {
                 const canEdit = hasGrant(editLocations, c), canDelete = hasGrant(deleteLocations, c);
                 return <TableRow key={JSON.stringify([c.brandId, c.locationId, c.id])}>
-                  <TableCell>Ikke registreret</TableCell>
+                  <TableCell><ActivityTime value={activity?.activatedAt} /></TableCell>
                   <TableCell>{brands.find(row => row.id === c.brandId)?.name}</TableCell>
                   <TableCell>{locations.find(row => row.id === c.locationId && row.brandId === c.brandId)?.name}</TableCell>
                   <TableCell><span className="whitespace-nowrap">{stateLabels[c.state]}</span></TableCell>
-                  <TableCell>Ikke registreret</TableCell><TableCell>{totalPrinters ?? 'Ikke registreret'}</TableCell>
+                  <TableCell>{activity?.printHistory === 'never' ? 'Aldrig printet'
+                    : <ActivityTime value={activity?.lastConfirmedPrintAt} />}</TableCell><TableCell>{totalPrinters ?? 'Ikke registreret'}</TableCell>
                   <TableCell className="max-w-[220px] break-words font-medium">{c.name}</TableCell>
                   <TableCell className="text-muted-foreground"><span className="whitespace-nowrap">Star {c.model === 'mc-print2' ? 'mC-Print2' : 'mC-Print3'}</span><br />{c.transport === 'cloudprnt-http' ? 'CloudPRNT HTTP' : 'CloudPRNT MQTT'}<br />{c.paperWidthMm} mm</TableCell>
                   <TableCell><div className="flex flex-wrap gap-2 min-w-[180px]">
@@ -211,7 +229,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
           </TableBody>
         </Table>
       </div>
-      <p className="text-xs text-muted-foreground">Total printers er alle ikke-slettede printere på rækkens brand og lokation, uanset printertype. Aktiveringsdato og seneste bekræftede print er endnu ikke tilgængelige. Tabellen kan rulles vandret.</p>
+      <p className="text-xs text-muted-foreground">Total printers er alle ikke-slettede printere på rækkens brand og lokation, uanset printertype. Datoer vises i dansk tid. Aktiveringsdato er seneste registrerede aktivering i systemet. Last used kræver et bekræftet print; ukendt historik vises som Ikke registreret. Tabellen kan rulles vandret.</p>
       <div className="flex flex-wrap gap-3">
         {after && <Button variant="outline" disabled={!!editor} onClick={() => setAfter(null)}>Første side</Button>}
         {current?.page?.nextCursor && <Button variant="outline" disabled={!!editor} onClick={() => setAfter(current.page!.nextCursor!)}>Næste side</Button>}
