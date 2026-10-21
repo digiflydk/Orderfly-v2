@@ -74,11 +74,11 @@ test('claimed profile bonus is hidden and opt-out gender is explained before cla
 });
 
 test('merchant text is escaped, fixed-amount and stacking terms are truthful and path-prefix shop links work',async()=>{
- const d={...discount,description:'<img src=x onerror="window.__bad=true">',discountType:'fixed_amount',discountValue:30,allowStacking:true};
+ const d={...discount,description:'<img src=x onerror="window.__bad=true">',discountType:'fixed_amount',discountValue:30,allowStacking:true,firstTimeCustomerOnly:true};
  const {page}=await open('earned',{campaigns:{profile:null,profileBonusGranted:true,discount:d},base:'/esmeralda/club'},320);try{
   const benefit=page.getByRole('region',{name:'Din personlige Club-rabat'});await benefit.waitFor();
   await benefit.getByText(d.description,{exact:true}).waitFor();assert.equal(await benefit.locator('img').count(),0);assert.equal(await page.evaluate(()=>window.__bad),undefined);
-  await benefit.getByText(/30,00/).waitFor();await benefit.getByText(/inklusive tilvalg og menuer/).waitFor();
+  await benefit.getByText(/30,00/).waitFor();await benefit.getByText(/inklusive tilvalg og menuer/).waitFor();await benefit.getByText('Gælder kun dit første køb.').waitFor();
   assert.equal(await page.getByRole('link',{name:'Bestil i webshoppen'}).getAttribute('href'),'/esmeralda');assert.ok(await noOverflow(page));
  }finally{await page.close();}
 });

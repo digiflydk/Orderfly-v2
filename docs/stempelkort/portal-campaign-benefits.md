@@ -24,7 +24,7 @@ The authenticated member optionally includes:
 }
 ```
 
-The discount summary has `id`, `discountType` (`percentage` or `fixed_amount`), `discountValue`, optional `description`/`minOrderValue`, `allowStacking`, optional epoch `endsAt`, `locationIds`, `orderTypes`, `activeDays` and `activeTimeSlots`. Root integration owns the server projections and excludes unavailable campaigns or consumed entitlements. Until that integration is present, the optional missing data renders no promotional content or empty layout spacer.
+The discount summary has `id`, `discountType` (`percentage` or `fixed_amount`), `discountValue`, optional `description`/`minOrderValue`, `allowStacking`, optional `firstTimeCustomerOnly`, optional epoch `endsAt`, `locationIds`, `orderTypes`, `activeDays` and `activeTimeSlots`. Root integration owns the server projections and excludes unavailable campaigns or consumed entitlements. Until that integration is present, the optional missing data renders no promotional content or empty layout spacer.
 
 ## Customer experience
 

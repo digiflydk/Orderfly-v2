@@ -2,7 +2,7 @@ import { stampWord } from './texts';
 
 export type ClubDiscountSummary = {
   id: string; discountType: 'percentage' | 'fixed_amount'; discountValue: number; description?: string;
-  minOrderValue?: number; allowStacking: boolean; endsAt?: number | null;
+  minOrderValue?: number; allowStacking: boolean; firstTimeCustomerOnly?: boolean; endsAt?: number | null;
   locationIds?: string[]; orderTypes?: ('pickup' | 'delivery')[];
   activeDays?: string[]; activeTimeSlots?: { start: string; end: string }[];
 };
@@ -32,6 +32,7 @@ function DiscountConditions({ discount }: { discount: ClubDiscountSummary }) {
       <p>{discount.allowStacking
         ? 'Gælder på varer efter varerabatter, inklusive tilvalg og menuer. Pose, levering og gebyrer er ikke med.'
         : 'Gælder kun varer uden anden rabat. Gælder ikke menuer, pose, levering eller gebyrer.'}</p>
+      {discount.firstTimeCustomerOnly && <p>Gælder kun dit første køb.</p>}
       {!!discount.orderTypes?.length && <p>Gælder {discount.orderTypes.map(type => type === 'pickup' ? 'afhentning' : 'levering').join(' og ')}.</p>}
       {days.length > 0 && days.length < 7 && <p>Gyldige dage: {days.map(day => DAYS[day] ?? day).join(', ')} (dansk tid).</p>}
       {slots.length > 0 && <p>Gyldige tidspunkter: {slots.map(slot => `${slot.start}–${slot.end}`).join(', ')} (dansk tid).</p>}
