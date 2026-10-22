@@ -171,6 +171,61 @@ test('actual checkout action uses the real closed native writer and keeps respon
   assert.doesNotMatch(JSON.stringify(f.result), /capability|acceptanceApplied|writeCount/);
 });
 
+async function checkoutWithTenantIds(brandId, locationId) {
+  const f = await checkout({ createOnly: true, realReservations: true,
+    brandOverrides: { id: brandId },
+    locationOverrides: { id: locationId, brandId, paymentMethods: { online: true, payAtPickup: true } } });
+  const brand = f.records.get('brands/b'), nativeLocation = f.records.get('locations/l');
+  f.records.delete('brands/b'); f.records.delete('locations/l');
+  f.records.set('brands/' + brandId, brand); f.records.set('locations/' + locationId, nativeLocation);
+  f.records.set('products/p', { ...f.records.get('products/p'), brandId, locationIds: [locationId] });
+  const result = await f.actions.createStripeCheckoutSessionAction(
+    [{ id: 'p', name: 'Pizza', quantity: 1, unitPrice: 100, totalPrice: 100 }],
+    { name: 'Test', email: 'test@example.test', phone: '12345678', subscribeToNewsletter: false,
+      acceptTerms: true, paymentMethod: 'pay_at_pickup' },
+    'pickup', brandId, locationId,
+    { subtotal: 100, deliveryFee: 0, discountTotal: 0, tips: 0, taxes: 0, bagFee: 4 },
+    null, 'brand', 'location');
+  return { ...f, result };
+}
+
+test('actual checkout preserves dot and 129–160 character tenant IDs when print intents are OFF', async () => {
+  const previous = process.env.ORDERFLY_PRINT_INTENTS_ENABLED;
+  process.env.ORDERFLY_PRINT_INTENTS_ENABLED = 'false';
+  try {
+    for (const field of ['brandId', 'locationId']) for (const value of ['tenant.example', 'tenant ø.中 value', 't'.repeat(129), 't'.repeat(160)]) {
+      const brandId = field === 'brandId' ? value : 'brand', locationId = field === 'locationId' ? value : 'location';
+      const f = await checkoutWithTenantIds(brandId, locationId);
+      assert.equal(f.result.success, true, `${field}/${value.length}: ${f.result.error}`);
+      const saved = f.records.get('orders/ORD-TEST');
+      assert.equal(saved.status, 'Received'); assert.equal(saved.paymentStatus, 'Pending');
+      assert.equal(saved.brandId, brandId); assert.equal(saved.locationId, locationId);
+      assert.equal(saved.discountReservation, 'held'); assert.equal(f.events.includes('stripe'), false);
+      const mail = [...f.records].filter(([key]) => key.startsWith('orderNotificationJobs/'));
+      assert.equal(mail.length, 1); assert.equal(mail[0][1].brandId, brandId); assert.equal(mail[0][1].locationId, locationId);
+    }
+  } finally {
+    if (previous === undefined) delete process.env.ORDERFLY_PRINT_INTENTS_ENABLED;
+    else process.env.ORDERFLY_PRINT_INTENTS_ENABLED = previous;
+  }
+});
+
+test('checkout and the native acceptance boundary reject unsafe or over-160 tenant IDs before acceptance', async () => {
+  for (const field of ['brandId', 'locationId']) for (const value of ['', 'a/b', 'a\\b', 'a?b', 'a#b', 't'.repeat(161)]) {
+    const f = fixture();
+    await safeReject(f.transact(c => f.preparePickupCheckoutAcceptance(c, { ...input, [field]: value })));
+    assert.deepEqual(f.calls, []); assert.equal(f.rows.get('orders/order').status, 'Pending');
+    const actual = await checkoutWithTenantIds(field === 'brandId' ? value : 'brand', field === 'locationId' ? value : 'location');
+    assert.equal(actual.result.success, false, `${field}/${JSON.stringify(value)} must reject`);
+    assert.equal(actual.records.has('orders/ORD-TEST'), false);
+    assert.equal([...actual.records.keys()].some(key => key.startsWith('orderNotificationJobs/')), false);
+  }
+  // Order IDs are generated internally (ORD-######), not tenant IDs supplied by checkout.
+  const f = fixture();
+  await safeReject(f.transact(c => f.preparePickupCheckoutAcceptance(c, { ...input, orderId: 'o'.repeat(129) })));
+  assert.deepEqual(f.calls, []);
+});
+
 test('actual checkout callsite rereads pickup configuration after reservation and retains lost-outcome semantics', async () => {
   for (const unknown of [false, true]) {
     const f = await checkout({ realReservations: true,

@@ -28,6 +28,13 @@ fields never replace native authority. Native transaction conflict detection and
 retry provide current-state protection; no invented order revision is stored.
 The selected slot is recomputed using the existing fulfillment helper.
 
+Brand and location IDs keep the existing public checkout identifier contract:
+nonempty strings up to 160 characters excluding `/`, backslash, `?` and `#`. Dots,
+Unicode and lengths above 128 remain valid, including when print intents are OFF.
+The generated order ID retains its separate internal ASCII/128-character bound.
+Both command and stored-field raw string bounds run before schema regex checks;
+the native scope equality checks remain unchanged.
+
 The fixed plan updates Received status, accepted/updated server timestamps and
 fulfillment, then writes the existing deterministic `pickupReceived` notification
 with a server event ID. Its write count is exactly two. It never creates an invoice,
@@ -86,6 +93,9 @@ before writes, exact write count, immutable projection, expiry, discarded attemp
 late write failure and rollback. Actual checkout tests load this real service and
 exercise successful acceptance, configuration revocation after reservation and
 unknown-outcome behavior. Existing merchant payment assertions remain intact.
+The identifier regression first reproduced an ordinary print-OFF checkout
+rejection, then verifies actual checkout acceptance with dotted and 129/160-character
+tenant IDs, plus checkout/native rejection of separators and overlong IDs.
 These in-memory transaction contracts are source tests, not native emulator,
 browser, production acceptance or physical-print evidence.
 
