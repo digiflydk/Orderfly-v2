@@ -14,7 +14,7 @@ test('browser: reviewed activation is explicit, scope-bound and never retries an
   const receipt = Buffer.alloc(32, 1).toString('base64url');
   const entry = path.join(dir, 'entry.js'), loader = path.join(dir, 'loader.js');
   fs.writeFileSync(entry, `import React from 'react';import{createRoot}from'react-dom/client';import{PrinterActivationPanel}from ${JSON.stringify(path.join(root, 'src/app/superadmin/printers/printer-activation-panel.tsx'))};import{PrinterCredentialsPanel}from ${JSON.stringify(path.join(root, 'src/app/superadmin/printers/printer-credentials-panel.tsx'))};
-    function App(){const[permitted,setPermitted]=React.useState(true);const[mode,setMode]=React.useState('activation');window.changePermission=setPermitted;window.showCredentials=()=>setMode('credentials');if(mode==='credentials')return React.createElement(PrinterCredentialsPanel,{scope:${JSON.stringify({ ...scope, printerRevision: 2 })},printerName:'Pilot',pilotProfile:{model:'mc-print3',paperWidthMm:80,transport:'cloudprnt-http',state:'active'},permitted,onSessionLost:()=>{},onClose:()=>{}});return React.createElement(PrinterActivationPanel,{item:${JSON.stringify(item)},permitted,onPendingChange:v=>{window.pending=v},onCancel:()=>{window.cancelled=true},onSessionLost:()=>{window.sessionLost=true},onSaved:()=>{window.saved=true}})}
+    function App(){const[permitted,setPermitted]=React.useState(true);const[mode,setMode]=React.useState('activation');const[transport,setTransport]=React.useState('cloudprnt-http');window.changeTransport=setTransport;window.changePermission=setPermitted;window.showCredentials=()=>setMode('credentials');if(mode==='credentials')return React.createElement(PrinterCredentialsPanel,{scope:${JSON.stringify({ ...scope, printerRevision: 2 })},printerName:'Pilot',pilotProfile:{model:'mc-print3',paperWidthMm:80,transport:'cloudprnt-http',state:'active'},permitted,onSessionLost:()=>{},onClose:()=>{}});return React.createElement(PrinterActivationPanel,{item:{...${JSON.stringify(item)},configuration:{...${JSON.stringify(configuration)},transport}},permitted,onPendingChange:v=>{window.pending=v},onCancel:()=>{window.cancelled=true},onSessionLost:()=>{window.sessionLost=true},onSaved:()=>{window.saved=true}})}
     createRoot(document.getElementById('root')).render(React.createElement(React.StrictMode,null,React.createElement(App)));`);
   fs.writeFileSync(loader, `const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   await new Promise((resolve, reject) => webpackModule.webpack({ mode: 'development', devtool: false, entry,
@@ -60,6 +60,10 @@ test('browser: reviewed activation is explicit, scope-bound and never retries an
   await page.goto(url); assert.equal(calls.length, 0);
   await expect(page.getByLabel('CloudPRNT-pilotadresse', { exact: true })).toHaveValue('https://activation.test/api/cloudprnt-pilot/brand/location/p1');
   await expect(page.getByText('orderfly', { exact: true })).toBeVisible();
+  await page.evaluate(() => window.changeTransport('cloudprnt-mqtt'));
+  await expect(page.getByLabel('CloudPRNT-pilotadresse', { exact: true })).toHaveCount(0);
+  await page.evaluate(() => window.changeTransport('cloudprnt-http'));
+  await expect(page.getByLabel('CloudPRNT-pilotadresse', { exact: true })).toHaveValue('https://activation.test/api/cloudprnt-pilot/brand/location/p1');
   const check = page.getByRole('button', { name: 'Kontrollér printkø', exact: true });
   await check.click(); await expect(page.getByRole('button', { name: 'Bekræft aktivering', exact: true })).toBeVisible();
   assert.equal(calls.length, 1); assert.equal(calls[0].method, 'GET');

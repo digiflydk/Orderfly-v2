@@ -78,7 +78,7 @@ export function PrinterActivationPanel({ item, permitted, onPendingChange, onCan
     <h2 className="font-semibold">Aktivér printer: {c.name}</h2>
     <p className="text-sm">Aktivér kun i et aftalt testvindue. Først kontrolleres den eksisterende printkø. En ukendt eller ikke-tom kø kan ikke frigives her.</p>
     <p className="text-sm">Efter aktivering ændres printerens revision. Opdater printeradgangen, erstat adgangskoden, og start et nyt testforløb. Aktivering sender ikke en testbon.</p>
-    <PrinterPilotAddress scope={scope} />
+    {c.transport === 'cloudprnt-http' && <PrinterPilotAddress scope={scope} />}
     {message && <p role="status">{message}</p>}
     <div className="flex flex-wrap gap-3">
       {review === null ? <Button disabled={!permitted || busy || refreshRequired || complete} onClick={() => void run(false)}>Kontrollér printkø</Button>

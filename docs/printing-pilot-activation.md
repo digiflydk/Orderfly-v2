@@ -8,6 +8,8 @@ The superadmin printer row exposes explicit **Aktivér** for paused/disabled pri
 
 Receipts live only within the action, never in DOM, storage or telemetry. Double submissions are guarded synchronously. Unknown/conflicting responses require overview refresh; there is no automatic write retry. Permission revocation blocks further requests. Successful activation advances the printer revision, making prior device credentials stale. Refresh, rotate the device credential, configure its new one-time password, then begin a fresh qualification. Do not create a pilot job while disabled or reuse qualification from the prior revision.
 
+The HTTP pilot address is displayed only for `cloudprnt-http` configuration. Generic queue-reviewed activation does not turn MQTT configuration into an HTTP pilot; an MQTT row never receives this setup address.
+
 ## Controlled operator sequence
 
 1. After the coordinator verifies the actual deployment and authorizes a controlled window, open **Superadmin → System → Printere** (`/superadmin/printers`). Select the exact brand/location and a dedicated Star HTTP printer. Do not change the Wolt device profile.
