@@ -473,9 +473,9 @@ export async function createStripeCheckoutSessionAction(
 
     const checkoutMode = await checkoutModeForBrand(brandId);
     if (customerInfo.subscribeToClub && checkoutMode !== 'club') throw new Error('Club-tilmelding er ikke aktiv i checkout. Genindlæs siden.');
-    const clubSignupInput = {db:getAdminDb(),brandId,brandSlug,name:customerInfo.name,email:customerInfo.email,
+    const clubSignupInput = () => ({db:getAdminDb(),brandId,brandSlug,name:customerInfo.name,email:customerInfo.email,
       newsletterConsent:customerInfo.subscribeToNewsletter,termsAccepted:customerInfo.clubTermsAccepted === true,
-      consentVersion:customerInfo.clubConsentVersion || '',termsVersion:customerInfo.clubTermsVersion || '',campaignVersion:customerInfo.clubCampaignVersion,now:Date.now()};
+      consentVersion:customerInfo.clubConsentVersion || '',termsVersion:customerInfo.clubTermsVersion || '',campaignVersion:customerInfo.clubCampaignVersion,now:Date.now()});
     let clubPreflight: {eligible:boolean;customerId?:string} | null = null;
 
     const chargedItemsSubtotal = cartItems.reduce((sum, item) => {
@@ -566,7 +566,7 @@ export async function createStripeCheckoutSessionAction(
       selectedDiscount = await getDiscountById(appliedDiscountId);
       if (!selectedDiscount) throw new Error('The selected discount no longer exists.');
       if (customerInfo.subscribeToClub) {
-        clubPreflight = await validateClubCheckoutSignup({...clubSignupInput,discountId:selectedDiscount.applicationType === 'club_signup' ? selectedDiscount.id : undefined});
+        clubPreflight = await validateClubCheckoutSignup({...clubSignupInput(),discountId:selectedDiscount.applicationType === 'club_signup' ? selectedDiscount.id : undefined});
         if (!clubPreflight.eligible) throw new Error('Club-tilmeldingen eller kampagnen er ændret. Genindlæs siden.');
       }
       const personalClub = selectedDiscount.applicationType === 'club_signup' && clubDiscountEligible(existingCustomer?.pendingClubDiscountId, selectedDiscount.id, existingCustomer?.discountUsage?.[selectedDiscount.id] || 0);
@@ -593,7 +593,7 @@ export async function createStripeCheckoutSessionAction(
     }
 
     if (customerInfo.subscribeToClub && !clubPreflight) {
-      clubPreflight = await validateClubCheckoutSignup(clubSignupInput);
+      clubPreflight = await validateClubCheckoutSignup(clubSignupInput());
       if (!clubPreflight.eligible) throw new Error('Club-tilmeldingen er ændret. Genindlæs siden.');
     }
     const manualDiscountWins = selectedDiscountAmount > (automaticCartDiscount?.amount || 0);
@@ -645,7 +645,7 @@ export async function createStripeCheckoutSessionAction(
 
     if (customerInfo.subscribeToClub) {
       stage = 'club_signup';
-      const enrolled = await prepareClubCheckoutSignup({...clubSignupInput,now:Date.now(),discountId:selectedDiscount?.applicationType === 'club_signup' ? selectedDiscount.id : undefined});
+      const enrolled = await prepareClubCheckoutSignup({...clubSignupInput(),now:Date.now(),discountId:selectedDiscount?.applicationType === 'club_signup' ? selectedDiscount.id : undefined});
       if (enrolled.customerId !== customerId) throw new Error('Club- og ordreprofilen matcher ikke. Genindlæs siden.');
     }
     if (customerInfo.subscribeToNewsletter && !customerInfo.subscribeToClub) {
