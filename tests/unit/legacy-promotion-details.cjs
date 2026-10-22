@@ -1,6 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { loadTs } = require('../helpers/load-ts.cjs');
+const { Timestamp } = require('firebase-admin/firestore');
 
 const dates = loadTs('src/lib/promotion-date.ts');
 const forms = loadTs('src/lib/legacy-promotion-form.ts');
@@ -26,7 +27,7 @@ const mockActions = {
       records[id]=after;
     },
   },
-  'firebase-admin/firestore':{Timestamp:{now:()=>timestamp('2026-09-28T10:00:00Z'),fromDate:date=>timestamp(date.toISOString())}},
+  'firebase-admin/firestore':{Timestamp},
 };
 const codes=loadTs('src/app/superadmin/discounts/actions.ts',mockActions);
 const standard=loadTs('src/app/superadmin/standard-discounts/actions.ts',mockActions);
