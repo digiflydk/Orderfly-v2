@@ -18,14 +18,16 @@ Unit/service and actual Chromium component tests exercise successful behavior, i
 
 Production acceptance is not established by a local build or emulator. Before declaring Deployed/closed, the coordinator must verify current-main ancestry, every relevant current-head CI check, independent Codex review without unresolved findings or human holds, then serial merge/deploy, actual health release SHA and read-only live behavior. A current source main is not a deployed release.
 
-## Outstanding production prerequisites
+## Production activation (#449 / #450)
 
-1. Review `docs/qr-firestore-indexes.json`: three additive composites, including both brand-wide and current-location analytics forms. The existing additive index script ignores fieldOverrides. Verify collection-group document-name query readiness separately. No production index operation has run in this work.
-2. Establish that the **deployed** browser Firestore policy denies QR definition/index/event/audit/receipt/maintenance paths. Checked-in `firestore.access.rules` is deny-all, but source is not evidence of the live policy. Rules preview is read-only; changing rules requires its separate production approval and must not accidentally alter unrelated access.
-3. Keep `QR_MODULE_ENABLED` OFF until index/access readiness is documented. Enabling it also enables public redirects and retention through the existing heartbeat. No secret or paid integration is required. Existing definitions may be managed while OFF; new dynamic exports/imports/creation fail closed.
-4. A controlled production acceptance QR and its scan events would be production data writes. Select and authorize a test brand/location and the reversible scenario separately before creating it; never run unattended production seed/cleanup. Verify canonical-domain/proxy behavior on the actual deployed service before distributing printed codes.
+PO/PM approved the activation scope on 21–22 October 2026. Verified before the flag was merged:
+
+1. `docs/qr-firestore-indexes.json`: the three additive composites, including both brand-wide and current-location analytics forms, are READY in `orderfly-39325` (run 39691780053). The reserved `__name__` field cannot be configured; the retention sweep's document-name ordered collection-group queries over `qrScanEvents` and `qrRateLimits` succeeded read-only in production, with and without a start cursor (run 39725659082).
+2. Live browser/API denial: anonymous 401, cross-origin 403, foreign brand 403; checked-in `firestore.access.rules` stays deny-all and unchanged. Changing rules still requires its own production approval.
+3. `QR_MODULE_ENABLED="true"` (RUNTIME) enables public redirects, dynamic creation/import/export and bounded retention through the existing heartbeat. No secret or paid integration is involved. Rollback is a reviewed release that removes the flag; existing records and audit stay.
+4. The only approved production test data is one brand-wide Esmeralda QR (`QR release acceptance #389`, campaign `internal-release-389`) with one HEAD, one mobile and one bot GET, readback and pause; its paused definition, receipts and audit are kept. Bulk, conflict and retention-limit scenarios are tested in isolated emulators only.
 5. Physical phone-camera and printed-size acceptance requires actual hardware. Machine decoding of the rendered PNG is documented separately and does not count as a physical scan test.
 
-No production data, rules, indexes, secrets or paid integrations have been changed. Conversion attribution, unique-person tracking and trusted geographic enrichment remain separate, unactivated follow-up issues #422–428. Scan-time campaign/location metadata describes the configured source, not an observed person's physical position. Cross-code aggregate reporting is not claimed by the single-code dashboard.
+Beyond the items above, no production data, rules, indexes, secrets or paid integrations have been changed. Conversion attribution, unique-person tracking and trusted geographic enrichment remain separate, unactivated follow-up issues #422–428. Scan-time campaign/location metadata describes the configured source, not an observed person's physical position. Cross-code aggregate reporting is not claimed by the single-code dashboard; it is tracked as development work in #478.
 
-The status email is blocked solely on a concrete authorized recipient. Automatic approval rejected the inferred historical address; no alternate channel or retry may bypass that decision. No email has been sent.
+Project status emails go to the PO-approved address recorded in #389.

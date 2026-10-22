@@ -72,3 +72,19 @@ live acceptance are separate counters. No UI, provisioning, CloudPRNT transport,
 activation, physical printer/FW/Wolt changes or production/environment/secrets/
 rules/index writes are included. Shared workflow additions/publication require
 root's serialized slot grant.
+
+# CI correction for the release (#503)
+
+The unrelated commerce P2 fixture repeatedly failed while finding the delivery
+button immediately after reopening cached product options and pressing Escape.
+The fixture previously waited only for dialog visibility before that key. Radix
+installs its keyboard listener in an effect, and the real options panel has an
+opening animation. The corrected fixture waits for the actual open panel's
+animation to finish and its focus to be inside the panel, sends exactly one
+Escape, and requires the dialog to be hidden before continuing. All previous
+assertions and the existing 6000 ms operation deadline remain unchanged. Failure
+diagnostics contain only fixture dialog counts and state booleans.
+
+This is a source-backed readiness correction, not a local browser-pass claim.
+The one official pinned Chromium installation attempt failed with a truncated
+archive, so the actual desktop/mobile proof must pass in CI before release.
