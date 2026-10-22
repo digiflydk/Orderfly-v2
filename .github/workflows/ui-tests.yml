@@ -191,6 +191,9 @@ jobs:
       - name: Supervised pilot operator controls browser regression
         run: node --test tests/unit/printing-pilot-controls-browser.cjs
 
+      - name: Explicit printer activation browser regression
+        run: node --test tests/unit/printing-printer-activation-browser.cjs
+
       - name: Printer routing editor and sample preview regression
         run: node --test tests/unit/printing-routing-editor.cjs tests/unit/printing-routing-ui-browser.cjs
 

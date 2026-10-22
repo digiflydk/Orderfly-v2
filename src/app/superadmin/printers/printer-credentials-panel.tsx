@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/button';
 import { createCredentialController, credentialOperationAllowed, type CredentialScope, type CredentialOperation } from './printer-credentials-client';
 import { PrinterPilotControls } from './pilot-controls';
+import { PrinterPilotAddress } from './printer-pilot-address';
 
 const labels: Record<CredentialOperation, string> = { issue: 'Opret printeradgang', rotate: 'Erstat adgangskode', revoke: 'Tilbagekald printeradgang' };
 const states = { missing: 'Ikke oprettet', current: 'Oprettet', revoked: 'Tilbagekaldt', stale: 'Printeren er ændret. Adgangskoden skal erstattes.' };
@@ -28,6 +29,7 @@ export function PrinterCredentialsPanel({ scope, printerName, permitted, onSessi
     {busy && <p role="status">{view.phase === 'loading' ? 'Indlæser status…' : 'Afventer bekræftelse…'}</p>}
     {view.message && <p role={view.phase === 'error' ? 'alert' : 'status'}>{view.message}</p>}
     {view.metadata && <p>Status: {states[view.metadata.state]}</p>}
+    {permitted && pilotProfile?.transport === 'cloudprnt-http' && <PrinterPilotAddress scope={scope} showUsername={view.phase !== 'secret'} />}
     {view.phase === 'confirm' && view.operation && <div className="space-y-3">
       <p>{view.operation === 'issue' ? 'Opret en ny adgangskode til denne printer?' : view.operation === 'rotate'
         ? 'Den tidligere adgangskode stopper med at virke. Erstat den med en ny kode?' : 'Printeren mister sin adgang. Tilbagekald adgangskoden?'}</p>

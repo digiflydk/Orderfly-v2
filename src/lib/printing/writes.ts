@@ -8,6 +8,7 @@ import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { printerConfigurationSchema, validatePrinterConfiguration } from './configuration';
 import { storedPrinterSchema } from './storage';
 import { initialPrinterActivity } from './activity-metadata';
+import { storedPrintQueueSchema } from './queue-storage';
 
 const createSchema = z.object({ configuration: printerConfigurationSchema }).strict();
 const editSchema = createSchema.extend({ revision: z.number().int().positive().safe() }).strict();
@@ -48,6 +49,15 @@ export async function writePrinterConfiguration(operation: 'create' | 'edit', in
       throw new PrinterWriteError('not_found', 404);
     }
     const before = previous?.success ? previous.data : null;
+    if (operation === 'create') {
+      // Only a genuinely unused new identity may establish a proven empty ledger.
+      // Missing metadata on existing/legacy printers is never repaired here.
+      const [queue, jobs] = await Promise.all([
+        tx.get(ref.collection('queue').doc('state')),
+        tx.get(ref.collection('jobs').limit(1)),
+      ]);
+      if (queue.exists || !jobs.empty) throw new PrinterWriteError('record_conflict', 409);
+    }
     if (operation === 'edit' && (before!.revision !== expectedRevision
       || before!.revision === Number.MAX_SAFE_INTEGER || before!.configuration.state !== 'disabled')) {
       throw new PrinterWriteError('record_conflict', 409);
@@ -66,6 +76,10 @@ export async function writePrinterConfiguration(operation: 'create' | 'edit', in
     });
     if (operation === 'create') {
       tx.create(ref, after);
+      tx.create(ref.collection('queue').doc('state'), storedPrintQueueSchema.parse({
+        schemaVersion: 1, brandId: config.brandId, locationId: config.locationId, printerId: config.id,
+        revision: 1, pendingCount: 0, oldestPendingAt: null, updatedAt: timestamp,
+      }));
       // Creation proves this new, never-reused native identity has no prior use.
       // Existing/legacy printers are never upgraded to "never" by an edit.
       tx.create(ref.collection('statusMetadata').doc('current'), initialPrinterActivity({

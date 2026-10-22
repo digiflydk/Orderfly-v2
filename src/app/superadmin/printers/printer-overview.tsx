@@ -8,6 +8,7 @@ import { AdminSelectField } from '@/components/superadmin/admin-select-field';
 import { PrinterConfigurationForm } from './printer-configuration-form';
 import { PrinterLifecycleDialog } from './printer-lifecycle-dialog';
 import { PrinterCredentialsPanel } from './printer-credentials-panel';
+import { PrinterActivationPanel } from './printer-activation-panel';
 import type { PrinterConfiguration } from '@/lib/printing/domain';
 
 type Brand = { id: string; name: string };
@@ -66,7 +67,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const [after, setAfter] = useState<Cursor | null>(null);
   const [refresh, setRefresh] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
-  const [editor, setEditor] = useState<{ scope: string; brandId: string; locationId: string; item?: Item; action?: 'deactivate' | 'delete' } | null>(null);
+  const [editor, setEditor] = useState<{ scope: string; brandId: string; locationId: string; item?: Item; action?: 'deactivate' | 'delete' | 'resume' } | null>(null);
   const [credential, setCredential] = useState<{ key: string; item: Item } | null>(null);
   const [sessionLost, setSessionLost] = useState(false);
   const [savePending, setSavePending] = useState(false);
@@ -100,11 +101,11 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
     && hasGrant(editLocations, credential.item.configuration) && !!current?.page?.items.some(row => row.revision === credential.item.revision
       && row.configuration.id === credential.item.configuration.id && row.configuration.brandId === credential.item.configuration.brandId
       && row.configuration.locationId === credential.item.configuration.locationId);
-  const openEditor = (item?: Item, action?: 'deactivate' | 'delete') => {
+  const openEditor = (item?: Item, action?: 'deactivate' | 'delete' | 'resume') => {
     const target = item?.configuration || createScope;
     if (!target || editor || credential || feedback?.requiresRefresh || !current?.page || sessionLost
       || !hasGrant(action === 'delete' ? deleteLocations : item ? editLocations : createLocations, target)
-      || (item && action !== 'delete' && (action === 'deactivate'
+      || (item && action !== 'delete' && (action === 'resume' ? item.configuration.state === 'active' : action === 'deactivate'
         ? item.configuration.state === 'disabled' : item.configuration.state !== 'disabled'))) return;
     // Ignore obsolete reads before a revisioned mutation can begin.
     readGeneration.current += 1; readController.current?.abort();
@@ -205,7 +206,13 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
         setFeedback({ message, requiresRefresh }); if (requiresRefresh) readsAllowed.current = false;
       } }}
       onSaved={() => { if (editorRef.current === editor) { setSavedScope(editor.scope); closeAndRefresh(); } }} />}
-    {editor?.item && editor.action && !sessionLost && (editorAllowed || savePending) && <PrinterLifecycleDialog
+    {editor?.item && editor.action === 'resume' && !sessionLost && (editorAllowed || savePending) && <PrinterActivationPanel
+      key={JSON.stringify([editor.scope, editor.item.configuration.id, editor.item.revision, editor.action])}
+      item={editor.item} permitted={editorAllowed} onPendingChange={reportPending} onCancel={closeAndRefresh}
+      onSessionLost={() => { if (editorRef.current === editor) loseSession(); }}
+      onSaved={() => { if (editorRef.current === editor) { closeAndRefresh(); setFeedback({ requiresRefresh: false,
+        message: 'Printeren er aktiveret. Åbn Printeradgang, erstat adgangskoden, og start derefter et nyt testforløb.' }); } }} />}
+    {editor?.item && editor.action && editor.action !== 'resume' && !sessionLost && (editorAllowed || savePending) && <PrinterLifecycleDialog
       key={JSON.stringify([editor.scope, editor.item.configuration.id, editor.item.revision, editor.action])}
       item={editor.item} action={editor.action} permitted={editorAllowed} onPendingChange={reportPending} onCancel={closeAndRefresh}
       onSessionLost={() => { if (editorRef.current === editor) loseSession(); }}
@@ -234,6 +241,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
                   <TableCell className="max-w-[220px] break-words font-medium">{c.name}</TableCell>
                   <TableCell className="text-muted-foreground"><span className="whitespace-nowrap">Star {c.model === 'mc-print2' ? 'mC-Print2' : 'mC-Print3'}</span><br />{c.transport === 'cloudprnt-http' ? 'CloudPRNT HTTP' : 'CloudPRNT MQTT'}<br />{c.paperWidthMm} mm</TableCell>
                   <TableCell><div className="flex flex-wrap gap-2 min-w-[180px]">
+                    <Button aria-label={`Aktivér ${c.name}`} size="sm" variant="outline" disabled={!canEdit || !!editor || !!credential || !!feedback?.requiresRefresh || c.state === 'active'} onClick={() => openEditor({ configuration: c, revision }, 'resume')}>Aktivér</Button>
                     <Button aria-label={`Rediger ${c.name}`} title={!canEdit ? 'Ingen redigeringsadgang på denne lokation' : undefined} size="sm" variant="outline" disabled={!canEdit || !!editor || !!credential || !!feedback?.requiresRefresh || c.state !== 'disabled'} onClick={() => openEditor({ configuration: c, revision })}>Edit</Button>
                     <Button aria-label={`Deaktiver ${c.name}`} title={!canEdit ? 'Ingen redigeringsadgang på denne lokation' : undefined} size="sm" variant="outline" disabled={!canEdit || !!editor || !!credential || !!feedback?.requiresRefresh || c.state === 'disabled'} onClick={() => openEditor({ configuration: c, revision }, 'deactivate')}>Deactivate</Button>
                     <Button aria-label={`Slet ${c.name}`} title={!canDelete ? 'Ingen sletteadgang på denne lokation' : undefined} size="sm" variant="outline" disabled={!canDelete || !!editor || !!credential || !!feedback?.requiresRefresh} onClick={() => openEditor({ configuration: c, revision }, 'delete')}>Delete</Button>
