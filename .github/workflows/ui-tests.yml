@@ -83,6 +83,9 @@ jobs:
       - name: Explicit local intent runtime safety regression
         run: node --test tests/unit/local-qa-intent-runtime.cjs
 
+      - name: Pilot native transaction runner safety regression
+        run: node --test tests/unit/pilot-native-runner-safety.cjs
+
       - name: Booking feedback and mail regression
         run: node --test tests/unit/booking-feedback-setup-144.cjs tests/unit/booking-feedback-timing.cjs tests/unit/feedback-mail.cjs tests/unit/feedback-readiness.cjs tests/unit/feedback-central-access.cjs tests/unit/feedback-scopes.cjs tests/unit/feedback-admin-notifications.cjs tests/unit/feedback-report-public.cjs tests/unit/feedback-page-access.cjs tests/unit/feedback-presentation.cjs tests/unit/feedback-review-evidence.cjs
 
@@ -176,6 +179,9 @@ jobs:
       - name: Atomic Stripe routed print-intent integration
         run: node --test tests/unit/printing-stripe-settlement-integration.cjs
 
+      - name: Atomic staff pickup settlement regression
+        run: node --test tests/unit/printing-pickup-settlement-integration.cjs
+
       - name: Private settlement preparation regression
         run: node --test tests/unit/settlement-preparation.cjs
 
@@ -221,6 +227,10 @@ jobs:
       - name: Real isolated credential metadata and native persistence proof
         timeout-minutes: 8
         run: QA0_FIREBASE_BIN="$RUNNER_TEMP/orderfly-qa0-tools/node_modules/.bin/firebase" QA0_JAVA_BIN="$JAVA_HOME/bin/java" QA0_CREDENTIAL_METADATA_PROOF=true node scripts/local-qa/run-backend.cjs
+
+      - name: Actual isolated pilot native transaction and one-shot delivery proof
+        timeout-minutes: 10
+        run: QA0_FIREBASE_BIN="$RUNNER_TEMP/orderfly-qa0-tools/node_modules/.bin/firebase" QA0_JAVA_BIN="$JAVA_HOME/bin/java" node tests/local-qa/pilot-native-transaction.cjs --run
 
       - name: Native intent fixture and launcher safety regression
         run: node --test tests/unit/local-qa-native-intent.cjs tests/unit/local-qa-native-intent-launcher.cjs

@@ -1,5 +1,10 @@
 # Staff pickup settlement origin (#337)
 
+The subsequent #350 integration is documented in
+[`printing-pickup-settlement.md`](printing-pickup-settlement.md). The description
+below records this origin module's own boundary; it still never mints financial
+write authority or applies settlement itself.
+
 This server-only foundation is an independent prerequisite of #303. It adds no
 production callsite, order/payment mutation, print-job insertion, API, transport or
 activation. Existing `settlePaidPickupOrder` and held-checkout pickup acceptance

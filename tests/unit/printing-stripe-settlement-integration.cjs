@@ -295,7 +295,7 @@ test('#349 Paid replay refuses missing/corrupt manifest, changed targets/rules/c
 
 test('#349 valid provider origin/serialized objects cannot mint the private financial plan capability', async () => {
   const f = await fixture(), origin = await f.origins.verifyStripePrintPayment(f.session.id), before = structuredClone([...f.records]);
-  assert.deepEqual(Object.keys(f.settlement).sort(), ['readStripeSettlementPrintCapability', 'settlePaidCheckoutSession', 'settlePaidPickupOrder'].sort());
+  assert.deepEqual(Object.keys(f.settlement).sort(), ['readStripeSettlementPrintCapability', 'readPickupSettlementPrintCapability', 'settlePaidCheckoutSession', 'settlePaidPickupOrder'].sort());
   for (const fake of [{}, origin, JSON.parse(JSON.stringify(origin)), null]) {
     await assert.rejects(f.db.runTransaction(transaction => f.outbox.prepareStripeSettlementPrintIntents({ db: f.db, transaction }, fake, { intents: [] })), /Unverified settlement print capability/);
   }
