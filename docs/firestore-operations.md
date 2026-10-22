@@ -4,7 +4,7 @@ Three manual GitHub workflows change the production data project `orderfly-39325
 
 | Workflow | Changes | Approval |
 |---|---|---|
-| **Firestore indexes** (`firestore-indexes.yml`) | Adds missing composite indexes from `docs/*-firestore-indexes.json`. Never deletes. See [firestore-schema.md](firestore-schema.md). | None (additive only) |
+| **Firestore indexes** (`firestore-indexes.yml`) | Adds missing composite indexes and missing single-field override indexes (`fieldOverrides`) from `docs/*-firestore-indexes.json`. Never deletes; an override keeps the field's existing indexes. `__name__` cannot be configured and is verified by a read-only query instead. See [firestore-schema.md](firestore-schema.md). | None (additive only) |
 | **Firestore rules** (`firestore-rules.yml`) | Publishes the rules file named in `firebase.access.json` (`firestore.access.rules`). | `production` environment |
 | **Firestore data migration** (`firestore-migration.yml`) | Runs one migration from `scripts/migrations/`. | `production` environment |
 

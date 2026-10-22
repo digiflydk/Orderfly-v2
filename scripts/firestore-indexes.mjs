@@ -24,6 +24,26 @@ const api = async (url, init = {}) => {
 };
 const key = fields => fields.filter(f => f.fieldPath !== '__name__').map(f => `${f.fieldPath}:${f.order || f.arrayConfig}`).join(',');
 
+// Read-only proof for the document-name ordered collection-group sweep: the query with and without a
+// start cursor, at most one document name, no field values. Needs read access; an index-only principal
+// logs the readiness as NOT VERIFIED without failing the run.
+async function probe() {
+  const documents = `projects/${PROJECT}/databases/(default)/documents`;
+  for (const override of builtin.filter(o => o.indexes.some(i => i.queryScope === 'COLLECTION_GROUP'))) {
+    for (const startAt of [null, { values: [{ referenceValue: `${documents}/brands/0` }], before: false }]) {
+      const { status, body } = await api(`https://firestore.googleapis.com/v1/${documents}:runQuery`, {
+        method: 'POST', body: JSON.stringify({ structuredQuery: { from: [{ collectionId: override.collectionGroup, allDescendants: true }],
+          select: { fields: [{ fieldPath: '__name__' }] }, orderBy: [{ field: { fieldPath: '__name__' }, direction: 'ASCENDING' }],
+          ...(startAt ? { startAt } : {}), limit: 1 } }),
+      });
+      const label = `query     ${override.collectionGroup} collection group ordered by __name__${startAt ? ' after a cursor' : ''}`;
+      if (status === 200) console.log(`${label}: OK (${(Array.isArray(body) ? body : []).filter(r => r.document).length} document name read)`);
+      else if (status === 403) console.log(`${label}: NOT VERIFIED, principal has no read access (HTTP 403)`);
+      else throw new Error(`${label}: HTTP ${status} ${(Array.isArray(body) ? body[0] : body)?.error?.message || ''}`);
+    }
+  }
+}
+
 const wanted = files.flatMap(file => JSON.parse(readFileSync(file, 'utf8')).indexes);
 for (const index of wanted) {
   const { status, body } = await api(`${base}/${index.collectionGroup}/indexes`, {
@@ -36,9 +56,47 @@ for (const index of wanted) {
   else throw new Error(`${label}: HTTP ${status} ${body.error?.message || ''}`);
 }
 
+// Single-field overrides, e.g. a COLLECTION_GROUP index on a field used by a collection-group query.
+// Additive: the field's current effective indexes are kept and only missing ones are appended.
+const fieldUrl = override => `${base}/${override.collectionGroup}/fields/${encodeURIComponent(override.fieldPath)}`;
+const fieldKey = index => `${index.queryScope}:${index.order || index.arrayConfig}`;
+const fieldIndexes = body => (body.indexConfig?.indexes || []).map(index => ({
+  queryScope: index.queryScope, state: index.state,
+  ...(index.fields?.[0]?.order ? { order: index.fields[0].order } : { arrayConfig: index.fields?.[0]?.arrayConfig }),
+}));
+const requested = files.flatMap(file => JSON.parse(readFileSync(file, 'utf8')).fieldOverrides || []);
+// Firestore rejects any override on the reserved document-name field and indexes it itself; for that
+// field the read-only query probe below is the readiness evidence.
+const builtin = requested.filter(override => override.fieldPath === '__name__');
+const overrides = requested.filter(override => override.fieldPath !== '__name__');
+for (const override of builtin) console.log(`builtin   ${override.collectionGroup}.__name__ (not configurable; verified by the query probe)`);
+for (const override of overrides) {
+  const label = `${override.collectionGroup}.${override.fieldPath}`;
+  const current = await api(fieldUrl(override));
+  if (current.status !== 200) throw new Error(`${label}: HTTP ${current.status} ${current.body.error?.message || ''}`);
+  const existing = fieldIndexes(current.body);
+  const missing = override.indexes.filter(index => !existing.some(e => fieldKey(e) === fieldKey(index)));
+  if (!missing.length) { console.log(`exists    ${label} (${override.indexes.map(fieldKey).join(',')})`); continue; }
+  const indexes = [...existing, ...missing].map(index => ({ queryScope: index.queryScope,
+    fields: [{ fieldPath: override.fieldPath, ...(index.order ? { order: index.order } : { arrayConfig: index.arrayConfig }) }] }));
+  const { status, body } = await api(`${fieldUrl(override)}?updateMask=indexConfig`, { method: 'PATCH', body: JSON.stringify({ indexConfig: { indexes } }) });
+  if (status !== 200) throw new Error(`${label}: HTTP ${status} ${body.error?.message || ''}`);
+  console.log(`created   ${label} (${missing.map(fieldKey).join(',')}; kept ${existing.map(fieldKey).join(',') || 'none'})`);
+}
+
 // Index builds take a few minutes; report the final state of every listed index.
 for (let attempt = 0; attempt < 60; attempt++) {
   const states = [];
+  for (const override of overrides) {
+    const { status, body } = await api(fieldUrl(override));
+    if (status !== 200) throw new Error(`get ${override.collectionGroup}.${override.fieldPath}: HTTP ${status} ${body.error?.message || ''}`);
+    const existing = fieldIndexes(body);
+    for (const index of override.indexes) {
+      states.push([`${override.collectionGroup}.${override.fieldPath} (${fieldKey(index)})`, existing.find(e => fieldKey(e) === fieldKey(index))?.state
+        // An override is applied by a long-running operation; give it a minute to appear.
+        || (attempt < 3 ? 'PENDING' : 'MISSING')]);
+    }
+  }
   for (const group of [...new Set(wanted.map(i => i.collectionGroup))]) {
     const existing = [];
     for (let page = ''; ;) {
@@ -54,7 +112,7 @@ for (let attempt = 0; attempt < 60; attempt++) {
     }
   }
   const pending = states.filter(([, state]) => state !== 'READY');
-  if (!pending.length) { console.log(`All ${states.length} indexes are READY.`); process.exit(0); }
+  if (!pending.length) { console.log(`All ${states.length} indexes are READY.`); await probe(); process.exit(0); }
   if (pending.some(([, state]) => state === 'MISSING' || state === 'NEEDS_REPAIR')) throw new Error(`Not building: ${JSON.stringify(pending)}`);
   console.log(`waiting   ${pending.length} index(es) still building`);
   await new Promise(resolve => setTimeout(resolve, 20_000));
