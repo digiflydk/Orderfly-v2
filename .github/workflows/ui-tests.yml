@@ -92,6 +92,9 @@ jobs:
       - name: Native print claim reservation regression
         run: node --test tests/unit/printing-native-claim.cjs
 
+      - name: Native print confirmation persistence regression
+        run: node --test tests/unit/printing-print-result-native.cjs
+
       - name: CloudPRNT protocol and simulator regression
         run: node --test tests/unit/printing-cloudprnt.cjs
 
