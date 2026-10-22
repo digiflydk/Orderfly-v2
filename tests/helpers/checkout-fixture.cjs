@@ -20,6 +20,13 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
  const events=[];const writes=[];let coupon, persistenceError, sessionParams;let patchCalls=0;
  const records=new Map();
  const marketingDb=require('./marketing-db.cjs').memoryDb(records);
+ const nativeCollection=marketingDb.collection;
+ const nativeRef=ref=>({...ref,collection:child=>nativeQuery(nativeCollection(ref.path+'/'+child))});
+ const nativeQuery=query=>({...query,doc:id=>nativeRef(query.doc(id)),where:(...args)=>nativeQuery(query.where(...args)),limit:n=>nativeQuery(query.limit(n)),get:async()=>{const result=await query.get();return {...result,size:result.docs.length};}});
+ marketingDb.collection=name=>nativeQuery(nativeCollection(name));
+ const acceptanceGraph=require('./load-ts-graph.cjs').moduleGraph({react:require('next/dist/compiled/react'),
+  'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>marketingDb,getAdminFieldValue:()=>({serverTimestamp:()=>new Date('2026-09-07T00:00:00Z')})},
+ });
  const firestoreRef=(collection,id)=>({collection,id});
  const snapshot=ref=>({id:ref.id,ref,exists:()=>records.has(ref.collection+'/'+ref.id),data:()=>records.get(ref.collection+'/'+ref.id)});
  const save=(ref,data,merge=false)=>{
@@ -53,9 +60,8 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   '@/lib/marketing/config':{marketingConfig:brandId=>marketingConfigured && brandId==='b'?{brandId:'b'}:null},
   'node:crypto':require('node:crypto'),
   '@/lib/firebase-admin':{getAdminDb:()=>marketingDb},
-  '@/lib/server/accept-pickup-checkout':loadTs('src/lib/server/accept-pickup-checkout.ts',{
-   'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>marketingDb,getAdminFieldValue:()=>({serverTimestamp:()=>new Date('2026-09-07T00:00:00Z')})},
-  }),
+  '@/lib/server/accept-pickup-checkout':acceptanceGraph('src/lib/server/accept-pickup-checkout.ts'),
+  '@/lib/printing/unpaid-acceptance-originals':acceptanceGraph('src/lib/printing/unpaid-acceptance-originals.ts'),
   '@/lib/marketing/store':{recordNewsletterConsent:async(...args)=>{events.push('newsletter-consent');if(fault==='newsletter-consent')throw Error('consent storage offline');return loadTs('src/lib/marketing/store.ts',{'server-only':{}}).recordNewsletterConsent(...args);}},
   '@/lib/synthetic-product':loadTs('src/lib/synthetic-product.ts'),
   '@/lib/checkout-schema':loadTs('src/lib/checkout-schema.ts'),
@@ -109,7 +115,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
    },
    runTransaction:async(_,callback)=>{beforeCustomerTransaction?.(records);const tx={get:async ref=>snapshot(ref),set:(ref,data,options)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)};
     const compatRef=ref=>{const [collection,id]=ref.path.split('/');return firestoreRef(collection,id);};
-    const nativeTx={get:async ref=>{const saved=await tx.get(compatRef(ref));return{...saved,exists:saved.exists()};},set:(ref,...args)=>tx.set(compatRef(ref),...args),update:(ref,...args)=>tx.update(compatRef(ref),...args)};
+    const nativeTx={get:async ref=>{if(!ref.path||ref.path.split('/').length!==2)return ref.get();const saved=await tx.get(compatRef(ref));return{...saved,exists:saved.exists()};},create:(ref,data)=>{if(records.has(ref.path))throw Error('Exists');strictWrite(data);records.set(ref.path,structuredClone(data));},set:(ref,...args)=>ref.path.split('/').length===2?tx.set(compatRef(ref),...args):records.set(ref.path,structuredClone(args[0])),update:(ref,...args)=>tx.update(compatRef(ref),...args)};
     return callback(tx,Object.freeze({db:marketingDb,transaction:nativeTx}));},
    serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),
    setDoc:async(ref,data)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data);writes.push({ref,data});events.push(ref.collection);},

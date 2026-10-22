@@ -43,6 +43,7 @@ import { brandSlugFromHost, storefrontPath } from '@/lib/brand-subdomain';
 import { generateOrderId } from '@/lib/order-id';
 import { readGuestReceipt, type GuestReceipt } from '@/lib/server/guest-receipt';
 import { preparePickupCheckoutAcceptance } from '@/lib/server/accept-pickup-checkout';
+import { prepareUnpaidAcceptanceOriginals } from '@/lib/printing/unpaid-acceptance-originals';
 
 
 // Helper functions for Stripe statement descriptors
@@ -730,7 +731,9 @@ export async function createStripeCheckoutSessionAction(
       try {
         await runTransaction(db, async (_transaction, context) => {
           const acceptance = await preparePickupCheckoutAcceptance(context, { orderId, brandId, locationId, selection: deliveryTime });
+          const printPlan = await prepareUnpaidAcceptanceOriginals(context, acceptance.capability);
           acceptance.apply();
+          printPlan?.apply();
           fulfillmentAt = acceptance.fulfillmentAt;
         });
       } catch (error) {
