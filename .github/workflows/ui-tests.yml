@@ -140,6 +140,9 @@ jobs:
       - name: Atomic Stripe routed print-intent integration
         run: node --test tests/unit/printing-stripe-settlement-integration.cjs
 
+      - name: Atomic staff pickup settlement regression
+        run: node --test tests/unit/printing-pickup-settlement-integration.cjs
+
       - name: Private settlement preparation regression
         run: node --test tests/unit/settlement-preparation.cjs
 

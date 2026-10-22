@@ -2,7 +2,7 @@ import 'server-only';
 import { z } from 'zod';
 import { FieldValue, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
-import type { StripeSettlementPrintCapability, readStripeSettlementPrintCapability } from '@/lib/server/settle-checkout';
+import type { StripeSettlementPrintCapability, PickupSettlementPrintCapability, readStripeSettlementPrintCapability } from '@/lib/server/settle-checkout';
 import { kitchenPrintIntentEligibility, printJobId, type KitchenOrder } from './domain';
 import { storedPrinterSchema } from './storage';
 import { storedPrintQueueSchema as queueSchema, storedQueuedPrintJobSchema as jobSchema, PRINT_QUEUE_LIMIT } from './queue-storage';
@@ -64,14 +64,25 @@ export async function prepareOriginalPrintIntents(db: Firestore, tx: Transaction
   return prepareBatch(db, tx, input);
 }
 
-type SettlementAuthority = { context: NativeTransactionContext; capability: StripeSettlementPrintCapability;
-  read: typeof readStripeSettlementPrintCapability; manifestTargets: ReadonlyArray<z.infer<typeof manifestTargetSchema>> };
+type SettlementRead = (requireApplied?: boolean) => ReturnType<typeof readStripeSettlementPrintCapability>;
+type SettlementAuthority = { read: SettlementRead; requireExistingJobs: boolean;
+  manifestTargets: ReadonlyArray<z.infer<typeof manifestTargetSchema>> };
 /** Closed Stripe path: the fixed financial writer alone can mint this capability.
  * Lazy fixed import preserves module identity without an eager circular dependency.
  */
 export async function prepareStripeSettlementPrintIntents(context: NativeTransactionContext, capability: StripeSettlementPrintCapability, input: unknown) {
   const read = (await import('@/lib/server/settle-checkout')).readStripeSettlementPrintCapability;
-  const authority = read(context, capability);
+  return prepareSettlementIntents(context, applied => read(context, capability, applied), input, false);
+}
+
+/** Fixed staff adapter; only the actual settlement writer can mint its capability. */
+export async function preparePickupSettlementPrintIntents(context: NativeTransactionContext, capability: PickupSettlementPrintCapability, input: unknown) {
+  const read = (await import('@/lib/server/settle-checkout')).readPickupSettlementPrintCapability;
+  return prepareSettlementIntents(context, applied => read(context, capability, applied), input, true);
+}
+
+async function prepareSettlementIntents(context: NativeTransactionContext, read: SettlementRead, input: unknown, pickup: boolean) {
+  const authority = read();
   const raw = input as { intents?: unknown; identity?: { targets?: unknown } } | null;
   const targets = raw?.identity?.targets;
   if (!raw || !Array.isArray(raw.intents) || raw.intents.length > PRINT_INTENT_BATCH_LIMIT
@@ -90,9 +101,16 @@ export async function prepareStripeSettlementPrintIntents(context: NativeTransac
   if (JSON.stringify(expected) !== JSON.stringify(actual)) throw new PrintOutboxError('invalid_intent');
   const manifestRef = context.db.collection('orders').doc(identity.orderId).collection('printIntents').doc('original');
   const manifest = await context.transaction.get(manifestRef);
+  // A staff collection is later than unpaid acceptance. Without its canonical
+  // original manifest there is no proof that legacy/orphan jobs did not already
+  // print elsewhere. Current targets, held status and printer scans cannot prove
+  // whole-order history absence. Only the separate trusted acceptance producer
+  // may create these originals; staff settlement must never backfill them.
+  if (pickup && !manifest.exists) throw new PrintOutboxError('job_conflict');
   const now = Date.now();
   if (!Number.isSafeInteger(now) || now <= 0) throw new PrintOutboxError('queue_unverified');
-  if (authority.replay) {
+  const reuseManifest = authority.replay || (pickup && manifest.exists);
+  if (reuseManifest) {
     if (!boundedManifest(manifest.data())) throw new PrintOutboxError('job_conflict');
     const saved = storedManifestSchema.safeParse(manifest.data());
     if (!manifest.exists || manifest.id !== 'original' || !saved.success || saved.data.createdAt > now) throw new PrintOutboxError('job_conflict');
@@ -101,10 +119,11 @@ export async function prepareStripeSettlementPrintIntents(context: NativeTransac
   } else if (manifest.exists) throw new PrintOutboxError('job_conflict');
   // The private financial capability reserves its own writes plus exactly one
   // manifest create for a fresh transition. Replay can never create a manifest.
-  const plan = await prepareBatch(context.db, context.transaction, { intents: parsed.data.intents, reservedWriteCount: authority.writeCount }, { context, capability, read, manifestTargets: identity.targets });
-  return { ...plan, writeCount: plan.writeCount + (authority.replay ? 0 : 1), apply() {
-    read(context, capability, true);
-    if (!authority.replay) context.transaction.create(manifestRef, { ...identity, createdAt: now });
+  const plan = await prepareBatch(context.db, context.transaction, { intents: parsed.data.intents,
+    reservedWriteCount: authority.writeCount - (!authority.replay && reuseManifest ? 1 : 0) }, { read, requireExistingJobs: reuseManifest, manifestTargets: identity.targets });
+  return { ...plan, writeCount: plan.writeCount + (reuseManifest ? 0 : 1), apply() {
+    read(true);
+    if (!reuseManifest) context.transaction.create(manifestRef, { ...identity, createdAt: now });
     plan.apply();
   } };
 }
@@ -142,7 +161,7 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
     }
     for (const order of orders) {
       const saved = orderSchema.safeParse(order.data());
-      const authority = settlement ? settlement.read(settlement.context, settlement.capability) : null;
+      const authority = settlement ? settlement.read() : null;
       const candidate = authority?.order;
       if (!saved.success || saved.data.brandId !== command.brandId || saved.data.locationId !== command.locationId
         || candidate && (candidate.id !== order.id || candidate.brandId !== saved.data.brandId || candidate.locationId !== saved.data.locationId)
@@ -175,7 +194,7 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
     const prepared = commands.map(c => {
       const identity = { ...c, revision: 0 as const }, jobId = printJobId(identity);
       const prior = existing.get(jobId);
-      if (settlement && settlement.read(settlement.context, settlement.capability).replay) {
+      if (settlement && (settlement.requireExistingJobs || prior)) {
         const target = settlement.manifestTargets.find(target => target.printerId === c.printerId);
         if (!prior || !target || prior.printerRevision !== target.printerRevision
           || prior.printerRevision !== config.data.revision) throw new PrintOutboxError('job_conflict');
@@ -204,7 +223,7 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
     jobs: [...unique.keys()].map(jobId => results.get(jobId)!), createdCount, writeCount,
     apply() {
       if (applied) throw new PrintOutboxError('job_conflict');
-      if (settlement) settlement.read(settlement.context, settlement.capability, true);
+      if (settlement) settlement.read(true);
       if (!writeCount) return;
       applied = true;
       for (const plan of plans) {
