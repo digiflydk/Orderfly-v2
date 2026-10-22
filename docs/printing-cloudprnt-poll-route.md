@@ -12,6 +12,8 @@ Before reading route parameters, streaming the body or obtaining Admin/Firestore
 
 These limits apply per running Node process and reset on restart; this is not a distributed edge quota. Multiple hosting instances multiply the bound. A deployment-level global ingress limit remains useful for stronger fleet-wide denial-of-service protection. The route does not infer a trusted client IP from public headers or use extra Firestore reads to enforce its admission bound.
 
+Basic scheme casing and allowed separator spaces are canonicalized before hashing. Equivalent accepted spellings share the same credential bucket; the case-sensitive credential payload is preserved.
+
 This endpoint provides a deployable connectivity boundary. It does not dispatch, download bytes, accept a result, issue client actions, record protocol observations or trigger a testprint, even if flags elsewhere change. Production configuration, intent and output stay off. Device setup and credential provisioning require their own controlled authorization; no physical printer was contacted during implementation.
 
 ## Verification

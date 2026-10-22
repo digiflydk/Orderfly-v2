@@ -194,6 +194,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
       key={JSON.stringify([credential.key, credential.item.configuration.brandId, credential.item.configuration.locationId, credential.item.configuration.id, credential.item.revision])}
       scope={{ brandId: credential.item.configuration.brandId, locationId: credential.item.configuration.locationId,
         printerId: credential.item.configuration.id, printerRevision: credential.item.revision }} printerName={credential.item.configuration.name}
+      pilotProfile={{ model: credential.item.configuration.model, paperWidthMm: credential.item.configuration.paperWidthMm, transport: credential.item.configuration.transport, state: credential.item.configuration.state }}
       permitted={credentialAllowed} onSessionLost={loseSession} onClose={() => setCredential(null)} />}
     {editor && !editor.action && !sessionLost && (editorAllowed || savePending) && <PrinterConfigurationForm
       key={JSON.stringify([editor.scope, editor.item?.configuration.id || '', editor.item?.revision || 0])}

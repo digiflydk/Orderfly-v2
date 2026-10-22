@@ -5,7 +5,30 @@ const fs = require('node:fs'), path = require('node:path'), net = require('node:
 const { spawn, spawnSync, execFileSync } = require('node:child_process');
 const assert = require('node:assert/strict');
 const ROOT = path.resolve(__dirname, '../..'), PROJECT = 'demo-orderfly-qa0';
+const NATIVE_ROOTS = ['platformAdminControl/access-v1', 'brands/qa0-pilot-brand', 'locations/qa0-pilot-location'];
 let stage = 'runtime';
+async function assertVacantRoots(db) {
+  for (const key of NATIVE_ROOTS) {
+    const ref = db.doc(key);
+    assert.equal((await ref.get()).exists, false, 'refuse existing fixed seed');
+    assert.equal((await ref.listCollections()).length, 0, 'refuse orphan descendant namespace');
+  }
+}
+async function cleanupRegistered(db, expected) {
+  // No recursive deletion: foreign/unregistered descendants are never touched.
+  await db.runTransaction(async tx => {
+    const current = await Promise.all([...expected.keys()].map(key => tx.get(db.doc(key))));
+    for (const row of current) assert.ok(row.exists && row.updateTime.isEqual(expected.get(row.ref.path)), 'cleanup record ownership changed');
+    for (const row of current) tx.delete(row.ref, { lastUpdateTime: expected.get(row.ref.path) });
+  });
+  await assertVacantRoots(db);
+}
+function assertCommittedSource(root = ROOT) {
+  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: root, encoding: 'utf8' }).trim();
+  assert.match(commit, /^[a-f0-9]{40}$/);
+  assert.equal(execFileSync('git', ['status', '--porcelain', '--untracked-files=no', '--', 'src', 'tests', 'scripts', 'package.json', 'package-lock.json'], { cwd: root, encoding: 'utf8' }).trim(), '', 'native proof sources must be committed');
+  return commit;
+}
 function pilotEnvironment() {
   return { ...require('../../scripts/local-qa/environment.cjs').environment(),
     ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED: 'true', ORDERFLY_PRINTER_PILOT_OUTPUT_ENABLED: 'true' };
@@ -28,9 +51,7 @@ function preflight() {
 }
 async function child() {
   assertRuntime(); preflight();
-  const commit = execFileSync('git', ['rev-parse', 'HEAD'], { cwd: ROOT, encoding: 'utf8' }).trim();
-  assert.match(commit, /^[a-f0-9]{40}$/);
-  assert.equal(execFileSync('git', ['status', '--porcelain', '--untracked-files=no', '--', 'src', 'tests/local-qa/pilot-native-transaction.cjs'], { cwd: ROOT, encoding: 'utf8' }).trim(), '');
+  const commit = assertCommittedSource();
   globalThis.AsyncLocalStorage ||= require('node:async_hooks').AsyncLocalStorage;
   const admin = require('firebase-admin');
   const app = admin.initializeApp({ projectId: PROJECT,
@@ -44,12 +65,24 @@ async function child() {
   const scope = { brandId: 'qa0-pilot-brand', locationId: 'qa0-pilot-location', printerId: 'qa0-pilot-printer' };
   const binding = { ...scope, printerRevision: 1, credentialRevision: 1 };
   const printerPath = `locations/${scope.locationId}/printers/${scope.printerId}`;
-  const roots = ['platformAdminControl/access-v1', `brands/${scope.brandId}`, `locations/${scope.locationId}`];
+  const roots = NATIVE_ROOTS;
   let uid, ownsSeed = false, cleaned = false;
+  const expected = new Map();
+  const remember = async paths => { for (const key of paths) { const row = await db.doc(key).get(); assert.equal(row.exists,true); expected.set(key,row.updateTime); } };
   const nonceMarker = require('node:crypto').randomBytes(24).toString('base64url');
   try {
     stage = 'seed';
-    for (const key of roots) assert.equal((await db.doc(key).get()).exists, false, 'refuse existing fixed seed');
+    await assertVacantRoots(db);
+    // Real emulator regression: an absent parent with a foreign orphan must
+    // reject ownership without changing that orphan. Delete only this probe's
+    // exact create/version afterward, never the namespace it demonstrates.
+    const orphan = db.doc(roots[2]+'/foreign/keep');
+    const probe = await orphan.create({ probeOwner: nonceMarker });
+    try {
+      await assert.rejects(assertVacantRoots(db), /orphan descendant/);
+      assert.deepEqual((await orphan.get()).data(), { probeOwner: nonceMarker });
+    } finally { await orphan.delete({ lastUpdateTime: probe.writeTime }); }
+    await assertVacantRoots(db);
     stage = 'auth';
     const response = await fetch('http://127.0.0.1:9099/identitytoolkit.googleapis.com/v1/accounts:signUp?key=qa0-public-only', {
       method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ email: 'pilot@qa0.example.invalid',
@@ -69,7 +102,8 @@ async function child() {
       brandId: scope.brandId, locationId: scope.locationId, name: 'Synthetic emulator only', manufacturer: 'star', model: 'mc-print3',
       transport: 'cloudprnt-http', state: 'active', paperWidthMm: 80 } });
     batch.create(db.doc(printerPath + '/deviceCredentials/current'), credential.record);
-    await batch.commit(); ownsSeed = true;
+    const seeded = await batch.commit(); ownsSeed = true;
+    [roots[0],roots[1],roots[2],printerPath,printerPath+'/deviceCredentials/current'].forEach((key,index)=>expected.set(key,seeded[index].writeTime));
     const { workAsyncStorage } = require('next/dist/server/app-render/work-async-storage.external');
     const { workUnitAsyncStorage } = require('next/dist/server/app-render/work-unit-async-storage.external');
     const { RequestCookies } = require('next/dist/server/web/spec-extension/cookies');
@@ -81,6 +115,8 @@ async function child() {
     const pilot = load('src/lib/printing/synthetic-pilot-job.ts');
     stage = 'issuance';
     const issued = await request(() => issuance.issuePilotQualificationSession(binding));
+    assert.match(issued.sessionId,/^[A-Za-z0-9_-]{43}$/);
+    await remember([`${printerPath}/pilotQualifications/${issued.sessionId}`,`${printerPath}/pilotQualificationAudit/${issued.sessionId}`]);
     const attestation = { ...binding, sessionId: issued.sessionId, nonce: issued.nonce, trust: 'supervised_operator',
       operatorId: 'emulator_fixture', physicalDeviceIdentified: true, nativeEnrollmentCorrelated: true,
       method: 'stario_firmware_query', model: 'mc-print3', labelSku: 'SYNTHETIC_FIXTURE', firmware: '3.2', captureDigest: 'b'.repeat(64),
@@ -93,33 +129,34 @@ async function child() {
       `${printerPath}/pilotState/current`, `${printerPath}/pilotQualificationAudit/${issued.sessionId}-consume`].map(p => db.doc(p).get()));
     assert.ok(atomics.every(row => row.exists));
     assert.ok(atomics.every(row => row.updateTime.isEqual(atomics[0].updateTime)), 'all four native writes share a commit');
+    for(const row of atomics)expected.set(row.ref.path,row.updateTime);
     stage = 'delivery';
     const device = { ...scope, authorization: `Basic ${Buffer.from(`orderfly:${credential.secret}`).toString('base64')}` };
     const offered = await pilot.pollSyntheticPilotJob({ ...device, ready: true }); assert.equal(offered.jobReady, true);
+    await remember([jobPath]);
     const downloaded = await pilot.downloadSyntheticPilotJob({ ...device, token: offered.jobToken });
+    await remember([jobPath]);
     assert.equal(downloaded.contentType, 'image/png'); assert.equal(downloaded.payload[0], 137);
     await assert.rejects(pilot.downloadSyntheticPilotJob({ ...device, token: offered.jobToken }));
     assert.deepEqual(await pilot.pollSyntheticPilotJob({ ...device, ready: true }), { jobReady: false });
     await pilot.recordSyntheticPilotResult({ ...device, token: offered.jobToken, outcome: 'unknown' });
     assert.deepEqual(await pilot.pollSyntheticPilotJob({ ...device, ready: true }), { jobReady: false });
     const terminal = await db.doc(jobPath).get(); assert.equal(terminal.data().state, 'unknown'); assert.equal(terminal.data().confirmedAt, null);
+    expected.set(jobPath,terminal.updateTime);
     const persisted = JSON.stringify(atomics.map(row => row.data()).concat(terminal.data()));
     for (const secret of [issued.nonce, credential.secret, offered.jobToken, cookie]) assert.equal(persisted.includes(secret), false);
   } finally {
     try {
-      const owner = await db.doc(roots[2]).get();
-      if (owner.data()?.qaPilotOwner === nonceMarker) {
-        await db.recursiveDelete(db.doc(roots[2]));
-        for (const key of roots.slice(0, 2)) await db.doc(key).delete();
-        for (const key of roots) assert.equal((await db.doc(key).get()).exists, false);
-        cleaned = true;
-      } else assert.equal(ownsSeed, false, 'never clean foreign seed');
-      if (uid) { await app.auth().deleteUser(uid); await assert.rejects(app.auth().getUser(uid), error => error.code === 'auth/user-not-found'); }
+      try {
+        if (ownsSeed) { await cleanupRegistered(db,expected); cleaned = true; }
+      } finally {
+        if (uid) { await app.auth().deleteUser(uid); await assert.rejects(app.auth().getUser(uid), error => error.code === 'auth/user-not-found'); }
+      }
     } finally { await db.terminate(); await app.delete(); }
   }
   assert.equal(cleaned, true);
   return { ...preflight(), sourceCommit: commit, nativeExecution: true, realAuthSession: true,
-    concurrentConsumeWinners: 1, sameNativeCommit: true, downloadOnce: true, unknownNeverResends: true, cleanupVerified: true };
+    concurrentConsumeWinners: 1, sameNativeCommit: true, orphanPreserved: true, downloadOnce: true, unknownNeverResends: true, cleanupVerified: true };
 }
 async function run() {
   preflight();
@@ -156,4 +193,4 @@ async function main(args = process.argv.slice(2)) {
   return args[0] === '--preflight' ? preflight() : args[0] === '--run' ? run() : child();
 }
 if (require.main === module) main().then(result=>console.log(JSON.stringify(result))).catch(()=>{console.error('Pilot native transaction proof failed at '+stage);process.exitCode=1;});
-module.exports = { pilotEnvironment, assertRuntime, preflight, main };
+module.exports = { pilotEnvironment, assertRuntime, assertVacantRoots, cleanupRegistered, assertCommittedSource, preflight, main };

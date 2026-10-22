@@ -11,7 +11,12 @@ brand and location ownership, exact printer and nonrevoked credential revisions,
 the still-pending ceremony, job, single-device pointer and immutable consume audit.
 Private paths are not read until tenant ownership has been validated.
 
-The authenticated supervisor must be the ceremony's issuing actor. The strict
+The authenticated supervisor must be the ceremony's issuing actor. The native
+printer must be active when the job is created; disabled/paused printers fail
+before writes. Activation is a separate explicit audited lifecycle action and
+changes the printer revision, so refresh/rotate the credential and start a new
+ceremony afterward. Deactivation or credential changes also stop later delivery.
+The strict
 operator submission must match its nonce, scope, revisions and exclusive ten-minute
 server expiry. Observed model/paper/raster must match the native printer. The
 supervisor explicitly attests the onsite identification, StarIO firmware query,

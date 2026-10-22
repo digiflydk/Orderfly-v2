@@ -34,8 +34,14 @@ No printer connection is attempted. `physicalPrintVerified` and
 `productionAcceptance` remain false in every output. The only enabled flags live
 inside the disposable loopback child, never the application/production runtime.
 
-Cleanup is limited to roots created by this atomic seed and proven by its random
-ownership marker, plus the real Auth user created by this run. It verifies the
-roots and user are absent before success. A collision must fail without adopting
-or deleting someone else's seed. Source and unit checks alone do not establish
+Preflight checks both absent documents and absent descendant collections for
+every fixed root before taking ownership. The native run creates its own orphan
+probe under a missing parent and verifies rejection preserves it, then removes
+only that exact probe version. Cleanup deletes only registered documents in one
+native transaction with each recorded version checked before any deletion. It
+never recursively deletes a namespace. Changed policy/brand versions abort the
+cleanup; unregistered foreign descendants are preserved and prevent a clean PASS.
+The native roots and descendant collections, plus real created Auth user, must
+be absent before success. All tracked source/helper/launcher/guard and package
+changes reject source-commit evidence. Source and unit checks alone do not establish
 native execution; only the actual runner output may claim it.
