@@ -27,7 +27,7 @@ before(async () => {
     export const usePathname = () => window.__pathname;`);
   const tracking = write('tracking.js', `export function mountBrandTracking(){ window.__mounted = (window.__mounted || 0) + 1; return () => {}; }`);
   const link = write('link.js', `import React from 'react';export default function Link({href,children,...props}){return React.createElement('a',{href,...props},children)}`);
-  const analytics = write('analytics.js', `export const trackingConsent = () => ({ statistics: true, marketing: true }); export function clearRejectedTrackingCookies(){}`);
+  const analytics = write('analytics.js', `export const trackingConsent = () => ({ statistics: window.__statistics !== false, marketing: true }); export const hasTrackingConsentChoice = () => window.__choice !== false; export function clearRejectedTrackingCookies(){}`);
   const entry = write('entry.js', `
     import React from 'react'; import { createRoot } from 'react-dom/client';
     import { SignupForm } from ${src('app/[brandSlug]/club/tilmeld/signup-form')};
@@ -214,6 +214,38 @@ test('changed texts ask for fresh ticks and rate limits are explained', async ()
   } finally { await page.close(); }
 });
 
+const TOUCH = 'a'.repeat(32) + '.12345678-1234-4123-8123-123456789abc.' + 'b'.repeat(64);
+for (const mode of ['allowed', 'first-choice', 'denied', 'revoked', 'silent-revocation', 'duplicate', 'malformed']) test(`QR signup attribution: ${mode}, without browser storage or retrospective consent`, async () => {
+  const query = mode === 'duplicate' ? `?qr_touch=${TOUCH}&qr_touch=${TOUCH}` : `?qr_touch=${mode === 'malformed' ? 'bad-token' : TOUCH}`;
+  const {page, calls} = await open('signup', {hash: query, init: {fn: value => {window.__statistics = !['denied','first-choice'].includes(value);window.__choice=value!=='first-choice';}, arg: mode}});
+  try {
+    await page.getByLabel('Navn', {exact:true}).fill('Anna Hansen');
+    await page.getByLabel('E-mail', {exact:true}).fill('anna@example.com');
+    await page.getByRole('checkbox', {name:/nyhedsbrevet fra Esmeralda/}).click();
+    await page.getByRole('checkbox', {name:'Jeg accepterer vilkårene for Esmeralda Club.'}).click();
+    if (mode === 'first-choice') {
+      assert.equal(new URL(page.url()).searchParams.get('qr_touch'), TOUCH);
+      await page.evaluate(() => {window.__statistics = true; window.__choice=true; window.dispatchEvent(new Event('orderfly:consent'));});
+    }
+    if (mode === 'denied') {
+      assert.equal(new URL(page.url()).searchParams.has('qr_touch'), false);
+      await page.evaluate(() => {window.__statistics = true; window.dispatchEvent(new Event('orderfly:consent'));});
+    }
+    if (mode === 'revoked') {
+      await page.evaluate(() => {window.__statistics = false; window.dispatchEvent(new Event('orderfly:consent'));});
+      assert.equal(new URL(page.url()).searchParams.has('qr_touch'), false);
+      await page.evaluate(() => {window.__statistics = true; window.dispatchEvent(new Event('orderfly:consent'));});
+    }
+    if (mode === 'silent-revocation') await page.evaluate(() => {window.__statistics = false;});
+    await page.getByRole('button', {name:'Bliv medlem'}).click();
+    await page.getByRole('heading', {name:'Tjek din e-mail'}).waitFor();
+    assert.equal(calls.length, 1);
+    assert.deepEqual(calls[0].body.qrAttribution, ['allowed','first-choice'].includes(mode) ? {receipt:TOUCH, statisticsConsent:true} : undefined);
+    assert.equal(new URL(page.url()).searchParams.has('qr_touch'), false);
+    assert.deepEqual(await page.evaluate(() => ({local:Object.keys(localStorage),session:Object.keys(sessionStorage),cookie:document.cookie})), {local:[],session:[],cookie:''});
+  } finally {await page.close();}
+});
+
 for (const width of [390, 1440]) test(`a login link is requested by e-mail with a neutral answer at ${width}px`, async () => {
   const { page, calls } = await open('login', { width });
   try {
@@ -271,7 +303,7 @@ test('a malformed link is rejected without a call; a lost connection can retry t
 });
 
 test('brand tracking stays off on portal pages and still runs in the storefront', async () => {
-  for (const [pathname, mounted] of [['/club/login', undefined], ['/esmeralda/club', undefined], ['/esmeralda/amager', 1], ['/', 1]]) {
+  for (const [pathname, mounted] of [['/club/login', undefined], ['/club/tilmeld', undefined], ['/esmeralda/club/tilmeld', undefined], ['/esmeralda/club', undefined], ['/esmeralda/amager', 1], ['/', 1]]) {
     const { page } = await open(`tracking?path=${encodeURIComponent(pathname)}`);
     try {
       await page.waitForFunction(() => document.readyState === 'complete');

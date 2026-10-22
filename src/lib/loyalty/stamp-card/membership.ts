@@ -17,6 +17,8 @@ import {
   cardIsExpired, COLLECTIONS, hashKey, memberIdentityKey, readProgram, type CardDoc, type EventType, type LoyaltyEvent, type MemberDoc, type ProgramDoc, type RewardDoc,
 } from './model';
 import { profileFromCustomer } from './profile-rules';
+import { stageClubQrConversion } from './qr-attribution';
+import { QR_TOUCH_RECEIPT_PATTERN } from '@/lib/qr/touch-contract';
 import { loadTextContext, renderedHash, renderedTextId, renderForProgram, type TextContext } from './program-texts';
 
 const DAY = 86_400_000;
@@ -49,6 +51,7 @@ export const signupSchema = z.object({
   consentVersion: z.string().max(64),
   termsVersion: z.string().max(64),
   campaignVersion: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  qrAttribution: z.object({ receipt: z.string().max(134).regex(QR_TOUCH_RECEIPT_PATTERN), statisticsConsent: z.boolean() }).strict().optional(),
 }).strict();
 export const loginLinkSchema = z.object({ email: z.string().trim().email().max(254) }).strict();
 export const verifySchema = z.object({ token: tokenSchema }).strict();
@@ -204,11 +207,14 @@ export async function signup(db: Firestore, brand: ProgramBrand, input: z.infer<
     const welcome = await stageBonusGrant({ db, tx, brand, memberId, member, kind: 'welcome', welcomeEligible: true, now });
     const discount = await stageClubSignupDiscount({ db, tx, brandId: brand.brandId, email, customerId: customer.customerId,
       customer: customer.data, discountId: trusted.clubDiscountId, now });
+    const qrConversion = await stageClubQrConversion(db, tx, { brandId: brand.brandId, memberId, now,
+      attribution: trusted.source === 'checkout' ? undefined : input.qrAttribution });
     recordIp(); recordEmail();
     customer.create?.(input.name, now);
     tx.create(db.collection(COLLECTIONS.members).doc(memberId), member);
     welcome.apply();
     discount.apply();
+    qrConversion.apply();
     if (!shownKnown) tx.create(shownRef, { brandId: brand.brandId, textVersion: program.texts.version, hash: texts.hash, texts: texts.texts, createdAt: now });
     tx.create(identityRef, { brandId: brand.brandId, memberId, createdAt: now });
     consent.apply();
