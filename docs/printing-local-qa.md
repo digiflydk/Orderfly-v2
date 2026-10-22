@@ -247,13 +247,16 @@ cause. One further actual CI inspection is required before a product bug scope.
 
 A separate valid review finding showed that `pageerror` cannot observe exceptions
 caught by the login form. The Chromium-only observer now attaches AFTER fields
-are filled and only wraps submit through the asserted session200, detaching before
-navigation. It uses CDP `Debugger.setPauseOnExceptions:all`, maps only known error
+are filled and wraps submit, the asserted session200 and the app's own post-login
+navigation until the destination has loaded. It uses CDP
+`Debugger.setPauseOnExceptions:all`, maps only known error
 descriptions to fixed enums in memory, and always resumes in a finally. It reads
 no frames, locals or object properties. Each protocol operation has a one-second
-deadline; more than16 pauses, failed setup/resume/disable/detach, or uncertain
-cleanup fails the proof with a fixed observer category. Teardown attempts pause
-mode none, any needed resume, disable and detach even after action failure. The
+deadline; more than16 pauses, failed setup/resume/detach, or uncertain cleanup
+fails the proof with a fixed observer category. Teardown settles tracked pauses,
+performs any needed resume and then only detaches the CDP session (browser-side;
+this ends the client's Debugger agent and pause mode), even after action failure;
+it sends no renderer-bound pause-mode/disable command. The
 original20-second page and60-second smoke deadlines and all acceptance assertions
 remain. This diagnostic observer is not a production change or successful login
 proof. A regression first failed with a handled exception and no `pageerror`,
