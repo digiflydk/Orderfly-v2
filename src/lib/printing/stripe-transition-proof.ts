@@ -3,6 +3,7 @@ import Stripe from 'stripe';
 import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
+import { localQaStripeOptions } from './local-qa-stripe-options';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
 import type { KitchenOrder } from './domain';
 
@@ -54,9 +55,10 @@ export async function verifyStripePrintPayment(input: unknown): Promise<StripePr
   const parsed = sessionId.safeParse(input);
   if (!parsed.success) throw new PrintTransitionProofError('invalid_payment_reference');
   try {
-    const key = await getActiveStripeSecretKey();
+    const local = localQaStripeOptions();
+    const key = local ? local.key : await getActiveStripeSecretKey();
     if (!key) throw new PrintTransitionProofError('proof_unavailable');
-    const stripe = new Stripe(key, { timeout: 5000, maxNetworkRetries: 0 });
+    const stripe = new Stripe(key, local ? local.options : { timeout: 5000, maxNetworkRetries: 0 });
     const session = await stripe.checkout.sessions.retrieve(parsed.data);
     const native = scope.safeParse(session.metadata);
     if (session.id !== parsed.data || session.mode !== 'payment' || session.status !== 'complete'

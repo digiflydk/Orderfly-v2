@@ -74,6 +74,9 @@ jobs:
       - name: Local QA environment safety regressions
         run: node --test tests/unit/local-qa-environment.cjs tests/unit/local-qa-client.cjs tests/unit/local-qa-browser.cjs tests/unit/local-qa-credential-metadata.cjs
 
+      - name: Isolated intent proof contract regression
+        run: node --test tests/unit/local-qa-intent-proof.cjs
+
       - name: Explicit local intent runtime safety regression
         run: node --test tests/unit/local-qa-intent-runtime.cjs
 
@@ -104,11 +107,17 @@ jobs:
       - name: Native printer credential provisioning regression
         run: node --test tests/unit/printing-device-credentials-service.cjs
 
+      - name: Supervised pilot qualification regression
+        run: node --test tests/unit/printing-pilot-qualification.cjs
+
       - name: CloudPRNT Basic native identity regression
         run: node --test tests/unit/printing-cloudprnt-http-auth.cjs
 
       - name: CloudPRNT no-job poll HTTP regression
         run: node --test tests/unit/printing-cloudprnt-poll-http.cjs
+
+      - name: CloudPRNT scoped no-job route regression
+        run: node --test tests/unit/printing-cloudprnt-poll-route.cjs
 
       - name: Superadmin printer credential HTTP regression
         run: node --test tests/unit/printing-device-credentials-http.cjs
@@ -203,6 +212,13 @@ jobs:
       - name: Real isolated credential metadata and native persistence proof
         timeout-minutes: 8
         run: QA0_FIREBASE_BIN="$RUNNER_TEMP/orderfly-qa0-tools/node_modules/.bin/firebase" QA0_JAVA_BIN="$JAVA_HOME/bin/java" QA0_CREDENTIAL_METADATA_PROOF=true node scripts/local-qa/run-backend.cjs
+
+      - name: Native intent fixture and launcher safety regression
+        run: node --test tests/unit/local-qa-native-intent.cjs tests/unit/local-qa-native-intent-launcher.cjs
+
+      - name: Real isolated atomic settlement and replay proof
+        timeout-minutes: 8
+        run: QA0_FIREBASE_BIN="$RUNNER_TEMP/orderfly-qa0-tools/node_modules/.bin/firebase" QA0_JAVA_BIN="$JAVA_HOME/bin/java" node scripts/local-qa/run-native-intents.cjs
 
       - name: QR module behavior, scope and browser regression
         run: node --test tests/unit/qr-*.cjs
