@@ -148,7 +148,23 @@ for(const width of [1280,390])test(`P2 menu search, options retry/cache and fulf
    const box=await cartPanel.boundingBox();assert.ok(Math.abs(box.y+box.height-900)<2);
    await page.keyboard.press('Escape');await cartPanel.waitFor({state:'hidden'});
  }
- await page.getByRole('button',{name:'Tilføj Fixture Pizza'}).click();await page.getByRole('dialog').waitFor();assert.equal(optionReads,2,'second open reuses options');await page.keyboard.press('Escape');
+ await page.getByRole('button',{name:'Tilføj Fixture Pizza'}).click();await page.getByRole('dialog').waitFor();assert.equal(optionReads,2,'second open reuses options');
+ // DOM visibility precedes Radix's effect-installed keyboard/focus lifecycle.
+ // Exercise one Escape only after the reopened panel is actually ready.
+ await page.waitForFunction(()=>{
+   const panel=document.querySelector('[data-commerce-panel="options"]');
+   return panel?.getAttribute('data-state')==='open'&&panel.contains(document.activeElement)
+     &&panel.getAnimations().every(animation=>animation.playState==='finished');
+ },undefined,{timeout:6000});
+ await page.keyboard.press('Escape');
+ try {await page.getByRole('dialog').waitFor({state:'hidden'});} catch {
+   const state=await page.evaluate(()=>{
+     const panel=document.querySelector('[data-commerce-panel="options"]');
+     return {dialogs:document.querySelectorAll('[role="dialog"]').length,optionsPresent:!!panel,
+       optionsOpen:panel?.getAttribute('data-state')==='open',focusInsideOptions:!!panel?.contains(document.activeElement)};
+   });
+   assert.fail('Options did not dismiss after one Escape: '+JSON.stringify(state));
+ }
  await page.getByRole('button',{name:'Levering',exact:true}).click();
  await page.waitForFunction(()=>JSON.parse(document.getElementById('cart-state').textContent).ready&&JSON.parse(document.getElementById('cart-state').textContent).mode==='delivery');
  assert.equal(new URL(page.url()).searchParams.get('deliveryMethod'),'delivery');await page.reload();

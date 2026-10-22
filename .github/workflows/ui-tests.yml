@@ -104,6 +104,9 @@ jobs:
       - name: Superadmin printer credential HTTP regression
         run: node --test tests/unit/printing-device-credentials-http.cjs
 
+      - name: Safe printer credential metadata regression
+        run: node --test tests/unit/printing-device-credentials-metadata.cjs
+
       - name: CloudPRNT protocol and simulator regression
         run: node --test tests/unit/printing-cloudprnt.cjs
 
@@ -157,6 +160,9 @@ jobs:
 
       - name: Install Chromium for brand-owner regression
         run: npx playwright install --with-deps chromium
+
+      - name: Printer credential controls and one-time delivery regression
+        run: node --test tests/unit/printing-device-credentials-ui.cjs
 
       - name: Printer routing editor and sample preview regression
         run: node --test tests/unit/printing-routing-editor.cjs tests/unit/printing-routing-ui-browser.cjs
