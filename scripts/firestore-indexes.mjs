@@ -24,19 +24,23 @@ const api = async (url, init = {}) => {
 };
 const key = fields => fields.filter(f => f.fieldPath !== '__name__').map(f => `${f.fieldPath}:${f.order || f.arrayConfig}`).join(',');
 
-// Read-only proof for a COLLECTION_GROUP __name__ override: the same document-name ordered query as the
-// collection-group sweep, at most one document name, no field values. Needs read access; an index-only
-// principal reports the denial without failing the run.
+// Read-only proof for the document-name ordered collection-group sweep: the query with and without a
+// start cursor, at most one document name, no field values. Needs read access; an index-only principal
+// logs the readiness as NOT VERIFIED without failing the run.
 async function probe() {
-  for (const override of overrides.filter(o => o.fieldPath === '__name__' && o.indexes.some(i => i.queryScope === 'COLLECTION_GROUP'))) {
-    const { status, body } = await api(`https://firestore.googleapis.com/v1/projects/${PROJECT}/databases/(default)/documents:runQuery`, {
-      method: 'POST', body: JSON.stringify({ structuredQuery: { from: [{ collectionId: override.collectionGroup, allDescendants: true }],
-        select: { fields: [{ fieldPath: '__name__' }] }, orderBy: [{ field: { fieldPath: '__name__' }, direction: 'ASCENDING' }], limit: 1 } }),
-    });
-    const label = `query     ${override.collectionGroup} collection group ordered by __name__`;
-    if (status === 200) console.log(`${label}: OK (${(Array.isArray(body) ? body : []).filter(r => r.document).length} document name read)`);
-    else if (status === 403) console.log(`${label}: not run, principal has no read access (HTTP 403)`);
-    else throw new Error(`${label}: HTTP ${status} ${(Array.isArray(body) ? body[0] : body)?.error?.message || ''}`);
+  const documents = `projects/${PROJECT}/databases/(default)/documents`;
+  for (const override of builtin.filter(o => o.indexes.some(i => i.queryScope === 'COLLECTION_GROUP'))) {
+    for (const startAt of [null, { values: [{ referenceValue: `${documents}/brands/0` }], before: false }]) {
+      const { status, body } = await api(`https://firestore.googleapis.com/v1/${documents}:runQuery`, {
+        method: 'POST', body: JSON.stringify({ structuredQuery: { from: [{ collectionId: override.collectionGroup, allDescendants: true }],
+          select: { fields: [{ fieldPath: '__name__' }] }, orderBy: [{ field: { fieldPath: '__name__' }, direction: 'ASCENDING' }],
+          ...(startAt ? { startAt } : {}), limit: 1 } }),
+      });
+      const label = `query     ${override.collectionGroup} collection group ordered by __name__${startAt ? ' after a cursor' : ''}`;
+      if (status === 200) console.log(`${label}: OK (${(Array.isArray(body) ? body : []).filter(r => r.document).length} document name read)`);
+      else if (status === 403) console.log(`${label}: NOT VERIFIED, principal has no read access (HTTP 403)`);
+      else throw new Error(`${label}: HTTP ${status} ${(Array.isArray(body) ? body[0] : body)?.error?.message || ''}`);
+    }
   }
 }
 
@@ -52,7 +56,7 @@ for (const index of wanted) {
   else throw new Error(`${label}: HTTP ${status} ${body.error?.message || ''}`);
 }
 
-// Single-field overrides, e.g. a COLLECTION_GROUP __name__ index for a collection-group sweep.
+// Single-field overrides, e.g. a COLLECTION_GROUP index on a field used by a collection-group query.
 // Additive: the field's current effective indexes are kept and only missing ones are appended.
 const fieldUrl = override => `${base}/${override.collectionGroup}/fields/${encodeURIComponent(override.fieldPath)}`;
 const fieldKey = index => `${index.queryScope}:${index.order || index.arrayConfig}`;
@@ -60,7 +64,12 @@ const fieldIndexes = body => (body.indexConfig?.indexes || []).map(index => ({
   queryScope: index.queryScope, state: index.state,
   ...(index.fields?.[0]?.order ? { order: index.fields[0].order } : { arrayConfig: index.fields?.[0]?.arrayConfig }),
 }));
-const overrides = files.flatMap(file => JSON.parse(readFileSync(file, 'utf8')).fieldOverrides || []);
+const requested = files.flatMap(file => JSON.parse(readFileSync(file, 'utf8')).fieldOverrides || []);
+// Firestore rejects any override on the reserved document-name field and indexes it itself; for that
+// field the read-only query probe below is the readiness evidence.
+const builtin = requested.filter(override => override.fieldPath === '__name__');
+const overrides = requested.filter(override => override.fieldPath !== '__name__');
+for (const override of builtin) console.log(`builtin   ${override.collectionGroup}.__name__ (not configurable; verified by the query probe)`);
 for (const override of overrides) {
   const label = `${override.collectionGroup}.${override.fieldPath}`;
   const current = await api(fieldUrl(override));
