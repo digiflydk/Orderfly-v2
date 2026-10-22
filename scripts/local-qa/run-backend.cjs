@@ -17,7 +17,7 @@ function launch(command, args, childEnv, label, cwd = root) {
   const log = path.join(privateDir, `${label}.log`); const fd = fs.openSync(log, 'wx', 0o600); logs.push(log);
   const child = spawn(command, args, { cwd, env: childEnv, stdio: ['ignore', fd, fd], detached: true }); fs.closeSync(fd); children.push(child); return child;
 }
-(async () => {
+if (typeof module === 'undefined' || require.main === module || process.env.QA0_BROWSER_PROOF === 'true') (async () => {
   const firebase = process.env.QA0_FIREBASE_BIN, java = process.env.QA0_JAVA_BIN;
   if (!firebase || !java || !path.isAbsolute(firebase) || !path.isAbsolute(java) || !fs.existsSync(firebase) || !fs.existsSync(java)) throw Error('Provide explicit installed Firebase15.30 and Java21 binary paths');
   if (process.env.QA0_BROWSER_PROOF !== undefined && process.env.QA0_BROWSER_PROOF !== 'true') throw Error('QA0 browser proof mode rejected');
@@ -76,3 +76,39 @@ function launch(command, args, childEnv, label, cwd = root) {
 })().catch(error => { console.error(error.message); console.error('Protected local process logs:', logs.join(', ')); process.exitCode = 1; }).finally(async () => {
   for (const child of children.reverse()) if (child.exitCode === null) { try { process.kill(-child.pid, 'SIGTERM'); } catch { child.kill('SIGTERM'); } }
 });
+
+// Fixed backend-only integration entry. No caller callback, child path or env is accepted.
+async function runNativeIntentProof() {
+  const childEnv = require('./intent-environment.cjs').intentEnvironment();
+  const firebase = process.env.QA0_FIREBASE_BIN, java = process.env.QA0_JAVA_BIN;
+  const toolsEnv = { PATH: path.dirname(java || '') + path.delimiter + childEnv.PATH, LANG: childEnv.LANG, TZ: childEnv.TZ, CI: 'true', FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true', FIREBASE_CLI_DISABLE_USAGE_REPORTING: 'true' };
+  try {
+    if (!firebase || !java || !path.isAbsolute(firebase) || !path.isAbsolute(java) || !fs.existsSync(firebase) || !fs.existsSync(java)) throw Error('Native intent tools unavailable');
+    for (const name of ['.env', '.env.local', '.env.development', '.env.development.local']) if (fs.existsSync(path.join(root, name))) throw Error('Native intent dotenv rejected');
+    const cli = spawnSync(firebase, ['--version'], { env: toolsEnv, encoding: 'utf8' });
+    const jvm = spawnSync(java, ['-version'], { env: toolsEnv, encoding: 'utf8' });
+    if (cli.status !== 0 || cli.stdout.trim() !== '15.30.0' || jvm.status !== 0 || !/version "21\./.test(jvm.stderr)) throw Error('Native intent tools rejected');
+    for (const port of [3100,8088,9099,4400,4500,9150]) await new Promise((resolve,reject) => { const probe=net.createServer(); probe.once('error',()=>reject(Error('Native intent ports unavailable'))); probe.listen(port,'127.0.0.1',()=>probe.close(resolve)); });
+    const emulator = launch(firebase, ['emulators:start', '--project', 'demo-orderfly-qa0', '--only', 'auth,firestore', '--config', path.join(root, 'tests/local-qa/firebase.json')], toolsEnv, 'intent-emulators', privateDir);
+    await ready('http://127.0.0.1:9099/emulator/v1/projects/demo-orderfly-qa0/config', emulator);
+    await ready('http://127.0.0.1:8088/', emulator);
+    const passes = [];
+    for (let pass=0; pass<2; pass++) {
+      const child = spawn(process.execPath, [path.join(__dirname, 'native-intent-smoke.cjs')], { cwd: root, env: childEnv, stdio: ['ignore','pipe','pipe'], detached: true }); children.push(child);
+      let output='', failureStage='unknown'; child.stdout.on('data', chunk => { output += chunk; if (output.length > 16384) child.kill('SIGKILL'); }); child.stderr.on('data', chunk => { const match=/^QA511 native intent proof failed at (runtime|source|provider|fixture|proof|provider-count|invalid_reference|invalid_catalog|invalid_order|invalid_intent|ineligible_intent|queue_unverified|job_conflict|write_budget_exceeded|payment_unverified|proof_unavailable|transition_unverified)\n$/.exec(String(chunk)); if(match) failureStage=match[1]; });
+      const code = await new Promise((resolve,reject) => {
+        const deadline=setTimeout(() => { try { process.kill(-child.pid,'SIGKILL'); } catch { child.kill('SIGKILL'); } reject(Error('Native intent proof timed out')); },60000);
+        child.once('error',()=>{clearTimeout(deadline);reject(Error('Native intent child failed'));});
+        child.once('exit',code=>{clearTimeout(deadline);resolve(code);});
+      });
+      if (code !== 0 || output.length > 16384) throw Error('Native intent proof failed at '+failureStage);
+      const result=JSON.parse(output);
+      if (result.nativeExecution !== true || result.cleanupVerified !== true || result.productionAcceptance !== false || result.physicalPrintVerified !== false) throw Error('Native intent evidence rejected');
+      passes.push(result);
+    }
+    return { ...passes[1], sameEmulatorPasses: passes.length };
+  } finally {
+    for (const child of children.reverse()) if (child.exitCode === null) { try { process.kill(-child.pid,'SIGTERM'); } catch { child.kill('SIGTERM'); } }
+  }
+}
+if (typeof module !== 'undefined') module.exports = { runNativeIntentProof };
