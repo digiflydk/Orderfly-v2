@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label';
 import { SignupBenefits, type SignupCampaigns } from '../club-benefits';
 import { CheckEmail } from '../check-email';
 import { portalErrorText, portalRequest } from '../portal-api';
+import { clearClubQrTouch, clubQrAttribution, watchClubQrConsent } from '@/lib/loyalty/stamp-card/qr-attribution-client';
 
 type Program = { name: string; consentText: string; consentHelp: string; termsAccept: string; consentVersion: string; termsVersion: string; campaigns?: SignupCampaigns | null };
 type Errors = Partial<Record<'name' | 'email' | 'consent' | 'terms' | 'form', string>>;
@@ -40,6 +41,7 @@ export function SignupForm({ slug, base, program }: { slug: string; base: string
   const summary = useRef<HTMLParagraphElement>(null);
 
   useEffect(() => { if (errors.form) summary.current?.focus(); }, [errors.form]);
+  useEffect(watchClubQrConsent, []);
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -55,9 +57,10 @@ export function SignupForm({ slug, base, program }: { slug: string; base: string
     }
     setBusy(true);
     const answer = await portalRequest(slug, 'signup', { name: name.trim(), email: email.trim(), newsletterConsent: true, termsAccepted: true,
-      consentVersion: program.consentVersion, termsVersion: program.termsVersion, campaignVersion: program.campaigns?.version });
+      consentVersion: program.consentVersion, termsVersion: program.termsVersion, campaignVersion: program.campaigns?.version,
+      qrAttribution: clubQrAttribution() });
     setBusy(false);
-    if (answer.ok) { setSentTo(email.trim()); return; }
+    if (answer.ok) { clearClubQrTouch(); setSentTo(email.trim()); return; }
     if (answer.error === 'program_changed') {
       setErrors({ form: 'Teksterne er blevet opdateret, eller kampagnefordelene har ændret sig. Læs dem igen, og sæt dine flueben.' });
       router.refresh();

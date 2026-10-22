@@ -4,13 +4,21 @@ import { metricPayload, commercePage } from './commerce-metrics';
 import type { BrandTrackingEvent } from './brand-tracking-frame';
 import { optionalGet } from './optional-storage';
 declare global { interface Window { dataLayer: any[]; orderflyPendingTracking?: BrandTrackingEvent[]; } }
-export function trackingConsent() {
+function savedTrackingConsent(): Record<string, unknown> | null {
   try {
     const cookie = document.cookie.split('; ').find(row => row.startsWith('orderfly_cookie_consent='));
     const raw = optionalGet('orderfly_cookie_consent') || (cookie ? decodeURIComponent(cookie.slice(cookie.indexOf('=') + 1)) : null);
-    const consent = raw ? JSON.parse(raw) : {};
-    return { statistics: consent.statistics === true || consent.analytics === true, marketing: consent.marketing === true };
-  } catch { return { statistics: false, marketing: false }; }
+    const consent = raw ? JSON.parse(raw) : null;
+    return consent && typeof consent === 'object' && !Array.isArray(consent) ? consent : null;
+  } catch { return null; }
+}
+export function hasTrackingConsentChoice() {
+  const consent = savedTrackingConsent();
+  return !!consent && (typeof consent.statistics === 'boolean' || typeof consent.analytics === 'boolean');
+}
+export function trackingConsent() {
+  const consent = savedTrackingConsent();
+  return { statistics: consent?.statistics === true || consent?.analytics === true, marketing: consent?.marketing === true };
 }
 export const statisticsAllowed = () => trackingConsent().statistics;
 export const marketingAllowed = () => trackingConsent().marketing;

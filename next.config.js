@@ -10,6 +10,8 @@ const nextConfig = {
   env: {NEXT_PUBLIC_RELEASE_SHA: releaseSha},
   async headers() {
     return [
+      { source: '/club/:path*', headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }] },
+      { source: '/:brandSlug/club/:path*', headers: [{ key: 'Referrer-Policy', value: 'no-referrer' }] },
       { source: '/:brandSlug/:locationSlug/checkout/confirmation', headers: [
         { key: 'Referrer-Policy', value: 'no-referrer' },
         { key: 'X-Robots-Tag', value: 'noindex, nofollow' },
