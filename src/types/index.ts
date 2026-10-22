@@ -105,6 +105,11 @@ export interface CustomerInfo {
     email: string;
     phone: string;
     subscribeToNewsletter: boolean;
+    subscribeToClub?: boolean;
+    clubTermsAccepted?: boolean;
+    clubConsentVersion?: string;
+    clubTermsVersion?: string;
+    clubCampaignVersion?: string;
     street?: string;
     zipCode?: string;
     city?: string;
@@ -125,6 +130,9 @@ export type Customer = {
     city?: string;
     country?: string;
     marketingConsent?: boolean;
+    discountUsage?: Record<string, number>;
+    pendingNewsletterDiscountId?: string;
+    pendingClubDiscountId?: string;
     tags?: string[];
     notes?: string;
     status: 'active' | 'inactive';
@@ -389,6 +397,7 @@ export type RawOrder = {
  * @collection discounts
  */
 export type Discount = {
+  applicationType?: 'code' | 'newsletter_signup' | 'club_signup';
   id: string;
   brandId: string;
   locationIds: string[];

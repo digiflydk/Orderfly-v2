@@ -44,14 +44,14 @@ test('Change dialog uses shared calculator: expired day cannot be selected, next
       '@/lib/time-slots':{calculateTimeSlots},
       '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),
       '@/lib/storefront-format':loadTs('src/lib/storefront-format.ts'),
-      '@/context/cart-context':{useCart:()=>({location,deliveryType:'pickup',selectedTime:'asap',setSelectedTime:v=>saved=v})},
+      '@/context/cart-context':{useCart:()=>({location,deliveryType:'pickup',selectedTime:'2026-09-06T10:20:00.000Z',setSelectedTime:v=>saved=v})},
     });
     const {TimeSlotDialog} = load(path,mocks);
     const render = () => {index=0;return TimeSlotDialog({isOpen:true,setIsOpen:()=>{},locationId:'l'});};
     const find = (node,type) => { if (!node || typeof node !== 'object') return null; if (node.type===type) return node; for (const child of [node.props?.children].flat(Infinity)) {const found=find(child,type);if(found)return found;}return null; };
-    render(); effects[1](); await new Promise(resolve=>setImmediate(resolve));
+    render(); effects[0](); await new Promise(resolve=>setImmediate(resolve));
     let tree=render();
-    assert.equal(find(tree,'SelectItem'),null);
+    assert.equal(find(tree,'SelectItem').props.disabled,true);
     assert.equal(find(tree,'Button').props.disabled,true);
     find(tree,'Button').props.onClick(); assert.equal(saved,undefined);
     await find(tree,'Calendar').props.onSelect(new Date('2026-09-07T12:00:00Z'));
@@ -73,9 +73,9 @@ test('email effect coalesces typing, rejects incomplete email and ignores stale 
   const source=fs.readFileSync('src/components/checkout/checkout-client.tsx','utf8');
   const start=source.indexOf('    let cancelled = false;',source.indexOf('const newsletterEmail'));
   const end=source.indexOf('\n  }, [',start);
-  const effect = new Function('newsletterEmail','brand','location','deliveryType','subtotal','setNewsletterOffer','getNewsletterSignupDiscountAction','setTimeout','clearTimeout','z',source.slice(start,end));
+  const effect = new Function('newsletterEmail','brand','location','deliveryType','subtotal','setNewsletterOffer','getNewsletterSignupDiscountAction','setTimeout','clearTimeout','z','cartItems','isLockedItem','lineMoney','sumMoney','itemDiscount',source.slice(start,end));
   const timers=new Map(); let id=0,calls=0,offer,resolve;
-  const run=email=>effect(email,{id:'b'},{id:'l'},'pickup',100,v=>offer=v,()=>{calls++;return new Promise(r=>resolve=r);},(fn,delay)=>{assert.equal(delay,500);timers.set(++id,fn);return id;},key=>timers.delete(key),require('zod').z);
+  const run=email=>effect(email,{id:'b'},{id:'l'},'pickup',100,v=>offer=v,()=>{calls++;return new Promise(r=>resolve=r);},(fn,delay)=>{assert.equal(delay,500);timers.set(++id,fn);return id;},key=>timers.delete(key),require('zod').z,[],()=>false,()=>0,values=>values.reduce((sum,value)=>sum+value,0),0);
   assert.equal(run('a@'),undefined); assert.equal(timers.size,0);
   let cleanup;
   for(const email of ['a@e.co','a@ex.co','a@example.com']) {cleanup?.();cleanup=run(email);}
@@ -109,14 +109,15 @@ test('delivery rolls to tomorrow independently of remaining pickup capacity', ()
   assert.equal(slots.asap_delivery, 'Tomorrow - 12:40');
 });
 test('newsletter offer checks actual customer and keeps canceled retry eligible', async () => {
-  let customer = { totalOrders: 1, marketingConsent: false };
-  let discount = { brandId:'b', applicationType:'newsletter_signup', isActive:true, locationIds:['l'], orderTypes:['pickup'], activeDays:[], activeTimeSlots:[], usedCount:0, usageLimit:0, perCustomerLimit:1 };
+  let customer = { brandId:'b',email:'a@example.com',normalizedEmail:'a@example.com',totalOrders: 1, marketingConsent: false };
+  let discount = { discountType:'percentage',discountValue:10,brandId:'b', applicationType:'newsletter_signup', isActive:true, locationIds:['l'], orderTypes:['pickup'], activeDays:[], activeTimeSlots:[], usedCount:0, usageLimit:0, perCustomerLimit:1 };
   const imports = [...fs.readFileSync('src/app/checkout/actions.ts','utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>m[1]);
   const mocks = Object.fromEntries(imports.map(name=>[name,{}]));
   mocks['@/lib/marketing/config'] = {marketingConfig:()=>({brandId:'b'})};
   mocks['@/lib/promotion-rules'] = load('src/lib/promotion-rules.ts');
+  mocks['@/lib/customer-identity'] = require('../helpers/load-ts.cjs').loadTs('src/lib/customer-identity.ts');
   mocks['@/lib/checkout-customer-identity'] = {findCheckoutCustomer:async()=>({ref:{id:'c'},exists:()=>true,data:()=>customer})};
-  mocks['firebase/firestore'] = {collection:()=>null,where:()=>null,query:()=>null,getDocs:async()=>({docs:[{id:'d',data:()=>discount}]})};
+  mocks['firebase/firestore'] = {doc:()=>({}),getDoc:async()=>({exists:()=>false}),collection:()=>null,where:()=>null,query:()=>null,getDocs:async()=>({docs:[{id:'d',data:()=>discount}]})};
   const api = load('src/app/checkout/actions.ts',mocks);
   const offer = () => api.getNewsletterSignupDiscountAction('b','l',100,'pickup','a@example.com');
   assert.equal((await offer()).id,'d'); // Returning customer may newly subscribe.

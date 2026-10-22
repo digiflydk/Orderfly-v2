@@ -113,6 +113,11 @@ export interface CustomerInfo {
     zipCode?: string;
     city?: string;
     subscribeToNewsletter: boolean;
+    subscribeToClub?: boolean;
+    clubTermsAccepted?: boolean;
+    clubConsentVersion?: string;
+    clubTermsVersion?: string;
+    clubCampaignVersion?: string;
 }
 
 export type AnalyticsAttribution = {
@@ -151,6 +156,7 @@ export type Customer = {
     marketingConsent?: boolean;
     discountUsage?: Record<string, number>;
     pendingNewsletterDiscountId?: string;
+    pendingClubDiscountId?: string;
     tags?: string[];
     notes?: string;
     status: 'active' | 'inactive';
@@ -472,7 +478,7 @@ export type Discount = {
   brandId: string;
   locationIds: string[];
   code: string;
-  applicationType?: 'code' | 'newsletter_signup';
+  applicationType?: 'code' | 'newsletter_signup' | 'club_signup';
   description?: string;
   discountType: 'percentage' | 'fixed_amount';
   discountValue: number;

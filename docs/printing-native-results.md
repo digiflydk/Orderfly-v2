@@ -56,6 +56,9 @@ input. Existing activity and activation are preserved; latest use advances by
 server confirmation time, with stable existing job identity on equal times.
 Invalid server clock or a clock earlier than stored history fails closed rather
 than accepting future data or silently rewriting prior confirmation time.
+This write guard is deliberately stricter than the activity reader's bounded
+cross-instance clock-skew tolerance; tolerating a read does not authorize an
+older confirmation write.
 
 Duplicates authenticate again and validate the entire immutable saved result
 against the same delivery/content/scope/revisions and its original valid time

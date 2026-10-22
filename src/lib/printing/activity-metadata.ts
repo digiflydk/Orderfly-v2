@@ -4,6 +4,9 @@ import { z } from 'zod';
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const instant = z.number().int().nonnegative().safe().max(8.64e15);
 const revision = z.number().int().positive().safe();
+// Server instances can disagree briefly despite sharing the same authoritative clock source.
+// This only affects reading already stored server timestamps; clients never supply these values.
+const SERVER_CLOCK_SKEW_TOLERANCE_MS = 30_000;
 export const printerActivitySchema = z.object({
   schemaVersion: z.literal(1), brandId: id, locationId: id, printerId: id,
   // Server-generated time of the latest audited software lifecycle resume.
@@ -34,7 +37,8 @@ export function readStoredPrinterActivity(value: unknown, scope: Scope, printerR
   const parsed = printerActivitySchema.safeParse(value);
   if (!parsed.success || parsed.data.brandId !== scope.brandId || parsed.data.locationId !== scope.locationId
     || parsed.data.printerId !== scope.printerId || (parsed.data.activationRevision ?? 0) > printerRevision
-    || (parsed.data.activatedAt ?? 0) > now || (parsed.data.lastConfirmedPrintAt ?? 0) > now) {
+    || (parsed.data.activatedAt ?? 0) - now > SERVER_CLOCK_SKEW_TOLERANCE_MS
+    || (parsed.data.lastConfirmedPrintAt ?? 0) - now > SERVER_CLOCK_SKEW_TOLERANCE_MS) {
     throw new PrinterActivityError();
   }
   return parsed.data;

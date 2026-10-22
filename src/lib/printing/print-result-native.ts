@@ -113,6 +113,11 @@ export async function persistNativePrintConfirmation(input: unknown) {
       const deliveryDigest = printDeliveryTokenDigest('delivery', request.confirmation.token, binding);
       if (!equalDigest(envelope.claimDigest, claimDigest) || !equalDigest(envelope.deliveryDigest, deliveryDigest)) return invalid();
       const previous = readStoredPrinterActivity(activity.exists ? activity.data() : undefined, identity, identity.printerRevision, now);
+      // Read-only projections allow bounded server clock skew. A writer must
+      // still reject a backwards clock instead of persisting an older result.
+      if (previous.lastConfirmedPrintAt !== null && previous.lastConfirmedPrintAt > now) {
+        throw new NativePrintResultError('print_result_unavailable');
+      }
       // A reviewed producer must downgrade never before any possible dispatch.
       if (previous.printHistory === 'never') return invalid();
       if (result.exists) {
