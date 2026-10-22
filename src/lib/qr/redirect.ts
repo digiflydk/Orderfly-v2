@@ -12,6 +12,7 @@ export type QrStoredMetricEvent = QrMetricEvent & {
 };
 export type QrRedirectDependencies = {
   db: () => QrDatabase; enabled: boolean; environment?: string; now?: () => number; eventId?: () => string;
+  appHosting?: { service: string; port: string };
 };
 class RateLimitError extends Error { constructor(public retryAfter: number) { super('rate_limit'); } }
 const responseHeaders = {
@@ -23,12 +24,25 @@ function errorResponse(status: number, extra?: Record<string, string>) {
     { status, headers: { ...responseHeaders, 'Content-Type': 'text/plain; charset=utf-8', ...extra } });
 }
 
-/** Request URL and direct Host must agree. Forwarded host/geo/IP are never authority here. */
-export function isQrCanonicalRequest(request: Request, environment?: string): boolean {
+/** Deployment-owned Cloud Run context, never request headers, enables the proxy representation. */
+function isAppHostingOrigin(url: URL, context: QrRedirectDependencies['appHosting']): boolean {
+  if (!context || !/^[a-z][a-z0-9-]{0,62}$/.test(context.service) || !/^[1-9][0-9]{0,4}$/.test(context.port) || Number(context.port) > 65535) return false;
+  if (['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(url.hostname)) {
+    return ['http:', 'https:'].includes(url.protocol) && url.port === context.port;
+  }
+  // Cloud Run service URLs, including revision-tagged URLs. No arbitrary external
+  // origin, custom domain, port or different service can use the forwarded-host path.
+  return url.protocol === 'https:' && !url.port && new RegExp(
+    `^(?:[a-z0-9-]+---)?${context.service}-(?:[a-z0-9]+-[a-z0-9]+\\.a|[0-9]+\\.[a-z0-9-]+)\\.run\\.app$`,
+  ).test(url.hostname);
+}
+
+/** Canonical routing only: native slug/brand/status checks remain the data authority. */
+export function isQrCanonicalRequest(request: Request, environment?: string, appHosting?: QrRedirectDependencies['appHosting']): boolean {
   const url = new URL(request.url), directHost = request.headers.get('host')?.toLowerCase();
   // Next dev constructs a localhost URL even when its fixed QA listener and
   // incoming Host use 127.0.0.1. Accept only same-port loopback aliases in dev;
-  // production keeps exact URL/Host agreement and the canonical HTTPS origin.
+  // production only admits the deployment-owned proxy representation below.
   const loopback = (host: string) => ['localhost', '127.0.0.1', '[::1]'].includes(host.toLowerCase());
   if (environment === 'development' && url.protocol === 'http:' && loopback(url.hostname)) {
     if (!directHost) return true;
@@ -37,14 +51,21 @@ export function isQrCanonicalRequest(request: Request, environment?: string): bo
       return incoming.host === directHost && !incoming.username && !incoming.password && loopback(incoming.hostname) && incoming.port === url.port;
     } catch { return false; }
   }
-  if (directHost && directHost !== url.host.toLowerCase()) return false;
-  if (url.protocol === 'https:' && url.host.toLowerCase() === 'orderfly.dk') return true;
-  return false;
+  const forwardedHost = request.headers.get('x-forwarded-host')?.toLowerCase();
+  const forwardedProto = request.headers.get('x-forwarded-proto')?.toLowerCase();
+  // Do not take the first element of a list, normalize a port, or let a forwarded
+  // header override a contradictory public Host/URL. Exact single values only.
+  if (forwardedHost !== undefined && forwardedHost !== 'orderfly.dk') return false;
+  if (forwardedProto !== undefined && forwardedProto !== 'https') return false;
+  if (url.protocol === 'https:' && url.host === 'orderfly.dk') return !directHost || directHost === 'orderfly.dk';
+  if (environment !== 'production' || !isAppHostingOrigin(url, appHosting)) return false;
+  return forwardedHost === 'orderfly.dk' && forwardedProto === 'https' &&
+    (directHost === url.host.toLowerCase() || directHost === 'orderfly.dk');
 }
 
 /** Public endpoint. Every counted opening and its rate-limit increment commit atomically. */
 async function executeQrRedirect(request: Request, slug: string, dependencies: QrRedirectDependencies): Promise<Response> {
-  if (!dependencies.enabled || !isQrCanonicalRequest(request, dependencies.environment)) return errorResponse(404);
+  if (!dependencies.enabled || !isQrCanonicalRequest(request, dependencies.environment, dependencies.appHosting)) return errorResponse(404);
   const method = request.method.toUpperCase();
   if (method !== 'GET' && method !== 'HEAD') return errorResponse(405, { Allow: 'GET, HEAD' });
   if (!/^[a-f0-9]{32}$/.test(slug)) return errorResponse(404);
