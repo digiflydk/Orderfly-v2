@@ -1,5 +1,6 @@
 'use server';
-import { discountApplicationType } from '@/lib/promotion-rules';
+import { discountApplicationType, checkoutSignupMode, clubDiscountEligible, signupModeAllows, type CheckoutSignupMode } from '@/lib/promotion-rules';
+import { getClubSignupDiscountEligibility, validateClubCheckoutSignup, prepareClubCheckoutSignup } from '@/lib/loyalty/stamp-card/club-signup';
 
 import { isSyntheticProduct } from '@/lib/synthetic-product';
 
@@ -70,13 +71,19 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     if (!normalizedEmail) throw new Error('Customer email is required.');
 
     const integrated = await findCheckoutCustomer(brandId, normalizedEmail, customerInfo.phone);
-    if (integrated) return { customerRef: integrated.ref, customerDoc: integrated, normalizedEmail };
+    if (integrated) {
+        // Public checkout cannot prove ownership of a new email from a phone number.
+        // Otherwise a later email-link Club login could expose this existing profile.
+        if (!customerHasEmail(integrated.data(), normalizedEmail))
+            throw new Error('Customer identity scope conflict.');
+        return { customerRef: integrated.ref, customerDoc: integrated, normalizedEmail };
+    }
 
     const scopedRef = doc(db, 'customers', scopedCustomerId(brandId, normalizedEmail));
     const scopedDoc = await getDoc(scopedRef);
     if (scopedDoc.exists()) {
         const scopedData = scopedDoc.data() as Customer;
-        if (scopedData.brandId !== brandId) {
+        if (scopedData.brandId !== brandId || !customerHasEmail(scopedData, normalizedEmail)) {
             throw new Error('Customer identity scope conflict.');
         }
         return { customerRef: scopedRef, customerDoc: scopedDoc, normalizedEmail };
@@ -88,7 +95,7 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     const legacyDoc = await getDoc(legacyRef);
     if (legacyDoc.exists()) {
         const legacyData = legacyDoc.data() as Customer;
-        if (legacyData.brandId === brandId) {
+        if (legacyData.brandId === brandId && customerHasEmail(legacyData, normalizedEmail)) {
             return { customerRef: legacyRef, customerDoc: legacyDoc, normalizedEmail };
         }
     }
@@ -150,9 +157,9 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
 
             if (customerData && customerData.brandId !== brandId)
                 throw new Error('Customer identity scope conflict.');
-            if (customerData
-                && !customerHasEmail(customerData, normalizedEmail)
-                && !customerHasPhone(customerData, normalizedPhone)) {
+            // Recheck inside the transaction: a concurrent phone identity must not
+            // redirect a new email to somebody else's customer record.
+            if (customerData && !customerHasEmail(customerData, normalizedEmail)) {
                 throw new Error('Customer identity scope conflict.');
             }
             if (emailIdentitySnapshot.exists()
@@ -298,6 +305,8 @@ type DiscountEligibilityContext = {
     customerId?: string;
     customer?: Customer | null;
     newsletterConsent?: boolean;
+    checkoutMode?: CheckoutSignupMode;
+    clubEligible?: boolean;
 };
 
 function validateDiscountEligibility(discount: Discount, context: DiscountEligibilityContext): string | null {
@@ -330,74 +339,81 @@ function validateDiscountEligibility(discount: Discount, context: DiscountEligib
     if (discount.perCustomerLimit > 0 && ((context.customer?.discountUsage?.[discount.id] || 0) >= discount.perCustomerLimit)) return 'Du har brugt rabatten det maksimale antal gange.';
 
     if (applicationType === 'newsletter_signup') {
+        if (!signupModeAllows(applicationType, context.checkoutMode ?? 'newsletter')) return 'Tilmeldingskampagnen i checkout er ændret. Genindlæs siden.';
         if (!marketingConfig(discount.brandId)) return 'Nyhedsbrevsrabatten afventer opsætning af nyhedsbrevstjenesten.';
         if (!context.newsletterConsent) return 'Tilmelding til nyhedsbrevet er påkrævet for rabatten.';
         if (!newsletterEligible(!!context.customer?.marketingConsent, context.customer?.pendingNewsletterDiscountId, discount.id, context.customer?.discountUsage?.[discount.id] || 0)) return 'Nyhedsbrevsrabatten er allerede brugt.';
     }
 
+    if (applicationType === 'club_signup' && !context.clubEligible) return 'Club-rabatten er ikke tilgængelig for denne kunde.';
     return null;
 }
 
 export type NewsletterDiscountOffer = Pick<Discount, 'id' | 'description' | 'discountType' | 'discountValue' | 'minOrderValue' | 'allowStacking'> & {
-    applicationType: 'newsletter_signup';
+    applicationType: 'newsletter_signup' | 'club_signup';
+    requiresSignup?: boolean;
 };
 
 export async function newsletterSyncAvailableAction(brandId: string): Promise<boolean> {
     return /^[a-zA-Z0-9_-]{1,128}$/.test(brandId) && !!marketingConfig(brandId);
 }
 
+export type CheckoutSignupConfig = {
+    mode: CheckoutSignupMode;
+    clubProgram?: { active: boolean; name: string; consentText: string; consentHelp: string; termsAccept: string; consentVersion: string; termsVersion: string; campaignVersion?: string; welcomeStamps?: number; termsUrl: string };
+};
+
+async function checkoutModeForBrand(brandId: string): Promise<CheckoutSignupMode> {
+    const snapshot = await getDoc(doc(db, 'loyaltyCampaigns', brandId));
+    return checkoutSignupMode(snapshot.exists() ? snapshot.data() : undefined, brandId);
+}
+
+export async function getCheckoutSignupAction(brandId: string): Promise<CheckoutSignupConfig> {
+    if (!/^[a-zA-Z0-9_-]{1,128}$/.test(brandId)) return {mode:'none'};
+    const mode = await checkoutModeForBrand(brandId);
+    if (mode !== 'club') return {mode};
+    const brand = await getBrandById(brandId);
+    if (!brand?.slug) return {mode:'none'};
+    const {resolveBrand, programForPortal} = await import('@/lib/loyalty/stamp-card/membership');
+    const resolved = await resolveBrand(getAdminDb(), brand.slug);
+    if (resolved.brandId !== brandId) return {mode:'none'};
+    const programme = await programForPortal(getAdminDb(), resolved);
+    if (!programme.active) return {mode:'none'};
+    return {mode,clubProgram:{active:programme.active,name:programme.name,consentText:programme.consentText,
+        consentHelp:programme.consentHelp,termsAccept:programme.termsAccept,consentVersion:programme.consentVersion,
+        termsVersion:programme.termsVersion,campaignVersion:programme.campaigns?.version,welcomeStamps:programme.campaigns?.welcomeStamps,termsUrl:`/${brand.slug}/club/vilkaar`}};
+}
+
 export async function getNewsletterSignupDiscountAction(
-    brandId: string,
-    locationId: string,
-    subtotal: number,
-    deliveryType: 'delivery' | 'pickup',
-    email?: string,
-    bases?: { undiscounted: number; charged: number }
+    brandId: string, locationId: string, subtotal: number, deliveryType: 'delivery' | 'pickup',
+    email?: string, bases?: { undiscounted: number; charged: number }
 ): Promise<NewsletterDiscountOffer | null> {
-    if (!marketingConfig(brandId)) return null;
     if (!email || !email.includes('@')) return null;
+    const mode = await checkoutModeForBrand(brandId);
     const resolved = await resolveCheckoutCustomerRef({ email } as CustomerInfo, brandId);
     const customer = resolved.customerDoc.exists() ? resolved.customerDoc.data() as Customer : undefined;
     const discountsQuery = query(collection(db, 'discounts'), where('brandId', '==', brandId));
     const snapshot = await getDocs(discountsQuery);
-
-    let best: NewsletterDiscountOffer | null = null;
-    let bestSaving = 0;
+    let best: NewsletterDiscountOffer | null = null, bestSaving = 0;
     for (const discountDoc of [...snapshot.docs].sort((a, b) => a.id.localeCompare(b.id))) {
-        const data = discountDoc.data();
-        if (discountApplicationType(data) !== 'newsletter_signup') continue;
-        const discount = {
-            ...data,
-            id: discountDoc.id,
-            applicationType: discountApplicationType(data),
-            startDate: asDate(data.startDate),
-            endDate: asDate(data.endDate),
-        } as Discount;
+        const data = discountDoc.data(), applicationType = discountApplicationType(data);
+        if (applicationType !== 'newsletter_signup' && applicationType !== 'club_signup') continue;
+        const personalClub = applicationType === 'club_signup' && clubDiscountEligible(customer?.pendingClubDiscountId, discountDoc.id, customer?.discountUsage?.[discountDoc.id] || 0);
+        if (!personalClub && !signupModeAllows(applicationType, mode)) continue;
+        const clubEligible = applicationType === 'club_signup' && await getClubSignupDiscountEligibility({db:getAdminDb(),brandId,email,discountId:discountDoc.id,now:Date.now()});
+        if (applicationType === 'club_signup' && !clubEligible) continue;
+        const discount = {...data,id:discountDoc.id,applicationType,startDate:asDate(data.startDate),endDate:asDate(data.endDate)} as Discount;
         const base = bases ? (newsletterAllowsStacking(discount) ? bases.charged : bases.undiscounted) : subtotal;
         if (!Number.isFinite(base) || base < 0 || base > subtotal) continue;
-        const error = validateDiscountEligibility(discount, {
-            brandId,
-            locationId,
-            deliveryType,
-            subtotal: base,
-            newsletterConsent: true,
-            customerId: resolved.customerRef.id,
-            customer,
-        });
+        const error = validateDiscountEligibility(discount,{brandId,locationId,deliveryType,subtotal:base,
+            newsletterConsent:true,checkoutMode:mode,clubEligible,customerId:resolved.customerRef.id,customer});
         if (error) continue;
-
-        const saving = discount.discountType === 'percentage' ? percentageMoney(base, Math.min(100, discount.discountValue)) : money(Math.min(base, discount.discountValue));
+        const saving = discount.discountType === 'percentage' ? percentageMoney(base,Math.min(100,discount.discountValue)) : money(Math.min(base,discount.discountValue));
         if (saving <= bestSaving) continue;
         bestSaving = saving;
-        best = {
-            id: discount.id,
-            description: discount.description,
-            discountType: discount.discountType,
-            discountValue: discount.discountValue,
-            minOrderValue: discount.minOrderValue,
-            allowStacking: newsletterAllowsStacking(discount),
-            applicationType: 'newsletter_signup',
-        };
+        best = {id:discount.id,description:discount.description,discountType:discount.discountType,discountValue:discount.discountValue,
+            minOrderValue:discount.minOrderValue,allowStacking:newsletterAllowsStacking(discount),applicationType,
+            ...(applicationType === 'club_signup' ? {requiresSignup:!personalClub} : {})};
     }
     return best;
 }
@@ -460,6 +476,13 @@ export async function createStripeCheckoutSessionAction(
     const existingCustomer = resolvedCustomer.customerDoc.exists()
       ? resolvedCustomer.customerDoc.data() as Customer
       : null;
+
+    const checkoutMode = await checkoutModeForBrand(brandId);
+    if (customerInfo.subscribeToClub && checkoutMode !== 'club') throw new Error('Club-tilmelding er ikke aktiv i checkout. Genindlæs siden.');
+    const clubSignupInput = () => ({db:getAdminDb(),brandId,brandSlug,name:customerInfo.name,email:customerInfo.email,
+      newsletterConsent:customerInfo.subscribeToNewsletter,termsAccepted:customerInfo.clubTermsAccepted === true,
+      consentVersion:customerInfo.clubConsentVersion || '',termsVersion:customerInfo.clubTermsVersion || '',campaignVersion:customerInfo.clubCampaignVersion,now:Date.now()});
+    let clubPreflight: {eligible:boolean;customerId?:string} | null = null;
 
     const chargedItemsSubtotal = cartItems.reduce((sum, item) => {
       const lineTotal = toNumber(item.totalPrice);
@@ -548,6 +571,13 @@ export async function createStripeCheckoutSessionAction(
     if (appliedDiscountId) {
       selectedDiscount = await getDiscountById(appliedDiscountId);
       if (!selectedDiscount) throw new Error('The selected discount no longer exists.');
+      if (customerInfo.subscribeToClub) {
+        clubPreflight = await validateClubCheckoutSignup({...clubSignupInput(),discountId:selectedDiscount.applicationType === 'club_signup' ? selectedDiscount.id : undefined});
+        if (!clubPreflight.eligible) throw new Error('Club-tilmeldingen eller kampagnen er ændret. Genindlæs siden.');
+      }
+      const personalClub = selectedDiscount.applicationType === 'club_signup' && clubDiscountEligible(existingCustomer?.pendingClubDiscountId, selectedDiscount.id, existingCustomer?.discountUsage?.[selectedDiscount.id] || 0);
+      const clubEligible = selectedDiscount.applicationType === 'club_signup' && (personalClub || !!clubPreflight?.eligible)
+        && await getClubSignupDiscountEligibility({db:getAdminDb(),brandId,email:customerInfo.email,discountId:selectedDiscount.id,now:Date.now()});
       // Use validated charged merchandise, including options/combos, only when
       // the persisted newsletter campaign explicitly enables item stacking.
       const prizeIndex=selectedDiscount.gameProductId?resolvedLines.findIndex((line,index)=>line.catalog?.id===selectedDiscount!.gameProductId&&eligibleLines[index]>0):-1;
@@ -562,17 +592,22 @@ export async function createStripeCheckoutSessionAction(
         customerId: resolvedCustomer.customerRef.id,
         customer: existingCustomer,
         newsletterConsent: customerInfo.subscribeToNewsletter,
+        checkoutMode, clubEligible,
       });
       if (eligibilityError) throw new Error(eligibilityError);
       selectedDiscountAmount = selectedDiscount.gameProductId ? selectedSubtotal : calculateDiscountAmount(selectedDiscount, selectedSubtotal);
     }
 
+    if (customerInfo.subscribeToClub && !clubPreflight) {
+      clubPreflight = await validateClubCheckoutSignup(clubSignupInput());
+      if (!clubPreflight.eligible) throw new Error('Club-tilmeldingen er ændret. Genindlæs siden.');
+    }
     const manualDiscountWins = selectedDiscountAmount > (automaticCartDiscount?.amount || 0);
     const cartDiscountTotal = manualDiscountWins
       ? selectedDiscountAmount
       : (automaticCartDiscount?.amount || 0);
     const cartDiscountName = manualDiscountWins
-      ? (selectedDiscount?.applicationType === 'newsletter_signup' ? 'Newsletter signup' : selectedDiscount?.code)
+      ? (selectedDiscount?.applicationType === 'newsletter_signup' ? 'Newsletter signup' : selectedDiscount?.applicationType === 'club_signup' ? 'Club signup' : selectedDiscount?.code)
       : automaticCartDiscount?.name;
     const appliedDiscountIdForOrder = manualDiscountWins ? selectedDiscount?.id || null : null;
 
@@ -614,7 +649,12 @@ export async function createStripeCheckoutSessionAction(
     stage = 'customer';
     const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined);
 
-    if (customerInfo.subscribeToNewsletter) {
+    if (customerInfo.subscribeToClub) {
+      stage = 'club_signup';
+      const enrolled = await prepareClubCheckoutSignup({...clubSignupInput(),now:Date.now(),discountId:selectedDiscount?.applicationType === 'club_signup' ? selectedDiscount.id : undefined});
+      if (enrolled.customerId !== customerId) throw new Error('Club- og ordreprofilen matcher ikke. Genindlæs siden.');
+    }
+    if (customerInfo.subscribeToNewsletter && !customerInfo.subscribeToClub) {
       stage = 'newsletter_consent';
       await recordNewsletterConsent(getAdminDb(),{brandId:brand.id,brandName:brand.name,locationId:location.id,customerId,email:customerInfo.email,
         submissionId:customerInfo.newsletterConsentId,version:customerInfo.newsletterConsentVersion});

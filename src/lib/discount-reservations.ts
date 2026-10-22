@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { checkoutSignupMode, clubDiscountEligible, discountApplicationType, isSignupDiscount, signupModeAllows } from './promotion-rules';
 import { db, doc, runTransaction, serverTimestamp, type Transaction } from '@/lib/server/firestore-compat';
 
 function refs(brandId: string, customerId: string, discountId: string | null) {
@@ -15,9 +16,9 @@ export async function reserveDiscount(orderId: string, discountId: string | null
   return runTransaction(db, async tx => {
     const orderRef = doc(db, 'orders', orderId), customerRef = doc(db, 'customers', customerId);
     const r = refs(brandId, customerId, discountId);
-    const [orderSnap, customerSnap, discountSnap, cSnap, dSnap, pSnap] = await Promise.all([
+    const [orderSnap, customerSnap, discountSnap, cSnap, dSnap, pSnap, campaignSnap] = await Promise.all([
       tx.get(orderRef), tx.get(customerRef), discountId ? tx.get(doc(db, 'discounts', discountId)) : null,
-      tx.get(r.customer), r.discount ? tx.get(r.discount) : null, r.pair ? tx.get(r.pair) : null,
+      tx.get(r.customer), r.discount ? tx.get(r.discount) : null, r.pair ? tx.get(r.pair) : null, tx.get(doc(db, 'loyaltyCampaigns', brandId)),
     ]);
     if (!orderSnap.exists() || orderSnap.data().brandId !== brandId || orderSnap.data().customerDetails.id !== customerId || orderSnap.data().appliedDiscountId !== discountId) throw new Error('Reservation scope mismatch');
     if (orderSnap.data().discountReservation === 'held') return;
@@ -31,10 +32,13 @@ export async function reserveDiscount(orderId: string, discountId: string | null
     // purchases do not claim that offer and must not be blocked by an older hold.
     if (firstTime && (c.firstTimeHeld || (c.held || 0) > 0 || Math.max(c.paid || 0, customer.totalOrders || 0) > 0)) throw new Error('First-order promotion already used or reserved');
     if (discount) {
+      const applicationType = discountApplicationType(discount);
+      if (applicationType !== 'club_signup' && !signupModeAllows(applicationType, checkoutSignupMode(campaignSnap.data(), brandId))) throw new Error('Checkout signup campaign changed');
+      if (applicationType === 'club_signup' && !clubDiscountEligible(customer.pendingClubDiscountId, discountId!, customer.discountUsage?.[discountId!] || 0)) throw new Error('Club signup discount is not available for this customer');
       const usage = Math.max(discount.usedCount || 0, d.paid || 0);
       const personalUsage = Math.max(customer.discountUsage?.[discountId!] || 0, p.paid || 0);
       if (discount.usageLimit > 0 && usage + (d.held || 0) >= discount.usageLimit) throw new Error('Discount usage limit reached or reserved by another checkout');
-      const personalLimit = discount.applicationType === 'newsletter_signup' ? 1 : discount.perCustomerLimit;
+      const personalLimit = isSignupDiscount(discount) ? 1 : discount.perCustomerLimit;
       if (personalLimit > 0 && personalUsage + (p.held || 0) >= personalLimit) throw new Error('Discount already used or reserved for this customer');
       tx.set(r.discount!, { paid: usage, held: (d.held || 0) + 1 });
       tx.set(r.pair!, { paid: personalUsage, held: (p.held || 0) + 1 });
