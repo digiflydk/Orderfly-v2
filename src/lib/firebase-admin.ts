@@ -1,6 +1,6 @@
 import 'server-only';
 import * as admin from 'firebase-admin';
-import { localQaEnvironment } from './local-qa-environment';
+import { localQaRuntimeEnvironment } from './local-qa-runtime';
 
 type ServiceAccount = {
 	project_id: string;
@@ -63,7 +63,7 @@ function loadServiceAccount(): ServiceAccount | null {
 }
 
 function initializeAdminApp(): admin.app.App {
-	const local = localQaEnvironment();
+	const local = localQaRuntimeEnvironment();
 	if (local) return admin.initializeApp({ projectId: local.projectId,
 		credential: { getAccessToken: async () => ({ access_token: 'owner', expires_in: 3600 }) },
 	}, 'orderfly-local-qa0');
@@ -93,7 +93,7 @@ function initializeAdminApp(): admin.app.App {
 }
 
 export function getAdminApp(): admin.app.App {
-	const local = localQaEnvironment();
+	const local = localQaRuntimeEnvironment();
 	if (adminApp) {
 		if (adminApp.name !== (local ? 'orderfly-local-qa0' : ADMIN_APP_NAME)
 			|| local && adminApp.options.projectId !== local.projectId) throw new Error('Firebase runtime scope changed');
@@ -111,7 +111,7 @@ export function getAdminApp(): admin.app.App {
 }
 
 export function getAdminDb(): admin.firestore.Firestore {
-	const local = localQaEnvironment();
+	const local = localQaRuntimeEnvironment();
 	if (local) {
 		// Explicit unusable credentials prevent ADC fallback; insecure emulator gRPC
 		// never authenticates against Google. The launcher blocks all non-loopback I/O.
