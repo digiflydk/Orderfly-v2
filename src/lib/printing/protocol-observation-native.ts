@@ -88,6 +88,10 @@ const ownArray = (value: unknown, max: number): unknown[] => {
     return invalid();
   }
 };
+const rawString = (value: unknown, maxLength: number): string => {
+  if (typeof value !== 'string' || value.length > maxLength) return invalid();
+  return value;
+};
 function exactScope(input: unknown): Scope {
   const row = ownData(input, 4), keys = Object.keys(row), allowed = ['brandId', 'locationId', 'printerId', 'secret'];
   if (keys.length !== 4 || keys.some(key => !allowed.includes(key))) return invalid();
@@ -98,8 +102,17 @@ function exactScope(input: unknown): Scope {
 }
 function uniqueFacts(input: unknown): Facts {
   const row = ownData(input, 9);
-  const candidate = { ...row, protocols: ownArray(row.protocols, 3), encodings: ownArray(row.encodings, 16),
-    mediaTypes: ownArray(row.mediaTypes, 2), page: ownData(row.page, 2) };
+  const protocols = ownArray(row.protocols, 3), encodings = ownArray(row.encodings, 16);
+  const mediaTypes = ownArray(row.mediaTypes, 2);
+  rawString(row.mac, 17);
+  if (row.uid !== null) rawString(row.uid, 128);
+  rawString(row.clientFamily, 14);
+  rawString(row.clientVersion, 32);
+  if (row.serial !== null) rawString(row.serial, 64);
+  for (const value of protocols) rawString(value, 5);
+  for (const value of encodings) rawString(value, 32);
+  for (const value of mediaTypes) rawString(value, 10);
+  const candidate = { ...row, protocols, encodings, mediaTypes, page: ownData(row.page, 2) };
   const parsed = nativeProtocolFactsSchema.safeParse(candidate);
   if (!parsed.success) return invalid();
   for (const values of [parsed.data.protocols, parsed.data.encodings, parsed.data.mediaTypes]) {

@@ -113,6 +113,43 @@ test('oversized records reject before traversing their descriptors', enabled(asy
   }
 }));
 
+test('oversized raw fact strings reject before regex scanning or object reflection', enabled(async () => {
+  const originalExec = RegExp.prototype.exec;
+  const oversized = {
+    mac: 'm'.repeat(18), uid: 'u'.repeat(129), clientFamily: 'f'.repeat(15), clientVersion: 'v'.repeat(33),
+    serial: 's'.repeat(65), protocols: 'p'.repeat(6), encodings: 'e'.repeat(33), mediaTypes: 't'.repeat(11),
+  };
+  const privateText = 'PRIVATE_OVERSIZED_REGEX_SCAN';
+  RegExp.prototype.exec = function(value) {
+    if (Object.values(oversized).includes(value)) throw Error(privateText);
+    return Reflect.apply(originalExec, this, [value]);
+  };
+  try {
+    const variants = [
+      { ...facts, mac: oversized.mac }, { ...facts, uid: oversized.uid },
+      { ...facts, clientFamily: oversized.clientFamily }, { ...facts, clientVersion: oversized.clientVersion },
+      { ...facts, serial: oversized.serial }, { ...facts, protocols: [oversized.protocols] },
+      { ...facts, encodings: [oversized.encodings] }, { ...facts, mediaTypes: [oversized.mediaTypes] },
+    ];
+    for (const invalidFacts of variants) {
+      const f = fixture(); const challenge = await f.run('issueNativeProtocolObservationChallenge', scope);
+      await assert.rejects(f.run('persistNativeProtocolObservation', { ...scope, nonce: challenge.nonce, facts: invalidFacts }), error => {
+        const rendered = String(error) + (error.stack || '') + JSON.stringify(error);
+        assert.equal(error.code, 'invalid_protocol_observation');
+        assert.equal(rendered.includes(privateText), false);
+        return true;
+      });
+      assert.equal(f.rows.has(`${prefix}/protocolObservations/current`), false);
+    }
+    const reflection = new Proxy({}, { getPrototypeOf() { throw Error('PRIVATE_FACT_VALUE_REFLECTION'); } });
+    const f = fixture(); const challenge = await f.run('issueNativeProtocolObservationChallenge', scope);
+    await rejects(f.run('persistNativeProtocolObservation', { ...scope, nonce: challenge.nonce,
+      facts: { ...facts, uid: reflection } }));
+  } finally {
+    RegExp.prototype.exec = originalExec;
+  }
+}));
+
 test('malformed foreign and clock-invalid prior challenges cannot be replaced', enabled(async () => {
   for (const mutate of [row => { row.brandId = 'foreign'; }, row => { row.printerRevision = 4; },
     row => { row.credentialRevision = 3; }, row => { row.consumedAt = row.expiresAt; },
