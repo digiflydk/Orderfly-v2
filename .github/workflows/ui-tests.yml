@@ -68,6 +68,12 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Install Chromium for browser regressions
+        run: npx playwright install --with-deps chromium
+
+      - name: Receipt settings, online preview and editor regression
+        run: node --test tests/unit/receipt-*.cjs
+
       - name: Platform administration and brand-reference regression
         run: node --test tests/unit/mpanel-platform-admin.cjs tests/unit/brand-location-edit.cjs tests/unit/platform-role-server.cjs tests/unit/freemium-access.cjs tests/unit/access-authority.cjs tests/unit/order-access.cjs tests/unit/admin-session.cjs tests/unit/opsfly-login.cjs tests/unit/mpanel-launch.cjs tests/unit/website-access.cjs tests/unit/access-permission-migration.cjs tests/unit/loyalty-stamp-card-rules.cjs tests/unit/loyalty-stamp-card-counter.cjs tests/unit/loyalty-merchant-routes.cjs tests/unit/loyalty-membership.cjs tests/unit/loyalty-portal-routes.cjs tests/unit/loyalty-admin.cjs tests/unit/loyalty-portal-pages.cjs tests/unit/loyalty-stamp-card-texts.cjs
 
@@ -191,9 +197,6 @@ jobs:
       - name: Promotion and reservation regression (#206, #210, #219)
         run: node --test tests/unit/stale-discount-holds-210.cjs tests/unit/promotion-qa-206-219.cjs tests/unit/qa-218-187.cjs tests/unit/brand-subdomains-12.cjs
 
-      - name: Install Chromium for brand-owner regression
-        run: npx playwright install --with-deps chromium
-
       - name: Printer credential controls and one-time delivery regression
         run: node --test tests/unit/printing-device-credentials-ui.cjs
 
@@ -244,9 +247,6 @@ jobs:
 
       - name: Games editor browser regression
         run: node --test tests/unit/games-editor-browser.cjs
-
-      - name: Receipt settings, online preview and editor regression
-        run: node --test tests/unit/receipt-*.cjs
 
       - name: Shared admin access and filter regression
         run: node --test tests/unit/marketing-layout-boundary.cjs tests/unit/endpoint-audit.cjs tests/unit/settings-access.cjs tests/unit/system-cleanup.cjs tests/unit/access-navigation.cjs tests/unit/printing-ui-page.cjs tests/unit/merchant-admin-portal.cjs tests/unit/admin-sales-filters.cjs tests/unit/admin-loading.cjs tests/unit/admin-mobile-header.cjs

@@ -12,7 +12,7 @@ function fixture(options = {}) {
     p.roles.push({ id: 'owner', name: 'Owner', companyId: null, kind: 'superuser', permissions: [], active: true });
     p.memberships.push({ id: 'owner', principalId: actorId, companyId: null, locationIds: null, roleIds: ['owner'], active: true });
   }
-  const records = new Map([['platformAdminControl/access-v1', p], ['brands/brand', {}], ['locations/location', { brandId: 'brand' }]]);
+  const records = new Map([['platformAdminControl/access-v1', p], ['brands/brand', { status: 'active' }], ['locations/location', { brandId: 'brand' }]]);
   let calls = 0, retried = false, queue = Promise.resolve(); const writes = [];
   const ref = path => ({ path, id: path.split('/').at(-1), collection: name => ({ doc: id => ref(`${path}/${name}/${id}`) }) });
   const db = { collection: name => ({ doc: id => ref(`${name}/${id}`) }), runTransaction(run) {
@@ -67,7 +67,7 @@ test('fresh policy and native brand scope reject revoked, inactive, foreign or d
     r => r.get('platformAdminControl/access-v1').companies[0].active = false,
     r => r.get('platformAdminControl/access-v1').companies[0].orderflyBrandIds = ['foreign'],
     r => r.get('platformAdminControl/access-v1').roles.find(x => x.id === 'owner').active = false,
-    r => r.delete('brands/brand'), r => r.set('brands/brand', { id: 'foreign' }), r => r.set('brands/brand', { deleted: true })]) {
+    r => r.delete('brands/brand'), r => r.set('brands/brand', { status: 'active', id: 'foreign' }), r => r.set('brands/brand', { status: 'active', deleted: true })]) {
     const f = fixture(); mutate(f.records); await assert.rejects(f.service.writeReceiptSettings(command()), /forbidden/); assert.equal(f.writes.length, 0);
   }
   const retry = fixture({ retry: r => r.get('platformAdminControl/access-v1').principals[0].active = false });
@@ -86,7 +86,7 @@ test('historical inactive brand receipts preserve order access while current per
     assert.deepEqual(await f.service.readReceiptSettingsForOrder('brand', 'location'), { brandId: 'brand', revision: 0, settings: defaults });
     f.records.set('locations/location', { brandId: 'foreign' });
     await assert.rejects(f.service.readReceiptSettingsForOrder('brand', 'location'), /forbidden/);
-    const editor = fixture(); editor.records.set('brands/brand', brand);
+    const editor = fixture(); editor.records.set('brands/brand', { status: 'active', ...brand });
     await assert.rejects(editor.service.readReceiptSettings('brand'), /forbidden/);
     await assert.rejects(editor.service.writeReceiptSettings(command()), /forbidden/);
     assert.equal(editor.writes.length, 0);
@@ -98,6 +98,23 @@ test('historical inactive brand receipts preserve order access while current per
     const f = fixture({ staff: true }); f.records.set('brands/brand', { isActive: false }); mutate(f.records);
     await assert.rejects(f.service.readReceiptSettingsForOrder('brand', 'location'), /forbidden/);
   }
+});
+test('editor honors canonical brand status on reads, writes and transaction retries while historical reads remain available', async () => {
+  for (const status of ['active', 'pending', 'trialing']) {
+    const f = fixture(); f.records.set('brands/brand', { status });
+    assert.equal((await f.service.readReceiptSettings('brand')).revision, 0);
+    assert.equal((await f.service.writeReceiptSettings(command())).revision, 1);
+  }
+  for (const status of ['suspended', 'unknown', undefined, null, false]) {
+    const f = fixture(); f.records.set('brands/brand', { status, isActive: true });
+    await assert.rejects(f.service.readReceiptSettings('brand'), /forbidden/);
+    await assert.rejects(f.service.writeReceiptSettings(command()), /forbidden/);
+    assert.equal(f.writes.length, 0);
+    assert.equal((await f.service.readReceiptSettingsForOrder('brand', 'location')).revision, 0);
+  }
+  const retry = fixture({ retry: rows => rows.set('brands/brand', { status: 'suspended' }) });
+  await assert.rejects(retry.service.writeReceiptSettings(command()), /forbidden/);
+  assert.equal(retry.writes.length, 0);
 });
 test('audit failure is atomic; unknown and corrupt settings fail closed without data leakage', async () => {
   for (const options of [{ failAudit: true }, { unknown: true }]) {

@@ -36,7 +36,8 @@ async function scope(tx: FirebaseFirestore.Transaction, identity: VerifiedIdenti
   // not hide an otherwise authorized historical receipt.
   if (!admin) return;
   const brand = await tx.get(db.collection('brands').doc(brandId)), row = brand.data();
-  if (!brand.exists || brand.id !== brandId || !row || (row.id !== undefined && row.id !== brandId)
+  if (!brand.exists || brand.id !== brandId || !row || !['active', 'pending', 'trialing'].includes(row.status)
+    || (row.id !== undefined && row.id !== brandId)
     || ['deleted', 'isDeleted', 'isTestData'].some(key => row[key] !== undefined && row[key] !== false)
     || (row.deletedAt !== undefined && row.deletedAt !== null) || (row.isActive !== undefined && row.isActive !== true)) throw new AuthorityError('forbidden');
 }
