@@ -78,7 +78,7 @@ test('truncation returns explicitly incomplete sampled metrics without fabricate
 test('TTL retention and future intervals are visibly incomplete even when the query is empty',async()=>{
  const f=fixture(),old=await f.service.read(scope,'code',{from:NOW-91*DAY,to:NOW});
  assert.equal(old.retentionLimited,true);assert.equal(old.complete,false);
- const future=await fixture().service.read(scope,'code',{from:NOW-DAY,to:NOW+1});assert.equal(future.futureLimited,true);assert.equal(future.complete,false);
+ const future=await fixture().service.read(scope,'code',{from:NOW,to:NOW+DAY});assert.equal(future.futureLimited,true);assert.equal(future.complete,false);
  const empty=await fixture().service.read(scope,'code',range);assert.equal(empty.complete,true);assert.equal(empty.metrics.totalOpenings,0);
 });
 test('retention clamps native reads and excludes expired snapshots even before cleanup',async()=>{
@@ -129,3 +129,29 @@ test('attribution CSV is explicitly scan-time, preserves unknown labels and neut
  const csv=exportQrAnalyticsCsv(result);assert.ok(csv.includes('"campaign_at_scan","\'=SUM(1,2)"'));assert.ok(csv.includes('"campaign_at_scan","Ukendt kampagne"'));assert.ok(csv.includes('"location_at_scan","Uden registreret afdeling"'));
  const legacy={...result};delete legacy.attribution;assert.equal(exportQrAnalyticsCsv(legacy).includes('campaign_at_scan'),false);
 });
+
+ test('today is a complete provisional snapshot bounded by the update time and can export',async()=>{
+ const dates=parseQrAnalyticsDates({from:'2026-10-21',to:'2026-10-21'});
+ const f=fixture([row(),row({timestamp:NOW}),row({timestamp:NOW+1})]);
+ const result=await f.service.read(scope,'code',dates);
+ assert.equal(result.complete,true);assert.equal(result.totalsAreExact,true);assert.equal(result.futureLimited,true);
+ assert.equal(result.metrics.totalOpenings,1);assert.equal(result.metrics.estimatedUnique,null);
+ assert.equal(result.period.to,dates.to);assert.equal(result.dataAsOf,NOW);
+ assert.ok(f.filters.some(([field,op,value])=>field==='timestamp'&&op==='<'&&value===NOW));
+ const csv=exportQrAnalyticsCsv(result);assert.ok(csv.includes('"data_as_of","provisional"'));assert.ok(csv.includes('"'+NOW+'","true"'));
+ const empty=await fixture().service.read(scope,'code',dates);assert.equal(empty.complete,true);assert.equal(empty.metrics.totalOpenings,0);
+ const future=fixture();const futureResult=await future.service.read(scope,'code',{from:NOW,to:NOW+DAY});
+ assert.equal(future.trace.some(([kind])=>kind==='events'),false);assert.throws(()=>exportQrAnalyticsCsv(futureResult),/incomplete_analytics/);
+ });
+ test('ongoing periods retain genuine incomplete-data and server-side export rejection guards',async()=>{
+ for(const [rows,options,from] of [
+  [Array.from({length:QR_ANALYTICS_EVENT_LIMIT+1},()=>row()),{},NOW-DAY],
+  [[],{},NOW-91*DAY],
+  [[row({classification:null})],{},NOW-DAY],
+  [[row({timestamp:NOW})],{forceRows:true},NOW-DAY],
+ ]){
+ const result=await fixture(rows,options).service.read(scope,'code',{from,to:NOW+DAY});
+ assert.equal(result.futureLimited,true);assert.equal(result.complete,false);assert.equal(result.totalsAreExact,false);
+ assert.throws(()=>exportQrAnalyticsCsv(result),error=>error.code==='incomplete_analytics'&&error.status===409);
+ }
+ });

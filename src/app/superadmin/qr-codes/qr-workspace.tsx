@@ -14,7 +14,7 @@ import type { QrLifetime } from '@/lib/qr/lifetime';
 
 export type QrWorkspaceData = { brands: QrBrandChoice[]; codes: QrCodeSummary[]; capabilities: QrCapabilities; analytics: boolean; analyticsCodeKeys?: string[]; truncated: boolean; dynamicEnabled?: boolean; allTime?: Record<string, QrLifetime | null> };
 type RenderFile = { content: string; mime: string; encoding?: 'base64' | 'utf8' | 'utf-8'; filename: string };
-type AnalyticsResult = { metrics: QrMetrics; complete: boolean; currentLocationOnly: boolean; attribution?: QrScanAttribution };
+type AnalyticsResult = { metrics: QrMetrics; complete: boolean; currentLocationOnly: boolean; futureLimited?: boolean; dataAsOf?: number; attribution?: QrScanAttribution };
 const codeKey = (code: { brandId: string; id: string }) => `${code.brandId}/${code.id}`;
 const object = (value: unknown): value is Record<string, unknown> => typeof value === 'object' && value !== null && !Array.isArray(value);
 function isSummary(value: unknown): value is QrCodeSummary {
@@ -89,6 +89,7 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
   const [filters, setFilters] = useState<QrAnalyticsFilter>(() => ({ ...initialPeriod(), qrId: '', campaign: '', placement: '' }));
   const [metrics, setMetrics] = useState<QrMetrics | null>(null);
   const [complete, setComplete] = useState(false);
+  const [snapshot, setSnapshot] = useState<{ futureLimited?: boolean; dataAsOf?: number }>({});
   const [attribution, setAttribution] = useState<QrScanAttribution | undefined>();
   const [currentLocationOnly, setCurrentLocationOnly] = useState<boolean | undefined>();
   const [loadedQrKey, setLoadedQrKey] = useState('');
@@ -193,8 +194,8 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
     setLoading(true);
     try {
       const result = await command<AnalyticsResult>(body);
-      if (!isAttribution(result?.attribution) || !isMetrics(result?.metrics) || typeof result.complete !== 'boolean' || typeof result.currentLocationOnly !== 'boolean') throw new QrTransportError('unavailable');
-      if (mounted.current && request === latestAnalytics.current) { setMetrics(result.metrics); setComplete(result.complete); setCurrentLocationOnly(result.currentLocationOnly); setAttribution(result.attribution); setLoadedQrKey(value.qrId); }
+      if ((result?.futureLimited !== undefined && typeof result.futureLimited !== 'boolean') || (result?.dataAsOf !== undefined && (!Number.isSafeInteger(result.dataAsOf) || result.dataAsOf < 0 || !Number.isFinite(new Date(result.dataAsOf).getTime()))) || (result?.futureLimited === true && result.dataAsOf === undefined) || !isAttribution(result?.attribution) || !isMetrics(result?.metrics) || typeof result.complete !== 'boolean' || typeof result.currentLocationOnly !== 'boolean') throw new QrTransportError('unavailable');
+      if (mounted.current && request === latestAnalytics.current) { setMetrics(result.metrics); setComplete(result.complete); setSnapshot({ futureLimited: result.futureLimited, dataAsOf: result.dataAsOf }); setCurrentLocationOnly(result.currentLocationOnly); setAttribution(result.attribution); setLoadedQrKey(value.qrId); }
     } catch { if (mounted.current && request === latestAnalytics.current) setAnalyticsError('unavailable'); }
     finally { if (mounted.current && request === latestAnalytics.current) setLoading(false); }
   };
@@ -227,7 +228,7 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
       <QrAnalytics metrics={metrics ? { ...metrics, byQr: metrics.byQr.map(row => ({ ...row, key: loadedQrKey.endsWith('/' + row.key) ? loadedQrKey : row.key })) } : null} period={{ dateFrom: filters.dateFrom, dateTo: filters.dateTo }} selection={{ qrId: filters.qrId, campaign: filters.campaign, placement: filters.placement }}
         codes={data.codes.filter(code => code.kind === 'dynamic').map(code => ({ id: codeKey(code), name: code.name, campaign: code.campaign, placement: data.brands.find(brand => brand.id === code.brandId)?.locations.find(location => location.id === code.locationId)?.name || (code.locationId || 'Hele brandet') }))}
         complete={metrics ? complete : true} loading={loading} error={analyticsError} canExport={data.capabilities.export && !selectionError}
-        currentLocationOnly={currentLocationOnly} attribution={attribution}
+        currentLocationOnly={currentLocationOnly} attribution={attribution} futureLimited={snapshot.futureLimited} dataAsOf={snapshot.dataAsOf}
         onFilterChange={value => { void loadAnalytics(value); }} onRetry={() => { void loadAnalytics(filters); }} onExport={exportAnalytics} />
     </div>}
   </div>;

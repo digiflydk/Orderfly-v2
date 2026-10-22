@@ -14,6 +14,8 @@ export type QrAnalyticsProps = {
   loading?: boolean;
   error?: string | null;
   complete: boolean;
+  futureLimited?: boolean;
+  dataAsOf?: number;
   /** Server report scope, never inferred from the current catalog or client permissions. */
   currentLocationOnly?: boolean;
   attribution?: QrScanAttribution;
@@ -78,7 +80,7 @@ function Timeline({ values, hourly, complete }: { values: QrMetricBucket[]; hour
 
 /** Presentation only. The parent owns authorization, query completeness and transport. */
 export function QrAnalytics({ metrics, period, codes = [], selection, loading = false, error, complete = false,
-  currentLocationOnly, attribution, canExport, onFilterChange, onExport, onRetry }: QrAnalyticsProps) {
+  currentLocationOnly, attribution, futureLimited, dataAsOf, canExport, onFilterChange, onExport, onRetry }: QrAnalyticsProps) {
   const id = useId();
   const [filters, setFilters] = useState<QrAnalyticsFilter>({ ...period, qrId: selection?.qrId ?? '', campaign: selection?.campaign ?? '', placement: selection?.placement ?? '' });
   const [hourly, setHourly] = useState(false);
@@ -117,8 +119,9 @@ export function QrAnalytics({ metrics, period, codes = [], selection, loading = 
     {error && <div role="alert" className={box}><p>Statistikken kunne ikke indlæses. Eventuelle viste tal er fra den senest indlæste periode.</p>{onRetry && <button type="button" className={action} onClick={onRetry} disabled={loading}>Prøv igen</button>}</div>}
     {exportError && <p role="alert">CSV kunne ikke eksporteres. Prøv igen.</p>}
     {!complete && <p role="alert" className={box}>Ufuldstændige data: Tallene omfatter kun indlæste hændelser og er ikke totalen for perioden. Unikestimat og eksport er derfor ikke tilgængelige.</p>}
+    {metrics && complete && futureLimited && dataAsOf !== undefined && <p role="note" aria-label="Foreløbige tal" className={box}>Foreløbige tal: Perioden er ikke afsluttet. Alle indlæste registreringer frem til {dateTime(dataAsOf)} (dansk tid) er med. CSV indeholder opdateringstidspunktet. Opdatér statistikken for at se nye registreringer.</p>}
     {metrics && <>
-      <p className="text-sm text-muted-foreground">Indlæst dataperiode: {dateTime(metrics.from)} til {dateTime(metrics.to)} (sluttidspunktet er ikke med). Alle datoer og timer vises i dansk tid.</p>
+      <p className="text-sm text-muted-foreground">Valgt dataperiode: {dateTime(metrics.from)} til {dateTime(metrics.to)} (sluttidspunktet er ikke med). Alle datoer og timer vises i dansk tid.</p>
       <p role="note" aria-label="Afdelingshistorik" className="text-sm text-muted-foreground">{currentLocationOnly === true
         ? 'Afdelingshistorik: Kun hændelser fra QR-kodens nuværende afdeling er med. Hændelser fra tidligere afdelinger er ikke med.'
         : currentLocationOnly === false

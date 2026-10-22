@@ -104,6 +104,7 @@ export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
       if (!Number.isSafeInteger(dataAsOf) || dataAsOf < 0 || !Number.isFinite(new Date(dataAsOf).getTime())) return fail('invalid_clock', 503);
       const retainedFrom = Math.max(0, dataAsOf - QR_ANALYTICS_RETENTION_DAYS * DAY);
       const queryFrom = Math.max(range.from, retainedFrom);
+      const queryTo = Math.min(range.to, dataAsOf);
       // Mandatory stored-record lookup before constructing any events query.
       const found = await options.getCode(scope, id);
       if (!found || found.id !== id || found.brandId !== scope.brandId || (found.locationId !== null && !validKey(found.locationId))) return fail('not_found', 404);
@@ -115,8 +116,8 @@ export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
       let query = db.collection('brands').doc(scope.brandId).collection(QR_PATHS.codes).doc(id).collection(QR_PATHS.events)
         .where('brandId', '==', scope.brandId).where('qrId', '==', id);
       if (currentLocationOnly) query = query.where('locationId', '==', code.locationId);
-      const result = queryFrom >= range.to ? { docs: [] } : await query
-        .where('timestamp', '>=', queryFrom).where('timestamp', '<', range.to)
+      const result = queryFrom >= queryTo ? { docs: [] } : await query
+        .where('timestamp', '>=', queryFrom).where('timestamp', '<', queryTo)
         .orderBy('timestamp', 'asc').orderBy('__name__', 'asc').limit(QR_ANALYTICS_EVENT_LIMIT + 1).get();
       const truncated = result.docs.length > QR_ANALYTICS_EVENT_LIMIT, events: QrMetricEvent[] = [];
       const byCampaign = new Map<string, QrAttributionBucket>(), byLocation = new Map<string, QrAttributionBucket>();
@@ -125,7 +126,7 @@ export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
         const row = snapshot.data(), c = classification(row?.classification), expiresAt = expiryMillis(row?.expiresAt);
         if (!row || row.brandId !== scope.brandId || row.qrId !== id || (row.locationId !== null && !validKey(row.locationId))
           || (currentLocationOnly && row.locationId !== code.locationId) || !Number.isSafeInteger(row.timestamp)
-          || (row.timestamp as number) < queryFrom || (row.timestamp as number) >= range.to || !c || expiresAt === null || expiresAt <= dataAsOf) { discardedEvents++; continue; }
+          || (row.timestamp as number) < queryFrom || (row.timestamp as number) >= queryTo || !c || expiresAt === null || expiresAt <= dataAsOf) { discardedEvents++; continue; }
         // Identifiers are deliberately not projected. This release cannot estimate unique visitors.
         const event: QrMetricEvent = { timestamp: row.timestamp as number, qrId: id, classification: c };
         events.push(event);
@@ -133,7 +134,7 @@ export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
         addAttribution(byLocation, row.locationId === null ? '' : row.locationId as string, event);
       }
       const retentionLimited = range.from < retainedFrom, futureLimited = range.to > dataAsOf;
-      const complete = !truncated && !retentionLimited && !futureLimited && discardedEvents === 0;
+      const complete = !truncated && !retentionLimited && range.from < dataAsOf && discardedEvents === 0;
       return { code, metrics: aggregateQrMetrics(events, { ...range, qrId: id }), complete, totalsAreExact: complete,
         truncated, retentionLimited, futureLimited, discardedEvents, sampledEvents: events.length, currentLocationOnly, dataAsOf, retainedFrom,
         attribution: { byCampaign: [...byCampaign.values()].sort((a,b) => a.key.localeCompare(b.key)), byLocation: [...byLocation.values()].sort((a,b) => a.key.localeCompare(b.key)) },
@@ -144,11 +145,12 @@ export function createQrAnalyticsService(db: QrAnalyticsDatabase, options: {
 
 /** Aggregate export only. The caller must separately enforce the export action. */
 export function exportQrAnalyticsCsv(result: QrAnalyticsResult): string {
+  if (!result.complete) return fail('incomplete_analytics', 409);
   const m = result.metrics;
   const rows: QrCsvCell[][] = [
-    ['dimension', 'key', 'openings', 'probable_scans', 'excluded_openings', 'estimated_unique', 'count', 'complete', 'from', 'to', 'timezone', 'current_location_only'],
+    ['dimension', 'key', 'openings', 'probable_scans', 'excluded_openings', 'estimated_unique', 'count', 'complete', 'from', 'to', 'timezone', 'current_location_only', 'data_as_of', 'provisional'],
   ];
-  const suffix: QrCsvCell[] = [result.complete, result.period.from, result.period.to, result.period.timezone, result.currentLocationOnly];
+  const suffix: QrCsvCell[] = [result.complete, result.period.from, result.period.to, result.period.timezone, result.currentLocationOnly, result.dataAsOf, result.futureLimited];
   rows.push(['total', result.code.name, m.totalOpenings, m.probableScans, m.excludedOpenings, m.estimatedUnique, null, ...suffix]);
   for (const [dimension, buckets] of [['day', m.byDay], ['hour', m.byHour], ['qr', m.byQr]] as const)
     for (const bucket of buckets) rows.push([dimension, bucket.key, bucket.totalOpenings, bucket.probableScans, bucket.excludedOpenings, bucket.estimatedUnique, null, ...suffix]);
