@@ -27,12 +27,25 @@ export function watchClubQrConsent() {
   // No choice yet is not a rejection: the visible URL may be used after the
   // first choice on this landing. An actual denial/revocation is irreversible
   // for this touch, even if statistics is subsequently reaccepted.
-  if (hasTrackingConsentChoice() && !trackingConsent().statistics) clearClubQrTouch();
-  const update = () => { if (!trackingConsent().statistics) clearClubQrTouch(); };
+  let hadChoice = hasTrackingConsentChoice();
+  const update = () => {
+    const hasChoice = hasTrackingConsentChoice();
+    if ((hadChoice || hasChoice) && !trackingConsent().statistics) clearClubQrTouch();
+    hadChoice ||= hasChoice;
+  };
+  update();
+  const storage = (event: StorageEvent) => {
+    // Cart/delivery writes in another tab are not consent decisions. Removing
+    // an existing consent (including clear-all) must still discard the touch,
+    // even if an older cookie fallback remains readable in this tab.
+    if (event.key !== 'orderfly_cookie_consent' && event.key !== null) return;
+    if (event.newValue === null && hadChoice) clearClubQrTouch();
+    else update();
+  };
   window.addEventListener('orderfly:consent', update);
-  window.addEventListener('storage', update);
+  window.addEventListener('storage', storage);
   return () => {
     window.removeEventListener('orderfly:consent', update);
-    window.removeEventListener('storage', update);
+    window.removeEventListener('storage', storage);
   };
 }

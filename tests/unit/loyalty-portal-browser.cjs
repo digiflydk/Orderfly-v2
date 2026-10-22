@@ -215,15 +215,19 @@ test('changed texts ask for fresh ticks and rate limits are explained', async ()
 });
 
 const TOUCH = 'a'.repeat(32) + '.12345678-1234-4123-8123-123456789abc.' + 'b'.repeat(64);
-for (const mode of ['allowed', 'first-choice', 'denied', 'revoked', 'silent-revocation', 'duplicate', 'malformed']) test(`QR signup attribution: ${mode}, without browser storage or retrospective consent`, async () => {
+for (const mode of ['allowed', 'first-choice', 'unrelated-storage', 'consent-deleted', 'storage-cleared', 'denied', 'revoked', 'silent-revocation', 'duplicate', 'malformed']) test(`QR signup attribution: ${mode}, without browser storage or retrospective consent`, async () => {
   const query = mode === 'duplicate' ? `?qr_touch=${TOUCH}&qr_touch=${TOUCH}` : `?qr_touch=${mode === 'malformed' ? 'bad-token' : TOUCH}`;
-  const {page, calls} = await open('signup', {hash: query, init: {fn: value => {window.__statistics = !['denied','first-choice'].includes(value);window.__choice=value!=='first-choice';}, arg: mode}});
+  const {page, calls} = await open('signup', {hash: query, init: {fn: value => {window.__statistics = !['denied','first-choice','unrelated-storage'].includes(value);window.__choice=!['first-choice','unrelated-storage'].includes(value);}, arg: mode}});
   try {
     await page.getByLabel('Navn', {exact:true}).fill('Anna Hansen');
     await page.getByLabel('E-mail', {exact:true}).fill('anna@example.com');
     await page.getByRole('checkbox', {name:/nyhedsbrevet fra Esmeralda/}).click();
     await page.getByRole('checkbox', {name:'Jeg accepterer vilkårene for Esmeralda Club.'}).click();
-    if (mode === 'first-choice') {
+    if (mode === 'unrelated-storage') {
+      await page.evaluate(() => window.dispatchEvent(new StorageEvent('storage', {key:'orderfly_cart',newValue:'[]'})));
+      assert.equal(new URL(page.url()).searchParams.get('qr_touch'), TOUCH);
+    }
+    if (['first-choice','unrelated-storage'].includes(mode)) {
       assert.equal(new URL(page.url()).searchParams.get('qr_touch'), TOUCH);
       await page.evaluate(() => {window.__statistics = true; window.__choice=true; window.dispatchEvent(new Event('orderfly:consent'));});
     }
@@ -237,10 +241,16 @@ for (const mode of ['allowed', 'first-choice', 'denied', 'revoked', 'silent-revo
       await page.evaluate(() => {window.__statistics = true; window.dispatchEvent(new Event('orderfly:consent'));});
     }
     if (mode === 'silent-revocation') await page.evaluate(() => {window.__statistics = false;});
+    if (['consent-deleted','storage-cleared'].includes(mode)) {
+      // A stale cookie fallback can still say true after localStorage removal;
+      // the removal event must discard this touch regardless.
+      await page.evaluate(value => window.dispatchEvent(new StorageEvent('storage', {key:value==='consent-deleted'?'orderfly_cookie_consent':null,newValue:null})), mode);
+      assert.equal(new URL(page.url()).searchParams.has('qr_touch'), false);
+    }
     await page.getByRole('button', {name:'Bliv medlem'}).click();
     await page.getByRole('heading', {name:'Tjek din e-mail'}).waitFor();
     assert.equal(calls.length, 1);
-    assert.deepEqual(calls[0].body.qrAttribution, ['allowed','first-choice'].includes(mode) ? {receipt:TOUCH, statisticsConsent:true} : undefined);
+    assert.deepEqual(calls[0].body.qrAttribution, ['allowed','first-choice','unrelated-storage'].includes(mode) ? {receipt:TOUCH, statisticsConsent:true} : undefined);
     assert.equal(new URL(page.url()).searchParams.has('qr_touch'), false);
     assert.deepEqual(await page.evaluate(() => ({local:Object.keys(localStorage),session:Object.keys(sessionStorage),cookie:document.cookie})), {local:[],session:[],cookie:''});
   } finally {await page.close();}

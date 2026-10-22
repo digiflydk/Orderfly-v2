@@ -22,6 +22,10 @@ response removes the query parameter as well. A direct visit stays unattributed.
 This intentionally covers only direct QR landing on the signup page, not a
 cross-page or cross-domain acquisition history.
 
+Unrelated cross-tab storage updates (for example a cart) are ignored. Removal
+of a previously observed consent, including clearing storage, discards the touch
+even when an older cookie fallback is still readable.
+
 The Club response uses `Referrer-Policy: no-referrer` on both canonical and
 brand-prefixed routes, with matching metadata. The existing BrandTracking Club
 guard remains in force: no Google, Meta or GTM integration is added to Club.
