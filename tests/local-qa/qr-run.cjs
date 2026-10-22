@@ -20,6 +20,11 @@ async function ready(url,child){const until=Date.now()+90000;while(Date.now()<un
  const emulator=launch(firebase,['emulators:start','--project','demo-orderfly-qa0','--only','auth,firestore','--config',path.join(root,'tests/local-qa/firebase.json')],toolsEnv,'emulators',privateDir);
  await ready('http://127.0.0.1:9099/emulator/v1/projects/demo-orderfly-qa0/config',emulator);await ready('http://127.0.0.1:8088/',emulator);
  const app=launch(process.execPath,[path.join(root,'node_modules/next/dist/bin/next'),'dev','-p','3100','-H','127.0.0.1'],env,'app');await ready('http://127.0.0.1:3100/api/health',app);
+ // Compile the cold dev login route before measuring browser interaction. This
+ // is loopback-only setup; the actual browser still performs and verifies login.
+ const loginPage=await fetch('http://127.0.0.1:3100/admin-login',{signal:AbortSignal.timeout(60000)});
+ if(loginPage.status!==200)throw Error('QR_QA0_LOGIN_READINESS_FAILED');
+ await loginPage.text();
  const results=[];
  for(let pass=0;pass<2;pass++){
   const smoke=spawn(process.execPath,[path.join(__dirname,'qr-smoke.cjs'),...(apiOnly?['--api-only']:[])],{cwd:root,env:{...env,...(!apiOnly?{CART_CHROMIUM_PATH:browser}:{})},stdio:['ignore','pipe','pipe']});children.push(smoke);let output='',diagnostic='';smoke.stdout.on('data',chunk=>{output+=chunk;});smoke.stderr.on('data',chunk=>{if(diagnostic.length<512)diagnostic+=chunk;});

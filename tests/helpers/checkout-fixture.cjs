@@ -53,6 +53,9 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   '@/lib/marketing/config':{marketingConfig:brandId=>marketingConfigured && brandId==='b'?{brandId:'b'}:null},
   'node:crypto':require('node:crypto'),
   '@/lib/firebase-admin':{getAdminDb:()=>marketingDb},
+  '@/lib/server/accept-pickup-checkout':loadTs('src/lib/server/accept-pickup-checkout.ts',{
+   'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>marketingDb,getAdminFieldValue:()=>({serverTimestamp:()=>new Date('2026-09-07T00:00:00Z')})},
+  }),
   '@/lib/marketing/store':{recordNewsletterConsent:async(...args)=>{events.push('newsletter-consent');if(fault==='newsletter-consent')throw Error('consent storage offline');return loadTs('src/lib/marketing/store.ts',{'server-only':{}}).recordNewsletterConsent(...args);}},
   '@/lib/synthetic-product':loadTs('src/lib/synthetic-product.ts'),
   '@/lib/checkout-schema':loadTs('src/lib/checkout-schema.ts'),
@@ -104,7 +107,10 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
     }
     return snapshot(ref);
    },
-   runTransaction:async(_,callback)=>{beforeCustomerTransaction?.(records);return callback({get:async ref=>snapshot(ref),set:(ref,data,options)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)});},
+   runTransaction:async(_,callback)=>{beforeCustomerTransaction?.(records);const tx={get:async ref=>snapshot(ref),set:(ref,data,options)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)};
+    const compatRef=ref=>{const [collection,id]=ref.path.split('/');return firestoreRef(collection,id);};
+    const nativeTx={get:async ref=>{const saved=await tx.get(compatRef(ref));return{...saved,exists:saved.exists()};},set:(ref,...args)=>tx.set(compatRef(ref),...args),update:(ref,...args)=>tx.update(compatRef(ref),...args)};
+    return callback(tx,Object.freeze({db:marketingDb,transaction:nativeTx}));},
    serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),
    setDoc:async(ref,data)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data);writes.push({ref,data});events.push(ref.collection);},
    updateDoc:async(ref,data)=>{

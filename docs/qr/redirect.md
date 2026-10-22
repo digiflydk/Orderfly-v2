@@ -10,11 +10,19 @@ HEAD responses have no body, including errors.
 The route requires `QR_MODULE_ENABLED=true`, a non-secret operator flag. It is
 OFF when absent or any other value. Do not activate it before the complete #389
 release prerequisites and Firestore rules/retention acceptance are verified.
-The request URL and direct Host header must agree. Only the canonical HTTPS apex
-is accepted in production; brand subdomains, alternate ports and spoofed Host
-headers fail before Firebase access. Development additionally accepts HTTP on
-localhost/loopback. Forwarded headers do not grant host authority, visitor identity
-or location information.
+Direct public requests require the canonical HTTPS apex and an absent or agreeing
+Host header. Production App Hosting may instead supply its internal listener or
+same-service Cloud Run URL, verified against server-owned `K_SERVICE` and `PORT`,
+with exactly `X-Forwarded-Host: orderfly.dk` and `X-Forwarded-Proto: https`.
+The direct Host must match that internal URL or the canonical apex. The complete
+accepted proxy forms and rejection rules are specified in
+[the App Hosting redirect contract](proxy-redirect.md#routing-boundary).
+Brand subdomains, alternate public ports and conflicting or ambiguous headers
+fail before Firebase access. Development additionally accepts HTTP on
+localhost/loopback. Forwarded headers supply constrained public routing context;
+they do not prove proxy ingress or grant administration, tenant ownership,
+visitor identity or location information. Native QR/brand/location/status reads
+remain the data authority.
 
 ## Atomic recording and limits
 
@@ -67,7 +75,7 @@ source. No fingerprint or cookie is created by the redirect.
 
 `tests/unit/qr-redirect.cjs` executes the actual service with the actual payload,
 metrics and store modules against a transaction double, plus the actual Next route
-wrapper with injected Firebase. Nine tests cover GET/HEAD, bot/prefetch, concurrent
+wrapper with injected Firebase. Eleven tests cover GET/HEAD, bot/prefetch, concurrent
 quota boundary, minute rollover, paused/archived/expired/invalid targets, host
 spoofing, module OFF, DB failures with atomic rollback, unsafe stored destinations,
 header minimization and schema projection. These are isolated automated tests,

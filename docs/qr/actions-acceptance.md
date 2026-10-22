@@ -1,0 +1,64 @@
+# QR acceptance in GitHub Actions (#389 / #449)
+
+`QR native acceptance` reuses `tests/local-qa/qr-run.cjs` and its existing
+fixture, unchanged. It runs the real Next application, Auth and Firestore
+emulators, native session verification, scoped manager/viewer users, API and
+browser login, persisted QR create/edit/replay/conflict, mobile and bot GETs,
+no-write HEAD, analytics/history, downloaded PNG decode, pause and cleanup.
+Two complete cycles share one emulator/app lifetime. The existing loopback
+network guard and fixed `demo-orderfly-qa0` project remain mandatory.
+The job receives no production credentials. Its output explicitly separates
+native/browser acceptance from production and physical scanning acceptance.
+
+The workflow runs on all `src/` changes, root configuration, QR tests,
+fixture/network-guard and locked dependency changes in PRs and main, and can subsequently be
+started with Run workflow on main. No new GitHub permission or secret is added.
+Java 21, the pinned Firebase CLI 15.30.0 and the repository's locked Playwright
+are provisioned on the runner. Protected emulator/application logs are not
+uploaded; they can contain test session material. Safe checks and fixed failure
+phase codes remain in the job output.
+Superseded PR runs are cancelled; main runs remain serialized and are not cancelled.
+Using the whole source tree includes transitive shared dependencies such as
+origin/CSRF helpers and the sole retention heartbeat caller without a fragile
+list of individual production files.
+
+Initial CI attempts failed at the browser email field, with an unchanged
+retry passing all checks. The runner now precompiles the cold Next dev login
+route with a loopback-only GET before starting the measured fixture cycles.
+The browser waits for initial network resources and requires visible acknowledgement of the method
+switch before entering test credentials. It does not retry the click, bypass
+login, raise assertion timeouts or remove any original acceptance assertion.
+If the switch fails, only input/option counts and a page-error count are emitted,
+never input values, cookies or raw browser errors. CI still must verify this
+change; a suspected dev compilation/hydration race is not a proven production login diagnosis.
+
+## Production checkpoint, read only
+
+Only main push/manual runs use the already configured
+`FIREBASE_SERVICE_ACCOUNT_JSON`, in a separate job. The script issues one
+authenticated GET to `orderfly-39325` document `qrMaintenance/retention-v1`
+with a field mask. It never requests the internal cursor or prints lease
+tokens, credentials, raw provider errors or arbitrary document data.
+
+Acceptance requires schema version 1, a released lease, null last error,
+safe nonnegative counters with zero errors, and a completion within the last
+hour. One hour is this diagnostic's freshness threshold, not a change to the
+existing heartbeat schedule. Missing/stale/busy/error/denied evidence fails
+the check with a sanitized blocker, and must not be reported as verified.
+The script does not call the heartbeat, run cleanup, create indexes, change
+rules/grants, or write any production document. It does not prove deletion of
+expired production rows or provide the heartbeat caller's response log.
+
+## Remaining production acceptance
+
+The repository currently has no documented configured native-user login
+credential for an unattended production QR test. A service-account read cannot
+replace the product's native authorization. Do not mint or impersonate a user,
+create users/grants, export browser cookies, retry the rejected anonymous admin
+probe, or treat emulator results as actual production scan totals.
+
+The approved single Esmeralda QR scenario in `activation-plan.md` still needs
+a usable authorized native production session, deployed release verification,
+existing-record/audit search before creation, exactly the approved requests,
+analytics/history and preserved paused record. No production write test is
+included in this workflow. Physical camera/print acceptance remains separate.
