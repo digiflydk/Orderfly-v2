@@ -1,6 +1,6 @@
-# Proposed production activation (#449)
+# Production activation runbook (#449)
 
-This is an inactive, separately reviewable proposal. Creating this branch or PR changes no environment. Keep it draft until the coordinator has specific acceptance of the index/test-data operation below and all current-head engineering/release gates pass.
+Executed by PR #450, which turns the module on in production. PO/PM approved this scope on 21–22 October 2026. The preconditions below were verified before merge (evidence in #449); the controlled acceptance scenario runs only after the deployed release is confirmed. `release-readiness.md` holds the current production state. Keep this runbook for incident work and any later re-activation after a rollback.
 
 ## Exact configuration change
 
@@ -9,14 +9,14 @@ Add only `QR_MODULE_ENABLED="true"`, availability `RUNTIME`, to `apphosting.yaml
 ## Preconditions
 
 - PR411 source and this activation delta independently reviewed with current-main ancestry, green relevant CI and no unresolved findings or human stop.
-- Three additive composites in `docs/qr-firestore-indexes.json` are READY in data project `orderfly-39325`. Use the existing additive workflow only after specific acceptance; do not replace/delete indexes. Its script does not apply fieldOverrides. Verify actual collection-group document-name query readiness separately before activation; unverified index operations are not authorized by this plan.
-- Existing denial policy evidence: issue139 comments5678232687 and6221153272. Confirm current deployed browser denial still covers all QR collections. No rules change is proposed.
+- Three additive composites in `docs/qr-firestore-indexes.json` are READY in data project `orderfly-39325` (verified: run 39691780053). Use only the additive workflow; never replace/delete indexes. The reserved `__name__` field cannot be configured; the retention sweep's document-name ordered collection-group queries must succeed read-only (verified: run 39725659082).
+- Existing denial policy evidence: issue139 comments5678232687 and6221153272. Confirm current deployed browser denial still covers all QR collections (verified live: anonymous 401, cross-origin 403, foreign brand 403). No rules change is involved.
 - Hosting is `orderfly-v21-10334086-b3076`, backend `studio`; it must continue using data project `orderfly-39325`.
 - A real native authorized production session is available without recording credentials in GitHub. Physical phone/print acceptance is separately documented.
 
-## Proposed controlled production acceptance
+## Controlled production acceptance (approved)
 
-Only after specific acceptance of this exact scenario and selected brand. First verify `/api/health` reports the reviewed deployed merge (or a later main containing it), before any production test record is created; repeat that release check after the scenario:
+Approved for this exact scenario and brand. First verify `/api/health` reports the reviewed deployed merge (or a later main containing it), before any production test record is created; repeat that release check after the scenario:
 
 1. Create one brand-wide QR via the authorized UI/API in existing Esmeralda brand `oeypKaMyYcQjIwaa1PtV`: name `QR release acceptance #389`, campaign `internal-release-389`, destination `https://example.com/qr-acceptance`. No customer/order/payment data is involved.
 2. Verify native stored record, immutable create audit/receipt, zero lifetime, and PNG decode to its permanent apex URL.
