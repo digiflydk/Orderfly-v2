@@ -20,6 +20,11 @@ function launch(command, args, childEnv, label, cwd = root) {
 (async () => {
   const firebase = process.env.QA0_FIREBASE_BIN, java = process.env.QA0_JAVA_BIN;
   if (!firebase || !java || !path.isAbsolute(firebase) || !path.isAbsolute(java) || !fs.existsSync(firebase) || !fs.existsSync(java)) throw Error('Provide explicit installed Firebase15.30 and Java21 binary paths');
+  if (process.env.QA0_CREDENTIAL_METADATA_PROOF !== undefined && process.env.QA0_CREDENTIAL_METADATA_PROOF !== 'true') throw Error('QA0 metadata proof mode rejected');
+  if (process.env.QA0_CREDENTIAL_METADATA_PROOF === 'true') {
+    env.QA0_CREDENTIAL_METADATA_PROOF = 'true';
+    env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED = 'false';
+  }
   // Next loads dotenv files independently of child env. Refuse them without reading secrets.
   for (const name of ['.env', '.env.local', '.env.development', '.env.development.local']) if (fs.existsSync(path.join(root, name))) throw Error('QA0 requires a checkout without dotenv files');
   const toolsEnv = { PATH: path.dirname(java) + path.delimiter + env.PATH, LANG: env.LANG, TZ: env.TZ, CI: 'true', FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true', FIREBASE_CLI_DISABLE_USAGE_REPORTING: 'true' };
