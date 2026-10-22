@@ -1,5 +1,18 @@
 # Stempelkort (Esmeralda Club)
 
+## Esmeraldas hjemmesidedesign på club-siderne (#386)
+
+Esmeraldas eksisterende kundeportal tilpasses direkte i Orderfly. Den flyttes ikke til Webflow, så login, host-only sessionscookie og versioneret samtykke fortsat bruger de eksisterende sider og API'er.
+
+- Reference: den publicerede `https://www.esmeraldapizza.dk/bordbooking`, inspiceret 2026-10-21. Hvidt logo på sort navigation, Bourton/Brandon, mørk formularflade, gyldne knapper og hjemmesidens navigationslinks/footer.
+- `src/app/[brandSlug]/club/portal-frame.tsx` viser Esmeraldas fulde ramme, en formularflade og en informationskolonne. Kortet efter login beholder en smallere visning. Antal stempler og belønningstekst kommer fra programmet.
+- `esmeralda-club.css` afgrænser designet til Esmeraldas portal og footer. Andre brands beholder den kompakte portalramme. Webshoppen og admin får ikke club-styles.
+- Navigation til hjemmesiden bruger absolutte `esmeraldapizza.dk`-links. Interne club-links bruger den eksisterende `portalBase`, så sessionen bliver på samme host. På mobil bruges en tastaturbetjenelig menu uden nyt script eller tracking.
+- `BrandLayoutClient` vælger Esmeralda-footeren kun på Esmeraldas club-stier. Cookieindstillinger åbner stadig det eksisterende samtykkepanel. Der vises fortsat kun én `main`.
+- Formularernes validering, login-token, afkrydsninger, samtykkeversioner, fejlbeskeder og neutrale svar ændres ikke.
+
+Verifikation: portalens browser-fixture renderer den faktiske ramme og de eksisterende formularer. Den dækker 320/390/820/1440 px, mobilmenu, links, formularfarver, cookieknap, ingen utilsigtede API-kald og et andet brand, foruden de eksisterende login/tilmelding/QR/profil-regressioner. Fixture er ikke produktions-live-QA. Efter deployment kontrolleres release-SHA og login/tilmelding visuelt samt ufuldstændig formular uden at sende mail eller oprette et medlem.
+
 Specifikationer: [fase 1](fase-1-stempelkort-backend.md), [fase 2](fase-2-stempelkort-kundeportal.md) og [fase 3](fase-3-stempelkort-merchantportal.md).
 Godkendt analyse og plan: [fase 1](fase-1-analyse-og-plan.md), [fase 2](fase-2-analyse-og-plan.md) og [fase 3](fase-3-analyse-og-plan.md) (fase 3 bygges parallelt med fase 2 efter PM-beslutning 2026-10-17).
 
@@ -298,3 +311,12 @@ Alle tre PR'er er merget, men **fase 2 er ikke accepteret endnu**. Planen (C7) k
 - **Skilt til disken:** [skilt-qr-tilmelding.svg](skilt-qr-tilmelding.svg) er en QR-kode til `https://esmeralda.orderfly.dk/club/tilmeld` med høj fejlkorrektion, klar til tryk. Den virker først, når `*.orderfly.dk` er sat op.
 
 **Test:** `tests/unit/loyalty-portal-pages.cjs` (stier, tekster, datoer, brandudseende og serverlæsning) og `tests/unit/loyalty-portal-browser.cjs` (tilmelding, login, links fra mailen, tracking, kortet QR-kodens fornyelse, udløb, offline og forkert ur, profil, sletning, menu og hjemmeskærm-vejledningen i Chromium ved 390 og 1440 px). `loyalty-portal-pages.cjs` dækker også historiktekster, manifest, ikoner og skilt-QR'en.
+
+### Esmeraldas medlemsvisning efter login (#453)
+Medlemskort, QR, belønninger, historik og profil følger nu også restaurantens mørke/gyldne design. Kort og QR står side om side på større skærme og under hinanden på mobil. Den aktive medlemsfane er gylden; stempelantal og fremdrift kommer fortsat fra kortets snapshot. QR-feltet beholder sort kode på hvid baggrund og eksisterende quiet zone, udløb og fornyelse. Andre brands beholder den kompakte præsentation.
+
+`historik/history-view.tsx` er kun præsentation. Server-siden foretager stadig samme medlemskontrol og redirect, og der tilføjes ingen API- eller trackingkald. Profilens samtykke, logout og sletningsbekræftelse er uændrede.
+
+Browserregressioner bruger de faktiske komponenter og syntetiske svar: medlemskort/historik/profil ved 320/390/820/1440 px, ti stempler på smal skærm, tom historik, aktiv navigation, QR-kontrast, brand-isolation samt de eksisterende QR-, samtykke- og fejlforløb. Dette er isolerede browsertests, ikke produktionsdata- eller fysisk hardwareaccept.
+
+Live acceptance efter verificeret deployet release: log ind med autoriseret eksisterende medlemskonto, gennemgå Kort, Historik og Profil read-only, kontroller korrekt data og navigation samt QR-område uden at offentliggøre kode/token eller medlemsoplysninger. Undlad samtykkeændring, sletning og tildeling/indløsning af stempler. Engangs-loginlinks og QR-payloads må aldrig gemmes i GitHub eller screenshots. Autentificeret live acceptance skal dokumenteres særskilt før #453 lukkes.

@@ -1,5 +1,6 @@
 import 'server-only';
 import * as admin from 'firebase-admin';
+import { localQaEnvironment } from './local-qa-environment';
 
 type ServiceAccount = {
 	project_id: string;
@@ -11,6 +12,7 @@ const ADMIN_APP_NAME = 'orderfly-production-data';
 
 let adminApp: admin.app.App | null = null;
 let initError: Error | null = null;
+let localQaDb: admin.firestore.Firestore | null = null;
 
 function loadServiceAccount(): ServiceAccount | null {
 	const raw =
@@ -61,6 +63,10 @@ function loadServiceAccount(): ServiceAccount | null {
 }
 
 function initializeAdminApp(): admin.app.App {
+	const local = localQaEnvironment();
+	if (local) return admin.initializeApp({ projectId: local.projectId,
+		credential: { getAccessToken: async () => ({ access_token: 'owner', expires_in: 3600 }) },
+	}, 'orderfly-local-qa0');
 	if (initError) {
 		throw initError;
 	}
@@ -87,20 +93,32 @@ function initializeAdminApp(): admin.app.App {
 }
 
 export function getAdminApp(): admin.app.App {
+	const local = localQaEnvironment();
 	if (adminApp) {
+		if (adminApp.name !== (local ? 'orderfly-local-qa0' : ADMIN_APP_NAME)
+			|| local && adminApp.options.projectId !== local.projectId) throw new Error('Firebase runtime scope changed');
 		return adminApp;
 	}
 
 	const existingApp = admin.apps.find(
-		(app) => app?.name === ADMIN_APP_NAME,
+		(app) => app?.name === (local ? 'orderfly-local-qa0' : ADMIN_APP_NAME),
 	);
 
+	if (local && existingApp && existingApp.options.projectId !== local.projectId) throw new Error('Firebase runtime scope changed');
 	adminApp = existingApp ?? initializeAdminApp();
 
 	return adminApp;
 }
 
 export function getAdminDb(): admin.firestore.Firestore {
+	const local = localQaEnvironment();
+	if (local) {
+		// Explicit unusable credentials prevent ADC fallback; insecure emulator gRPC
+		// never authenticates against Google. The launcher blocks all non-loopback I/O.
+		return localQaDb ??= new admin.firestore.Firestore({ projectId: local.projectId,
+			host: local.firestoreHost, ssl: false,
+			credentials: { client_email: 'qa0@demo-orderfly-qa0.invalid', private_key: 'LOCAL_EMULATOR_ONLY_NOT_A_PRIVATE_KEY' } });
+	}
 	return getAdminApp().firestore();
 }
 

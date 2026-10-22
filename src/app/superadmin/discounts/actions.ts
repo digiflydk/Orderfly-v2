@@ -23,7 +23,7 @@ const discountSchema = z.object({
   id: z.string().optional(),
   brandId: z.string().min(1, 'A brand must be selected.'),
   locationIds: z.array(z.string()).min(1, 'At least one location must be selected.'),
-  applicationType: z.enum(['code', 'newsletter_signup']).default('code'),
+  applicationType: z.enum(['code', 'newsletter_signup', 'club_signup']).default('code'),
   code: z.string().transform(v => v.trim().toUpperCase()),
   description: z.string().optional(),
   discountType: z.enum(['percentage', 'fixed_amount']),
@@ -42,8 +42,8 @@ const discountSchema = z.object({
   allowStacking: z.boolean().default(false),
 }).superRefine((data, ctx) => {
   if (data.discountType === 'percentage' && data.discountValue > 100) ctx.addIssue({ code: 'custom', path: ['discountValue'], message: 'Procentrabatten må højst være 100 %.' });
-  if (data.applicationType === 'code' && data.code === 'NEWSLETTER_SIGNUP') {
-    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['code'], message: 'Indtast en rabatkode. NEWSLETTER_SIGNUP er reserveret til nyhedsbrevsrabatter.' });
+  if (data.applicationType === 'code' && ['NEWSLETTER_SIGNUP', 'CLUB_SIGNUP'].includes(data.code)) {
+    ctx.addIssue({ code: z.ZodIssueCode.custom, path: ['code'], message: 'Indtast en rabatkode. NEWSLETTER_SIGNUP og CLUB_SIGNUP er reserveret til tilmeldingskampagner.' });
   }
   if (data.applicationType === 'code' && data.code.length < 3) {
     ctx.addIssue({
@@ -73,7 +73,7 @@ export async function createOrUpdateDiscount(
         applicationType: formData.get('applicationType') || 'code',
         code: formData.get('applicationType') === 'newsletter_signup'
           ? 'NEWSLETTER_SIGNUP'
-          : formData.get('code'),
+          : formData.get('applicationType') === 'club_signup' ? 'CLUB_SIGNUP' : formData.get('code'),
         description: formData.get('description') === null ? undefined : String(formData.get('description')),
         discountType: formData.get('discountType'),
         discountValue: formData.get('discountValue'),

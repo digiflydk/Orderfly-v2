@@ -12,6 +12,32 @@ import { scratchCardDraftSchema } from '@/lib/games/scratch-card';
 import { orderflySession } from '@/lib/access/orderfly-session';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import type { RestaurantPaymentForm } from '@/lib/merchant-payment-methods';
+import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
+import type { KitchenOrder } from '@/lib/printing/domain';
+import { verifyStripePrintPayment, prepareStripePrintTransition, stripePrintTransitionProjection,
+  type StripePrintPaymentProof, type StripePrintTransition } from '@/lib/printing/stripe-transition-proof';
+import { preparePrintIntentTargetPolicy } from '@/lib/printing/intent-target-policy';
+import { projectNativePrintCatalog } from '@/lib/printing/catalog-line-projection';
+import { prepareSavedPrinterRouting } from '@/lib/printing/saved-routing';
+import { previewPrinterRouting } from '@/lib/printing/routing-preview';
+import { prepareStripeSettlementPrintIntents } from '@/lib/printing/outbox';
+
+/** Minted only by the private ACTUAL financial plan, never by an origin/DTO caller. */
+export type StripeSettlementPrintCapability = Readonly<{ readonly stripeSettlementPrintCapability: unique symbol }>;
+const stripeSettlementPlans = new WeakMap<object, { context: NativeTransactionContext;
+  transition: StripePrintTransition; order: Readonly<KitchenOrder>; writeCount: number; financialApplied: boolean }>();
+/** Fixed read/assert boundary for the outbox. No mint or mutation callback is exported.
+ * Applied means financial mutations queued in THIS transaction, not committed yet.
+ */
+export function readStripeSettlementPrintCapability(context: NativeTransactionContext, capability: StripeSettlementPrintCapability, requireApplied = false) {
+  const entry = capability && typeof capability === 'object' ? stripeSettlementPlans.get(capability) : undefined;
+  if (!entry || entry.context !== context || context.db !== getAdminDb() || (requireApplied && !entry.financialApplied)) throw new Error('Unverified settlement print capability');
+  const proof = stripePrintTransitionProjection(context, entry.transition); // Irreversible lifetime check.
+  if (proof.order.id !== entry.order.id || proof.order.brandId !== entry.order.brandId || proof.order.locationId !== entry.order.locationId) throw new Error('Settlement print scope mismatch');
+  return Object.freeze({ order: entry.order, writeCount: entry.writeCount + (proof.replay ? 0 : 1),
+    replay: proof.replay, financialApplied: entry.financialApplied });
+}
+
 
 // Only call with a signed webhook or a session retrieved server-to-server from Stripe.
 export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session) {
@@ -28,6 +54,10 @@ export async function settlePaidPickupOrder(orderId: string, method: RestaurantP
   return settleOrder({ kind: 'pickup', orderId, method, actor });
 }
 
+const isTerminalPaidReplay = (order: { paymentStatus?: unknown; status?: unknown } | undefined) =>
+  order?.paymentStatus === 'Paid' && typeof order.status === 'string'
+  && ['Completed', 'Delivered', 'Error', 'Canceled'].includes(order.status);
+
 type PaymentProof = { kind: 'stripe'; session: Stripe.Checkout.Session }
   | { kind: 'pickup'; orderId: string; method: RestaurantPaymentForm; actor: Awaited<ReturnType<typeof orderflySession>> };
 async function settleOrder(proof: PaymentProof) {
@@ -42,9 +72,23 @@ async function settleOrder(proof: PaymentProof) {
   const piId = session ? typeof session.payment_intent === 'string' ? session.payment_intent : session.payment_intent?.id : undefined;
   let analytics: OrderDetail['analytics'];
   const issuedAt = new Date().toISOString();
+  // Disabled installations retain the old settlement path without print reads or
+  // an extra provider request. Native policy is authoritative whenever enabled.
+  const printIntentsEnabled = !!session && process.env.ORDERFLY_PRINT_INTENTS_ENABLED === 'true';
+  let stripePrintProof: StripePrintPaymentProof | undefined;
+  if (printIntentsEnabled) {
+    const needsPrintProof = await db.runTransaction(async transaction => {
+      // Terminal Paid repair has no print dependency, including stale policy or targets.
+      if (isTerminalPaidReplay((await transaction.get(orderRef)).data())) return false;
+      const preflight = await preparePrintIntentTargetPolicy({ db, transaction }, { brandId: metadata.brandId, locationId: metadata.locationId });
+      return preflight.enabled;
+    }, { readOnly: true });
+    if (needsPrintProof) stripePrintProof = await verifyStripePrintPayment(session!.id);
+  }
   // Private plan owns the actual settlement writes. Nothing supplied by a caller
   // can replace the mutation, projected state or apply callback. Rebuilt on retry.
-  const prepareSettlement = async (transaction: Transaction) => {
+  const prepareSettlement = async (context: NativeTransactionContext, transition?: StripePrintTransition) => {
+    const transaction: Transaction = context.transaction;
     const writes: Array<() => void> = [];
     let writeCount = 0;
     const addWrite = (apply: () => void, count = 1) => {
@@ -53,11 +97,23 @@ async function settleOrder(proof: PaymentProof) {
     };
     const finish = (fulfilled: boolean) => {
       if (!Number.isSafeInteger(writeCount) || writeCount < 0 || writeCount > 500) throw new Error('Settlement write budget exceeded');
+      let capability: StripeSettlementPrintCapability | undefined;
+      if (transition) {
+        const projection = stripePrintTransitionProjection(context, transition);
+        const expectedStatus = order.status === 'Pending' ? 'Received' : order.status;
+        if (proof.kind !== 'stripe' || projection.order.id !== orderSnap.id || projection.order.brandId !== order.brandId
+          || projection.order.locationId !== order.locationId || projection.order.status !== expectedStatus
+          || projection.order.paymentMethod !== order.paymentMethod || projection.order.deliveryType !== order.deliveryType
+          || projection.replay !== !fulfilled || (fulfilled ? order.paymentStatus !== 'Pending' : order.paymentStatus !== 'Paid')) throw new Error('Settlement print transition mismatch');
+        capability = Object.freeze({}) as StripeSettlementPrintCapability;
+        stripeSettlementPlans.set(capability, { context, transition, order: projection.order, writeCount, financialApplied: false });
+      }
       let applied = false;
-      return Object.freeze({ fulfilled, writeCount, apply: () => {
+      return Object.freeze({ fulfilled, writeCount, capability, apply: () => {
         if (applied) throw new Error('Settlement plan already applied');
         applied = true;
         for (const write of writes) write();
+        if (capability) stripeSettlementPlans.get(capability)!.financialApplied = true;
       } });
     };
     const orderSnap = await transaction.get(orderRef);
@@ -192,10 +248,47 @@ async function settleOrder(proof: PaymentProof) {
     return finish(true);
   };
   const fulfilled = await db.runTransaction(async transaction => {
-    const prepared = await prepareSettlement(transaction);
-    // The future closed print adapter must finish its reads and reserve this
-    // exact writeCount here, before either plan writes. No print callsite yet.
+    const context: NativeTransactionContext = Object.freeze({ db, transaction });
+    // Inspect the current order before any policy/target reads on every SDK attempt.
+    // Terminal Paid repair must survive malformed policy and never backfill intent.
+    const policy = printIntentsEnabled && !isTerminalPaidReplay((await transaction.get(orderRef)).data())
+      ? await preparePrintIntentTargetPolicy(context, { brandId: metadata.brandId, locationId: metadata.locationId }) : null;
+    const printTransitionEnabled = policy?.enabled;
+    if (printTransitionEnabled && !stripePrintProof) throw new Error('Print policy changed; verified payment origin required');
+    const transition = printTransitionEnabled ? await prepareStripePrintTransition(context, stripePrintProof!) : undefined;
+    const prepared = await prepareSettlement(context, transition);
+    let printPlan: Awaited<ReturnType<typeof prepareStripeSettlementPrintIntents>> | undefined;
+    if (printTransitionEnabled && policy) {
+      if (!prepared.capability) throw new Error('Missing private settlement print capability');
+      const [catalog, saved] = await Promise.all([
+        projectNativePrintCatalog(context, { orderId: metadata.orderId, brandId: metadata.brandId, locationId: metadata.locationId }),
+        prepareSavedPrinterRouting(context, { brandId: metadata.brandId, locationId: metadata.locationId }),
+      ]);
+      if (saved.revision === null || !saved.rules.length) throw new Error('Saved printer routing required');
+      const routing = previewPrinterRouting({ scope: catalog.scope, deliveryType: catalog.deliveryType, lines: catalog.lines,
+        rules: saved.rules, printers: saved.printers.map(row => ({ configuration: row.configuration, deleted: false })) });
+      if (routing.unrouted.length || !routing.targets.length) throw new Error('Order has unrouted print lines');
+      const fingerprint = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
+      const manifestTargets: Array<{ printerId: string; printerRevision: number; configurationHash: string; kinds: Array<'kitchen' | 'packing'>; lineIds: string[] }> = [];
+      const intents = routing.targets.flatMap(target => {
+        const selected = policy.targets.find(row => row.configuration.id === target.printerId);
+        const current = saved.printers.find(row => row.configuration.id === target.printerId);
+        if (!selected || !current || selected.printerRevision !== current.revision) throw new Error('Routing target is not enabled by current print policy');
+        manifestTargets.push({ printerId: target.printerId, printerRevision: selected.printerRevision,
+          configurationHash: fingerprint(selected.configuration), kinds: [...selected.kinds].sort(), lineIds: target.lines.map(line => line.lineId) });
+        return selected.kinds.map(kind => ({ brandId: metadata.brandId, locationId: metadata.locationId,
+          orderId: metadata.orderId, printerId: target.printerId, kind }));
+      });
+      printPlan = await prepareStripeSettlementPrintIntents(context, prepared.capability, { intents, identity: {
+        schemaVersion: 1, id: 'original', orderId: metadata.orderId, brandId: metadata.brandId, locationId: metadata.locationId,
+        originalRevision: 0, policyRevision: policy.policyRevision, routingRevision: saved.revision,
+        rulesHash: fingerprint(saved.rules), catalogHash: fingerprint(catalog), targets: manifestTargets,
+      } });
+    }
+    // Every native read is complete before either plan writes. The outbox's
+    // intrinsic capability check requires this exact financial plan to apply.
     prepared.apply();
+    printPlan?.apply();
     return prepared.fulfilled;
   });
   if (fulfilled && session) {
