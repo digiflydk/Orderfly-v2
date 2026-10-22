@@ -380,5 +380,11 @@ route compile and exceeded the one-second bound, and detaching ends the
 session's debugger state without them. All one-second bounds, maximum16 pauses,
 first-failure preservation, fail-closed behavior, closing checks and original
 assertions remain unchanged. Modeled regressions cover resume-before-detach and
-the navigation case; the full browser/native/two-pass acceptance is shown by
-real CI on the exact current head, not by the models.
+the navigation case; they do not establish the full browser/native/two-pass
+acceptance. Historical source `fd745db2916b3d807b25836c91eb7912ff115250`
+passed Orderfly CI run `39703472133`, including its real isolated browser proof
+step. That result belongs to the historical SHA only. The current candidate
+still requires its own successful exact-head CI run and completed independent
+review after publication; neither the historical run nor these models satisfies
+those current-head release gates. This paragraph does not claim production
+acceptance or borrow a separate native-only proof as browser evidence.

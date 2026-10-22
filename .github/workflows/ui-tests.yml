@@ -205,6 +205,9 @@ jobs:
       - name: Club campaign service and browser regressions
         run: node --test --test-concurrency=1 tests/unit/loyalty-campaign-bonus.cjs tests/unit/loyalty-campaign-admin.cjs tests/unit/loyalty-club-signup-integration.cjs tests/unit/loyalty-profile.cjs tests/unit/club-promotion-rules.cjs tests/unit/club-checkout.cjs tests/unit/checkout-availability.cjs tests/unit/loyalty-benefits-browser.cjs tests/unit/loyalty-campaign-admin-browser.cjs tests/unit/loyalty-profile-browser.cjs
 
+      - name: Esmeralda homepage Club promotion browser regressions
+        run: node --test tests/unit/club-homepage-browser.cjs
+
       - name: Build
         run: npm run build
 
