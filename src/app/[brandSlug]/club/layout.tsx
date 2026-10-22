@@ -18,6 +18,7 @@ export async function generateMetadata({ params }: Omit<Props, 'children'>): Pro
     title: program.name,
     // Personal pages and one-time login links are kept out of search engines.
     robots: { index: false, follow: false },
+    referrer: 'no-referrer',
     // "Tilføj til hjemmeskærm" (spec §4.6) with the brand's name and icon.
     manifest: `${base}/manifest.webmanifest`,
     icons: { apple: `${base}/ikon/180` },
