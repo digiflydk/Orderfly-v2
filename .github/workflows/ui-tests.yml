@@ -134,6 +134,9 @@ jobs:
       - name: Native and compatibility transaction bridge regression
         run: node --test tests/unit/firestore-compat-transaction.cjs
 
+      - name: Atomic Stripe routed print-intent integration
+        run: node --test tests/unit/printing-stripe-settlement-integration.cjs
+
       - name: Private settlement preparation regression
         run: node --test tests/unit/settlement-preparation.cjs
 
