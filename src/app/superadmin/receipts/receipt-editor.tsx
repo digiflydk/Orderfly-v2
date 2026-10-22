@@ -108,7 +108,7 @@ export function ReceiptEditor({ brands, initialBrandId, testModel, testPaperWidt
       <p className="mt-2 text-sm text-muted-foreground">Tilpas kvitteringens onlinevisning pr. brand. Forhåndsvisningen opdateres med det samme; ændringer gemmes først, når du trykker Gem. Indstillingerne ændrer endnu ikke fysiske kundeudskrifter.</p>
     </header>
     {!brands.length ? <p>Der er ingen brands tilgængelige.</p> : <>
-      <label className="block max-w-md text-sm font-medium">Brand<select className={inputClass} value={brandId} disabled={saving} onChange={event => {
+      <label className="block max-w-md text-sm font-medium">Brand<select aria-label="Brand" className={inputClass} value={brandId} disabled={saving} onChange={event => {
         if (!discardAllowed()) return;
         ++generation.current; setSaved(null); setLoading(true); setBrandId(event.target.value);
       }}>{brands.map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label>
@@ -120,7 +120,7 @@ export function ReceiptEditor({ brands, initialBrandId, testModel, testPaperWidt
         <section className="min-w-0 rounded-lg border p-4" aria-labelledby="receipt-fields">
           <h2 id="receipt-fields" className="text-lg font-semibold">Bonoplysninger</h2>
           <fieldset className="mt-4 space-y-4" disabled={saving || blocked}>
-            <label className="block text-sm font-medium">Papirbredde<select className={inputClass} value={draft.paperWidthMm} onChange={event => edit('paperWidthMm', Number(event.target.value) as 58 | 80)}><option value={58}>58 mm</option><option value={80}>80 mm</option></select></label>
+            <label className="block text-sm font-medium">Papirbredde<select aria-label="Papirbredde" className={inputClass} value={draft.paperWidthMm} onChange={event => edit('paperWidthMm', Number(event.target.value) as 58 | 80)}><option value={58}>58 mm</option><option value={80}>80 mm</option></select></label>
             <label className="block text-sm font-medium">Overskrift<input className={inputClass} maxLength={80} value={draft.heading} onChange={event => edit('heading', event.target.value)} /></label>
             <label className="block text-sm font-medium">Adresse<textarea className={inputClass} maxLength={160} value={draft.address} onChange={event => edit('address', event.target.value)} /></label>
             <label className="block text-sm font-medium">Telefon<input className={inputClass} maxLength={40} value={draft.phone} onChange={event => edit('phone', event.target.value)} /></label>

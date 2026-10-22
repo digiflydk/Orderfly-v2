@@ -31,7 +31,7 @@ export function TestBonPreview({ model = 'mc-print3', paperWidthMm = 80 }: {
     <h2 className="text-lg font-semibold">Printerens faste testbon</h2>
     <p className="text-sm text-muted-foreground">Samme billede som i printertesten. Visningen sender intet til printeren. Kvitteringsindstillingerne ændrer ikke denne testbon; papirfremføring og fysisk kvalitet kontrolleres ved et rigtigt testprint.</p>
     <label className="flex flex-col gap-2 text-sm">Printer og papirbredde
-      <select className="rounded-md border bg-background p-2" value={profile} onChange={event => setProfile(event.target.value)}>
+      <select aria-label="Printer og papirbredde" className="rounded-md border bg-background p-2" value={profile} onChange={event => setProfile(event.target.value)}>
         <option value="mc-print2:58">Star mC-Print2 · 58 mm</option>
         <option value="mc-print3:58">Star mC-Print3 · 58 mm</option>
         <option value="mc-print3:80">Star mC-Print3 · 80 mm</option>

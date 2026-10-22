@@ -59,7 +59,7 @@ test('receipt editor: explicit scoped saves, conflict recovery, unknown outcomes
   await expect(page.getByLabel('Overskrift', { exact: true })).toHaveValue('Kvittering');
   await expect(save).toBeDisabled(); assert.equal(writes.length, 0);
   await page.getByLabel('Overskrift', { exact: true }).fill('Velkommen');
-  await page.getByLabel('Papirbredde').selectOption('58');
+  await page.getByLabel('Papirbredde', { exact: true }).selectOption('58');
   await page.getByLabel('Kundens navn', { exact: true }).check();
   const preview = page.getByRole('article', { name: 'Forhåndsvisning af kvittering' });
   await expect(preview).toContainText('Eksempelkunde');
