@@ -2,7 +2,8 @@ import 'server-only';
 import { z } from 'zod';
 import { FieldValue, type Firestore, type Transaction } from 'firebase-admin/firestore';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
-import type { StripeSettlementPrintCapability, readStripeSettlementPrintCapability } from '@/lib/server/settle-checkout';
+import type { StripeSettlementPrintCapability } from '@/lib/server/settle-checkout';
+import type { PickupAcceptanceCapability } from '@/lib/server/accept-pickup-checkout';
 import { kitchenPrintIntentEligibility, printJobId, type KitchenOrder } from './domain';
 import { storedPrinterSchema } from './storage';
 import { storedPrintQueueSchema as queueSchema, storedQueuedPrintJobSchema as jobSchema, PRINT_QUEUE_LIMIT } from './queue-storage';
@@ -64,13 +65,30 @@ export async function prepareOriginalPrintIntents(db: Firestore, tx: Transaction
   return prepareBatch(db, tx, input);
 }
 
-type SettlementAuthority = { context: NativeTransactionContext; capability: StripeSettlementPrintCapability;
-  read: typeof readStripeSettlementPrintCapability; manifestTargets: ReadonlyArray<z.infer<typeof manifestTargetSchema>> };
+type OriginalAuthority<C extends object = object> = { context: NativeTransactionContext; capability: C;
+  read: (context: NativeTransactionContext, capability: C, requireApplied?: boolean) => Readonly<{ order: Readonly<KitchenOrder>; writeCount: number; replay: boolean }>; manifestTargets: ReadonlyArray<z.infer<typeof manifestTargetSchema>>; freshOnly?: boolean };
 /** Closed Stripe path: the fixed financial writer alone can mint this capability.
  * Lazy fixed import preserves module identity without an eager circular dependency.
  */
 export async function prepareStripeSettlementPrintIntents(context: NativeTransactionContext, capability: StripeSettlementPrintCapability, input: unknown) {
   const read = (await import('@/lib/server/settle-checkout')).readStripeSettlementPrintCapability;
+  return prepareAuthorizedOriginals(context, capability, input, read);
+}
+
+/** Only the actual native unpaid acceptance writer can mint this capability.
+ * Reserve its two fixed writes and one canonical manifest create together.
+ */
+export async function preparePickupAcceptancePrintIntents(context: NativeTransactionContext, capability: PickupAcceptanceCapability, input: unknown) {
+  const reader = (await import('@/lib/server/accept-pickup-checkout')).readPickupAcceptanceCapability;
+  const read = (current: NativeTransactionContext, proof: PickupAcceptanceCapability, applied = false) => {
+    const value = reader(current, proof, applied);
+    return { ...value, writeCount: value.writeCount + 1 };
+  };
+  return prepareAuthorizedOriginals(context, capability, input, read, true);
+}
+
+async function prepareAuthorizedOriginals<C extends object>(context: NativeTransactionContext, capability: C, input: unknown,
+  read: OriginalAuthority<C>['read'], freshOnly = false) {
   const authority = read(context, capability);
   const raw = input as { intents?: unknown; identity?: { targets?: unknown } } | null;
   const targets = raw?.identity?.targets;
@@ -101,7 +119,7 @@ export async function prepareStripeSettlementPrintIntents(context: NativeTransac
   } else if (manifest.exists) throw new PrintOutboxError('job_conflict');
   // The private financial capability reserves its own writes plus exactly one
   // manifest create for a fresh transition. Replay can never create a manifest.
-  const plan = await prepareBatch(context.db, context.transaction, { intents: parsed.data.intents, reservedWriteCount: authority.writeCount }, { context, capability, read, manifestTargets: identity.targets });
+  const plan = await prepareBatch(context.db, context.transaction, { intents: parsed.data.intents, reservedWriteCount: authority.writeCount }, { context, capability, read, manifestTargets: identity.targets, freshOnly });
   return { ...plan, writeCount: plan.writeCount + (authority.replay ? 0 : 1), apply() {
     read(context, capability, true);
     if (!authority.replay) context.transaction.create(manifestRef, { ...identity, createdAt: now });
@@ -109,7 +127,7 @@ export async function prepareStripeSettlementPrintIntents(context: NativeTransac
   } };
 }
 
-async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, settlement?: SettlementAuthority) {
+async function prepareBatch<C extends object>(db: Firestore, tx: Transaction, input: unknown, settlement?: OriginalAuthority<C>) {
   const parsed = batchSchema.safeParse(input);
   if (!parsed.success) throw new PrintOutboxError('invalid_intent');
   const groups = new Map<string, Command[]>();
@@ -180,6 +198,7 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
         if (!prior || !target || prior.printerRevision !== target.printerRevision
           || prior.printerRevision !== config.data.revision) throw new PrintOutboxError('job_conflict');
       }
+      if (prior && settlement?.freshOnly) throw new PrintOutboxError('job_conflict');
       if (prior && (!current.success || prior.orderId !== c.orderId || prior.kind !== c.kind)) {
         throw new PrintOutboxError('job_conflict');
       }
