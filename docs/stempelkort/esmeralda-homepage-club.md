@@ -106,3 +106,5 @@ browser coverage, not provider receipt or production signup acceptance.
 Independent source review found one hidden-tab measurement bug: the impression
 was marked sent even when the enqueue was rejected. Marking now occurs only after
 actual enqueue. The fix and current source were independently rechecked.
+
+Live staging inspection found that `padding-global` also applies flex, centered italic text and a brown background through an existing combo. The Club wrappers therefore reuse `padding-section-medium` with local horizontal spacing, avoiding those unrelated styles. Actual staging computed styles must be checked after publish.

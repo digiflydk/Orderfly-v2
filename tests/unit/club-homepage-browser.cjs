@@ -8,7 +8,7 @@ const html = fs.readFileSync(path.join(root,'design/esmeralda-club-homepage.html
 const css = fs.readFileSync(path.join(root,'design/esmeralda-club-homepage.css'),'utf8');
 const js = fs.readFileSync(path.join(root,'design/esmeralda-club-popup.js'),'utf8');
 // Existing approved Webflow utility values, not promotion-specific typography.
-const shared = '.heading-style-h1{font-size:38px;line-height:1.1}.heading-style-h2{font-size:42px}.heading-style-h3{font-size:28px;line-height:1.2}.text-size-regular{font-size:16px;line-height:1.5}.padding-global{padding-left:5%;padding-right:5%}.padding-section-medium{padding-top:56px;padding-bottom:56px}.button{padding:14px 40px;font-size:16px;text-align:center}';
+const shared = '.heading-style-h1{font-size:38px;line-height:1.1}.heading-style-h2{font-size:42px}.heading-style-h3{font-size:28px;line-height:1.2}.text-size-regular{font-size:16px;line-height:1.5}.padding-global{display:flex;margin:60px 0;padding:0 3.25rem;justify-content:center;align-items:center;text-align:center}.padding-global.padding-section-medium{background:#2a1000}.padding-section-medium{padding-top:4rem;padding-bottom:4rem}.button{padding:14px 40px;font-size:16px;text-align:center}';
 let browser;
 before(async()=>{browser=await chromium.launch({headless:true,executablePath:process.env.CLUB_QA_CHROMIUM||undefined,args:['--no-sandbox']});});
 after(async()=>{await browser?.close();});
@@ -79,6 +79,8 @@ for(const width of [320,390,768,1440]) test(`responsive ${width}: no horizontal 
  assert.ok(dim.scroll<=dim.width,JSON.stringify(dim));assert.ok(dim.modal.width<=width);assert.ok(dim.modal.left>=0);
  assert.ok(dim.modal.top>=0);assert.equal(await page.getByRole('button',{name:'Luk Club-tilbud'}).isVisible(),true);
  assert.equal(await page.locator('#es-club-heading').evaluate(el=>getComputedStyle(el).fontSize),'38px');
+ assert.equal(await page.locator('.es-club-hero__inner').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
+ assert.notEqual(await page.locator('.es-club-hero__intro').evaluate(el=>getComputedStyle(el).textAlign),'center');
  for(const selector of ['.es-club-hero__intro','.es-club-fineprint','.es-club-popup__text'])
   assert.equal(await page.locator(selector).first().evaluate(el=>getComputedStyle(el).fontSize),'16px');
  await page.getByRole('button',{name:'Måske senere'}).click();assert.equal(await page.locator('dialog[open]').count(),0);await context.close();
