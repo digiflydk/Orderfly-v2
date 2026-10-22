@@ -37,6 +37,7 @@ export async function loadQrWorkspace() {
  const brands:Array<{id:string;name:string;allowWholeBrand:boolean;locations:Array<{id:string;name:string}>}>=[],codes:ReturnType<typeof qrSummary>[]=[];
  const analyticsGrants=session.superuser?null:await orderflyReadGrants(permission('analytics')).catch(error=>{if(error instanceof AuthorityError&&error.status===403)return [];throw error;});
  const allTime:Record<string,QrLifetime|null>={};
+ const analyticsCodeKeys=new Set<string>();
  let truncated=false;
  for(const grant of grants){
   const brand=await db.collection('brands').doc(grant.brandId).get();
@@ -50,6 +51,9 @@ export async function loadQrWorkspace() {
   for(const locationId of [...(grant.locationIds===null?[null]:[]),...locations.map(l=>l.id)]){
    const result=await store.list(scope,{locationId});truncated ||= result.truncated;
    codes.push(...result.rows.map(qrSummary));
+   for(const row of result.rows){
+    if(session.superuser||analyticsGrants?.some(g=>g.brandId===row.brandId&&(g.locationIds===null||row.locationId!==null&&g.locationIds.includes(row.locationId))))analyticsCodeKeys.add(`${row.brandId}/${row.id}`);
+   }
    if(session.superuser||analyticsGrants?.some(g=>g.brandId===grant.brandId&&g.locationIds===null)){
     for(const row of result.rows){
      const saved=(row as unknown as {lifetime?:unknown}).lifetime;
@@ -65,7 +69,7 @@ export async function loadQrWorkspace() {
   try{return (await orderflyReadGrants(permission(action))).length>0;}catch(error){if(error instanceof AuthorityError&&error.status===403)return false;throw error;}
  };
  const [create,edit,archive,exportCodes,analytics]=await Promise.all(['create','edit','archive','export','analytics'].map(a=>allowed(a as QrAction)));
- return {brands,codes,allTime,capabilities:{create,edit,archive,export:exportCodes},analytics,truncated,dynamicEnabled:process.env.QR_MODULE_ENABLED==='true'};
+ return {brands,codes,allTime,analyticsCodeKeys:[...analyticsCodeKeys].filter(key=>codes.some(code=>`${code.brandId}/${code.id}`===key)),capabilities:{create,edit,archive,export:exportCodes},analytics,truncated,dynamicEnabled:process.env.QR_MODULE_ENABLED==='true'};
 }
 
 export async function executeQrCommand(command:unknown) {

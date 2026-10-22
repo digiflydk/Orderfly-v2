@@ -12,7 +12,7 @@ import type { QrScanAttribution } from '@/lib/qr/analytics';
 import type { QrMetrics } from '@/lib/qr/metrics';
 import type { QrLifetime } from '@/lib/qr/lifetime';
 
-export type QrWorkspaceData = { brands: QrBrandChoice[]; codes: QrCodeSummary[]; capabilities: QrCapabilities; analytics: boolean; truncated: boolean; dynamicEnabled?: boolean; allTime?: Record<string, QrLifetime | null> };
+export type QrWorkspaceData = { brands: QrBrandChoice[]; codes: QrCodeSummary[]; capabilities: QrCapabilities; analytics: boolean; analyticsCodeKeys?: string[]; truncated: boolean; dynamicEnabled?: boolean; allTime?: Record<string, QrLifetime | null> };
 type RenderFile = { content: string; mime: string; encoding?: 'base64' | 'utf8' | 'utf-8'; filename: string };
 type AnalyticsResult = { metrics: QrMetrics; complete: boolean; currentLocationOnly: boolean; attribution?: QrScanAttribution };
 const codeKey = (code: { brandId: string; id: string }) => `${code.brandId}/${code.id}`;
@@ -25,6 +25,7 @@ function isSummary(value: unknown): value is QrCodeSummary {
 }
 function isWorkspace(value: unknown): value is QrWorkspaceData {
   if (!object(value) || !Array.isArray(value.codes) || !value.codes.every(isSummary) || !Array.isArray(value.brands) || !object(value.capabilities)
+    || value.analyticsCodeKeys !== undefined && (!Array.isArray(value.analyticsCodeKeys) || !value.analyticsCodeKeys.every(key => typeof key === 'string'))
     || typeof value.analytics !== 'boolean' || typeof value.truncated !== 'boolean') return false;
   return ['create', 'edit', 'archive', 'export'].every(key => typeof (value.capabilities as Record<string, unknown>)[key] === 'boolean')
     && value.brands.every(brand => object(brand) && typeof brand.id === 'string' && typeof brand.name === 'string' && Array.isArray(brand.locations)
@@ -215,7 +216,7 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
     {<nav aria-label="QR-modul" className="flex flex-wrap gap-2 rounded-xl border bg-white p-2 shadow-sm"><button type="button" aria-current={tab === 'manage' ? 'page' : undefined} className="rounded-lg px-4 py-2 text-sm font-semibold aria-[current=page]:bg-slate-800 aria-[current=page]:text-white" onClick={() => setTab('manage')}>Administration</button>{data.analytics && <button type="button" aria-current={tab === 'analytics' ? 'page' : undefined} className="rounded-lg px-4 py-2 text-sm font-semibold aria-[current=page]:bg-slate-800 aria-[current=page]:text-white" onClick={() => setTab('analytics')}>Statistik</button>}{bulkAllowed && <button type="button" aria-current={tab === 'bulk' ? 'page' : undefined} className="rounded-lg px-4 py-2 text-sm font-semibold aria-[current=page]:bg-slate-800 aria-[current=page]:text-white" onClick={() => setTab('bulk')}>CSV-import</button>}<button type="button" aria-current={tab === 'history' ? 'page' : undefined} className="rounded-lg px-4 py-2 text-sm font-semibold aria-[current=page]:bg-slate-800 aria-[current=page]:text-white" onClick={() => setTab('history')}>Historik</button></nav>}
     {data.truncated && <p role="alert">Oversigten er ufuldstændig. Flere QR-koder findes end de viste. Søgning og filtre gælder kun de indlæste koder.</p>}
     {refreshError && <p role="alert">Ændringen er gemt, men oversigten kunne ikke genindlæses. Den bekræftede kode er bevaret. Genindlæs siden for en ny oversigt.</p>}
-    <div hidden={tab !== 'manage'}><QrManager brands={data.brands} initialCodes={data.codes} capabilities={data.capabilities} api={api} dynamicEnabled={data.dynamicEnabled === true} allTime={data.analytics ? data.allTime : undefined} onAnalytics={data.analytics ? code => { setTab('analytics'); void loadAnalytics({ ...filters, qrId: codeKey(code), campaign: '', placement: '' }); } : undefined}
+    <div hidden={tab !== 'manage'}><QrManager brands={data.brands} initialCodes={data.codes} capabilities={data.capabilities} api={api} dynamicEnabled={data.dynamicEnabled === true} allTime={data.analytics ? data.allTime : undefined} analyticsCodeKeys={data.analyticsCodeKeys} onAnalytics={data.analytics ? code => { if (!dataRef.current.analyticsCodeKeys?.includes(codeKey(code))) return; setTab('analytics'); void loadAnalytics({ ...filters, qrId: codeKey(code), campaign: '', placement: '' }); } : undefined}
       renderExtras={(draft, context) => <QrPrintTools key={JSON.stringify([draft, context])} draft={draft} context={context} render={renderPrint} />} /></div>
     <div hidden={tab !== 'bulk' || !bulkAllowed}><QrBulkTools brands={data.brands} api={bulkApi} onCommitted={afterBulk} disabled={!bulkAllowed} /></div>
     {tab === 'history' && <QrHistory codes={data.codes.map(code => ({ id: codeKey(code), name: `${data.brands.find(brand => brand.id === code.brandId)?.name || code.brandId} · ${code.name}` }))} load={loadHistory} />}

@@ -12,7 +12,7 @@ const root = process.cwd();
 const componentDir = path.join(root, 'src/app/superadmin/qr-codes');
 const transpile = source => ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
 const base = { name: 'Bord 1', brandId: 'b1', locationId: 'l1', kind: 'dynamic', destination: 'https://example.com/menu', staticType: 'url', fields: {}, campaign: 'Oktober', tags: [], utm: { source: '', medium: 'qr', campaign: '', content: '', term: '' }, id: 'qr1', revision: '1', status: 'active' };
-const initial = { brands: [{ id: 'b1', name: 'Esmeralda', locations: [{ id: 'l1', name: 'Amager' }] }], codes: [base], capabilities: { create: true, edit: true, archive: true, export: true }, analytics: true, truncated: false, dynamicEnabled: true };
+const initial = { brands: [{ id: 'b1', name: 'Esmeralda', locations: [{ id: 'l1', name: 'Amager' }] }], codes: [base], capabilities: { create: true, edit: true, archive: true, export: true }, analytics: true, analyticsCodeKeys: ['b1/qr1','b2/qr1','b1/legacy','b1/zero'], truncated: false, dynamicEnabled: true };
 const metrics = { from: Date.parse('2026-10-20T22:00:00Z'), to: Date.parse('2026-10-21T22:00:00Z'), timezone: 'Europe/Copenhagen', totalOpenings: 4, probableScans: 3, excludedOpenings: 1, knownUnique: 0, unidentifiedScans: 3, estimatedUnique: null, byDay: [], byHour: [], byQr: [], byDevice: [], byOs: [], byBrowser: [], byReferrer: [] };
 const bulkEntry = { name: 'CSV bord', destination: 'https://example.com/csv', brandId: 'b1', locationId: 'l1', campaign: '', tags: [] };
 const canonical = JSON.stringify({ schemaVersion: 1, entries: [bulkEntry] });
@@ -39,6 +39,7 @@ before(async () => {
     const props=${JSON.stringify(initial)},params=new URLSearchParams(location.search);
     if(params.has('design')){props.codes[0].publicUrl='https://orderfly.dk/q/'+'a'.repeat(32);props.codes[0].name='Pepperoni';props.codes[0].campaign='Frozen pizza';props.codes[0].destination='https://www.esmeraldapizza.dk/produkter';props.allTime={'b1/qr1':{openings:19,probableScans:18,excludedOpenings:1,firstOpenedAt:1792533600000,lastOpenedAt:1792619999000}};}
     if(params.has('pages'))props.codes=Array.from({length:13},(_,i)=>({...props.codes[0],id:'q'+i,name:'Kode '+String(i).padStart(2,'0')}));
+    if(params.has('mixedanalytics'))props.analyticsCodeKeys=['b1/qr1'];
     if(params.has('denied')){props.analytics=false;props.capabilities={create:false,edit:false,archive:false,export:false};}
     if(params.has('truncated'))props.truncated=true;
     if(params.has('off'))props.dynamicEnabled=false;
@@ -433,3 +434,12 @@ test('catalogue pagination is bounded and filters reset the selected page',async
     assert.equal(calls.length,0);
   }finally{await page.close();}
 });
+
+ test('catalogue analytics actions follow per-code grants across brands and fail closed without eligibility',async()=>{
+  const {page,calls}=await open({query:'?collision&mixedanalytics'});
+  try{
+   assert.equal(await page.getByRole('button',{name:'Statistik for Anden kode',exact:true}).count(),0);
+   await page.getByRole('button',{name:'Statistik for Bord 1',exact:true}).click();
+   assert.equal(calls.length,1);assert.equal(calls[0].body.brandId,'b1');assert.equal(calls[0].body.id,'qr1');
+  }finally{await page.close();}
+ });

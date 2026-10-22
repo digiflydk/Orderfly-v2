@@ -25,7 +25,7 @@ export type QrManagerApi = {
   download: (draft: QrDraft, format: 'png' | 'svg', context: { id?: string; revision?: string }) => Promise<{ url: string; filename: string }>;
 };
 export type QrManagerProps = { brands: QrBrandChoice[]; initialCodes: QrCodeSummary[]; capabilities: QrCapabilities; api: QrManagerApi; dynamicEnabled?: boolean;
-  allTime?: Record<string, QrLifetime | null>; onAnalytics?: (code: QrCodeSummary) => void;
+  allTime?: Record<string, QrLifetime | null>; onAnalytics?: (code: QrCodeSummary) => void; analyticsCodeKeys?: string[];
   renderExtras?: (draft: QrDraft, context: { id?: string; revision?: string }) => React.ReactNode };
 
 const blank = (brandId = ''): QrDraft => ({ name: '', brandId, locationId: null, kind: 'dynamic', destination: '', staticType: 'url', fields: {}, campaign: '', tags: [], utm: { source: '', medium: 'qr', campaign: '', content: '', term: '' } });
@@ -102,7 +102,7 @@ function QrThumbnail({ code, api, enabled }: { code: QrCodeSummary; api: QrManag
   return <div ref={target} className="qr-thumbnail">{image ? <img src={image} alt={`QR-kode: ${code.name}`} width={96} height={96} /> : <span className="qr-thumbnail-placeholder">{failed ? 'Preview utilgængeligt' : 'QR'}</span>}</div>;
 }
 
-export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnabled = true, renderExtras, allTime, onAnalytics }: QrManagerProps) {
+export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnabled = true, renderExtras, allTime, onAnalytics, analyticsCodeKeys = [] }: QrManagerProps) {
   const [codes, setCodes] = useState(initialCodes);
   // Refresh only catalogue rows. A sibling bulk refresh must never discard an
   // unresolved editor operation, its original request key or draft.
@@ -276,7 +276,7 @@ export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnab
           {(code.campaign || code.tags.length > 0) && <p className="qr-card-tags">{code.campaign}{code.tags.length ? ` · ${code.tags.join(', ')}` : ''}</p>}
         </div>
         <div className="qr-card-side"><div className="qr-card-actions">
-          {onAnalytics && code.kind === 'dynamic' && <button type="button" className={buttonClass} aria-label={`Statistik for ${code.name}`} onClick={() => onAnalytics(code)}>Statistik</button>}
+          {onAnalytics && analyticsCodeKeys.includes(`${code.brandId}/${code.id}`) && code.kind === 'dynamic' && <button type="button" className={buttonClass} aria-label={`Statistik for ${code.name}`} onClick={() => onAnalytics(code)}>Statistik</button>}
           {capabilities.edit && code.status !== 'archived' && <button type="button" className={buttonClass} disabled={busy || uncertain} aria-label={`Redigér ${code.name}`} onClick={() => open(code)}>Redigér / design</button>}
           {!capabilities.edit && capabilities.export && code.status !== 'archived' && <button type="button" className={buttonClass} disabled={busy || uncertain} aria-label={`Vis ${code.name}`} onClick={() => open(code)}>Vis / download</button>}
           {(capabilities.create || capabilities.edit || capabilities.archive) && <details className="qr-action-menu"><summary aria-label={`Flere handlinger for ${code.name}`}>•••</summary><div>

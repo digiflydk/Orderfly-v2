@@ -90,3 +90,5 @@ synthetic data and do not prove a production scan. Existing renderer tests verif
 PNG/SVG decode and rejection cases. Live acceptance remains read-only: deployed
 SHA, authenticated catalogue/editor rendering, and original QR HEAD302; no test
 mutation to production records is required.
+
+Per-code statistics actions use server-derived `analyticsCodeKeys`, matched by brand and current location. A global analytics capability does not enable actions for other brands; missing eligibility hides the action. Location-only analytics grants can show the action without exposing whole-lifetime counters. The server remains the authorization boundary.
