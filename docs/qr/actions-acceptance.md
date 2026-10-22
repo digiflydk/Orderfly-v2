@@ -10,12 +10,14 @@ network guard and fixed `demo-orderfly-qa0` project remain mandatory.
 The job receives no production credentials. Its output explicitly separates
 native/browser acceptance from production and physical scanning acceptance.
 
-The workflow runs on the relevant PR and main changes, and can subsequently be
+The workflow runs on QR product/API/UI, native access/session, shared admin,
+fixture/network-guard and locked dependency changes in PRs and main, and can subsequently be
 started with Run workflow on main. No new GitHub permission or secret is added.
 Java 21, the pinned Firebase CLI 15.30.0 and the repository's locked Playwright
 are provisioned on the runner. Protected emulator/application logs are not
 uploaded; they can contain test session material. Safe checks and fixed failure
 phase codes remain in the job output.
+Superseded PR runs are cancelled; main runs remain serialized and are not cancelled.
 
 ## Production checkpoint, read only
 

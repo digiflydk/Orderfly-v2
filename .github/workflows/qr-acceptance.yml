@@ -6,14 +6,46 @@ on:
     branches: [main]
     paths:
       - '.github/workflows/qr-acceptance.yml'
-      - 'tests/local-qa/qr-*.cjs'
+      - 'tests/local-qa/**'
+      - 'scripts/local-qa/**'
+      - 'tests/helpers/**'
+      - 'src/app/api/qr/**'
+      - 'src/app/q/**'
+      - 'src/app/superadmin/qr-codes/**'
+      - 'src/components/qr/**'
+      - 'src/lib/qr/**'
+      - 'src/lib/access/**'
+      - 'src/lib/firebase*'
+      - 'src/app/admin-login/**'
+      - 'src/app/api/admin/session/**'
+      - 'src/app/superadmin/layout.tsx'
+      - 'src/components/superadmin/**'
+      - 'src/middleware.ts'
+      - 'package.json'
+      - 'package-lock.json'
       - 'scripts/qr-retention-readiness.mjs'
       - 'tests/unit/qr-retention-readiness.cjs'
   push:
     branches: [main]
     paths:
       - '.github/workflows/qr-acceptance.yml'
-      - 'tests/local-qa/qr-*.cjs'
+      - 'tests/local-qa/**'
+      - 'scripts/local-qa/**'
+      - 'tests/helpers/**'
+      - 'src/app/api/qr/**'
+      - 'src/app/q/**'
+      - 'src/app/superadmin/qr-codes/**'
+      - 'src/components/qr/**'
+      - 'src/lib/qr/**'
+      - 'src/lib/access/**'
+      - 'src/lib/firebase*'
+      - 'src/app/admin-login/**'
+      - 'src/app/api/admin/session/**'
+      - 'src/app/superadmin/layout.tsx'
+      - 'src/components/superadmin/**'
+      - 'src/middleware.ts'
+      - 'package.json'
+      - 'package-lock.json'
       - 'scripts/qr-retention-readiness.mjs'
 
 permissions:
@@ -21,7 +53,7 @@ permissions:
 
 concurrency:
   group: qr-native-acceptance-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   native:
