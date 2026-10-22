@@ -20,6 +20,18 @@ function launch(command, args, childEnv, label, cwd = root) {
 (async () => {
   const firebase = process.env.QA0_FIREBASE_BIN, java = process.env.QA0_JAVA_BIN;
   if (!firebase || !java || !path.isAbsolute(firebase) || !path.isAbsolute(java) || !fs.existsSync(firebase) || !fs.existsSync(java)) throw Error('Provide explicit installed Firebase15.30 and Java21 binary paths');
+  if (process.env.QA0_BROWSER_PROOF !== undefined && process.env.QA0_BROWSER_PROOF !== 'true') throw Error('QA0 browser proof mode rejected');
+  const browserProof = process.env.QA0_BROWSER_PROOF === 'true';
+  if (browserProof) {
+    const { chromium } = require('playwright');
+    if (!fs.existsSync(chromium.executablePath())) throw Error('QA0 official Chromium1234 binary is unavailable');
+    env.ORDERFLY_LOCAL_QA_BROWSER = 'true';
+  }
+  if (process.env.QA0_CREDENTIAL_METADATA_PROOF !== undefined && process.env.QA0_CREDENTIAL_METADATA_PROOF !== 'true') throw Error('QA0 metadata proof mode rejected');
+  if (process.env.QA0_CREDENTIAL_METADATA_PROOF === 'true') {
+    env.QA0_CREDENTIAL_METADATA_PROOF = 'true';
+    env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED = 'false';
+  }
   // Next loads dotenv files independently of child env. Refuse them without reading secrets.
   for (const name of ['.env', '.env.local', '.env.development', '.env.development.local']) if (fs.existsSync(path.join(root, name))) throw Error('QA0 requires a checkout without dotenv files');
   const toolsEnv = { PATH: path.dirname(java) + path.delimiter + env.PATH, LANG: env.LANG, TZ: env.TZ, CI: 'true', FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true', FIREBASE_CLI_DISABLE_USAGE_REPORTING: 'true' };
@@ -37,17 +49,30 @@ function launch(command, args, childEnv, label, cwd = root) {
   const summaries = [];
   // Keep the SAME emulator and app alive: a second seed must observe any leak.
   for (let pass = 0; pass < 2; pass++) {
-    const smoke = spawn(process.execPath, [path.join(__dirname, 'backend-smoke.cjs')], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'] }); children.push(smoke);
+    const smoke = spawn(process.execPath, [path.join(__dirname, 'backend-smoke.cjs')], { cwd: root, env, stdio: ['ignore', 'pipe', 'pipe'], detached: browserProof }); children.push(smoke);
     let summary = ''; smoke.stdout.on('data', chunk => summary += chunk); smoke.stderr.on('data', () => {});
     const code = await new Promise((resolve, reject) => {
-      const deadline = setTimeout(() => { reject(Error('QA0 backend proof timed out')); smoke.kill('SIGKILL'); }, 60000);
+      const deadline = setTimeout(() => {
+        reject(Error('QA0 backend proof timed out'));
+        if (browserProof) { try { process.kill(-smoke.pid, 'SIGKILL'); } catch { smoke.kill('SIGKILL'); } }
+        else smoke.kill('SIGKILL');
+      }, 60000);
       smoke.once('error', () => { clearTimeout(deadline); reject(Error('QA0 backend proof failed')); });
       smoke.once('exit', code => { clearTimeout(deadline); resolve(code); });
     });
     if (code !== 0) throw Error('QA0 backend proof failed');
     summaries.push(JSON.parse(summary));
   }
-  console.log(JSON.stringify({ ...summaries[1], sameEmulatorPasses: summaries.length }));
+  const summary = { ...summaries[1], sameEmulatorPasses: summaries.length };
+  if (browserProof) {
+    const source = spawnSync('git', ['rev-parse', 'HEAD'], { cwd: root, env: toolsEnv, encoding: 'utf8' });
+    if (source.status !== 0 || !/^[0-9a-f]{40}$/.test(source.stdout.trim())) throw Error('QA0 source version unavailable');
+    summary.environment = 'QA0b2-local-browser'; summary.source = source.stdout.trim();
+    summary.nextVersion = require('next/package.json').version; summary.playwrightVersion = require('playwright/package.json').version;
+    const artifacts = path.join(root, 'test-results'); fs.mkdirSync(artifacts, { recursive: true });
+    fs.writeFileSync(path.join(artifacts, 'local-qa-summary.json'), JSON.stringify(summary, null, 2), { mode: 0o600 });
+  }
+  console.log(JSON.stringify(summary));
 })().catch(error => { console.error(error.message); console.error('Protected local process logs:', logs.join(', ')); process.exitCode = 1; }).finally(async () => {
   for (const child of children.reverse()) if (child.exitCode === null) { try { process.kill(-child.pid, 'SIGTERM'); } catch { child.kill('SIGTERM'); } }
 });
