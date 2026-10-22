@@ -245,6 +245,9 @@ jobs:
       - name: Games editor browser regression
         run: node --test tests/unit/games-editor-browser.cjs
 
+      - name: Receipt settings, online preview and editor regression
+        run: node --test tests/unit/receipt-*.cjs
+
       - name: Shared admin access and filter regression
         run: node --test tests/unit/marketing-layout-boundary.cjs tests/unit/endpoint-audit.cjs tests/unit/settings-access.cjs tests/unit/system-cleanup.cjs tests/unit/access-navigation.cjs tests/unit/printing-ui-page.cjs tests/unit/merchant-admin-portal.cjs tests/unit/admin-sales-filters.cjs tests/unit/admin-loading.cjs tests/unit/admin-mobile-header.cjs
 

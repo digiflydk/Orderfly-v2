@@ -89,6 +89,7 @@ export default async function OrderDetailPage({ params }: OrderDetailPageProps) 
 					</p>
 				</div>
 				<div className="flex items-center gap-2">
+                    <Button variant="outline" asChild><Link href={`/superadmin/sales/orders/${encodeURIComponent(order.id)}/receipt`}>Vis kvittering</Link></Button>
                     <FeedbackRequestButton orderId={order.id} />
 					{stripeUrl && <Button asChild><a href={stripeUrl} target="_blank" rel="noopener noreferrer"><LinkIcon className="mr-2" />Se i Stripe</a></Button>}
 				</div>
