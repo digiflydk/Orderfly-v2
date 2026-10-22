@@ -50,3 +50,13 @@ and seven state cases, plus verified native and Auth cleanup. Final hardening ad
 invalid-cookie and malformed-digest rejection, bringing each final pass to 18
 GETs. The exact final candidate is rerun after commit; its issue checkpoint
 records the commit and final result. Unit/source checks remain separately labeled.
+
+## CI boundary
+
+The existing Local QA safety regression step runs the dedicated metadata resource
+and response checks alongside the unchanged QA0 environment/client tests. This
+registration does not claim native execution. Current main does not install the
+authoritative pinned Java/Firebase emulator tools in this workflow, so no second
+installer/environment or misleading native CI step is introduced here. The
+actual native proof above is run using the already installed official local tools;
+the root can enable it in CI when the existing shared tool setup is available.

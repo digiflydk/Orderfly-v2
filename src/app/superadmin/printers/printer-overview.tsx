@@ -7,6 +7,7 @@ import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@
 import { AdminSelectField } from '@/components/superadmin/admin-select-field';
 import { PrinterConfigurationForm } from './printer-configuration-form';
 import { PrinterLifecycleDialog } from './printer-lifecycle-dialog';
+import { PrinterCredentialsPanel } from './printer-credentials-panel';
 import type { PrinterConfiguration } from '@/lib/printing/domain';
 
 type Brand = { id: string; name: string };
@@ -66,6 +67,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const [refresh, setRefresh] = useState(0);
   const [result, setResult] = useState<Result | null>(null);
   const [editor, setEditor] = useState<{ scope: string; brandId: string; locationId: string; item?: Item; action?: 'deactivate' | 'delete' } | null>(null);
+  const [credential, setCredential] = useState<{ key: string; item: Item } | null>(null);
   const [sessionLost, setSessionLost] = useState(false);
   const [savePending, setSavePending] = useState(false);
   const savePendingRef = useRef(false);
@@ -90,13 +92,17 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const canCreate = !!createScope && hasGrant(createLocations, createScope);
   const editorAllowed = !!editor && editor.scope === scope && hasGrant(
     editor.action === 'delete' ? deleteLocations : editor.item ? editLocations : createLocations, editor);
-  const closeAndRefresh = () => { setFeedback(null); readsAllowed.current = true; setEditor(null); setAfter(null); setRefresh(value => value + 1); };
+  const closeAndRefresh = () => { setFeedback(null); readsAllowed.current = true; setEditor(null); setCredential(null); setAfter(null); setRefresh(value => value + 1); };
   const key = JSON.stringify([scope, after, refresh, model]);
   const current = result?.key === key ? result : null;
-  const loseSession = () => { setFeedback(null); readsAllowed.current = false; readGeneration.current += 1; readController.current?.abort(); sessionEpoch.current += 1; setSessionLost(true); setEditor(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
+  const loseSession = () => { setFeedback(null); readsAllowed.current = false; readGeneration.current += 1; readController.current?.abort(); sessionEpoch.current += 1; setSessionLost(true); setEditor(null); setCredential(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
+  const credentialAllowed = !!credential && credential.key === key && !editor && !feedback?.requiresRefresh
+    && hasGrant(editLocations, credential.item.configuration) && !!current?.page?.items.some(row => row.revision === credential.item.revision
+      && row.configuration.id === credential.item.configuration.id && row.configuration.brandId === credential.item.configuration.brandId
+      && row.configuration.locationId === credential.item.configuration.locationId);
   const openEditor = (item?: Item, action?: 'deactivate' | 'delete') => {
     const target = item?.configuration || createScope;
-    if (!target || editor || feedback?.requiresRefresh || !current?.page || sessionLost
+    if (!target || editor || credential || feedback?.requiresRefresh || !current?.page || sessionLost
       || !hasGrant(action === 'delete' ? deleteLocations : item ? editLocations : createLocations, target)
       || (item && action !== 'delete' && (action === 'deactivate'
         ? item.configuration.state === 'disabled' : item.configuration.state !== 'disabled'))) return;
@@ -111,6 +117,8 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
     // transaction must settle before its form can be removed.
     if (editor && !editorAllowed && !savePendingRef.current) setEditor(null);
   }, [editor, editorAllowed, savePending]);
+
+  useEffect(() => { if (credential && !credentialAllowed) setCredential(null); }, [credential, credentialAllowed]);
 
   useEffect(() => {
     if (!readsAllowed.current || editor) return;
@@ -181,7 +189,12 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
     {sessionLost && !current?.error && <p role="alert">Din session er udløbet. Log ind igen.</p>}
     {savedScope && !editor && <p role="status">Printeropsætningen er gemt som deaktiveret.</p>}
     {feedback && !editor && <p role="alert">{feedback.message}</p>}
-    {location && canCreate && !feedback?.requiresRefresh && current?.page && !editor && <Button onClick={() => openEditor()}>Tilføj printer</Button>}
+    {location && canCreate && !feedback?.requiresRefresh && current?.page && !editor && !credential && <Button onClick={() => openEditor()}>Tilføj printer</Button>}
+    {credential && credentialAllowed && <PrinterCredentialsPanel
+      key={JSON.stringify([credential.key, credential.item.configuration.brandId, credential.item.configuration.locationId, credential.item.configuration.id, credential.item.revision])}
+      scope={{ brandId: credential.item.configuration.brandId, locationId: credential.item.configuration.locationId,
+        printerId: credential.item.configuration.id, printerRevision: credential.item.revision }} printerName={credential.item.configuration.name}
+      permitted={credentialAllowed} onSessionLost={loseSession} onClose={() => setCredential(null)} />}
     {editor && !editor.action && !sessionLost && (editorAllowed || savePending) && <PrinterConfigurationForm
       key={JSON.stringify([editor.scope, editor.item?.configuration.id || '', editor.item?.revision || 0])}
       brandId={editor.brandId} locationId={editor.locationId} item={editor.item} permitted={editorAllowed}
@@ -220,9 +233,11 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
                   <TableCell className="max-w-[220px] break-words font-medium">{c.name}</TableCell>
                   <TableCell className="text-muted-foreground"><span className="whitespace-nowrap">Star {c.model === 'mc-print2' ? 'mC-Print2' : 'mC-Print3'}</span><br />{c.transport === 'cloudprnt-http' ? 'CloudPRNT HTTP' : 'CloudPRNT MQTT'}<br />{c.paperWidthMm} mm</TableCell>
                   <TableCell><div className="flex flex-wrap gap-2 min-w-[180px]">
-                    <Button aria-label={`Rediger ${c.name}`} title={!canEdit ? 'Ingen redigeringsadgang på denne lokation' : undefined} size="sm" variant="outline" disabled={!canEdit || !!editor || !!feedback?.requiresRefresh || c.state !== 'disabled'} onClick={() => openEditor({ configuration: c, revision })}>Edit</Button>
-                    <Button aria-label={`Deaktiver ${c.name}`} title={!canEdit ? 'Ingen redigeringsadgang på denne lokation' : undefined} size="sm" variant="outline" disabled={!canEdit || !!editor || !!feedback?.requiresRefresh || c.state === 'disabled'} onClick={() => openEditor({ configuration: c, revision }, 'deactivate')}>Deactivate</Button>
-                    <Button aria-label={`Slet ${c.name}`} title={!canDelete ? 'Ingen sletteadgang på denne lokation' : undefined} size="sm" variant="outline" disabled={!canDelete || !!editor || !!feedback?.requiresRefresh} onClick={() => openEditor({ configuration: c, revision }, 'delete')}>Delete</Button>
+                    <Button aria-label={`Rediger ${c.name}`} title={!canEdit ? 'Ingen redigeringsadgang på denne lokation' : undefined} size="sm" variant="outline" disabled={!canEdit || !!editor || !!credential || !!feedback?.requiresRefresh || c.state !== 'disabled'} onClick={() => openEditor({ configuration: c, revision })}>Edit</Button>
+                    <Button aria-label={`Deaktiver ${c.name}`} title={!canEdit ? 'Ingen redigeringsadgang på denne lokation' : undefined} size="sm" variant="outline" disabled={!canEdit || !!editor || !!credential || !!feedback?.requiresRefresh || c.state === 'disabled'} onClick={() => openEditor({ configuration: c, revision }, 'deactivate')}>Deactivate</Button>
+                    <Button aria-label={`Slet ${c.name}`} title={!canDelete ? 'Ingen sletteadgang på denne lokation' : undefined} size="sm" variant="outline" disabled={!canDelete || !!editor || !!credential || !!feedback?.requiresRefresh} onClick={() => openEditor({ configuration: c, revision }, 'delete')}>Delete</Button>
+                    <Button aria-label={`Printeradgang ${c.name}`} title={!canEdit ? 'Ingen redigeringsadgang på denne lokation' : undefined} size="sm" variant="outline" disabled={!canEdit || !!editor || !!credential || !!feedback?.requiresRefresh}
+                      onClick={() => { if (canEdit && !editor && !credential && current?.page && !feedback?.requiresRefresh) setCredential({ key, item: { configuration: c, revision } }); }}>Printeradgang</Button>
                   </div></TableCell>
                 </TableRow>;
               })}
