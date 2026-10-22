@@ -104,8 +104,14 @@ jobs:
       - name: CloudPRNT Basic native identity regression
         run: node --test tests/unit/printing-cloudprnt-http-auth.cjs
 
+      - name: CloudPRNT no-job poll HTTP regression
+        run: node --test tests/unit/printing-cloudprnt-poll-http.cjs
+
       - name: Superadmin printer credential HTTP regression
         run: node --test tests/unit/printing-device-credentials-http.cjs
+
+      - name: Safe printer credential metadata regression
+        run: node --test tests/unit/printing-device-credentials-metadata.cjs
 
       - name: CloudPRNT protocol and simulator regression
         run: node --test tests/unit/printing-cloudprnt.cjs
@@ -158,6 +164,9 @@ jobs:
       - name: Install Chromium for brand-owner regression
         run: npx playwright install --with-deps chromium
 
+      - name: Printer credential controls and one-time delivery regression
+        run: node --test tests/unit/printing-device-credentials-ui.cjs
+
       - name: Printer routing editor and sample preview regression
         run: node --test tests/unit/printing-routing-editor.cjs tests/unit/printing-routing-ui-browser.cjs
 
@@ -190,6 +199,9 @@ jobs:
 
       - name: Club campaign service and browser regressions
         run: node --test --test-concurrency=1 tests/unit/loyalty-campaign-bonus.cjs tests/unit/loyalty-campaign-admin.cjs tests/unit/loyalty-club-signup-integration.cjs tests/unit/loyalty-profile.cjs tests/unit/club-promotion-rules.cjs tests/unit/club-checkout.cjs tests/unit/checkout-availability.cjs tests/unit/loyalty-benefits-browser.cjs tests/unit/loyalty-campaign-admin-browser.cjs tests/unit/loyalty-profile-browser.cjs
+
+      - name: Esmeralda homepage Club promotion browser regressions
+        run: node --test tests/unit/club-homepage-browser.cjs
 
       - name: Build
         run: npm run build
