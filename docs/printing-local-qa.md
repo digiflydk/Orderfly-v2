@@ -369,10 +369,16 @@ whether the native command rejected or exceeded its one-second deadline.
 A focused conservative protocol-ordering regression FIRST failed when the action
 completed while a tracked explicit resume acknowledgement was still in flight:
 pause-mode configuration was attempted while the fixture's VM remained stopped.
-The minimal harness candidate drains tracked pause/resume work and performs any
-needed explicit resume BEFORE changing pause mode. All existing one-second
-bounds, maximum16 pauses, first-failure preservation, fail-closed behavior,
-closing checks, disable/detach cleanup and original assertions remain unchanged.
-The modeled regression passes after reordering. It is NOT proof of Chrome's
-actual failure cause; fresh real CI must validate the candidate and the full
-browser/native/two-pass acceptance, which remains pending.
+That candidate drained tracked pause/resume work and performed any needed
+explicit resume BEFORE changing pause mode; it was later superseded (CI
+39679454112). The current teardown in `caught-login-exceptions.cjs` drains
+tracked pause/resume work, performs any needed explicit resume, removes its
+listener and then only detaches its CDP session within the bound. It no longer
+sends `setPauseOnExceptions({state:'none'})` or `Debugger.disable`: during the
+app's post-login navigation those renderer-bound commands waited on the DEV
+route compile and exceeded the one-second bound, and detaching ends the
+session's debugger state without them. All one-second bounds, maximum16 pauses,
+first-failure preservation, fail-closed behavior, closing checks and original
+assertions remain unchanged. Modeled regressions cover resume-before-detach and
+the navigation case; the full browser/native/two-pass acceptance is shown by
+real CI on the exact current head, not by the models.
