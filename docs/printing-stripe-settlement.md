@@ -112,6 +112,15 @@ This leaves received-money financial settlement intact and does not change
 superadmin draft administration. The existing global OFF path still performs
 zero additional print reads/provider requests.
 
+Catalog projection and saved-routing preparation do not interpret the obsolete
+`Brand.isActive` field as a second lifecycle policy. A canonical active/trialing
+brand may retain `isActive:false` after merge-based brand edits; this must not
+abort an otherwise valid payment transaction. Canonical `Brand.status` remains
+authoritative at the native intent-policy boundary, while location activity,
+ownership/deletion, product/category activity and all other native guards remain
+unchanged. These pure preparations do not grant output authority or make a
+pending/suspended/missing/unknown brand print-eligible.
+
 Actual exported-callsite regressions cover suspension before preflight (no print
 proof retrieval), between preflight and the financial transaction, and during a
 retry with the reused SDK transaction object. Financial effects commit once with

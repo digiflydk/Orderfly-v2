@@ -106,6 +106,32 @@ test('#363 ineligible canonical brands settle received money once without print 
   assert.equal(await trial.settle(), true); assert.equal(trial.jobs().length, 2); assert.equal(trial.requests.length, 1);
 });
 
+test('#349 canonical active/trialing brands ignore stale legacy isActive through real catalog and routing calls', async () => {
+  for (const status of ['active', 'trialing']) {
+    const f = await fixture(); Object.assign(f.records.get('brands/b'), { status, isActive: false });
+    assert.equal(await f.settle(), true); assert.equal(f.order().paymentStatus, 'Paid');
+    assert.equal(f.jobs().length, 2); assert.equal(f.ledgers().length, 2);
+    const before = structuredClone([...f.records]); assert.equal(await f.settle(), false);
+    assert.deepEqual([...f.records], before);
+  }
+  for (const options of [
+    { afterPreflight: f => { f.records.get('brands/b').isActive = false; } },
+    { retry: true, onRetry: f => { f.records.get('brands/b').isActive = false; } },
+  ]) {
+    const f = await fixture(options); assert.equal(await f.settle(), true);
+    assert.equal(f.order().paymentStatus, 'Paid'); assert.equal(f.jobs().length, 2);
+  }
+});
+
+test('#349 canonical brand eligibility never relaxes location activity rejection or atomic rollback', async () => {
+  for (const isActive of [false, 'true', null]) {
+    const f = await fixture(); Object.assign(f.records.get('brands/b'), { status: 'active', isActive: false });
+    f.records.get('locations/l').isActive = isActive;
+    const before = structuredClone([...f.records]); await assert.rejects(f.settle());
+    assert.deepEqual([...f.records], before); assert.equal(writes(f).length, 0);
+  }
+});
+
 test('#363 suspension between preflight and financial transaction or SDK retry suppresses all print intent', async () => {
   for (const options of [
     { afterPreflight: f => { f.records.get('brands/b').status = 'suspended'; } },
