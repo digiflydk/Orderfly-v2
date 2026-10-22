@@ -89,6 +89,9 @@ jobs:
       - name: Native printer device verification regression
         run: node --test tests/unit/printing-device-auth-native.cjs
 
+      - name: Native protocol observation regression
+        run: node --test tests/unit/printing-protocol-observation-native.cjs
+
       - name: Native print claim reservation regression
         run: node --test tests/unit/printing-native-claim.cjs
 
