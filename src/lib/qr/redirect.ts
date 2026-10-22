@@ -2,13 +2,14 @@ import { randomUUID } from 'node:crypto';
 import { classifyQrRequest, type QrMetricEvent } from './metrics';
 import { normalizeDestination, QrPayloadError } from './payload';
 import { createQrStore, QR_PATHS, QrStoreError, type QrDatabase } from './store';
+import { newQrTouchProof, prepareClubQrTouch, type QrTouchProof } from './touch';
 
 export const QR_RATE_LIMIT_COLLECTION = 'qrRateLimits';
 export const QR_GETS_PER_CODE_MINUTE = 500;
 export const QR_EVENT_RETENTION_DAYS = 90;
 const DAY = 86_400_000;
 export type QrStoredMetricEvent = QrMetricEvent & {
-  brandId: string; locationId: string | null; campaign: string; tags: string[]; expiresAt: Date;
+  brandId: string; locationId: string | null; campaign: string; tags: string[]; expiresAt: Date; touch?: QrTouchProof;
 };
 export type QrRedirectDependencies = {
   db: () => QrDatabase; enabled: boolean; environment?: string; now?: () => number; eventId?: () => string;
@@ -86,6 +87,8 @@ async function executeQrRedirect(request: Request, slug: string, dependencies: Q
     purpose: request.headers.get('purpose'), secPurpose: request.headers.get('sec-purpose'), referrer: request.headers.get('referer') });
   // IDs are generated once outside the retryable transaction. No client ID, IP or cookie is retained.
   const eventId = method === 'GET' ? (dependencies.eventId ?? randomUUID)() : null;
+  let touchProof: string | null = null;
+  if (classification.probableScan) { try { touchProof = newQrTouchProof(); } catch { /* Optional handoff cannot break the redirect. */ } }
   try {
     if (eventId !== null && !/^[a-f0-9-]{36}$/i.test(eventId)) throw new Error('invalid_event_id_source');
     const db = dependencies.db(), store = createQrStore(db, { normalizeDestination, now: clock });
@@ -93,6 +96,9 @@ async function executeQrRedirect(request: Request, slug: string, dependencies: Q
       const target = await store.resolveInTransaction(tx, slug);
       if (method === 'HEAD') return target.destination;
       const at = clock();
+      const brand = await tx.get(db.collection('brands').doc(target.brandId));
+      const handoff = classification.probableScan
+        ? prepareClubQrTouch(target, brand.data()?.slug, slug, eventId!, touchProof, at) : null;
       const codeRef = db.collection('brands').doc(target.brandId).collection(QR_PATHS.codes).doc(target.codeId);
       const minute = Math.floor(at / 60_000);
       const limitRef = codeRef.collection(QR_RATE_LIMIT_COLLECTION).doc(String(minute));
@@ -102,11 +108,11 @@ async function executeQrRedirect(request: Request, slug: string, dependencies: Q
       if (count >= QR_GETS_PER_CODE_MINUTE) throw new RateLimitError(Math.max(1, Math.ceil(((minute + 1) * 60_000 - at) / 1000)));
       const event: QrStoredMetricEvent = { timestamp: at, qrId: target.codeId, classification,
         brandId: target.brandId, locationId: target.locationId, campaign: target.campaign, tags: target.tags,
-        expiresAt: new Date(at + QR_EVENT_RETENTION_DAYS * DAY) };
+        expiresAt: new Date(at + QR_EVENT_RETENTION_DAYS * DAY), ...(handoff ? { touch: handoff.touch } : {}) };
       await store.recordLifetimeInTransaction(tx, target.brandId, target.codeId, classification, at);
       tx.set(limitRef, { brandId: target.brandId, qrId: target.codeId, count: count + 1, expiresAt: new Date((minute + 1) * 60_000 + DAY) });
       tx.create(codeRef.collection(QR_PATHS.events).doc(eventId!), event);
-      return target.destination;
+      return handoff?.destination ?? target.destination;
     });
     return new Response(null, { status: 302, headers: { ...responseHeaders, Location: destination } });
   } catch (error) {
