@@ -9,31 +9,46 @@ const record = (id, patch = {}) => ({ schemaVersion: 1, configuration: configura
   deletedAt: null, createdAt: { seconds: 1 }, updatedAt: { seconds: 2 }, ...patch });
 
 function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, anonymous = false,
-  forbidden = false, failDatabase = false, identityStatus, authorityStatus, totalOverride } = {}) {
+  forbidden = false, failDatabase = false, identityStatus, authorityStatus, totalOverride, activity = {},
+  afterTransactionList } = {}) {
   const calls = [];
+  let transactionListObserved = false;
   const snapshot = (id, value) => ({ id, exists: value !== undefined, data: () => value });
   const database = { collection(name) {
     assert.equal(name, 'locations');
     return { doc(locationId) { return {
-      async get() { calls.push(['location', locationId]); return snapshot(locationId, locations[locationId]); },
+      async get(view) { calls.push(['location', locationId]); return snapshot(locationId, (view?.locations ?? locations)[locationId]); },
       collection(collection) {
         assert.equal(collection, 'printers');
         calls.push(['printers', locationId]);
         return {
-          doc(id) { return { async get() { calls.push(['detail', id]); if (failDatabase) throw Error('PRIVATE_SENTINEL'); return snapshot(id, rows[id]); } }; },
+          doc(id) { return {
+            async get(view) { calls.push(['detail', id]); if (failDatabase) throw Error('PRIVATE_SENTINEL'); return snapshot(id, (view?.rows ?? rows)[id]); },
+            collection(name) { assert.equal(name, 'statusMetadata'); return { doc(key) {
+              assert.equal(key, 'current'); return { async get(view) {
+                calls.push(['activity', id]); return snapshot(key, (view?.activity ?? activity)[id]);
+              } };
+            } }; },
+          }; },
           where(field, op, value) {
             calls.push(['where', field, op, value]); assert.deepEqual([field, op, value], ['deletedAt', '==', null]);
             const makeQuery = (filters = [], after = '', limit) => {
-              const matching = () => Object.keys(rows).sort().filter(id => rows[id].deletedAt === null && filters.every(([field, value]) => field.split('.').reduce((row, key) => row?.[key], rows[id]) === value));
+              const matching = view => { const source = view?.rows ?? rows; return Object.keys(source).sort().filter(id => source[id].deletedAt === null && filters.every(([field, value]) => field.split('.').reduce((row, key) => row?.[key], source[id]) === value)); };
               return {
                 where(field, op, value) { assert.equal(op, '=='); assert.ok(['configuration.model', 'configuration.brandId', 'configuration.locationId'].includes(field)); return makeQuery([...filters, [field, value]], after, limit); },
-                count() { return { get: async () => ({ data: () => ({ count: totalOverride === undefined ? matching().length : totalOverride }) }) }; },
+                count() { return { get: async view => ({ data: () => ({ count: totalOverride === undefined ? matching(view).length : totalOverride }) }) }; },
                 orderBy(field) { calls.push(['orderBy', field]); assert.equal(field, '__name__'); return makeQuery(filters, after, limit); },
                 startAfter(cursor) { calls.push(['after', cursor]); return makeQuery(filters, cursor, limit); },
                 limit(count) { calls.push(['limit', count]); assert.ok(count <= 51); return makeQuery(filters, after, count); },
-                async get() {
+                async get(view) {
                   calls.push(['list']); if (failDatabase) throw Error('PRIVATE_SENTINEL');
-                  return { docs: matching().filter(id => id > after).slice(0, limit).map(id => snapshot(id, rows[id])) };
+                  const source = view?.rows ?? rows;
+                  const docs = matching(view).filter(id => id > after).slice(0, limit).map(id => snapshot(id, source[id]));
+                  if (view && afterTransactionList && !transactionListObserved) {
+                    transactionListObserved = true;
+                    afterTransactionList({ rows, activity });
+                  }
+                  return { docs };
                 },
               };
             };
@@ -42,6 +57,14 @@ function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, an
         };
       },
     }; } };
+  }, async runTransaction(callback, options) {
+    calls.push(['transaction', options]);
+    assert.deepEqual(options, { readOnly: true });
+    const view = structuredClone({ rows, locations, activity });
+    return callback({
+      async get(target) { calls.push(['transactionGet']); return target.get(view); },
+      async getAll(...targets) { calls.push(['transactionGetAll', targets.length]); return Promise.all(targets.map(target => target.get(view))); },
+    });
   } };
   const { GET } = loadTs('src/app/api/merchant/printers/route.ts', {
     'server-only': {}, '@/lib/firebase-admin': { getAdminDb: () => database },
@@ -200,4 +223,47 @@ test('overview aggregate excludes a foreign configuration even beyond the visibl
  const f = fixture({ rows: { p1: record('p1'), p2: record('p2'), p3: record('p3', { configuration: configuration('p3', { brandId: 'foreign' }) }) } });
  const result = await f.read('brandId=brand&locationId=location&overview=true&limit=1');
  assert.equal(result.status, 200); assert.equal(result.body.totalPrinters, 2); assert.equal(result.body.items[0].configuration.id, 'p1');
+});
+
+test('overview activity is bounded to returned rows and preserves honest unknown/never/confirmed states', async () => {
+ const base = { schemaVersion: 1, brandId: 'brand', locationId: 'location', printerId: 'p1',
+  activatedAt: null, activationRevision: null, printHistory: 'never', lastConfirmedPrintAt: null, lastConfirmedJobId: null };
+ const f = fixture({ rows: { p1: record('p1'), p2: record('p2'), p3: record('p3') }, activity: { p1: base,
+  p3: { ...base, printerId: 'p3', activatedAt: 1000, activationRevision: 1,
+   printHistory: 'confirmed', lastConfirmedPrintAt: 2000, lastConfirmedJobId: 'a'.repeat(64) } } });
+ const page = await f.read('brandId=brand&locationId=location&overview=true&limit=2');
+ assert.deepEqual(page.body.items.map(row => row.activity), [
+  { activatedAt: null, lastConfirmedPrintAt: null, printHistory: 'never' },
+  { activatedAt: null, lastConfirmedPrintAt: null, printHistory: 'unknown' }]);
+ assert.deepEqual(f.calls.filter(c => c[0] === 'activity'), [['activity', 'p1'], ['activity', 'p2']]);
+ const next = await f.read('brandId=brand&locationId=location&overview=true&after=p2');
+ assert.deepEqual(next.body.items[0].activity, { activatedAt: 1000, lastConfirmedPrintAt: 2000, printHistory: 'confirmed' });
+ assert.doesNotMatch(JSON.stringify(next.body), /lastConfirmedJobId|activationRevision|schemaVersion/);
+});
+
+test('overview uses one read-only snapshot when a resume commits between page and activity reads', async () => {
+ const before = { schemaVersion: 1, brandId: 'brand', locationId: 'location', printerId: 'p1',
+  activatedAt: null, activationRevision: null, printHistory: 'never', lastConfirmedPrintAt: null, lastConfirmedJobId: null };
+ const f = fixture({ rows: { p1: record('p1') }, activity: { p1: before },
+  afterTransactionList({ rows, activity }) {
+   rows.p1 = record('p1', { revision: 2 });
+   activity.p1 = { ...before, activatedAt: 3000, activationRevision: 2 };
+  } });
+ const result = await f.read('brandId=brand&locationId=location&overview=true');
+ assert.equal(result.status, 200);
+ assert.deepEqual(result.body.items[0], { configuration: configuration('p1'), revision: 1,
+  activity: { activatedAt: null, lastConfirmedPrintAt: null, printHistory: 'never' } });
+ assert.deepEqual(f.calls.filter(call => call[0] === 'transaction'), [['transaction', { readOnly: true }]]);
+ assert.ok(f.calls.some(call => call[0] === 'transactionGetAll' && call[1] === 1));
+ // The fixture's live state did advance, proving the response came from the captured transaction snapshot.
+ assert.equal((await f.read()).body.items[0].revision, 2);
+});
+
+test('corrupt/foreign activity fails closed; denied native location never reads activity', async () => {
+ const f = fixture({ rows: { p1: record('p1') }, activity: { p1: { brandId: 'PRIVATE_SENTINEL' } } });
+ const result = await f.read('brandId=brand&locationId=location&overview=true');
+ assert.equal(result.status, 503); assert.deepEqual(result.body, { error: 'printers_unavailable' });
+ const denied = fixture({ rows: { p1: record('p1') }, locations: { location: { brandId: 'foreign' } } });
+ assert.equal((await denied.read('brandId=brand&locationId=location&overview=true')).status, 403);
+ assert.equal(denied.calls.some(c => c[0] === 'activity'), false);
 });
