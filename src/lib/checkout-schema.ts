@@ -18,8 +18,11 @@ const customer = z.object({
   phone: z.string().trim().min(5).max(50), street: optionalText, zipCode: optionalText, city: optionalText,
   newsletterConsentId: z.string().uuid().optional(),
   newsletterConsentVersion: z.enum(['checkout-email-da-2026-09-08', 'checkout-email-da-2026-09-28']).optional(),
-  subscribeToNewsletter: z.boolean(), acceptTerms: z.literal(true),
+  subscribeToNewsletter: z.boolean(), subscribeToClub: z.boolean().optional(), clubTermsAccepted: z.boolean().optional(),
+  clubConsentVersion: z.string().max(64).optional(), clubTermsVersion: z.string().max(64).optional(), clubCampaignVersion: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  acceptTerms: z.literal(true),
 }).superRefine((value, context) => {
+  if (value.subscribeToClub && (!value.subscribeToNewsletter || value.clubTermsAccepted !== true || !value.clubConsentVersion || !value.clubTermsVersion)) context.addIssue({code:'custom',message:'Club signup requires explicit newsletter and terms acceptance with the shown versions'});
   if (!!value.newsletterConsentId !== !!value.newsletterConsentVersion) {
     context.addIssue({ code: 'custom', message: 'Newsletter consent ID and version must be supplied together' });
   }

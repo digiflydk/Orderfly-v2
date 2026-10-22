@@ -146,12 +146,12 @@ export async function lookupMember(db: Firestore, actor: CounterActor, input: z.
   }
 }
 
-type StampOutcome = { stamps: number; stampsRequired: number; rewardsEarned: number; cardId: string };
+export type StampOutcome = { stamps: number; stampsRequired: number; rewardsEarned: number; cardId: string };
 
 // Shared by purchases and manual corrections. Reads must already be complete.
-function addStampsToCard(w: Writer, ctx: {
+export function addStampsToCard(w: Writer, ctx: {
   companyId: string; brandId: string; memberId: string; member: MemberDoc; program: ReturnType<typeof readProgram>;
-  entry: { id: string; card: CardDoc } | null; count: number; locationId: string; now: number;
+  entry: { id: string; card: CardDoc } | null; count: number; locationId: string | null; now: number;
   base: Partial<LoyaltyEvent> & { source: EventSource }; eventId: string; hash: string; idempotencyKey: string;
   memberPatch?: Partial<MemberDoc>;
 }): StampOutcome {
@@ -166,7 +166,11 @@ function addStampsToCard(w: Writer, ctx: {
   }
   if (!entry || entry.card.status !== 'active') entry = { id: db.collection(COLLECTIONS.cards).doc().id, card: newCard(program, companyId, memberId, now) };
   const card = entry.card;
-  const location = stampLocation(card.crossLocation, card, ctx.locationId);
+  // Campaign stamps have no counter location: preserve an existing binding and
+  // leave a new card unbound until its first qualifying purchase.
+  const location = ctx.locationId === null
+    ? { allowed: true as const, locationId: card.crossLocation ? null : card.locationId }
+    : stampLocation(card.crossLocation, card, ctx.locationId);
   if (!location.allowed) throw new LoyaltyError('wrong_location', 409);
   const result = applyStamps(card, ctx.count, program.settings.stampsRequired);
   const nowDate = new Date(now);
@@ -193,7 +197,7 @@ function addStampsToCard(w: Writer, ctx: {
     const next = newCard(program, companyId, memberId, now, result.card.stamps);
     finalCardId = db.collection(COLLECTIONS.cards).doc().id;
     tx.create(db.collection(COLLECTIONS.cards).doc(finalCardId), result.card.stamps > 0
-      ? { ...next, locationId: next.crossLocation ? null : ctx.locationId, lastStampAt: now, expiresAt: cardExpiresAt(nowDate, next.cardValidityMonths).getTime() }
+      ? { ...next, locationId: next.crossLocation ? null : location.locationId, lastStampAt: now, expiresAt: cardExpiresAt(nowDate, next.cardValidityMonths).getTime() }
       : next);
   }
   tx.update(db.collection(COLLECTIONS.members).doc(memberId), { ...ctx.memberPatch, currentCardId: finalCardId, lastActivityAt: now });

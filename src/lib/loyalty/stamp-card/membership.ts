@@ -9,9 +9,14 @@ import { brandSubdomainUrl } from '@/lib/brand-subdomain';
 import { stageExplicitConsent } from '@/lib/marketing/store';
 import { consumeLimit, RateLimited } from './limits';
 import { issueQrToken, LoyaltyError } from './counter';
+import { stageBonusGrant } from './bonus';
+import { readCampaign } from './campaign-rules';
+import { stageClubSignupDiscount } from './club-discount';
+import { publicCampaignBenefits, memberCampaignBenefits } from './campaign-benefits';
 import {
   cardIsExpired, COLLECTIONS, hashKey, memberIdentityKey, readProgram, type CardDoc, type EventType, type LoyaltyEvent, type MemberDoc, type ProgramDoc, type RewardDoc,
 } from './model';
+import { profileFromCustomer } from './profile-rules';
 import { loadTextContext, renderedHash, renderedTextId, renderForProgram, type TextContext } from './program-texts';
 
 const DAY = 86_400_000;
@@ -43,6 +48,7 @@ export const signupSchema = z.object({
   termsAccepted: z.literal(true),
   consentVersion: z.string().max(64),
   termsVersion: z.string().max(64),
+  campaignVersion: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 }).strict();
 export const loginLinkSchema = z.object({ email: z.string().trim().email().max(254) }).strict();
 export const verifySchema = z.object({ token: tokenSchema }).strict();
@@ -123,7 +129,7 @@ async function resolveCustomer(tx: Transaction, db: Firestore, brandId: string, 
 const primaryEmailOf = (customer: Record<string, unknown> | null) =>
   normalizeEmail(typeof customer?.normalizedEmail === 'string' ? customer.normalizedEmail : typeof customer?.email === 'string' ? customer.email : '');
 
-export async function programForPortal(db: Firestore, brand: ProgramBrand) {
+export async function programForPortal(db: Firestore, brand: ProgramBrand, now = Date.now()) {
   const [snap, ctx] = await Promise.all([db.collection(COLLECTIONS.programs).doc(brand.brandId).get(), loadTextContext(db, brand.brandId)]);
   const program = readProgram(brand.brandId, snap.data()), s = program.settings, texts = portalTexts(program, ctx);
   // A missing brand detail closes sign-up instead of showing an unfilled placeholder.
@@ -132,20 +138,27 @@ export async function programForPortal(db: Firestore, brand: ProgramBrand) {
   return { active, name: s.name, stampsRequired: s.stampsRequired, rewardDescription: s.rewardDescription,
     consentText: active ? texts.texts.consentText : '', consentHelp: active ? texts.texts.consentHelp : '',
     termsAccept: active ? texts.texts.termsAccept : '', terms: active ? texts.texts.terms : '',
-    consentVersion: texts.consentVersion, termsVersion: texts.termsVersion };
+    consentVersion: texts.consentVersion, termsVersion: texts.termsVersion,
+    campaigns: await publicCampaignBenefits(db, brand.brandId, active, now) };
 }
 
 // Always resolves neutrally so the response never reveals whether an e-mail is known.
-export async function signup(db: Firestore, brand: ProgramBrand, input: z.infer<typeof signupSchema>, ctx: RequestContext) {
+export async function signup(db: Firestore, brand: ProgramBrand, input: z.infer<typeof signupSchema>, ctx: RequestContext, trusted: { clubDiscountId?: string; source?: 'checkout' } = {}) {
   const email = normalizeEmail(input.email), now = ctx.now;
   const mailJob = await db.runTransaction(async tx => {
     const recordIp = await limit(tx, db, 'signup-ip', `${brand.brandId}|${ctx.ip}`, LIMITS.signupPerIp, 3_600_000, now);
     const recordEmail = await limit(tx, db, 'link-email', `${brand.brandId}|${email}`, LIMITS.linkPerEmail, 3_600_000, now);
     const program = readProgram(brand.brandId, (await tx.get(db.collection(COLLECTIONS.programs).doc(brand.brandId))).data()), s = program.settings;
+    if (trusted.source === 'checkout') {
+      const campaign = await tx.get(db.collection('loyaltyCampaigns').doc(brand.brandId));
+      const config = readCampaign(brand.brandId,campaign.data());
+      if (config.version===0 || config.settings.checkoutMode !== 'club') throw new LoyaltyError('campaign_changed',409);
+    }
     const texts = portalTexts(program, await loadTextContext(db, brand.brandId, tx));
     if (!s.active || !brand.companyId || !texts.ready) throw new LoyaltyError('program_inactive', 409);
     const { consentVersion, termsVersion } = texts;
     if (input.consentVersion !== consentVersion || input.termsVersion !== termsVersion) throw new LoyaltyError('program_changed', 409);
+    if(input.campaignVersion && input.campaignVersion !== (await publicCampaignBenefits(db,brand.brandId,true,now,tx)).version) throw new LoyaltyError('program_changed',409);
     // The exact filled texts the member saw, stored once per variant.
     const shownRef = db.collection(COLLECTIONS.renderedTexts).doc(renderedTextId(brand.brandId, program.texts.version, texts.hash));
     const shownKnown = (await tx.get(shownRef)).exists;
@@ -153,8 +166,30 @@ export async function signup(db: Firestore, brand: ProgramBrand, input: z.infer<
     const identity = (await tx.get(identityRef)).data();
     if (identity) {
       const member = (await tx.get(db.collection(COLLECTIONS.members).doc(String(identity.memberId)))).data() as MemberDoc | undefined;
-      recordIp(); recordEmail();
-      if (!member || member.status !== 'active' || member.brandId !== brand.brandId) return null;
+      if (!member || member.status !== 'active' || member.brandId !== brand.brandId) { recordIp(); recordEmail(); return null; }
+      if (trusted.source === 'checkout') {
+        // Explicit checkout acceptance must also be durable for an existing
+        // member. This refreshes consent only, never acquisition rewards.
+        const customer = await tx.get(db.collection('customers').doc(member.customerId));
+        if (!customer.exists || customer.data()?.brandId !== brand.brandId || !customerHasEmail(customer.data()!,email))
+          throw new LoyaltyError('customer_conflict',409);
+        const primaryEmail = primaryEmailOf(customer.data()!)===email;
+        const needsConsent = member.consent.status !== 'given' || member.consent.version !== consentVersion
+          || member.termsVersion !== termsVersion || member.textHash !== texts.hash || (primaryEmail && customer.data()?.marketingConsent !== true);
+        if (needsConsent) {
+        const consent = await stageExplicitConsent(tx,db,{brandId:brand.brandId,customerId:member.customerId,email,source:'loyalty',
+          action:'subscribe',requestId:`checkout:${identity.memberId}:${now}`,capturedAt:now,version:consentVersion,wording:texts.consentWording,
+          primaryEmail});
+        recordIp(); recordEmail();
+        consent.apply();
+        tx.update(db.collection(COLLECTIONS.members).doc(String(identity.memberId)),{
+          consent:{status:'given',at:now,source:'checkout',eventId:consent.id,version:consentVersion},
+          termsVersion,textVersion:program.texts.version,textHash:texts.hash});
+        if (!shownKnown) tx.create(shownRef,{brandId:brand.brandId,textVersion:program.texts.version,hash:texts.hash,texts:texts.texts,createdAt:now});
+        tx.set(db.collection(COLLECTIONS.events).doc(hashKey('consent-given',String(identity.memberId),consent.id)),
+          loyaltyEvent(member,String(identity.memberId),now,'consent_given',{channel:'email',reason:consentVersion}));
+        } else { recordIp(); recordEmail(); }
+      } else { recordIp(); recordEmail(); }
       return stageLoginLink(tx, db, brand, s.name, String(identity.memberId), member, now);
     }
     const customer = await resolveCustomer(tx, db, brand.brandId, email);
@@ -162,13 +197,18 @@ export async function signup(db: Firestore, brand: ProgramBrand, input: z.infer<
     const consent = await stageExplicitConsent(tx, db, { brandId: brand.brandId, customerId: customer.customerId, email, source: 'loyalty',
       action: 'subscribe', requestId: `signup:${memberId}`, capturedAt: now, version: consentVersion, wording: texts.consentWording,
       primaryEmail: !customer.data || primaryEmailOf(customer.data) === email });
-    recordIp(); recordEmail();
-    customer.create?.(input.name, now);
     const member: MemberDoc = { companyId: brand.companyId, brandId: brand.brandId, customerId: customer.customerId, name: input.name, normalizedEmail: email,
       status: 'active', joinedAt: now, currentCardId: null, stampDay: null, stampsOnDay: 0, termsVersion, sessionEpoch: 0,
       textVersion: program.texts.version, textHash: texts.hash,
       consent: { status: 'given', at: now, source: 'portal', eventId: consent.id, version: consentVersion } };
+    const welcome = await stageBonusGrant({ db, tx, brand, memberId, member, kind: 'welcome', welcomeEligible: true, now });
+    const discount = await stageClubSignupDiscount({ db, tx, brandId: brand.brandId, email, customerId: customer.customerId,
+      customer: customer.data, discountId: trusted.clubDiscountId, now });
+    recordIp(); recordEmail();
+    customer.create?.(input.name, now);
     tx.create(db.collection(COLLECTIONS.members).doc(memberId), member);
+    welcome.apply();
+    discount.apply();
     if (!shownKnown) tx.create(shownRef, { brandId: brand.brandId, textVersion: program.texts.version, hash: texts.hash, texts: texts.texts, createdAt: now });
     tx.create(identityRef, { brandId: brand.brandId, memberId, createdAt: now });
     consent.apply();
@@ -179,7 +219,7 @@ export async function signup(db: Firestore, brand: ProgramBrand, input: z.infer<
     return stageLoginLink(tx, db, brand, s.name, memberId, member, now);
   }).catch(error => {
     // An identity conflict needs an administrator; the customer still gets the neutral answer.
-    if (error instanceof LoyaltyError && error.code === 'customer_conflict') { console.error('[loyalty] customer identity conflict', brand.brandId); return null; }
+    if (trusted.source !== 'checkout' && error instanceof LoyaltyError && error.code === 'customer_conflict') { console.error('[loyalty] customer identity conflict', brand.brandId); return null; }
     throw error;
   });
   return { ok: true as const, mailJob };
@@ -243,12 +283,13 @@ const HISTORY_TYPES = new Set<EventType>(['stamp_added', 'stamp_removed', 'rewar
 // The customer's own card. Staff identities and reasons are never included.
 export async function memberView(db: Firestore, brand: ProgramBrand, session: MemberSession, now: number) {
   const { member, memberId } = session;
-  const [programSnap, cardSnap, rewards, events, ctx] = await Promise.all([
+  const [programSnap, cardSnap, rewards, events, ctx, customerSnap] = await Promise.all([
     db.collection(COLLECTIONS.programs).doc(brand.brandId).get(),
     member.currentCardId ? db.collection(COLLECTIONS.cards).doc(member.currentCardId).get() : Promise.resolve(null),
     db.collection(COLLECTIONS.rewards).where('memberId', '==', memberId).where('status', '==', 'available').get(),
     db.collection(COLLECTIONS.events).where('memberId', '==', memberId).orderBy('createdAt', 'desc').limit(100).get(),
     loadTextContext(db, brand.brandId),
+    db.collection('customers').doc(member.customerId).get(),
   ]);
   const program = readProgram(brand.brandId, programSnap.data()), texts = portalTexts(program, ctx);
   const card = cardSnap?.data() as CardDoc | undefined;
@@ -256,6 +297,7 @@ export async function memberView(db: Firestore, brand: ProgramBrand, session: Me
   return {
     program: { name: program.settings.name, active: program.settings.active, rewardDescription: program.settings.rewardDescription, terms: texts.ready ? texts.texts.terms : '' },
     member: { name: member.name, email: member.normalizedEmail, joinedAt: member.joinedAt },
+    profile: profileFromCustomer(customerSnap.data()?.brandId === brand.brandId && customerHasEmail(customerSnap.data()!, member.normalizedEmail) ? customerSnap.data() : undefined, now),
     card: { stamps: live?.stamps ?? 0, stampsRequired: live?.stampsRequired ?? program.settings.stampsRequired, expiresAt: live?.expiresAt ?? null,
       rewardDescription: live?.rewardDescription ?? program.settings.rewardDescription },
     rewards: rewards.docs.map(doc => ({ id: doc.id, ...(doc.data() as RewardDoc) }))
@@ -263,6 +305,7 @@ export async function memberView(db: Firestore, brand: ProgramBrand, session: Me
       .map(r => ({ id: r.id, description: r.description, expiresAt: r.expiresAt })),
     history: events.docs.map(doc => doc.data() as LoyaltyEvent).filter(e => e.brandId === brand.brandId && HISTORY_TYPES.has(e.type))
       .map(e => ({ type: e.type, quantity: e.quantity, channel: e.channel, createdAt: e.createdAt })),
+    campaigns: await memberCampaignBenefits(db, member, customerSnap.data(), program.settings.active, now),
     newsletter: { subscribed: member.consent.status === 'given', consentVersion: texts.consentVersion },
   };
 }

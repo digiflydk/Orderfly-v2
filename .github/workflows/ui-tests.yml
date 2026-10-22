@@ -71,6 +71,9 @@ jobs:
       - name: Platform administration and brand-reference regression
         run: node --test tests/unit/mpanel-platform-admin.cjs tests/unit/brand-location-edit.cjs tests/unit/platform-role-server.cjs tests/unit/freemium-access.cjs tests/unit/access-authority.cjs tests/unit/order-access.cjs tests/unit/admin-session.cjs tests/unit/opsfly-login.cjs tests/unit/mpanel-launch.cjs tests/unit/website-access.cjs tests/unit/access-permission-migration.cjs tests/unit/loyalty-stamp-card-rules.cjs tests/unit/loyalty-stamp-card-counter.cjs tests/unit/loyalty-merchant-routes.cjs tests/unit/loyalty-membership.cjs tests/unit/loyalty-portal-routes.cjs tests/unit/loyalty-admin.cjs tests/unit/loyalty-portal-pages.cjs tests/unit/loyalty-stamp-card-texts.cjs
 
+      - name: Local QA environment safety regressions
+        run: node --test tests/unit/local-qa-environment.cjs tests/unit/local-qa-client.cjs
+
       - name: Booking feedback and mail regression
         run: node --test tests/unit/booking-feedback-setup-144.cjs tests/unit/booking-feedback-timing.cjs tests/unit/feedback-mail.cjs tests/unit/feedback-readiness.cjs tests/unit/feedback-central-access.cjs tests/unit/feedback-scopes.cjs tests/unit/feedback-admin-notifications.cjs tests/unit/feedback-report-public.cjs tests/unit/feedback-page-access.cjs tests/unit/feedback-presentation.cjs tests/unit/feedback-review-evidence.cjs
 
@@ -78,10 +81,19 @@ jobs:
         run: node --test tests/unit/omnisend-contact-import.cjs tests/unit/omnisend-193.cjs tests/unit/customer-manual-sync.cjs tests/unit/orderfly-booking-sync.cjs
 
       - name: Stripe payment lifecycle regression (#189)
-        run: node --test tests/unit/stripe-lifecycle-189.cjs tests/unit/cart-cancel.cjs tests/unit/payment-display.cjs tests/unit/takeaway-qa-regressions.cjs tests/unit/wait-for-release.cjs tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs tests/unit/printing-queue-summary.cjs tests/unit/printing-queue-review.cjs tests/unit/printing-resume.cjs
+        run: node --test tests/unit/stripe-lifecycle-189.cjs tests/unit/cart-cancel.cjs tests/unit/payment-display.cjs tests/unit/takeaway-qa-regressions.cjs tests/unit/wait-for-release.cjs tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-activity-metadata.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs tests/unit/printing-queue-summary.cjs tests/unit/printing-queue-review.cjs tests/unit/printing-resume.cjs
 
       - name: Private printer device credential regression
         run: node --test tests/unit/printing-device-auth.cjs
+
+      - name: Native printer device verification regression
+        run: node --test tests/unit/printing-device-auth-native.cjs
+
+      - name: Native print claim reservation regression
+        run: node --test tests/unit/printing-native-claim.cjs
+
+      - name: Native print confirmation persistence regression
+        run: node --test tests/unit/printing-print-result-native.cjs
 
       - name: Native printer credential provisioning regression
         run: node --test tests/unit/printing-device-credentials-service.cjs
@@ -98,6 +110,9 @@ jobs:
       - name: Kitchen PNG payload regression
         run: node --test tests/unit/printing-kitchen-png.cjs
 
+      - name: Immutable synthetic testbon content regression
+        run: node --test tests/unit/printing-job-content.cjs
+
       - name: Combined print-intent batch regression
         run: node --test tests/unit/printing-outbox-batch.cjs
 
@@ -110,6 +125,9 @@ jobs:
       - name: Native print catalog projection regression
         run: node --test tests/unit/printing-catalog-projection.cjs
 
+      - name: Saved printer routing API regression
+        run: node --test tests/unit/printing-saved-routing.cjs
+
       - name: Scoped print-intent target policy regression
         run: node --test tests/unit/printing-intent-target-policy.cjs
 
@@ -118,6 +136,9 @@ jobs:
 
       - name: Native and compatibility transaction bridge regression
         run: node --test tests/unit/firestore-compat-transaction.cjs
+
+      - name: Atomic Stripe routed print-intent integration
+        run: node --test tests/unit/printing-stripe-settlement-integration.cjs
 
       - name: Private settlement preparation regression
         run: node --test tests/unit/settlement-preparation.cjs
@@ -131,8 +152,14 @@ jobs:
       - name: Install Chromium for brand-owner regression
         run: npx playwright install --with-deps chromium
 
+      - name: Printer routing editor and sample preview regression
+        run: node --test tests/unit/printing-routing-editor.cjs tests/unit/printing-routing-ui-browser.cjs
+
       - name: Core browser regression
         run: node --test tests/unit/printing-ui-browser.cjs tests/unit/merchant-payment-browser.cjs tests/unit/brand-location-browser.cjs tests/unit/opsfly-login-browser.cjs tests/unit/mpanel-launch-browser.cjs tests/unit/feedback-browser.cjs tests/unit/customer-form-browser.cjs tests/unit/customer-sync-actions-browser.cjs tests/unit/loyalty-admin-browser.cjs tests/unit/loyalty-portal-browser.cjs tests/unit/loyalty-counter-browser.cjs
+
+      - name: QR module behavior, scope and browser regression
+        run: node --test tests/unit/qr-*.cjs
 
       - name: Games editor browser regression
         run: node --test tests/unit/games-editor-browser.cjs
@@ -154,6 +181,9 @@ jobs:
             test-results/printing-config-*.png
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Club campaign service and browser regressions
+        run: node --test --test-concurrency=1 tests/unit/loyalty-campaign-bonus.cjs tests/unit/loyalty-campaign-admin.cjs tests/unit/loyalty-club-signup-integration.cjs tests/unit/loyalty-profile.cjs tests/unit/club-promotion-rules.cjs tests/unit/club-checkout.cjs tests/unit/checkout-availability.cjs tests/unit/loyalty-benefits-browser.cjs tests/unit/loyalty-campaign-admin-browser.cjs tests/unit/loyalty-profile-browser.cjs
 
       - name: Build
         run: npm run build

@@ -1,0 +1,142 @@
+/* Scoped to Esmeralda's club frame. The storefront, admin and other brands retain their own styles. */
+[data-esmeralda-club], [data-esmeralda-club-footer] {
+  font-family: 'Brandon Text Office Regular', Arial, sans-serif;
+  font-size: 16px;
+  line-height: 1.5;
+  color: #fff;
+}
+[data-esmeralda-club] { background: #111; min-height: 65vh; }
+[data-esmeralda-club] *, [data-esmeralda-club-footer] * { box-sizing: border-box; }
+[data-esmeralda-club] a, [data-esmeralda-club-footer] a { text-underline-offset: 4px; }
+[data-esmeralda-club] :is(a, button, input, summary):focus-visible,
+[data-esmeralda-club-footer] :is(a, button):focus-visible { outline: 2px solid #f5ae25; outline-offset: 4px; }
+[data-esmeralda-club] .es-club-header { background: #000; border-bottom: 1px solid #242424; }
+.es-club-header-inner { max-width: 1360px; min-height: 90px; margin: auto; padding: 8px 32px; display: flex; align-items: center; justify-content: space-between; gap: 24px; }
+.es-club-logo { flex-shrink: 0; }
+.es-club-logo img { width: 142px; height: 70px; object-fit: contain; }
+.es-club-desktop-nav { display: flex; align-items: center; gap: clamp(16px, 2vw, 30px); }
+.es-club-desktop-nav a { font-size: 17px; white-space: nowrap; }
+.es-club-desktop-nav a:hover, .es-club-desktop-nav [aria-current], .es-club-mobile-menu [aria-current] { color: #f5ae25; }
+[data-esmeralda-club] .es-club-order { display: inline-flex; flex-shrink: 0; align-items: center; justify-content: center; gap: 24px; min-height: 50px; border-radius: 10px; padding: 12px 28px; background: #f5aa24; color: #111; font: 400 14px/1.3 'Bourton Base', Impact, sans-serif; letter-spacing: .04em; text-transform: uppercase; }
+.es-club-order:hover { background: #ffc34c; }
+.es-club-mobile-menu { display: none; }
+.es-club-skip { position: absolute; top: 12px; left: 12px; transform: translateY(-200%); z-index: 30; background: #111; padding: 12px; }
+.es-club-skip:focus { transform: translateY(0); }
+.es-club-content { max-width: 1320px; margin: auto; padding: 56px 32px 72px; }
+.es-club-eyebrow { margin: 0 0 24px; color: #f5ae25; letter-spacing: .08em; }
+.es-club-columns { display: grid; grid-template-columns: minmax(0, 2fr) minmax(250px, 1fr); align-items: start; gap: 40px; }
+.es-club-form-panel { min-width: 0; background: #1d1d1d; border: 1px solid #3d3d3d; border-radius: 18px; padding: 36px; }
+[data-esmeralda-club] .es-club-form-panel :is(h1, h2), [data-esmeralda-club-footer] h2 { font-family: 'Bourton Base', Impact, sans-serif; font-weight: 400; text-transform: uppercase; letter-spacing: .04em; }
+[data-esmeralda-club] .es-club-form-panel h1 { font-size: clamp(28px, 3vw, 38px); line-height: 1.2; margin: 0 0 12px; }
+[data-esmeralda-club] .es-club-form-panel :is(form, section) > .text-center { text-align: left; }
+[data-esmeralda-club] .es-club-form-panel form > p.text-center { text-align: left; }
+[data-esmeralda-club] .es-club-form-panel form { gap: 24px; }
+[data-esmeralda-club] .es-club-form-panel input { min-height: 52px; border: 1px solid #666; border-radius: 9px; background: #121212; color: #fff; font-size: 16px; }
+[data-esmeralda-club] .es-club-form-panel label { color: #fff; }
+[data-commerce-root][data-brand-slug="esmeralda"] [data-esmeralda-club] .es-club-form-panel [data-ui-button][data-ui-variant="brand"] {
+  min-height: 52px; height: auto; padding: 15px 24px; border-radius: 10px; background: #f5ae25; color: #111;
+  font: 400 16px/1.4 'Bourton Base', Impact, sans-serif; text-transform: uppercase; letter-spacing: .04em; white-space: normal;
+}
+[data-esmeralda-club] .es-club-form-panel form a { color: #f5ae25; }
+[data-esmeralda-club] .es-club-form-panel .commerce-newsletter { padding: 0; border: 0; background: transparent; border-radius: 0; }
+[data-esmeralda-club] .es-club-form-panel [role="checkbox"] { flex-shrink: 0; background: #121212; border-color: #b6b6b6; }
+[data-esmeralda-club] .es-club-form-panel [role="checkbox"][data-state="checked"] { background: #f5ae25; color: #111; }
+.es-club-aside { min-width: 0; }
+.es-club-aside section { padding: 0 0 24px; margin: 0 0 24px; border-bottom: 1px solid #3d3d3d; }
+.es-club-aside section:last-child { border-bottom: 0; margin-bottom: 0; }
+[data-esmeralda-club] .es-club-aside h2 { font-family: 'Bourton Base', Impact, sans-serif; font-weight: 400; font-size: 23px; line-height: 1.3; margin: 0 0 12px; }
+.es-club-aside p { color: #ccc; margin: 0 0 10px; }
+.es-club-aside a { color: #f5ae25; text-decoration: underline; }
+.es-club-content-member { max-width: 760px; }
+.es-club-content-member .es-club-columns { grid-template-columns: minmax(0, 1fr); }
+[data-commerce-root][data-brand-slug="esmeralda"] [data-esmeralda-club-footer] { background: #2a1000; padding: 52px 32px 24px; }
+.es-club-footer-grid, .es-club-footer-bottom { max-width: 1256px; margin: auto; }
+.es-club-footer-grid { display: grid; grid-template-columns: 1.5fr 1fr 1fr 1.4fr; gap: 40px; }
+[data-esmeralda-club-footer] h2 { font-size: 20px; margin: 0 0 16px; }
+.es-club-footer-grid p { color: #ddd; margin: 12px 0; max-width: 250px; }
+.es-club-footer-grid a { display: block; width: fit-content; padding: 5px 0; overflow-wrap: anywhere; }
+.es-club-footer-grid img { width: 142px; height: 76px; object-fit: contain; }
+.es-club-footer-grid a:hover, .es-club-footer-bottom a:hover, .es-club-footer-bottom button:hover { color: #f5ae25; text-decoration: underline; }
+.es-club-footer-bottom { border-top: 1px solid #ffffff30; padding-top: 24px; margin-top: 36px; display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px; font-size: 14px; color: #ddd; }
+.es-club-footer-bottom > div { display: flex; flex-wrap: wrap; gap: 20px; }
+.es-club-footer-bottom :is(a, button) { display: inline-flex; align-items: center; min-height: 44px; }
+@media (max-width: 1150px) {
+  .es-club-desktop-nav { display: none; }
+  .es-club-mobile-menu { display: block; }
+  .es-club-header-inner { position: relative; }
+  .es-club-order { margin-left: auto; }
+  .es-club-mobile-menu summary { display: flex; align-items: center; gap: 8px; min-height: 48px; cursor: pointer; list-style: none; }
+  .es-club-mobile-menu summary::-webkit-details-marker { display: none; }
+  .es-club-mobile-menu nav { position: absolute; z-index: 20; top: 100%; left: 0; right: 0; display: grid; padding: 12px 32px 24px; background: #000; border-bottom: 1px solid #3d3d3d; }
+  .es-club-mobile-menu nav a { padding: 12px 0; }
+}
+@media (max-width: 760px) {
+  .es-club-header-inner { min-height: 76px; padding: 6px 20px; gap: 16px; }
+  .es-club-logo img { width: 104px; height: 62px; }
+  [data-esmeralda-club] .es-club-order { padding: 12px 14px; min-height: 44px; gap: 10px; font-size: 12px; }
+  .es-club-content { padding: 32px 20px 48px; }
+  .es-club-columns { grid-template-columns: minmax(0, 1fr); gap: 36px; }
+  .es-club-form-panel { padding: 24px 20px; border-radius: 14px; }
+  .es-club-eyebrow { margin-bottom: 20px; }
+  .es-club-aside h2 { font-size: 22px; }
+  .es-club-footer-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 32px 24px; }
+  .es-club-footer-grid > :first-child, .es-club-footer-grid > :last-child { grid-column: 1 / -1; }
+  [data-commerce-root][data-brand-slug="esmeralda"] [data-esmeralda-club-footer] { padding: 36px 20px 20px; }
+}
+@media (max-width: 360px) {
+  .es-club-header-inner { gap: 10px; padding-inline: 16px; }
+  [data-esmeralda-club] .es-club-order { padding-inline: 10px; }
+  .es-club-order span { display: none; }
+  .es-club-footer-grid { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* Signed-in member pages use the same restaurant palette, with a clear card/QR hierarchy. */
+[data-esmeralda-club] .es-club-content-member:has(.club-member-card, .club-member-history, .club-member-profile) { max-width: 1120px; }
+[data-esmeralda-club] .es-club-content-member .es-club-form-panel:has(.club-member-card, .club-member-history, .club-member-profile) { padding: 0; background: transparent; border: 0; }
+[data-esmeralda-club] .club-member-nav { gap: 8px; padding: 6px; border: 1px solid #3d3d3d; border-radius: 14px; background: #1d1d1d; margin-bottom: 28px; }
+[data-esmeralda-club] .club-member-nav a { min-height: 48px; border: 0; border-radius: 9px; color: #ddd; }
+[data-esmeralda-club] .club-member-nav a:hover { color: #fff; background: #303030; }
+[data-esmeralda-club] .club-member-nav a[aria-current="page"] { background: #f5ae25; color: #111; font-weight: 700; }
+[data-esmeralda-club] .club-member-card { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 24px; align-items: stretch; }
+[data-esmeralda-club] :is(.club-stamp-card, .club-member-qr, .club-member-rewards, .club-home-screen, .club-member-profile > section, .club-member-history) { min-width: 0; border: 1px solid #3d3d3d; border-radius: 18px; background: #1d1d1d; padding: 28px; }
+[data-esmeralda-club] :is(.club-stamp-card, .club-member-qr) { justify-content: center; }
+[data-esmeralda-club] .club-stamp-card h1 { font-size: clamp(28px, 3vw, 36px); overflow-wrap: anywhere; }
+[data-esmeralda-club] .club-stamp-card > div:first-child { width: 100%; text-align: left; }
+[data-esmeralda-club] .club-stamp-card > div:first-child p { color: #ccc; font-size: 20px; }
+[data-esmeralda-club] .club-stamp-grid { background: #141414; border-color: #444; padding: 24px 12px; }
+[data-esmeralda-club] [data-stamp] { width: 100%; height: auto; aspect-ratio: 1; border-color: #f5ae25; }
+[data-esmeralda-club] [data-stamp="filled"] { background: #f5ae25; color: #111; }
+[data-esmeralda-club] [data-stamp="empty"] { background: #252525; }
+[data-esmeralda-club] .club-stamp-count { color: #f5ae25; font-size: 24px; }
+[data-esmeralda-club] .club-stamp-progress { appearance: none; display: block; width: 100%; height: 6px; border: 0; border-radius: 6px; overflow: hidden; background: #444; color: #f5ae25; }
+[data-esmeralda-club] .club-stamp-progress::-webkit-progress-bar { background: #444; }
+[data-esmeralda-club] .club-stamp-progress::-webkit-progress-value { background: #f5ae25; }
+[data-esmeralda-club] .club-stamp-progress::-moz-progress-bar { background: #f5ae25; }
+[data-esmeralda-club] .club-member-qr h2 { align-self: flex-start; font-size: 24px; }
+[data-esmeralda-club] .club-member-qr > p { max-width: 320px; color: #ccc; }
+[data-esmeralda-club] :is(.club-member-rewards, .club-card-expiry, .club-home-screen) { grid-column: 1 / -1; }
+[data-esmeralda-club] .club-member-rewards h2 { font-size: 24px; }
+[data-esmeralda-club] .club-member-rewards .commerce-newsletter { padding: 20px; border: 1px solid #86621e; border-radius: 12px; background: #302713; }
+[data-esmeralda-club] .club-member-rewards strong { color: #ffcc6a; }
+[data-esmeralda-club] .club-card-expiry { color: #ccc; font-size: 14px; }
+[data-esmeralda-club] .club-member-profile { max-width: 760px; width: 100%; margin: auto; }
+[data-esmeralda-club] .club-member-profile > h1 { text-align: left; }
+[data-esmeralda-club] .club-member-profile section h2 { font-size: 23px; }
+[data-esmeralda-club] .club-member-profile dt { color: #bbb; }
+[data-esmeralda-club] .club-member-profile dd { min-width: 0; }
+[data-esmeralda-club] .club-member-profile [data-ui-variant="outline"],
+[data-esmeralda-club] .club-home-screen [data-ui-variant="outline"] { min-height: 48px; background: #252525; border-color: #888; color: #fff; }
+[data-esmeralda-club] .club-member-profile [data-ui-variant="ghost"] { color: #ffb4aa; }
+[data-esmeralda-club] .club-member-profile a { color: #f5ae25; }
+[data-esmeralda-club] .club-member-history { max-width: 900px; width: 100%; margin: auto; }
+[data-esmeralda-club] .club-member-history > ul { border-color: #555; }
+[data-esmeralda-club] .club-member-history li { border-color: #555; flex-wrap: wrap; }
+[data-esmeralda-club] .club-member-history li > span { min-width: 0; overflow-wrap: anywhere; }
+[data-esmeralda-club] .club-member-history time { color: #ccc; }
+@media (max-width: 760px) {
+  [data-esmeralda-club] .club-member-card { grid-template-columns: minmax(0, 1fr); }
+  [data-esmeralda-club] :is(.club-stamp-card, .club-member-qr, .club-member-rewards, .club-home-screen, .club-member-profile > section, .club-member-history) { padding: 24px 16px; border-radius: 14px; }
+  [data-esmeralda-club] .club-member-nav { margin-bottom: 24px; }
+  [data-esmeralda-club] .club-member-nav a { font-size: 16px; }
+  [data-esmeralda-club] .club-stamp-grid { column-gap: 8px; padding-inline: 4px; }
+}

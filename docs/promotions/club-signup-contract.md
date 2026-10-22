@@ -1,0 +1,13 @@
+# Club campaign signup integration (#459 / #470)
+
+The existing Club signup transaction remains the authority for membership, identity and versioned consent. New memberships stage the welcome bonus and one active server-selected `club_signup` Promotion, before any transaction writes. Existing members only get the neutral login-link response and cannot regrant welcome benefits.
+
+Standalone signup deterministically selects an active public Club promotion. Checkout can pass its already-priced promotion ID through a trusted server-only argument; the browser's signup schema cannot set that argument or a reward amount. Both entry points write the same customer `pendingClubDiscountId`. Independent email-identity and central-customer claim records prevent a second entitlement through membership recreation or an email alias. Normal payment reservations/usage still govern redemption and retries. Offers tied to another customer are not public signup offers. Normal schedule/location/basket/first-purchase rules still apply at checkout.
+
+`validateClubCheckoutSignup` is read-only. It checks real Club consent and terms versions and eligibility. Only after checkout validates catalog prices and the submitted quote may `prepareClubCheckoutSignup` call real signup, deliver its existing login mail and return the central customer ID. Checkout must re-resolve its customer and use the existing atomic one-use reservation before payment. False consent, stale texts, cross-brand slug/ID and inactive programs are rejected, rather than inferring Club membership from marketing consent.
+
+Campaign configuration is read-only on public pages. No campaign is enabled by code deployment; X/Y rates, periods and welcome/profile bonuses remain explicit administrator settings. Checkout mode governs new acquisition prompts; existing personal entitlements remain subject to their promotion's own validity. QA uses isolated data, not live member/stamp writes or real mail delivery.
+
+CI runs the Club campaign service, identity/bonus and actual Chromium component regressions as a sequential step in Orderfly CI. Campaign fingerprints cover computed period-active benefits and all valid active Club promotion offers, so checkout cannot silently accept an edited secondary offer.
+
+An existing active member explicitly accepting Club checkout consent refreshes the exact versioned consent and terms in the signup transaction, including the central marketing projection and outbox. It does not receive a second welcome stamp or discount. Customer ownership is revalidated before any writes; checkout identity conflicts fail instead of using the neutral public signup response. Standalone repeat signup retains its neutral login-only behavior.
