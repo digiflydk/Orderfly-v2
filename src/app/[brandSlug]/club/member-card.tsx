@@ -1,6 +1,7 @@
 import { Check } from 'lucide-react';
 import type { PortalMember } from './data';
 import { HomeScreenHint } from './home-screen-hint';
+import { MemberBenefits, type MemberCampaigns } from './club-benefits';
 import { MemberQr } from './member-qr';
 import { danishDate, firstName, nextRewardText, stampWord } from './texts';
 
@@ -8,6 +9,7 @@ import { danishDate, firstName, nextRewardText, stampWord } from './texts';
 // is fetched in the browser so it is always fresh.
 export function MemberCard({ member, slug, base }: { member: PortalMember; slug: string; base: string }) {
   const { card, rewards, program } = member;
+  const campaigns = (member as PortalMember & { campaigns?: MemberCampaigns }).campaigns;
   const filled = Math.min(card.stamps, card.stampsRequired);
   // Even rows: 8 stamps as 2 × 4, at most 5 per row on a phone.
   const columns = card.stampsRequired <= 5 ? card.stampsRequired : card.stampsRequired <= 10 ? Math.ceil(card.stampsRequired / 2) : 5;
@@ -54,6 +56,7 @@ export function MemberCard({ member, slug, base }: { member: PortalMember; slug:
         <p className="club-card-expiry text-center">Dine stempler udløber, hvis du ikke har fået et nyt stempel inden {danishDate(card.expiresAt)}.</p>
       )}
 
+      <MemberBenefits campaigns={campaigns} base={base} />
       <HomeScreenHint slug={slug} />
     </div>
   );

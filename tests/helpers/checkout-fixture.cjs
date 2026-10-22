@@ -5,7 +5,7 @@ const {loadTs}=require('./load-ts.cjs');
 function load(path,mocks={}) {
  const mod={exports:{}};
  const code=ts.transpileModule(fs.readFileSync(path,'utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,target:ts.ScriptTarget.ES2022}}).outputText;
- new Function('require','module','exports',code)(name=>['./money','@/lib/money'].includes(name)?require('../helpers/load-ts.cjs').loadTs('src/lib/money.ts'):name === '@/lib/server/firestore-compat' && mocks['firebase/firestore'] ? {...mocks['firebase/firestore'],db:mocks['@/lib/firebase']?.db} : name in mocks ?mocks[name]:require(name),mod,mod.exports);return mod.exports;
+ new Function('require','module','exports',code)(name=>name==='./promotion-rules'?loadTs('src/lib/promotion-rules.ts'):['./money','@/lib/money'].includes(name)?require('../helpers/load-ts.cjs').loadTs('src/lib/money.ts'):name === '@/lib/server/firestore-compat' && mocks['firebase/firestore'] ? {...mocks['firebase/firestore'],db:mocks['@/lib/firebase']?.db} : name in mocks ?mocks[name]:require(name),mod,mod.exports);return mod.exports;
 }
 const optional=load('src/lib/firestore-optional-fields.ts');
 const customerIdentity=loadTs('src/lib/customer-identity.ts');
@@ -14,7 +14,7 @@ function strictWrite(value,path='root') {
  if(value && typeof value==='object') for(const [key,entry] of Object.entries(value)) strictWrite(entry,`${path}.${key}`);
 }
 const offer={id:'d',brandId:'b',isActive:true,locationIds:['l'],orderTypes:['pickup'],activeDays:[],activeTimeSlots:[],discountType:'percentage',discountValue:10,code:'SAVE10',usedCount:0,usageLimit:0};
-async function checkout({discountReaders,existing=false,kind='none',identityCleaner=false, fault, stripeError, realReservations=false, marketingConfigured=true, city='Hellerup', items, seed=[], locationOverrides={}, deliveryType='pickup', deliveryTime, customerOverrides={}, beforeStripe, brandOverrides={}, paymentOverrides={}, standardDiscounts, expectedCartDiscount, consentCookie, anonymousConsentId, orderId='ORD-TEST', discountOrderTypes=['pickup'], createOnly=false, origin='https://example.test', discountId='d'}={}) {
+async function checkout({discountReaders,existing=false,kind='none',identityCleaner=false, fault, stripeError, realReservations=false, marketingConfigured=true, city='Hellerup', items, seed=[], locationOverrides={}, deliveryType='pickup', deliveryTime, customerOverrides={}, beforeCustomerTransaction, beforeStripe, brandOverrides={}, paymentOverrides={}, standardDiscounts, expectedCartDiscount, consentCookie, anonymousConsentId, orderId='ORD-TEST', discountOrderTypes=['pickup'], createOnly=false, origin='https://example.test', discountId='d'}={}) {
  const path='src/app/checkout/actions.ts';
  const mocks=Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],{}]));
  const events=[];const writes=[];let coupon, persistenceError, sessionParams;let patchCalls=0;
@@ -32,7 +32,8 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   records.set(key,saved);
  };
  records.set('products/p',{brandId:'b',locationIds:['l'],categoryId:'pizza',price:100,isActive:true,productName:'Pizza'});
- records.set('discounts/d',{...offer,id:'d',orderTypes:discountOrderTypes,applicationType:kind==='newsletter'?'newsletter_signup':'code',perCustomerLimit:1,usageLimit:1});
+ records.set('discounts/d',{...offer,id:'d',orderTypes:discountOrderTypes,applicationType:kind==='newsletter'?'newsletter_signup':kind==='club'?'club_signup':'code',perCustomerLimit:1,usageLimit:1});
+ if(kind==='club') records.set('loyaltyCampaigns/b',{brandId:'b',settings:{checkoutMode:'club'}});
  if(fault==='collision')records.set('orders/ORD-TEST',{paymentStatus:'Paid',brandId:'other',totalAmount:900});
  const record={id:'c',brandId:'b',email:'test@example.test',normalizedEmail:'test@example.test',phone:'12345678',normalizedPhone:'12345678',locationIds:['l'],marketingConsent:false};
  for (const [key, data] of seed) records.set(key,data);
@@ -44,6 +45,11 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
  if(existing) records.set('customers/c',record);
  const snap=snapshot(firestoreRef('customers','c'));
  Object.assign(mocks,{
+  '@/lib/loyalty/stamp-card/club-signup':{
+   getClubSignupDiscountEligibility:async()=>fault!=='club-ineligible',
+   validateClubCheckoutSignup:async input=>{events.push('club-preflight');assert.equal(input.newsletterConsent,true);assert.equal(input.termsAccepted,true);return{eligible:fault!=='club-ineligible'};},
+   prepareClubCheckoutSignup:async input=>{events.push('club-signup');if(fault==='club-signup')throw Error('Club signup unavailable');const row=[...records].find(([key,data])=>key.startsWith('customers/')&&data.brandId===input.brandId&&customerIdentity.customerHasEmail(data,input.email));assert.ok(row,'canonical checkout customer exists before Club signup');if(input.discountId)records.set(row[0],{...row[1],pendingClubDiscountId:input.discountId});return{customerId:row[1].id};},
+  },
   '@/lib/marketing/config':{marketingConfig:brandId=>marketingConfigured && brandId==='b'?{brandId:'b'}:null},
   'node:crypto':require('node:crypto'),
   '@/lib/firebase-admin':{getAdminDb:()=>marketingDb},
@@ -98,7 +104,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
     }
     return snapshot(ref);
    },
-   runTransaction:async(_,callback)=>callback({get:async ref=>snapshot(ref),set:(ref,data,options)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)}),
+   runTransaction:async(_,callback)=>{beforeCustomerTransaction?.(records);return callback({get:async ref=>snapshot(ref),set:(ref,data,options)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)});},
    serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),
    setDoc:async(ref,data)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data);writes.push({ref,data});events.push(ref.collection);},
    updateDoc:async(ref,data)=>{
@@ -123,7 +129,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
  if(discountReaders) mocks['@/lib/server/checkout-discounts']=discountReaders;
  const api=load(path,mocks);
  if(createOnly) return {result:{},writes,events,records,actions:api};
- const result=await api.createStripeCheckoutSessionAction(items || [{id:'p',name:'Pizza',quantity:1,unitPrice:100,totalPrice:100,toppings:identityCleaner?[]:undefined}],{name:'Test',email:'test@example.test',phone:'12345678',subscribeToNewsletter:kind==='newsletter',acceptTerms:true,...customerOverrides,...(identityCleaner?{street:'',zipCode:'',city:''}:{})},deliveryType,'b','l',{subtotal:100,deliveryFee:0,discountTotal:0,tips:0,taxes:0,bagFee:4,cartDiscountName:undefined,...paymentOverrides},['code','newsletter'].includes(kind)?discountId:null,'brand','location',deliveryTime,anonymousConsentId || (fault?.startsWith('consent-')?'anon':undefined));
+ const result=await api.createStripeCheckoutSessionAction(items || [{id:'p',name:'Pizza',quantity:1,unitPrice:100,totalPrice:100,toppings:identityCleaner?[]:undefined}],{name:'Test',email:'test@example.test',phone:'12345678',subscribeToNewsletter:['newsletter','club'].includes(kind),...(kind==='club'?{subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:'consent-1',clubTermsVersion:'terms-1'}:{}),acceptTerms:true,...customerOverrides,...(identityCleaner?{street:'',zipCode:'',city:''}:{})},deliveryType,'b','l',{subtotal:100,deliveryFee:0,discountTotal:0,tips:0,taxes:0,bagFee:4,cartDiscountName:undefined,...paymentOverrides},['code','newsletter','club'].includes(kind)?discountId:null,'brand','location',deliveryTime,anonymousConsentId || (fault?.startsWith('consent-')?'anon':undefined));
  return {result,writes,events,coupon,records,patchCalls,persistenceError,sessionParams,actions:api};
 }
 
