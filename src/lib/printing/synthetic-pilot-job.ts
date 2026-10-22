@@ -122,7 +122,7 @@ async function operate(input: unknown, operation: 'poll' | 'download' | 'result'
       if (saved.id !== j.jobId || session.id !== j.sessionId || p.data.sessionId !== j.sessionId
         || Object.keys(binding).some(key => j[key as keyof typeof binding] !== identity[key as keyof typeof binding]
           || q[key as keyof typeof binding] !== identity[key as keyof typeof binding])
-        || j.expiresAt !== q.expiresAt || j.createdAt !== q.consumedAt || now < j.createdAt || now >= j.expiresAt
+        || j.expiresAt !== q.expiresAt || j.createdAt !== q.consumedAt || now < j.createdAt
         || [j.offeredAt, j.downloadStartedAt, j.confirmedAt].some(time => time !== null && time > now)) return invalid();
       const content = readSyntheticTestBonContent(j.content, { brandId: identity.brandId, locationId: identity.locationId,
         printerId: identity.printerId, printerRevision: identity.printerRevision, model: j.model, paperWidthMm: j.paperWidthMm });
@@ -133,6 +133,12 @@ async function operate(input: unknown, operation: 'poll' | 'download' | 'result'
         j.brandId, j.locationId, j.printerId, j.printerRevision, j.credentialRevision, j.jobId, content.sha256])).digest('base64url');
       const tokenDigest = hash(deliveryToken);
       if (j.state !== 'queued' && !same(j.tokenDigest!, tokenDigest)) return invalid();
+      // A terminal pointer deliberately remains reserved. Authenticated ready
+      // polls may learn only that no work remains, even after expiry, but only
+      // after the entire current private binding and canonical content validate.
+      // Expiry still closes every nonterminal poll and every data/result action.
+      if (operation === 'poll' && ['confirmed', 'failed', 'unknown'].includes(j.state)) return { jobReady: false as const };
+      if (now >= j.expiresAt) return invalid();
       if (operation === 'poll') {
         if (!['queued', 'offered'].includes(j.state)) return { jobReady: false as const };
         if (j.state === 'queued') tx.set(jobRef, { ...j, state: 'offered', tokenDigest, offeredAt: now });
