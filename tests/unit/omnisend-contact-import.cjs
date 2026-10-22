@@ -173,37 +173,40 @@ test('Omnisend contact pagination uses the dated API version and incremental cur
 });
 
 
-test('online checkout reuses a booking customer matched by phone and reserves both aliases', async () => {
+test('public checkout rejects unknown email with a booking phone without changing customer or identities', async () => {
   const bookingCustomer = {
-    id: 'booking-customer', brandId: 'b',
-    email: 'booking@example.test', normalizedEmail: 'booking@example.test',
-    phone: '12345678', normalizedPhone: '12345678',
-    fullName: 'Anna Jensen', locationIds: ['l'], totalOrders: 1, totalSpend: 90,
-    marketingConsent: false,
+    id:'booking-customer',brandId:'b',email:'booking@example.test',normalizedEmail:'booking@example.test',
+    phone:'12345678',normalizedPhone:'12345678',fullName:'Anna Jensen',locationIds:['l'],totalOrders:1,totalSpend:90,marketingConsent:false,
   };
-  const result = await checkout({
-    seed: [['customers/booking-customer', bookingCustomer]],
-    customerOverrides: { email: 'online@example.test', phone: '12345678' },
-  });
-  assert.equal(result.result.success, true, result.result.error);
-  const customer = result.records.get('customers/booking-customer');
-  assert.equal(customer.normalizedEmail, 'booking@example.test');
-  assert.deepEqual(customer.emailAliases, ['online@example.test']);
-  assert.equal(customer.normalizedPhone, '12345678');
-  assert.equal([...result.records.keys()].filter(key => key.startsWith('customers/')).length, 1);
-  const emailHashForCheckout = createHash('sha256')
-    .update('b\nonline@example.test').digest('hex');
-  const phoneHashForCheckout = createHash('sha256')
-    .update('b\n12345678').digest('hex');
-  assert.equal(
-    result.records.get('integrationConsumerCustomerIdentities/' + emailHashForCheckout).customerId,
-    'booking-customer',
-  );
-  assert.equal(
-    result.records.get('integrationConsumerCustomerPhoneIdentities/' + phoneHashForCheckout).customerId,
-    'booking-customer',
-  );
-  assert.equal(result.writes.find(write => write.ref.collection === 'orders').data.customerDetails.id, 'booking-customer');
+  const phoneKey='integrationConsumerCustomerPhoneIdentities/'+customerIdentity.customerIdentityKey('b','12345678');
+  const reservation={brandId:'b',customerId:'booking-customer'};
+  const result=await checkout({seed:[['customers/booking-customer',bookingCustomer],[phoneKey,reservation]],customerOverrides:{email:'online@example.test',phone:'12345678'}});
+  assert.equal(result.result.success,false);
+  assert.deepEqual(result.writes,[]);assert.deepEqual(result.events,[]);
+  assert.deepEqual(result.records.get('customers/booking-customer'),bookingCustomer);
+  assert.deepEqual(result.records.get(phoneKey),reservation);
+  assert.equal([...result.records.keys()].filter(key=>key.startsWith('customers/')).length,1);
+  assert.equal([...result.records.keys()].some(key=>key.startsWith('integrationConsumerCustomerIdentities/')),false);
+  assert.equal([...result.records.keys()].some(key=>key.startsWith('orders/')),false);
+});
+
+test('checkout reuses an email alias already established by the trusted booking import flow', async () => {
+  const db=memoryDb(new Map([['brands/b',{id:'b'}],['locations/l',{id:'l',brandId:'b'}]]));
+  const admin={firestore:{FieldValue:{serverTimestamp:()=>new Date('2026-10-13T12:00:00.000Z'),arrayUnion:(...values)=>values}}};
+  const resolver=loadTs('src/lib/integrations/esmeralda-consumer-customer.ts',{'server-only':{},'@/lib/firebase-admin':{admin,getAdminDb:()=>db}});
+  const input={organization_id:'b',location_id:'l',full_name:'Anna Jensen',phone:'12345678'};
+  const first=await resolver.resolveOrUpsertEsmeraldaConsumerCustomer({...input,booking_id:'booking-primary',email:'booking@example.test'});
+  const imported=await resolver.resolveOrUpsertEsmeraldaConsumerCustomer({...input,booking_id:'booking-alias',email:'online@example.test'});
+  assert.equal(imported.customer_id,first.customer_id);
+  assert.deepEqual(db.rows.get('customers/'+first.customer_id).emailAliases,['online@example.test']);
+  const result=await checkout({seed:[...db.rows],customerOverrides:{email:'online@example.test',phone:'12345678'}});
+  assert.equal(result.result.success,true,result.result.error);
+  const customer=result.records.get('customers/'+first.customer_id);
+  assert.equal(customer.normalizedEmail,'booking@example.test');assert.deepEqual(customer.emailAliases,['online@example.test']);
+  assert.equal([...result.records.keys()].filter(key=>key.startsWith('customers/')).length,1);
+  assert.equal(result.records.get('integrationConsumerCustomerIdentities/'+customerIdentity.customerIdentityKey('b','online@example.test')).customerId,first.customer_id);
+  assert.equal(result.records.get('integrationConsumerCustomerPhoneIdentities/'+customerIdentity.customerIdentityKey('b','12345678')).customerId,first.customer_id);
+  assert.equal(result.records.get('orders/ORD-TEST').customerDetails.id,first.customer_id);
 });
 
 test('checkout does not create a duplicate when email and phone belong to different customers', async () => {
