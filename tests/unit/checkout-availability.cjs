@@ -109,12 +109,13 @@ test('delivery rolls to tomorrow independently of remaining pickup capacity', ()
   assert.equal(slots.asap_delivery, 'Tomorrow - 12:40');
 });
 test('newsletter offer checks actual customer and keeps canceled retry eligible', async () => {
-  let customer = { totalOrders: 1, marketingConsent: false };
+  let customer = { brandId:'b',email:'a@example.com',normalizedEmail:'a@example.com',totalOrders: 1, marketingConsent: false };
   let discount = { discountType:'percentage',discountValue:10,brandId:'b', applicationType:'newsletter_signup', isActive:true, locationIds:['l'], orderTypes:['pickup'], activeDays:[], activeTimeSlots:[], usedCount:0, usageLimit:0, perCustomerLimit:1 };
   const imports = [...fs.readFileSync('src/app/checkout/actions.ts','utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>m[1]);
   const mocks = Object.fromEntries(imports.map(name=>[name,{}]));
   mocks['@/lib/marketing/config'] = {marketingConfig:()=>({brandId:'b'})};
   mocks['@/lib/promotion-rules'] = load('src/lib/promotion-rules.ts');
+  mocks['@/lib/customer-identity'] = require('../helpers/load-ts.cjs').loadTs('src/lib/customer-identity.ts');
   mocks['@/lib/checkout-customer-identity'] = {findCheckoutCustomer:async()=>({ref:{id:'c'},exists:()=>true,data:()=>customer})};
   mocks['firebase/firestore'] = {doc:()=>({}),getDoc:async()=>({exists:()=>false}),collection:()=>null,where:()=>null,query:()=>null,getDocs:async()=>({docs:[{id:'d',data:()=>discount}]})};
   const api = load('src/app/checkout/actions.ts',mocks);
