@@ -143,3 +143,13 @@ test('admission bounds per-key rate, live keys and never lets oversized headers 
   // Idle keys expire instead of allowing unbounded growth.
   assert.equal(typeof rotating('new-key'), 'function');
 });
+
+test('equivalent Basic casing and spacing share one credential bucket', () => {
+  let time = 0; const admit = createCloudPrntPollAdmission(() => time);
+  const encoded = Buffer.from('orderfly:' + 'a'.repeat(43)).toString('base64');
+  const variants = ['Basic ', 'basic ', 'BASIC  ', 'bAsIc     '].map(prefix => prefix + encoded);
+  for (let i = 0; i < 10; i++) admit(variants[i % variants.length])();
+  for (const header of variants) assert.equal(admit(header), null);
+  time = 2000; admit(variants[3])();
+  for (const header of variants) assert.equal(admit(header), null);
+});
