@@ -74,6 +74,9 @@ jobs:
       - name: Local QA environment safety regressions
         run: node --test tests/unit/local-qa-environment.cjs tests/unit/local-qa-client.cjs tests/unit/local-qa-browser.cjs tests/unit/local-qa-credential-metadata.cjs
 
+      - name: Explicit local intent runtime safety regression
+        run: node --test tests/unit/local-qa-intent-runtime.cjs
+
       - name: Booking feedback and mail regression
         run: node --test tests/unit/booking-feedback-setup-144.cjs tests/unit/booking-feedback-timing.cjs tests/unit/feedback-mail.cjs tests/unit/feedback-readiness.cjs tests/unit/feedback-central-access.cjs tests/unit/feedback-scopes.cjs tests/unit/feedback-admin-notifications.cjs tests/unit/feedback-report-public.cjs tests/unit/feedback-page-access.cjs tests/unit/feedback-presentation.cjs tests/unit/feedback-review-evidence.cjs
 

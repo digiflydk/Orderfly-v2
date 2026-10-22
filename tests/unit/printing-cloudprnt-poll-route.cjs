@@ -4,6 +4,7 @@ const { loadTs } = require('../helpers/load-ts.cjs');
 const crypto = loadTs('src/lib/printing/device-auth.ts', { 'server-only': {} });
 const scope = { brandId: 'b1', locationId: 'l1', printerId: 'p1' };
 const filename = 'src/app/api/cloudprnt/[brandId]/[locationId]/[printerId]/route.ts';
+const { createCloudPrntPollAdmission } = loadTs('src/lib/printing/cloudprnt-poll-admission.ts', { 'server-only': {} });
 
 function fixture() {
   const draft = crypto.createPrinterDeviceCredentialDraft({ ...scope, printerRevision: 3, credentialRevision: 1 });
@@ -87,4 +88,58 @@ test('context and native failures remain fixed private errors with no partial wr
   assert.equal(f.adminCalls, 0);
   const g = fixture(); g.fail(Error('PRIVATE_SENTINEL'));
   await check(g, await g.run(), 503, { error: 'poll_unavailable' });
+});
+
+test('real route rejects excess credential polls before context, body or Admin I/O', async () => {
+  const f = fixture();
+  for (let i = 0; i < 10; i++) await check(f, await f.run(), 200, { jobReady: false });
+  const before = f.adminCalls;
+  const context = { get params() { throw Error('must not inspect context'); } };
+  const response = await f.route.POST(f.request(), context);
+  await check(f, response, 429, { error: 'poll_rate_limited' });
+  assert.equal(response.headers.get('retry-after'), '5');
+  assert.equal(f.adminCalls, before);
+});
+
+test('real route bounds concurrent transactions and releases slots after success/failure', async () => {
+  const f = fixture(); let release;
+  const pending = new Promise(resolve => { release = resolve; }); f.finish(() => pending);
+  const requests = Array.from({ length: 8 }, () => f.run());
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(f.options.length, 8); const before = f.adminCalls;
+  await check(f, await f.run(), 429, { error: 'poll_rate_limited' });
+  assert.equal(f.adminCalls, before);
+  release(); for (const response of await Promise.all(requests)) await check(f, response, 200, { jobReady: false });
+  await check(f, await f.run(), 200, { jobReady: false });
+  const g = fixture(); g.fail(Error('PRIVATE_SENTINEL'));
+  for (let i = 0; i < 9; i++) await check(g, await g.run(), 503, { error: 'poll_unavailable' });
+  assert.equal(g.options.length, 9);
+});
+
+test('admission bounds rotating credentials globally, refills monotonically and release is idempotent', () => {
+  let time = 0; const admit = createCloudPrntPollAdmission(() => time);
+  for (let i = 0; i < 20; i++) { const release = admit('rotating' + i); assert.equal(typeof release, 'function'); release(); release(); }
+  assert.equal(admit('new'), null);
+  time = 499; assert.equal(admit('new'), null);
+  time = 500; const release = admit('new'); assert.equal(typeof release, 'function'); release();
+  time = 499; assert.equal(admit('new'), null);
+  time = Number.NaN; assert.equal(admit('new'), null);
+});
+
+test('admission bounds per-key rate, live keys and never lets oversized headers allocate caller keys', () => {
+  let time = 0; const admit = createCloudPrntPollAdmission(() => time);
+  for (let i = 0; i < 10; i++) admit('one')();
+  assert.equal(admit('one'), null);
+  time = 1999; assert.equal(admit('one'), null);
+  time = 2000; admit('one')();
+  for (let i = 0; i < 10; i++) admit('x'.repeat(257 + i))();
+  assert.equal(admit(null), null);
+  // A steady rotating source can fill only a bounded map; existing keys remain usable.
+  let t = 0; const rotating = createCloudPrntPollAdmission(() => t);
+  for (let i = 0; i < 128; i++) { rotating('key' + i)(); t += 450; }
+  assert.equal(rotating('new-key'), null);
+  rotating('key0')();
+  t = 60_500;
+  // Idle keys expire instead of allowing unbounded growth.
+  assert.equal(typeof rotating('new-key'), 'function');
 });
