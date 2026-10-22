@@ -7,6 +7,7 @@ import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { printerConfigurationSchema, validatePrinterConfiguration } from './configuration';
 import { storedPrinterSchema } from './storage';
+import { initialPrinterActivity } from './activity-metadata';
 
 const createSchema = z.object({ configuration: printerConfigurationSchema }).strict();
 const editSchema = createSchema.extend({ revision: z.number().int().positive().safe() }).strict();
@@ -63,7 +64,14 @@ export async function writePrinterConfiguration(operation: 'create' | 'edit', in
       before: before?.configuration ?? null, after: checked.configuration,
       capabilityInvalidated: true, createdAt: timestamp,
     });
-    if (operation === 'create') tx.create(ref, after); else tx.set(ref, after);
+    if (operation === 'create') {
+      tx.create(ref, after);
+      // Creation proves this new, never-reused native identity has no prior use.
+      // Existing/legacy printers are never upgraded to "never" by an edit.
+      tx.create(ref.collection('statusMetadata').doc('current'), initialPrinterActivity({
+        brandId: config.brandId, locationId: config.locationId, printerId: config.id,
+      }, true));
+    } else tx.set(ref, after);
     return { item: { configuration: checked.configuration, revision } };
   });
 }

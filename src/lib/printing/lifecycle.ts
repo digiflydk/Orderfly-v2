@@ -10,6 +10,7 @@ import { validatePrinterConfiguration } from './configuration';
 import { storedPrinterSchema } from './storage';
 import { issuedQueueReviewSchema } from './queue-review-storage';
 import { readCanonicalQueueSnapshot } from './queue-snapshot';
+import { readStoredPrinterActivity } from './activity-metadata';
 
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const commandSchema = z.object({
@@ -85,6 +86,13 @@ export async function transitionPrinter(input: unknown) {
       throw new PrinterLifecycleError('record_conflict', 409);
     }
     const revision = before.revision + 1, timestamp = FieldValue.serverTimestamp();
+    const activityRef = ref.collection('statusMetadata').doc('current');
+    let resumedActivity;
+    if (command.action === 'resume') {
+      const activity = await tx.get(activityRef);
+      resumedActivity = { ...readStoredPrinterActivity(activity.exists ? activity.data() : undefined,
+        command, before.revision), activatedAt: Date.now(), activationRevision: revision };
+    }
     const configuration = { ...before.configuration, state: command.action === 'resume' ? 'active' as const
       : command.action === 'pause' ? 'paused' as const : 'disabled' as const };
     const deleted = command.action === 'delete';
@@ -101,6 +109,7 @@ export async function transitionPrinter(input: unknown) {
     });
     tx.set(ref, { ...before, configuration, revision,
       deletedAt: deleted ? timestamp : null, updatedAt: timestamp });
+    if (resumedActivity) tx.set(activityRef, resumedActivity);
     // A tombstone preserves the printer identity, audit children and all job references.
     return deleted ? { deleted: true, printerId: command.printerId, revision }
       : { item: { configuration, revision } };
