@@ -3,7 +3,6 @@ const assert = require('node:assert/strict');
 const { paymentFixture } = require('../helpers/merchant-payment-fixture.cjs');
 const { moduleGraph } = require('../helpers/load-ts-graph.cjs');
 const { memoryDb } = require('../helpers/marketing-db.cjs');
-const { createHash } = require('node:crypto');
 
 const flag = process.env.ORDERFLY_PRINT_INTENTS_ENABLED;
 process.env.ORDERFLY_PRINT_INTENTS_ENABLED = 'true';
@@ -85,37 +84,26 @@ async function fixture(options = {}) {
   };
 }
 
-// Explicit native history fixture, NOT a production acceptance producer. Actual
-// native planners and generic outbox create queued originals in isolated storage;
-// the immutable manifest is seeded only as this test's stated precondition.
+// Start from a held Pending order and invoke the actual #491/#506 acceptance
+// producer before staff settlement. The test never seeds a canonical manifest.
 async function acceptedFixture(options = {}) {
   const f = await fixture(options);
+  f.order().status = 'Pending';
   const seed = memoryDb(f.records);
   await seed.runTransaction(async transaction => {
-    const context = { db: f.db, transaction }, scope = { brandId: 'b', locationId: 'l' };
-    const policy = await f.load('src/lib/printing/intent-target-policy.ts').preparePrintIntentTargetPolicy(context, scope);
-    const catalog = await f.load('src/lib/printing/catalog-line-projection.ts').projectNativePrintCatalog(context, { ...scope, orderId: f.orderId });
-    const saved = await f.load('src/lib/printing/saved-routing.ts').prepareSavedPrinterRouting(context, scope);
-    const routing = f.load('src/lib/printing/routing-preview.ts').previewPrinterRouting({ scope: catalog.scope,
-      deliveryType: catalog.deliveryType, lines: catalog.lines, rules: saved.rules,
-      printers: saved.printers.map(row => ({ configuration: row.configuration, deleted: false })) });
-    assert.equal(routing.unrouted.length, 0);
-    const fingerprint = value => createHash('sha256').update(JSON.stringify(value)).digest('hex');
-    const targets = routing.targets.map(target => {
-      const selected = policy.targets.find(row => row.configuration.id === target.printerId);
-      return { printerId: target.printerId, printerRevision: selected.printerRevision,
-        configurationHash: fingerprint(selected.configuration), kinds: [...selected.kinds].sort(),
-        lineIds: target.lines.map(line => line.lineId) };
-    });
-    const intents = targets.flatMap(target => target.kinds.map(kind => ({ ...scope, orderId: f.orderId, printerId: target.printerId, kind })));
-    const plan = await f.outbox.prepareOriginalPrintIntents(f.db, transaction, { intents, reservedWriteCount: 1 });
-    transaction.create(f.db.collection('orders').doc(f.orderId).collection('printIntents').doc('original'), {
-      schemaVersion: 1, id: 'original', ...scope, orderId: f.orderId, originalRevision: 0,
-      policyRevision: policy.policyRevision, routingRevision: saved.revision, rulesHash: fingerprint(saved.rules),
-      catalogHash: fingerprint(catalog), targets, createdAt: Date.now(),
-    });
-    plan.apply();
+    let wrote = false;
+    const write = name => (...args) => { wrote = true; return transaction[name](...args); };
+    const context = { db: f.db, transaction: { get: ref => {
+      assert.equal(wrote, false, 'acceptance and print reads precede every write');
+      return transaction.get(ref);
+    }, create: write('create'), update: write('update'), set: write('set') } };
+    const acceptance = await f.load('src/lib/server/accept-pickup-checkout.ts').preparePickupCheckoutAcceptance(context,
+      { orderId: f.orderId, brandId: 'b', locationId: 'l', selection: 'asap' });
+    const originals = await f.load('src/lib/printing/unpaid-acceptance-originals.ts').prepareUnpaidAcceptanceOriginals(context, acceptance.capability);
+    acceptance.apply();
+    originals.apply();
   });
+  assert.equal(f.order().status, 'Received');
   return f;
 }
 

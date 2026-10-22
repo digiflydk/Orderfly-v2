@@ -39,7 +39,11 @@ rejected even when they happen to match all current targets; the collection
 cannot adopt them into invented immutable history. The same check repeats after
 every SDK retry. A separate trusted unpaid-acceptance producer must create its
 canonical manifest, jobs and queue ledgers in the same acceptance transaction.
-That producer and its real checkout integration are not implemented here.
+The separate #506 producer and real checkout integration are now included as a
+dependency from PR #513. The common outbox retains three fixed authority readers:
+Stripe settlement, unpaid acceptance and staff settlement. Acceptance creates
+originals only for a fresh native event; staff collection reuses their immutable
+history and can never adopt or backfill missing history.
 
 The process flag defaults OFF. OFF installations preserve the existing financial
 path without printer reads/writes. Native policy OFF also suppresses print writes.
@@ -48,11 +52,12 @@ backfilling originals. A legacy nonterminal Paid order without a manifest cannot
 acquire print jobs by turning the feature ON later. Ordinary OFF payment behavior
 is unchanged; this safety slice does not activate any flag or change production.
 
-The full #350 criterion that a fresh staff cash/card payment creates eligible
-original jobs is still **blocked**, rather than waived. The accepted-unpaid
-source/atomic producer must first establish native immutable history. #350 and
-#343 remain open. Root must assess this safety-only scope explicitly before
-release; green fixture tests do not prove that the missing producer exists.
+The combined source test now starts from a held Pending order, calls the actual
+#491/#506 acceptance writer and original producer, then collects cash/card using
+the real staff writer. It verifies one canonical job set, unchanged ledgers and
+duplicate collection safety. This resolves the former missing-source dependency,
+but #350 and #343 remain open for current-head release, native integration and
+applicable final QA. Source fixtures are not production or physical acceptance.
 
 ## Validation and acceptance
 
@@ -69,10 +74,9 @@ plan, native authorization, policy/catalog/saved-routing and outbox. Session,
 Admin storage and provider I/O are isolated. The 500/501 boundary alone injects
 capacity reservation metadata around the actual capacity callback, matching the
 existing financial boundary test. Retry cases reuse the SDK transaction object
-and check that pending mutations are discarded. Successful ON tests explicitly
-seed canonical accepted-original history using the real native planners and
-generic outbox in isolated storage; the test-only manifest fixture is not an
-authoritative production acceptance path. Missing/legacy/orphan histories must
+and check that pending mutations are discarded. Successful ON tests invoke the
+actual native acceptance and original producer in isolated storage, rather than
+seeding an invented manifest. Missing/legacy/orphan histories must
 reject instead. The prior fresh-mint success and late new-queue-write scenarios
 are no longer advertised as valid staff behavior under this safety contract;
 unchanged Stripe/outbox suites still cover fresh combined financial/queue
