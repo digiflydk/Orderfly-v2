@@ -19,6 +19,15 @@ uploaded; they can contain test session material. Safe checks and fixed failure
 phase codes remain in the job output.
 Superseded PR runs are cancelled; main runs remain serialized and are not cancelled.
 
+Initial CI attempts twice failed at the browser email field, with an unchanged
+retry passing all checks. The harness now waits for the cold Next login page's
+initial network resources and requires visible acknowledgement of the method
+switch before entering test credentials. It does not retry the click, bypass
+login, raise assertion timeouts or remove any original acceptance assertion.
+If the switch fails, only input/option counts and a page-error count are emitted,
+never input values, cookies or raw browser errors. CI still must verify this
+change; a suspected hydration race is not a proven production login diagnosis.
+
 ## Production checkpoint, read only
 
 Only main push/manual runs use the already configured
