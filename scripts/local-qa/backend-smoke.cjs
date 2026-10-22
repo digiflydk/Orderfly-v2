@@ -14,6 +14,7 @@ const actor = uid => createHash('sha256').update(JSON.stringify(['firebase', uid
 const ids = { brand: 'qa0-brand', foreignBrand: 'qa0-foreign-brand', location: 'qa0-location', foreignLocation: 'qa0-foreign-location', printer: 'qa0-printer' };
 const known = ['platformAdminControl/access-v1', `brands/${ids.brand}`, `brands/${ids.foreignBrand}`, `locations/${ids.location}`, `locations/${ids.foreignLocation}`];
 const accounts = [];
+const extraPaths = [];
 let seeded = false;
 async function json(url, body) { const r = await fetch(url, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
   if (!r.ok) throw Error('QA0 emulator operation rejected'); return r.json(); }
@@ -73,7 +74,13 @@ async function printerRead(cookie, brand = ids.brand, location = ids.location) {
     assert.equal(queue.status, 200); const summary = await queue.json(); assert.equal(summary.resumeAuthorized, false); counters.push('actual queue API validates native empty ledger without resume authority');
     assert.equal((await db.doc(printerPath).get()).data().configuration.state, 'disabled');
     const browser = process.env.ORDERFLY_LOCAL_QA_BROWSER === 'true' ? await require('./browser-smoke.cjs').runBrowserSmoke({ admin, merchant, ids }) : undefined;
-    proof = { ...(browser ? { browser } : {}), environment: 'QA0a-local-backend', project: PROJECT, softwareOnly: true, checks: counters, productionAcceptance: false, physicalPrintVerified: false };
+    const credentialMetadata = process.env.QA0_CREDENTIAL_METADATA_PROOF === 'true'
+      ? await require('./credential-metadata-proof.cjs').runCredentialMetadataProof({ db, ids, adminCookie, merchantCookie, register(path) {
+        assert.equal(path, printerPath + '/deviceCredentials/current', 'QA504 registers only its owner-created native credential path');
+        if (!extraPaths.includes(path)) extraPaths.push(path);
+        return true;
+      } }) : undefined;
+    proof = { ...(browser ? { browser } : {}), ...(credentialMetadata ? { credentialMetadata } : {}), environment: 'QA0a-local-backend', project: PROJECT, softwareOnly: true, checks: counters, productionAcceptance: false, physicalPrintVerified: false };
   } finally {
     try {
     // Only fixed test project and explicit seed paths. Never delete arbitrary projects/data.
@@ -81,7 +88,7 @@ async function printerRead(cookie, brand = ids.brand, location = ids.location) {
     for (const key of seeded ? known.filter(p => !p.startsWith('locations/')) : []) await db.doc(key).delete();
     for (const uid of accounts) { const response = await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:delete`, { method: 'POST', headers: { authorization: 'Bearer owner', 'content-type': 'application/json' }, body: JSON.stringify({localId:uid}) }); assert.equal(response.ok, true, 'QA0 removes only its created Auth user'); }
     if (seeded) {
-      const paths = [...known, `locations/${ids.location}/printers/${ids.printer}`, `locations/${ids.location}/printers/${ids.printer}/queue/state`];
+      const paths = [...known, `locations/${ids.location}/printers/${ids.printer}`, `locations/${ids.location}/printers/${ids.printer}/queue/state`, ...extraPaths];
       for (const key of paths) assert.equal((await db.doc(key).get()).exists, false, 'QA0 verifies every seeded native document was removed');
     }
     const lookup = await fetch(`${AUTH}/identitytoolkit.googleapis.com/v1/projects/${PROJECT}/accounts:lookup`, { method: 'POST', headers: { authorization: 'Bearer owner', 'content-type': 'application/json' }, body: JSON.stringify({ localId: accounts }) });

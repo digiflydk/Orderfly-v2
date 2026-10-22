@@ -27,6 +27,11 @@ function launch(command, args, childEnv, label, cwd = root) {
     if (!fs.existsSync(chromium.executablePath())) throw Error('QA0 official Chromium1234 binary is unavailable');
     env.ORDERFLY_LOCAL_QA_BROWSER = 'true';
   }
+  if (process.env.QA0_CREDENTIAL_METADATA_PROOF !== undefined && process.env.QA0_CREDENTIAL_METADATA_PROOF !== 'true') throw Error('QA0 metadata proof mode rejected');
+  if (process.env.QA0_CREDENTIAL_METADATA_PROOF === 'true') {
+    env.QA0_CREDENTIAL_METADATA_PROOF = 'true';
+    env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED = 'false';
+  }
   // Next loads dotenv files independently of child env. Refuse them without reading secrets.
   for (const name of ['.env', '.env.local', '.env.development', '.env.development.local']) if (fs.existsSync(path.join(root, name))) throw Error('QA0 requires a checkout without dotenv files');
   const toolsEnv = { PATH: path.dirname(java) + path.delimiter + env.PATH, LANG: env.LANG, TZ: env.TZ, CI: 'true', FIREBASE_CLI_DISABLE_UPDATE_CHECK: 'true', FIREBASE_CLI_DISABLE_USAGE_REPORTING: 'true' };
