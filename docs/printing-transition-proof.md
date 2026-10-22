@@ -1,9 +1,11 @@
-# Stripe origin proof for future print transitions (#327)
+# Stripe origin proof for print transitions (#327)
 
 This is the first bounded prerequisite of #303. It adds no production callsite,
 order mutation, outbox insertion, routing target, API, credentials or output.
-Current settlement and the original outbox helper are unchanged. Staff pickup
-payment and held-checkout pickup acceptance need separate proof-origin adapters.
+That describes the bounded #327 delivery. The subsequent default-OFF #349
+[atomic Stripe integration](printing-stripe-settlement.md) consumes this origin
+inside the actual sole financial writer with a separate intrinsic capability.
+Staff payment and held-checkout pickup acceptance remain separate integrations.
 
 ## Inspected current flow
 
@@ -71,13 +73,13 @@ caller is trusted to supply a real native transaction; this module is not an
 HTTP/client authorization API. Opaque maps protect against forged evidence, not
 malicious code with Admin database privileges.
 
-No existing helper accepts this projection as persisted order state. A follow-up
-must integrate verified origin and revalidated native reads with the actual order
-mutation and ONE combined outbox/queue delta in the same transaction, retaining
-all-read-before-write order and the shared 500-write application budget. It must
-also implement explicit default-off target/intent policy, staff/pickup origins,
-replay deduplication and actual caller wiring before print intent can be created.
-This prerequisite does not close #303 or prove atomic end-to-end printing.
+The persisted-order helper still does not accept this projection as persisted
+state. #349 now composes this origin with actual financial preparation, native
+policy/catalog/saved routing, an intrinsic private financial-plan capability and
+one combined queue delta in the same transaction. Its manifest prevents replay
+backfill or target expansion. See the linked integration contract for gates and
+remaining limits. Staff/checkout pickup integration, immutable printable payload
+and device transport remain separate work; #303 is not closed by this origin.
 
 ## Validation and release
 
