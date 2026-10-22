@@ -12,16 +12,20 @@ const root = process.cwd();
 const componentDir = path.join(root, 'src/app/superadmin/qr-codes');
 const transpile = source => ts.transpileModule(source, { compilerOptions: { target: ts.ScriptTarget.ES2020, module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, esModuleInterop: true } }).outputText;
 const base = { name: 'Bord 1', brandId: 'b1', locationId: 'l1', kind: 'dynamic', destination: 'https://example.com/menu', staticType: 'url', fields: {}, campaign: 'Oktober', tags: [], utm: { source: '', medium: 'qr', campaign: '', content: '', term: '' }, id: 'qr1', revision: '1', status: 'active' };
-const initial = { brands: [{ id: 'b1', name: 'Esmeralda', locations: [{ id: 'l1', name: 'Amager' }] }], codes: [base], capabilities: { create: true, edit: true, archive: true, export: true }, analytics: true, truncated: false, dynamicEnabled: true };
+const initial = { brands: [{ id: 'b1', name: 'Esmeralda', locations: [{ id: 'l1', name: 'Amager' }] }], codes: [base], capabilities: { create: true, edit: true, archive: true, export: true }, analytics: true, analyticsCodeKeys: ['b1/qr1','b2/qr1','b1/legacy','b1/zero'], truncated: false, dynamicEnabled: true };
 const metrics = { from: Date.parse('2026-10-20T22:00:00Z'), to: Date.parse('2026-10-21T22:00:00Z'), timezone: 'Europe/Copenhagen', totalOpenings: 4, probableScans: 3, excludedOpenings: 1, knownUnique: 0, unidentifiedScans: 3, estimatedUnique: null, byDay: [], byHour: [], byQr: [], byDevice: [], byOs: [], byBrowser: [], byReferrer: [] };
 const bulkEntry = { name: 'CSV bord', destination: 'https://example.com/csv', brandId: 'b1', locationId: 'l1', campaign: '', tags: [] };
 const canonical = JSON.stringify({ schemaVersion: 1, entries: [bulkEntry] });
 const bulkPlan = { schemaVersion: 1, entries: [bulkEntry], canonical, sha256: createHash('sha256').update(canonical).digest('hex') };
 const bulkPreview = { ok: true, rows: [{ row: 2, entry: bulkEntry }], errors: [], plan: bulkPlan };
 const bulkRecord = { ...base, ...bulkEntry, id: 'csv-qr' };
-let server, browser, origin;
+let server, browser, origin, stylesheet;
+const cssDir=fs.mkdtempSync(path.join(require('node:os').tmpdir(),'qr-workspace-css-'));
 
 before(async () => {
+  const cssFile=path.join(cssDir,'app.css');
+  require('node:child_process').execFileSync(process.execPath,[require.resolve('tailwindcss/lib/cli'),'-i','src/app/globals.css','-o',cssFile,'--minify'],{stdio:'pipe'});
+  stylesheet=fs.readFileSync(cssFile,'utf8');
   const modules = ['qr-manager', 'qr-analytics', 'qr-bulk-tools', 'qr-print-tools', 'qr-lifetime-summary', 'qr-history', 'qr-workspace'].map(name => [name, transpile(fs.readFileSync(path.join(componentDir, name + '.tsx'), 'utf8'))]);
   const reactDir = path.dirname(require.resolve('react/package.json')), domDir = path.dirname(require.resolve('react-dom/package.json'));
   const script = `
@@ -33,6 +37,9 @@ before(async () => {
     function require(name){if(name==='react')return React;if(name==='react/jsx-runtime')return jsx;if(name.startsWith('./'))return modules[name.slice(2)];throw Error(name)}
     for(const [name,source] of ${JSON.stringify(modules)}){const module={exports:{}};new Function('require','exports','module',source)(require,module.exports,module);modules[name]=module.exports;}
     const props=${JSON.stringify(initial)},params=new URLSearchParams(location.search);
+    if(params.has('design')){props.codes[0].publicUrl='https://orderfly.dk/q/'+'a'.repeat(32);props.codes[0].name='Pepperoni';props.codes[0].campaign='Frozen pizza';props.codes[0].destination='https://www.esmeraldapizza.dk/produkter';props.allTime={'b1/qr1':{openings:19,probableScans:18,excludedOpenings:1,firstOpenedAt:1792533600000,lastOpenedAt:1792619999000}};}
+    if(params.has('pages'))props.codes=Array.from({length:13},(_,i)=>({...props.codes[0],id:'q'+i,name:'Kode '+String(i).padStart(2,'0')}));
+    if(params.has('mixedanalytics'))props.analyticsCodeKeys=['b1/qr1'];
     if(params.has('denied')){props.analytics=false;props.capabilities={create:false,edit:false,archive:false,export:false};}
     if(params.has('truncated'))props.truncated=true;
     if(params.has('off'))props.dynamicEnabled=false;
@@ -43,16 +50,17 @@ before(async () => {
     const app=ReactDOM.createRoot(document.getElementById('root'));
     window.__unmount=()=>app.unmount();app.render(React.createElement(modules['qr-workspace'].QrWorkspace,{initial:props}));`;
   server = http.createServer((req, res) => {
+    if(req.url==='/styles.css'){res.setHeader('content-type','text/css');return res.end(stylesheet);}
     if (req.url === '/react.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(reactDir, 'umd/react.development.js'))); }
     if (req.url === '/react-dom.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(domDir, 'umd/react-dom.development.js'))); }
     if (req.url === '/app.js') { res.setHeader('content-type', 'application/javascript'); return res.end(script); }
     res.setHeader('content-type', 'text/html; charset=utf-8');
-    res.end('<!doctype html><html lang="da"><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main id="root"></main><script src="/react.js"></script><script src="/react-dom.js"></script><script src="/app.js"></script></body></html>');
+    res.end('<!doctype html><html lang="da"><head><link rel="stylesheet" href="/styles.css"><style>body{background:#f6f8fb;padding:24px;font-family:Arial,sans-serif}main{max-width:1280px;margin:auto}@media(max-width:600px){body{padding:12px}}</style><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><main id="root"></main><script src="/react.js"></script><script src="/react-dom.js"></script><script src="/app.js"></script></body></html>');
   });
   await new Promise(resolve => server.listen(0, '127.0.0.1', resolve)); origin = 'http://127.0.0.1:' + server.address().port;
   browser = await chromium.launch({ executablePath: process.env.CART_CHROMIUM_PATH, headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
 });
-after(async () => { await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); });
+after(async () => { fs.rmSync(cssDir,{recursive:true,force:true});await browser?.close(); if (server) await new Promise(resolve => server.close(resolve)); });
 
 async function open({ answers = [], query = '', width = 390 } = {}) {
   const page = await browser.newPage({ viewport: { width, height: 1000 } }), calls = [], errors = [];
@@ -125,6 +133,7 @@ test('status command takes brand and location from the stored code', async () =>
   const paused = { ...base, status: 'paused', revision: '2' };
   const { page, calls } = await open({ answers: [[200, paused], [200, { ...initial, codes: [paused] }]] });
   try {
+    await page.getByLabel('Flere handlinger for Bord 1', { exact: true }).click();
     await page.getByRole('button', { name: 'Sæt på pause Bord 1', exact: true }).click();
     await page.getByRole('button', { name: 'Aktivér Bord 1', exact: true }).waitFor();
     const { requestId, ...body } = calls[0].body;
@@ -339,6 +348,7 @@ test('same code ID in two brands uses the selected row scope for mutation and an
   const snapshot = { ...initial, brands: [...initial.brands, { id: 'b2', name: 'Andet brand', locations: [{ id: 'l2', name: 'Anden afdeling' }] }], codes: [base, other] };
   const { page, calls } = await open({ query: '?collision', answers: [[200, other], [200, snapshot], [200, { metrics, complete: true, currentLocationOnly: true }]] });
   try {
+    await page.getByLabel('Flere handlinger for Anden kode', { exact: true }).click();
     await page.getByRole('button', { name: 'Sæt på pause Anden kode', exact: true }).click(); await page.getByRole('button', { name: 'Aktivér Anden kode', exact: true }).waitFor();
     assert.equal(calls[0].body.brandId, 'b2'); assert.equal(calls[0].body.locationId, 'l2'); assert.equal(await page.getByRole('heading', { name: 'Bord 1', exact: true }).count(), 1);
     await page.getByRole('button', { name: 'Statistik', exact: true }).click(); await page.getByRole('combobox', { name: 'QR-kode', exact: true }).selectOption('b2/qr1');
@@ -368,3 +378,68 @@ test('server page guards unauthorized, forbidden and unavailable before renderin
   const unavailable = await render(async () => { throw new AuthorityError('PRIVATE_PROVIDER_DETAIL', 503); });
   assert.equal(unavailable.props.role, 'alert'); assert.equal(JSON.stringify(unavailable).includes('PRIVATE_PROVIDER_DETAIL'), false);
 });
+
+for(const width of [390,1440]) test(`styled catalogue renders actual code, opens scoped statistics and previews logo at ${width}px`,async()=>{
+  const {loadTs}=require('../helpers/load-ts.cjs');const {renderQr}=loadTs('src/lib/qr/render.ts',{sharp:{default:require('sharp')},jsqr:{default:require('jsqr')}});
+  const real=await renderQr('https://orderfly.dk/q/'+'a'.repeat(32));
+  const {page,calls}=await open({query:'?design',width,answers:[route=>route.fulfill({json:{payload:'https://orderfly.dk/q/'+'a'.repeat(32),imageUrl:'data:image/png;base64,'+real.png.toString('base64')}})]});
+  try{
+    await page.getByRole('img',{name:'QR-kode: Pepperoni',exact:true}).waitFor();
+    assert.equal(calls.length,1);assert.equal(calls[0].body.action,'render');assert.equal(calls[0].body.format,'preview');
+    assert.deepEqual(calls[0].body.context,{id:'qr1',revision:'1'});
+    const card=page.getByRole('listitem').filter({has:page.getByRole('heading',{name:'Pepperoni',exact:true})});
+    await card.getByText('18',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    if(process.env.QR_DESIGN_SCREENSHOTS)await page.screenshot({path:`/tmp/qr-workspace-catalogue-${width}.png`,fullPage:true});
+    await page.getByRole('button',{name:'Statistik for Pepperoni',exact:true}).click();
+    await page.getByRole('button',{name:'Administration',exact:true}).click();
+    assert.equal(calls[1].body.action,'analytics');assert.equal(calls[1].body.id,'qr1');assert.equal(calls[1].body.brandId,'b1');
+    await page.getByRole('button',{name:'Redigér Pepperoni',exact:true}).click();
+    await page.route('**/api/qr/admin', async route=>{
+      const body=route.request().postDataJSON();assert.equal(body.action,'render');
+      const rendered=await renderQr('https://orderfly.dk/q/'+'a'.repeat(32),{...body.draft.style,...(body.logoBase64?{logo:Buffer.from(body.logoBase64,'base64'),errorCorrectionLevel:'H'}:{})});
+      return route.fulfill({json:{content:rendered.png.toString('base64'),mime:'image/png',encoding:'base64',filename:'qr.png'}});
+    });
+    const logo=await require('sharp')(Buffer.from('<svg width="100" height="100"><rect width="100" height="100" fill="white"/><text x="50" y="73" text-anchor="middle" font-size="65" fill="#164e3b">E</text></svg>')).png().toBuffer();
+    await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'test-brand.png',mimeType:'image/png',buffer:logo});
+    await page.getByRole('button',{name:'Vis designpreview',exact:true}).click();
+    await page.getByRole('img',{name:'QR-preview med valgt design og logo',exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
+    if(process.env.QR_DESIGN_SCREENSHOTS){await page.getByRole('region',{name:'Logo og print',exact:true}).screenshot({path:`/tmp/qr-workspace-design-${width}.png`});await page.screenshot({path:`/tmp/qr-workspace-editor-${width}.png`,fullPage:true});}
+  }finally{await page.close();}
+});
+
+test('catalogue counters keep brand scope, unknown and zero distinct, and statistics opens the selected code', async()=>{
+  const {page,calls}=await open({query:'?lifetime&collision'});
+  try{
+    const card=name=>page.getByRole('listitem').filter({has:page.getByRole('heading',{name,exact:true})});
+    await card('Bord 1').getByText('7',{exact:true}).waitFor();await card('Anden kode').getByText('18',{exact:true}).waitFor();
+    await card('Gammel kode').getByText('Ukendt',{exact:true}).waitFor();await card('Ny tom kode').getByText('0',{exact:true}).waitFor();
+    assert.equal(await card('Ingen totaladgang').locator('.qr-card-count').count(),0);
+    await page.getByLabel('Sortering',{exact:true}).selectOption('scans');
+    assert.equal(await page.getByRole('list',{name:'Gemte QR-koder',exact:true}).getByRole('heading').first().innerText(),'Anden kode');
+    await page.getByRole('button',{name:'Statistik for Anden kode',exact:true}).click();
+    await page.getByRole('heading',{name:'QR-statistik',exact:true}).waitFor();
+    assert.equal(calls[0].body.brandId,'b2');assert.equal(calls[0].body.id,'qr1');
+  }finally{await page.close();}
+});
+test('catalogue pagination is bounded and filters reset the selected page',async()=>{
+  const {page,calls}=await open({query:'?pages'});
+  try{
+    const rows=page.getByRole('list',{name:'Gemte QR-koder',exact:true}).getByRole('listitem');
+    assert.equal(await rows.count(),12);
+    await page.getByRole('button',{name:'Næste',exact:true}).click();assert.equal(await rows.count(),1);
+    await page.getByLabel('Søg QR-koder',{exact:true}).fill('Kode 00');
+    await rows.getByRole('heading',{name:'Kode 00',exact:true}).waitFor();assert.equal(await rows.count(),1);
+    assert.equal(calls.length,0);
+  }finally{await page.close();}
+});
+
+ test('catalogue analytics actions follow per-code grants across brands and fail closed without eligibility',async()=>{
+  const {page,calls}=await open({query:'?collision&mixedanalytics'});
+  try{
+   assert.equal(await page.getByRole('button',{name:'Statistik for Anden kode',exact:true}).count(),0);
+   await page.getByRole('button',{name:'Statistik for Bord 1',exact:true}).click();
+   assert.equal(calls.length,1);assert.equal(calls[0].body.brandId,'b1');assert.equal(calls[0].body.id,'qr1');
+  }finally{await page.close();}
+ });

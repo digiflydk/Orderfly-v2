@@ -55,3 +55,9 @@ test('brand-wide bulk preview accepts only active native locations of the author
   assert.ok(trace.every(([field,op,value])=>field==='brandId'&&op==='=='&&value==='own'));
  }finally{if(previous===undefined)delete process.env.QR_MODULE_ENABLED;else process.env.QR_MODULE_ENABLED=previous;}
 });
+
+test('code analytics eligibility preserves brand and current location grants independently of lifetime access',async()=>{
+ for(const grant of [undefined,[],['other']])assert.deepEqual((await workspace(grant)).analyticsCodeKeys,[]);
+ for(const grant of [null,['loc']])assert.deepEqual((await workspace(grant)).analyticsCodeKeys,['own/code0']);
+ assert.deepEqual((await workspace(undefined,[lifetime],true)).analyticsCodeKeys,['own/code0']);
+});

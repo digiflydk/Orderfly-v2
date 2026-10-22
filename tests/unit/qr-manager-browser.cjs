@@ -133,6 +133,7 @@ test('a denied replay cannot clear an earlier uncertain save and every retry kee
 test('duplicate opens an unsaved copy and archive requires confirmation', async () => {
   const { page, calls } = await open();
   try {
+    await page.getByLabel('Flere handlinger for Bord 1', { exact: true }).click();
     await page.getByRole('button', { name: 'Duplikér Bord 1', exact: true }).click();
     assert.equal(await page.getByLabel('Navn', { exact: true }).inputValue(), 'Bord 1 (kopi)');
     assert.equal(calls.length, 0);
@@ -163,7 +164,11 @@ test('static Wi-Fi preview passes structured fields, and readonly hides mutation
     assert.equal(calls[0].draft.fields.security, 'WPA');
   } finally { await page.close(); }
   const readonly = await open({ readonly: true });
-  try { assert.equal(await readonly.page.getByRole('button').count(), 0); } finally { await readonly.page.close(); }
+  try {
+    assert.equal(await readonly.page.getByRole('button', { name: /Opret|Redigér|Duplikér|Sæt på pause|Aktivér|Arkivér|Download/ }).count(), 0);
+    await readonly.page.getByRole('button', { name: 'Kort', exact: true }).click();
+    assert.equal(await readonly.page.getByRole('button', { name: 'Kort', exact: true }).getAttribute('aria-pressed'), 'true');
+  } finally { await readonly.page.close(); }
 });
 
 test('preview rejects cross-origin assets and download includes saved code identity', async () => {
@@ -182,6 +187,7 @@ test('preview rejects cross-origin assets and download includes saved code ident
 test('pause and filtering use persisted statuses', async () => {
   const { page, calls } = await open();
   try {
+    await page.getByLabel('Flere handlinger for Bord 1', { exact: true }).click();
     await page.getByRole('button', { name: 'Sæt på pause Bord 1', exact: true }).click();
     await page.getByRole('button', { name: 'Aktivér Bord 1', exact: true }).waitFor();
     assert.equal(calls[0].status, 'paused');
@@ -190,5 +196,26 @@ test('pause and filtering use persisted statuses', async () => {
     await page.getByLabel('Status', { exact: true }).selectOption('paused');
     await page.getByLabel('Søg QR-koder', { exact: true }).fill('ikke fundet');
     assert.equal(await page.getByRole('heading', { name: 'Bord 1', exact: true }).count(), 0);
+  } finally { await page.close(); }
+});
+
+for (const width of [390, 1440]) test(`catalogue filters URLs, switches layout and keeps colour presets explicit at ${width}px`, async () => {
+  const { page, calls } = await open({ width });
+  try {
+    await page.getByLabel('Søg QR-koder', { exact: true }).fill('example.com/menu');
+    await page.getByRole('heading', { name: 'Bord 1', exact: true }).waitFor();
+    await page.getByLabel('Kampagnefilter', { exact: true }).selectOption('Oktober');
+    await page.getByRole('button', { name: 'Kort', exact: true }).click();
+    assert.equal(await page.getByRole('button', { name: 'Kort', exact: true }).getAttribute('aria-pressed'), 'true');
+    await page.getByRole('button', { name: 'Redigér Bord 1', exact: true }).click();
+    await page.getByRole('button', { name: 'Skovgrøn', exact: false }).click();
+    assert.equal(await page.getByLabel('Kodefarve', { exact: true }).inputValue(), '#164e3b');
+    assert.equal(await page.getByRole('button', { name: 'Download PNG', exact: true }).isDisabled(), true);
+    assert.equal(calls.length, 0, 'design choice must not save until explicitly confirmed');
+    await page.getByRole('button', { name: 'Gem QR-kode', exact: true }).click();
+    await page.getByRole('status').filter({ hasText: 'QR-koden er gemt.' }).waitFor();
+    assert.equal(calls[0].draft.style.dark, '#164e3b'); assert.equal(calls[0].context.id, 'qr1');
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+    if (process.env.QR_DESIGN_SCREENSHOTS) await page.screenshot({ path: `/tmp/qr-admin-${width}.png`, fullPage: true });
   } finally { await page.close(); }
 });
