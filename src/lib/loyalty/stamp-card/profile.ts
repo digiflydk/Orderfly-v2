@@ -24,19 +24,23 @@ export async function updateMemberProfile(db: Firestore, brand: ProgramBrand, se
       || currentSession.revokedAt || currentSession.expiresAt <= ctx.now || currentSession.epoch !== member.sessionEpoch) throw new LoyaltyError('unauthorized', 401);
     const customerRef = db.collection('customers').doc(member.customerId), customerSnap = await tx.get(customerRef), customer = customerSnap.data();
     if (!customer || customer.brandId !== brand.brandId || !customerHasEmail(customer, member.normalizedEmail)) throw new LoyaltyError('customer_conflict', 409);
-    const next = { ...profileFromCustomer(customer, ctx.now), ...values };
+    const previous = profileFromCustomer(customer, ctx.now);
+    const next = { ...previous, ...values };
     const phone = normalizeCustomerPhone(next.phone);
     const phoneRef = phone ? db.collection('integrationConsumerCustomerPhoneIdentities').doc(customerIdentityKey(brand.brandId, phone)) : null;
     let phoneKnown = false;
     if (values.phone !== undefined && phone && phoneRef) {
       // Legacy customers may have only a formatted primary phone and no index.
       // A normalized equality query cannot prove uniqueness for those rows.
+      // A formatting-only save retains an existing identity, so avoid scanning
+      // every brand customer when the displayed normalized phone is unchanged.
       const [identity, customers] = await Promise.all([
-        tx.get(phoneRef), tx.get(db.collection('customers').where('brandId', '==', brand.brandId)),
+        tx.get(phoneRef), phone !== normalizeCustomerPhone(previous.phone)
+          ? tx.get(db.collection('customers').where('brandId', '==', brand.brandId)) : Promise.resolve(null),
       ]);
       const owner = identity.data(); phoneKnown = identity.exists;
       if ((owner && (owner.brandId !== brand.brandId || owner.customerId !== member.customerId))
-        || customers.docs.some(doc => doc.id !== member.customerId && customerHasPhone(doc.data(), phone))) throw new LoyaltyError('customer_conflict', 409);
+        || customers?.docs.some(doc => doc.id !== member.customerId && customerHasPhone(doc.data(), phone))) throw new LoyaltyError('customer_conflict', 409);
     }
     const changes: Record<string, unknown> = { updatedAt: new Date(ctx.now) };
     if (values.birthDate !== undefined) changes.birthDate = next.birthDate;
