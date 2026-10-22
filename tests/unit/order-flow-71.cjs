@@ -149,7 +149,7 @@ test('#71 stale upsell products cannot hide a later scoped public offer',async()
  const offer=id=>({id,brandId:'b',locationIds:['l'],isActive:true,orderTypes:['pickup'],activeDays:[],activeTimeSlots:[],offerType:'product',offerProductIds:[id+'-product'],offerCategoryIds:[],triggerConditions:[{type:'cart_value_over',referenceId:'0'}],upsellName:id,discountType:'none'});
  const docs=[offer('stale'),offer('valid')].map(data=>({id:data.id,data:()=>data}));const calls=[];
  const {getActiveUpsellForCart}=loadTs('src/app/superadmin/upsells/actions.ts',{
-  '@/lib/access/orderfly-session':{},'@/lib/access/scoped-data':{},'@/lib/access/location-catalog':{},
+  'server-only':{},'@/lib/access/orderfly-session':{},'@/lib/access/scoped-data':{},'@/lib/access/location-catalog':{},
   '@/lib/promotion-rules':{restaurantClock:()=>({day:'monday',time:'12:00'})},'next/cache':{},'next/navigation':{},'@/lib/upsell-serialization':{},
   '@/lib/firebase-admin':{admin:{firestore:{Timestamp:{now:()=>0,fromDate:d=>d},FieldPath:{documentId:()=>''}}},getAdminDb:()=>({collection:()=>({where(){return this},get:async()=>({docs})})})},
   '../products/actions':{getProductsByIds:async(ids,brandId,locationId)=>{calls.push([ids,brandId,locationId]);return ids[0]==='valid-product'?[{id:'valid-product'}]:[];}},

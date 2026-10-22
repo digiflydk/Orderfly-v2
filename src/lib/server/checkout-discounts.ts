@@ -11,7 +11,7 @@ export async function getDiscountByCode(code: string, brandId: string): Promise<
   const result = await getAdminDb().collection('discounts').where('code', '==', code).where('brandId', '==', brandId).limit(2).get();
   if (result.size !== 1) return null;
   const record = result.docs[0], data = record.data();
-  if (discountApplicationType(data) === 'newsletter_signup') return null;
+  if (['newsletter_signup', 'club_signup'].includes(discountApplicationType(data)) || ['NEWSLETTER_SIGNUP', 'CLUB_SIGNUP'].includes(data.code)) return null;
   return discountRecord(record.id, data);
 }
 

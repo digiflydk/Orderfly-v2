@@ -26,6 +26,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog"
 import { deleteDiscount } from './actions';
+import { ClubCampaignPanel } from './club-campaign-panel';
 import { promotionEligibilityText, type PromotionEligibilityIssue } from '@/lib/promotion-eligibility';
 import { useToast } from '@/hooks/use-toast';
 import { Badge } from '@/components/ui/badge';
@@ -92,16 +93,18 @@ export function DiscountsClientPage({ initialDiscounts, brands }: DiscountsClien
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Discounts</h1>
           <p className="text-muted-foreground">
-            Manage codes and newsletter discounts here, or open automatic product, category and quantity offers.
+            Manage codes, newsletter and Club signup discounts here, or open automatic product, category and quantity offers.
           </p>
         </div>
         <div className="flex gap-2"><Button variant="outline" asChild><Link href="/superadmin/standard-discounts">Automatic discounts · products / categories / X for Y</Link></Button><Button asChild>
             <Link href="/superadmin/discounts/new">
                 <PlusCircle className="mr-2" />
-                Add code / newsletter discount
+                Add code / signup discount
             </Link>
         </Button></div>
       </div>
+
+      <ClubCampaignPanel brands={brands} />
 
        <Card>
             <CardContent className="p-4 flex items-center gap-4">
@@ -160,8 +163,8 @@ export function DiscountsClientPage({ initialDiscounts, brands }: DiscountsClien
             <TableBody>
               {filteredDiscounts.map((d) => (
                 <TableRow key={d.id}>
-                  <TableCell className="font-mono text-sm">{d.applicationType === 'newsletter_signup' ? 'Automatic' : d.code}</TableCell>
-                  <TableCell>{d.applicationType === 'newsletter_signup' ? 'Newsletter signup' : 'Discount code'}</TableCell>
+                  <TableCell className="font-mono text-sm">{['newsletter_signup', 'club_signup'].includes(String(d.applicationType)) ? 'Automatic' : d.code}</TableCell>
+                  <TableCell>{String(d.applicationType) === 'club_signup' ? 'Club signup' : d.applicationType === 'newsletter_signup' ? 'Newsletter signup' : 'Discount code'}</TableCell>
                   <TableCell>{d.brandName}</TableCell>
                   <TableCell>
                     {d.discountType === 'percentage' ? `${d.discountValue}%` : `kr. ${d.discountValue.toFixed(2)}`}
