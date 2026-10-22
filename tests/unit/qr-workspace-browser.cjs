@@ -208,11 +208,12 @@ test('analytics requires a concrete code and sends exact scoped date filter', as
   } finally { await page.close(); }
 });
 
-test('analytics export uses same scoped filter and is hidden without permission', async () => {
-  const { page, calls } = await open({ answers: [[200, { metrics, complete: true, currentLocationOnly: false }], [200, { csv: 'date,scans\r\n2026-10-21,3\r\n' }]] });
+test('provisional analytics metadata reaches the UI and export uses the same scoped filter', async () => {
+  const { page, calls } = await open({ answers: [[200, { metrics, complete: true, currentLocationOnly: false, futureLimited: true, dataAsOf: Date.parse('2026-10-21T12:00:00Z') }], [200, { csv: 'date,scans\r\n2026-10-21,3\r\n' }]] });
   try {
     await page.getByRole('button', { name: 'Statistik', exact: true }).click(); await page.getByRole('combobox', { name: 'QR-kode', exact: true }).selectOption('b1/qr1');
     await page.getByRole('button', { name: 'Vis statistik', exact: true }).click(); await page.getByText('Registrerede åbninger', { exact: true }).waitFor();
+    await page.getByRole('note', { name: 'Foreløbige tal' }).waitFor();
     const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'Eksportér CSV', exact: true }).click(); await download;
     assert.deepEqual(calls[1].body, { ...calls[0].body, export: true });
   } finally { await page.close(); }

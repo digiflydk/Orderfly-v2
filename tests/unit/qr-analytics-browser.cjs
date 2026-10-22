@@ -16,12 +16,12 @@ before(async () => {
     const mode=new URLSearchParams(location.search).get('mode');
     const classified=classifyQrRequest({method:'GET',userAgent:'Mozilla/5.0 (iPhone) Version/18.0 Mobile Safari/604.1',referrer:'https://example.com/path?secret=1'});
     const make=(iso,key,extra={})=>({timestamp:Date.parse(iso),qrId:'poster',classification:classified,visitorKey:key,...extra});
-    const events=[make('2026-10-25T00:30:00Z','a'),make('2026-10-25T01:30:00Z','a'),make('2026-10-26T12:00:00Z',mode==='unknown'?null:'b'),make('2026-10-26T12:01:00Z',null,{classification:classifyQrRequest({method:'GET',userAgent:'Googlebot'})})];
+    const events=[make('2026-10-25T00:30:00Z','a'),make('2026-10-25T01:30:00Z','a'),make('2026-10-26T12:00:00Z',['unknown','provisional'].includes(mode)?null:'b'),make('2026-10-26T12:01:00Z',null,{classification:classifyQrRequest({method:'GET',userAgent:'Googlebot'})})];
     const metrics=aggregateQrMetrics(mode==='empty'?[]:events,{from:Date.parse('2026-10-25T00:00:00Z'),to:Date.parse('2026-10-27T00:00:00Z')});
     const codes=[{id:'poster',name:'Brunch-plakat',campaign:'Brunch',placement:'Vindue'},{id:'table',name:'Bordkort',campaign:'Club',placement:'Bord'}];
     function App(){const [calls,setCalls]=React.useState([]);const [exported,setExported]=React.useState(0);const [retries,setRetries]=React.useState(0);
       return <><QrAnalytics metrics={mode==='none'?null:metrics} codes={codes} period={{dateFrom:'2026-10-25',dateTo:'2026-10-26'}}
-        canExport={mode!=='denied'} complete={mode!=='partial'} loading={mode==='loading'} error={mode==='error'?'internal-secret':null}
+        futureLimited={['provisional','partial'].includes(mode)} dataAsOf={Date.parse('2026-10-26T13:00:00Z')} canExport={mode!=='denied'} complete={mode!=='partial'} loading={mode==='loading'} error={mode==='error'?'internal-secret':null}
         onFilterChange={value=>setCalls(previous=>[...previous,value])} onRetry={()=>setRetries(v=>v+1)}
         onExport={async()=>{setExported(v=>v+1);if(mode==='export-fail')throw Error('secret');if(mode==='slow-export')await new Promise(resolve=>setTimeout(resolve,250));}}/>
         <output data-testid="filter-calls">{JSON.stringify(calls)}</output><output data-testid="exports">{exported}</output><output data-testid="retries">{retries}</output></>;
@@ -85,3 +85,13 @@ test('empty results and not-yet-loaded data are distinct',async t=>{
 test('390px mobile keeps tables scrollable without page-width overflow',async t=>{
   const page=await pageFor(t,'',390);await expect(page.getByRole('table',{name:'Scanninger pr. dag'})).toBeVisible();assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1),true);
 });
+
+ test('ongoing complete snapshot shows update time, enables CSV and preserves unknown unique',async t=>{
+ const page=await pageFor(t,'provisional');
+ await expect(page.getByRole('note',{name:'Foreløbige tal'})).toContainText('26.10.2026');
+ await expect(page.getByRole('note',{name:'Foreløbige tal'})).toContainText('14.00');
+ await expect(page.getByRole('alert')).toHaveCount(0);
+ await expect(stat(page,'Estimerede unikke')).toHaveText('Ukendt');
+ await page.getByRole('button',{name:'Eksportér CSV'}).click();await expect(page.getByTestId('exports')).toHaveText('1');
+ const partial=await pageFor(t,'partial');await expect(partial.getByRole('note',{name:'Foreløbige tal'})).toHaveCount(0);await expect(partial.getByRole('button',{name:'Eksportér CSV'})).toBeDisabled();
+ });
