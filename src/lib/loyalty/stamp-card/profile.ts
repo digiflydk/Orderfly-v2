@@ -27,6 +27,7 @@ export async function updateMemberProfile(db: Firestore, brand: ProgramBrand, se
     const previous = profileFromCustomer(customer, ctx.now);
     const next = { ...previous, ...values };
     const phone = normalizeCustomerPhone(next.phone);
+    const phoneChanged = phone !== normalizeCustomerPhone(previous.phone);
     const phoneRef = phone ? db.collection('integrationConsumerCustomerPhoneIdentities').doc(customerIdentityKey(brand.brandId, phone)) : null;
     let phoneKnown = false;
     if (values.phone !== undefined && phone && phoneRef) {
@@ -35,7 +36,7 @@ export async function updateMemberProfile(db: Firestore, brand: ProgramBrand, se
       // A formatting-only save retains an existing identity, so avoid scanning
       // every brand customer when the displayed normalized phone is unchanged.
       const [identity, customers] = await Promise.all([
-        tx.get(phoneRef), phone !== normalizeCustomerPhone(previous.phone)
+        tx.get(phoneRef), phoneChanged
           ? tx.get(db.collection('customers').where('brandId', '==', brand.brandId)) : Promise.resolve(null),
       ]);
       const owner = identity.data(); phoneKnown = identity.exists;
@@ -52,7 +53,7 @@ export async function updateMemberProfile(db: Firestore, brand: ProgramBrand, se
       const aliases = Array.isArray(customer.phoneAliases) ? customer.phoneAliases.filter((value): value is string => typeof value === 'string') : [];
       changes.phone = next.phone; changes.normalizedPhone = phone;
       changes.phoneAliases = [...new Set([...aliases.map(normalizeCustomerPhone), ...oldPhones].filter((value): value is string => !!value && value !== phone))];
-      if (phoneRef && phone) tx.set(phoneRef, { brandId: brand.brandId, customerId: member.customerId, phoneHash: customerIdentityKey(brand.brandId, phone),
+      if (phoneRef && phone && (phoneChanged || phoneKnown)) tx.set(phoneRef, { brandId: brand.brandId, customerId: member.customerId, phoneHash: customerIdentityKey(brand.brandId, phone),
         source: 'loyalty_profile', updatedAt: ctx.now, ...(phoneKnown ? {} : { createdAt: ctx.now }) }, { merge: true });
     }
     tx.update(customerRef, changes);

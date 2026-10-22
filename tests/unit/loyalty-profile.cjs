@@ -138,3 +138,17 @@ test('unchanged phone still rejects a conflicting deterministic reservation with
  const before=structuredClone([...db.rows]);await rejects(update(db,session,{phone:'+4511112222',gender:'male'}),'customer_conflict');
  assert.equal(scans,0);assert.deepEqual([...db.rows],before);
 });
+
+
+test('unchanged unindexed phone does not claim an identity without a uniqueness scan',async()=>{
+ for(const indexed of [false,true]){
+  const {db,session}=setup(),path='integrationConsumerCustomerPhoneIdentities/'+customerIdentityKey('b','+4511112222');
+  // A preexisting duplicate is deliberately not scanned on an unchanged save.
+  db.rows.set('customers/legacy-duplicate',{brandId:'b',phone:'+45 11112222'});
+  if(indexed)db.rows.set(path,{brandId:'b',customerId:'c',createdAt:NOW-1});
+  let scans=0;const run=db.runTransaction;db.runTransaction=fn=>run(tx=>fn({...tx,get:ref=>{if(!ref.path)scans++;return tx.get(ref)}}));
+  await update(db,session,{phone:'+4511112222',birthDate:'1990-05-01',gender:'female'});
+  assert.equal(scans,0);assert.equal(db.rows.has(path),indexed,'unindexed unchanged phone cannot acquire a new reservation');
+  if(indexed){assert.equal(db.rows.get(path).customerId,'c');assert.equal(db.rows.get(path).createdAt,NOW-1);}
+ }
+});
