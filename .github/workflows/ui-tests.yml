@@ -107,11 +107,17 @@ jobs:
       - name: Native printer credential provisioning regression
         run: node --test tests/unit/printing-device-credentials-service.cjs
 
+      - name: Supervised pilot qualification regression
+        run: node --test tests/unit/printing-pilot-qualification.cjs
+
       - name: CloudPRNT Basic native identity regression
         run: node --test tests/unit/printing-cloudprnt-http-auth.cjs
 
       - name: CloudPRNT no-job poll HTTP regression
         run: node --test tests/unit/printing-cloudprnt-poll-http.cjs
+
+      - name: CloudPRNT scoped no-job route regression
+        run: node --test tests/unit/printing-cloudprnt-poll-route.cjs
 
       - name: Superadmin printer credential HTTP regression
         run: node --test tests/unit/printing-device-credentials-http.cjs
@@ -154,6 +160,9 @@ jobs:
 
       - name: Unpaid pickup acceptance origin regression
         run: node --test tests/unit/printing-unpaid-acceptance-origin.cjs
+
+      - name: Atomic unpaid pickup originals regression
+        run: node --test tests/unit/printing-unpaid-originals.cjs
 
       - name: Native and compatibility transaction bridge regression
         run: node --test tests/unit/firestore-compat-transaction.cjs
