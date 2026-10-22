@@ -57,6 +57,14 @@ second download. The pointer remains reserved even for terminal jobs. Another
 session needs a separately reviewed explicit operator clear/cancel operation;
 there is no automatic replacement or background retry.
 
+An authenticated ready poll for an already confirmed, failed or unknown job
+continues to return `jobReady:false` after expiry. It does so only after the
+current device identity, credential, scope/revisions, consumed session, pointer,
+job binding and canonical content still validate. Expired queued, offered or
+download-started jobs remain closed, as do every download and result operation
+after expiry. This quiet terminal poll does not clear or reset the pointer and
+cannot authorize another download.
+
 A protocol confirmation remains distinct from operator verification of actual
 paper output. This synthetic service does not update ordinary last-confirmed-use
 metadata or imply acceptance of #344/#456/#461. Those production integration

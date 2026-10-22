@@ -126,6 +126,47 @@ test('unknown/failed results are terminal and never print-success or automatic r
   }
 }));
 
+test('expired terminal jobs poll quiet only after current private state still validates', enabled(async () => {
+  for (const outcome of ['confirmed', 'failed', 'unknown']) {
+    const f = fixture(), realNow = Date.now;
+    const offered = await f.poll(); await f.download(offered.jobToken); await f.result(offered.jobToken, outcome);
+    const before = structuredClone(job(f));
+    try {
+      Date.now = () => f.row.expiresAt;
+      assert.deepEqual(await f.poll(), { jobReady: false });
+      await assert.rejects(f.download(offered.jobToken), /invalid_pilot_job/);
+      await assert.rejects(f.result(offered.jobToken, outcome), /invalid_pilot_job/);
+    } finally { Date.now = realNow; }
+    assert.deepEqual(job(f), before);
+  }
+
+  for (const state of ['queued', 'offered', 'download_started']) {
+    const f = fixture(), realNow = Date.now;
+    let offered;
+    if (state !== 'queued') offered = await f.poll();
+    if (state === 'download_started') await f.download(offered.jobToken);
+    try {
+      Date.now = () => f.row.expiresAt;
+      await assert.rejects(f.poll(), /invalid_pilot_job/);
+    } finally { Date.now = realNow; }
+  }
+
+  for (const [label, corrupt] of [
+    ['revoked credential', f => { const p = `${root}/deviceCredentials/current`;
+      f.rows.set(p, { ...f.rows.get(p), revokedAt: f.now + 1 }); }],
+    ['changed binding', f => { f.rows.get(`${root}/pilotQualifications/${sessionId}`).credentialRevision++; }],
+    ['changed content', f => { f.rows.get(`${root}/pilotQualifications/${sessionId}`).contentDigest = 'f'.repeat(64); }],
+  ]) {
+    const f = fixture(), realNow = Date.now;
+    const offered = await f.poll(); await f.download(offered.jobToken); await f.result(offered.jobToken);
+    corrupt(f);
+    try {
+      Date.now = () => f.row.expiresAt;
+      await assert.rejects(f.poll(), label);
+    } finally { Date.now = realNow; }
+  }
+}));
+
 test('retry reauthenticates, rollback does not offer token and unknown download commit cannot resend', enabled(async () => {
   const revoke = fixture({ retry: rows => rows.set(`${root}/deviceCredentials/current`, { ...rows.get(`${root}/deviceCredentials/current`), revokedAt: Date.now() }) });
   await assert.rejects(revoke.poll()); assert.equal(job(revoke).state, 'queued'); assert.deepEqual(revoke.writes, []);
