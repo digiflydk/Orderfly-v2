@@ -132,6 +132,62 @@ test('invalid slug/method never reach DB, and database failures cannot produce f
   const unavailable = await handleQrRedirect(request(), slug, { ...f.options, db: () => { throw new Error('PRIVATE'); } }); assert.equal(unavailable.status, 503);
 });
 
+test('App Hosting proxy representations keep GET atomic and HEAD read-only', async () => {
+  for (const url of [
+    `http://0.0.0.0:8080/q/${slug}`, `http://localhost:8080/q/${slug}`,
+    `https://studio-abc123-uc.a.run.app/q/${slug}`,
+    `https://t-revision---studio-abc123-uc.a.run.app/q/${slug}`,
+    `https://studio-123456789.us-central1.run.app/q/${slug}`,
+  ]) {
+    for (const host of [new URL(url).host, 'orderfly.dk']) {
+      const f = fixture(), options = { ...f.options, appHosting: { service: 'studio', port: '8080' } };
+      const headers = { host, 'x-forwarded-host': 'orderfly.dk', 'x-forwarded-proto': 'https' };
+      const before = structuredClone([...f.db.rows]);
+      const head = await handleQrRedirect(request('HEAD', headers, url), slug, options);
+      assert.equal(head.status, 302, `${url} Host=${host}`); assert.deepEqual([...f.db.rows], before);
+      const get = await handleQrRedirect(request('GET', headers, url), slug, options);
+      assert.equal(get.status, 302); assert.equal(get.headers.get('location'), 'https://www.esmeraldapizza.dk/menu?utm_source=table');
+      assert.equal(events(f.db).length, 1); assert.equal(events(f.db)[0].classification.probableScan, true);
+      assert.equal(f.db.rows.get(`${f.prefix}/qrRateLimits/${Math.floor(at / 60000)}`).count, 1);
+    }
+  }
+});
+
+test('proxy headers cannot opt in outside deployment context or override hostile/ambiguous hosts', async () => {
+  const url = `http://0.0.0.0:8080/q/${slug}`;
+  const canonical = { host: '0.0.0.0:8080', 'x-forwarded-host': 'orderfly.dk', 'x-forwarded-proto': 'https' };
+  const f = fixture(), options = { ...f.options, appHosting: { service: 'studio', port: '8080' } };
+  const cases = [
+    [url, canonical, f.options], // A header cannot provide the server-owned Cloud Run context.
+    [url, canonical, { ...options, environment: 'development' }],
+    [url, canonical, { ...options, appHosting: { service: 'studio', port: '8081' } }],
+    [url, canonical, { ...options, appHosting: { service: 'studio.*', port: '8080' } }],
+    [`https://evil.example/q/${slug}`, { ...canonical, host: 'evil.example' }, options],
+    [`https://other-abc123-uc.a.run.app/q/${slug}`, { ...canonical, host: 'other-abc123-uc.a.run.app' }, options],
+    [`https://studio-abc123-uc.a.run.app.evil.example/q/${slug}`, { ...canonical, host: 'studio-abc123-uc.a.run.app.evil.example' }, options],
+    [`https://studio-abc123-uc.a.run.app:444/q/${slug}`, { ...canonical, host: 'studio-abc123-uc.a.run.app:444' }, options],
+    [`https://esmeralda.orderfly.dk/q/${slug}`, { ...canonical, host: 'esmeralda.orderfly.dk' }, options],
+    [`https://orderfly.dk/q/${slug}`, { ...canonical, host: 'evil.example' }, options],
+  ];
+  for (const bad of [null, 'evil.example', 'esmeralda.orderfly.dk', 'orderfly.dk:443', 'orderfly.dk.', 'orderfly.dk, evil.example', 'evil.example, orderfly.dk', 'orderfly.dk/path', 'orderfly.dk@evil.example']) {
+    const headers = { ...canonical }; if (bad === null) delete headers['x-forwarded-host']; else headers['x-forwarded-host'] = bad;
+    cases.push([url, headers, options]);
+  }
+  for (const bad of [null, 'http', 'https,http', 'http,https']) {
+    const headers = { ...canonical }; if (bad === null) delete headers['x-forwarded-proto']; else headers['x-forwarded-proto'] = bad;
+    cases.push([url, headers, options]);
+  }
+  for (const bad of [null, 'evil.example', '0.0.0.0:8081', 'orderfly.dk:443', 'orderfly.dk, evil.example']) {
+    const headers = { ...canonical }; if (bad === null) delete headers.host; else headers.host = bad;
+    cases.push([url, headers, options]);
+  }
+  for (const [inputUrl, headers, dependencies] of cases) {
+    const response = await handleQrRedirect(request('GET', headers, inputUrl), slug, dependencies);
+    assert.equal(response.status, 404, `${inputUrl} ${JSON.stringify(headers)}`);
+  }
+  assert.equal(f.db.transactions, 0); assert.equal(events(f.db).length, 0);
+});
+
 test('malformed limiter state and unsafe persisted destination fail closed without an event', async () => {
   const f = fixture(); f.db.rows.set(`${f.prefix}/qrRateLimits/${Math.floor(at / 60000)}`, { count: 'bad' });
   assert.equal((await handleQrRedirect(request(), slug, f.options)).status, 503); assert.equal(events(f.db).length, 0);
@@ -145,11 +201,17 @@ test('actual route resolves async params and defaults module OFF without touchin
   mod.require = name => name === '@/lib/firebase-admin' ? { getAdminDb: () => { dbCalls++; return f.db; } }
     : name === '@/lib/qr/redirect' ? { handleQrRedirect } : require(name);
   mod._compile(ts.transpileModule(fs.readFileSync(filename, 'utf8'), { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022 } }).outputText, filename);
-  const previous = process.env.QR_MODULE_ENABLED;
+  const previous = Object.fromEntries(['QR_MODULE_ENABLED', 'K_SERVICE', 'PORT', 'NODE_ENV'].map(key => [key, process.env[key]]));
   try {
     delete process.env.QR_MODULE_ENABLED;
     assert.equal((await mod.exports.GET(request(), { params: Promise.resolve({ code: slug }) })).status, 404); assert.equal(dbCalls, 0);
     process.env.QR_MODULE_ENABLED = 'true';
     const response = await mod.exports.HEAD(request('HEAD'), { params: Promise.resolve({ code: slug }) }); assert.equal(response.status, 302); assert.equal(events(f.db).length, 0); assert.equal(dbCalls, 1);
-  } finally { if (previous === undefined) delete process.env.QR_MODULE_ENABLED; else process.env.QR_MODULE_ENABLED = previous; }
+    process.env.K_SERVICE = 'studio'; process.env.PORT = '8080'; process.env.NODE_ENV = 'production';
+    const proxy = request('HEAD', { host: 'studio-abc123-uc.a.run.app', 'x-forwarded-host': 'orderfly.dk', 'x-forwarded-proto': 'https' }, `https://studio-abc123-uc.a.run.app/q/${slug}`);
+    assert.equal((await mod.exports.HEAD(proxy, { params: Promise.resolve({ code: slug }) })).status, 302);
+    assert.equal(events(f.db).length, 0); assert.equal(dbCalls, 2);
+    delete process.env.K_SERVICE;
+    assert.equal((await mod.exports.HEAD(proxy, { params: Promise.resolve({ code: slug }) })).status, 404); assert.equal(dbCalls, 2);
+  } finally { for (const [key, value] of Object.entries(previous)) { if (value === undefined) delete process.env[key]; else process.env[key] = value; } }
 });
