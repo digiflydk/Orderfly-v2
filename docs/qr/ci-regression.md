@@ -1,0 +1,11 @@
+# Merge-CI mPanel browser regression (#451)
+
+Merge CI run39685258188 on main9c068b1b failed the unrelated-message browser assertion with no commands yet recorded. The fixture waited for `role=status`, but that element renders before `useEffect` registers the message listener and sends `start`. A visible initial status is not evidence that a challenge or message has been processed. No QR runtime or mPanel production bug was diagnosed from that failure.
+
+The fixture now records the real opener's validated `orderfly-launch-ready` challenge. It posts a syntactically valid but unrelated-type token first, then marks readiness. The test waits for that causal handshake and sends a different valid control token from the same opener. Ordered messages plus successful control navigation provide a positive processing barrier. Assertions require exactly one start and one redeem, with the redeemed token byte-for-byte equal to the control token. Accepting the unrelated token cannot pass. Direct visits with both foreign and permitted origins, but no opener, must show the recoverable denial and add neither a challenge nor redemption.
+
+No sleeps, longer timeouts, skipped tests, security assertion removal or production changes are involved. The optional local executable uses the same ordinary launch arguments as CI; its previous forced single-process/GPU overrides crashed local Chromium153 before page creation. CI's default executable launch arguments are unchanged.
+
+Verification on21October2026: full `npm run typecheck` passed; actual Chromium153 ran all4 browser cases and9 launcher/service cases successfully. Command: `CART_CHROMIUM_PATH=/tmp/qr-chromium-153 node --test tests/unit/mpanel-launch-browser.cjs tests/unit/mpanel-launch.cjs`.
+
+Mutation proof temporarily removed only the production receiver's message-type guard in this isolated workspace. The negative browser test failed on the exact token assertion: it redeemed the unrelated e/f token instead of the valid c/d control token. Production source was restored byte-identically (SHA256 `b6d2b3261c08076fd18708bd0c042de30c5b81ab70dc0d50c4a5f0ed0a7a0c64`), then all13 cases passed again. The mutation is not committed. Independent exact-head review, current CI and coordinator-owned merge/deploy/live gates remain separate. No production login, data or activation was used.

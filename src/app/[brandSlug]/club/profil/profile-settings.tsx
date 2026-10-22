@@ -67,7 +67,7 @@ export function ProfileSettings({ slug, base, programName, member, newsletter }:
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="club-member-profile flex flex-col gap-6">
       <h1 className="text-center text-3xl">Profil</h1>
       {message && <p role={message.error ? 'alert' : 'status'} className={`rounded-md border p-3 text-center ${message.error ? 'border-destructive text-destructive' : ''}`}>{message.text}</p>}
 
