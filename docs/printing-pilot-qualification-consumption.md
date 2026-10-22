@@ -18,7 +18,10 @@ changes the printer revision, so refresh/rotate the credential and start a new
 ceremony afterward. Deactivation or credential changes also stop later delivery.
 The strict
 operator submission must match its nonce, scope, revisions and exclusive ten-minute
-server expiry. Observed model/paper/raster must match the native printer. The
+server expiry. Consumption also requires at least one full server-clock minute to
+remain before that expiry. A later attestation is rejected without creating the
+job, audit or permanent current pointer; the operator must explicitly begin a new
+ceremony. Observed model/paper/raster must match the native printer. The
 supervisor explicitly attests the onsite identification, StarIO firmware query,
 enrollment correlation and capture. The operator label and capture digest are
 accountable human statements, not authentication, independent device truth or
@@ -55,3 +58,5 @@ reader with only session/native database I/O isolated. Coverage includes one
 atomic successful job, all-read-before-write, no secret persistence, current
 authority/revision/revocation, issuing actor, malformed/expired/foreign/nonced
 input, outstanding pointer/replay, discarded retries, rollback and unknown commit.
+The expiry regression proves that a 59.999-second remainder writes nothing while
+the exact 60-second boundary creates a job with that full delivery window.

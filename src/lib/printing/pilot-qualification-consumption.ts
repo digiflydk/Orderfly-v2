@@ -15,6 +15,7 @@ import { createSyntheticPilotJobRecord } from './synthetic-pilot-job';
 const token = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
 const instant = z.number().int().positive().safe().max(8.64e15);
+export const SYNTHETIC_PILOT_MIN_DELIVERY_WINDOW_MS = 60_000;
 /** Consumed human-supervised ceremony, never production device capability. */
 export const consumedPilotQualificationSchema = pilotQualificationSessionSchema.innerType().extend({
   state: z.literal('consumed'), jobId: token, contentDigest: digest, consumedAt: instant,
@@ -72,6 +73,10 @@ export async function consumePilotQualification(input: unknown) {
         || !pending.exists || pending.id !== a.sessionId || !s.success || s.data.actorId !== actorId
         || job.exists || pointer.exists || audit.exists) return fail('qualification_conflict');
       validatePilotOperatorAttestation(s.data, a, now);
+      // The pointer deliberately has no automatic clear/retry path. Do not
+      // consume a valid ceremony so late that the resulting one-shot job is
+      // unusable before the authenticated device can poll and download it.
+      if (s.data.expiresAt - now < SYNTHETIC_PILOT_MIN_DELIVERY_WINDOW_MS) return fail('invalid_qualification');
       const record = createSyntheticPilotJobRecord({ brandId: a.brandId, locationId: a.locationId,
         printerId: a.printerId, printerRevision: a.printerRevision, credentialRevision: a.credentialRevision,
         sessionId: a.sessionId, model: a.model, paperWidthMm: a.paperWidthMm, createdAt: now, expiresAt: s.data.expiresAt });

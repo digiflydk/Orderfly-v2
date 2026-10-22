@@ -115,6 +115,27 @@ test('nonce/profile/expiry/foreign/replay and outstanding pointer never produce 
     await assert.rejects(f.consume(attestation(issued))); assert.equal(f.commits.length, 1);
   }
 });
+test('late attestation preserves one full server delivery minute before creating a permanent pointer', async () => {
+  const late = fixture(), issued = await late.issue(), realNow = Date.now;
+  try {
+    Date.now = () => issued.expiresAt - 59_999;
+    await assert.rejects(late.consume(attestation(issued)), /invalid_qualification/);
+  } finally { Date.now = realNow; }
+  assert.equal(late.commits.length, 1);
+  assert.equal(late.records.has(jobPath(issued)), false);
+  assert.equal(late.records.has(`${path}/pilotState/current`), false);
+  assert.equal(late.records.get(sessionPath(issued)).state, 'pending_operator_attestation');
+
+  const boundary = fixture(), boundaryIssued = await boundary.issue();
+  try {
+    Date.now = () => boundaryIssued.expiresAt - 60_000;
+    await boundary.consume(attestation(boundaryIssued));
+  } finally { Date.now = realNow; }
+  const job = boundary.records.get(jobPath(boundaryIssued));
+  assert.equal(job.expiresAt - job.createdAt, 60_000);
+  assert.deepEqual(boundary.records.get(`${path}/pilotState/current`),
+    { schemaVersion: 1, sessionId: boundaryIssued.sessionId });
+});
 test('retry reauthorizes current policy/revisions and commits only one canonical job', async () => {
   const success = fixture(), issued = await success.issue(); success.options.retry = () => {};
   await success.consume(attestation(issued)); assert.equal(success.commits.length, 2);
