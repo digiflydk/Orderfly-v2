@@ -89,6 +89,18 @@ jobs:
       - name: Native printer device verification regression
         run: node --test tests/unit/printing-device-auth-native.cjs
 
+      - name: Native print claim reservation regression
+        run: node --test tests/unit/printing-native-claim.cjs
+
+      - name: Native print confirmation persistence regression
+        run: node --test tests/unit/printing-print-result-native.cjs
+
+      - name: Native printer credential provisioning regression
+        run: node --test tests/unit/printing-device-credentials-service.cjs
+
+      - name: Superadmin printer credential HTTP regression
+        run: node --test tests/unit/printing-device-credentials-http.cjs
+
       - name: CloudPRNT protocol and simulator regression
         run: node --test tests/unit/printing-cloudprnt.cjs
 
@@ -97,6 +109,9 @@ jobs:
 
       - name: Kitchen PNG payload regression
         run: node --test tests/unit/printing-kitchen-png.cjs
+
+      - name: Immutable synthetic testbon content regression
+        run: node --test tests/unit/printing-job-content.cjs
 
       - name: Combined print-intent batch regression
         run: node --test tests/unit/printing-outbox-batch.cjs
@@ -121,6 +136,9 @@ jobs:
 
       - name: Native and compatibility transaction bridge regression
         run: node --test tests/unit/firestore-compat-transaction.cjs
+
+      - name: Atomic Stripe routed print-intent integration
+        run: node --test tests/unit/printing-stripe-settlement-integration.cjs
 
       - name: Private settlement preparation regression
         run: node --test tests/unit/settlement-preparation.cjs

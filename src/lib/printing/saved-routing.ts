@@ -79,7 +79,10 @@ async function native(context: NativeTransactionContext, collection: string, key
 async function nativeScope(context: NativeTransactionContext, scope: Scope) {
   const [brand, location] = await Promise.all([native(context, 'brands', scope.brandId), native(context, 'locations', scope.locationId)]);
   if (field(location, 'brandId') !== scope.brandId) return fail('reference_unverified', 409);
-  for (const row of [brand, location]) if (field(row, 'isActive') !== undefined && field(row, 'isActive') !== true) return fail('reference_unverified', 409);
+  // Management/native preparation is not brand lifecycle or output authority.
+  // The intent policy checks canonical Brand.status; ignore its obsolete
+  // isActive field without weakening the location's own activity requirement.
+  if (field(location, 'isActive') !== undefined && field(location, 'isActive') !== true) return fail('reference_unverified', 409);
 }
 function membership(row: Row, locationId: string, allowGlobal: boolean) {
   const value = field(row, 'locationIds');
