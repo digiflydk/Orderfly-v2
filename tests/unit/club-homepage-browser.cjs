@@ -10,19 +10,19 @@ const js = fs.readFileSync(path.join(root,'design/esmeralda-club-popup.js'),'utf
 let browser;
 before(async()=>{browser=await chromium.launch({headless:true,executablePath:process.env.CLUB_QA_CHROMIUM||undefined,args:['--no-sandbox']});});
 after(async()=>{await browser?.close();});
-async function fixture({consent=null,width=1440,pathName='/'}={}) {
+async function fixture({consent=null,width=1440,pathName='/',host='www.esmeraldapizza.dk'}={}) {
  const context=await browser.newContext({viewport:{width,height:950}});
  if(consent!==null) await context.addCookies([
-  {name:'fa-consent-security_storage',value:'true',domain:'www.esmeraldapizza.dk',path:'/'},
-  {name:'fa-consent-analytics_storage',value:consent?'true':'false',domain:'www.esmeraldapizza.dk',path:'/'}]);
+  {name:'fa-consent-security_storage',value:'true',domain:host,path:'/'},
+  {name:'fa-consent-analytics_storage',value:consent?'true':'false',domain:host,path:'/'}]);
  const page=await context.newPage(); await page.clock.install();
  await page.route('**/*',async route=>{
   const url=route.request().url();
-  if(url.startsWith('https://www.esmeraldapizza.dk/')) return route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0}*{box-sizing:border-box}${css}</style></head><body><button id="prior">Previous action</button>${html}<div id="cookie" flowappz-cookie-popup style="display:none">Cookies</div><script>${js}</script></body></html>`});
+  if(url.startsWith('https://'+host+'/')) return route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0}*{box-sizing:border-box}${css}</style></head><body><button id="prior">Previous action</button>${html}<div id="cookie" flowappz-cookie-popup style="display:none">Cookies</div><script>${js}</script></body></html>`});
   if(url.endsWith('.webp')) return route.fulfill({contentType:'image/webp',body:fs.readFileSync(path.join(root,'attached_assets/esmeralda-club-hero-20261022.webp'))});
   return route.abort();
  });
- await page.goto('https://www.esmeraldapizza.dk'+pathName);return {page,context};
+ await page.goto('https://'+host+pathName);return {page,context};
 }
 async function events(page){return page.evaluate(()=>Array.from(window.dataLayer||[],x=>Array.from(x)));}
 test('no choice: no automatic popup or promotion events',async()=>{
@@ -66,6 +66,10 @@ test('statistics revocation immediately stops click measurement and strips attri
 test('not the homepage: no campaign runtime',async()=>{
  const {page,context}=await fixture({consent:true,pathName:'/bordbooking'});await page.clock.fastForward(14000);
  assert.equal(await page.locator('dialog').count(),0);assert.deepEqual(await events(page),[]);await context.close();
+});
+test('preview host never sends website analytics even with consent',async()=>{
+ const {page,context}=await fixture({consent:true,host:'preview.webflow.io'});await page.clock.fastForward(13000);
+ assert.equal(await page.locator('dialog[open]').count(),1);assert.deepEqual(await events(page),[]);await context.close();
 });
 for(const width of [320,390,768,1440]) test(`responsive ${width}: no horizontal overflow; readable popup and controls`,async()=>{
  const {page,context}=await fixture({consent:false,width});await page.clock.fastForward(13000);

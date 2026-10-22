@@ -12,7 +12,10 @@
     var found = document.cookie.split('; ').find(function (p) { return p.indexOf(name + '=') === 0; });
     return found ? found.slice(name.length + 1) : null;
   }
-  function stats() { return cookie('fa-consent-analytics_storage') === 'true'; }
+  function stats() {
+    return (location.hostname === 'www.esmeraldapizza.dk' || location.hostname === 'esmeraldapizza.dk') &&
+      cookie('fa-consent-analytics_storage') === 'true';
+  }
   function event(name, slot) {
     if (!stats() || slots.indexOf(slot) < 0 || document.visibilityState !== 'visible') return;
     window.dataLayer = window.dataLayer || [];

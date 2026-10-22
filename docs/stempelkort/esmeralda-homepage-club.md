@@ -45,7 +45,8 @@ Normal Club signup still uses Orderfly's consent projection/outbox to Omnisend.
 Homepage `view_promotion` (hero/popup) and `select_promotion` (CTA placement) use
 the existing **website** Google property `G-F9XCDW2586`, verified in the website
 GTM container `GTM-52G3QF76`; never the separate Orderfly commerce property.
-Each enqueue checks current `fa-consent-analytics_storage=true` and visible tab.
+Each enqueue checks current `fa-consent-analytics_storage=true`, visible tab and
+the exact production website hostname. Webflow previews do not send events.
 No analytics identity, contact details, member IDs, login links, QR secrets,
 arbitrary current URLs or referrers are included. Payload fields are fixed:
 `send_to`, `promotion_id`, `promotion_name`, `creative_slot`, canonical
@@ -90,10 +91,10 @@ Actual signup/one-stamp issuance remains the controlled live acceptance in #487.
 
 `CLUB_QA_CHROMIUM=/path/to/chromium node --test tests/unit/club-homepage-browser.cjs`
 
-The eleven real Chromium fixtures cover denied/unresolved/allowed statistics,
+The twelve real Chromium fixtures cover denied/unresolved/allowed statistics,
 consent revocation, fixed event fields and destinations, clean/UTM links, cookie
 panel precedence, Escape/focus/session dismissal, non-homepage isolation and
-320/390/768/1440 layouts. External requests are intercepted; this is isolated
+preview-host exclusion and320/390/768/1440 layouts. External requests are intercepted; this is isolated
 browser coverage, not provider receipt or production signup acceptance.
 
 Independent source review found one hidden-tab measurement bug: the impression
