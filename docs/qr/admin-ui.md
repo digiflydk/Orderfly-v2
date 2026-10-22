@@ -44,3 +44,51 @@ Each mutation gets a UUID request ID. An unknown result, such as a lost network 
 Before release: integrate actual route/API callbacks, map payloads and revisions, verify brand/location grants on the server, register focused tests in the existing CI inventory, run full repository typecheck and related suites, conduct an authenticated browser pass using actual styling, complete exact-head independent review, deploy and verify the deployed commit plus live acceptance. Logo upload, PDF/print layout, bulk CSV, analytics and conversion attribution are separate issues under #389.
 
 Component checkpoint (2026-10-21): all eight browser scenarios pass using Chromium 153 supplied as a local test executable (`CART_CHROMIUM_PATH=/tmp/qr-chromium-153`). The standard browser CDN returned invalid archives; no test was skipped to work around it. The create/edit cases also verify Copenhagen midnight on the daylight-saving transition date. Explicit select `aria-label` values fixed an accessible-name ambiguity found by these tests.
+
+## Reference-led catalogue and designer (#528)
+
+The 22 October layout follows the PO's screenshots within the existing Orderfly
+capabilities. The catalogue offers responsive list/cards, URL/name/campaign/tag
+search, status and campaign filters, alphabetical or probable-scan sorting, and
+12-row pagination. The summary describes the loaded catalogue (the existing
+truncation notice remains). Cards show brand, status, destination, immutable
+public link with clipboard copy, and scoped lifetime probable scans. Missing
+scope omits the counter; legacy unknown remains unknown rather than zero. The
+counter is not labelled unique people or a period-specific total. A card's
+statistics action passes its full brand/code identity and clears stale catalogue
+filters before loading the existing authenticated report.
+
+Visible published thumbnails call the authenticated `preview` renderer with the
+stored brand/id/revision; they never request the destination or public `/q/` route.
+IntersectionObserver delays offscreen work; pagination bounds mounted rows to 12.
+Revision changes invalidate previews, and rejected/stale requests cannot replace
+another record's image. Paused records can be designed; archived records do not
+request preview. Thumbnail failures show a placeholder without changing data.
+
+Edit/design remains a persisted-draft workflow, with four explicit colour presets
+and manual controls. Presets do not save automatically. Unsaved dynamic changes
+still require Save before export. A grouped menu contains duplicate, pause/activate
+and confirmed archive. There is no hard delete, mutable public slug, or placeholder
+folder action. The existing seven static types remain available; external hosted
+PDF/social/app landing-page types are not falsely advertised.
+
+The logo/export panel has a responsive two-column layout, uploaded-logo swatch and
+large preview. `Vis designpreview` requests PNG through exactly the same
+server renderer/context/logo options used by PNG export, validates the returned
+asset and displays it without initiating a download. Changing logo or scope clears
+preview; late responses from a prior scope are discarded. Existing raster limits,
+H correction for logos, actual server decode and SVG/print security checks remain.
+Logo state is export-local, explicitly explained, and is never stored. Shape/corner
+variants, frames and persistent brand templates are not implemented by this slice.
+
+Verification: manager, print-tools and workspace Playwright tests exercise desktop
+1440 and mobile390, existing failure/retry/scope boundaries, new filters/layout,
+pagination, scoped unknown/zero counters, logo preview/export equivalence and late
+responses. Workspace tests compile and load the actual application Tailwind CSS
+and use the real QR renderer for catalogue/logo visual scenarios. Screenshots use
+synthetic data and do not prove a production scan. Existing renderer tests verify
+PNG/SVG decode and rejection cases. Live acceptance remains read-only: deployed
+SHA, authenticated catalogue/editor rendering, and original QR HEAD302; no test
+mutation to production records is required.
+
+Per-code statistics actions use server-derived `analyticsCodeKeys`, matched by brand and current location. A global analytics capability does not enable actions for other brands; missing eligibility hides the action. Location-only analytics grants can show the action without exposing whole-lifetime counters. The server remains the authorization boundary.
