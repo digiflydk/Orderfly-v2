@@ -70,10 +70,12 @@ export async function projectNativePrintCatalog(context: NativeTransactionContex
   };
   const [order, brand, location] = await Promise.all([read('orders', orderId), read('brands', brandId), read('locations', locationId)]);
   if (field(order, 'brandId') !== brandId || field(order, 'locationId') !== locationId || field(location, 'brandId') !== brandId) fail('invalid_catalog');
-  for (const data of [brand, location]) {
-    const active = field(data, 'isActive');
-    if (active !== undefined && active !== true) fail('invalid_catalog');
-  }
+  // Brand lifecycle is canonical Brand.status, checked by the native intent
+  // policy. Legacy Brand.isActive must not contradict that policy. This pure
+  // projection grants no lifecycle/output authority; location activity remains
+  // a separate native catalog requirement.
+  const active = field(location, 'isActive');
+  if (active !== undefined && active !== true) fail('invalid_catalog');
   const deliveryType = field(order, 'deliveryType');
   if (deliveryType !== 'Pickup' && deliveryType !== 'Delivery') fail('invalid_order');
   const source = array(field(order, 'productItems'), PRINT_CATALOG_PROJECTION_LIMITS.lines, 'invalid_order');

@@ -6,6 +6,36 @@ const texts=loadTs('src/app/[brandSlug]/club/texts.ts');
 const {portalPreset}=loadTs('src/app/[brandSlug]/club/brand-preset.ts');
 const {locationSlugError,brandSlugError}=loadTs('src/lib/brand-subdomain.ts');
 
+test('the real brand layout selects the club footer only for Esmeralda club paths and keeps cookie settings wired',()=>{
+  const fs=require('node:fs'),ts=require('typescript');
+  let pathname,opened=0;
+  const mocks={
+    'react/jsx-runtime':{jsx:(type,props)=>({type,props}),jsxs:(type,props)=>({type,props})},
+    react:{useState:()=>[false,()=>{opened++;}]},
+    'next/navigation':{usePathname:()=>pathname},
+    '@/components/cookie-consent':{CookieConsent:'Cookies'},
+    '@/components/layout/header':{Header:'Header'},
+    '@/components/layout/footer':{Footer:'Footer'},
+    '@/components/layout/menu-header':{MenuHeader:'MenuHeader'},
+    '@/lib/loyalty/portal-path':paths,
+    '@/lib/brand-subdomain':loadTs('src/lib/brand-subdomain.ts'),
+    './club/portal-frame':{EsmeraldaClubFooter:'EsmeraldaClubFooter'},
+  };
+  const code=ts.transpileModule(fs.readFileSync('src/app/[brandSlug]/layout-client.tsx','utf8'),{compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX}}).outputText;
+  const mod={exports:{}};
+  new Function('require','module','exports',code)(name=>{assert.ok(name in mocks,`unexpected dependency ${name}`);return mocks[name];},mod,mod.exports);
+  for(const [slug,path,expected] of [['esmeralda','/club/login','EsmeraldaClubFooter'],['esmeralda','/esmeralda/club/tilmeld','EsmeraldaClubFooter'],
+    ['other','/club/login','Footer'],['esmeralda','/esmeralda/amager','Footer']]){
+    pathname=path;
+    const tree=mod.exports.BrandLayoutClient({brand:{id:slug,slug},children:'form'}),children=tree.props.children;
+    const footer=children.find(c=>c?.type===expected),cookies=children.find(c=>c?.type==='Cookies');
+    assert.ok(footer,`${slug} ${path}`);assert.equal(children.filter(c=>['Footer','EsmeraldaClubFooter'].includes(c?.type)).length,1);
+    footer.props.onOpenCookieSettings();assert.ok(cookies);
+    if(path.includes('/club'))assert.equal(children.find(c=>c?.props?.children==='form').type,'div','club owns its single main');
+  }
+  assert.equal(opened,4);
+});
+
 test('club paths are recognised on the brand subdomain and on orderfly.dk/{slug}',()=>{
   for(const p of ['/club','/club/login','/esmeralda/club','/esmeralda/club/tilmeld']) assert.equal(paths.isClubPath(p,'esmeralda'),true,p);
   for(const p of ['/','/esmeralda','/esmeralda/amager','/amager','/esmeralda/amager/club','/clubs',null]) assert.equal(paths.isClubPath(p,'esmeralda'),false,String(p));

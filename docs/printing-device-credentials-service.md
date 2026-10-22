@@ -41,6 +41,9 @@ transaction promise confirms commit. JSON/object enumeration omits it. No secret
 is written to database/audit, logged, accepted from callers or placed in a URL.
 Audit includes actor and scoped revision/action metadata, never digest or secret.
 Errors are fixed contextual messages rather than driver/private input text.
+Secret-generation failures also map to `credentials_unavailable` (503) before
+native I/O; generation remains outside the retried transaction callback. Revocation
+does not generate a replacement secret or depend on the entropy provider.
 
 There is deliberately no plaintext recovery or idempotent secret replay. If a
 commit succeeds but its response is lost, the secret may be unavailable. Repeating

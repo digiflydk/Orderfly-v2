@@ -96,7 +96,7 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
       transaction.get(db.collection('brands').doc(brandId)), transaction.get(locationRef),
       transaction.get(locationRef.collection('printIntentPolicies').doc('original')),
     ]);
-    nativeScopeRecord(brand, brandId);
+    const nativeBrand = nativeScopeRecord(brand, brandId);
     if (nativeScopeRecord(location, locationId).brandId !== brandId) throw new PrintIntentPolicyError('policy_unverified');
     const result = (policyRevision: number | null, targets: PreparedPrintIntentPolicy['targets']): PreparedPrintIntentPolicy => Object.freeze({
       brandId, locationId, policyRevision, enabled: targets.length > 0,
@@ -128,7 +128,13 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
       return Object.freeze({ configuration: Object.freeze(stored.data.configuration), printerRevision: stored.data.revision,
         kinds: Object.freeze([...target.kinds]), dispatchAuthorized: false as const });
     }));
-    return result(policy.revision, targets);
+    // Brand lifecycle is canonical `status`, not the legacy `isActive` field.
+    // Validate the saved policy and every selected target first so suspension
+    // cannot conceal corrupt configuration. Effective OFF does not mutate the
+    // saved policy or block the caller's ordinary received-money settlement.
+    const status = Object.getOwnPropertyDescriptor(nativeBrand, 'status');
+    const eligible = status && 'value' in status && (status.value === 'active' || status.value === 'trialing');
+    return result(policy.revision, eligible ? targets : []);
   } catch (error) {
     if (error instanceof PrintIntentPolicyError) throw error;
     throw new PrintIntentPolicyError('policy_unavailable');

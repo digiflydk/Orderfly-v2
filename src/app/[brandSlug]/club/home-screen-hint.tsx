@@ -32,7 +32,7 @@ export function HomeScreenHint({ slug }: { slug: string }) {
 
   if (!platform) return null;
   return (
-    <aside aria-labelledby="club-home-screen" className="flex flex-col gap-2 rounded-xl border p-4 text-sm">
+    <aside aria-labelledby="club-home-screen" className="club-home-screen flex flex-col gap-2 rounded-xl border p-4 text-sm">
       <h2 id="club-home-screen" className="text-base font-semibold">Læg kortet på din hjemmeskærm</h2>
       {platform === 'ios' && <p>Tryk på Del-knappen i Safari, og vælg »Føj til hjemmeskærm«. Så åbner kortet med ét tryk.</p>}
       {platform === 'android' && <p>Åbn browserens menu (⋮), og vælg »Føj til startskærm«. Så åbner kortet med ét tryk.</p>}

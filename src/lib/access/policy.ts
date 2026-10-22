@@ -13,6 +13,7 @@ export const FEATURES = [
   ['orderfly.customer_score', ['view', 'create', 'edit', 'delete']],
   ['orderfly.stamp_cards', ['overview', 'counter', 'redeem', 'correct', 'settings', 'members', 'log']],
   ['orderfly.analytics', ['view']],
+  ['orderfly.qr_codes', ['view', 'create', 'edit', 'archive', 'export', 'analytics']],
   ['orderfly.website', ['view', 'create', 'edit', 'delete']],
   ['orderfly.billing', ['view', 'edit']],
   ['opsfly.own_documents', ['view', 'edit']],

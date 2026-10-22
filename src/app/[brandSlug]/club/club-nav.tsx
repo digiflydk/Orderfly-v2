@@ -10,7 +10,7 @@ export function ClubNav({ base, programName }: { base: string; programName: stri
   const current = (href: string) => pathname === href || pathname.endsWith(href.slice(href.indexOf('/club')));
   const items = [[base, 'Kort'], [`${base}/historik`, 'Historik'], [`${base}/profil`, 'Profil']] as const;
   return (
-    <nav aria-label={`Menu for ${programName}`} className="mb-6 grid grid-cols-3 gap-2">
+    <nav aria-label={`Menu for ${programName}`} className="club-member-nav mb-6 grid grid-cols-3 gap-2">
       {items.map(([href, label]) => (
         <Link key={href} href={href} aria-current={current(href) ? 'page' : undefined}
           className="flex min-h-11 items-center justify-center rounded-md border text-base aria-[current=page]:border-primary aria-[current=page]:font-semibold">

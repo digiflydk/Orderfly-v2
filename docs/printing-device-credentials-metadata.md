@@ -46,10 +46,13 @@ errors/result validation failure return fixed credentials_unavailable503 without
 private text. No secret, digest or private record is logged or placed in URLs; the three
 query scope identifiers are identifiers only, never authentication.
 
-The isolated branch explicitly stacks #365 currente92, #369 current24f and genuine
-maind817. Release is BLOCKED until both dependency PRs are actuallymain, then
-synchronize/remove redundant dependency diff, rerun own/current-head checks and
-actual independent review. Root alone serializes publication workflow slots,
+The existing isolated branch has been reconciled with released #365 on main
+`88587bed` and the stable #368 POST candidate `c8c4e3a6`. The credential service's
+reviewed generation-error handling is preserved; its sole metadata change is the
+export of the existing schema. POST helper/export behavior and source remain
+unchanged, apart from adding the independent GET export. Release waits until
+#369 is actually on main, then requires a fresh synchronization, own checks and
+independent review of that current commit. Root alone serializes workflow slots,
 merge, deploy and applicable read-only live QA. No live successful native metadata
 scenario is inferred from fixtures or anonymous boundary checks.
 

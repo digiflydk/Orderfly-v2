@@ -40,10 +40,12 @@ in generic errors or cached. A client can lose a successful one-time response;
 this endpoint cannot retrieve/replay it. A future separate authenticated metadata
 read plus explicit fresh-revision rotation is required for that recovery.
 
-The branch deliberately stacks on #364/PR365 plus genuine main6c2ee939. Release is
-blocked until PR365 is actually in main, then this branch must synchronize and
-remove redundant dependency diff with own checks, current-head CI and actual
-independent review. Root alone serializes merge, deployment and live verification.
+#364/PR365 is merged and deployed, including its fixed error mapping for secret-
+generation failures. This existing HTTP branch is synchronized with current main
+`88587bedba3ac42908b272e66d977ebfdd9c63c4`; the credential service is a main
+dependency rather than a second feature diff. Release still requires own checks,
+CI and completed independent review for the current branch commit. Root alone
+serializes merge, deployment and live verification.
 No production provisioning or live write acceptance is claimed. Read-only post-
 deploy QA can verify session/CSRF/malformed boundaries only without mutating
 production; controlled authenticated successful writes are a separate scenario.
@@ -62,7 +64,7 @@ Existing service tests retain rollback/retry/CAS coverage.
 Planning: one task / one planned development sprint, nominal40 active minutes,
 uncertainty30–55; actual active effort unmeasured. Implementation completion and
 live acceptance are reported separately. Splitting original setup API into this
-write boundary (S1a) and a future safe-metadata read (S1b, not started) revises the
+write boundary (S1a) and a separate safe-metadata read (S1b, #375 / PR377) revises the
 provisional setup forecast3->4 and overall21->22. This is scope refinement, not a
 calendar ETA or a claim of22 implemented issues. No environment, rules/index,
 production data, hardware, firmware or Wolt settings changed.

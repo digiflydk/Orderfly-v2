@@ -76,3 +76,8 @@ Printer administration remains System / superadmin only. Configuration writes
 and physical output remain default-OFF. Independent current-head Codex review,
 CI, root-serialized merge/deploy and relevant deployed read-only QA are separate
 gates. Fixtures do not prove live authenticated settlement or physical print.
+
+The subsequent #349 [atomic Stripe integration](printing-stripe-settlement.md)
+now uses this private boundary through an intrinsic financial-plan capability.
+The bounded #346 scope above remains a description of its original refactor;
+staff settlement and initial unpaid pickup acceptance are still separate work.

@@ -46,12 +46,13 @@ export async function writePrinterDeviceCredential(input: unknown): Promise<Prin
     || command.credentialRevision === Number.MAX_SAFE_INTEGER) return failure('invalid_request', 400);
   if (process.env.ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED !== 'true') return failure('writes_unavailable', 503);
   const actorId = principalKey(session.identity), nextRevision = command.credentialRevision + 1;
-  // Exactly once per invocation, outside the SDK retry callback. CAS binds every retry.
-  const draft = command.operation === 'revoke' ? null : createPrinterDeviceCredentialDraft({
-    brandId: command.brandId, locationId: command.locationId, printerId: command.printerId,
-    printerRevision: command.printerRevision, credentialRevision: nextRevision,
-  });
   try {
+    // Exactly once per invocation, outside the SDK retry callback. CAS binds every
+    // retry, while entropy/provider failures use the fixed service error below.
+    const draft = command.operation === 'revoke' ? null : createPrinterDeviceCredentialDraft({
+      brandId: command.brandId, locationId: command.locationId, printerId: command.printerId,
+      printerRevision: command.printerRevision, credentialRevision: nextRevision,
+    });
     const db = getAdminDb(), locationRef = db.collection('locations').doc(command.locationId);
     const printerRef = locationRef.collection('printers').doc(command.printerId);
     const credentialRef = printerRef.collection('deviceCredentials').doc('current');

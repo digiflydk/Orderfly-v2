@@ -19,7 +19,7 @@ const EVENT_LABELS: Record<string, string> = {
   stamp_added: 'Stempel', stamp_removed: 'Stempel fjernet', reward_earned: 'Belønning optjent', reward_redeemed: 'Belønning indløst',
   redemption_cancelled: 'Indløsning annulleret', stamps_expired: 'Stempler udløbet', reward_expired: 'Belønning udløbet',
 };
-const CHANNEL_LABELS: Record<string, string> = { dine_in: 'Spis her', takeaway: 'Takeaway', pickup: 'Afhentning', delivery: 'Levering' };
+const CHANNEL_LABELS: Record<string, string> = { dine_in: 'Spis her', takeaway: 'Takeaway', pickup: 'Afhentning', delivery: 'Levering', bonus_welcome: 'Velkomststempel', bonus_profile: 'Profilbonus' };
 
 export function historyText(event: { type: string; quantity: number; channel: string | null }) {
   const label = EVENT_LABELS[event.type] ?? 'Hændelse';

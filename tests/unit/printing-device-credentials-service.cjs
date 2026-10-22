@@ -32,7 +32,10 @@ function fixture(options = {}) {
     'server-only': {}, '@/lib/firebase-admin': { getAdminDb: () => { dbCalls++; return db; } },
     '@/lib/access/orderfly-session': { requirePlatformSuperuser: async () => { if (options.denied) throw new authority.AuthorityError('forbidden'); return session; } },
     '@/lib/access/authority': authority, './authority': authority,
-    './device-auth': { ...crypto, createPrinterDeviceCredentialDraft: input => { const draft = crypto.createPrinterDeviceCredentialDraft(input); generated.push(draft); return draft; } },
+    './device-auth': { ...crypto, createPrinterDeviceCredentialDraft: input => {
+      if (options.draftFailure) throw Error('PRIVATE entropy provider unavailable');
+      const draft = crypto.createPrinterDeviceCredentialDraft(input); generated.push(draft); return draft;
+    } },
     'firebase-admin/firestore': { FieldValue: { serverTimestamp: () => ({ serverTimestamp: true }) } },
   });
   return { records, events, commits, generated, get dbCalls() { return dbCalls; },
@@ -52,6 +55,20 @@ test('issue commits private digest and immutable audit, returns one-time nonenum
   assert.deepEqual(f.records.get(path), before); assert.equal(f.commits.length, 1);
   assert.equal(f.records.get(`${path}/deviceCredentialAudit/1`).actorId, actorId);
   assert.doesNotMatch(JSON.stringify(f.records.get(`${path}/deviceCredentialAudit/1`)), /secret|Digest/);
+});
+test('credential generation failures map to fixed 503 before native I/O; revoke does not generate a secret', async () => {
+  for (const operation of ['issue', 'rotate']) {
+    const options = {}, f = fixture(options);
+    if (operation === 'rotate') await f.run();
+    const before = structuredClone([...f.records]), calls = f.dbCalls, commits = f.commits.length, generated = f.generated.length;
+    options.draftFailure = true;
+    await assert.rejects(f.run(command(operation, operation === 'issue' ? 0 : 1)), error =>
+      error.message === 'credentials_unavailable' && error.status === 503 && !JSON.stringify(error).includes('PRIVATE'));
+    assert.deepEqual([...f.records], before); assert.equal(f.dbCalls, calls);
+    assert.equal(f.commits.length, commits); assert.equal(f.generated.length, generated);
+  }
+  const options = {}, f = fixture(options); await f.run(); options.draftFailure = true;
+  assert.equal((await f.run(command('revoke', 1))).revoked, true); assert.equal(f.generated.length, 1);
 });
 test('rotate invalidates old secret, revoke advances revision and explicit rotate is required to restore identity', async () => {
   const f = fixture(); const first = await f.run(); const second = await f.run(command('rotate', 1));
