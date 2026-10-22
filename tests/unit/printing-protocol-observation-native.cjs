@@ -150,6 +150,38 @@ test('oversized raw fact strings reject before regex scanning or object reflecti
   }
 }));
 
+test('oversized raw scope strings reject before regex scanning in every exported operation', enabled(async () => {
+  const originalExec = RegExp.prototype.exec;
+  const oversized = { brandId: 'b'.repeat(129), locationId: 'l'.repeat(129), printerId: 'p'.repeat(129), secret: 'S'.repeat(44) };
+  const privateText = 'PRIVATE_OVERSIZED_SCOPE_REGEX_SCAN';
+  RegExp.prototype.exec = function(value) {
+    if (Object.values(oversized).includes(value)) throw Error(privateText);
+    return Reflect.apply(originalExec, this, [value]);
+  };
+  try {
+    for (const [field, value] of Object.entries(oversized)) {
+      const invalidScope = { ...scope, [field]: value };
+      for (const [method, input] of [
+        ['issueNativeProtocolObservationChallenge', invalidScope],
+        ['persistNativeProtocolObservation', { ...invalidScope, nonce: 'B'.repeat(43), facts }],
+        ['readNativeProtocolObservation', invalidScope],
+      ]) {
+        const f = fixture();
+        await assert.rejects(f.run(method, input), error => {
+          const rendered = String(error) + (error.stack || '') + JSON.stringify(error);
+          assert.equal(error.code, 'invalid_protocol_observation');
+          assert.equal(error.message, error.code);
+          assert.equal(rendered.includes(privateText), false);
+          return true;
+        });
+        assert.deepEqual(f.auth, []); assert.deepEqual(f.writes, []);
+      }
+    }
+  } finally {
+    RegExp.prototype.exec = originalExec;
+  }
+}));
+
 test('malformed foreign and clock-invalid prior challenges cannot be replaced', enabled(async () => {
   for (const mutate of [row => { row.brandId = 'foreign'; }, row => { row.printerRevision = 4; },
     row => { row.credentialRevision = 3; }, row => { row.consumedAt = row.expiresAt; },

@@ -95,6 +95,10 @@ const rawString = (value: unknown, maxLength: number): string => {
 function exactScope(input: unknown): Scope {
   const row = ownData(input, 4), keys = Object.keys(row), allowed = ['brandId', 'locationId', 'printerId', 'secret'];
   if (keys.length !== 4 || keys.some(key => !allowed.includes(key))) return invalid();
+  rawString(row.brandId, 128);
+  rawString(row.locationId, 128);
+  rawString(row.printerId, 128);
+  if (typeof row.secret !== 'string' || row.secret.length !== 43) return invalid();
   const parsed = z.object({ brandId: id, locationId: id, printerId: id,
     secret: z.string().length(43).regex(/^[A-Za-z0-9_-]{43}$/) }).strict().safeParse(row);
   if (!parsed.success || Buffer.from(parsed.data.secret, 'base64url').toString('base64url') !== parsed.data.secret) return invalid();
