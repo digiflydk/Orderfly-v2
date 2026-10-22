@@ -116,7 +116,9 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
    runTransaction:async(_,callback)=>{beforeCustomerTransaction?.(records);const tx={get:async ref=>snapshot(ref),set:(ref,data,options)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)};
     const compatRef=ref=>{const [collection,id]=ref.path.split('/');return firestoreRef(collection,id);};
     const nativeTx={get:async ref=>{if(!ref.path||ref.path.split('/').length!==2)return ref.get();const saved=await tx.get(compatRef(ref));return{...saved,exists:saved.exists()};},create:(ref,data)=>{if(records.has(ref.path))throw Error('Exists');strictWrite(data);records.set(ref.path,structuredClone(data));},set:(ref,...args)=>ref.path.split('/').length===2?tx.set(compatRef(ref),...args):records.set(ref.path,structuredClone(args[0])),update:(ref,...args)=>tx.update(compatRef(ref),...args)};
-    return callback(tx,Object.freeze({db:marketingDb,transaction:nativeTx}));},
+    const result=await callback(tx,Object.freeze({db:marketingDb,transaction:nativeTx}));
+    if(fault==='pickup-response'&&records.get('orders/'+orderId)?.status==='Received')throw Error('acceptance response lost');
+    return result;},
    serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),
    setDoc:async(ref,data)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data);writes.push({ref,data});events.push(ref.collection);},
    updateDoc:async(ref,data)=>{

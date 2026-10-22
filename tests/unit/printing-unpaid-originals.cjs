@@ -93,3 +93,32 @@ test('#506 real checkout action wires the same native capability into enabled qu
  const f=await checkout({realReservations:true,kind:'code',seed,brandOverrides:{status:'active'},locationOverrides:{paymentMethods:{online:true,payAtPickup:true}},customerOverrides:{paymentMethod:'pay_at_pickup'}});
  assert.equal(f.result.success,true,f.result.error);assert.equal(f.records.get('orders/ORD-TEST').status,'Received');assert.equal(f.records.has('orders/ORD-TEST/printIntents/original'),true);assert.equal(f.records.get(printerPath+'/queue/state').pendingCount,2);assert.equal(f.events.includes('stripe'),false);
 }));
+test('#506 real checkout rejects print preparation before acceptance and releases limited discount capacity',()=>enabled(async()=>{
+ const {checkout}=require('../helpers/checkout-fixture.cjs');
+ for(const failure of ['routing','revision','queue']) {
+  const source=await fixture();
+  if(failure==='routing')source.records.delete('locations/l/printerRouting/original');
+  if(failure==='revision')source.records.get(printerPath).revision=2;
+  if(failure==='queue')source.records.set(printerPath+'/queue/state',{});
+  const seed=[...source.records].filter(([p])=>!p.startsWith('orders/')&&!p.startsWith('products/')&&p!=='locations/l'&&p!=='brands/b');
+  const f=await checkout({realReservations:true,kind:'code',seed,brandOverrides:{status:'active'},locationOverrides:{paymentMethods:{online:true,payAtPickup:true}},customerOverrides:{paymentMethod:'pay_at_pickup'}});
+  assert.equal(f.result.success,false);assert.equal(f.result.retryable,true,failure);
+  assert.equal(f.records.get('orders/ORD-TEST').discountReservation,'released',failure);
+  assert.deepEqual([...f.records].filter(([p])=>p.startsWith('checkout_')).map(([,row])=>row.held),[0,0,0],failure);
+  assert.equal(f.records.get('orders/ORD-TEST').status,'Canceled',failure);
+  assert.equal(f.records.has('orders/ORD-TEST/printIntents/original'),false);
+  assert.equal([...f.records.keys()].some(p=>p.startsWith('orderNotificationJobs/')),false);
+  assert.equal(f.events.includes('stripe'),false);assert.equal(f.events.includes('release'),true);
+ }
+}));
+test('#506 lost acceptance commit response keeps holds and disallows blind retry',()=>enabled(async()=>{
+ const {checkout}=require('../helpers/checkout-fixture.cjs');const source=await fixture();
+ const seed=[...source.records].filter(([p])=>!p.startsWith('orders/')&&!p.startsWith('products/')&&p!=='locations/l'&&p!=='brands/b');
+ const f=await checkout({realReservations:true,kind:'code',fault:'pickup-response',seed,brandOverrides:{status:'active'},locationOverrides:{paymentMethods:{online:true,payAtPickup:true}},customerOverrides:{paymentMethod:'pay_at_pickup'}});
+ assert.equal(f.result.success,false);assert.equal(f.result.retryable,false);
+ assert.equal(f.records.get('orders/ORD-TEST').status,'Received');
+ assert.equal(f.records.get('orders/ORD-TEST').discountReservation,'held');
+ assert.deepEqual([...f.records].filter(([p])=>p.startsWith('checkout_')).map(([,row])=>row.held),[1,1,1]);
+ assert.equal(f.records.has('orders/ORD-TEST/printIntents/original'),true);
+ assert.equal(f.events.includes('release'),false);assert.equal(f.events.includes('stripe'),false);
+}));

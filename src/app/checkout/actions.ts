@@ -728,16 +728,28 @@ export async function createStripeCheckoutSessionAction(
       // disable/reassignment cannot admit a new pickup order.
       stage = 'pickup_acceptance';
       sessionRequestStarted = true; // A lost acceptance response is not a rejection.
+      let preparationRejected = false;
       try {
         await runTransaction(db, async (_transaction, context) => {
-          const acceptance = await preparePickupCheckoutAcceptance(context, { orderId, brandId, locationId, selection: deliveryTime });
-          const printPlan = await prepareUnpaidAcceptanceOriginals(context, acceptance.capability);
+          // SDK retries discard the previous attempt. Only this attempt's
+          // read-only preparation failure proves that no acceptance committed.
+          preparationRejected = false;
+          const { acceptance, printPlan } = await (async () => {
+            try {
+              const acceptance = await preparePickupCheckoutAcceptance(context, { orderId, brandId, locationId, selection: deliveryTime });
+              const printPlan = await prepareUnpaidAcceptanceOriginals(context, acceptance.capability);
+              return { acceptance, printPlan };
+            } catch (error) {
+              preparationRejected = true;
+              throw error;
+            }
+          })();
           acceptance.apply();
           printPlan?.apply();
           fulfillmentAt = acceptance.fulfillmentAt;
         });
       } catch (error) {
-        if ((error as { code?: string })?.code === 'pickup_order_rejected') sessionRequestStarted = false;
+        if (preparationRejected || (error as { code?: string })?.code === 'pickup_order_rejected') sessionRequestStarted = false;
         throw error;
       }
       return { success: true, orderId, url: `${origin}${checkoutPath}/confirmation?order_id=${orderId}&receipt_token=${receiptToken}` };
