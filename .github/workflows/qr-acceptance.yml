@@ -1,0 +1,71 @@
+name: QR native acceptance
+
+on:
+  workflow_dispatch:
+  pull_request:
+    branches: [main]
+    paths:
+      - '.github/workflows/qr-acceptance.yml'
+      - 'tests/local-qa/qr-*.cjs'
+      - 'scripts/qr-retention-readiness.mjs'
+      - 'tests/unit/qr-retention-readiness.cjs'
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/qr-acceptance.yml'
+      - 'tests/local-qa/qr-*.cjs'
+      - 'scripts/qr-retention-readiness.mjs'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: qr-native-acceptance-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  native:
+    name: QR native emulator and browser acceptance
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Provision pinned existing QA tools
+        run: |
+          qr_tools_dir=$(mktemp -d)
+          npm install --prefix "$qr_tools_dir" --no-audit --no-fund firebase-tools@15.30.0
+          echo "QA0_FIREBASE_BIN=$qr_tools_dir/node_modules/.bin/firebase" >> "$GITHUB_ENV"
+          echo "QA0_JAVA_BIN=$(command -v java)" >> "$GITHUB_ENV"
+          echo "CART_CHROMIUM_PATH=$(node -p 'require("@playwright/test").chromium.executablePath()')" >> "$GITHUB_ENV"
+      - name: Verify read-only probe safeguards
+        run: node --test tests/unit/qr-retention-readiness.cjs
+      - name: Actual native QR login, scans, analytics, history and browser download, twice
+        run: node tests/local-qa/qr-run.cjs
+
+  retention:
+    name: Production retention checkpoint (read only)
+    # Never expose the existing production credential to PR source or another ref.
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - name: Read fixed checkpoint without triggering heartbeat or any write
+        env:
+          FIREBASE_SERVICE_ACCOUNT_JSON: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JSON }}
+        run: node scripts/qr-retention-readiness.mjs
