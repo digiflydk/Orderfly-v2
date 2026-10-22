@@ -109,6 +109,74 @@ test('oversized or invalid UTF8 response bodies fail closed with no reflected bo
   }
 });
 
+test('integration: actual exported metadata GET and native service enable only the same-row credential controller', async () => {
+  const { record, path, actorId, policy } = require('../helpers/printing-fixture.cjs');
+  const authority = loadTs('src/lib/access/authority.ts', { 'server-only': {} });
+  const crypto = loadTs('src/lib/printing/device-auth.ts', { 'server-only': {} });
+  const target = { brandId: 'brand', locationId: 'location', printerId: 'p1', printerRevision: 1 };
+  const draft = crypto.createPrinterDeviceCredentialDraft({ ...target, credentialRevision: 4 });
+  const nativePolicy = policy();
+  nativePolicy.roles.push({ id: 'owner', name: 'Owner', companyId: null, kind: 'superuser', permissions: [], active: true });
+  nativePolicy.memberships.push({ id: 'owner', principalId: actorId, companyId: null, locationIds: null, roleIds: ['owner'], active: true });
+  const credentialPath = path + '/deviceCredentials/current';
+  const rows = new Map([['platformAdminControl/access-v1', nativePolicy], ['brands/brand', { status: 'active' }],
+    ['locations/location', { brandId: 'brand' }], [path, record()]]);
+  const reads = [], responses = []; let nativeCalls = 0, sessionStatus = null;
+  const ref = path => ({ path, id: path.split('/').at(-1), collection: name => ({ doc: id => ref(`${path}/${name}/${id}`) }) });
+  const transaction = {
+    async get(reference) { reads.push(reference.path); return { id: reference.id, exists: rows.has(reference.path), data: () => structuredClone(rows.get(reference.path)) }; },
+    create() { assert.fail('metadata integration cannot write'); }, set() { assert.fail('metadata integration cannot write'); },
+    update() { assert.fail('metadata integration cannot write'); }, delete() { assert.fail('metadata integration cannot write'); },
+  };
+  const db = { collection: name => ({ doc: id => ref(`${name}/${id}`) }), async runTransaction(run, options) {
+    assert.deepEqual(options, { readOnly: true }); nativeCalls++; return run(transaction);
+  } };
+  const route = loadTs('src/app/api/superadmin/printers/device-credentials/route.ts', {
+    'server-only': {}, '@/lib/firebase-admin': { getAdminDb: () => db }, '@/lib/access/authority': authority, './authority': authority,
+    '@/lib/access/orderfly-session': { requirePlatformSuperuser: async () => {
+      if (sessionStatus) throw new authority.AuthorityError('PRIVATE session', sessionStatus);
+      return { identity: { provider: 'firebase', subject: 'writer' }, superuser: true };
+    } },
+  });
+  // This assertion fails on the former POST-only route. The adapter below calls
+  // this real export: it never supplies a fabricated metadata response.
+  assert.equal(typeof route.GET, 'function');
+  const makeController = (row = target) => createCredentialController(row, true, () => {}, async (url, options) => {
+    assert.notEqual(options.method, 'POST', 'metadata integration never provisions a credential');
+    const response = await route.GET(new Request(new URL(url, 'https://orderfly.dk'), options));
+    responses.push({ status: response.status, cache: response.headers.get('cache-control'), vary: response.headers.get('vary') });
+    return response;
+  });
+  for (const [stored, revision, state, operation] of [
+    [null, 1, 'missing', 'issue'], [draft.record, 1, 'current', 'rotate'],
+    [{ ...draft.record, revokedAt: Date.now() }, 1, 'revoked', 'rotate'], [draft.record, 2, 'stale', 'rotate'],
+  ]) {
+    if (stored) rows.set(credentialPath, stored); else rows.delete(credentialPath);
+    rows.set(path, record({ revision })); const before = structuredClone([...rows]);
+    const controller = makeController({ ...target, printerRevision: revision }); await controller.refresh();
+    assert.equal(controller.getSnapshot().phase, 'ready'); assert.equal(controller.getSnapshot().metadata.state, state);
+    assert.equal(controller.getSnapshot().metadata.credentialRevision, stored ? 4 : 0);
+    assert.equal(controller.getSnapshot().secret, null); assert.doesNotMatch(JSON.stringify(controller.getSnapshot()), new RegExp(draft.secret));
+    controller.select(operation); assert.equal(controller.getSnapshot().phase, 'confirm'); controller.cancel(); controller.dispose();
+    assert.deepEqual([...rows], before, 'native metadata and UI refresh cannot mutate any record');
+  }
+  assert.equal(nativeCalls, 4);
+  assert.ok(responses.every(r => r.status === 200 && r.cache === 'no-store' && r.vary === 'Cookie'));
+  const staleRow = makeController(); await staleRow.refresh();
+  assert.equal(staleRow.getSnapshot().phase, 'error', 'actual current printer revision must agree with the displayed row');
+  staleRow.dispose();
+  for (const denied of [401, 403]) {
+    sessionStatus = denied; const before = nativeCalls; const controller = makeController(); await controller.refresh();
+    assert.equal(controller.getSnapshot().phase, 'error'); assert.equal(controller.getSnapshot().secret, null);
+    assert.equal(nativeCalls, before, 'session rejection occurs before native I/O'); controller.dispose();
+  }
+  sessionStatus = null; rows.set('locations/location', { brandId: 'foreign' }); reads.length = 0;
+  const foreign = makeController(); await foreign.refresh();
+  assert.equal(foreign.getSnapshot().phase, 'error'); assert.equal(foreign.getSnapshot().metadata, null);
+  assert.equal(reads.includes(path), false); assert.equal(reads.includes(credentialPath), false);
+  foreign.dispose();
+});
+
 test('browser: actual credential panel confirms once, clears secret on row/permission change and works in StrictMode', async t => {
   const fs = require('node:fs'), os = require('node:os'), path = require('node:path'), http = require('node:http');
   const { chromium, expect } = require('@playwright/test');
