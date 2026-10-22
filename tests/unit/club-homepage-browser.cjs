@@ -7,6 +7,8 @@ const root = path.resolve(__dirname, '../..');
 const html = fs.readFileSync(path.join(root,'design/esmeralda-club-homepage.html'),'utf8');
 const css = fs.readFileSync(path.join(root,'design/esmeralda-club-homepage.css'),'utf8');
 const js = fs.readFileSync(path.join(root,'design/esmeralda-club-popup.js'),'utf8');
+// Existing approved Webflow utility values, not promotion-specific typography.
+const shared = '.heading-style-h1{font-size:38px;line-height:1.1}.heading-style-h2{font-size:42px}.heading-style-h3{font-size:28px;line-height:1.2}.text-size-regular{font-size:16px;line-height:1.5}.padding-global{padding-left:5%;padding-right:5%}.padding-section-medium{padding-top:56px;padding-bottom:56px}.button{padding:14px 40px;font-size:16px;text-align:center}';
 let browser;
 before(async()=>{browser=await chromium.launch({headless:true,executablePath:process.env.CLUB_QA_CHROMIUM||undefined,args:['--no-sandbox']});});
 after(async()=>{await browser?.close();});
@@ -18,7 +20,7 @@ async function fixture({consent=null,width=1440,pathName='/',host='www.esmeralda
  const page=await context.newPage(); await page.clock.install();
  await page.route('**/*',async route=>{
   const url=route.request().url();
-  if(url.startsWith('https://'+host+'/')) return route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0}*{box-sizing:border-box}${css}</style></head><body><button id="prior">Previous action</button>${html}<div id="cookie" flowappz-cookie-popup style="display:none">Cookies</div><script>${js}</script></body></html>`});
+  if(url.startsWith('https://'+host+'/')) return route.fulfill({contentType:'text/html; charset=utf-8',body:`<!doctype html><html><head><meta charset="utf-8"><style>body{margin:0}*{box-sizing:border-box}${shared}${css}</style></head><body><button id="prior">Previous action</button>${html}<div id="cookie" flowappz-cookie-popup style="display:none">Cookies</div><script>${js}</script></body></html>`});
   if(url.endsWith('.webp')) return route.fulfill({contentType:'image/webp',body:fs.readFileSync(path.join(root,'attached_assets/esmeralda-club-hero-20261022.webp'))});
   return route.abort();
  });
@@ -76,5 +78,8 @@ for(const width of [320,390,768,1440]) test(`responsive ${width}: no horizontal 
  const dim=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,modal:document.querySelector('dialog').getBoundingClientRect().toJSON()}));
  assert.ok(dim.scroll<=dim.width,JSON.stringify(dim));assert.ok(dim.modal.width<=width);assert.ok(dim.modal.left>=0);
  assert.ok(dim.modal.top>=0);assert.equal(await page.getByRole('button',{name:'Luk Club-tilbud'}).isVisible(),true);
+ assert.equal(await page.locator('#es-club-heading').evaluate(el=>getComputedStyle(el).fontSize),'38px');
+ for(const selector of ['.es-club-hero__intro','.es-club-fineprint','.es-club-popup__text'])
+  assert.equal(await page.locator(selector).first().evaluate(el=>getComputedStyle(el).fontSize),'16px');
  await page.getByRole('button',{name:'Måske senere'}).click();assert.equal(await page.locator('dialog[open]').count(),0);await context.close();
 });

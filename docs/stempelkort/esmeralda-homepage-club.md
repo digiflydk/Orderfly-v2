@@ -23,6 +23,12 @@ charcoal tabletop, warmly lit stone-oven Margherita pizza, gold pizza stamp,
 dark phone with eight loyalty spaces, one gold; no people, alcohol or text.
 The full prompt is retained in the coordination checkpoint.
 
+The active site rule `rules/universal-layout-and-typography.md` version2 is
+applied: shared heading-style-h1 (Bourton38px/1.1), body text-size-regular
+(Brandon16px/1.5), approved heading/button and padding utilities. The new hero
+does not override standard heading/body font sizes. The hero is an intentional
+marketing layout, not a new information page duplicating the universal component.
+
 ## Popup and Omnisend
 
 The native `<dialog>` appears only on `/`, after twelve seconds and once the

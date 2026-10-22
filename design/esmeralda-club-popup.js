@@ -58,11 +58,11 @@
     dialog.innerHTML = '<button class="es-club-popup__close" type="button" aria-label="Luk Club-tilbud">×</button>' +
       '<div class="es-club-popup__grid"><img class="es-club-popup__image" src="https://cdn.prod.website-files.com/6a6c7110638d57d95365ad1c/6ad9d07056ceecce9f266398_esmeralda-club-hero-20261022.webp" alt="" width="1536" height="1024" loading="lazy">' +
       '<div class="es-club-popup__copy"><p class="es-club-eyebrow">ESMERALDA PIZZA CLUB</p>' +
-      '<h2 id="es-club-popup-title">DIT FØRSTE STEMPEL ER PÅ HUSET</h2>' +
-      '<p class="es-club-popup__text" id="es-club-popup-text">Bliv medlem gratis og få ét velkomststempel. Saml 8 stempler og glæd dig til en gratis pizza.</p>' +
-      '<a class="es-club-button" href="' + BASE + '/club/tilmeld" data-club-placement="popup">JA TAK, BLIV MEDLEM <span aria-hidden="true">↗</span></a>' +
+      '<h2 class="heading-style-h2" id="es-club-popup-title">DIT FØRSTE STEMPEL ER PÅ HUSET</h2>' +
+      '<p class="text-size-regular es-club-popup__text" id="es-club-popup-text">Bliv medlem gratis og få ét velkomststempel. Saml 8 stempler og glæd dig til en gratis pizza.</p>' +
+      '<a class="button es-club-button" href="' + BASE + '/club/tilmeld" data-club-placement="popup">JA TAK, BLIV MEDLEM <span aria-hidden="true">↗</span></a>' +
       '<button class="es-club-popup__later" type="button">Måske senere</button>' +
-      '<p class="es-club-fineprint">Fra 15 år. Medlemskab kræver tilmelding til nyhedsbrevet. Velkomstbonussen gives én gang. <a href="' + BASE + '/club/vilkaar">Se vilkårene</a>.</p></div></div>';
+      '<p class="text-size-regular es-club-fineprint">Fra 15 år. Medlemskab kræver tilmelding til nyhedsbrevet. Velkomstbonussen gives én gang. <a href="' + BASE + '/club/vilkaar">Se vilkårene</a>.</p></div></div>';
     document.body.appendChild(dialog);
     dialog.querySelector('.es-club-popup__close').addEventListener('click', dismiss);
     dialog.querySelector('.es-club-popup__later').addEventListener('click', dismiss);
