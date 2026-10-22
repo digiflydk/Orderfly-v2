@@ -1,8 +1,11 @@
 # Printer QA0 local environment
 
-Issue: #376. QA0a is backend preparation. QA0b was split before implementation
-into #379 (b1: guarded browser client emulator wiring) and future b2 (actual
-browser login/acceptance proof, not started). These THREE preparation slices are
+Issue: #376. QA0a backend preparation and QA0b1 #379 guarded browser client
+emulator wiring are implemented. QA0b2 #381, the third preparation slice for
+actual browser login and app proof, is implemented in this candidate too. The
+historical evidence below belongs to its recorded source SHAs; the current
+combined head still requires successful CI execution of its real browser and
+native proof steps and completed independent review before release. These THREE preparation slices are
 separate from the provisional 22 feature-sprint budget and the conditional
 acceptance packages #372, #373 and #374. This supersedes the earlier two-slice
 setup estimate; it is not a calendar promise.
@@ -90,8 +93,9 @@ harness fails with a fixed error. Native Firestore termination runs in a nested
 `finally` even if cleanup deletion or verification rejects. Failure and stalled
 child regressions preserve these resource boundaries.
 
-Only local printer configuration writes are enabled inside the isolated child
-environment. Print intent/output/dispatch flags and all payment/provider
+Ordinary QA0 enables only local printer configuration writes inside the isolated
+child environment; the opt-in credential metadata proof explicitly sets those
+writes false. Print intent/output/dispatch flags and all payment/provider
 configuration are absent. No real orders, payments, printer credentials,
 customer notifications, printer connection, hardware change or Wolt operation
 are performed.
@@ -125,9 +129,9 @@ prove failure occurs before credential access. That unit isolation is separate
 from the real emulator evidence above. Run `npm run typecheck` and relevant
 session/authority/identity tests for changes to the binding.
 
-QA0b1 #379 remains required for browser Firebase emulator wiring; its owner works
-in a separate branch. Future QA0b2 is not started and must prove real interactive
-login and app UI flows, reusable acceptance fixtures and browser diagnostics. This
+The implemented QA0b1 #379 binding and QA0b2 #381 browser proof are described
+below. QA0b2 covers real interactive login, app UI flows and browser diagnostics;
+its current combined head still requires actual CI execution and review. This
 backend smoke does not implement all race/TTL/mutation acceptance scenarios.
 Neither QA0a nor QA0b constitutes authenticated production live QA or physical
 printer readiness. Keep #376 open until all THREE preparation criteria are verified.
@@ -135,7 +139,8 @@ printer readiness. Keep #376 open until all THREE preparation criteria are verif
 ## QA0b1 browser client binding (issue #379)
 
 Preparation was split before implementation into **three** slices: QA0a backend,
-QA0b1 client binding, and future QA0b2 actual browser runtime/login proof. This
+QA0b1 client binding, and QA0b2 actual browser runtime/login proof. All three
+implementations are now available in this candidate. This
 supersedes the earlier provisional two-slice setup because client safety wiring
 plus missing browser provisioning and end-to-end proof could not fit one bounded
 60-active-minute slice. These are preparation tasks, separate from the provisional
@@ -167,7 +172,7 @@ emulator addresses, normal production behavior, cache/HMR behavior and failure
 handling. The malformed project regression first failed against the old module
 because it initialized the SDK without rejecting the claimed QA mode. These
 adapter tests are **not** actual browser login or authenticated UI acceptance.
-QA0b2 still owns official browser provisioning, browser-specific loopback network
+QA0b2, implemented below, owns official browser provisioning, browser-specific loopback network
 restrictions, shared in-memory seed/cleanup, real visible login and real app UI
 proof. No browser process, installer or server is started by QA0b1; parent #376
 remains open.
@@ -209,7 +214,10 @@ credentials. External requests are aborted without logging URL/query/body. The
 Node guard remains active separately. No HAR, trace, storageState, cookie dump,
 video or credential-screen screenshot is recorded. Screenshots are taken only
 of the authenticated synthetic printer table at desktop/mobile sizes. A failed scenario writes only a fixed stage label in `local-qa-browser-failure.json`;
-no raw error, request or credential data is stored. Diagnostic correction after
+no raw error, request or credential data is stored.
+
+The following diagnostic sequence records historical failures and corrections,
+not the current head's CI result. Diagnostic correction after
 the first real CI login failure adds fixed login substages (page-ready, toggle,
 fields-email, fields-password, submit, session-response, navigation), safe error/UI/client categories and
 numeric statuses only for exact local login page, Auth signIn and session API
@@ -226,7 +234,8 @@ values, HTML or label text and does not retry or extend scenario timeouts.
 
 The following actual CI revision failed specifically at `admin-fields-email`:
 all three expected post-switch controls had count0/visiblefalse, still with
-page200 and no Auth/session request. Cause remains unclassified. A separate
+page200 and no Auth/session request. At that checkpoint the cause remained
+unclassified. A separate
 bounded diagnostic task therefore records fixed pre-click and field-failure DOM
 counts/visibility for the original separate-account toggle, login form, exact
 ADMINISTRATION heading and existing `Indlæser login…` Suspense label too. It adds
@@ -243,7 +252,8 @@ where uncertainty arose; it does not establish a cause before the actual run.
 No URL/query, message, values, HTML, login screenshot, retry or timeout change is
 introduced. These extra fixed observations distinguish missing form, unchanged
 mode, navigation and uncaught script failure without assuming hydration is the
-cause. One further actual CI inspection is required before a product bug scope.
+cause. Further actual CI inspection was required at that checkpoint; the later
+first-click and observer corrections below record the subsequent findings.
 
 A separate valid review finding showed that `pageerror` cannot observe exceptions
 caught by the login form. The Chromium-only observer now attaches AFTER fields
@@ -317,12 +327,16 @@ one-second cleanup bound, and independently attempts context close under the
 same bound even if draining failed. Uncertain cleanup fails the proof. Unit
 fixtures test those lifecycle/frontier/error cases; they are NOT Next acceptance.
 
-The expected current RED has NOT been executed yet: only actual official CI
-Chromium against this SSR runtime may establish it. A `lost-first-enabled-click`
+At the reproduction-only checkpoint, the expected RED had not yet been executed;
+the later actual official CI RED is recorded in the #387 section below. Only
+actual official CI Chromium against this SSR runtime establishes that result.
+A `lost-first-enabled-click`
 result establishes a state failure under controlled script delivery, not the
 cause of previous intermittent CI failures or proof of completed hydration.
 This is DEV-only evidence: Next's `useSearchParams`/Suspense can render differently
-in production static builds. No production SSR defect or product fix is claimed.
+in production static builds. The reproduction alone does not establish a
+production SSR defect or product correction; the later readiness change is
+documented separately below.
 The existing official CI browser installation and isolated app/emulator step are
 reused; there is no new environment, install, port, seed or workflow change.
 Primary guidance: [Playwright hydration](https://playwright.dev/docs/navigations#hydration)

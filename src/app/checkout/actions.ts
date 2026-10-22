@@ -42,6 +42,7 @@ import { getOrigin } from '@/lib/url';
 import { brandSlugFromHost, storefrontPath } from '@/lib/brand-subdomain';
 import { generateOrderId } from '@/lib/order-id';
 import { readGuestReceipt, type GuestReceipt } from '@/lib/server/guest-receipt';
+import { preparePickupCheckoutAcceptance } from '@/lib/server/accept-pickup-checkout';
 
 
 // Helper functions for Stripe statement descriptors
@@ -726,25 +727,11 @@ export async function createStripeCheckoutSessionAction(
       // disable/reassignment cannot admit a new pickup order.
       stage = 'pickup_acceptance';
       sessionRequestStarted = true; // A lost acceptance response is not a rejection.
-      const pickupMailRef = doc(db, 'orderNotificationJobs', createHash('sha256').update(JSON.stringify(['pickup-received', brandId, orderId])).digest('hex'));
       try {
-        await runTransaction(db, async transaction => {
-          const [saved, nativeLocation] = await Promise.all([
-            transaction.get(orderRef), transaction.get(doc(db, 'locations', locationId)),
-          ]);
-          const order = saved.data();
-          const current = nativeLocation.exists() ? { ...nativeLocation.data(), id: locationId } as Location : null;
-          try {
-            if (!order || order.brandId !== brandId || order.locationId !== locationId || order.paymentMethod !== 'PayAtPickup' || order.discountReservation !== 'held' || order.status !== 'Pending' || !current || current.brandId !== brandId) throw new Error('Ordren kunne ikke godkendes. Genindlæs kassen.');
-            assertCheckoutPaymentMethod(current, deliveryType, paymentMethod);
-            fulfillmentAt = resolveFulfillmentTime(current, deliveryType, deliveryTime);
-          } catch (error) { throw Object.assign(error instanceof Error ? error : new Error('Invalid pickup order'), { code: 'pickup_order_rejected' }); }
-          transaction.update(orderRef, { status: 'Received', acceptedAt: serverTimestamp(), fulfillmentAt, deliveryTime: displayFulfillmentTime(fulfillmentAt), updatedAt: serverTimestamp() });
-          // The order-received mail is committed with the acceptance, so only an accepted order is ever mailed.
-          transaction.set(pickupMailRef, {
-            orderId, brandId, locationId, kind: 'pickupReceived', state: 'pending', eventId: randomUUID(),
-            nextAttemptAt: Date.now(), attempts: 0, createdAt: Date.now(), updatedAt: Date.now(),
-          });
+        await runTransaction(db, async (_transaction, context) => {
+          const acceptance = await preparePickupCheckoutAcceptance(context, { orderId, brandId, locationId, selection: deliveryTime });
+          acceptance.apply();
+          fulfillmentAt = acceptance.fulfillmentAt;
         });
       } catch (error) {
         if ((error as { code?: string })?.code === 'pickup_order_rejected') sessionRequestStarted = false;
