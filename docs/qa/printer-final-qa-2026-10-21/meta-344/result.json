@@ -1,0 +1,288 @@
+{
+ "appHealthRelease": "ac36202ce61f8aded33887c9b92cf144514b4534",
+ "repoHead": "ac36202ce61f8aded33887c9b92cf144514b4534 tree 3ee5690869df87d05a9112615354310e8472b8ed",
+ "appSourceDiffVsOriginMain": "none",
+ "observerLoaded": true,
+ "driverExit": 0,
+ "environment": "QA0a demo-orderfly-qa0, real Next app + Auth/Firestore emulators + Chromium",
+ "started": "2026-10-22T01:10:34.846Z",
+ "finished": "2026-10-22T01:11:01.419Z",
+ "total": 39,
+ "passed": 39,
+ "failed": 0,
+ "results": [
+  {
+   "id": "pass0 C0 emulator empty",
+   "issue": "344",
+   "expected": "[]",
+   "actual": "[]",
+   "pass": true
+  },
+  {
+   "id": "pass0 S1a create writes initial activity atomically",
+   "issue": "344",
+   "expected": "201; statusMetadata {activatedAt null, activationRevision null, printHistory never, lastConfirmed* null}; audit/1",
+   "actual": "201 {\"schemaVersion\":1,\"brandId\":\"qac-brand\",\"locationId\":\"qac-loc\",\"printerId\":\"qm-new\",\"activatedAt\":null,\"activationRevision\":null,\"printHistory\":\"never\",\"lastConfirmedPrintAt\":null,\"lastConfirmedJobId\":null}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S1b overview projection for new printer",
+   "issue": "344",
+   "expected": "activity {activatedAt null, lastConfirmedPrintAt null, printHistory never}; exactly 3 keys; no job id",
+   "actual": "{\"activatedAt\":null,\"lastConfirmedPrintAt\":null,\"printHistory\":\"never\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S2a legacy printer without metadata",
+   "issue": "344",
+   "expected": "unknown/null/null",
+   "actual": "{\"activatedAt\":null,\"lastConfirmedPrintAt\":null,\"printHistory\":\"unknown\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S2b ordinary edit of legacy printer invents nothing",
+   "issue": "344",
+   "expected": "200 rev4; no statusMetadata doc created; still unknown/null (createdAt not used)",
+   "actual": "200 doc=null {\"activatedAt\":null,\"lastConfirmedPrintAt\":null,\"printHistory\":\"unknown\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S2c edit of new printer keeps never",
+   "issue": "344",
+   "expected": "statusMetadata unchanged (never)",
+   "actual": "{\"schemaVersion\":1,\"brandId\":\"qac-brand\",\"locationId\":\"qac-loc\",\"printerId\":\"qm-new\",\"activatedAt\":null,\"activationRevision\":null,\"printHistory\":\"never\",\"lastConfirmedPrintAt\":null,\"lastConfirmedJobId\":null}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S3a resume commits activation with printer revision + audit",
+   "issue": "344",
+   "expected": "200; activationRevision=3=printer revision; activatedAt server time within request; printHistory stays never; audit printer.resume",
+   "actual": "200 {\"schemaVersion\":1,\"brandId\":\"qac-brand\",\"locationId\":\"qac-loc\",\"printerId\":\"qm-new\",\"activatedAt\":\"set\",\"activationRevision\":3,\"printHistory\":\"never\",\"lastConfirmedPrintAt\":null,\"lastConfirmedJobId\":null} rev3",
+   "pass": true
+  },
+  {
+   "id": "pass0 S3b overview shows activation",
+   "issue": "344",
+   "expected": "activatedAt = stored value; never",
+   "actual": "{\"activatedAt\":1792631439685,\"lastConfirmedPrintAt\":null,\"printHistory\":\"never\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S3c legacy resume: activation set, history stays unknown",
+   "issue": "344",
+   "expected": "200; printHistory unknown; activationRevision = new rev",
+   "actual": "200 unknown rev5",
+   "pass": true
+  },
+  {
+   "id": "pass0 S3d resume preserves existing confirmed use (seeded fixture)",
+   "issue": "344",
+   "expected": "lastConfirmedPrintAt/jobId/printHistory confirmed unchanged; activation set",
+   "actual": "200 confirmed true",
+   "pass": true
+  },
+  {
+   "id": "pass0 S3e confirmed projection hides job id",
+   "issue": "344",
+   "expected": "confirmed + timestamp, no lastConfirmedJobId in DTO",
+   "actual": "{\"activatedAt\":1792631440981,\"lastConfirmedPrintAt\":1792621800000,\"printHistory\":\"confirmed\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S4a stale printer revision",
+   "issue": "344",
+   "expected": "409, nothing changed (no metadata doc)",
+   "actual": "409",
+   "pass": true
+  },
+  {
+   "id": "pass0 S4b fabricated receipt",
+   "issue": "344",
+   "expected": "409, nothing changed",
+   "actual": "409",
+   "pass": true
+  },
+  {
+   "id": "pass0 S4c other superadmin uses receipt",
+   "issue": "344",
+   "expected": "409, nothing changed",
+   "actual": "409",
+   "pass": true
+  },
+  {
+   "id": "pass0 S4d wrong scope",
+   "issue": "344",
+   "expected": "403, nothing changed",
+   "actual": "403",
+   "pass": true
+  },
+  {
+   "id": "pass0 S4e real commit failure (audit collision)",
+   "issue": "344",
+   "expected": "503; no metadata doc, printer, receipt, audit unchanged",
+   "actual": "503 meta=null",
+   "pass": true
+  },
+  {
+   "id": "pass0 S4f revoked access after review",
+   "issue": "344",
+   "expected": "403, nothing changed",
+   "actual": "403",
+   "pass": true
+  },
+  {
+   "id": "pass0 S5 overview reads concurrent with resume are snapshot-consistent",
+   "issue": "344",
+   "expected": "resume 200; all 12 reads 200; each row either disabled+no activation or active+activation",
+   "actual": "resume 200 non200=[] incoherent=0 states=daaaaaaaaaaa",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7 metadata extra field",
+   "issue": "344",
+   "expected": "503 printers_unavailable; nothing leaked",
+   "actual": "503 {\"error\":\"printers_unavailable\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7 metadata foreign printerId",
+   "issue": "344",
+   "expected": "503 printers_unavailable; nothing leaked",
+   "actual": "503 {\"error\":\"printers_unavailable\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7 metadata future activatedAt (+5min)",
+   "issue": "344",
+   "expected": "503 printers_unavailable; nothing leaked",
+   "actual": "503 {\"error\":\"printers_unavailable\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7 metadata activation without revision",
+   "issue": "344",
+   "expected": "503 printers_unavailable; nothing leaked",
+   "actual": "503 {\"error\":\"printers_unavailable\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7 metadata activationRevision > printer revision",
+   "issue": "344",
+   "expected": "503 printers_unavailable; nothing leaked",
+   "actual": "503 {\"error\":\"printers_unavailable\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7 metadata confirmed without job id",
+   "issue": "344",
+   "expected": "503 printers_unavailable; nothing leaked",
+   "actual": "503 {\"error\":\"printers_unavailable\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7 metadata never with timestamp",
+   "issue": "344",
+   "expected": "503 printers_unavailable; nothing leaked",
+   "actual": "503 {\"error\":\"printers_unavailable\"}",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7 small server clock skew (+20s) tolerated",
+   "issue": "344",
+   "expected": "200",
+   "actual": "200",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7 ordinary merchant overview",
+   "issue": "344",
+   "expected": "403",
+   "actual": "403",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7 foreign location overview",
+   "issue": "344",
+   "expected": "403",
+   "actual": "403",
+   "pass": true
+  },
+  {
+   "id": "pass0 S7c pagination unchanged with metadata",
+   "issue": "344",
+   "expected": "200; 20 items each with activity; nextCursor; total 21",
+   "actual": "200 n=20 cursor=true total=21",
+   "pass": true
+  },
+  {
+   "id": "pass0 B1 resumed new printer: activation date (Copenhagen) and \"Aldrig printet\"",
+   "issue": "344",
+   "expected": "Aktiveringsdato \"22.10.2026, 03.10\", Last used \"Aldrig printet\"",
+   "actual": "[\"22.10.2026, 03.10\",\"QAC Own\",\"QAC Amager\",\"Active\",\"Aldrig printet\"]",
+   "pass": true
+  },
+  {
+   "id": "pass0 B2 legacy printer: activation from resume, last used \"Ikke registreret\"",
+   "issue": "344",
+   "expected": "Last used \"Ikke registreret\" (unknown, not \"Aldrig\")",
+   "actual": "[\"22.10.2026, 03.10\",\"QAC Own\",\"QAC Amager\",\"Active\",\"Ikke registreret\"]",
+   "pass": true
+  },
+  {
+   "id": "pass0 B3 never-activated disabled printer: \"Ikke registreret\"",
+   "issue": "344",
+   "expected": "Aktiveringsdato \"Ikke registreret\"",
+   "actual": "[\"Ikke registreret\",\"QAC Own\",\"QAC Amager\",\"Deactive\",\"Ikke registreret\"]",
+   "pass": true
+  },
+  {
+   "id": "pass0 B4 confirmed (SEEDED ISOLATED fixture) across UTC midnight shows Copenhagen date in a New York browser",
+   "issue": "344",
+   "expected": "Last used \"22.10.2026, 00.30\"; <time datetime> = 2026-10-21T22:30:00.000Z",
+   "actual": "22.10.2026, 00.30 [\"2026-10-22T01:10:40.981Z\",\"2026-10-21T22:30:00.000Z\"]",
+   "pass": true
+  },
+  {
+   "id": "pass0 B5 table regressions: 9 headers",
+   "issue": "344",
+   "expected": "9 headers",
+   "actual": "9",
+   "pass": true
+  },
+  {
+   "id": "pass0 B6 mobile 375 no page overflow",
+   "issue": "344",
+   "expected": "doc <= vw",
+   "actual": "{\"doc\":375,\"vw\":375}",
+   "pass": true
+  },
+  {
+   "id": "pass0 B7 same Copenhagen rendering in a UTC browser",
+   "issue": "344",
+   "expected": "\"22.10.2026, 00.30\"",
+   "actual": "22.10.2026, 00.30",
+   "pass": true
+  },
+  {
+   "id": "pass0 B8 malformed metadata fails closed in UI",
+   "issue": "344",
+   "expected": "error row, headers kept, no secret",
+   "actual": "Aktiveringsdato Brand Lokation Status Last used Total printers Printer name Prin",
+   "pass": true
+  },
+  {
+   "id": "pass0 B9 no non-loopback browser requests",
+   "issue": "344",
+   "expected": "0",
+   "actual": "0",
+   "pass": true
+  },
+  {
+   "id": "pass0 Z1 no-store + Vary Cookie on every API response",
+   "issue": "344",
+   "expected": "0",
+   "actual": "0",
+   "pass": true
+  }
+ ]
+}
