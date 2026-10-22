@@ -9,9 +9,10 @@ that same process-local acceptance capability before creating its canonical
 original manifest, routed revision-0 jobs and one ledger delta per printer.
 A late error aborts the entire native transaction. Each SDK retry prepares a new
 capability against current native state. There is no post-commit job insertion.
-If read-only acceptance/print preparation rejects, checkout releases its order
+If read-only print preparation rejects, checkout releases its order
 and limited-discount holds and returns a retryable failure. This marker resets
-for every SDK callback attempt. Errors after preparation, including an unknown
+for every SDK callback attempt. Native acceptance errors retain their existing
+unknown-outcome handling. Errors after preparation, including an unknown
 commit response, remain uncertain and preserve holds to prevent blind retries.
 
 The existing #491 service alone issues the opaque capability. The adapter accepts

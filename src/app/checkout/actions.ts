@@ -734,11 +734,10 @@ export async function createStripeCheckoutSessionAction(
           // SDK retries discard the previous attempt. Only this attempt's
           // read-only preparation failure proves that no acceptance committed.
           preparationRejected = false;
-          const { acceptance, printPlan } = await (async () => {
+          const acceptance = await preparePickupCheckoutAcceptance(context, { orderId, brandId, locationId, selection: deliveryTime });
+          const printPlan = await (async () => {
             try {
-              const acceptance = await preparePickupCheckoutAcceptance(context, { orderId, brandId, locationId, selection: deliveryTime });
-              const printPlan = await prepareUnpaidAcceptanceOriginals(context, acceptance.capability);
-              return { acceptance, printPlan };
+              return await prepareUnpaidAcceptanceOriginals(context, acceptance.capability);
             } catch (error) {
               preparationRejected = true;
               throw error;
