@@ -65,6 +65,7 @@ export async function consumePilotQualification(input: unknown) {
       if (!printer.exists || printer.id !== a.printerId || !p.success || p.data.revision !== a.printerRevision
         || !validatePrinterConfiguration(p.data.configuration, { brandId: a.brandId, locationId: a.locationId }, { id: location.id, brandId: a.brandId }).ok
         || p.data.configuration.id !== a.printerId || p.data.configuration.transport !== 'cloudprnt-http'
+        || p.data.configuration.state !== 'active'
         || p.data.configuration.model !== a.model || p.data.configuration.paperWidthMm !== a.paperWidthMm
         || !credential.exists || !c.success || bindingKeys.some(key => c.data[key] !== a[key])
         || c.data.revokedAt !== null || c.data.issuedAt > now

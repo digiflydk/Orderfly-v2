@@ -9,8 +9,9 @@ function fixture() {
   const policy = basePolicy();
   policy.roles.push({ id: 'owner', name: 'Owner', companyId: null, kind: 'superuser', permissions: [], active: true });
   policy.memberships.push({ id: 'owner', principalId: actorId, companyId: null, locationIds: null, roleIds: ['owner'], active: true });
+  const printer = record(); printer.configuration.state = 'active';
   const records = new Map([['platformAdminControl/access-v1', policy], ['brands/brand', { status: 'active' }],
-    ['locations/location', { brandId: 'brand' }], [path, record()],
+    ['locations/location', { brandId: 'brand' }], [path, printer],
     [credentialPath, { schemaVersion: 1, ...scope, secretDigest: 'a'.repeat(64), issuedAt: 1, revokedAt: null }]]);
   const options = {}, commits = [], reads = [];
   const ref = path => ({ path, id: path.split('/').at(-1), collection: name => ({ doc: id => ref(`${path}/${name}/${id}`) }) });
@@ -90,6 +91,7 @@ test('native ownership, current revision, credential revoke and issuing supervis
   const mutations = [r => r.get('platformAdminControl/access-v1').memberships.at(-1).active = false,
     r => r.get('locations/location').brandId = 'foreign', r => r.get('brands/brand').status = 'suspended',
     r => r.get(path).revision++, r => r.get(path).configuration.model = 'mc-print2',
+    r => r.get(path).configuration.state = 'disabled', r => r.get(path).configuration.state = 'paused',
     r => r.get(path).configuration.paperWidthMm = 58, r => r.get(credentialPath).credentialRevision++,
     r => r.get(credentialPath).revokedAt = Date.now(), r => r.get(credentialPath).issuedAt = Date.now() + 60000];
   for (const mutate of mutations) {

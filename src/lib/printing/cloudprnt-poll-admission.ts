@@ -14,7 +14,7 @@ export function createCloudPrntPollAdmission(now: () => number = () => performan
     if (active >= 8 || globalTokens < 1) return null;
     // Never retain headers/plaintext credentials, and bound hashing before allocation.
     const key = authorization && authorization.length <= 256
-      ? createHash('sha256').update(authorization).digest('hex') : 'anonymous';
+      ? createHash('sha256').update(authorization.replace(/^Basic +/i, 'Basic ')).digest('hex') : 'anonymous';
     let bucket = keys.get(key);
     if (!bucket) {
       for (const [storedKey, value] of keys) {
