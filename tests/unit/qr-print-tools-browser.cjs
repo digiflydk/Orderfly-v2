@@ -107,3 +107,43 @@ test('unsaved dynamic codes cannot export; duplicate clicks are locked while ren
     assert.equal(await view.page.getByRole('button',{name:'PNG med valgt logo'}).isDisabled(),false);
   } finally {release?.();await view.page.close();}
 });
+
+for (const width of [390, 1440]) test(`design preview uses the same validated PNG renderer and logo as export at ${width}px`, async () => {
+  const { page, calls } = await open({ width }); let downloads = 0; page.on('download', () => downloads++);
+  try {
+    await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({ name: 'brand.png', mimeType: 'image/png', buffer: png });
+    await page.getByRole('button', { name: 'Vis designpreview', exact: true }).click();
+    await page.getByRole('img', { name: 'QR-preview med valgt design og logo', exact: true }).waitFor();
+    assert.equal(downloads, 0);
+    const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'PNG med valgt logo', exact: true }).click(); await download;
+    assert.deepEqual(calls[0], calls[1]); assert.equal(calls[0].draft.style.errorCorrectionLevel, 'H');
+    assert.equal(calls[0].options.logoBase64, png.toString('base64'));
+    if (process.env.QR_DESIGN_SCREENSHOTS) await page.screenshot({ path: `/tmp/qr-design-${width}.png`, fullPage: true });
+    await page.getByRole('button', { name: 'Fjern logo', exact: true }).click();
+    assert.equal(await page.getByRole('img', { name: 'QR-preview med valgt design og logo', exact: true }).count(), 0);
+    assert.equal(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth), true);
+  } finally { await page.close(); }
+});
+test('failed design preview does not create a download or display an unsafe image', async () => {
+  const { page } = await open({ answer: route => route.fulfill({ json: { content: '<svg onload="alert(1)"/>', mime: 'image/png', encoding: 'base64' } }) });
+  let downloads=0; page.on('download',()=>downloads++);
+  try {
+    await page.getByRole('button', { name: 'Vis designpreview', exact: true }).click();
+    await page.getByRole('alert').waitFor();
+    assert.equal(await page.getByRole('img', { name: 'QR-preview med valgt design og logo', exact: true }).count(), 0);
+    assert.equal(downloads,0);
+  } finally { await page.close(); }
+});
+
+test('a late design preview from a previous scope is discarded', async () => {
+  let pending;
+  const {page}=await open({answer:route=>{pending=route;}});
+  try{
+    const request=page.waitForRequest('**/render');
+    await page.getByRole('button',{name:'Vis designpreview',exact:true}).click();await request;
+    await page.evaluate(()=>window.__changeScope());
+    await pending.fulfill({json:{content:png.toString('base64'),mime:'image/png',encoding:'base64',filename:'qr.png'}});
+    await page.getByRole('button',{name:'Vis designpreview',exact:true}).waitFor();
+    assert.equal(await page.getByRole('img',{name:'QR-preview med valgt design og logo',exact:true}).count(),0);
+  }finally{await page.close();}
+});
