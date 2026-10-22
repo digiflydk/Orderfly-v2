@@ -14,7 +14,7 @@ const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
 const revision = z.number().int().positive().safe();
 const commandSchema = z.object({ operation: z.enum(['issue', 'rotate', 'revoke']), brandId: id, locationId: id,
   printerId: id, printerRevision: revision, credentialRevision: z.number().int().nonnegative().safe() }).strict();
-const credentialSchema = z.object({ schemaVersion: z.literal(1), brandId: id, locationId: id, printerId: id,
+export const credentialSchema = z.object({ schemaVersion: z.literal(1), brandId: id, locationId: id, printerId: id,
   printerRevision: revision, credentialRevision: revision, secretDigest: z.string().length(64).regex(/^[a-f0-9]+$/),
   issuedAt: revision, revokedAt: revision.nullable() }).strict();
 export class PrinterDeviceCredentialWriteError extends Error {
