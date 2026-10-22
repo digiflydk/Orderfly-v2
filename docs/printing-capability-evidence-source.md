@@ -1,6 +1,6 @@
 # HTTP pilot capability evidence: source decision
 
-Decision checkpoint: 2026-10-22. Repository baseline: `88587bedba3ac42908b272e66d977ebfdd9c63c4`.
+Decision checkpoint: 2026-10-22. Repository baseline: `6856041f9d04bc22b99cb2a16b13343f58af8be1`.
 Scope: #485 source/contract decision, with #486 observations and #461 delivery as dependent work.
 
 **Implementation status: BLOCKED_SOURCE.** No authoritative evidence for either Esmeralda device was available through the authorized repository/issue access used for this decision. The official documentation establishes ways to collect facts; it does not verify these installed printers or provide a remotely verifiable hardware attestation. Do not implement an evidence producer that simply promotes configuration, an uploaded image, or an authenticated CloudPRNT poll into authority.
@@ -21,6 +21,8 @@ No SDK is run, no LAN address probed, no credential extracted, and no hardware/c
 
 - `configuration.ts` accepts a pretrusted `self-test`/`device-query` DTO. Its pure HTTP compatibility minimum is 1.2. It has no authoritative source, lifetime or current credential-revision validation.
 - `cloudprnt-http.ts` explicitly selects the token-capable mC-Print2/3 subset with firmware **at least 3.2**. The effective token-based pilot requirement must therefore be at least 3.2; passing the older pure helper is insufficient. This document does not change either helper.
+- `cloudprnt-http-auth.ts` parses a bounded Basic header and delegates to the current native identity verifier. Successful credential authentication still returns capability/dispatch/physical-compatibility authority as false; it proves neither installed firmware nor media/output fit.
+- `device-credentials-http.ts` is a superadmin-only issue/rotate/revoke administration boundary. Its responses explicitly keep dispatch and activation authority false, and credential administration is neither device capability evidence nor output authorization.
 - `device-auth-native.ts` returns capability/dispatch/physical-compatibility authority as false. `native-claim.ts` reserves only and also returns no dispatch grant. `print-result-native.ts` remains internal and depends on a real immutable delivery producer.
 - `writes.ts` and `lifecycle.ts` delete `locations/{locationId}/printerCapabilityVerifications/{printerId}` on their relevant mutations. `device-credentials-service.ts` increments credential revisions on rotation/revocation without deleting that path. Consumers must compare fresh revisions; physical record deletion alone cannot enforce invalidation.
 - `kitchen-png.ts` emits 384 dots for 58 mm or 576 dots for 80 mm and explicitly reports `physicalFitVerified: false`. Model family or paper-width configuration cannot certify that raster's physical fit.
