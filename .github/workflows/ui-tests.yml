@@ -134,6 +134,9 @@ jobs:
       - name: Staff pickup print-origin proof regression
         run: node --test tests/unit/printing-pickup-transition-proof.cjs
 
+      - name: Unpaid pickup acceptance origin regression
+        run: node --test tests/unit/printing-unpaid-acceptance-origin.cjs
+
       - name: Native and compatibility transaction bridge regression
         run: node --test tests/unit/firestore-compat-transaction.cjs
 

@@ -1,0 +1,137 @@
+import 'server-only';
+import { z } from 'zod';
+import { createHash, randomUUID } from 'node:crypto';
+import { getAdminDb, getAdminFieldValue } from '@/lib/firebase-admin';
+import type { NativeTransactionContext } from './firestore-compat';
+import { assertCheckoutPaymentMethod } from '@/lib/merchant-payment-methods';
+import { resolveFulfillmentTime, displayFulfillmentTime, unavailableTime } from '@/lib/fulfillment-time';
+import type { Location } from '@/types';
+import type { KitchenOrder } from '@/lib/printing/domain';
+
+const id = z.string().max(128).regex(/^[A-Za-z0-9_-]{1,128}$/);
+const request = z.object({ orderId: id, brandId: id, locationId: id,
+  selection: z.string().max(64).optional() }).strict();
+const live = { deletedAt: z.null().optional(), deleted: z.literal(false).optional(), isDeleted: z.literal(false).optional() };
+const pending = z.object({ id: id.optional(), brandId: id, locationId: id,
+  status: z.literal('Pending'), paymentStatus: z.literal('Pending'),
+  paymentMethod: z.literal('PayAtPickup'), deliveryType: z.literal('Pickup'),
+  discountReservation: z.literal('held'), psp: z.null().optional(), paymentCollection: z.null().optional(),
+  refundedAmountOre: z.literal(0).optional(), refundedAmount: z.literal(0).optional(), refundedAt: z.null().optional(), ...live });
+const nativeLocation = z.object({ id: id.optional(), brandId: id, ...live });
+const lifetime = 300_000;
+export type PickupAcceptanceCapability = Readonly<{ readonly pickupAcceptanceCapability: unique symbol }>;
+type Entry = { context: NativeTransactionContext; order: Readonly<KitchenOrder>;
+  issuedAt: number; observedAt: number; invalid: boolean; applied: boolean };
+const plans = new WeakMap<object, Entry>();
+function rejected(message = 'Ordren kunne ikke godkendes. Genindlæs kassen.') {
+  return Object.assign(new Error(message), { code: 'pickup_order_rejected' });
+}
+function clock() {
+  const now = Date.now();
+  if (!Number.isSafeInteger(now) || now <= 0) throw new Error('Pickup acceptance unavailable');
+  return now;
+}
+function current(entry: Entry) {
+  let now: number;
+  try { now = clock(); } catch { entry.invalid = true; throw new Error('Pickup acceptance unavailable'); }
+  if (entry.invalid || now < entry.observedAt || now - entry.issuedAt >= lifetime) {
+    entry.invalid = true; throw new Error('Pickup acceptance expired');
+  }
+  entry.observedAt = now;
+}
+// Read only known schema fields. Never traverse unrelated customer/order payloads
+// or invoke a stored accessor while checking an acceptance boundary.
+function selected(value: unknown, fields: string[]) {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) throw rejected();
+  const result: Record<string, unknown> = {};
+  for (const field of fields) {
+    const descriptor = Object.getOwnPropertyDescriptor(value, field);
+    if (descriptor) {
+      if (!('value' in descriptor) || typeof descriptor.value === 'string' && descriptor.value.length > 128) throw rejected();
+      result[field] = descriptor.value;
+    }
+  }
+  return result;
+}
+
+/** The actual sole acceptance write plan, not an independent proof issuer.
+ * Rebuild inside EACH current native callback attempt. Preparation does not
+ * authorize dispatch, assert payment or prove that anything committed.
+ */
+export async function preparePickupCheckoutAcceptance(context: NativeTransactionContext, input: unknown) {
+  let parsed: z.SafeParseReturnType<unknown, z.infer<typeof request>>;
+  try {
+    if (!input || typeof input !== 'object' || Array.isArray(input) || Reflect.ownKeys(input).length > 4) throw rejected();
+    const prototype = Object.getPrototypeOf(input);
+    if (prototype !== Object.prototype && prototype !== null) throw rejected();
+    const raw: Record<string, unknown> = Object.create(null);
+    for (const field of Reflect.ownKeys(input)) {
+      const descriptor = Object.getOwnPropertyDescriptor(input, field);
+      if (typeof field !== 'string' || !descriptor || !('value' in descriptor)
+        || typeof descriptor.value === 'string' && descriptor.value.length > 128) throw rejected();
+      raw[field] = descriptor.value;
+    }
+    parsed = request.safeParse(raw);
+  } catch { throw rejected(); }
+  if (!parsed.success) throw rejected();
+  if (!context || context.db !== getAdminDb() || !context.transaction) throw new Error('Pickup acceptance unavailable');
+  const startedAt = clock();
+  const { orderId, brandId, locationId, selection } = parsed.data;
+  const { db, transaction } = context;
+  const ref = db.collection('orders').doc(orderId);
+  // Native I/O errors are not definitive rejection/commit proof. Preserve the
+  // checkout's unknown-outcome behavior instead of releasing a held order.
+  const [saved, location] = await Promise.all([
+    transaction.get(ref), transaction.get(db.collection('locations').doc(locationId)),
+  ]);
+  let fulfillmentAt: string;
+  try {
+    const order = pending.safeParse(selected(saved.data(), Object.keys(pending.shape)));
+    const rawLocation = location.data();
+    const scope = nativeLocation.safeParse(selected(rawLocation, Object.keys(nativeLocation.shape)));
+    if (!saved.exists || saved.id !== orderId || !order.success || order.data.id !== undefined && order.data.id !== orderId
+      || order.data.brandId !== brandId || order.data.locationId !== locationId
+      || !location.exists || location.id !== locationId || !scope.success || scope.data.brandId !== brandId
+      || scope.data.id !== undefined && scope.data.id !== locationId) throw rejected();
+    const currentLocation = { ...rawLocation, id: locationId } as Location;
+    assertCheckoutPaymentMethod(currentLocation, 'pickup', 'pay_at_pickup');
+    fulfillmentAt = resolveFulfillmentTime(currentLocation, 'pickup', selection);
+  } catch (error) {
+    // Preserve known customer-facing messages, never a native/reflection error.
+    if (error instanceof Error && [unavailableTime,
+      'This restaurant does not currently offer the selected order type.',
+      'Betalingsmetoden er ikke aktiv hos denne restaurant. Genindlæs kassen.'].includes(error.message)) throw rejected(error.message);
+    throw rejected();
+  }
+  const issuedAt = clock();
+  if (issuedAt < startedAt || issuedAt - startedAt >= lifetime) throw new Error('Pickup acceptance unavailable');
+  const capability = Object.freeze({}) as PickupAcceptanceCapability;
+  const entry: Entry = { context, order: Object.freeze({ id: orderId, brandId, locationId,
+    status: 'Received', paymentStatus: 'Pending', paymentMethod: 'PayAtPickup', deliveryType: 'Pickup', discountReservation: 'held' }),
+    issuedAt, observedAt: issuedAt, invalid: false, applied: false };
+  plans.set(capability, entry);
+  const mailId = createHash('sha256').update(JSON.stringify(['pickup-received', brandId, orderId])).digest('hex');
+  const mailRef = db.collection('orderNotificationJobs').doc(mailId);
+  return Object.freeze({ capability, fulfillmentAt, writeCount: 2 as const, apply() {
+    current(entry);
+    if (entry.applied) throw new Error('Pickup acceptance already applied');
+    // A failed apply cannot be retried using this plan, even if the caller catches.
+    entry.invalid = true;
+    transaction.update(ref, { status: 'Received', acceptedAt: getAdminFieldValue().serverTimestamp(), fulfillmentAt,
+      deliveryTime: displayFulfillmentTime(fulfillmentAt), updatedAt: getAdminFieldValue().serverTimestamp() });
+    transaction.set(mailRef, { orderId, brandId, locationId, kind: 'pickupReceived', state: 'pending', eventId: randomUUID(),
+      nextAttemptAt: issuedAt, attempts: 0, createdAt: issuedAt, updatedAt: issuedAt });
+    entry.applied = true; entry.invalid = false;
+  } });
+}
+
+/** Fixed capability assertion for a future atomic outbox consumer. No mint,
+ * caller projection, callback or arbitrary writer is accepted. Applied only
+ * means both fixed writes were queued in this attempt, never committed.
+ */
+export function readPickupAcceptanceCapability(context: NativeTransactionContext, capability: PickupAcceptanceCapability, requireApplied = false) {
+  const entry = capability && typeof capability === 'object' ? plans.get(capability) : undefined;
+  if (!entry || entry.context !== context || context.db !== getAdminDb() || requireApplied && !entry.applied) throw new Error('Unverified pickup acceptance capability');
+  current(entry);
+  return Object.freeze({ order: entry.order, writeCount: 2 as const, replay: false as const, acceptanceApplied: entry.applied });
+}
