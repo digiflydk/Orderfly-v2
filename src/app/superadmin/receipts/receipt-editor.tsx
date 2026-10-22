@@ -121,11 +121,11 @@ export function ReceiptEditor({ brands, initialBrandId, testModel, testPaperWidt
           <h2 id="receipt-fields" className="text-lg font-semibold">Bonoplysninger</h2>
           <fieldset className="mt-4 space-y-4" disabled={saving || blocked}>
             <label className="block text-sm font-medium">Papirbredde<select aria-label="Papirbredde" className={inputClass} value={draft.paperWidthMm} onChange={event => edit('paperWidthMm', Number(event.target.value) as 58 | 80)}><option value={58}>58 mm</option><option value={80}>80 mm</option></select></label>
-            <label className="block text-sm font-medium">Overskrift<input className={inputClass} maxLength={80} value={draft.heading} onChange={event => edit('heading', event.target.value)} /></label>
-            <label className="block text-sm font-medium">Adresse<textarea className={inputClass} maxLength={160} value={draft.address} onChange={event => edit('address', event.target.value)} /></label>
-            <label className="block text-sm font-medium">Telefon<input className={inputClass} maxLength={40} value={draft.phone} onChange={event => edit('phone', event.target.value)} /></label>
-            <label className="block text-sm font-medium">Hjemmeside<input className={inputClass} maxLength={120} value={draft.website} onChange={event => edit('website', event.target.value)} /></label>
-            <label className="block text-sm font-medium">Bundtekst<textarea className={inputClass} maxLength={240} value={draft.footer} onChange={event => edit('footer', event.target.value)} /></label>
+            <label className="block text-sm font-medium">Overskrift<input aria-label="Overskrift" className={inputClass} maxLength={80} value={draft.heading} onChange={event => edit('heading', event.target.value)} /></label>
+            <label className="block text-sm font-medium">Adresse<textarea aria-label="Adresse" className={inputClass} maxLength={160} value={draft.address} onChange={event => edit('address', event.target.value)} /></label>
+            <label className="block text-sm font-medium">Telefon<input aria-label="Telefon" className={inputClass} maxLength={40} value={draft.phone} onChange={event => edit('phone', event.target.value)} /></label>
+            <label className="block text-sm font-medium">Hjemmeside<input aria-label="Hjemmeside" className={inputClass} maxLength={120} value={draft.website} onChange={event => edit('website', event.target.value)} /></label>
+            <label className="block text-sm font-medium">Bundtekst<textarea aria-label="Bundtekst" className={inputClass} maxLength={240} value={draft.footer} onChange={event => edit('footer', event.target.value)} /></label>
             <div className="space-y-2"><p className="text-sm font-medium">Vis på kvitteringen</p>{toggles.map(([key, label]) => <label key={key} className="flex items-center gap-2 text-sm"><input type="checkbox" checked={draft[key]} onChange={event => edit(key, event.target.checked)} />{label}</label>)}</div>
           </fieldset>
           <p className="mt-4 text-xs text-muted-foreground">Ordrenummer, varer og beløb bevares. Slå valgfrie oplysninger fra, eller ryd tekstfelterne for at fjerne dem.</p>
