@@ -12,8 +12,41 @@ test('authorized create atomically stores disabled v1 config, server timestamps,
     after: config(), capabilityInvalidated: true, createdAt: { serverTimestamp: true } });
   assert.equal(f.records.has('locations/location/printerCapabilityVerifications/p1'), false);
   assert.equal(f.commits.length, 1);
+  assert.deepEqual(f.records.get(`${path}/queue/state`), { schemaVersion: 1, brandId: 'brand', locationId: 'location',
+    printerId: 'p1', revision: 1, pendingCount: 0, oldestPendingAt: null, updatedAt: { serverTimestamp: true } });
   assert.deepEqual(f.events.slice(0, 3).map(x => x[1]), ['platformAdminControl/access-v1', 'brands/brand', 'locations/location']);
   assert.doesNotMatch(JSON.stringify(result.body), /actor|audit|createdAt|schemaVersion|serverTimestamp/);
+});
+
+test('fresh create rejects orphan queue or jobs and never initializes existing legacy identity', async () => {
+  for (const extra of [[`${path}/queue/state`, { legacy: true }], [`${path}/jobs/orphan`, { legacy: true }]]) {
+    const f = fixture({ extra: [extra] }), before = structuredClone([...f.records]);
+    assert.equal((await f.request()).status, 409); assert.deepEqual([...f.records], before); assert.equal(f.commits.length, 0);
+  }
+  const edit = fixture({ existing: record() });
+  assert.equal((await edit.request('PATCH', { configuration: config({ name: 'Changed' }), revision: 1 })).status, 200);
+  assert.equal(edit.records.has(`${path}/queue/state`), false);
+});
+
+test('fresh ledger creation rechecks orphan history on retry and rolls back all writes on audit/commit failure', async () => {
+  const retry = fixture({ retry: rows => rows.set(`${path}/jobs/arrived`, { legacy: true }) });
+  assert.equal((await retry.request()).status, 409); assert.equal(retry.records.has(path), false);
+  assert.equal(retry.records.has(`${path}/queue/state`), false); assert.equal(retry.commits.length, 0);
+  for (const options of [{ failAudit: true }, { beforeCommit: () => { throw Error('PRIVATE_SENTINEL'); } }]) {
+    const f = fixture(options), before = structuredClone([...f.records]);
+    assert.equal((await f.request()).status, 503); assert.deepEqual([...f.records], before);
+    assert.equal(f.records.has(`${path}/queue/state`), false); assert.equal(f.commits.length, 0);
+  }
+});
+
+test('actual newly created disabled printer can obtain existing native empty-queue review and resume', async () => {
+  const f = fixture(); assert.equal((await f.request()).status, 201);
+  const scope = { brandId: 'brand', locationId: 'location', printerId: 'p1' };
+  const review = await f.review({ ...scope, printerRevision: 1, queueRevision: 1, decision: 'resume_empty' });
+  const resumed = await f.transition({ ...scope, revision: 1, action: 'resume', receipt: review.receipt, queueRevision: 1 });
+  assert.equal(resumed.item.configuration.state, 'active'); assert.equal(resumed.item.revision, 2);
+  assert.equal(f.records.get(`${path}/queueReviews/${require('node:crypto').createHash('sha256').update(review.receipt).digest('hex')}`).consumedAt > 0, true);
+  assert.equal(f.records.get(`${path}/queue/state`).pendingCount, 0);
 });
 
 test('edit preserves createdAt, advances revision, audits before/after and invalidates trusted evidence', async () => {

@@ -37,9 +37,10 @@ function fixture({ existing, permissions, anonymous = false, identityStatus, ena
           const tx = {
             async get(ref) { assert.equal(writing, false, 'Firestore reads must precede writes'); events.push(['get', ref.path || ref.query]);
               if (ref.query) {
-                assert.equal(ref.limit, 501, 'queue scans must be bounded and detect overflow');
+                assert.ok(ref.limit === 501 || target === 'configuration' && ref.limit === 1,
+                  'queue scans must be bounded; new configuration checks only one orphan');
                 const rows = [...staged].filter(([key]) => key.startsWith(`${ref.query}/`) && !key.slice(ref.query.length + 1).includes('/')).slice(0, ref.limit);
-                return { size: rows.length, docs: rows.map(([key, value]) => ({ id: key.split('/').at(-1), data: () => structuredClone(value) })) };
+                return { size: rows.length, empty: rows.length === 0, docs: rows.map(([key, value]) => ({ id: key.split('/').at(-1), data: () => structuredClone(value) })) };
               }
               return { id: ref.id, exists: staged.has(ref.path), data: () => structuredClone(staged.get(ref.path)) }; },
             delete(ref) { assert.notEqual(target, 'queue', 'read-only queue must never delete'); writing = true; writes.push(['delete', ref.path]); staged.delete(ref.path); },
