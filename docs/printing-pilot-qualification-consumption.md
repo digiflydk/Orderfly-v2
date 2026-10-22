@@ -39,11 +39,13 @@ are unchanged. All returned output/dispatch/activation/physical flags are false.
 
 An existing pointer, job, audit or consumed session conflicts. The service never
 overwrites another pending/uncertain attempt or reconstructs prior history. The
-delivery lifecycle must deliberately finish and clear its own pointer before a
-new attempt. SDK retry rebuilds from current native reads. Late failure rolls all
-four writes back. Unknown commit returns a fixed unavailable error; replay cannot
-duplicate a committed job. A client must inspect the authorized existing state,
-never automatically resend after an uncertain outcome.
+current delivery lifecycle deliberately retains its pointer after confirmed,
+failed or unknown outcomes; it does not clear or replace the pointer. A future
+attempt therefore requires a separately designed and reviewed operator
+clear/cancel action. SDK retry rebuilds from current native reads. Late failure
+rolls all four writes back. Unknown commit returns a fixed unavailable error;
+replay cannot duplicate a committed job. A client must inspect the authorized
+existing state, never automatically resend after an uncertain outcome.
 
 The separate synthetic pilot lifecycle rereads native device authority, consumed
 session and canonical job linkage on every operation and owns the explicit
