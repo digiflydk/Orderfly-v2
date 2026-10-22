@@ -110,6 +110,9 @@ jobs:
       - name: Supervised pilot qualification regression
         run: node --test tests/unit/printing-pilot-qualification.cjs
 
+      - name: Supervised pilot HTTP control regression
+        run: node --test tests/unit/printing-pilot-control-http.cjs tests/unit/printing-pilot-qualification-consumption.cjs tests/unit/printing-synthetic-pilot-job.cjs tests/unit/printing-synthetic-pilot-http.cjs
+
       - name: CloudPRNT Basic native identity regression
         run: node --test tests/unit/printing-cloudprnt-http-auth.cjs
 
@@ -187,6 +190,12 @@ jobs:
 
       - name: Printer credential controls and one-time delivery regression
         run: node --test tests/unit/printing-device-credentials-ui.cjs
+
+      - name: Supervised pilot operator controls browser regression
+        run: node --test tests/unit/printing-pilot-controls-browser.cjs
+
+      - name: Explicit printer activation browser regression
+        run: node --test tests/unit/printing-printer-activation-browser.cjs
 
       - name: Printer routing editor and sample preview regression
         run: node --test tests/unit/printing-routing-editor.cjs tests/unit/printing-routing-ui-browser.cjs
