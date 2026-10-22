@@ -98,6 +98,9 @@ jobs:
       - name: Native printer credential provisioning regression
         run: node --test tests/unit/printing-device-credentials-service.cjs
 
+      - name: Superadmin printer credential HTTP regression
+        run: node --test tests/unit/printing-device-credentials-http.cjs
+
       - name: CloudPRNT protocol and simulator regression
         run: node --test tests/unit/printing-cloudprnt.cjs
 
