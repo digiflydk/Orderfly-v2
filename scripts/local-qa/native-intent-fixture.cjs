@@ -64,8 +64,13 @@ async function createFixture(db) {
   const hash = parts => createHash('sha256').update(JSON.stringify(parts)).digest('hex');
   const ownerPath = 'localQaFixtures/' + prefix + 'owner', owner = randomUUID();
   rows.set(ownerPath, { owner }); registered.add(ownerPath);
+  // Settlement derives its year later from issuedAt. The bounded proof can
+  // cross midnight on New Year's Eve, so reserve both possible counter paths
+  // before acquiring ownership, and verify both during cleanup.
+  const year = new Date().getUTCFullYear();
   const financial = [
-    `invoiceCounters/${scope.brandId}-${new Date().getUTCFullYear()}`,
+    `invoiceCounters/${scope.brandId}-${year}`,
+    `invoiceCounters/${scope.brandId}-${year + 1}`,
     'checkout_customer_capacity/' + hash([scope.brandId, prefix + 'customer']),
     'orderNotificationJobs/' + hash(['order-confirmation', scope.brandId, scope.orderId]),
   ];

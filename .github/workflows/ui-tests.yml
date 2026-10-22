@@ -201,6 +201,13 @@ jobs:
         timeout-minutes: 8
         run: QA0_FIREBASE_BIN="$RUNNER_TEMP/orderfly-qa0-tools/node_modules/.bin/firebase" QA0_JAVA_BIN="$JAVA_HOME/bin/java" QA0_CREDENTIAL_METADATA_PROOF=true node scripts/local-qa/run-backend.cjs
 
+      - name: Native intent fixture and launcher safety regression
+        run: node --test tests/unit/local-qa-native-intent.cjs tests/unit/local-qa-native-intent-launcher.cjs
+
+      - name: Real isolated atomic settlement and replay proof
+        timeout-minutes: 8
+        run: QA0_FIREBASE_BIN="$RUNNER_TEMP/orderfly-qa0-tools/node_modules/.bin/firebase" QA0_JAVA_BIN="$JAVA_HOME/bin/java" node scripts/local-qa/run-native-intents.cjs
+
       - name: QR module behavior, scope and browser regression
         run: node --test tests/unit/qr-*.cjs
 

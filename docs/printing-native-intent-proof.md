@@ -29,6 +29,9 @@ customer, routing, policy and two paused printers with empty queues. Determinist
 financial paths are registered before settlement; new manifest/job paths are
 registered by #490 before its reads. A pre-existing document or descendants reject
 without taking cleanup ownership. Batch creation uses native create semantics.
+Both the seed year's invoice counter and the following year's counter are
+checked for collisions and registered before seeding. A settlement crossing
+January 1 UTC therefore cannot leave its new counter behind during cleanup.
 Every post-acquisition failure enters cleanup, and recursive roots are limited
 to the fixture's exact order and location; every registered path and recursive
 descendant collection is verified absent. No Auth user is created by this
