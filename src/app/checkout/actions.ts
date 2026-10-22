@@ -71,13 +71,19 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     if (!normalizedEmail) throw new Error('Customer email is required.');
 
     const integrated = await findCheckoutCustomer(brandId, normalizedEmail, customerInfo.phone);
-    if (integrated) return { customerRef: integrated.ref, customerDoc: integrated, normalizedEmail };
+    if (integrated) {
+        // Public checkout cannot prove ownership of a new email from a phone number.
+        // Otherwise a later email-link Club login could expose this existing profile.
+        if (!customerHasEmail(integrated.data(), normalizedEmail))
+            throw new Error('Customer identity scope conflict.');
+        return { customerRef: integrated.ref, customerDoc: integrated, normalizedEmail };
+    }
 
     const scopedRef = doc(db, 'customers', scopedCustomerId(brandId, normalizedEmail));
     const scopedDoc = await getDoc(scopedRef);
     if (scopedDoc.exists()) {
         const scopedData = scopedDoc.data() as Customer;
-        if (scopedData.brandId !== brandId) {
+        if (scopedData.brandId !== brandId || !customerHasEmail(scopedData, normalizedEmail)) {
             throw new Error('Customer identity scope conflict.');
         }
         return { customerRef: scopedRef, customerDoc: scopedDoc, normalizedEmail };
@@ -89,7 +95,7 @@ async function resolveCheckoutCustomerRef(customerInfo: CustomerInfo, brandId: s
     const legacyDoc = await getDoc(legacyRef);
     if (legacyDoc.exists()) {
         const legacyData = legacyDoc.data() as Customer;
-        if (legacyData.brandId === brandId) {
+        if (legacyData.brandId === brandId && customerHasEmail(legacyData, normalizedEmail)) {
             return { customerRef: legacyRef, customerDoc: legacyDoc, normalizedEmail };
         }
     }
@@ -151,9 +157,9 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
 
             if (customerData && customerData.brandId !== brandId)
                 throw new Error('Customer identity scope conflict.');
-            if (customerData
-                && !customerHasEmail(customerData, normalizedEmail)
-                && !customerHasPhone(customerData, normalizedPhone)) {
+            // Recheck inside the transaction: a concurrent phone identity must not
+            // redirect a new email to somebody else's customer record.
+            if (customerData && !customerHasEmail(customerData, normalizedEmail)) {
                 throw new Error('Customer identity scope conflict.');
             }
             if (emailIdentitySnapshot.exists()

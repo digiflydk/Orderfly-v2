@@ -44,13 +44,14 @@ test('actual checkout action rejects tampering before side effects, allows valid
  let identityCalls=0;let writes=0;
  Object.assign(mocks,{
   '@/lib/checkout-price-validation':pricing,'@/lib/promotion-rules':rules,'@/lib/automatic-discounts':automatic,
+  '@/lib/customer-identity':loadTs('src/lib/customer-identity.ts'),
   '@/lib/synthetic-product':loadTs('src/lib/synthetic-product.ts'),
   '@/lib/checkout-schema':loadTs('src/lib/checkout-schema.ts'),
   '@/lib/merchant-payment-methods':loadTs('src/lib/merchant-payment-methods.ts'),
   '@/lib/checkout-items':loadTs('src/lib/checkout-items.ts'),
   '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),
   stripe:{default:class Stripe {}},'@/lib/firebase':{db:{}},
-  '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>{if(++identityCalls===2)throw Error('AFTER_PRICE_VALIDATION');return {ref:{id:'c'},exists:()=>true,data:()=>({brandId:'b'})};}},
+  '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>{if(++identityCalls===2)throw Error('AFTER_PRICE_VALIDATION');return {ref:{id:'c'},exists:()=>true,data:()=>({brandId:'b',email:'test@example.test',normalizedEmail:'test@example.test'})};}},
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
   '@/lib/url':{getOrigin:async()=> 'https://example.test'},'@/lib/brand-subdomain':loadTs('src/lib/brand-subdomain.ts'),
   '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b',slug:'brand'})},

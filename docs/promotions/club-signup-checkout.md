@@ -19,3 +19,10 @@ Checkout loads the authoritative acquisition mode and current Club wording. Club
 The server performs read-only eligibility before quoting. Only after the current server quote is accepted and the canonical checkout customer exists does it invoke actual Club signup. The signup service rechecks programme/mode/benefit versions and grants the same personal right used by standalone signup. Generic checkout newsletter consent recording is skipped for Club signup because the Club service records the exact Club consent. Existing earned personal rights require no new membership acceptance.
 
 Isolated server tests verify current-order savings, stale quotes with no membership/payment writes, missing consent rejection, mode changes, signup failures and personal entitlements. Actual Chromium component tests cover desktop/mobile independent acceptance, submission of displayed versions/fingerprint and personal Club benefits alongside the sole newsletter acquisition option. These tests use isolated provider fixtures; they are not production live QA.
+
+
+## Public customer identity boundary (#484)
+
+Checkout may reuse a customer's supplied email only when it is already the primary email or an existing alias on that record. A phone-only match is rejected before customer writes for both ordinary checkout and Club enrollment. The customer transaction repeats the email check to prevent a concurrently added phone index from redirecting the request. This also prevents ordinary checkout from first minting an email alias that a later standalone Club email login would trust.
+
+Existing imported aliases remain established identity records. This change does not assert historical aliases were verified: their provenance is not available. Any audit or remediation of previously linked aliases is a separate task; this fix performs no production data rewrite.

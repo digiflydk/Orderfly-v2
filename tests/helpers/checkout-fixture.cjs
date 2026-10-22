@@ -14,7 +14,7 @@ function strictWrite(value,path='root') {
  if(value && typeof value==='object') for(const [key,entry] of Object.entries(value)) strictWrite(entry,`${path}.${key}`);
 }
 const offer={id:'d',brandId:'b',isActive:true,locationIds:['l'],orderTypes:['pickup'],activeDays:[],activeTimeSlots:[],discountType:'percentage',discountValue:10,code:'SAVE10',usedCount:0,usageLimit:0};
-async function checkout({discountReaders,existing=false,kind='none',identityCleaner=false, fault, stripeError, realReservations=false, marketingConfigured=true, city='Hellerup', items, seed=[], locationOverrides={}, deliveryType='pickup', deliveryTime, customerOverrides={}, beforeStripe, brandOverrides={}, paymentOverrides={}, standardDiscounts, expectedCartDiscount, consentCookie, anonymousConsentId, orderId='ORD-TEST', discountOrderTypes=['pickup'], createOnly=false, origin='https://example.test', discountId='d'}={}) {
+async function checkout({discountReaders,existing=false,kind='none',identityCleaner=false, fault, stripeError, realReservations=false, marketingConfigured=true, city='Hellerup', items, seed=[], locationOverrides={}, deliveryType='pickup', deliveryTime, customerOverrides={}, beforeCustomerTransaction, beforeStripe, brandOverrides={}, paymentOverrides={}, standardDiscounts, expectedCartDiscount, consentCookie, anonymousConsentId, orderId='ORD-TEST', discountOrderTypes=['pickup'], createOnly=false, origin='https://example.test', discountId='d'}={}) {
  const path='src/app/checkout/actions.ts';
  const mocks=Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],{}]));
  const events=[];const writes=[];let coupon, persistenceError, sessionParams;let patchCalls=0;
@@ -104,7 +104,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
     }
     return snapshot(ref);
    },
-   runTransaction:async(_,callback)=>callback({get:async ref=>snapshot(ref),set:(ref,data,options)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)}),
+   runTransaction:async(_,callback)=>{beforeCustomerTransaction?.(records);return callback({get:async ref=>snapshot(ref),set:(ref,data,options)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data,!!options?.merge);writes.push({ref,data});events.push(ref.collection);},update:(ref,data)=>save(ref,data,true)});},
    serverTimestamp:()=>new Date('2026-09-07T00:00:00Z'),
    setDoc:async(ref,data)=>{if(fault==='customer'&&ref.collection==='customers')throw Error('customer offline');save(ref,data);writes.push({ref,data});events.push(ref.collection);},
    updateDoc:async(ref,data)=>{

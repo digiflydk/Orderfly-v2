@@ -37,3 +37,36 @@ test('Club signup failure never creates a paid order or payment session',async()
  const f=await checkout({kind:'club',fault:'club-signup',paymentOverrides:{cartDiscountTotal:10,discountTotal:10}});
  assert.equal(f.result.success,false);assert.equal(f.records.has('orders/ORD-TEST'),false);assert.equal(f.events.includes('reserve'),false);assert.equal(f.events.includes('stripe'),false);
 });
+
+// Public checkout must never turn knowledge of a phone into an email-login identity.
+test('unknown email with an existing phone is rejected before ordinary or Club checkout writes',async()=>{
+ const owner={id:'owner',brandId:'b',email:'owner@example.test',normalizedEmail:'owner@example.test',phone:'12345678',normalizedPhone:'12345678',locationIds:['l'],marketingConsent:false};
+ for(const kind of ['none','club']) for(const staleQuote of [false,true]) {
+  const f=await checkout({kind,seed:[['customers/owner',owner]],paymentOverrides:staleQuote?{subtotal:1}:kind==='club'?{cartDiscountTotal:10,discountTotal:10}:undefined});
+  assert.equal(f.result.success,false);assert.deepEqual(f.writes,[]);assert.deepEqual(f.events,[]);
+  assert.deepEqual(f.records.get('customers/owner'),owner);
+  assert.equal([...f.records.keys()].some(key=>key.startsWith('integrationConsumerCustomerIdentities/')),false);
+  assert.equal([...f.records.keys()].some(key=>key.startsWith('orders/')),false);
+ }
+});
+test('an existing trusted email alias retains canonical checkout and Club access',async()=>{
+ const owner={id:'owner',brandId:'b',email:'owner@example.test',normalizedEmail:'owner@example.test',emailAliases:['test@example.test'],phone:'12345678',normalizedPhone:'12345678',locationIds:['l'],marketingConsent:false};
+ for(const kind of ['none','club']) {
+  const f=await checkout({kind,seed:[['customers/owner',owner]],paymentOverrides:kind==='club'?{cartDiscountTotal:10,discountTotal:10}:undefined});
+  assert.equal(f.result.success,true,f.result.error);assert.equal(f.records.get('orders/ORD-TEST').customerDetails.id,'owner');
+  assert.equal(f.records.get('customers/owner').email,'owner@example.test');
+ }
+});
+
+test('transaction rejects a concurrently introduced phone-only customer identity without writes',async()=>{
+ const identity=loadTs('src/lib/customer-identity.ts');
+ for(const kind of ['none','club']) {
+  const owner={id:'owner',brandId:'b',email:'owner@example.test',normalizedEmail:'owner@example.test',phone:'12345678',normalizedPhone:'12345678',locationIds:['l']};
+  const f=await checkout({kind,paymentOverrides:kind==='club'?{cartDiscountTotal:10,discountTotal:10}:undefined,beforeCustomerTransaction:records=>{
+   records.set('customers/owner',owner);
+   records.set('integrationConsumerCustomerPhoneIdentities/'+identity.customerIdentityKey('b','12345678'),{brandId:'b',customerId:'owner'});
+  }});
+  assert.equal(f.result.success,false);assert.deepEqual(f.writes,[]);assert.deepEqual(f.events,kind==='club'?['club-preflight']:[]);
+  assert.deepEqual(f.records.get('customers/owner'),owner);
+ }
+});

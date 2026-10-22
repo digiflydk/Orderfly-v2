@@ -119,3 +119,36 @@ test('changing or clearing legacy phone retains both displayed and stale normali
   assert.equal(aliases.includes('invalid'),false);assert.equal(aliases.includes(''),false);
  }
 });
+
+test('saving unchanged normalized displayed phone with birth date or gender avoids the brand customer scan',async()=>{
+ for(const fields of [{phone:'+45 11112222',birthDate:'1990-05-01'},{phone:'0045 11.11.22.22',gender:'female'},{gender:'male'}]){
+  const {db,session}=setup();let scans=0;const run=db.runTransaction;
+  db.runTransaction=fn=>run(tx=>fn({...tx,get:ref=>{if(!ref.path)scans++;return tx.get(ref)}}));
+  await update(db,session,fields);assert.equal(scans,0,'unchanged phone must not read the whole customer brand');
+ }
+ const {db,session}=setup();db.rows.get('customers/c').normalizedPhone='+4599998888';
+ let scans=0;const run=db.runTransaction;db.runTransaction=fn=>run(tx=>fn({...tx,get:ref=>{if(!ref.path)scans++;return tx.get(ref)}}));
+ await update(db,session,{phone:'+4511112222',birthDate:'1990-05-01'});assert.equal(scans,0,'displayed legacy phone is unchanged even when old normalized field is stale');
+});
+
+test('unchanged phone still rejects a conflicting deterministic reservation without a brand scan',async()=>{
+ const {db,session}=setup();let scans=0;const run=db.runTransaction;
+ db.runTransaction=fn=>run(tx=>fn({...tx,get:ref=>{if(!ref.path)scans++;return tx.get(ref)}}));
+ db.rows.set('integrationConsumerCustomerPhoneIdentities/'+customerIdentityKey('b','+4511112222'),{brandId:'b',customerId:'other'});
+ const before=structuredClone([...db.rows]);await rejects(update(db,session,{phone:'+4511112222',gender:'male'}),'customer_conflict');
+ assert.equal(scans,0);assert.deepEqual([...db.rows],before);
+});
+
+
+test('unchanged unindexed phone does not claim an identity without a uniqueness scan',async()=>{
+ for(const indexed of [false,true]){
+  const {db,session}=setup(),path='integrationConsumerCustomerPhoneIdentities/'+customerIdentityKey('b','+4511112222');
+  // A preexisting duplicate is deliberately not scanned on an unchanged save.
+  db.rows.set('customers/legacy-duplicate',{brandId:'b',phone:'+45 11112222'});
+  if(indexed)db.rows.set(path,{brandId:'b',customerId:'c',createdAt:NOW-1});
+  let scans=0;const run=db.runTransaction;db.runTransaction=fn=>run(tx=>fn({...tx,get:ref=>{if(!ref.path)scans++;return tx.get(ref)}}));
+  await update(db,session,{phone:'+4511112222',birthDate:'1990-05-01',gender:'female'});
+  assert.equal(scans,0);assert.equal(db.rows.has(path),indexed,'unindexed unchanged phone cannot acquire a new reservation');
+  if(indexed){assert.equal(db.rows.get(path).customerId,'c');assert.equal(db.rows.get(path).createdAt,NOW-1);}
+ }
+});
