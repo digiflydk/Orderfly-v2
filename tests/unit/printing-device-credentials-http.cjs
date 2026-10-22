@@ -28,7 +28,7 @@ const safe = value => { assert.equal(value.cache, 'no-store'); assert.equal(valu
 
 test('actual POST route explicitly projects nonenumerable secret for issue/rotate and omits it for revoke', async () => {
   for (const c of [command(), command('rotate', 1), command('revoke', 2)]) {
-    const f = fixture(); assert.equal(f.route.runtime, 'nodejs'); assert.equal(f.route.dynamic, 'force-dynamic'); assert.equal(f.route.GET, undefined);
+    const f = fixture(); assert.equal(f.route.runtime, 'nodejs'); assert.equal(f.route.dynamic, 'force-dynamic'); assert.equal(typeof f.route.GET, 'function');
     const output = await f.run(request(c)); safe(output); assert.equal(output.status, c.operation === 'issue' ? 201 : 200);
     assert.equal(output.body.secret, c.operation === 'revoke' ? undefined : secret); assert.equal(output.body.credentialRevision, c.credentialRevision + 1);
     assert.equal(output.body.dispatchAuthorized, false); assert.equal(output.body.activationAuthorized, false);
