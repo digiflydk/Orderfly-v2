@@ -104,6 +104,9 @@ jobs:
       - name: Kitchen PNG payload regression
         run: node --test tests/unit/printing-kitchen-png.cjs
 
+      - name: Immutable synthetic testbon content regression
+        run: node --test tests/unit/printing-job-content.cjs
+
       - name: Combined print-intent batch regression
         run: node --test tests/unit/printing-outbox-batch.cjs
 
