@@ -36,3 +36,23 @@ signup transaction, with no customer, membership, consent, bonus or mail writes.
 The new case failed with “Missing expected rejection” on `5852c71d`; coordinator
 fix `d4c9dbb2` makes all 30 integration cases pass. This check used synthetic
 memory records only.
+
+## Existing member checkout resubscription follow-up (#481 review)
+
+An additional actual-service lifecycle signs up a member, marks their old personal
+signup offer used (no pending offer), withdraws consent through
+`setNewsletterConsent`, and calls `prepareClubCheckoutSignup` without a discount.
+It requires current versioned explicit consent, the central customer subscription,
+a pending marketing job/contact and the member's subscribed state. Existing cards,
+bonus ledgers and discount claims must remain unchanged. Separate cases reject
+false newsletter/terms consent and stale text versions with a full zero-write
+snapshot.
+
+RED was confirmed against pre-fix `73115e3b`: checkout returned while member consent
+remained `withdrawn`. Coordinator fixes `9b5ddcc1` and `7cfdef2b` make the same
+assertions pass and preserve existing concurrent retry idempotence assertions.
+Final command:
+`node --test tests/unit/loyalty-club-signup-integration.cjs tests/unit/loyalty-membership.cjs`
+Result: **47 tests passed, 0 failures** (31 integration + 16 membership).
+This follow-up remains isolated synthetic service QA, with the live/release limits
+above unchanged. The QA-owned commit contains only this evidence and test file.

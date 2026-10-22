@@ -166,8 +166,30 @@ export async function signup(db: Firestore, brand: ProgramBrand, input: z.infer<
     const identity = (await tx.get(identityRef)).data();
     if (identity) {
       const member = (await tx.get(db.collection(COLLECTIONS.members).doc(String(identity.memberId)))).data() as MemberDoc | undefined;
-      recordIp(); recordEmail();
-      if (!member || member.status !== 'active' || member.brandId !== brand.brandId) return null;
+      if (!member || member.status !== 'active' || member.brandId !== brand.brandId) { recordIp(); recordEmail(); return null; }
+      if (trusted.source === 'checkout') {
+        // Explicit checkout acceptance must also be durable for an existing
+        // member. This refreshes consent only, never acquisition rewards.
+        const customer = await tx.get(db.collection('customers').doc(member.customerId));
+        if (!customer.exists || customer.data()?.brandId !== brand.brandId || !customerHasEmail(customer.data()!,email))
+          throw new LoyaltyError('customer_conflict',409);
+        const primaryEmail = primaryEmailOf(customer.data()!)===email;
+        const needsConsent = member.consent.status !== 'given' || member.consent.version !== consentVersion
+          || member.termsVersion !== termsVersion || member.textHash !== texts.hash || (primaryEmail && customer.data()?.marketingConsent !== true);
+        if (needsConsent) {
+        const consent = await stageExplicitConsent(tx,db,{brandId:brand.brandId,customerId:member.customerId,email,source:'loyalty',
+          action:'subscribe',requestId:`checkout:${identity.memberId}:${now}`,capturedAt:now,version:consentVersion,wording:texts.consentWording,
+          primaryEmail});
+        recordIp(); recordEmail();
+        consent.apply();
+        tx.update(db.collection(COLLECTIONS.members).doc(String(identity.memberId)),{
+          consent:{status:'given',at:now,source:'checkout',eventId:consent.id,version:consentVersion},
+          termsVersion,textVersion:program.texts.version,textHash:texts.hash});
+        if (!shownKnown) tx.create(shownRef,{brandId:brand.brandId,textVersion:program.texts.version,hash:texts.hash,texts:texts.texts,createdAt:now});
+        tx.set(db.collection(COLLECTIONS.events).doc(hashKey('consent-given',String(identity.memberId),consent.id)),
+          loyaltyEvent(member,String(identity.memberId),now,'consent_given',{channel:'email',reason:consentVersion}));
+        } else { recordIp(); recordEmail(); }
+      } else { recordIp(); recordEmail(); }
       return stageLoginLink(tx, db, brand, s.name, String(identity.memberId), member, now);
     }
     const customer = await resolveCustomer(tx, db, brand.brandId, email);
@@ -197,7 +219,7 @@ export async function signup(db: Firestore, brand: ProgramBrand, input: z.infer<
     return stageLoginLink(tx, db, brand, s.name, memberId, member, now);
   }).catch(error => {
     // An identity conflict needs an administrator; the customer still gets the neutral answer.
-    if (error instanceof LoyaltyError && error.code === 'customer_conflict') { console.error('[loyalty] customer identity conflict', brand.brandId); return null; }
+    if (trusted.source !== 'checkout' && error instanceof LoyaltyError && error.code === 'customer_conflict') { console.error('[loyalty] customer identity conflict', brand.brandId); return null; }
     throw error;
   });
   return { ok: true as const, mailJob };

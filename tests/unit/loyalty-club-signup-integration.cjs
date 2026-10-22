@@ -274,3 +274,45 @@ test('a dotted valid phone uses the shared normalizer and qualifies for the conf
  assert.equal(result.bonusGranted,true);assert.equal(db.rows.get('customers/'+member.customerId).normalizedPhone,'+4555556666');
  assert.equal(rows(db,'loyaltyBonusGrants').length,4);
 });
+
+async function withdrawnMemberCheckout(){
+ const db=fixture();await signup(db);
+ // This existing member no longer has a pending signup offer (for example after redemption).
+ const existing=rows(db,'loyaltyMembers')[0];
+ const customer=db.rows.get('customers/'+existing.customerId);
+ delete customer.pendingClubDiscountId;customer.discountUsage={d1:1};
+ const member=rows(db,'loyaltyMembers')[0],session=await memberSession(db,member),brand=await m.resolveBrand(db,'esmeralda');
+ await m.setNewsletterConsent(db,brand,session,{subscribed:false},NOW+1);
+ assert.equal(db.rows.get('loyaltyMembers/'+member.id).consent.status,'withdrawn');
+ assert.equal(db.rows.get('customers/'+member.customerId).marketingConsent,false);
+ return {db,member,request:await input(db,{discountId:undefined,now:NOW+2})};
+}
+
+test('existing withdrawn Club member explicitly resubscribes in checkout without a new discount or bonus',async()=>{
+ const {db,member,request}=await withdrawnMemberCheckout();
+ const grants=snapshotCollection(db,'loyaltyBonusGrants'),claims=snapshotCollection(db,'loyaltySignupDiscountClaims'),cards=snapshotCollection(db,'loyaltyCards');
+ const priorConsentCount=rows(db,'marketingConsents').length;
+ const result=await checkout.prepareClubCheckoutSignup(request);
+ assert.equal(result.customerId,member.customerId);assert.equal(rows(db,'loyaltyMembers').length,1);
+ const current=db.rows.get('loyaltyMembers/'+member.id),customer=db.rows.get('customers/'+member.customerId);
+ assert.equal(current.consent.status,'given');assert.equal(current.consent.version,request.consentVersion);
+ assert.equal(customer.marketingConsent,true);assert.equal(customer.pendingClubDiscountId,undefined);
+ assert.equal(rows(db,'marketingConsents').length,priorConsentCount+1);
+ const event=rows(db,'marketingConsents').find(event=>event.id===current.consent.eventId);
+ assert.ok(event);assert.equal(event.customerId,member.customerId);assert.equal(event.brandId,BRAND);
+ assert.equal(event.email,'anna@example.com');assert.equal(event.version,request.consentVersion);assert.equal(event.capturedAt,NOW+2);
+ assert.ok(event.wording.includes('Esmeralda'));assert.notEqual(event.action,'unsubscribe');
+ const job=db.rows.get('marketingOutbox/'+event.id);assert.equal(job.state,'pending');assert.equal(job.customerId,member.customerId);
+ const contact=rows(db,'marketingContacts').find(contact=>contact.latestEventId===event.id);assert.ok(contact);assert.equal(contact.customerId,member.customerId);
+ assert.deepEqual(snapshotCollection(db,'loyaltyBonusGrants'),grants);assert.deepEqual(snapshotCollection(db,'loyaltySignupDiscountClaims'),claims);
+ assert.deepEqual(snapshotCollection(db,'loyaltyCards'),cards);assert.equal(rows(db,'loyaltyEvents').filter(e=>e.channel==='bonus_profile').length,0);
+});
+function snapshotCollection(db,name){return structuredClone([...db.rows].filter(([key])=>key.startsWith(name+'/')));}
+
+test('existing withdrawn checkout member cannot resubscribe with false or stale consent',async()=>{
+ for(const changes of [{newsletterConsent:false},{termsAccepted:false},{consentVersion:'stale'},{termsVersion:'stale'}]){
+  const {db,request}=await withdrawnMemberCheckout(),before=snapshot(db);
+  await rejects(checkout.prepareClubCheckoutSignup({...request,...changes}),changes.newsletterConsent===false||changes.termsAccepted===false?'invalid_request':'program_changed');
+  assert.deepEqual(snapshot(db),before);
+ }
+});
