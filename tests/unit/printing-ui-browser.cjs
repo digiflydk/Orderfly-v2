@@ -135,6 +135,52 @@ test('foreign, oversized and malformed responses fail closed; scoped empty page 
   response = { items: [], nextCursor: null }; await page.getByRole('button', { name: 'Opdater' }).click();
   await expect(page.getByText('Ingen printere på denne lokation.', { exact: true })).toBeVisible();
 });
+test('authoritative activity dates use Copenhagen time and distinguish confirmed never-used from unknown history', async t => {
+  const context = await browser.newContext({ timezoneId: 'America/Los_Angeles' }); t.after(() => context.close());
+  const page = await context.newPage();
+  const activatedAt = Date.parse('2026-10-21T22:15:00.000Z'), lastConfirmedPrintAt = Date.parse('2026-10-22T08:30:00.000Z');
+  await page.route('**/api/merchant/printers?*', route => route.fulfill({ json: { items: [
+    { ...item('confirmed'), activity: { activatedAt, lastConfirmedPrintAt, printHistory: 'confirmed' } },
+    { ...item('never'), activity: { activatedAt: null, lastConfirmedPrintAt: null, printHistory: 'never' } },
+    { ...item('unknown'), activity: { activatedAt, lastConfirmedPrintAt: null, printHistory: 'unknown' } },
+    item('legacy'),
+  ], nextCursor: null, totalPrinters: 4 } }));
+  await page.goto(origin); await choose(page);
+  const confirmed = page.getByRole('row').filter({ hasText: 'Køkken confirmed' });
+  await expect(confirmed.locator('time').nth(0)).toHaveAttribute('datetime', '2026-10-21T22:15:00.000Z');
+  await expect(confirmed.locator('time').nth(0)).toHaveText('22.10.2026, 00.15');
+  await expect(confirmed.locator('time').nth(1)).toHaveAttribute('datetime', '2026-10-22T08:30:00.000Z');
+  await expect(confirmed.locator('time').nth(1)).toHaveText('22.10.2026, 10.30');
+  const never = page.getByRole('row').filter({ hasText: 'Køkken never' });
+  await expect(never.getByRole('cell').nth(0)).toHaveText('Ikke registreret');
+  await expect(never.getByRole('cell').nth(4)).toHaveText('Aldrig printet');
+  const unknown = page.getByRole('row').filter({ hasText: 'Køkken unknown' });
+  await expect(unknown.getByRole('cell').nth(0).locator('time')).toBeVisible();
+  await expect(unknown.getByRole('cell').nth(4)).toHaveText('Ikke registreret');
+  const legacy = page.getByRole('row').filter({ hasText: 'Køkken legacy' });
+  await expect(legacy.getByRole('cell').nth(0)).toHaveText('Ikke registreret');
+  await expect(legacy.getByRole('cell').nth(4)).toHaveText('Ikke registreret');
+});
+test('malformed or contradictory activity metadata rejects the whole response without displaying dates or rows', async t => {
+  const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
+  let activity;
+  await page.route('**/api/merchant/printers?*', route => route.fulfill({ json: { items: [{ ...item('bad_activity'), activity }], nextCursor: null } }));
+  for (const value of [null, {}, { activatedAt: '2026-10-21', lastConfirmedPrintAt: null, printHistory: 'unknown' },
+    { activatedAt: -1, lastConfirmedPrintAt: null, printHistory: 'never' },
+    { activatedAt: 8640000000000001, lastConfirmedPrintAt: null, printHistory: 'unknown' },
+    { activatedAt: null, lastConfirmedPrintAt: null, printHistory: 'confirmed' },
+    { activatedAt: null, lastConfirmedPrintAt: 1, printHistory: 'never' },
+    { activatedAt: null, lastConfirmedPrintAt: 1, printHistory: 'unknown' },
+    { activatedAt: null, lastConfirmedPrintAt: null, printHistory: 'unknown', secret: 'PRIVATE_METADATA' }]) {
+    activity = value;
+    if (page.url() === 'about:blank') { await page.goto(origin); await choose(page); }
+    else await page.getByRole('button', { name: 'Opdater', exact: true }).click();
+    await expect(page.getByRole('alert')).toHaveText('Printerne kunne ikke indlæses. Prøv igen.');
+    await expect(page.getByText('Køkken bad_activity', { exact: true })).toHaveCount(0);
+    assert.equal((await page.locator('body').innerText()).includes('PRIVATE_METADATA'), false);
+    await expect(page.getByRole('columnheader')).toHaveCount(9);
+  }
+});
 test('old in-flight location response cannot overwrite a new scope', async t => {
   const context = await browser.newContext(); t.after(() => context.close()); const page = await context.newPage();
   let release, started;

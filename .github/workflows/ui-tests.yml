@@ -81,13 +81,16 @@ jobs:
         run: node --test tests/unit/omnisend-contact-import.cjs tests/unit/omnisend-193.cjs tests/unit/customer-manual-sync.cjs tests/unit/orderfly-booking-sync.cjs
 
       - name: Stripe payment lifecycle regression (#189)
-        run: node --test tests/unit/stripe-lifecycle-189.cjs tests/unit/cart-cancel.cjs tests/unit/payment-display.cjs tests/unit/takeaway-qa-regressions.cjs tests/unit/wait-for-release.cjs tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs tests/unit/printing-queue-summary.cjs tests/unit/printing-queue-review.cjs tests/unit/printing-resume.cjs
+        run: node --test tests/unit/stripe-lifecycle-189.cjs tests/unit/cart-cancel.cjs tests/unit/payment-display.cjs tests/unit/takeaway-qa-regressions.cjs tests/unit/wait-for-release.cjs tests/unit/printing-domain.cjs tests/unit/printing-configuration.cjs tests/unit/printing-activity-metadata.cjs tests/unit/printing-reads.cjs tests/unit/printing-identity.cjs tests/unit/printing-writes.cjs tests/unit/printing-lifecycle.cjs tests/unit/printing-outbox.cjs tests/unit/printing-queue-summary.cjs tests/unit/printing-queue-review.cjs tests/unit/printing-resume.cjs
 
       - name: Private printer device credential regression
         run: node --test tests/unit/printing-device-auth.cjs
 
       - name: Native printer device verification regression
         run: node --test tests/unit/printing-device-auth-native.cjs
+
+      - name: Native print claim reservation regression
+        run: node --test tests/unit/printing-native-claim.cjs
 
       - name: CloudPRNT protocol and simulator regression
         run: node --test tests/unit/printing-cloudprnt.cjs
@@ -166,6 +169,9 @@ jobs:
             test-results/printing-config-*.png
           if-no-files-found: ignore
           retention-days: 14
+
+      - name: Club campaign service and browser regressions
+        run: node --test --test-concurrency=1 tests/unit/loyalty-campaign-bonus.cjs tests/unit/loyalty-campaign-admin.cjs tests/unit/loyalty-club-signup-integration.cjs tests/unit/loyalty-profile.cjs tests/unit/club-promotion-rules.cjs tests/unit/club-checkout.cjs tests/unit/checkout-availability.cjs tests/unit/loyalty-benefits-browser.cjs tests/unit/loyalty-campaign-admin-browser.cjs tests/unit/loyalty-profile-browser.cjs
 
       - name: Build
         run: npm run build
