@@ -59,8 +59,20 @@ export function isQrCanonicalRequest(request: Request, environment?: string, app
   if (forwardedProto !== undefined && forwardedProto !== 'https') return false;
   if (url.protocol === 'https:' && url.host === 'orderfly.dk') return !directHost || directHost === 'orderfly.dk';
   if (environment !== 'production' || !isAppHostingOrigin(url, appHosting)) return false;
+  // Next constructs request.url from its local listener, while App Hosting's
+  // incoming Host remains the deployment's Cloud Run service. Validate both
+  // representations separately; a foreign Host must still fail before DB access.
+  let deploymentHost = false;
+  if (directHost && ['localhost', '127.0.0.1', '0.0.0.0', '[::1]'].includes(url.hostname)) {
+    try {
+      const incoming = new URL(`https://${directHost}`);
+      deploymentHost = incoming.host === directHost && !incoming.username && !incoming.password &&
+        incoming.pathname === '/' && !incoming.search && !incoming.hash &&
+        incoming.hostname.endsWith('.run.app') && isAppHostingOrigin(incoming, appHosting);
+    } catch { /* Invalid Host is rejected below. */ }
+  }
   return forwardedHost === 'orderfly.dk' && forwardedProto === 'https' &&
-    (directHost === url.host.toLowerCase() || directHost === 'orderfly.dk');
+    (directHost === url.host.toLowerCase() || directHost === 'orderfly.dk' || deploymentHost);
 }
 
 /** Public endpoint. Every counted opening and its rate-limit increment commit atomically. */

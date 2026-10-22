@@ -177,7 +177,11 @@ test('proxy headers cannot opt in outside deployment context or override hostile
     const headers = { ...canonical }; if (bad === null) delete headers['x-forwarded-proto']; else headers['x-forwarded-proto'] = bad;
     cases.push([url, headers, options]);
   }
-  for (const bad of [null, 'evil.example', '0.0.0.0:8081', 'orderfly.dk:443', 'orderfly.dk, evil.example']) {
+  for (const bad of [null, 'evil.example', '0.0.0.0:8081', 'orderfly.dk:443', 'orderfly.dk, evil.example',
+    'other-434157933685.us-central1.run.app', 'studio-434157933685.us-central1.run.app.evil.example',
+    'studio-434157933685.us-central1.run.app:443', 'studio-434157933685.us-central1.run.app/path',
+    'user@studio-434157933685.us-central1.run.app', 'studio-434157933685.us-central1.run.app.',
+    'studio-434157933685.us-central1.run.app, orderfly.dk']) {
     const headers = { ...canonical }; if (bad === null) delete headers.host; else headers.host = bad;
     cases.push([url, headers, options]);
   }
@@ -186,6 +190,23 @@ test('proxy headers cannot opt in outside deployment context or override hostile
     assert.equal(response.status, 404, `${inputUrl} ${JSON.stringify(headers)}`);
   }
   assert.equal(f.db.transactions, 0); assert.equal(events(f.db).length, 0);
+});
+
+test('Next listener URL accepts its deployment Cloud Run Host without changing QR authority', async () => {
+  for (const origin of ['http://localhost:8080', 'https://localhost:8080', 'https://0.0.0.0:8080']) {
+    for (const host of ['studio-434157933685.us-central1.run.app', 'studio-abc123-uc.a.run.app']) {
+      const f = fixture(), options = { ...f.options, appHosting: { service: 'studio', port: '8080' } };
+      const headers = { host, 'x-forwarded-host': 'orderfly.dk', 'x-forwarded-proto': 'https' };
+      const before = structuredClone([...f.db.rows]);
+      assert.equal((await handleQrRedirect(request('HEAD', headers, `${origin}/q/${slug}`), slug, options)).status, 302);
+      assert.deepEqual([...f.db.rows], before);
+      assert.equal((await handleQrRedirect(request('GET', headers, `${origin}/q/${slug}`), slug, options)).status, 302);
+      assert.equal(events(f.db).length, 1);
+      f.db.rows.get(f.prefix).status = 'paused';
+      assert.equal((await handleQrRedirect(request('GET', headers, `${origin}/q/${slug}`), slug, options)).status, 404);
+      assert.equal(events(f.db).length, 1);
+    }
+  }
 });
 
 test('malformed limiter state and unsafe persisted destination fail closed without an event', async () => {
