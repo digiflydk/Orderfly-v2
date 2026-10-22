@@ -103,7 +103,7 @@ async function runIntentProof(input) {
     for (const t of plan.targets) {
       const p = byPath.get(t.printer)?.data(), q = byPath.get(t.ledger)?.data();
       if (!scoped(p?.configuration, plan.scope) || p.configuration.id !== t.printerId || p.configuration.state !== 'paused' || p.revision !== 1 || p.deletedAt !== null
-        || !scoped(q, plan.scope, t.printerId) || q.revision !== 0 || q.pendingCount !== 0 || q.oldestPendingAt !== null) fail('seed_invalid');
+        || !scoped(q, plan.scope, t.printerId) || q.revision !== 1 || q.pendingCount !== 0 || q.oldestPendingAt !== null) fail('seed_invalid');
     }
     stable();
     if ((await jobCounts(r, plan)).some(count => count !== 0)) fail('seed_invalid');
@@ -123,7 +123,7 @@ async function runIntentProof(input) {
       if (!target || target.printerRevision !== 1 || JSON.stringify(target.kinds) !== '["kitchen"]'
         || !scoped(job, plan.scope, t.printerId) || job.orderId !== plan.scope.orderId || job.id !== t.jobId || job.revision !== 0 || job.kind !== 'kitchen'
         || job.printerRevision !== 1 || job.state !== 'queued' || job.attempts !== 0 || !Number.isSafeInteger(job.createdAt) || job.createdAt <= 0
-        || !scoped(queue, plan.scope, t.printerId) || queue.revision !== 1 || queue.pendingCount !== 1 || queue.oldestPendingAt !== job.createdAt) fail('atomicity_failed');
+        || !scoped(queue, plan.scope, t.printerId) || queue.revision !== 2 || queue.pendingCount !== 1 || queue.oldestPendingAt !== job.createdAt) fail('atomicity_failed');
     }
     stable();
     if ((await jobCounts(r, plan)).some(count => count !== 1)) fail('atomicity_failed');

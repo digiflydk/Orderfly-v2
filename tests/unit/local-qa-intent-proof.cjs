@@ -29,7 +29,7 @@ function fixture() {
         targets: plan.targets.map(t => ({ printerId: t.printerId, printerRevision: 1, kinds: ['kitchen'] })) });
       for (const t of plan.targets) {
         store(t.job, { ...scope, printerId: t.printerId, id: t.jobId, orderId: scope.orderId, revision: 0, kind: 'kitchen', printerRevision: 1, state: 'queued', attempts: 0, createdAt: 100 });
-        store(t.ledger, { ...scope, printerId: t.printerId, revision: 1, pendingCount: 1, oldestPendingAt: 100 });
+        store(t.ledger, { ...scope, printerId: t.printerId, revision: 2, pendingCount: 1, oldestPendingAt: 100 });
       }
       return true;
     } };
@@ -44,7 +44,7 @@ function fixture() {
   records.get(plan.order).data = { ...scope, paymentStatus: 'Pending', status: 'Pending', paymentMethod: 'Stripe' };
   for (const t of plan.targets) {
     records.get(t.printer).data = { configuration: { ...scope, id: t.printerId, state: 'paused' }, revision: 1, deletedAt: null };
-    records.get(t.ledger).data = { ...scope, printerId: t.printerId, revision: 0, pendingCount: 0, oldestPendingAt: null };
+    records.get(t.ledger).data = { ...scope, printerId: t.printerId, revision: 1, pendingCount: 0, oldestPendingAt: null };
   }
   db.runTransaction = async (operation, options) => {
     reads++; assert.deepEqual(options, { readOnly: true });
@@ -120,6 +120,7 @@ test('invalid pending seed, active-output printer or nonempty queue never invoke
   for (const mutate of [f => f.records.get(f.plan.order).data.paymentStatus = 'Paid',
     f => f.records.get(f.plan.targets[0].printer).data.configuration.state = 'active',
     f => f.records.get(f.plan.targets[0].ledger).data.pendingCount = 1,
+    f => f.records.get(f.plan.targets[0].ledger).data.revision = 0,
     f => f.records.set(f.plan.manifest, { data: {}, seconds: 99, nanoseconds: 1 }),
     f => f.records.get(`locations/${f.plan.scope.locationId}`).data.brandId = 'foreign']) {
     const f = fixture(); mutate(f); await rejects(() => runIntentProof(f.resource), 'seed_invalid'); assert.equal(f.settles(), 0);

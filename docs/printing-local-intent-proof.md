@@ -47,7 +47,7 @@ Required fresh seed:
 - Brand status `active` or `trialing`, active own location.
 - Stripe order with `paymentStatus:Pending`, `status:Pending` and valid native seller/customer/amount/currency/invoice prerequisites for actual settlement.
 - Exactly two own paused printers at revision 1, `deletedAt:null`. Paused printers allow intent preparation and do not authorize output.
-- Valid empty queue ledgers at revision 0, count 0 and null oldest time; no existing printer jobs or original manifest.
+- Valid empty queue ledgers at revision 1, count 0 and null oldest time; no existing printer jobs or original manifest.
 - Valid native ON intent policy, native catalog/products, saved routing and verified local Stripe session producing exactly one kitchen original per printer. The owner must seed/register those resources, ordinary financial counters/audits/notification records and any local provider fixture before invoking this module.
 
 The existing two-principal Auth/Firestore environment is reused; this webhook settlement case itself does not authenticate a browser principal. The module does not claim it has observed Auth login. A future staff case must use the real native staff identity and `orders:edit` path, not substitute the Stripe callback.
@@ -57,7 +57,7 @@ The existing two-principal Auth/Firestore environment is reused; this webhook se
 1. Fixed runtime, native SDK settings, source/scope shape and existing cleanup ownership pass before database or settlement callbacks. Register exact created paths, then revalidate unchanged resources.
 2. Read native seed documents in a read-only transaction. Reject paid, foreign, active-output, nonempty or pre-existing-original seed. Bounded queries check empty job collections.
 3. Invoke the actual settlement adapter once; it must return `true`.
-4. Read order, original manifest, both jobs and both ledgers through the supplied native Firestore client. All six native `updateTime` values must match **exact seconds and nanoseconds**, not rounded milliseconds. Require Paid/Received order with invoice, manifest with both original targets, revision-0 queued kitchen jobs with attempts 0 and printer revision 1, and revision-1 ledgers with count 1 and oldest time matching each job. Bounded native job queries reject extra or foreign job IDs.
+4. Read order, original manifest, both jobs and both ledgers through the supplied native Firestore client. All six native `updateTime` values must match **exact seconds and nanoseconds**, not rounded milliseconds. Require Paid/Received order with invoice, manifest with both original targets, revision-0 queued kitchen jobs with attempts 0 and printer revision 1, and revision-2 ledgers with count 1 and oldest time matching each job. Bounded native job queries reject extra or foreign job IDs.
 5. Replay through the same actual adapter; it must return `false`. All six native update times remain unchanged and each printer still has exactly the expected one job.
 
 The safe result includes the source SHA, compared-record/job counts and boolean commit/replay outcomes. It deliberately returns `cleanupVerified:false`, `cleanupOwnedByCaller:true`, `productionAcceptance:false` and `physicalPrintVerified:false`. It does not expose timestamps, IDs, invoices or raw records.
@@ -80,3 +80,5 @@ npm run typecheck
 ```
 
 Root remains the sole publication/release coordinator. Current-main ancestry, exact-head green CI, completed independent Codex review, no unresolved findings/human holds, serial merge/deploy, actual release verification and Claude acceptance remain required. Production data/configuration/flags/output/hardware/firmware/Wolt are untouched.
+
+Native integration #511 found that the canonical stored queue schema requires a positive revision. The proof now seeds revision 1 and requires the settlement delta to revision 2; revision 0 persisted queues reject before settlement. Production queue validation is unchanged.
