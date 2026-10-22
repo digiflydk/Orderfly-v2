@@ -61,6 +61,7 @@ before(async () => {
   const checkoutActions = fixture('checkout-actions', `
     import {call} from ${JSON.stringify(transport)};
     export const newsletterSyncAvailableAction=async()=>false;
+    export const getCheckoutSignupAction=async()=>({mode:'newsletter'});
     export const getNewsletterSignupDiscountAction=async()=>null;
     export const validateDiscountAction=(...args)=>call('discount',args);
   `);

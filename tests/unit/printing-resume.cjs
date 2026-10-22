@@ -24,6 +24,30 @@ const frozenNow = async (now, run) => {
   try { return await run(); } finally { Date.now = previous; }
 };
 
+test('resume records authoritative software activation without overwriting confirmed use; invalid activity rolls back', async () => {
+ const activityPath = `${path}/statusMetadata/current`;
+ const activity = { schemaVersion: 1, ...scope, activatedAt: 1000, activationRevision: 1,
+  printHistory: 'confirmed', lastConfirmedPrintAt: 2000, lastConfirmedJobId: 'a'.repeat(64) };
+ for (const history of [activity, { ...activity, activatedAt: null, activationRevision: null,
+  printHistory: 'never', lastConfirmedPrintAt: null, lastConfirmedJobId: null }]) {
+  const f = setup({ extra: [[queuePath, metadata()], [activityPath, history]] });
+  const receipt = (await issue(f)).receipt;
+  const start = Date.now(); assert.equal((await f.request('POST', command(receipt))).status, 200);
+  const saved = f.records.get(activityPath);
+  assert.ok(saved.activatedAt >= start && saved.activatedAt <= Date.now()); assert.equal(saved.activationRevision, 2);
+  assert.equal(saved.printHistory, history.printHistory); assert.equal(saved.lastConfirmedPrintAt, history.lastConfirmedPrintAt);
+  assert.equal(saved.lastConfirmedJobId, history.lastConfirmedJobId);
+ }
+ for (const bad of [{ ...activity, brandId: 'foreign' }, { ...activity, activationRevision: 2 },
+  { ...activity, token: 'PRIVATE_SENTINEL' }]) {
+  const f = setup({ extra: [[queuePath, metadata()], [activityPath, bad]] });
+  const receipt = (await issue(f)).receipt, before = structuredClone([...f.records]);
+  const response = await f.request('POST', command(receipt));
+  assert.equal(response.status, 503); assert.deepEqual(response.body, { error: 'printers_unavailable' });
+  assert.deepEqual([...f.records], before);
+ }
+});
+
 test('actual issued receipt resumes paused/disabled exactly once with atomic consumption, revision, audit and capability invalidation', async () => {
   for (const state of ['paused', 'disabled']) {
     const f = setup({ existing: record({ configuration: config({ state }) }), extra: [[queuePath, metadata()],
@@ -45,7 +69,11 @@ test('actual issued receipt resumes paused/disabled exactly once with atomic con
         tokenHash: digest(receipt), queueRevision: 7, decision: 'resume_empty', issuedAt: review.issuedAt,
         expiresAt: review.expiresAt, consumedAt: consumed.consumedAt } });
     assert.deepEqual(f.commits.at(-1), [['set', reviewPath(receipt)], ['delete', 'locations/location/printerCapabilityVerifications/p1'],
-      ['create', `${path}/audit/2`], ['set', path]]);
+      ['create', `${path}/audit/2`], ['set', path], ['set', `${path}/statusMetadata/current`]]);
+    const activity = f.records.get(`${path}/statusMetadata/current`);
+    assert.ok(activity.activatedAt >= start && activity.activatedAt <= Date.now());
+    assert.equal(activity.activationRevision, 2); assert.equal(activity.printHistory, 'unknown');
+    assert.equal(activity.lastConfirmedPrintAt, null);
     assert.equal(f.records.has('locations/location/printerCapabilityVerifications/p1'), false);
     assert.deepEqual(f.records.get(`${path}/audit/1`), { historical: true });
     assert.deepEqual(f.records.get('privateCredentials/p1'), { secret: 'PRIVATE_SENTINEL' });
