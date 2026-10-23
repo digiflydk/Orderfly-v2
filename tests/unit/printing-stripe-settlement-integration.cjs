@@ -88,10 +88,11 @@ test('#349 actual Stripe settlement commits Paid, routed original jobs and one d
   assert.equal(await f.settle(), false); assert.deepEqual([...f.records], before);
 });
 
-test('#549 supervised print pilot never blocks a paid combo purchase or prints a partial order', async () => {
+test('#549 supervised print pilot never blocks paid unsupported purchases or prints a partial order', async () => {
   const before = process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED;
   process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED = 'true';
   try {
+    for (const [lineCount, includeCombo, extraToppings] of [[2, true, false], [51, true, false], [97, false, false], [1, false, true]]) {
     const f = await fixture();
     f.records.get(policyPath).supervisedOrderTest = true;
     const crypto = f.load('src/lib/printing/device-auth.ts'), now = Date.now();
@@ -108,8 +109,11 @@ test('#549 supervised print pilot never blocks a paid combo purchase or prints a
       .preparePrintIntentTargetPolicy({ db: f.db, transaction }, { brandId: 'b', locationId: 'l', orderId: f.orderId }));
     assert.equal(eligible.enabled, true, 'the test window actually enables ordinary products before adding a combo');
     // A mixed order must not become a partial product-only kitchen ticket.
-    f.order().productItems.push({ ...f.order().productItems[0], itemType: 'combo',
+    if (includeCombo) f.order().productItems.push({ ...f.order().productItems[0], itemType: 'combo',
       comboSelections: [{ groupName: 'Pizza', products: [{ id: 'choice', name: 'Pizza' }] }] });
+    while (f.order().productItems.length < lineCount) f.order().productItems.push({ ...f.order().productItems[0] });
+    if (extraToppings) f.order().productItems[0].toppings = Array.from({ length: 9 }, (_, i) => 'Topping ' + i);
+    assert.equal(f.order().productItems.length, lineCount);
     assert.equal(await f.settle(), true);
     assert.equal(f.order().paymentStatus, 'Paid'); assert.equal(f.order().status, 'Received');
     assert.equal(f.jobs().length, 0); assert.equal(f.ledgers().length, 0);
@@ -117,6 +121,7 @@ test('#549 supervised print pilot never blocks a paid combo purchase or prints a
     assert.equal(f.requests.length, 0, 'no unnecessary additional print-payment proof request');
     assert.equal(await f.settle(), false);
     assert.equal(f.jobs().length, 0);
+    }
   } finally {
     if (before === undefined) delete process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED;
     else process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED = before;

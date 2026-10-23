@@ -6,6 +6,7 @@ import type { PrinterConfiguration, PrintJobKind } from './domain';
 import { storedPrinterSchema } from './storage';
 import { orderTestWindowSchema } from './order-test-schema';
 import { credentialSchema } from './device-credentials-service';
+import { projectNativePrintCatalog, PrintCatalogProjectionError } from './catalog-line-projection';
 
 const identifier = z.string().max(128).regex(/^[A-Za-z0-9_-]{1,128}$/);
 const scopeSchema = z.object({ brandId: identifier, locationId: identifier, orderId: identifier.optional() }).strict();
@@ -121,14 +122,19 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
       if (process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED !== 'true') return result(policy.revision, []);
       if (scope.data.orderId !== undefined) {
         // A test window must not make unrelated, supported checkout purchases
-        // fail because their combo projection is outside this printer pilot.
+        // fail because their native projection is outside this printer pilot.
         // Skip the entire print intent, never emit a partial kitchen ticket.
         const order = await transaction.get(db.collection('orders').doc(scope.data.orderId));
         const row = nativeScopeRecord(order, scope.data.orderId);
         if (row.brandId !== brandId || row.locationId !== locationId) throw new PrintIntentPolicyError('policy_unverified');
-        const items = row.productItems;
-        if (Array.isArray(items) && items.length <= 50 && items.some(item => item && typeof item === 'object'
-          && (item.itemType === 'combo' || item.comboSelections !== undefined))) return result(policy.revision, []);
+        try {
+          await projectNativePrintCatalog(context, { orderId: scope.data.orderId, brandId, locationId });
+        } catch (error) {
+          // Only a known unsupported/invalid printing projection suppresses
+          // the pilot. Unknown database failures still fail the transaction.
+          if (error instanceof PrintCatalogProjectionError) return result(policy.revision, []);
+          throw error;
+        }
       }
       const routing = await transaction.get(locationRef.collection('printerRouting').doc('original'));
       const currentRouting = routing.data();
