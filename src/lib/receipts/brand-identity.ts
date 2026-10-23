@@ -1,6 +1,7 @@
 import { z } from 'zod';
 
-const text = z.string().max(1000);
+// Address combines four individually bounded source fields plus separators.
+const text = z.string().max(1300);
 export const receiptBrandIdentitySchema = z.object({
   name: text, registrationNumber: text, address: text,
   logoUrl: z.string().max(4096).refine(value => {

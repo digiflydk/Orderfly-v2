@@ -146,3 +146,9 @@ test('brand projection excludes invalid logos and private fields and handles abs
   assert.deepEqual(projectReceiptBrand({ name: 'Fallback', logoUrl, secret: 'PRIVATE' }), { name: 'Fallback', registrationNumber: '', address: '' });
  }
 });
+
+test('maximum projected address remains valid in the response schema', () => {
+ const { projectReceiptBrand, receiptBrandIdentitySchema } = loadTs('src/lib/receipts/brand-identity.ts');
+ const row = Object.fromEntries(['companyName', 'street', 'zipCode', 'city', 'country', 'companyRegNo'].map(key => [key, 'x'.repeat(500)]));
+ assert.equal(receiptBrandIdentitySchema.safeParse(projectReceiptBrand(row)).success, true);
+});
