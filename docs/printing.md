@@ -226,7 +226,8 @@ larger than 8192 streamed bytes (regardless of Content-Length). Every response i
 
 **Rollout gate:** `ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED` must equal exactly
 `true` to allow even these preparatory writes. The service itself enforces it,
-not only the HTTP route. `apphosting.yaml` explicitly sets it to `false`, and the
+not only the HTTP route. `apphosting.yaml` now sets it to `true` after the active
+rules verification recorded below, and the
 absent/default value also fails closed with 503 `writes_unavailable` before
 database access. This is independent of future production-print activation.
 Do not enable it until the **active** Firestore release in data project
@@ -238,6 +239,19 @@ authorized Rules API credentials; missing credentials are a rollout blocker,
 not evidence of unsafe or safe production rules. Rules/index changes require
 their own reviewed release under `AGENTS.md`; unattended QA never writes rules
 or data and must not enable this gate.
+
+Configuration activation evidence (2026-10-24, Europe/Copenhagen): read-only
+[Firestore rules preview #4](https://github.com/digiflydk/Orderfly-v2/actions/runs/40035010241)
+on main `cd97e1dc386fb17bff3b953db0f1fd7aaef200e5` inspected the active
+`orderfly-39325` release. Live and candidate SHA-256 both equal
+`b19c7515e7e33841891e099379d9fea94c875a3d9a52d443a824948bdf9131be`.
+The exact source is a recursive deny-all client policy with no broader allow
+matches; authenticated/scoped server handlers remain the write authority.
+The platform rules CI exercises anonymous, signed-in and admin-claim denial
+for reads and writes including descendants. Activation enables authorized
+configuration, lifecycle and credential controls, but does not enable the
+independent pilot output, order-test output or print-intent flags. No rules,
+credentials, printer records or purchases are created by this configuration change.
 
 Fixture tests exercise actual transaction authorization and service/HTTP code
 with isolated database I/O, including atomic audit failure, competing revisions,

@@ -4,9 +4,9 @@ env:
     value: "true"
     availability:
       - RUNTIME
-  # Enable only after ACTIVE Firestore policy verification; no live print dispatch.
+  # Active rules verified by read-only workflow 40035010241; configuration only.
   - variable: ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED
-    value: "false"
+    value: "true"
     availability:
       - RUNTIME
   # Brand-bound internal recipient and central-mail organization. No secrets.
