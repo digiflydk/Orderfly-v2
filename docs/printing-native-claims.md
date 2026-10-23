@@ -1,5 +1,14 @@
 # Native claim reservation (#460)
 
+The #549 supervised purchase integration now reuses this reservation producer
+through `createCloudPrntClaimAttempt` and the same native transaction. Its
+request-local token reader does not grant dispatch: `ordinary-print-native.ts`
+independently validates the supervised window, immutable content and queue
+transfer. See [supervised purchases](printing-supervised-orders.md). The original
+reservation-only API and its `dispatchAuthorized:false` result remain unchanged.
+The historical slice description below refers to that original API, not the
+new supervised caller. Unattended production remains blocked.
+
 This server-only internal slice reserves a durable job-bound identity. It does
 not authorize dispatch, mark a delivery, expose an HTTP endpoint, remove a queued
 job, update queue metadata, or materialize last-confirmed-print. #456 and its

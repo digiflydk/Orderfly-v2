@@ -17,6 +17,7 @@ const itemSchema = z.object({
   quantity: z.number().int().min(1).max(99),
   name: field(160),
   modifiers: z.array(field(160)).max(KITCHEN_RECEIPT_LIMITS.modifiersPerItem).optional(),
+  literalModifiers: z.array(field(160)).max(KITCHEN_RECEIPT_LIMITS.modifiersPerItem).optional(),
   kitchenNote: field(400).optional(),
 }).strict();
 const snapshotSchema = z.object({
@@ -76,7 +77,7 @@ export function renderKitchenReceipt(snapshot: unknown, profile: unknown = { pap
   if (!parsed.success) throw new KitchenReceiptError('invalid_snapshot');
   const data = parsed.data;
   const textFields = [data.orderReference, data.fulfillmentLabel, data.fulfillmentTime, data.kitchenNote ?? '',
-    ...data.items.flatMap(item => [item.name, item.kitchenNote ?? '', ...(item.modifiers ?? [])])];
+    ...data.items.flatMap(item => [item.name, item.kitchenNote ?? '', ...(item.modifiers ?? []), ...(item.literalModifiers ?? [])])];
   if (textFields.reduce((size, value) => size + value.length, 0) > KITCHEN_RECEIPT_LIMITS.inputCodeUnits) {
     throw new KitchenReceiptError('receipt_too_large');
   }
@@ -93,6 +94,9 @@ export function renderKitchenReceipt(snapshot: unknown, profile: unknown = { pap
     const prefix = `${item.quantity} x `;
     lines.push(...wrap(item.name, prefix, ' '.repeat(prefix.length), columns));
     for (const modifier of item.modifiers ?? []) lines.push(...wrap(modifier, '  + ', '    ', columns));
+    // Saved order selections include removals ("Uden løg"). Preserve their
+    // meaning rather than prefixing every selection with an addition sign.
+    for (const modifier of item.literalModifiers ?? []) lines.push(...wrap(modifier, '    ', '    ', columns));
     if (item.kitchenNote) lines.push(...wrap(item.kitchenNote, '  Note: ', '        ', columns));
   }
   if (data.kitchenNote) lines.push('-'.repeat(columns), ...wrap(data.kitchenNote, 'Note: ', '      ', columns));

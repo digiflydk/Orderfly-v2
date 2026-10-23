@@ -5,6 +5,42 @@ const { memoryDb } = require('../helpers/marketing-db.cjs');
 const input = { orderId: 'order', brandId: 'b', locationId: 'l', selection: 'asap' };
 const policyPath = 'locations/l/printIntentPolicies/original';
 const printerPath = 'locations/l/printers/pizza';
+
+test('#549 supervised pilot preserves unpaid unsupported acceptance without partial print intents', () => enabled(async () => {
+  const before = process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED;
+  process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED = 'true';
+  try {
+    for (const [lineCount, includeCombo, extraToppings] of [[2, true, false], [51, true, false], [97, false, false], [1, false, true]]) {
+    const f = await fixture(), now = Date.now();
+    f.records.get(policyPath).supervisedOrderTest = true;
+    f.records.get(printerPath).configuration.state = 'active';
+    const scope = { brandId: 'b', locationId: 'l', printerId: 'pizza', printerRevision: 1, credentialRevision: 1 };
+    f.records.set(printerPath + '/deviceCredentials/current', f.load('src/lib/printing/device-auth.ts').createPrinterDeviceCredentialDraft(scope).record);
+    f.records.set(printerPath + '/orderTestWindows/current', { schemaVersion: 1, ...scope,
+      model: 'mc-print3', paperWidthMm: 80, qualificationId: 'q'.repeat(43), routingRevision: 1,
+      issuedAt: now, expiresAt: now + 3600000, stoppedAt: null, actorId: 'firebase:supervisor',
+      trust: 'supervised_order_test', physicalPaperCheckedByOperator: true, unattendedAuthorized: false });
+    const eligible = await f.db.runTransaction(transaction => f.load('src/lib/printing/intent-target-policy.ts')
+      .preparePrintIntentTargetPolicy({ db: f.db, transaction }, { brandId: 'b', locationId: 'l', orderId: 'order' }));
+    assert.equal(eligible.enabled, true, 'the test window actually enables ordinary products before adding a combo');
+    const items = f.records.get('orders/order').productItems;
+    if (includeCombo) items.push({ id: 'menu', itemType: 'combo', name: 'Menu', quantity: 1,
+      comboSelections: [{ groupName: 'Pizza', products: [{ id: 'p', name: 'Pizza' }] }] });
+    while (items.length < lineCount) items.push({ ...items[0] });
+    if (extraToppings) items[0].toppings = Array.from({ length: 9 }, (_, i) => 'Topping ' + i);
+    assert.equal(items.length, lineCount);
+    await f.accept();
+    assert.equal(f.records.get('orders/order').status, 'Received');
+    assert.equal(f.records.get('orders/order').paymentStatus, 'Pending');
+    assert.equal(f.records.has('orders/order/printIntents/original'), false);
+    assert.equal(f.records.has(printerPath + '/queue/state'), false);
+    assert.equal([...f.records.keys()].some(p => p.includes('/jobs/')), false);
+    }
+  } finally {
+    if (before === undefined) delete process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED;
+    else process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED = before;
+  }
+}));
 async function fixture(options = {}) {
   const records = new Map([
     ['brands/b', { status: 'active' }],

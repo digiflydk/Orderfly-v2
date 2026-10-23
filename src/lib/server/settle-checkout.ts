@@ -97,7 +97,7 @@ async function settleOrder(proof: PaymentProof) {
     const needsPrintProof = await db.runTransaction(async transaction => {
       // Terminal Paid repair has no print dependency, including stale policy or targets.
       if (isTerminalPaidReplay((await transaction.get(orderRef)).data())) return false;
-      const preflight = await preparePrintIntentTargetPolicy({ db, transaction }, { brandId: metadata.brandId, locationId: metadata.locationId });
+      const preflight = await preparePrintIntentTargetPolicy({ db, transaction }, { brandId: metadata.brandId, locationId: metadata.locationId, orderId: metadata.orderId });
       return preflight.enabled;
     }, { readOnly: true });
     if (needsPrintProof) stripePrintProof = await verifyStripePrintPayment(session!.id);
@@ -284,7 +284,7 @@ async function settleOrder(proof: PaymentProof) {
       metadata.brandId = currentOrder.brandId; metadata.locationId = currentOrder.locationId;
     }
     const policy = printIntentsEnabled && !isTerminalPaidReplay(currentOrder)
-      ? await preparePrintIntentTargetPolicy(context, { brandId: metadata.brandId, locationId: metadata.locationId }) : null;
+      ? await preparePrintIntentTargetPolicy(context, { brandId: metadata.brandId, locationId: metadata.locationId, orderId: metadata.orderId }) : null;
     const printTransitionEnabled = policy?.enabled;
     if (printTransitionEnabled && proof.kind === 'stripe' && !stripePrintProof) throw new Error('Print policy changed; verified payment origin required');
     const transition = printTransitionEnabled ? proof.kind === 'stripe'
