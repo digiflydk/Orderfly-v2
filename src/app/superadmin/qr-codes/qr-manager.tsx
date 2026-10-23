@@ -12,7 +12,7 @@ export type QrDraft = {
   campaign: string; tags: string[];
   utm: { source: string; medium: string; campaign: string; content: string; term: string };
   expiresAt?: number | null;
-  style?: { width: number; dark: string; light: string; errorCorrectionLevel: 'L' | 'M' | 'Q' | 'H'; margin: number };
+  style?: import('@/lib/qr/store').QrDesign;
 };
 export type QrCodeSummary = QrDraft & { id: string; revision: string; status: QrStatus; publicUrl?: string };
 export type QrBrandChoice = { id: string; name: string; locations: Array<{ id: string; name: string }>; allowWholeBrand?: boolean };
@@ -26,7 +26,7 @@ export type QrManagerApi = {
 };
 export type QrManagerProps = { brands: QrBrandChoice[]; initialCodes: QrCodeSummary[]; capabilities: QrCapabilities; api: QrManagerApi; dynamicEnabled?: boolean;
   allTime?: Record<string, QrLifetime | null>; onAnalytics?: (code: QrCodeSummary) => void; analyticsCodeKeys?: string[];
-  renderExtras?: (draft: QrDraft, context: { id?: string; revision?: string }) => React.ReactNode };
+  renderExtras?: (draft: QrDraft, context: { id?: string; revision?: string }, change: (patch: Partial<QrDraft>) => void, uploadBusy: (busy: boolean) => void, needsSave: boolean) => React.ReactNode };
 
 const blank = (brandId = ''): QrDraft => ({ name: '', brandId, locationId: null, kind: 'dynamic', destination: '', staticType: 'url', fields: {}, campaign: '', tags: [], utm: { source: '', medium: 'qr', campaign: '', content: '', term: '' } });
 const fieldClass = 'w-full rounded-md border bg-background px-3 py-2 text-sm';
@@ -119,6 +119,7 @@ export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnab
   const [preview, setPreview] = useState<QrPreview | null>(null);
   const [pendingArchive, setPendingArchive] = useState<QrCodeSummary | null>(null);
   const [busy, setBusy] = useState(false);
+  const [uploadBusy,setUploadBusy]=useState(false);
   const [uncertain, setUncertain] = useState(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
@@ -154,7 +155,7 @@ export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnab
   };
   const replace = (code: QrCodeSummary) => setCodes(current => [code, ...current.filter(row => row.id !== code.id || row.brandId !== code.brandId)]);
   const save = () => {
-    if (!draft || !dynamicEnabled || draft.kind !== 'dynamic' || !(editing ? capabilities.edit : capabilities.create)) return;
+    if (uploadBusy || !draft || !dynamicEnabled || draft.kind !== 'dynamic' || !(editing ? capabilities.edit : capabilities.create)) return;
     const value = draft, key = JSON.stringify(['save', editing?.id, editing?.revision, value]);
     void run(async () => {
       const saved = await api.save(value, { ...(editing ? { id: editing.id, revision: editing.revision } : {}), requestId: requestId(key) });
@@ -224,7 +225,7 @@ export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnab
 
     {draft && <form aria-label={editing ? 'Redigér QR-kode' : 'Ny QR-kode'} className="qr-editor space-y-4 rounded-lg border p-4" onSubmit={e => { e.preventDefault(); save(); }}>
       <p className="qr-eyebrow">INDHOLD OG DESIGN</p><h2 className="text-lg font-semibold">{editing ? 'Redigér QR-kode' : 'Ny QR-kode'}</h2>
-      <fieldset disabled={busy || uncertain} className="space-y-4" style={{ minWidth: 0 }}>
+      <fieldset disabled={busy || uncertain || uploadBusy} className="space-y-4" style={{ minWidth: 0 }}>
         <div style={gridStyle}>
           <label>Navn<input required maxLength={120} className={fieldClass} value={draft.name} onChange={e => change({ name: e.target.value })} /></label>
           <label>Brand<select aria-label="Brand" required className={fieldClass} disabled={!!editing} value={draft.brandId} onChange={e => { const brand = brands.find(candidate => candidate.id === e.target.value); change({ brandId: e.target.value, locationId: brand?.allowWholeBrand === false ? brand.locations[0]?.id || null : null }); }}>{brands.filter(brand => brand.allowWholeBrand !== false || brand.locations.length > 0).map(brand => <option key={brand.id} value={brand.id}>{brand.name}</option>)}</select></label>
@@ -246,7 +247,7 @@ export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnab
           <label>Størrelse i pixels<select aria-label="Størrelse i pixels" className={fieldClass} value={(draft.style || DEFAULT_STYLE).width} onChange={e => change({ style: { ...(draft.style || DEFAULT_STYLE), width: Number(e.target.value) } })}>{[256, 512, 1024, 2048].map(size => <option key={size} value={size}>{size}</option>)}</select></label>
           <label>Kodefarve<input type="color" className={fieldClass} value={(draft.style || DEFAULT_STYLE).dark} onChange={e => change({ style: { ...(draft.style || DEFAULT_STYLE), dark: e.target.value } })} /></label>
           <label>Baggrundsfarve<input type="color" className={fieldClass} value={(draft.style || DEFAULT_STYLE).light} onChange={e => change({ style: { ...(draft.style || DEFAULT_STYLE), light: e.target.value } })} /></label>
-          <label>Fejlkorrektion<select aria-label="Fejlkorrektion" className={fieldClass} value={(draft.style || DEFAULT_STYLE).errorCorrectionLevel} onChange={e => change({ style: { ...(draft.style || DEFAULT_STYLE), errorCorrectionLevel: e.target.value as 'L' | 'M' | 'Q' | 'H' } })}>{['L', 'M', 'Q', 'H'].map(level => <option key={level} value={level}>{level}</option>)}</select></label>
+          <label>Fejlkorrektion<select aria-label="Fejlkorrektion" className={fieldClass} disabled={!!draft.style?.logoBase64} value={draft.style?.logoBase64 ? 'H' : (draft.style || DEFAULT_STYLE).errorCorrectionLevel} onChange={e => change({ style: { ...(draft.style || DEFAULT_STYLE), errorCorrectionLevel: e.target.value as 'L' | 'M' | 'Q' | 'H' } })}>{['L', 'M', 'Q', 'H'].map(level => <option key={level} value={level}>{level}</option>)}</select></label>
         </div><p className="text-xs">Minimum fire modulers lys kant bevares. Eksporten kontrollerer kontrast og læsbarhed.</p></details>
         <div style={gridStyle}>
           <label>Kampagne<input maxLength={120} className={fieldClass} value={draft.campaign} onChange={e => change({ campaign: e.target.value })} /></label>
@@ -262,7 +263,7 @@ export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnab
         {dynamicNeedsSave && dynamicEnabled && <p className="text-sm">Gem koden og åbn den igen før preview eller download. Det sikrer, at printet bruger det permanente link.</p>}
       </fieldset>
       {preview && <figure className="space-y-2"><img src={preview.imageUrl} alt="Eksempel på QR-kode" width={256} height={256} style={{ maxWidth: '100%', height: 'auto' }} /><figcaption className="break-all text-xs">{draft.kind === 'dynamic' ? 'Preview. Brug den gemte kodes permanente link ved print.' : preview.payload}</figcaption></figure>}
-      {capabilities.export && !dynamicNeedsSave && !busy && !uncertain && renderExtras?.(draft, editing ? { id: editing.id, revision: editing.revision } : {})}
+      {(capabilities.export || (editing ? capabilities.edit : capabilities.create)) && !busy && !uncertain && renderExtras?.(draft, editing ? { id: editing.id, revision: editing.revision } : {}, change, setUploadBusy, dynamicNeedsSave)}
     </form>}
 
     {pendingArchive && <div role="dialog" aria-labelledby="archive-title" className="space-y-3 rounded-lg border p-4"><h2 id="archive-title">Arkivér QR-kode</h2><p>Koden {pendingArchive.name} vil ikke længere sende kunder videre. Trykte koder bliver berørt.</p><div className="flex flex-wrap gap-2"><button type="button" className={buttonClass} disabled={busy || uncertain} onClick={() => updateStatus(pendingArchive, 'archived')}>Bekræft arkivering</button><button type="button" className={buttonClass} disabled={busy || uncertain} onClick={() => { setPendingArchive(null); setError(''); retry.current = null; }}>Fortryd</button></div></div>}

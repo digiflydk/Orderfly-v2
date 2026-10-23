@@ -169,8 +169,13 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
     applyRecords(records);
     if (!await refreshDirectory()) throw new QrTransportError('unavailable');
   };
-  const renderPrint: QrPrintToolsProps['render'] = (draft, context, options) => {
-    if (!dataRef.current.capabilities.export || draft.kind === 'dynamic' && dataRef.current.dynamicEnabled !== true) throw new QrTransportError('forbidden', 403);
+  const renderPrint: QrPrintToolsProps['render'] = async (draft, context, options) => {
+    if (options.format !== 'preview' && !dataRef.current.capabilities.export || draft.kind === 'dynamic' && dataRef.current.dynamicEnabled !== true) throw new QrTransportError('forbidden', 403);
+    if(options.format==='preview') {
+      const result=await command<{imageUrl:string}>({action:'render',draft,context,format:'preview'});
+      if(typeof result?.imageUrl!=='string' || !result.imageUrl.startsWith('data:image/png;base64,')) throw new QrTransportError('unavailable');
+      return {content:result.imageUrl.slice('data:image/png;base64,'.length),mime:'image/png',encoding:'base64',filename:'qr-preview.png'};
+    }
     return command({ action: 'render', draft, context, format: options.format, ...(options.logoBase64 ? { logoBase64: options.logoBase64 } : {}) });
   };
   const codeFor = (value: QrAnalyticsFilter) => {
@@ -218,7 +223,7 @@ export function QrWorkspace({ initial }: { initial: QrWorkspaceData }) {
     {data.truncated && <p role="alert">Oversigten er ufuldstændig. Flere QR-koder findes end de viste. Søgning og filtre gælder kun de indlæste koder.</p>}
     {refreshError && <p role="alert">Ændringen er gemt, men oversigten kunne ikke genindlæses. Den bekræftede kode er bevaret. Genindlæs siden for en ny oversigt.</p>}
     <div hidden={tab !== 'manage'}><QrManager brands={data.brands} initialCodes={data.codes} capabilities={data.capabilities} api={api} dynamicEnabled={data.dynamicEnabled === true} allTime={data.analytics ? data.allTime : undefined} analyticsCodeKeys={data.analyticsCodeKeys} onAnalytics={data.analytics ? code => { if (!dataRef.current.analyticsCodeKeys?.includes(codeKey(code))) return; setTab('analytics'); void loadAnalytics({ ...filters, qrId: codeKey(code), campaign: '', placement: '' }); } : undefined}
-      renderExtras={(draft, context) => <QrPrintTools key={JSON.stringify([draft, context])} draft={draft} context={context} render={renderPrint} />} /></div>
+      renderExtras={(draft, context, change, uploadBusy, needsSave) => <QrPrintTools key={JSON.stringify([context.id, draft.brandId, draft.locationId])} draft={draft} context={context} canExport={data.capabilities.export} needsSave={needsSave} onUploadBusy={uploadBusy} onDesignChange={style => change({style})} render={renderPrint} />} /></div>
     <div hidden={tab !== 'bulk' || !bulkAllowed}><QrBulkTools brands={data.brands} api={bulkApi} onCommitted={afterBulk} disabled={!bulkAllowed} /></div>
     {tab === 'history' && <QrHistory codes={data.codes.map(code => ({ id: codeKey(code), name: `${data.brands.find(brand => brand.id === code.brandId)?.name || code.brandId} · ${code.name}` }))} load={loadHistory} />}
     {tab === 'analytics' && data.analytics && <div className="space-y-3">

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { QR_PATHS, type QrScope } from './store';
 
 type Snapshot = { id: string; data(): Record<string, unknown> | undefined };
@@ -35,7 +36,7 @@ function snapshotValues(raw: unknown, scope: QrScope, id: string): Record<string
         || !Number.isInteger(d.margin) || Number(d.margin) < 4 || Number(d.margin) > 32
         || !/^#[a-f0-9]{6}$/i.test(String(d.dark)) || !/^#[a-f0-9]{6}$/i.test(String(d.light))
         || !['L','M','Q','H'].includes(String(d.errorCorrectionLevel))) return undefined;
-    design = JSON.stringify({ width: d.width, margin: d.margin, dark: d.dark, light: d.light, errorCorrectionLevel: d.errorCorrectionLevel });
+    design = JSON.stringify({ width: d.width, margin: d.margin, dark: d.dark, light: d.light, errorCorrectionLevel: d.errorCorrectionLevel, ...(d.moduleShape ? {moduleShape:d.moduleShape}:{}), ...(d.cornerShape ? {cornerShape:d.cornerShape}:{}), ...(d.cornerShapes ? {cornerShapes:d.cornerShapes}:{}), ...(d.cornerColor ? {cornerColor:d.cornerColor}:{}), ...(typeof d.logoBase64==='string' ? {logo: createHash('sha256').update(d.logoBase64).digest('hex').slice(0,16)}:{}) });
   }
   return { name: value.name, destination: value.destination, locationId: value.locationId === null ? null : String(value.locationId),
     campaign: value.campaign, tags: JSON.stringify(value.tags), expiresAt: value.expiresAt === null ? null : String(value.expiresAt), status: String(value.status), design };
