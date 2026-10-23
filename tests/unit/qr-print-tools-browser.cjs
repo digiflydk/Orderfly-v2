@@ -112,7 +112,7 @@ for (const width of [390, 1440]) test(`design preview uses the same validated PN
   const { page, calls } = await open({ width }); let downloads = 0; page.on('download', () => downloads++);
   try {
     await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({ name: 'brand.png', mimeType: 'image/png', buffer: png });
-    await page.getByRole('button', { name: 'Vis designpreview', exact: true }).click();
+    await page.getByRole('button', { name: 'Preview QR', exact: true }).click();
     await page.getByRole('img', { name: 'QR-preview med valgt design og logo', exact: true }).waitFor();
     assert.equal(downloads, 0);
     const download = page.waitForEvent('download'); await page.getByRole('button', { name: 'PNG med valgt logo', exact: true }).click(); await download;
@@ -128,7 +128,7 @@ test('failed design preview does not create a download or display an unsafe imag
   const { page } = await open({ answer: route => route.fulfill({ json: { content: '<svg onload="alert(1)"/>', mime: 'image/png', encoding: 'base64' } }) });
   let downloads=0; page.on('download',()=>downloads++);
   try {
-    await page.getByRole('button', { name: 'Vis designpreview', exact: true }).click();
+    await page.getByRole('button', { name: 'Preview QR', exact: true }).click();
     await page.getByRole('alert').waitFor();
     assert.equal(await page.getByRole('img', { name: 'QR-preview med valgt design og logo', exact: true }).count(), 0);
     assert.equal(downloads,0);
@@ -140,10 +140,10 @@ test('a late design preview from a previous scope is discarded', async () => {
   const {page}=await open({answer:route=>{pending=route;}});
   try{
     const request=page.waitForRequest('**/render');
-    await page.getByRole('button',{name:'Vis designpreview',exact:true}).click();await request;
+    await page.getByRole('button',{name:'Preview QR',exact:true}).click();await request;
     await page.evaluate(()=>window.__changeScope());
     await pending.fulfill({json:{content:png.toString('base64'),mime:'image/png',encoding:'base64',filename:'qr.png'}});
-    await page.getByRole('button',{name:'Vis designpreview',exact:true}).waitFor();
+    await page.getByRole('button',{name:'Preview QR',exact:true}).waitFor();
     assert.equal(await page.getByRole('img',{name:'QR-preview med valgt design og logo',exact:true}).count(),0);
   }finally{await page.close();}
 });
@@ -152,14 +152,14 @@ for(const width of [390,1440])test(`saved design controls propagate logo, module
   const {page,calls}=await open({width,query:'persist'});
   try {
     await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'logo.png',mimeType:'image/png',buffer:png});
-    await page.getByText('Valgt logo: Gemt logo',{exact:true}).waitFor();
+    await page.getByText('Valgt logo: logo.png',{exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>window.__savedDesign.logoBase64),png.toString('base64'));
     await page.getByRole('button',{name:'Prikker',exact:true}).click();
     await page.getByLabel('Tilpas hvert hjørne',{exact:true}).check();
     await page.getByRole('button',{name:'Ekstra afrundede øverst højre',exact:true}).click();
     await page.getByLabel('Brug QR-kodens farve til hjørner',{exact:true}).uncheck();
     assert.deepEqual(await page.evaluate(()=>({shape:window.__savedDesign.moduleShape,corners:window.__savedDesign.cornerShapes,color:window.__savedDesign.cornerColor})),{shape:'dots',corners:['square','extra-rounded','square'],color:draft.style.dark});
-    await page.getByRole('button',{name:'Vis designpreview',exact:true}).click();
+    await page.getByRole('button',{name:'Preview QR',exact:true}).click();
     await page.getByRole('img',{name:'QR-preview med valgt design og logo'}).waitFor();
     assert.equal(calls.at(-1).options.logoBase64,undefined);assert.equal(calls.at(-1).draft.style.logoBase64,png.toString('base64'));assert.equal(calls.at(-1).draft.style.moduleShape,'dots');assert.equal(calls.at(-1).draft.style.errorCorrectionLevel,'H');
     await page.getByRole('button',{name:'Fjern logo',exact:true}).click();
@@ -168,4 +168,40 @@ for(const width of [390,1440])test(`saved design controls propagate logo, module
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
     assert.ok(await page.getByText(/højst 2048 × 2048 pixels/).count());
   } finally {await page.close();}
+});
+
+test('Upload logo opens the chooser, shows accepted filename and sends JPEG to QR preview', async()=>{
+ const jpeg=await sharp({create:{width:2048,height:1138,channels:3,background:'#ffffff'}}).toColourspace('cmyk').jpeg().toBuffer();
+ const {page,calls}=await open({query:'persist'});
+ try {
+  const chooser=page.waitForEvent('filechooser');await page.getByRole('button',{name:'Upload logo',exact:true}).click();
+  await (await chooser).setFiles({name:'brand-cmyk.jpg',mimeType:'image/jpeg',buffer:jpeg});
+  await page.getByText('Valgt logo: brand-cmyk.jpg',{exact:true}).waitFor();
+  await page.getByRole('img',{name:'Valgt logo',exact:true}).waitFor();
+  assert.equal(await page.getByRole('status').filter({hasText:'Logo er klar'}).isVisible(),true);
+  await page.getByRole('button',{name:'Preview QR',exact:true}).click();
+  await page.getByRole('img',{name:'QR-preview med valgt design og logo',exact:true}).waitFor();
+  assert.equal(calls[0].draft.style.logoBase64,jpeg.toString('base64'));
+  assert.equal(calls[0].draft.style.errorCorrectionLevel,'H');
+  await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'broken.jpg',mimeType:'image/jpeg',buffer:Buffer.from([255,216,255,0])});
+  await page.locator('[aria-label="Logo-upload"]').getByRole('alert').waitFor();
+  assert.equal(await page.getByRole('img',{name:'Valgt logo',exact:true}).isVisible(),true);
+  assert.equal(await page.getByRole('button',{name:'Upload logo',exact:true}).isEnabled(),true);
+  assert.equal(calls.length,1);
+ }finally{await page.close();}
+});
+
+test('style refresh during decoding cannot silently discard the upload',async()=>{
+ const {page}=await open({query:'persist'});
+ try {
+  await page.evaluate(()=>{const decode=window.createImageBitmap;window.createImageBitmap=async(...args)=>{await new Promise(resolve=>window.__releaseLogo=resolve);return decode(...args);};});
+  await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'logo.png',mimeType:'image/png',buffer:png});
+  await page.getByRole('status').filter({hasText:'Indlæser og kontrollerer logo'}).waitFor();
+  // Standalone designer also supports external style changes while decoding.
+  await page.getByRole('button',{name:'Prikker',exact:true}).click();
+  await page.evaluate(()=>window.__releaseLogo());
+  await page.getByRole('img',{name:'Valgt logo',exact:true}).waitFor();
+  assert.equal(await page.evaluate(()=>window.__savedDesign.moduleShape),'dots');
+  assert.equal(await page.evaluate(()=>window.__savedDesign.logoBase64),png.toString('base64'));
+ }finally{await page.close();}
 });

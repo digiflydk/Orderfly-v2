@@ -62,3 +62,17 @@ design panel so users can finish the edit where they selected the logo.
 Regression coverage delays a JPEG decode, checks the interaction lock, then
 saves and reopens the chosen logo and pattern. Invalid files unlock the editor
 and retain their validation error.
+
+### Explicit upload and preview feedback
+
+Use **Upload logo** to choose a PNG/JPEG. Decoding progress and validation errors
+appear beside the upload action. Only an accepted image appears as **Valgt logo**
+with its filename and thumbnail; cancelling selection preserves the accepted image.
+A failed replacement preserves the previous accepted logo and displays an error.
+**Preview QR** includes that accepted logo and current design. Saving remains the
+separate **Gem QR-kode** action. Upload completion uses a scope-specific generation
+independent of preview invalidation, so a style refresh cannot silently discard it.
+New drafts explicitly start with black modules (`#000000`) on white (`#ffffff`);
+existing saved color choices remain intact. Tests cover the actual file-chooser
+button, CMYK JPEG acceptance, preview payload, adjacent errors and style refresh
+while decoding, plus black defaults in a complete workspace preview.
