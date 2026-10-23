@@ -9,7 +9,12 @@ in Omnisend does not create a Club member or grant a welcome stamp.
 - Webflow site `6a6c7110638d57d95365ad1c`, homepage `6a6c7110638d57d95365ad04`.
 - Shared Navbar `2b416494-ed39-ef2c-d4cf-e87a453c4a1a`; desktop and mobile Club links.
 - Shared Footer `68f8b54a-2d0c-9925-a680-5abbbf81e5e5`; permanent Club link.
-- `design/esmeralda-club-homepage.html`: native homepage elements, before the old slider.
+- `design/esmeralda-club-homepage.html`: native homepage elements; presentation
+  wrapper is placed after the existing hero section. At homepage startup the
+  approved Club hero is moved into the existing Swiper wrapper as its first slide.
+  The three CMS slides and their existing order remain, followed by rewind to Club.
+  The three-step Club explanation stays below the rotation. Without JavaScript or
+  if the existing slider is missing, the original Club content remains accessible.
 - `design/esmeralda-club-homepage.css`: homepage head code, appended to existing code.
 - `design/esmeralda-club-popup.js`: homepage footer code; preserves existing site code.
 - Artwork `attached_assets/esmeralda-club-hero-20261022.webp`, 1536 x 1024,
@@ -58,6 +63,8 @@ arbitrary current URLs or referrers are included. Payload fields are fixed:
 `send_to`, `promotion_id`, `promotion_name`, `creative_slot`, canonical
 `page_location` and empty `page_referrer`. Hero impressions require half of the
 viewport/hero to be in view and enqueue at most once in that page view.
+Visibility is checked horizontally as well as vertically so an offscreen Club
+slide cannot generate an impression while another banner is being viewed.
 Events rejected before consent are not replayed. A currently visible hero can
 be measured after a new choice; revocation stops subsequent enqueues immediately.
 
@@ -97,10 +104,12 @@ Actual signup/one-stamp issuance remains the controlled live acceptance in #487.
 
 `CLUB_QA_CHROMIUM=/path/to/chromium node --test tests/unit/club-homepage-browser.cjs`
 
-The twelve real Chromium fixtures cover denied/unresolved/allowed statistics,
+The fourteen real Chromium fixtures cover first-slide placement, preservation of
+the three existing CMS slides, offscreen impression suppression and return-slide
+measurement, as well as denied/unresolved/allowed statistics,
 consent revocation, fixed event fields and destinations, clean/UTM links, cookie
 panel precedence, Escape/focus/session dismissal, non-homepage isolation and
-preview-host exclusion and320/390/768/1440 layouts. External requests are intercepted; this is isolated
+preview-host exclusion and 320/390/768/1440 layouts. External requests are intercepted; this is isolated
 browser coverage, not provider receipt or production signup acceptance.
 
 Independent source review found one hidden-tab measurement bug: the impression
@@ -108,3 +117,19 @@ was marked sent even when the enqueue was rejected. Marking now occurs only afte
 actual enqueue. The fix and current source were independently rechecked.
 
 Live staging inspection found that `padding-global` also applies flex, centered italic text and a brown background through an existing combo. The Club wrappers therefore reuse `padding-section-medium` with local horizontal spacing, avoiding those unrelated styles. Actual staging computed styles must be checked after publish.
+
+## H6: first slide in the existing hero rotation (2026-10-23)
+
+The existing Club element is moved, not copied, into the existing Swiper wrapper
+before its deferred initializer. The three CMS banner items and their queries
+remain unchanged. The native presentation wrapper is placed after the hero
+component so its three-step explanation remains below the rotation, with a
+readable fallback if JavaScript does not run. Existing navigation, popup, signup
+links and consent rules are unchanged. If Swiper already exists, update it and
+select slide zero. The page's two hero image preloads now reference the existing
+Club WebP instead of the brunch image. Preserve all other freeform code.
+
+Staging release: Webflow publish task `a91ec8ce-daa7-4517-bcd6-52552c407090`.
+Source merge does not publish Webflow production. Validate actual rotation,
+pagination, arrows and wraparound in the browser before production acceptance.
+The separate H5 Google receipt blocker is not resolved by this layout change.
