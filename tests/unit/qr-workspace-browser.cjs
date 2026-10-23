@@ -44,6 +44,7 @@ before(async () => {
     if(params.has('truncated'))props.truncated=true;
     if(params.has('off'))props.dynamicEnabled=false;
     if(params.has('missingflag'))delete props.dynamicEnabled;
+    if(params.has('editonly'))props.capabilities={create:true,edit:true,archive:false,export:false};
     if(params.has('exportonly'))props.capabilities={create:false,edit:false,archive:false,export:true};
     if(params.has('collision')){props.brands.push({id:'b2',name:'Andet brand',locations:[{id:'l2',name:'Anden afdeling'}]});props.codes.push({...props.codes[0],brandId:'b2',locationId:'l2',name:'Anden kode'});}
     if(params.has('lifetime')){props.codes.push({...props.codes[0],id:'legacy',name:'Gammel kode'},{...props.codes[0],id:'hidden',name:'Ingen totaladgang'},{...props.codes[0],id:'zero',name:'Ny tom kode'});props.allTime={'b1/qr1':{openings:9,probableScans:7,excludedOpenings:2,firstOpenedAt:1792533600000,lastOpenedAt:1792619999000},'b2/qr1':{openings:20,probableScans:18,excludedOpenings:2,firstOpenedAt:1792533600000,lastOpenedAt:1792619999000},'b1/legacy':null,'b1/zero':{openings:0,probableScans:0,excludedOpenings:0,firstOpenedAt:null,lastOpenedAt:null}};}
@@ -302,21 +303,34 @@ test('bulk creation is unavailable while disabled or without create capability',
   }
 });
 
-test('print extras require saved unchanged dynamic state and send logo to the real render command', async () => {
-  const png = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+cCuoAAAAASUVORK5CYII=';
-  const { page, calls } = await open({ answers: [[200, { content: png, mime: 'image/png', encoding: 'base64', filename: 'logo-qr.png' }]] });
+test('logo/design upload works before save and survives save/reopen; exports require saved unchanged design', async () => {
+  const png=(await require('sharp')({create:{width:64,height:64,channels:4,background:'#123322'}}).png().toBuffer()).toString('base64');
+  let saved;
+  const { page, calls } = await open({ answers: [
+    (route,body)=>{assert.equal(body.action,'save');assert.equal(body.draft.style.logoBase64,png);saved={...base,...body.draft,revision:'2'};return route.fulfill({json:saved});},
+    (route,body)=>{assert.equal(body.action,'list');return route.fulfill({json:{...initial,codes:[saved]}});},
+    [200,{content:png,mime:'image/png',encoding:'base64',filename:'logo-qr.png'}]
+  ] });
   try {
-    await page.getByRole('button', { name: 'Opret QR-kode', exact: true }).click(); assert.equal(await page.getByRole('heading', { name: 'Logo og print', exact: true }).count(), 0);
-    await page.getByRole('button', { name: 'Annullér', exact: true }).click(); await page.getByRole('button', { name: 'Redigér Bord 1', exact: true }).click();
-    await page.getByRole('heading', { name: 'Logo og print', exact: true }).waitFor();
-    await page.getByLabel('Navn', { exact: true }).fill('Usaved'); assert.equal(await page.getByRole('heading', { name: 'Logo og print', exact: true }).count(), 0);
-    await page.getByLabel('Navn', { exact: true }).fill('Bord 1'); await page.getByRole('heading', { name: 'Logo og print', exact: true }).waitFor();
-    await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: Buffer.from(png, 'base64') });
-    await page.getByText('Valgt logo: logo.png', { exact: true }).waitFor(); const download = page.waitForEvent('download');
-    await page.getByRole('button', { name: 'PNG med valgt logo', exact: true }).click(); assert.equal((await download).suggestedFilename(), 'logo-qr.png');
-    assert.equal(calls.length, 1); assert.equal(calls[0].body.action, 'render'); assert.equal(calls[0].body.format, 'png'); assert.equal(calls[0].body.logoBase64, png); assert.equal(calls[0].body.draft.style.errorCorrectionLevel, 'H');
-    assert.deepEqual(calls[0].body.context, { id: 'qr1', revision: '1' });
-  } finally { await page.close(); }
+    await page.getByRole('button', { name: 'Opret QR-kode', exact: true }).click();
+    await page.getByRole('heading',{name:'Logo og print',exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'PNG med valgt logo',exact:true}).isEnabled(),false);
+    await page.getByRole('button', { name: 'Annullér', exact: true }).click();
+    await page.getByRole('button', { name: 'Redigér Bord 1', exact: true }).click();
+    await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'logo.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+    await page.getByText('Valgt logo: Gemt logo',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Prikker',exact:true}).click();
+    assert.equal(await page.getByRole('button',{name:'PNG med valgt logo',exact:true}).isEnabled(),false);
+    await page.getByRole('button',{name:'Gem QR-kode',exact:true}).click();
+    await page.getByText('QR-koden er gemt.',{exact:true}).waitFor();
+    await page.getByRole('button',{name:'Redigér Bord 1',exact:true}).click();
+    await page.getByText('Valgt logo: Gemt logo',{exact:true}).waitFor();
+    assert.equal(await page.getByRole('button',{name:'Prikker',exact:true}).getAttribute('aria-pressed'),'true');
+    const download=page.waitForEvent('download');await page.getByRole('button',{name:'PNG med valgt logo',exact:true}).click();
+    assert.equal((await download).suggestedFilename(),'logo-qr.png');
+    assert.equal(calls.length,3);assert.equal(calls[2].body.logoBase64,undefined);assert.equal(calls[2].body.draft.style.logoBase64,png);assert.equal(calls[2].body.draft.style.moduleShape,'dots');
+    assert.deepEqual(calls[2].body.context,{id:'qr1',revision:'2'});
+  }finally{await page.close();}
 });
 
 test('static print works with dynamic runtime off and export-only permission', async () => {
@@ -325,6 +339,7 @@ test('static print works with dynamic runtime off and export-only permission', a
   try {
     await page.getByRole('button', { name: 'Generér statisk QR-kode', exact: true }).click();
     await page.getByRole('combobox', { name: 'Indholdstype', exact: true }).selectOption('text'); await page.getByLabel('Tekst', { exact: true }).fill('hej');
+    await page.getByText('Ved statiske koder bruges logo og design kun til eksport og gemmes ikke.', {exact:false}).waitFor();
     const opened = page.waitForEvent('popup'); await page.getByRole('button', { name: 'Åbn print / Gem som PDF', exact: true }).click(); popup = await opened;
     await popup.getByRole('heading', { name: 'Statisk print', exact: true }).waitFor(); assert.equal(await popup.evaluate(() => window.opener), null);
     assert.equal(calls.length, 1); assert.equal(calls[0].body.format, 'print'); assert.equal(calls[0].body.draft.kind, 'static'); assert.deepEqual(calls[0].body.context, {});
@@ -444,3 +459,23 @@ test('catalogue pagination is bounded and filters reset the selected page',async
    assert.equal(calls.length,1);assert.equal(calls[0].body.brandId,'b1');assert.equal(calls[0].body.id,'qr1');
   }finally{await page.close();}
  });
+
+test('editor without export can upload/save designs and preview through view authorization, without download controls',async()=>{
+ const png=(await require('sharp')({create:{width:32,height:32,channels:4,background:'#123322'}}).png().toBuffer()).toString('base64');
+ let saved;
+ const {page,calls}=await open({query:'?editonly',answers:[
+  (route,body)=>{assert.equal(body.action,'render');assert.equal(body.format,'preview');return route.fulfill({json:{payload:'https://orderfly.dk/q/'+'a'.repeat(32),imageUrl:'data:image/png;base64,'+png}});},
+  (route,body)=>{assert.equal(body.action,'save');saved={...base,...body.draft,revision:'2'};assert.equal(saved.style.moduleShape,'rounded');assert.equal(saved.style.logoBase64,png);return route.fulfill({json:saved});},
+  (route,body)=>{assert.equal(body.action,'list');return route.fulfill({json:{...initial,capabilities:{create:true,edit:true,archive:false,export:false},codes:[saved]}});}
+ ]});
+ try{
+  await page.getByRole('button',{name:'Redigér Bord 1',exact:true}).click();
+  await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'logo.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+  await page.getByText('Valgt logo: Gemt logo',{exact:true}).waitFor();await page.getByRole('button',{name:'Afrundede',exact:true}).click();
+  assert.equal(await page.getByRole('button',{name:'PNG med valgt logo',exact:true}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'Åbn print / Gem som PDF',exact:true}).count(),0);
+  await page.getByRole('button',{name:'Vis designpreview',exact:true}).click();await page.getByRole('img',{name:'QR-preview med valgt design og logo'}).waitFor();
+  await page.getByRole('button',{name:'Gem QR-kode',exact:true}).click();await page.getByText('QR-koden er gemt.',{exact:true}).waitFor();
+  assert.ok(calls.every(c=>c.body.action!=='render'||c.body.format==='preview'));
+ }finally{await page.close();}
+});

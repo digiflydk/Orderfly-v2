@@ -5,7 +5,7 @@ import type { QrRequestClassification } from './metrics';
 /** Internal service only. Scope MUST come from current server-side native authorization. */
 export type QrScope = { brandId: string; locationIds: string[] | null; actorId: string };
 export type QrStatus = 'active' | 'paused' | 'archived';
-export type QrDesign = { width: number; margin: number; dark: string; light: string; errorCorrectionLevel: 'L'|'M'|'Q'|'H' };
+export type QrDesign = Omit<import('./render').QrRenderOptions, 'logo'> & { width:number; margin:number; dark:string; light:string; errorCorrectionLevel:'L'|'M'|'Q'|'H' };
 export type QrInput = { name: string; destination: string; locationId: string | null; campaign?: string; tags?: string[]; expiresAt?: number | null; design?: QrDesign };
 export type QrRecord = { id: string; brandId: string; locationId: string | null; slug: string; name: string; destination: string;
   campaign: string; tags: string[]; expiresAt: number | null; status: QrStatus; revision: number; createdAt: number; updatedAt: number; design?: QrDesign;
@@ -18,7 +18,7 @@ export function qrAuditSnapshot(record: QrRecord): QrAuditSnapshot {
     destination: record.destination, campaign: record.campaign, tags: [...record.tags], expiresAt: record.expiresAt,
     status: record.status, revision: record.revision, createdAt: record.createdAt, updatedAt: record.updatedAt,
     ...(record.design ? { design: { width: record.design.width, margin: record.design.margin, dark: record.design.dark,
-      light: record.design.light, errorCorrectionLevel: record.design.errorCorrectionLevel } } : {}) };
+      light: record.design.light, errorCorrectionLevel: record.design.errorCorrectionLevel, ...designExtras(record.design) } } : {}) };
 }
 /** Command receipts freeze business results, never an obsolete scan-counter snapshot. */
 export function qrReceiptWithCurrentLifetime(result: QrRecord, current: QrRecord): QrRecord {
@@ -68,9 +68,10 @@ export function createQrStore(db: QrDatabase, options: {
     if (design && (!Number.isInteger(design.width) || design.width < 128 || design.width > 4096 || !Number.isInteger(design.margin)
       || design.margin < 4 || design.margin > 32 || !/^#[a-f0-9]{6}$/i.test(design.dark) || !/^#[a-f0-9]{6}$/i.test(design.light)
       || !['L','M','Q','H'].includes(design.errorCorrectionLevel))) fail('invalid_design');
+    if(design) designExtras(design);
     return { name: text(value.name, 160, true), destination: options.normalizeDestination(value.destination), locationId: value.locationId,
       campaign: text(value.campaign ?? '', 160), tags: [...new Set((value.tags ?? []).map(t => text(t, 50, true)))], expiresAt,
-      ...(design ? { design: { width:design.width, margin:design.margin, dark:design.dark, light:design.light, errorCorrectionLevel:design.errorCorrectionLevel } } : {}) };
+      ...(design ? { design: { width:design.width, margin:design.margin, dark:design.dark, light:design.light, errorCorrectionLevel:design.errorCorrectionLevel, ...designExtras(design) } } : {}) };
   }
   function read(scope: QrScope, snapshot: Snapshot): QrRecord {
     if (!snapshot.exists) return fail('not_found', 404);
@@ -190,4 +191,13 @@ export function createQrStore(db: QrDatabase, options: {
   return { create, update, get, list, duplicate, pause: (s: QrScope, id: string, revision: number, requestId: string) => status(s, id, 'paused', revision, requestId),
     activate: (s: QrScope, id: string, revision: number, requestId: string) => status(s, id, 'active', revision, requestId),
     archive: (s: QrScope, id: string, revision: number, requestId: string) => status(s, id, 'archived', revision, requestId), resolve, resolveInTransaction, recordLifetimeInTransaction };
+}
+
+function designExtras(design:QrDesign) {
+  if(design.logoBase64!==undefined && (typeof design.logoBase64!=='string' || design.logoBase64.length>128000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(design.logoBase64))) fail('invalid_design');
+  if(design.moduleShape && !['square','dots','rounded','horizontal','vertical','diamond'].includes(design.moduleShape)
+    || design.cornerShape && !['square','rounded','extra-rounded'].includes(design.cornerShape)
+    || design.cornerShapes && (!Array.isArray(design.cornerShapes)||design.cornerShapes.length!==3||design.cornerShapes.some(v=>!['square','rounded','extra-rounded'].includes(v)))
+    || design.cornerColor && !/^#[a-f0-9]{6}$/i.test(design.cornerColor)) fail('invalid_design');
+  return Object.fromEntries(Object.entries(design).filter(([key])=>['logoBase64','moduleShape','cornerShape','cornerShapes','cornerColor'].includes(key)));
 }
