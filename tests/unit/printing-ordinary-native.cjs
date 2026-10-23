@@ -36,7 +36,7 @@ async function fixture() {
   ]);
   const window = { schemaVersion: 1, ...scope, printerRevision: 3, credentialRevision: 1,
     model: 'mc-print3', paperWidthMm: 80, issuedAt: now - 5000, expiresAt: now - 5000 + 3600000,
-    qualificationId: 'q'.repeat(43), trust: 'supervised_order_test', actorId: 'firebase:supervisor', stoppedAt: null,
+    qualificationId: 'q'.repeat(43), routingRevision: 1, trust: 'supervised_order_test', actorId: 'firebase:supervisor', stoppedAt: null,
     physicalPaperCheckedByOperator: true, unattendedAuthorized: false };
   rows.set(path('orderTestWindows'), window);
   let serial = Promise.resolve(), failCommit = false, retry = null;

@@ -144,8 +144,10 @@ export async function controlOrderTestWindow(input: unknown) {
       // A test must never overwrite an existing production routing policy.
       if (existingIntent.exists) return fail('order_test_conflict');
       const routing = await prepareSavedPrinterRouting({ db, transaction: tx }, { brandId: a.brandId, locationId: a.locationId });
-      if (!routing.rules.some(r => r.printerId === a.printerId && r.effect === 'include')) return fail('order_test_conflict');
+      if (routing.revision === null || routing.rules.length !== 1 || routing.rules[0].printerId !== a.printerId
+        || routing.rules[0].effect !== 'include' || routing.rules[0].match.type !== 'all' || routing.rules[0].deliveryTypes) return fail('order_test_conflict');
       const record = orderTestWindowSchema.parse({ schemaVersion: 1, ...scope, qualificationId: qid,
+        routingRevision: routing.revision,
         trust: 'supervised_order_test', actorId, model: j.data.model, paperWidthMm: j.data.paperWidthMm,
         issuedAt: now, expiresAt: now + ORDER_TEST_WINDOW_MS, stoppedAt: null,
         physicalPaperCheckedByOperator: true, unattendedAuthorized: false });

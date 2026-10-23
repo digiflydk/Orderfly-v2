@@ -55,7 +55,7 @@ export function PrinterOrderTestControls({ scope, permitted, active }: { scope: 
   }
   return <section className="space-y-3 rounded border p-3" aria-label="Test køb med automatisk print">
     <h4 className="font-medium">Test køb med automatisk køkkenprint</h4>
-    <p className="text-sm">Åbn ét testvindue på 60 minutter senest en time efter testbonnen. Vælg først printeren under køkkenregler. Brug enkelte produkter i første testkøb, ikke menuer eller kombinationer.</p>
+    <p className="text-sm">Åbn ét testvindue på 60 minutter senest en time efter testbonnen. Gem først én køkkenregel: alle produkter til denne printer. Brug enkelte produkter i første testkøb. Menuer og kombinationer kan købes, men udskrives ikke i denne test.</p>
     <Button type="button" variant="outline" disabled={busy || !permitted} onClick={() => void perform('read')}>Hent ordreteststatus</Button>
     {status && <p role="status">{({ not_started: 'Ikke startet', active: 'Ordretest aktiv', stopped: 'Ordretest stoppet', expired: 'Ordretest udløbet', stale: 'Printeropsætningen er ændret' })[status.state]}
       {status.expiresAt && ` · Slutter ${new Date(status.expiresAt).toLocaleTimeString('da-DK')}`}</p>}

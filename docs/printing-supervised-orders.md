@@ -13,8 +13,11 @@ paper and confirms that the same device, firmware and media remain installed.
 The order-test control binds a limited window to the exact printer/credential
 revisions and qualification. Saved routing must include the selected printer.
 The first test purchase must contain ordinary product items, not combo menus:
-the existing native routing projection deliberately rejects unsupported combos
-instead of omitting their contents. This slice prints kitchen jobs only.
+the existing native routing projection cannot render combos. A supervised policy
+therefore skips all printing for a purchase containing combos, including mixed
+orders, while preserving normal checkout/payment acceptance. It never emits a
+partial ticket. Generic non-pilot policies keep their existing rejection rules.
+This slice prints kitchen jobs only.
 
 Required separately controlled flags are
 `ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED=true`,

@@ -88,6 +88,38 @@ test('#349 actual Stripe settlement commits Paid, routed original jobs and one d
   assert.equal(await f.settle(), false); assert.deepEqual([...f.records], before);
 });
 
+test('#549 supervised print pilot never blocks a paid combo purchase or prints a partial order', async () => {
+  const before = process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED;
+  process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED = 'true';
+  try {
+    const f = await fixture();
+    f.records.get(policyPath).supervisedOrderTest = true;
+    const crypto = f.load('src/lib/printing/device-auth.ts'), now = Date.now();
+    for (const printerId of ['pizza', 'packing']) {
+      const scope = { brandId: 'b', locationId: 'l', printerId, printerRevision: 1, credentialRevision: 1 };
+      f.records.get(printerPath(printerId)).configuration.state = 'active';
+      f.records.set(printerPath(printerId) + '/deviceCredentials/current', crypto.createPrinterDeviceCredentialDraft(scope).record);
+      f.records.set(printerPath(printerId) + '/orderTestWindows/current', { schemaVersion: 1, ...scope,
+        model: 'mc-print3', paperWidthMm: 80, qualificationId: 'q'.repeat(43), routingRevision: 1,
+        issuedAt: now, expiresAt: now + 3600000, stoppedAt: null, actorId: 'firebase:supervisor',
+        trust: 'supervised_order_test', physicalPaperCheckedByOperator: true, unattendedAuthorized: false });
+    }
+    // A mixed order must not become a partial product-only kitchen ticket.
+    f.order().productItems.push({ ...f.order().productItems[0], itemType: 'combo',
+      comboSelections: [{ groupName: 'Pizza', products: [{ id: 'choice', name: 'Pizza' }] }] });
+    assert.equal(await f.settle(), true);
+    assert.equal(f.order().paymentStatus, 'Paid'); assert.equal(f.order().status, 'Received');
+    assert.equal(f.jobs().length, 0); assert.equal(f.ledgers().length, 0);
+    assert.equal(f.records.has('orders/' + f.orderId + '/printIntents/original'), false);
+    assert.equal(f.requests.length, 0, 'no unnecessary additional print-payment proof request');
+    assert.equal(await f.settle(), false);
+    assert.equal(f.jobs().length, 0);
+  } finally {
+    if (before === undefined) delete process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED;
+    else process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED = before;
+  }
+});
+
 const writes = f => f.attempts.flatMap(attempt => attempt.events.filter(event => event.method !== 'get'));
 
 test('#363 ineligible canonical brands settle received money once without print proof or intent writes', async () => {

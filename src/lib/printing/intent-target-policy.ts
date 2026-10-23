@@ -8,7 +8,7 @@ import { orderTestWindowSchema } from './order-test-schema';
 import { credentialSchema } from './device-credentials-service';
 
 const identifier = z.string().max(128).regex(/^[A-Za-z0-9_-]{1,128}$/);
-const scopeSchema = z.object({ brandId: identifier, locationId: identifier }).strict();
+const scopeSchema = z.object({ brandId: identifier, locationId: identifier, orderId: identifier.optional() }).strict();
 const targetSchema = z.object({
   printerId: identifier, printerRevision: z.number().int().positive().safe(),
   kinds: z.array(z.enum(['kitchen', 'packing'])).min(1).max(2),
@@ -119,6 +119,19 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
     if (!policy.enabled) return result(policy.revision, []);
     if (policy.supervisedOrderTest) {
       if (process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED !== 'true') return result(policy.revision, []);
+      if (scope.data.orderId !== undefined) {
+        // A test window must not make unrelated, supported checkout purchases
+        // fail because their combo projection is outside this printer pilot.
+        // Skip the entire print intent, never emit a partial kitchen ticket.
+        const order = await transaction.get(db.collection('orders').doc(scope.data.orderId));
+        const row = nativeScopeRecord(order, scope.data.orderId);
+        if (row.brandId !== brandId || row.locationId !== locationId) throw new PrintIntentPolicyError('policy_unverified');
+        const items = row.productItems;
+        if (Array.isArray(items) && items.length <= 50 && items.some(item => item && typeof item === 'object'
+          && (item.itemType === 'combo' || item.comboSelections !== undefined))) return result(policy.revision, []);
+      }
+      const routing = await transaction.get(locationRef.collection('printerRouting').doc('original'));
+      const currentRouting = routing.data();
       const now = Date.now();
       for (const target of policy.targets) {
         const ref = locationRef.collection('printers').doc(target.printerId);
@@ -130,6 +143,8 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
         const window = orderTestWindowSchema.safeParse(savedWindow.data()), c = credentialSchema.safeParse(credential.data());
         const p = storedPrinterSchema.safeParse(printer.data());
         if (!window.success || window.data.brandId !== brandId || window.data.locationId !== locationId
+          || !currentRouting || currentRouting.brandId !== brandId || currentRouting.locationId !== locationId
+          || currentRouting.deletedAt !== null || currentRouting.revision !== window.data.routingRevision
           || window.data.printerId !== target.printerId || window.data.printerRevision !== target.printerRevision
           || window.data.stoppedAt !== null || now < window.data.issuedAt || now >= window.data.expiresAt
           || !c.success || c.data.revokedAt !== null || c.data.issuedAt > now

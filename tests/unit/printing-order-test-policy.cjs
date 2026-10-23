@@ -82,7 +82,8 @@ test('missing paper confirmation, pending/unknown test, old firmware, foreign sc
   const mutations = [r => r.get(`${path}/pilotJobs/${qid}`).state = 'unknown', r => r.get(`${path}/pilotJobs/${qid}`).confirmedAt = null,
     r => r.get(`${path}/pilotQualificationAudit/${qid}-consume`).firmware = '3.1', r => r.get('locations/location').brandId = 'other',
     r => r.get(credentialPath).revokedAt = now, r => r.get(path).revision++, r => r.get('brands/brand').status = 'suspended',
-    r => r.set(intentPath, { enabled: true }), r => r.delete('locations/location/printerRouting/original')];
+    r => r.set(intentPath, { enabled: true }), r => r.delete('locations/location/printerRouting/original'),
+    r => r.get('locations/location/printerRouting/original').rules[0].deliveryTypes = ['Pickup']];
   for (const mutate of mutations) { const f = fixture(); mutate(f.records); await assert.rejects(f.start()); assert.equal(f.records.has(windowPath), false); }
   const f = fixture(); await assert.rejects(f.api.controlOrderTestWindow({ ...scope, operation: 'start', physicalPaperChecked: false,
     deviceUnchanged: true, supervisingPurchases: true }), /invalid_order_test/);
@@ -100,7 +101,8 @@ test('fresh revision, credential, tenant, profile, expiry and output gates are c
 test('expired, stopped, changed profile or rotated credential suppresses new purchase intents without breaking settlement', () => enabled(async () => {
   for (const mutate of [r => { r.get(windowPath).issuedAt = now - 3600000; r.get(windowPath).expiresAt = now; },
     r => r.get(path).configuration.state = 'disabled', r => r.get(path).configuration.paperWidthMm = 58,
-    r => r.get(credentialPath).brandId = 'foreign', r => r.get(credentialPath).credentialRevision++]) {
+    r => r.get(credentialPath).brandId = 'foreign', r => r.get(credentialPath).credentialRevision++,
+    r => r.get('locations/location/printerRouting/original').revision++]) {
     const f = fixture(); await f.start(); mutate(f.records); assert.equal((await f.targets()).targets.length, 0);
   }
 }));

@@ -7,6 +7,7 @@ export const orderTestScopeSchema = z.object(orderTestBinding).strict();
 export const ORDER_TEST_WINDOW_MS = 3_600_000;
 export const orderTestWindowSchema = z.object({ schemaVersion: z.literal(1), ...orderTestBinding,
   qualificationId: z.string().regex(/^[A-Za-z0-9_-]{43}$/), trust: z.literal('supervised_order_test'), actorId: z.string().min(1).max(256),
+  routingRevision: revision,
   model: z.enum(['mc-print2', 'mc-print3']), paperWidthMm: z.union([z.literal(58), z.literal(80)]),
   issuedAt: time, expiresAt: time, stoppedAt: time.nullable(),
   physicalPaperCheckedByOperator: z.literal(true), unattendedAuthorized: z.literal(false),
