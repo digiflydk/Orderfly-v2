@@ -479,3 +479,41 @@ test('editor without export can upload/save designs and preview through view aut
   assert.ok(calls.every(c=>c.body.action!=='render'||c.body.format==='preview'));
  }finally{await page.close();}
 });
+
+
+test('JPEG decoding locks design controls, then save below the designer persists logo on reopen',async()=>{
+ const jpeg=await require('sharp')({create:{width:2048,height:1138,channels:3,background:'#ffffff'}}).jpeg().toBuffer();
+ const logo=jpeg.toString('base64');let saved;
+ const {page,calls}=await open({answers:[
+  (route,body)=>{assert.equal(body.action,'save');assert.equal(body.draft.style.logoBase64,logo);assert.equal(body.draft.style.moduleShape,'dots');saved={...base,...body.draft,revision:'2'};return route.fulfill({json:saved});},
+  (route,body)=>{assert.equal(body.action,'list');return route.fulfill({json:{...initial,codes:[saved]}});}
+ ]});
+ try{
+  await page.getByRole('button',{name:'Redigér Bord 1',exact:true}).click();
+  await page.evaluate(()=>{const decode=window.createImageBitmap;window.createImageBitmap=async(...args)=>{await new Promise(resolve=>window.__releaseLogo=resolve);return decode(...args);};});
+  await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'landscape-logo.jpg',mimeType:'image/jpeg',buffer:jpeg});
+  await page.waitForFunction(()=>!!window.__releaseLogo);
+  for(const name of ['Prikker','Ekstra afrundede alle hjørner','Vis designpreview','Gem QR-kode','Annullér'])assert.equal(await page.getByRole('button',{name,exact:true}).isDisabled(),true,name+' must wait for logo decoding');
+  await page.evaluate(()=>window.__releaseLogo());
+  await page.getByRole('img',{name:'Valgt logo',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Gem QR-kode',exact:true}).isEnabled(),true);
+  await page.getByRole('button',{name:'Prikker',exact:true}).click();
+  assert.equal(await page.evaluate(()=>!!(document.querySelector('section[aria-label="Logo og print"]').compareDocumentPosition(document.querySelector('button[type="submit"]'))&Node.DOCUMENT_POSITION_FOLLOWING)),true);
+  await page.getByRole('button',{name:'Gem QR-kode',exact:true}).click();await page.getByText('QR-koden er gemt.',{exact:true}).waitFor();
+  await page.getByRole('button',{name:'Redigér Bord 1',exact:true}).click();
+  await page.getByRole('img',{name:'Valgt logo',exact:true}).waitFor();
+  assert.equal(await page.getByRole('button',{name:'Prikker',exact:true}).getAttribute('aria-pressed'),'true');
+  assert.equal(calls.filter(c=>c.body.action==='save').length,1);
+ }finally{await page.close();}
+});
+
+test('rejected logo releases the entire editor and shows its validation error',async()=>{
+ const {page,calls}=await open();
+ try{
+  await page.getByRole('button',{name:'Redigér Bord 1',exact:true}).click();
+  await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'broken.jpg',mimeType:'image/jpeg',buffer:Buffer.from([255,216,255,0])});
+  await page.getByRole('alert').filter({hasText:'Vælg et gyldigt PNG- eller JPEG-logo'}).waitFor();
+  for(const name of ['Prikker','Gem QR-kode','Annullér'])assert.equal(await page.getByRole('button',{name,exact:true}).isEnabled(),true);
+  assert.equal(await page.getByRole('img',{name:'Valgt logo',exact:true}).count(),0);assert.equal(calls.length,0);
+ }finally{await page.close();}
+});

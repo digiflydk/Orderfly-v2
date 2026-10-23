@@ -51,3 +51,14 @@ existing view-authorized `preview` command. Download/print controls and server
 export commands still require export permission. Catalogue byte accounting
 serializes each candidate once and stops at the first row exceeding its budget,
 without repeatedly serializing the whole accumulated array.
+
+## Logo upload interaction
+
+The logo and design panel belongs to the editor's disabled fieldset while a
+logo is decoding. Pattern, corner, preview, save and cancel controls wait for the
+upload to finish, preventing a design change from invalidating the pending logo
+and silently leaving only the file-input name. Save actions follow the logo and
+design panel so users can finish the edit where they selected the logo.
+Regression coverage delays a JPEG decode, checks the interaction lock, then
+saves and reopens the chosen logo and pattern. Invalid files unlock the editor
+and retain their validation error.
