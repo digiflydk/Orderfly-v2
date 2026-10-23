@@ -92,7 +92,7 @@ test('preview host never sends website analytics even with consent',async()=>{
  const {page,context}=await fixture({consent:true,host:'preview.webflow.io'});await page.clock.fastForward(13000);
  assert.equal(await page.locator('dialog[open]').count(),1);assert.deepEqual(await events(page),[]);await context.close();
 });
-for(const width of [320,390,768,1440]) test(`responsive ${width}: no horizontal overflow; readable popup and controls`,async()=>{
+for(const width of [320,390,600,768,1440,1920]) test(`responsive ${width}: matching hero frame, no overflow; readable popup and controls`,async()=>{
  const {page,context}=await fixture({consent:false,width,rotation:true});await page.clock.fastForward(13000);
  const dim=await page.evaluate(()=>({width:innerWidth,scroll:document.documentElement.scrollWidth,modal:document.querySelector('dialog').getBoundingClientRect().toJSON()}));
  assert.ok(dim.scroll<=dim.width,JSON.stringify(dim));assert.ok(dim.modal.width<=width);assert.ok(dim.modal.left>=0);
@@ -100,6 +100,15 @@ for(const width of [320,390,768,1440]) test(`responsive ${width}: no horizontal 
  assert.equal(await page.locator('#es-club-heading').evaluate(el=>getComputedStyle(el).fontSize),'38px');
  assert.equal(await page.locator('.es-club-hero__inner').evaluate(el=>getComputedStyle(el).backgroundColor),'rgba(0, 0, 0, 0)');
  assert.notEqual(await page.locator('.es-club-hero__intro').evaluate(el=>getComputedStyle(el).textAlign),'center');
+ const frame=await page.locator('#pizza-club').boundingBox();
+ const expectedHeight=width<=479?430:width<=767?500:550;
+ // Missing brand fonts or enlarged text may require extra height; never clip.
+ assert.equal(await page.locator('#pizza-club').evaluate(el=>parseFloat(getComputedStyle(el).minHeight)),expectedHeight);
+ if(width>=390) assert.equal(frame.height,expectedHeight);
+ for(const selector of ['#es-club-heading','.es-club-hero__intro','.es-club-welcome','.es-club-actions','.es-club-hero__copy > .es-club-fineprint']){
+  const box=await page.locator(selector).boundingBox();
+  assert.ok(box.y>=frame.y&&box.y+box.height<=frame.y+frame.height,`${width}: ${selector} clipped: ${JSON.stringify({frame,box})}`);
+ }
  for(const selector of ['.es-club-hero__intro','.es-club-fineprint','.es-club-popup__text'])
   assert.equal(await page.locator(selector).first().evaluate(el=>getComputedStyle(el).fontSize),'16px');
  await page.getByRole('button',{name:'Måske senere'}).click();assert.equal(await page.locator('dialog[open]').count(),0);await context.close();

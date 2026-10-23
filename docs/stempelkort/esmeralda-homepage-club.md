@@ -133,3 +133,20 @@ Staging release: Webflow publish task `a91ec8ce-daa7-4517-bcd6-52552c407090`.
 Source merge does not publish Webflow production. Validate actual rotation,
 pagination, arrows and wraparound in the browser before production acceptance.
 The separate H5 Google receipt blocker is not resolved by this layout change.
+
+## H7: match the existing banner frame (2026-10-23)
+
+The Club rotation slide uses the existing hero dimensions: 550px on desktop and
+tablet, 500px below 768px, and 430px below 480px. Its desktop text inset matches
+the existing 52px outer padding plus 32px text padding; tablet uses 52px, mobile
+landscape 20px and portrait 16px. The original standalone fallback is preserved.
+Mobile uses the artwork as a full-frame darkened background and tighter spacing
+so the headline, offer, signup/login and full eligibility/terms stay in the frame.
+The repeated Club eyebrow is hidden on mobile; heading/body typography is unchanged.
+Frame sizes are minimums so enlarged text or unavailable brand fonts can expand
+the banner rather than crop the offer, controls or terms.
+The popup and other CMS slides are unaffected by the scoped rotation rules.
+
+Responsive fixtures check actual frame height and text/control containment at
+320, 390, 600, 768, 1440 and 1920px. Compare Club and CMS frames in published
+Webflow staging and production as a separate visual acceptance step.
