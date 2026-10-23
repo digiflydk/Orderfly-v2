@@ -3,9 +3,19 @@
 import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import type { CredentialScope } from './printer-credentials-client';
+import { PrinterOrderTestControls } from './order-test-controls';
 
 type Scope = CredentialScope & { credentialRevision: number };
 type Session = Scope & { sessionId: string; nonce: string; expiresAt: number };
+const statusLabels = {
+  none: 'Ingen testbon er klargjort.', queued: 'Testbonen venter på printeren.',
+  offered: 'Testbonen er tilbudt printeren.', download_started: 'Overførsel af testbonen er startet. Afventer printerens svar.',
+  confirmed: 'Printeren har meldt testbonen udskrevet. Kontrollér papiret ved printeren.',
+  failed: 'Printeren har meldt fejl. Kontrollér printeren, før der foretages mere.',
+  unknown: 'Udskriftens resultat er usikkert. Kontrollér papiret. Send ikke bonen igen.',
+  expired: 'Testforløbet er udløbet. En eventuel udskrift er ikke bekræftet. Kontrollér printeren.',
+};
+type PilotState = keyof typeof statusLabels;
 const flags = ['outputAuthorized', 'dispatchAuthorized', 'activationAuthorized', 'physicalCompatibilityVerified'];
 const token = /^[A-Za-z0-9_-]{42}[AEIMQUYcgkosw048]$/;
 const sameScope = (r: Record<string, unknown>, s: Scope) => Object.keys(s).every(key => r[key] === s[key as keyof Scope]);
@@ -31,11 +41,14 @@ export function PrinterPilotControls({ scope, model, paperWidthMm, active, permi
   const [busy, setBusy] = useState(false), [message, setMessage] = useState(''), [started, setStarted] = useState(false);
   const [operator, setOperator] = useState(''), [sku, setSku] = useState(''), [firmware, setFirmware] = useState('');
   const [capture, setCapture] = useState<string | null>(null), [captureBusy, setCaptureBusy] = useState(false);
+  const [pilotState, setPilotState] = useState<PilotState | null>(null), [statusMessage, setStatusMessage] = useState('');
   const [identified, setIdentified] = useState(false), [correlated, setCorrelated] = useState(false), [complete, setComplete] = useState(false);
   const session = useRef<Session | null>(null), pending = useRef(false), lifetime = useRef(0), request = useRef<AbortController | null>(null);
   const captureGeneration = useRef(0), lost = useRef(onSessionLost); lost.current = onSessionLost;
   useEffect(() => {
     const generation = ++lifetime.current;
+    setBusy(false); setStarted(false); setComplete(false); setPilotState(null); setStatusMessage(''); setMessage('');
+    setCapture(null); setCaptureBusy(false); setIdentified(false); setCorrelated(false);
     return () => { if (lifetime.current === generation) lifetime.current++; request.current?.abort(); session.current = null; pending.current = false; captureGeneration.current++; };
   }, [scope.brandId, scope.locationId, scope.printerId, scope.printerRevision, scope.credentialRevision, permitted, active]);
   async function selectCapture(file: File | undefined) {
@@ -47,6 +60,34 @@ export function PrinterPilotControls({ scope, model, paperWidthMm, active, permi
       if (captureGeneration.current === generation) { setCapture(Array.from(new Uint8Array(digest), b => b.toString(16).padStart(2, '0')).join('')); setMessage('Dokumentation valgt. Filen bliver på din enhed.'); }
     } catch { if (captureGeneration.current === generation) setMessage('Dokumentationen kunne ikke læses. Vælg filen igen.'); }
     finally { if (captureGeneration.current === generation) setCaptureBusy(false); }
+  }
+  async function refreshStatus() {
+    if (!permitted || pending.current) return;
+    const generation = lifetime.current, controller = new AbortController(); request.current = controller;
+    pending.current = true; setBusy(true); setPilotState(null); setStatusMessage('Henter testbonens status…');
+    const current = () => lifetime.current === generation && !controller.signal.aborted;
+    try {
+      const query = new URLSearchParams(Object.entries(scope).map(([key, value]) => [key, String(value)]));
+      const response = await fetch(`/api/superadmin/printers/pilot?${query}`, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
+      if (!current()) return;
+      if (response.status === 401) { setStatusMessage('Din session er udløbet. Log ind igen.'); lost.current(); return; }
+      if (response.status !== 200) {
+        setStatusMessage(response.status === 409 ? 'Printeropsætningen eller den gemte test er ændret. Opdater printeroversigten.'
+          : 'Status kunne ikke hentes. Kontrollér printeren, før du forsøger igen.'); return;
+      }
+      const result = await responseBody(response);
+      if (!current()) return;
+      const expected = [...Object.keys(scope), 'state', 'createdAt', 'expiresAt', 'confirmedAt', 'physicalCompatibilityVerified'].sort().join(',');
+      if (!result || typeof result !== 'object' || Array.isArray(result) || Object.keys(result).sort().join(',') !== expected
+        || !sameScope(result, scope) || typeof result.state !== 'string' || !Object.hasOwn(statusLabels, result.state)
+        || result.physicalCompatibilityVerified !== false
+        || ['createdAt', 'expiresAt', 'confirmedAt'].some(key => result[key] !== null && (typeof result[key] !== 'number'
+          || !Number.isSafeInteger(result[key]) || (result[key] as number) <= 0))) throw Error('invalid_response');
+      const state = result.state as PilotState;
+      setPilotState(state); setStatusMessage(statusLabels[state]);
+      if (state !== 'none') { setComplete(true); setStarted(false); session.current = null; }
+    } catch { if (current()) setStatusMessage('Status kunne ikke bekræftes. Kontrollér printeren, før du forsøger igen.'); }
+    finally { if (current()) { pending.current = false; setBusy(false); request.current = null; } }
   }
   async function submit(operation: 'issue' | 'attest') {
     if (!permitted || !active || pending.current || complete) return;
@@ -97,6 +138,9 @@ export function PrinterPilotControls({ scope, model, paperWidthMm, active, permi
     <p className="text-sm">{model === 'mc-print2' ? 'Star mC-Print2' : 'Star mC-Print3'} · {paperWidthMm} mm papir</p>
     {!active && <p role="status">Printeren skal først aktiveres gennem den godkendte printerhandling. Opdater derefter printeradgangen og start et nyt testforløb.</p>}
     {message && <p role="status">{message}</p>}
+    <Button variant="outline" disabled={!permitted || busy} onClick={() => void refreshStatus()}>Opdater testbonens status</Button>
+    {statusMessage && <p role="status">{statusMessage}</p>}
+    {pilotState === 'confirmed' && <PrinterOrderTestControls scope={scope} permitted={permitted} active={active} />}
     {!complete && <Button variant="outline" disabled={!permitted || !active || busy} onClick={() => void submit('issue')}>{started ? 'Start nyt testforløb' : 'Start testforløb'}</Button>}
     {started && !complete && <fieldset disabled={!permitted || !active || busy} className="space-y-3">
       <label className="block text-sm">Operatørens navn eller ID<input className="block border rounded px-2 py-1 w-full" value={operator} maxLength={128} onChange={e => setOperator(e.target.value)} placeholder="Navn uden mellemrum" /></label>

@@ -17,7 +17,7 @@ export async function prepareUnpaidAcceptanceOriginals(context: NativeTransactio
   if (process.env.ORDERFLY_PRINT_INTENTS_ENABLED !== 'true') return null;
   const { id: orderId, brandId, locationId } = authority.order;
   const scope = { brandId, locationId };
-  const policy = await preparePrintIntentTargetPolicy(context, scope);
+  const policy = await preparePrintIntentTargetPolicy(context, { ...scope, orderId });
   if (!policy.enabled) return null;
   const [catalog, saved] = await Promise.all([
     projectNativePrintCatalog(context, { orderId, ...scope }), prepareSavedPrinterRouting(context, scope),

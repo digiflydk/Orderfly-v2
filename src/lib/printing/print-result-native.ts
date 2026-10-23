@@ -6,6 +6,9 @@ import { printJobId } from './domain';
 import { parseCloudPrntConfirmation } from './cloudprnt-http';
 import { verifyNativePrinterDevice } from './device-auth-native';
 import { readStoredPrinterActivity } from './activity-metadata';
+import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
+import { verifyCloudPrntHttpDevice } from './cloudprnt-http-auth';
+import { ordinaryDispatchSchema, originalPrintHistorySchema } from './ordinary-print-storage';
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
@@ -150,4 +153,74 @@ export async function persistNativePrintConfirmation(input: unknown) {
     if (error instanceof NativePrintResultError) throw error;
     throw new NativePrintResultError('print_result_unavailable');
   }
+}
+
+/** Integrated CloudPRNT confirmation. The protocol supplies only its delivery
+ * token; the independent claim digest comes from the native offered dispatch,
+ * never an HTTP parameter. All reads precede the returned transaction plan.
+ */
+export async function prepareCloudPrntPrintConfirmation(context: NativeTransactionContext, input: unknown) {
+  const parsed = z.object({ ...scope, jobId: digest, authorization: z.string().min(78).max(256),
+    query: z.string().max(2048) }).strict().safeParse(input);
+  if (!parsed.success) return invalid();
+  const request = parsed.data, confirmation = parseCloudPrntConfirmation(request.query);
+  if (confirmation.outcome !== 'confirmed') return invalid();
+  const { db, transaction: tx } = context;
+  const identity = await verifyCloudPrntHttpDevice(context, { brandId: request.brandId, locationId: request.locationId,
+    printerId: request.printerId, authorization: request.authorization });
+  const policy = await (await import('./ordinary-output-policy')).requireOrdinaryOutputPolicy(context, identity);
+  const printer = db.collection('locations').doc(identity.locationId).collection('printers').doc(identity.printerId);
+  const resultRef = printer.collection('printResults').doc(request.jobId), activityRef = printer.collection('statusMetadata').doc('current');
+  const [delivery, result, activity, pending, dispatch, history] = await Promise.all([
+    tx.get(printer.collection('deliveries').doc(request.jobId)), tx.get(resultRef), tx.get(activityRef),
+    tx.get(printer.collection('jobs').doc(request.jobId)), tx.get(printer.collection('ordinaryDispatches').doc(request.jobId)),
+    tx.get(printer.collection('originalPrintHistory').doc(request.jobId)),
+  ]);
+  const d = deliveredPrintEnvelopeSchema.safeParse(delivery.data()), o = ordinaryDispatchSchema.safeParse(dispatch.data()),
+    h = originalPrintHistorySchema.safeParse(history.data()), now = Date.now();
+  if (!d.success || !o.success || !h.success || pending.exists || !instant.safeParse(now).success || now === 0) return invalid();
+  const envelope = d.data, offered = o.data;
+  const binding = { brandId: identity.brandId, locationId: identity.locationId, printerId: identity.printerId, jobId: request.jobId };
+  const deliveryDigest = printDeliveryTokenDigest('delivery', confirmation.token, binding);
+  if (envelope.job.id !== request.jobId || offered.jobId !== request.jobId || h.data.jobId !== request.jobId
+    || envelope.brandId !== identity.brandId || envelope.locationId !== identity.locationId || envelope.printerId !== identity.printerId
+    || offered.brandId !== identity.brandId || offered.locationId !== identity.locationId || offered.printerId !== identity.printerId
+    || h.data.brandId !== identity.brandId || h.data.locationId !== identity.locationId || h.data.printerId !== identity.printerId
+    || offered.qualificationId !== policy.qualificationId || offered.model !== policy.model || offered.paperWidthMm !== policy.paperWidthMm
+    || offered.job.createdAt < policy.issuedAt || offered.expiresAt > policy.expiresAt
+    || Object.entries(envelope.job).some(([key, value]) => offered.job[key as keyof typeof offered.job] !== value)
+    || envelope.printerRevision !== identity.printerRevision || envelope.credentialRevision !== identity.credentialRevision
+    || offered.printerRevision !== identity.printerRevision || offered.credentialRevision !== identity.credentialRevision
+    || !equalDigest(offered.claimDigest, envelope.claimDigest) || !equalDigest(offered.deliveryDigest, deliveryDigest)
+    || !equalDigest(envelope.deliveryDigest, deliveryDigest) || !equalDigest(offered.contentDigest, envelope.contentDigest)
+    || h.data.contentDigest !== envelope.contentDigest || h.data.transferredAt !== envelope.deliveredAt
+    || h.data.printerRevision !== identity.printerRevision || h.data.credentialRevision !== identity.credentialRevision
+    || offered.downloadedAt !== envelope.deliveredAt || offered.expiresAt !== envelope.expiresAt || envelope.deliveredAt > now
+    || !['download_started', 'confirmed'].includes(offered.state)) return invalid();
+  const previous = readStoredPrinterActivity(activity.exists ? activity.data() : undefined, identity, identity.printerRevision, now);
+  if (previous.printHistory === 'never' || (previous.lastConfirmedPrintAt ?? 0) > now) return invalid();
+  if (result.exists) {
+    const saved = confirmedPrintResultSchema.safeParse(result.data());
+    if (!saved.success || saved.data.jobId !== request.jobId || offered.state !== 'confirmed'
+      || saved.data.brandId !== identity.brandId || saved.data.locationId !== identity.locationId || saved.data.printerId !== identity.printerId
+      || saved.data.printerRevision !== identity.printerRevision || saved.data.credentialRevision !== identity.credentialRevision
+      || saved.data.claimDigest !== envelope.claimDigest || saved.data.deliveryDigest !== deliveryDigest
+      || saved.data.contentDigest !== envelope.contentDigest || saved.data.confirmedAt < envelope.deliveredAt
+      || saved.data.confirmedAt >= envelope.expiresAt || saved.data.confirmedAt > now
+      || offered.completedAt !== saved.data.confirmedAt || previous.printHistory !== 'confirmed'
+      || previous.lastConfirmedPrintAt! < saved.data.confirmedAt) return invalid();
+    return { duplicate: true, confirmedAt: saved.data.confirmedAt, apply() {} };
+  }
+  if (offered.state !== 'download_started' || now >= envelope.expiresAt) return invalid();
+  let applied = false;
+  return { duplicate: false, confirmedAt: now, apply() {
+    if (applied) return invalid();
+    applied = true;
+    tx.create(resultRef, { schemaVersion: 1, ...binding, state: 'confirmed', printerRevision: identity.printerRevision,
+      credentialRevision: identity.credentialRevision, claimDigest: envelope.claimDigest, deliveryDigest,
+      contentDigest: envelope.contentDigest, confirmedAt: now });
+    if (previous.lastConfirmedPrintAt === null || now > previous.lastConfirmedPrintAt) {
+      tx.set(activityRef, { ...previous, printHistory: 'confirmed', lastConfirmedPrintAt: now, lastConfirmedJobId: request.jobId });
+    }
+  } };
 }

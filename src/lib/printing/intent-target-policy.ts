@@ -4,9 +4,12 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
 import type { PrinterConfiguration, PrintJobKind } from './domain';
 import { storedPrinterSchema } from './storage';
+import { orderTestWindowSchema } from './order-test-schema';
+import { credentialSchema } from './device-credentials-service';
+import { projectNativePrintCatalog, PrintCatalogProjectionError } from './catalog-line-projection';
 
 const identifier = z.string().max(128).regex(/^[A-Za-z0-9_-]{1,128}$/);
-const scopeSchema = z.object({ brandId: identifier, locationId: identifier }).strict();
+const scopeSchema = z.object({ brandId: identifier, locationId: identifier, orderId: identifier.optional() }).strict();
 const targetSchema = z.object({
   printerId: identifier, printerRevision: z.number().int().positive().safe(),
   kinds: z.array(z.enum(['kitchen', 'packing'])).min(1).max(2),
@@ -16,6 +19,7 @@ const policySchema = z.object({
   brandId: identifier, locationId: identifier,
   revision: z.number().int().positive().safe(), deletedAt: z.null(),
   enabled: z.boolean(), targets: z.array(targetSchema).max(16),
+  supervisedOrderTest: z.literal(true).optional(),
 }).strict();
 
 export class PrintIntentPolicyError extends Error {
@@ -114,6 +118,50 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
     // OFF policies have no latent targets; ON policies must select explicitly.
     if (policy.enabled !== (policy.targets.length > 0)) throw new PrintIntentPolicyError('policy_unverified');
     if (!policy.enabled) return result(policy.revision, []);
+    if (policy.supervisedOrderTest) {
+      if (process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED !== 'true') return result(policy.revision, []);
+      if (scope.data.orderId !== undefined) {
+        // A test window must not make unrelated, supported checkout purchases
+        // fail because their native projection is outside this printer pilot.
+        // Skip the entire print intent, never emit a partial kitchen ticket.
+        const order = await transaction.get(db.collection('orders').doc(scope.data.orderId));
+        const row = nativeScopeRecord(order, scope.data.orderId);
+        if (row.brandId !== brandId || row.locationId !== locationId) throw new PrintIntentPolicyError('policy_unverified');
+        try {
+          await projectNativePrintCatalog(context, { orderId: scope.data.orderId, brandId, locationId });
+        } catch (error) {
+          // Only a known unsupported/invalid printing projection suppresses
+          // the pilot. Unknown database failures still fail the transaction.
+          if (error instanceof PrintCatalogProjectionError) return result(policy.revision, []);
+          throw error;
+        }
+      }
+      const routing = await transaction.get(locationRef.collection('printerRouting').doc('original'));
+      const currentRouting = routing.data();
+      const now = Date.now();
+      for (const target of policy.targets) {
+        const ref = locationRef.collection('printers').doc(target.printerId);
+        const [savedWindow, credential, printer] = await Promise.all([
+          transaction.get(ref.collection('orderTestWindows').doc('current')),
+          transaction.get(ref.collection('deviceCredentials').doc('current')),
+          transaction.get(ref),
+        ]);
+        const window = orderTestWindowSchema.safeParse(savedWindow.data()), c = credentialSchema.safeParse(credential.data());
+        const p = storedPrinterSchema.safeParse(printer.data());
+        if (!window.success || window.data.brandId !== brandId || window.data.locationId !== locationId
+          || !currentRouting || currentRouting.brandId !== brandId || currentRouting.locationId !== locationId
+          || currentRouting.deletedAt !== null || currentRouting.revision !== window.data.routingRevision
+          || window.data.printerId !== target.printerId || window.data.printerRevision !== target.printerRevision
+          || window.data.stoppedAt !== null || now < window.data.issuedAt || now >= window.data.expiresAt
+          || !c.success || c.data.revokedAt !== null || c.data.issuedAt > now
+          || c.data.brandId !== brandId || c.data.locationId !== locationId || c.data.printerId !== target.printerId
+          || c.data.credentialRevision !== window.data.credentialRevision || c.data.printerRevision !== target.printerRevision
+          || !p.success || p.data.revision !== target.printerRevision || p.data.configuration.state !== 'active'
+          || p.data.configuration.brandId !== brandId || p.data.configuration.locationId !== locationId
+          || p.data.configuration.id !== target.printerId || p.data.configuration.model !== window.data.model
+          || p.data.configuration.paperWidthMm !== window.data.paperWidthMm || p.data.configuration.transport !== 'cloudprnt-http') return result(policy.revision, []);
+      }
+    }
     const targets = await Promise.all(policy.targets.map(async target => {
       const snapshot = await transaction.get(locationRef.collection('printers').doc(target.printerId));
       const value = snapshot.data();

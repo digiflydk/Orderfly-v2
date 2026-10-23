@@ -29,15 +29,22 @@ test('browser: actual supervised controls bind one scoped testbon, hash local ca
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const page = await browser.newPage({ viewport: { width: 375, height: 812 } }), commands = [], errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  let unknown = false;
-  await page.route('**/api/superadmin/printers/pilot', async route => {
+  let unknown = false, pilotState = 'queued', statusReads = 0;
+  await page.route('**/api/superadmin/printers/pilot*', async route => {
+    if (route.request().method() === 'GET') {
+      statusReads++;
+      const params = Object.fromEntries(new URL(route.request().url()).searchParams);
+      assert.deepEqual(params, Object.fromEntries(Object.entries(scope).map(([k, v]) => [k, String(v)])));
+      return route.fulfill({ status: 200, json: { ...scope, state: pilotState, createdAt: Date.now() - 10000,
+        expiresAt: Date.now() + 500000, confirmedAt: pilotState === 'confirmed' ? Date.now() - 100 : null, physicalCompatibilityVerified: false } });
+    }
     const command = route.request().postDataJSON(); commands.push(command);
     if (command.operation === 'issue') return route.fulfill({ status: 201, json: { ...scope, sessionId, nonce, expiresAt: Date.now() + 600000, ...flags } });
     return route.fulfill({ status: unknown ? 503 : 201, json: unknown ? { error: 'qualification_unavailable' }
       : { ...scope, sessionId, jobId: sessionId, contentDigest: 'c'.repeat(64), trust: 'supervised_operator', ...flags } });
   });
   const url = 'http://127.0.0.1:' + server.address().port;
-  await page.goto(url); assert.equal(commands.length, 0);
+  await page.goto(url); assert.equal(commands.length, 0); assert.equal(statusReads, 0);
   await page.evaluate(() => window.changeActive(false));
   await expect(page.getByRole('button', { name: 'Start testforløb', exact: true })).toBeDisabled();
   assert.equal(commands.length, 0);
@@ -64,10 +71,22 @@ test('browser: actual supervised controls bind one scoped testbon, hash local ca
   assert.equal((await page.locator('body').innerText()).includes(nonce), false);
   assert.equal(await page.evaluate(() => localStorage.length + sessionStorage.length), 0);
   await expect(submit).toHaveCount(0);
+  const refresh = page.getByRole('button', { name: 'Opdater testbonens status' });
+  await refresh.click(); await expect(page.getByText('Testbonen venter på printeren.', { exact: true })).toBeVisible();
+  pilotState = 'download_started';
+  await refresh.click(); await expect(page.getByText('Overførsel af testbonen er startet.', { exact: false })).toBeVisible();
+  pilotState = 'confirmed';
+  await refresh.click(); await expect(page.getByText('Printeren har meldt testbonen udskrevet.', { exact: false })).toBeVisible();
+  assert.equal(commands.length, 2); assert.equal(statusReads, 3);
+  // A reopened panel can recover a previous result without another preparation request.
+  await page.goto(url); await refresh.click();
+  await expect(page.getByRole('button', { name: 'Start testforløb', exact: true })).toHaveCount(0);
+  assert.equal(commands.length, 2); assert.equal(statusReads, 4);
   unknown = true; await page.goto(url); await page.getByRole('button', { name: 'Start testforløb', exact: true }).click();
   await fill(); await submit.click(); await expect(page.getByText('Testforløbet er ikke tilgængeligt.', { exact: false })).toBeVisible();
   assert.equal(commands.length, 4); await expect(submit).toHaveCount(0);
   await page.evaluate(() => window.changePermission(false));
   await expect(page.getByRole('button', { name: 'Start testforløb', exact: true })).toBeDisabled();
+  await expect(refresh).toBeDisabled();
   assert.equal(commands.length, 4); assert.deepEqual(errors, []);
 });

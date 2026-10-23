@@ -49,7 +49,7 @@ async function check(f, response, status, expected) {
 }
 
 test('real exported POST authenticates native route scope and returns only no-job after read-only completion', async () => {
-  const f = fixture(); assert.deepEqual(Object.keys(f.route).sort(), ['POST', 'dynamic', 'runtime']);
+  const f = fixture(); assert.deepEqual(Object.keys(f.route).sort(), ['DELETE', 'GET', 'HEAD', 'POST', 'dynamic', 'runtime']);
   assert.equal(f.route.runtime, 'nodejs'); assert.equal(f.route.dynamic, 'force-dynamic');
   let release; const pending = new Promise(resolve => { release = resolve; }); f.finish(() => pending);
   let finished = false; const response = f.run().then(value => { finished = true; return value; });

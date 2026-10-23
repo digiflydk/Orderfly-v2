@@ -10,6 +10,10 @@ type PollRouteContext = {
 
 /** Path identifiers select native scope; only fresh native credentials authenticate it. */
 export async function POST(request: Request, context: PollRouteContext): Promise<Response> {
+  if (process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED === 'true') {
+    const { handleOrdinaryPrintHttp } = await import('@/lib/printing/ordinary-print-http');
+    return handleOrdinaryPrintHttp(request, context.params);
+  }
   let release: (() => void) | null = null;
   try {
     release = admitCloudPrntPoll(request.headers.get('authorization'));
@@ -22,4 +26,16 @@ export async function POST(request: Request, context: PollRouteContext): Promise
     return Response.json({ error: 'invalid_poll_request' }, { status: 400,
       headers: { 'Cache-Control': 'no-store', Vary: 'Authorization' } });
   } finally { release?.(); }
+}
+
+export async function GET(request: Request, context: PollRouteContext): Promise<Response> {
+  const { handleOrdinaryPrintHttp } = await import('@/lib/printing/ordinary-print-http');
+  return handleOrdinaryPrintHttp(request, context.params);
+}
+export async function DELETE(request: Request, context: PollRouteContext): Promise<Response> {
+  const { handleOrdinaryPrintHttp } = await import('@/lib/printing/ordinary-print-http');
+  return handleOrdinaryPrintHttp(request, context.params);
+}
+export async function HEAD(): Promise<Response> {
+  return new Response(null, { status: 405, headers: { Allow: 'POST, GET, DELETE', 'Cache-Control': 'no-store' } });
 }
