@@ -13,6 +13,8 @@ import { MembersTable } from './members-table';
 import { EventLog } from './event-log';
 import { TextVersionDetail, TextVersions } from './text-versions';
 import { cn } from '@/lib/utils';
+import { readSignupNotifications } from '@/lib/loyalty/stamp-card/signup-notifications';
+import { SignupNotificationCard } from './signup-notification-card';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -49,6 +51,8 @@ export default async function StampCardPage({ searchParams }: { searchParams: Se
         <Shell tabs={tabs} tab={tab} query={filterQuery(filters)}>
           <Link href={`/superadmin/loyalty/stamp-card?${filterQuery(filters, { tab: 'settings' })}`} className="text-sm text-muted-foreground hover:text-foreground">← Tilbage til oversigten</Link>
           <SettingsForm key={edit.brandId} initial={await readSettings(db, actor, edit.brandId)} canEditBrand={session.superuser} />
+          {session.superuser && <SignupNotificationCard key={`notifications-${edit.brandId}`} brandId={edit.brandId} brandName={edit.brandName}
+            initial={await readSignupNotifications(db, actor, edit.brandId)} />}
         </Shell>
       );
     }
