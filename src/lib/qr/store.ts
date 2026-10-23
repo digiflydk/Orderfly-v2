@@ -194,10 +194,11 @@ export function createQrStore(db: QrDatabase, options: {
 }
 
 function designExtras(design:QrDesign) {
+  if(design.logoSizePercent!==undefined && (!Number.isInteger(design.logoSizePercent)||design.logoSizePercent<15||design.logoSizePercent>30)) fail('invalid_design');
   if(design.logoBase64!==undefined && (typeof design.logoBase64!=='string' || design.logoBase64.length>128000 || !/^[A-Za-z0-9+/]+={0,2}$/.test(design.logoBase64))) fail('invalid_design');
   if(design.moduleShape && !['square','dots','rounded','horizontal','vertical','diamond'].includes(design.moduleShape)
     || design.cornerShape && !['square','rounded','extra-rounded'].includes(design.cornerShape)
     || design.cornerShapes && (!Array.isArray(design.cornerShapes)||design.cornerShapes.length!==3||design.cornerShapes.some(v=>!['square','rounded','extra-rounded'].includes(v)))
     || design.cornerColor && !/^#[a-f0-9]{6}$/i.test(design.cornerColor)) fail('invalid_design');
-  return Object.fromEntries(Object.entries(design).filter(([key])=>['logoBase64','moduleShape','cornerShape','cornerShapes','cornerColor'].includes(key)));
+  return Object.fromEntries(Object.entries(design).filter(([key])=>['logoBase64','logoSizePercent','moduleShape','cornerShape','cornerShapes','cornerColor'].includes(key)));
 }

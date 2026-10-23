@@ -123,3 +123,22 @@ test('style inputs reject invalid pattern, finder, color and logo bytes instead 
   for(const options of [{moduleShape:'script'},{cornerShape:'circle'},{cornerShapes:['square']},{cornerShapes:['square','rounded','bad']},{cornerColor:'#ffffff'},{cornerColor:'url(https://example.com)'},{logoBase64:'PHN2Zy8+'}])
     await assert.rejects(renderQr('https://example.com',options));
 });
+
+
+test('logo size is bounded and PNG/SVG geometry and payload match at 15, 25 and 30 percent', async () => {
+  const logo=await sharp({create:{width:180,height:100,channels:4,background:'#123322'}}).png().toBuffer();
+  const payload='https://orderfly.dk/q/b31e5762cbadc412ca470823a28a87d5';
+  for(const logoSizePercent of [15,25,30]) {
+    const result=await renderQr(payload,{logo,logoSizePercent,moduleShape:'dots',cornerShape:'extra-rounded'});
+    assert.equal(await decode(result.png),payload);
+    assert.equal(await decode(await sharp(Buffer.from(result.svg)).png().toBuffer()),payload);
+    const image=result.svg.match(/<image[^>]*width="([^"]+)"/);
+    assert.ok(image); const expected=Math.floor(result.moduleCount/(result.moduleCount+8)*512*logoSizePercent/100)/512*(result.moduleCount+8);
+    assert.equal(Number(image[1]),expected);
+  }
+  const legacy=await renderQr(payload,{logo});
+  const explicit=await renderQr(payload,{logo,logoSizePercent:15});
+  assert.deepEqual(legacy.png,explicit.png);
+  for(const logoSizePercent of [14,31,25.5,NaN,Infinity,'25',null])
+    await assert.rejects(renderQr(payload,{logo,logoSizePercent}),e=>e.code==='invalid_style');
+});

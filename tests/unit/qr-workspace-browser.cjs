@@ -307,7 +307,7 @@ test('logo/design upload works before save and survives save/reopen; exports req
   const png=(await require('sharp')({create:{width:64,height:64,channels:4,background:'#123322'}}).png().toBuffer()).toString('base64');
   let saved;
   const { page, calls } = await open({ answers: [
-    (route,body)=>{assert.equal(body.action,'save');assert.equal(body.draft.style.logoBase64,png);saved={...base,...body.draft,revision:'2'};return route.fulfill({json:saved});},
+    (route,body)=>{assert.equal(body.action,'save');assert.equal(body.draft.style.logoBase64,png);assert.equal(body.draft.style.logoSizePercent,30);saved={...base,...body.draft,revision:'2'};return route.fulfill({json:saved});},
     (route,body)=>{assert.equal(body.action,'list');return route.fulfill({json:{...initial,codes:[saved]}});},
     [200,{content:png,mime:'image/png',encoding:'base64',filename:'logo-qr.png'}]
   ] });
@@ -319,16 +319,19 @@ test('logo/design upload works before save and survives save/reopen; exports req
     await page.getByRole('button', { name: 'Redigér Bord 1', exact: true }).click();
     await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'logo.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
     await page.getByText('Valgt logo: logo.png',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Logostørrelse',{exact:true}).inputValue(),'25');
+    await page.getByLabel('Logostørrelse',{exact:true}).selectOption('30');
     await page.getByRole('button',{name:'Prikker',exact:true}).click();
     assert.equal(await page.getByRole('button',{name:'PNG med valgt logo',exact:true}).isEnabled(),false);
     await page.getByRole('button',{name:'Gem QR-kode',exact:true}).click();
     await page.getByText('QR-koden er gemt.',{exact:true}).waitFor();
     await page.getByRole('button',{name:'Redigér Bord 1',exact:true}).click();
     await page.getByText('Valgt logo: Gemt logo',{exact:true}).waitFor();
+    assert.equal(await page.getByLabel('Logostørrelse',{exact:true}).inputValue(),'30');
     assert.equal(await page.getByRole('button',{name:'Prikker',exact:true}).getAttribute('aria-pressed'),'true');
     const download=page.waitForEvent('download');await page.getByRole('button',{name:'PNG med valgt logo',exact:true}).click();
     assert.equal((await download).suggestedFilename(),'logo-qr.png');
-    assert.equal(calls.length,3);assert.equal(calls[2].body.logoBase64,undefined);assert.equal(calls[2].body.draft.style.logoBase64,png);assert.equal(calls[2].body.draft.style.moduleShape,'dots');
+    assert.equal(calls[2].body.draft.style.logoSizePercent,30);assert.equal(calls.length,3);assert.equal(calls[2].body.logoBase64,undefined);assert.equal(calls[2].body.draft.style.logoBase64,png);assert.equal(calls[2].body.draft.style.moduleShape,'dots');
     assert.deepEqual(calls[2].body.context,{id:'qr1',revision:'2'});
   }finally{await page.close();}
 });
