@@ -318,7 +318,7 @@ test('logo/design upload works before save and survives save/reopen; exports req
     await page.getByRole('button', { name: 'Annullér', exact: true }).click();
     await page.getByRole('button', { name: 'Redigér Bord 1', exact: true }).click();
     await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'logo.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
-    await page.getByText('Valgt logo: Gemt logo',{exact:true}).waitFor();
+    await page.getByText('Valgt logo: logo.png',{exact:true}).waitFor();
     await page.getByRole('button',{name:'Prikker',exact:true}).click();
     assert.equal(await page.getByRole('button',{name:'PNG med valgt logo',exact:true}).isEnabled(),false);
     await page.getByRole('button',{name:'Gem QR-kode',exact:true}).click();
@@ -418,7 +418,7 @@ for(const width of [390,1440]) test(`styled catalogue renders actual code, opens
     });
     const logo=await require('sharp')(Buffer.from('<svg width="100" height="100"><rect width="100" height="100" fill="white"/><text x="50" y="73" text-anchor="middle" font-size="65" fill="#164e3b">E</text></svg>')).png().toBuffer();
     await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'test-brand.png',mimeType:'image/png',buffer:logo});
-    await page.getByRole('button',{name:'Vis designpreview',exact:true}).click();
+    await page.getByRole('button',{name:'Preview QR',exact:true}).click();
     await page.getByRole('img',{name:'QR-preview med valgt design og logo',exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth),true);
     if(process.env.QR_DESIGN_SCREENSHOTS){await page.getByRole('region',{name:'Logo og print',exact:true}).screenshot({path:`/tmp/qr-workspace-design-${width}.png`});await page.screenshot({path:`/tmp/qr-workspace-editor-${width}.png`,fullPage:true});}
@@ -471,10 +471,10 @@ test('editor without export can upload/save designs and preview through view aut
  try{
   await page.getByRole('button',{name:'Redigér Bord 1',exact:true}).click();
   await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'logo.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
-  await page.getByText('Valgt logo: Gemt logo',{exact:true}).waitFor();await page.getByRole('button',{name:'Afrundede',exact:true}).click();
+  await page.getByText('Valgt logo: logo.png',{exact:true}).waitFor();await page.getByRole('button',{name:'Afrundede',exact:true}).click();
   assert.equal(await page.getByRole('button',{name:'PNG med valgt logo',exact:true}).count(),0);
   assert.equal(await page.getByRole('button',{name:'Åbn print / Gem som PDF',exact:true}).count(),0);
-  await page.getByRole('button',{name:'Vis designpreview',exact:true}).click();await page.getByRole('img',{name:'QR-preview med valgt design og logo'}).waitFor();
+  await page.getByRole('button',{name:'Preview QR',exact:true}).click();await page.getByRole('img',{name:'QR-preview med valgt design og logo'}).waitFor();
   await page.getByRole('button',{name:'Gem QR-kode',exact:true}).click();await page.getByText('QR-koden er gemt.',{exact:true}).waitFor();
   assert.ok(calls.every(c=>c.body.action!=='render'||c.body.format==='preview'));
  }finally{await page.close();}
@@ -493,7 +493,7 @@ test('JPEG decoding locks design controls, then save below the designer persists
   await page.evaluate(()=>{const decode=window.createImageBitmap;window.createImageBitmap=async(...args)=>{await new Promise(resolve=>window.__releaseLogo=resolve);return decode(...args);};});
   await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'landscape-logo.jpg',mimeType:'image/jpeg',buffer:jpeg});
   await page.waitForFunction(()=>!!window.__releaseLogo);
-  for(const name of ['Prikker','Ekstra afrundede alle hjørner','Vis designpreview','Gem QR-kode','Annullér'])assert.equal(await page.getByRole('button',{name,exact:true}).isDisabled(),true,name+' must wait for logo decoding');
+  for(const name of ['Prikker','Ekstra afrundede alle hjørner','Preview QR','Gem QR-kode','Annullér'])assert.equal(await page.getByRole('button',{name,exact:true}).isDisabled(),true,name+' must wait for logo decoding');
   await page.evaluate(()=>window.__releaseLogo());
   await page.getByRole('img',{name:'Valgt logo',exact:true}).waitFor();
   assert.equal(await page.getByRole('button',{name:'Gem QR-kode',exact:true}).isEnabled(),true);
@@ -515,5 +515,23 @@ test('rejected logo releases the entire editor and shows its validation error',a
   await page.getByRole('alert').filter({hasText:'Vælg et gyldigt PNG- eller JPEG-logo'}).waitFor();
   for(const name of ['Prikker','Gem QR-kode','Annullér'])assert.equal(await page.getByRole('button',{name,exact:true}).isEnabled(),true);
   assert.equal(await page.getByRole('img',{name:'Valgt logo',exact:true}).count(),0);assert.equal(calls.length,0);
+ }finally{await page.close();}
+});
+
+test('new QR draft previews explicitly black on white with the uploaded logo',async()=>{
+ const png=await require('sharp')({create:{width:32,height:32,channels:3,background:'#fff'}}).png().toBuffer();
+ const {page,calls}=await open({answers:[(route,body)=>{
+  assert.equal(body.action,'render');assert.equal(body.draft.style.dark,'#000000');assert.equal(body.draft.style.light,'#ffffff');assert.equal(body.draft.style.logoBase64,png.toString('base64'));
+  return route.fulfill({json:{content:png.toString('base64'),mime:'image/png',encoding:'base64',filename:'qr.png'}});
+ }]});
+ try{
+  await page.getByRole('button',{name:'Opret QR-kode',exact:true}).click();
+  assert.equal(await page.getByLabel('Kodefarve',{exact:true}).inputValue(),'#000000');
+  await page.getByLabel('Kodetype',{exact:true}).selectOption('static');
+  await page.getByLabel('Webadresse',{exact:true}).fill('https://example.org');
+  await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'logo.png',mimeType:'image/png',buffer:png});
+  await page.getByRole('img',{name:'Valgt logo',exact:true}).waitFor();
+  await page.getByRole('button',{name:'Preview QR',exact:true}).click();
+  await page.getByRole('img',{name:'QR-preview med valgt design og logo',exact:true}).waitFor();assert.equal(calls.length,1);
  }finally{await page.close();}
 });

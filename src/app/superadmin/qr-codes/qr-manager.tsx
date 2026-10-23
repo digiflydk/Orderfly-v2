@@ -28,7 +28,7 @@ export type QrManagerProps = { brands: QrBrandChoice[]; initialCodes: QrCodeSumm
   allTime?: Record<string, QrLifetime | null>; onAnalytics?: (code: QrCodeSummary) => void; analyticsCodeKeys?: string[];
   renderExtras?: (draft: QrDraft, context: { id?: string; revision?: string }, change: (patch: Partial<QrDraft>) => void, uploadBusy: (busy: boolean) => void, needsSave: boolean) => React.ReactNode };
 
-const blank = (brandId = ''): QrDraft => ({ name: '', brandId, locationId: null, kind: 'dynamic', destination: '', staticType: 'url', fields: {}, campaign: '', tags: [], utm: { source: '', medium: 'qr', campaign: '', content: '', term: '' } });
+const blank = (brandId = ''): QrDraft => ({ style: { ...DEFAULT_STYLE }, name: '', brandId, locationId: null, kind: 'dynamic', destination: '', staticType: 'url', fields: {}, campaign: '', tags: [], utm: { source: '', medium: 'qr', campaign: '', content: '', term: '' } });
 const fieldClass = 'w-full rounded-md border bg-background px-3 py-2 text-sm';
 const buttonClass = 'qr-button rounded-md border px-3 py-2 text-sm disabled:opacity-50';
 const gridStyle = { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(min(100%, 220px), 1fr))', gap: '1rem' };
