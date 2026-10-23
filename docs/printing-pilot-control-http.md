@@ -64,3 +64,13 @@ StrictMode component with bounded synthetic HTTP responses: explicit confirmatio
 local file digest, one scoped job, no nonce in DOM/storage, no repeat after unknown
 response and permission revocation. It requires the pinned Playwright Chromium;
 an unavailable executable is an environment blocker, not a passing browser test.
+
+## Read-only testbon progress
+
+`GET /api/superadmin/printers/pilot` accepts exactly `brandId`, `locationId`, `printerId`, `printerRevision` and `credentialRevision`. It rechecks the authenticated superuser, native location edit grant, brand ownership, current printer and credential in an SDK read-only transaction. It validates the durable pointer, consumed qualification and canonical synthetic payload before returning a bounded status projection. It does not require output gates to remain enabled, so an operator can inspect the result after closing a test window.
+
+The printer panel's explicit **Opdater testbonens status** button reports `none`, `queued`, `offered`, `download_started`, `confirmed`, `failed`, `unknown` or `expired`. Nonterminal jobs past their deadline show `expired`; terminal results remain visible. A saved job suppresses new preparation in the panel. Refresh does not prepare, resend, reset or clear a job, and opening the panel does not poll automatically. Responses contain only the exact scope/revisions, state, creation/expiry/confirmation times and `physicalCompatibilityVerified: false`. Tokens, credentials, operator captures and print payloads are never exposed.
+
+`confirmed` means the printer reported success; the operator must still inspect the paper. An unavailable or conflicting status is not evidence of success or permission to retry. Stale printer/credential revisions require refreshing the printer overview. The existing durable one-test pointer is not reset by this change.
+
+Verification: `tests/unit/printing-pilot-status.cjs` exercises the actual GET/service/module graph against bounded Admin I/O fixtures, including all states, expiry, tenant/revision rejection, revoked credentials, corrupt records and read-only enforcement. The real Chromium pilot-controls test covers explicit status refresh and recovery after reopening, with no duplicate preparation.

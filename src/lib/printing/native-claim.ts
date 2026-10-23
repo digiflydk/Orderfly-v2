@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
 import { verifyNativePrinterDevice } from './device-auth-native';
+import { verifyCloudPrntHttpDevice } from './cloudprnt-http-auth';
 import { printJobId } from './domain';
 import { storedQueuedPrintJobSchema } from './queue-storage';
 
@@ -34,8 +35,9 @@ const unavailable = (): never => { throw new NativePrintClaimError('claims_unava
 declare const attemptBrand: unique symbol;
 export type NativePrintClaimAttempt = Readonly<{ [attemptBrand]: true }>;
 type Request = z.infer<typeof requestSchema>;
-const attempts = new WeakMap<object, { request: Request; claimToken: string; deliveryToken: string }>();
-const scopedDigest = (kind: 'claim' | 'delivery', token: string, request: Request) => createHash('sha256')
+type HttpRequest = Omit<Request, 'secret'> & { authorization: string };
+const attempts = new WeakMap<object, { request: Request | HttpRequest; claimToken: string; deliveryToken: string }>();
+const scopedDigest = (kind: 'claim' | 'delivery', token: string, request: Omit<Request, 'secret'>) => createHash('sha256')
   .update(JSON.stringify(['orderfly-delivery-v1', kind, request.brandId, request.locationId,
     request.printerId, request.jobId, token])).digest('hex');
 const sameDigest = (a: string, b: string) => timingSafeEqual(Buffer.from(a, 'hex'), Buffer.from(b, 'hex'));
@@ -65,6 +67,24 @@ export function createNativePrintClaimAttempt(input: unknown): NativePrintClaimA
   } catch { return reject(); }
 }
 
+/** HTTP orchestration uses the same reservation producer, without extracting a
+ * plaintext credential from the authentication boundary. Tokens live in this
+ * request only and may be returned only after the caller's transaction commits.
+ */
+export function createCloudPrntClaimAttempt(input: unknown): NativePrintClaimAttempt {
+  const parsed = requestSchema.omit({ secret: true }).extend({ authorization: z.string().min(78).max(256) }).strict().safeParse(input);
+  if (!parsed.success) return reject();
+  const handle = Object.freeze({}) as NativePrintClaimAttempt;
+  attempts.set(handle, { request: parsed.data, claimToken: randomBytes(32).toString('base64url'),
+    deliveryToken: randomBytes(32).toString('base64url') });
+  return handle;
+}
+export function nativeClaimAttemptTokens(attempt: NativePrintClaimAttempt) {
+  const value = attempts.get(attempt);
+  if (!value) return reject();
+  return { claimToken: value.claimToken, deliveryToken: value.deliveryToken };
+}
+
 /** Internal reservation ONLY. Queued job/ledger/activity are deliberately unchanged.
  * Missing transport capability/output policy means no dispatch grant is issued.
  * Returned snapshot is NOT commit proof and must never be used to deliver a job.
@@ -76,8 +96,11 @@ export async function reserveNativePrintClaim(context: NativeTransactionContext,
     if (!storedAttempt || !context || context.db !== getAdminDb()
       || !context.transaction || typeof context.transaction.get !== 'function') return reject();
     const { request } = storedAttempt;
-    const identity = await verifyNativePrinterDevice(context, { brandId: request.brandId,
-      locationId: request.locationId, printerId: request.printerId, secret: request.secret });
+    const identity = 'authorization' in request
+      ? await verifyCloudPrntHttpDevice(context, { brandId: request.brandId, locationId: request.locationId,
+        printerId: request.printerId, authorization: request.authorization })
+      : await verifyNativePrinterDevice(context, { brandId: request.brandId,
+        locationId: request.locationId, printerId: request.printerId, secret: request.secret });
     if (identity.printerState !== 'active') return reject();
     const printer = context.db.collection('locations').doc(request.locationId).collection('printers').doc(request.printerId);
     const claimRef = printer.collection('claims').doc(request.jobId);

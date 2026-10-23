@@ -5,6 +5,7 @@ import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getOrigin } from '@/lib/url';
 import { issuePilotQualificationSession, pilotOperatorAttestationSchema, PilotQualificationError } from './pilot-qualification';
 import { consumePilotQualification } from './pilot-qualification-consumption';
+import { pilotStatusScopeSchema, pilotStatusResultSchema, readPrinterPilotStatus } from './pilot-status';
 
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
 const revision = z.number().int().positive().safe();
@@ -41,6 +42,24 @@ function failure(error: unknown) {
     }
   } catch { /* Untrusted provider errors must never be reflected. */ }
   return unavailable();
+}
+
+export async function getPrinterPilotControl(request: Request): Promise<Response> {
+  try {
+    await requirePlatformSuperuser();
+    const url = new URL(request.url), keys = Object.keys(pilotStatusScopeSchema.shape);
+    if (request.method !== 'GET' || request.body || url.username || url.password
+      || request.headers.get('sec-fetch-site') === 'cross-site'
+      || Array.from(url.searchParams.keys()).length !== keys.length
+      || keys.some(key => url.searchParams.getAll(key).length !== 1)) return reply({ error: 'invalid_qualification' }, 400);
+    const values = Object.fromEntries(url.searchParams);
+    if (!/^[1-9][0-9]{0,15}$/.test(values.printerRevision) || !/^[1-9][0-9]{0,15}$/.test(values.credentialRevision)) return reply({ error: 'invalid_qualification' }, 400);
+    const parsed = pilotStatusScopeSchema.safeParse({ ...values, printerRevision: Number(values.printerRevision), credentialRevision: Number(values.credentialRevision) });
+    if (!parsed.success) return reply({ error: 'invalid_qualification' }, 400);
+    const result = pilotStatusResultSchema.parse(project(await readPrinterPilotStatus(parsed.data), Object.keys(pilotStatusResultSchema.shape)));
+    if (keys.some(key => result[key as keyof typeof parsed.data] !== parsed.data[key as keyof typeof parsed.data])) return unavailable();
+    return reply(result);
+  } catch (error) { return failure(error); }
 }
 
 /** Protected explicit human-supervised pilot control. No device delivery or activation. */

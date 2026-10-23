@@ -3,6 +3,8 @@
 Decision checkpoint: 2026-10-22. Repository baseline: `6856041f9d04bc22b99cb2a16b13343f58af8be1`.
 Scope: #485 source/contract decision, with #486 observations and #461 delivery as dependent work.
 
+Follow-up #549 implements a distinct [supervised purchase-test window](printing-supervised-order-test.md), requiring a confirmed synthetic job plus explicit on-site paper/device checks. That bounded operator permission does not write capability verification records or resolve the independent source requirements below. Unattended production remains blocked pending the #485 source decision and physical acceptance.
+
 **Implementation status: BLOCKED_SOURCE.** No authoritative evidence for either Esmeralda device was available through the authorized repository/issue access used for this decision. The official documentation establishes ways to collect facts; it does not verify these installed printers or provide a remotely verifiable hardware attestation. Do not implement an evidence producer that simply promotes configuration, an uploaded image, or an authenticated CloudPRNT poll into authority.
 
 ## Available facts and missing authority

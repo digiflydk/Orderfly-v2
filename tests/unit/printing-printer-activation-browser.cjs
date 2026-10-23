@@ -59,9 +59,11 @@ test('browser: reviewed activation is explicit, scope-bound and never retries an
   const url = 'https://activation.test';
   await page.goto(url); assert.equal(calls.length, 0);
   await expect(page.getByLabel('CloudPRNT-pilotadresse', { exact: true })).toHaveValue('https://activation.test/api/cloudprnt-pilot/brand/location/p1');
+  await expect(page.getByLabel('CloudPRNT-ordre-adresse', { exact: true })).toHaveValue('https://activation.test/api/cloudprnt/brand/location/p1');
   await expect(page.getByText('orderfly', { exact: true })).toBeVisible();
   await page.evaluate(() => window.changeTransport('cloudprnt-mqtt'));
   await expect(page.getByLabel('CloudPRNT-pilotadresse', { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel('CloudPRNT-ordre-adresse', { exact: true })).toHaveCount(0);
   await page.evaluate(() => window.changeTransport('cloudprnt-http'));
   await expect(page.getByLabel('CloudPRNT-pilotadresse', { exact: true })).toHaveValue('https://activation.test/api/cloudprnt-pilot/brand/location/p1');
   const check = page.getByRole('button', { name: 'Kontrollér printkø', exact: true });
@@ -97,6 +99,9 @@ test('browser: reviewed activation is explicit, scope-bound and never retries an
   await expect(page.getByLabel('Engangsvist adgangskode')).toHaveText(secret);
   await expect(address).toHaveValue('https://activation.test/api/cloudprnt-pilot/brand/location/p1');
   assert.equal((await address.inputValue()).includes(secret), false);
+  const orderAddress = page.getByLabel('CloudPRNT-ordre-adresse', { exact: true });
+  await expect(orderAddress).toHaveValue('https://activation.test/api/cloudprnt/brand/location/p1');
+  assert.equal((await orderAddress.inputValue()).includes(secret), false);
   assert.equal(credentialCalls.filter(Boolean).length, 1); assert.equal(credentialCalls.find(Boolean).operation, 'rotate');
   assert.deepEqual(errors, []);
 });

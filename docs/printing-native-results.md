@@ -1,5 +1,13 @@
 # Native print confirmation persistence (#456)
 
+The #549 supervised purchase endpoint now calls
+`prepareCloudPrntPrintConfirmation` in its native result transaction. That helper
+freshly authenticates the device and supervised window, reads the server-owned
+claim binding and strict delivery/terminal identity, and stages confirmation with
+the dispatch/pointer update. See [supervised purchases](printing-supervised-orders.md).
+The standalone legacy API described below remains unwired; unattended production
+capability and physical acceptance are still separate open requirements.
+
 This is an internal, unwired persistence service. It does not deliver jobs, expose
 an HTTP endpoint, enable physical output, or prove a physical printer printed.
 The missing durable claim/delivery identity is tracked in #460. Its canonical

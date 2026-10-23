@@ -7,6 +7,7 @@ import type { PickupAcceptanceCapability } from '@/lib/server/accept-pickup-chec
 import { kitchenPrintIntentEligibility, printJobId, type KitchenOrder } from './domain';
 import { storedPrinterSchema } from './storage';
 import { storedPrintQueueSchema as queueSchema, storedQueuedPrintJobSchema as jobSchema, PRINT_QUEUE_LIMIT } from './queue-storage';
+import { originalPrintHistorySchema } from './ordinary-print-storage';
 
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const scope = { brandId: id, locationId: id, printerId: id };
@@ -34,7 +35,7 @@ const manifestIdentitySchema = z.object({ schemaVersion: z.literal(1), id: z.lit
   policyRevision: z.number().int().positive().safe(), routingRevision: z.number().int().positive().safe(),
   rulesHash: z.string().regex(/^[a-f0-9]{64}$/), catalogHash: z.string().regex(/^[a-f0-9]{64}$/),
   targets: z.array(manifestTargetSchema).min(1).max(16) }).strict();
-const storedManifestSchema = manifestIdentitySchema.extend({ createdAt: z.number().int().positive().safe() });
+export const storedManifestSchema = manifestIdentitySchema.extend({ createdAt: z.number().int().positive().safe() });
 function boundedManifest(value: unknown): boolean {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   const row = value as Record<string, unknown>;
@@ -161,11 +162,12 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
     const command = commands[0];
     const printerRef = db.collection('locations').doc(command.locationId).collection('printers').doc(command.printerId);
     const jobs = printerRef.collection('jobs'), queueRef = printerRef.collection('queue').doc('state');
-    const [brand, location, printer, queue, rows, orders] = await Promise.all([
+    const [brand, location, printer, queue, rows, orders, history] = await Promise.all([
       tx.get(db.collection('brands').doc(command.brandId)),
       tx.get(db.collection('locations').doc(command.locationId)), tx.get(printerRef), tx.get(queueRef),
       tx.get(jobs.limit(PRINT_QUEUE_LIMIT + 1)),
       Promise.all(commands.map(c => tx.get(db.collection('orders').doc(c.orderId)))),
+      Promise.all(commands.map(c => tx.get(printerRef.collection('originalPrintHistory').doc(printJobId({ ...c, revision: 0 }))))),
     ]);
     const config = storedPrinterSchema.safeParse(printer.data());
     if (!brand.exists || location.data()?.brandId !== command.brandId || !config.success
@@ -208,16 +210,22 @@ async function prepareBatch(db: Firestore, tx: Transaction, input: unknown, sett
     const prepared = commands.map(c => {
       const identity = { ...c, revision: 0 as const }, jobId = printJobId(identity);
       const prior = existing.get(jobId);
-      if (settlement && (settlement.requireExistingJobs || prior)) {
+      const historyRow = history.find(row => row.id === jobId);
+      const terminal = historyRow?.exists ? originalPrintHistorySchema.safeParse(historyRow.data()) : null;
+      if (historyRow?.exists && (!terminal?.success || terminal.data.jobId !== jobId
+        || !sameScope(terminal.data) || terminal.data.orderId !== c.orderId || terminal.data.kind !== c.kind
+        || terminal.data.transferredAt > now || prior)) throw new PrintOutboxError('job_conflict');
+      const original = prior ?? (terminal?.success ? terminal.data : undefined);
+      if (settlement && (settlement.requireExistingJobs || original)) {
         const target = settlement.manifestTargets.find(target => target.printerId === c.printerId);
-        if (!prior || !target || prior.printerRevision !== target.printerRevision
-          || prior.printerRevision !== config.data.revision) throw new PrintOutboxError('job_conflict');
+        if (!original || !target || original.printerRevision !== target.printerRevision
+          || original.printerRevision !== config.data.revision) throw new PrintOutboxError('job_conflict');
       }
-      if (prior && settlement?.freshOnly) throw new PrintOutboxError('job_conflict');
+      if (original && settlement?.freshOnly) throw new PrintOutboxError('job_conflict');
       if (prior && (!current.success || prior.orderId !== c.orderId || prior.kind !== c.kind)) {
         throw new PrintOutboxError('job_conflict');
       }
-      return { jobId, created: !prior, identity };
+      return { jobId, created: !original, identity };
     });
     const additions = prepared.filter(p => p.created);
     const revision = current.success ? current.data.revision : 0;

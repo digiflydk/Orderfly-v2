@@ -4,7 +4,7 @@ Issue #518 wires the actual #517 one-job lifecycle to a separate Node endpoint:
 
 `https://orderfly.dk/api/cloudprnt-pilot/{brandId}/{locationId}/{printerId}`
 
-The ordinary connectivity endpoint remains identity-only/no-job. This pilot endpoint does not create or activate jobs. It serves only an already consumed, server-bound, unexpired supervised qualification and its exact immutable synthetic payload under both exact default-OFF configuration and pilot-output gates. Physical printer contact and gate activation are separate controlled operations.
+The ordinary endpoint remains no-job unless the separate supervised order-test output gate and a current, scoped test window permit order delivery. This pilot endpoint does not create or activate jobs. It serves only an already consumed, server-bound, unexpired supervised qualification and its exact immutable synthetic payload under both exact default-OFF configuration and pilot-output gates. Physical printer contact and gate activation are separate controlled operations.
 
 All methods reuse bounded process-local admission before parameters, body or native I/O. Native lifecycle code verifies Basic authentication freshly on each transaction attempt using the existing parser/verifier, without returning plaintext credentials. URL scope selects native identity; MAC and optional UID from Star queries remain syntactic protocol fields and never grant identity or permission. Authorization values, tokens and native provider errors must never be logged. Responses are no-store and vary by Authorization.
 

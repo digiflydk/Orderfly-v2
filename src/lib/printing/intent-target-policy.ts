@@ -4,6 +4,8 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
 import type { PrinterConfiguration, PrintJobKind } from './domain';
 import { storedPrinterSchema } from './storage';
+import { orderTestWindowSchema } from './order-test-schema';
+import { credentialSchema } from './device-credentials-service';
 
 const identifier = z.string().max(128).regex(/^[A-Za-z0-9_-]{1,128}$/);
 const scopeSchema = z.object({ brandId: identifier, locationId: identifier }).strict();
@@ -16,6 +18,7 @@ const policySchema = z.object({
   brandId: identifier, locationId: identifier,
   revision: z.number().int().positive().safe(), deletedAt: z.null(),
   enabled: z.boolean(), targets: z.array(targetSchema).max(16),
+  supervisedOrderTest: z.literal(true).optional(),
 }).strict();
 
 export class PrintIntentPolicyError extends Error {
@@ -114,6 +117,30 @@ export async function preparePrintIntentTargetPolicy(context: NativeTransactionC
     // OFF policies have no latent targets; ON policies must select explicitly.
     if (policy.enabled !== (policy.targets.length > 0)) throw new PrintIntentPolicyError('policy_unverified');
     if (!policy.enabled) return result(policy.revision, []);
+    if (policy.supervisedOrderTest) {
+      if (process.env.ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED !== 'true') return result(policy.revision, []);
+      const now = Date.now();
+      for (const target of policy.targets) {
+        const ref = locationRef.collection('printers').doc(target.printerId);
+        const [savedWindow, credential, printer] = await Promise.all([
+          transaction.get(ref.collection('orderTestWindows').doc('current')),
+          transaction.get(ref.collection('deviceCredentials').doc('current')),
+          transaction.get(ref),
+        ]);
+        const window = orderTestWindowSchema.safeParse(savedWindow.data()), c = credentialSchema.safeParse(credential.data());
+        const p = storedPrinterSchema.safeParse(printer.data());
+        if (!window.success || window.data.brandId !== brandId || window.data.locationId !== locationId
+          || window.data.printerId !== target.printerId || window.data.printerRevision !== target.printerRevision
+          || window.data.stoppedAt !== null || now < window.data.issuedAt || now >= window.data.expiresAt
+          || !c.success || c.data.revokedAt !== null || c.data.issuedAt > now
+          || c.data.brandId !== brandId || c.data.locationId !== locationId || c.data.printerId !== target.printerId
+          || c.data.credentialRevision !== window.data.credentialRevision || c.data.printerRevision !== target.printerRevision
+          || !p.success || p.data.revision !== target.printerRevision || p.data.configuration.state !== 'active'
+          || p.data.configuration.brandId !== brandId || p.data.configuration.locationId !== locationId
+          || p.data.configuration.id !== target.printerId || p.data.configuration.model !== window.data.model
+          || p.data.configuration.paperWidthMm !== window.data.paperWidthMm || p.data.configuration.transport !== 'cloudprnt-http') return result(policy.revision, []);
+      }
+    }
     const targets = await Promise.all(policy.targets.map(async target => {
       const snapshot = await transaction.get(locationRef.collection('printers').doc(target.printerId));
       const value = snapshot.data();
