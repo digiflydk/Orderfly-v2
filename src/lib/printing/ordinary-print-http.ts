@@ -104,7 +104,10 @@ export async function handleOrdinaryPrintHttp(request: Request, params: Promise<
   } catch (error) {
     if (error instanceof CloudPrntHttpAuthenticationError) return error.code === 'device_unavailable'
       ? reply(503, { error: 'ordinary_print_unavailable' }) : reply(401, { error: 'device_unverified' });
-    if (error instanceof OrdinaryOutputPolicyError) return reply(409, { error: 'order_test_unavailable' });
+    // Native polling authenticates the device before checking its scoped window.
+    // Missing/inactive windows mean no eligible work. GET/DELETE remain strict.
+    if (error instanceof OrdinaryOutputPolicyError) return request.method === 'POST'
+      ? reply(200, { jobReady: false }) : reply(409, { error: 'order_test_unavailable' });
     if (error instanceof OrdinaryPrintError) return reply(error.code === 'ordinary_print_unavailable' ? 503 : 409,
       { error: error.code === 'ordinary_print_unavailable' ? 'ordinary_print_unavailable' : 'ordinary_print_conflict' });
     return reply(nativeStarted ? 503 : 400, { error: nativeStarted ? 'ordinary_print_unavailable' : 'invalid_order_print_request' });

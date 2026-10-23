@@ -4,6 +4,8 @@ This release connects original kitchen print intents to CloudPRNT HTTP during an
 
 ## Operator flow
 
+With the deployment-wide order-test flag enabled, authenticated ordinary POST polls without an eligible scoped window (including missing, stopped or expired windows) return `200 { jobReady: false }` without consuming jobs or writing delivery state. Device authentication still runs first. GET/DELETE continue to reject inactive windows; database failures remain unavailable errors.
+
 1. Register and activate the printer, then provision its current device credentials using the existing protected controls. Configure the physical printer with the displayed **CloudPRNT-pilotadresse** and a polling interval of at least five seconds.
 2. Run the existing supervised synthetic qualification, including actual installed firmware >=3.2 and the installed paper profile. Print the synthetic testbon.
 3. Use **Opdater testbonens status**. Printer acknowledgement is displayed independently of human paper inspection. An offered/downloaded/unknown job cannot be silently retried or replaced.
