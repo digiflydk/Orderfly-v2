@@ -44,11 +44,11 @@ test('defaults are frozen, safe, strictly bounded and reject controls and unknow
   for (const patch of [{ heading: 'x'.repeat(81) }, { footer: 'x'.repeat(241) }, { address: 'x'.repeat(161) }, { phone: 'x'.repeat(41) }, { website: 'x'.repeat(121) }, { heading: '\u001bprint' }, { paperWidthMm: 72 }, { showCustomer: 'true' }, { total: 0 }]) assert.equal(receiptSettingsSchema.safeParse({ ...defaults, ...patch }).success, false);
 });
 test('missing settings read without writes; create and edit atomically include audit and increment CAS', async () => {
-  const f = fixture(); assert.deepEqual(await f.service.readReceiptSettings('brand'), { brandId: 'brand', revision: 0, settings: defaults }); assert.equal(f.writes.length, 0);
+  const f = fixture(); assert.deepEqual(await f.service.readReceiptSettings('brand'), { brandId: 'brand', revision: 0, settings: defaults, brandIdentity: { name: '', registrationNumber: '', address: '' } }); assert.equal(f.writes.length, 0);
   const saved = await f.service.writeReceiptSettings(command()); assert.equal(saved.revision, 1);
   assert.equal(f.records.get('receiptSettings/brand/audit/1').actorId, actorId);
   const settings = { ...defaults, heading: 'Min bon', paperWidthMm: 58 };
-  assert.deepEqual(await f.service.writeReceiptSettings(command({ expectedRevision: 1, settings })), { brandId: 'brand', revision: 2, settings });
+  assert.deepEqual(await f.service.writeReceiptSettings(command({ expectedRevision: 1, settings })), { brandId: 'brand', revision: 2, settings, brandIdentity: { name: '', registrationNumber: '', address: '' } });
   assert.equal(f.records.get('receiptSettings/brand/audit/2').previousRevision, 1); assert.equal(f.writes.length, 4);
   await assert.rejects(f.service.writeReceiptSettings(command()), /record_conflict/); assert.equal(f.writes.length, 4);
 });
@@ -83,7 +83,7 @@ test('authorized location staff read settings; wrong or missing scope and editor
 test('historical inactive brand receipts preserve order access while current permission and native ownership remain required', async () => {
   for (const brand of [{ isActive: false }, { deleted: true }, { isDeleted: true, deletedAt: 123 }, { isTestData: true }]) {
     const f = fixture({ staff: true }); f.records.set('brands/brand', brand);
-    assert.deepEqual(await f.service.readReceiptSettingsForOrder('brand', 'location'), { brandId: 'brand', revision: 0, settings: defaults });
+    assert.deepEqual(await f.service.readReceiptSettingsForOrder('brand', 'location'), { brandId: 'brand', revision: 0, settings: defaults, brandIdentity: { name: '', registrationNumber: '', address: '' } });
     f.records.set('locations/location', { brandId: 'foreign' });
     await assert.rejects(f.service.readReceiptSettingsForOrder('brand', 'location'), /forbidden/);
     const editor = fixture(); editor.records.set('brands/brand', { status: 'active', ...brand });
@@ -124,4 +124,25 @@ test('audit failure is atomic; unknown and corrupt settings fail closed without 
   for (const row of [{}, { schemaVersion: 1, brandId: 'foreign', revision: 1, settings: defaults }, { schemaVersion: 1, brandId: 'brand', revision: 0, settings: defaults }]) {
     const f = fixture(); f.records.set('receiptSettings/brand', row); await assert.rejects(f.service.readReceiptSettings('brand'), /settings_unavailable/); await assert.rejects(f.service.writeReceiptSettings(command()), /settings_unavailable/); assert.equal(f.writes.length, 0);
   }
+});
+
+test('brand identity is scoped, allowlisted, refreshed on reads and returned after save but never stored in settings', async () => {
+ const f = fixture();
+ f.records.set('brands/brand', { status: 'active', name: 'Trading', companyName: 'Legal ApS', street: 'Street 1', zipCode: '1234', city: 'Town', country: 'DK', companyRegNo: '12345678', logoUrl: 'https://example.com/logo.png', secret: 'PRIVATE' });
+ const expected = { name: 'Legal ApS', registrationNumber: '12345678', address: 'Street 1, 1234 Town, DK', logoUrl: 'https://example.com/logo.png' };
+ assert.deepEqual((await f.service.readReceiptSettings('brand')).brandIdentity, expected);
+ assert.deepEqual((await f.service.readReceiptSettingsForOrder('brand', 'location')).brandIdentity, expected);
+ assert.deepEqual((await f.service.writeReceiptSettings(command())).brandIdentity, expected);
+ assert.equal(f.records.get('receiptSettings/brand').brandIdentity, undefined);
+ assert.equal(f.records.get('receiptSettings/brand/audit/1').brandIdentity, undefined);
+ f.records.get('brands/brand').companyName = 'Updated ApS';
+ assert.equal((await f.service.readReceiptSettings('brand')).brandIdentity.name, 'Updated ApS');
+ await assert.rejects(f.service.readReceiptSettingsForOrder('foreign', 'location'), /forbidden/);
+});
+test('brand projection excludes invalid logos and private fields and handles absent master data', () => {
+ const { projectReceiptBrand } = loadTs('src/lib/receipts/brand-identity.ts');
+ assert.deepEqual(projectReceiptBrand({}), { name: '', registrationNumber: '', address: '' });
+ for (const logoUrl of ['javascript:alert(1)', 'data:image/svg+xml,abc', '//foreign.test/logo', 'https://user:password@example.com/logo', 'http://example.com/logo', 123]) {
+  assert.deepEqual(projectReceiptBrand({ name: 'Fallback', logoUrl, secret: 'PRIVATE' }), { name: 'Fallback', registrationNumber: '', address: '' });
+ }
 });

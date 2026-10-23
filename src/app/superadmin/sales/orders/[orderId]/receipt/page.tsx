@@ -15,7 +15,7 @@ export default async function OrderReceiptPage({ params }: { params: Promise<{ o
   const { orderId } = await params;
   const order = await getOrderDetails(orderId);
   if (!order) notFound();
-  const { settings } = await readReceiptSettingsForOrder(order.brandId, order.locationId);
+  const { settings, brandIdentity } = await readReceiptSettingsForOrder(order.brandId, order.locationId);
   return <div className="space-y-6">
     <div className="flex flex-wrap items-center justify-between gap-3">
       <Button variant="outline" asChild><Link href={`/superadmin/sales/orders/${encodeURIComponent(order.id)}`}>Tilbage til ordre</Link></Button>
@@ -23,6 +23,6 @@ export default async function OrderReceiptPage({ params }: { params: Promise<{ o
     </div>
     <div><h1 className="text-2xl font-bold">Vis kvittering</h1><p className="text-muted-foreground">Forhåndsvisning med det aktuelle layout. Visningen opretter ingen printjob og er ikke en kopi af en tidligere papirudskrift.</p></div>
     {!order.invoice && <p className="rounded border p-3 text-sm">Der findes endnu ikke et gemt fakturabilag. Visningen viser ordrens registrerede oplysninger og betalingsstatus.</p>}
-    <div className="rounded-lg bg-muted p-3 sm:p-6"><ReceiptPreview settings={settings} order={projectReceipt(order)} /></div>
+    <div className="rounded-lg bg-muted p-3 sm:p-6"><ReceiptPreview settings={settings} order={projectReceipt(order, brandIdentity)} /></div>
   </div>;
 }
