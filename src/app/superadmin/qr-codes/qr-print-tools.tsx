@@ -7,11 +7,12 @@ export type QrPrintAsset = { content: string; mime: string; encoding?: string; f
 export type QrPrintToolsProps = {
   draft: QrDraft;
   needsSave?: boolean;
+  canExport?: boolean;
   onUploadBusy?: (busy: boolean) => void;
   onDesignChange?: (style: NonNullable<QrDraft['style']>) => void;
   context: { id?: string; revision?: string };
   render: (draft: QrDraft, context: { id?: string; revision?: string }, options: {
-    logoBase64?: string; format: 'png' | 'svg' | 'print';
+    logoBase64?: string; format: 'png' | 'svg' | 'print' | 'preview';
   }) => Promise<QrPrintAsset>;
 };
 const MAX_LOGO_BYTES = 2 * 1024 * 1024;
@@ -40,7 +41,7 @@ function assetBlob(asset: QrPrintAsset, format: 'png' | 'svg' | 'print'): Blob {
   return new Blob([asset.content], { type: mime });
 }
 
-export function QrPrintTools({ draft, context, render, onDesignChange, onUploadBusy, needsSave = false }: QrPrintToolsProps) {
+export function QrPrintTools({ draft, context, render, onDesignChange, onUploadBusy, needsSave = false, canExport = true }: QrPrintToolsProps) {
   const [localLogo, setLocalLogo] = useState<{ base64: string; name: string } | null>(null);
   const logo = onDesignChange ? (draft.style?.logoBase64 ? { base64: draft.style.logoBase64, name: 'Gemt logo' } : null) : localLogo;
   const setLogo = (value: {base64:string;name:string}|null) => {
@@ -92,7 +93,7 @@ export function QrPrintTools({ draft, context, render, onDesignChange, onUploadB
   };
   const needsSavedCode = draft.kind === 'dynamic' && (!context.id || !context.revision);
   const produce = async (format: 'png' | 'svg' | 'print' | 'preview') => {
-    if (running.current || needsSavedCode || needsSave && format !== 'preview') return;
+    if (running.current || needsSavedCode || format !== 'preview' && (!canExport || needsSave)) return;
     // Preopen synchronously from the click. A window opened after await may be
     // blocked; sever opener immediately without losing our navigation handle.
     const popup = format === 'print' ? window.open('about:blank', '_blank') : null;
@@ -102,7 +103,7 @@ export function QrPrintTools({ draft, context, render, onDesignChange, onUploadB
     running.current = true; setBusy(true); setError(''); setNotice('');
     try {
       const value = logo ? { ...draft, style: { ...(draft.style || DEFAULT_STYLE), errorCorrectionLevel: 'H' as const } } : draft;
-      const asset = await render(value, { ...context }, { format: format === 'preview' ? 'png' : format, ...(logo && !onDesignChange ? { logoBase64: logo.base64 } : {}) });
+      const asset = await render(value, { ...context }, { format: format === 'preview' ? (canExport ? 'png' : 'preview') : format, ...(logo && !onDesignChange ? { logoBase64: logo.base64 } : {}) });
       if (at !== generation.current) { popup?.close(); return; }
       const blob = assetBlob(asset, format === 'preview' ? 'png' : format);
       if (format === 'preview') {
@@ -132,8 +133,9 @@ export function QrPrintTools({ draft, context, render, onDesignChange, onUploadB
     {logo && <div className="flex flex-wrap items-center gap-2"><img src={`data:image/${isPng(Uint8Array.from(atob(logo.base64.slice(0, 12)), c => c.charCodeAt(0))) ? 'png' : 'jpeg'};base64,${logo.base64}`} alt="Valgt logo" width={56} height={56} className="qr-logo-swatch" /><p className="break-all text-sm">Valgt logo: {logo.name}</p><button type="button" className={buttonClass} disabled={busy} onClick={() => { generation.current++; setLogo(null); setPreview(''); if (input.current) input.current.value = ''; }}>Fjern logo</button></div>}
     <p className="text-sm">PNG eller JPEG · højst 2 MB · højst 2048 × 2048 pixels. Anbefalet: kvadratisk logo på mindst 256 × 256 pixels med luft omkring motivet. Logoet tilpasses automatisk til 15 % af QR-mønstrets bredde, bevarer proportionerne og gemmes som en lille PNG. Ved 512 pixels eksport er logofeltet typisk ca. 60 pixels bredt.</p>
     {onDesignChange && <QrShapeControls style={draft.style || DEFAULT_STYLE} change={onDesignChange} />}
-    <h4 className="qr-export-label">DOWNLOAD OG PRINT</h4>
+    <>{canExport && <><h4 className="qr-export-label">DOWNLOAD OG PRINT</h4>
     <div className="flex flex-wrap gap-2"><button type="button" className={buttonClass} disabled={busy || needsSavedCode || needsSave} onClick={() => { void produce('png'); }}>PNG med valgt logo</button><button type="button" className={buttonClass} disabled={busy || needsSavedCode || needsSave} onClick={() => { void produce('svg'); }}>SVG med valgt logo</button><button type="button" className={buttonClass} disabled={busy || needsSavedCode || needsSave} onClick={() => { void produce('print'); }}>Åbn print / Gem som PDF</button></div>
+    </>}</>
     {(needsSavedCode || needsSave) && <p className="text-sm">Gem den dynamiske kode og åbn den igen før eksport.</p>}
     <p className="text-sm">PDF laves via browserens printvindue. Kontrollér det færdige tryk med en telefon, før det bruges.</p>
     </div><aside className="qr-print-preview" aria-label="Designpreview"><h4>FORHÅNDSVISNING</h4><div className="qr-preview-canvas">{preview ? <img src={preview} alt="QR-preview med valgt design og logo" width={300} height={300} /> : <div><strong>Dit QR-design</strong><p>Se koden med de valgte farver og dit logo før download.</p></div>}</div><button type="button" className={buttonClass} disabled={busy || needsSavedCode} onClick={() => { void produce('preview'); }}>{preview ? 'Opdater preview' : 'Vis designpreview'}</button><p>Preview og download bruger samme generator.</p></aside></div>

@@ -38,7 +38,7 @@ export async function loadQrWorkspace() {
  const analyticsGrants=session.superuser?null:await orderflyReadGrants(permission('analytics')).catch(error=>{if(error instanceof AuthorityError&&error.status===403)return [];throw error;});
  const allTime:Record<string,QrLifetime|null>={};
  const analyticsCodeKeys=new Set<string>();
- let truncated=false;
+ let truncated=false,codeBytes=2;
  grantsLoop: for(const grant of grants){
   const brand=await db.collection('brands').doc(grant.brandId).get();
   if(!brand.exists)continue;
@@ -50,21 +50,16 @@ export async function loadQrWorkspace() {
   const scope={brandId:grant.brandId,locationIds:grant.locationIds,actorId:session.actorId};
   for(const locationId of [...(grant.locationIds===null?[null]:[]),...locations.map(l=>l.id)]){
    const result=await store.list(scope,{locationId});truncated ||= result.truncated;
-   codes.push(...result.rows.map(qrSummary));
    for(const row of result.rows){
+    const summary=qrSummary(row),bytes=Buffer.byteLength(JSON.stringify(summary),'utf8')+(codes.length?1:0);
+    if(codes.length>=2000 || codeBytes+bytes>4_000_000){truncated=true;break grantsLoop;}
+    codes.push(summary);codeBytes+=bytes;
     if(session.superuser||analyticsGrants?.some(g=>g.brandId===row.brandId&&(g.locationIds===null||row.locationId!==null&&g.locationIds.includes(row.locationId))))analyticsCodeKeys.add(`${row.brandId}/${row.id}`);
-   }
-   if(session.superuser||analyticsGrants?.some(g=>g.brandId===grant.brandId&&g.locationIds===null)){
-    for(const row of result.rows){
+    if(session.superuser||analyticsGrants?.some(g=>g.brandId===grant.brandId&&g.locationIds===null)){
      const saved=(row as unknown as {lifetime?:unknown}).lifetime;
      try{allTime[`${row.brandId}/${row.id}`]=saved==null?null:readQrLifetime(saved);}catch{allTime[`${row.brandId}/${row.id}`]=null;}
     }
    }
-   if(Buffer.byteLength(JSON.stringify(codes),'utf8')>4_000_000){
-    while(codes.length && Buffer.byteLength(JSON.stringify(codes),'utf8')>4_000_000) codes.pop();
-    truncated=true; break grantsLoop;
-   }
-   if(codes.length>2000){codes.splice(2000);truncated=true;break;}
   }
   if(codes.length>=2000)break;
  }

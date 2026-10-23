@@ -1,7 +1,7 @@
 const {test}=require('node:test'),assert=require('node:assert/strict');
 const {loadTs}=require('../helpers/load-ts.cjs');
 const lifetime={openings:7,probableScans:5,excludedOpenings:2,firstOpenedAt:1,lastOpenedAt:2};
-async function workspace(analyticsLocations,values=[lifetime],superuser=false){
+async function workspace(analyticsLocations,values=[lifetime],superuser=false,summary=row=>({id:row.id,brandId:row.brandId})){
  const snap=(id,data)=>({id,exists:true,data:()=>data});
  const db={collection(name){return {doc(id){return {get:async()=>snap(id,name==='brands'?{name:'Own'}:{brandId:'own',isActive:true})};},where(){return this;},limit(){return this;},get:async()=>({docs:name==='brands'?[snap('own',{})]:[snap('loc',{brandId:'own',isActive:true})]})};}};
  class AuthorityError extends Error{constructor(code,status=403){super(code);this.status=status;}}
@@ -12,7 +12,7 @@ async function workspace(analyticsLocations,values=[lifetime],superuser=false){
    return [{brandId:'own',locationIds:['loc']}];
   }},
   './store':{QrStoreError:class extends Error{},createQrStore:()=>({list:async()=>({truncated:false,rows:values.map((value,i)=>({id:'code'+i,brandId:'own',locationId:'loc',lifetime:value}))})})},
-  './admin':{qrSummary:row=>({id:row.id,brandId:row.brandId}),createQrAdminService:()=>{}},
+  './admin':{qrSummary:summary,createQrAdminService:()=>{}},
  });
  return runtime.loadQrWorkspace();
 }
@@ -60,4 +60,13 @@ test('code analytics eligibility preserves brand and current location grants ind
  for(const grant of [undefined,[],['other']])assert.deepEqual((await workspace(grant)).analyticsCodeKeys,[]);
  for(const grant of [null,['loc']])assert.deepEqual((await workspace(grant)).analyticsCodeKeys,['own/code0']);
  assert.deepEqual((await workspace(undefined,[lifetime],true)).analyticsCodeKeys,['own/code0']);
+});
+
+test('large-logo catalogue serializes each candidate once and truthfully truncates within byte budget',async()=>{
+ let serializations=0;
+ const result=await workspace(null,Array(100).fill(lifetime),false,row=>({id:row.id,brandId:row.brandId,toJSON(){serializations++;return {id:row.id,brandId:row.brandId,style:{logoBase64:'A'.repeat(128000)}};}}));
+ assert.equal(result.truncated,true);assert.equal(result.codes.length,31);
+ assert.equal(serializations,32,'serialize each admitted row and first rejected row only');
+ assert.equal(Object.keys(result.allTime).length,31);assert.equal(result.analyticsCodeKeys.length,31);
+ assert.ok(Buffer.byteLength(JSON.stringify(result.codes))<=4_000_000);
 });

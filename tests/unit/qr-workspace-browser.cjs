@@ -44,6 +44,7 @@ before(async () => {
     if(params.has('truncated'))props.truncated=true;
     if(params.has('off'))props.dynamicEnabled=false;
     if(params.has('missingflag'))delete props.dynamicEnabled;
+    if(params.has('editonly'))props.capabilities={create:true,edit:true,archive:false,export:false};
     if(params.has('exportonly'))props.capabilities={create:false,edit:false,archive:false,export:true};
     if(params.has('collision')){props.brands.push({id:'b2',name:'Andet brand',locations:[{id:'l2',name:'Anden afdeling'}]});props.codes.push({...props.codes[0],brandId:'b2',locationId:'l2',name:'Anden kode'});}
     if(params.has('lifetime')){props.codes.push({...props.codes[0],id:'legacy',name:'Gammel kode'},{...props.codes[0],id:'hidden',name:'Ingen totaladgang'},{...props.codes[0],id:'zero',name:'Ny tom kode'});props.allTime={'b1/qr1':{openings:9,probableScans:7,excludedOpenings:2,firstOpenedAt:1792533600000,lastOpenedAt:1792619999000},'b2/qr1':{openings:20,probableScans:18,excludedOpenings:2,firstOpenedAt:1792533600000,lastOpenedAt:1792619999000},'b1/legacy':null,'b1/zero':{openings:0,probableScans:0,excludedOpenings:0,firstOpenedAt:null,lastOpenedAt:null}};}
@@ -458,3 +459,23 @@ test('catalogue pagination is bounded and filters reset the selected page',async
    assert.equal(calls.length,1);assert.equal(calls[0].body.brandId,'b1');assert.equal(calls[0].body.id,'qr1');
   }finally{await page.close();}
  });
+
+test('editor without export can upload/save designs and preview through view authorization, without download controls',async()=>{
+ const png=(await require('sharp')({create:{width:32,height:32,channels:4,background:'#123322'}}).png().toBuffer()).toString('base64');
+ let saved;
+ const {page,calls}=await open({query:'?editonly',answers:[
+  (route,body)=>{assert.equal(body.action,'render');assert.equal(body.format,'preview');return route.fulfill({json:{payload:'https://orderfly.dk/q/'+'a'.repeat(32),imageUrl:'data:image/png;base64,'+png}});},
+  (route,body)=>{assert.equal(body.action,'save');saved={...base,...body.draft,revision:'2'};assert.equal(saved.style.moduleShape,'rounded');assert.equal(saved.style.logoBase64,png);return route.fulfill({json:saved});},
+  (route,body)=>{assert.equal(body.action,'list');return route.fulfill({json:{...initial,capabilities:{create:true,edit:true,archive:false,export:false},codes:[saved]}});}
+ ]});
+ try{
+  await page.getByRole('button',{name:'Redigér Bord 1',exact:true}).click();
+  await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'logo.png',mimeType:'image/png',buffer:Buffer.from(png,'base64')});
+  await page.getByText('Valgt logo: Gemt logo',{exact:true}).waitFor();await page.getByRole('button',{name:'Afrundede',exact:true}).click();
+  assert.equal(await page.getByRole('button',{name:'PNG med valgt logo',exact:true}).count(),0);
+  assert.equal(await page.getByRole('button',{name:'Åbn print / Gem som PDF',exact:true}).count(),0);
+  await page.getByRole('button',{name:'Vis designpreview',exact:true}).click();await page.getByRole('img',{name:'QR-preview med valgt design og logo'}).waitFor();
+  await page.getByRole('button',{name:'Gem QR-kode',exact:true}).click();await page.getByText('QR-koden er gemt.',{exact:true}).waitFor();
+  assert.ok(calls.every(c=>c.body.action!=='render'||c.body.format==='preview'));
+ }finally{await page.close();}
+});

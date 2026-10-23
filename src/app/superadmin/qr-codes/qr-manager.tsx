@@ -263,7 +263,7 @@ export function QrManager({ brands, initialCodes, capabilities, api, dynamicEnab
         {dynamicNeedsSave && dynamicEnabled && <p className="text-sm">Gem koden og åbn den igen før preview eller download. Det sikrer, at printet bruger det permanente link.</p>}
       </fieldset>
       {preview && <figure className="space-y-2"><img src={preview.imageUrl} alt="Eksempel på QR-kode" width={256} height={256} style={{ maxWidth: '100%', height: 'auto' }} /><figcaption className="break-all text-xs">{draft.kind === 'dynamic' ? 'Preview. Brug den gemte kodes permanente link ved print.' : preview.payload}</figcaption></figure>}
-      {capabilities.export && !busy && !uncertain && renderExtras?.(draft, editing ? { id: editing.id, revision: editing.revision } : {}, change, setUploadBusy, dynamicNeedsSave)}
+      {(capabilities.export || (editing ? capabilities.edit : capabilities.create)) && !busy && !uncertain && renderExtras?.(draft, editing ? { id: editing.id, revision: editing.revision } : {}, change, setUploadBusy, dynamicNeedsSave)}
     </form>}
 
     {pendingArchive && <div role="dialog" aria-labelledby="archive-title" className="space-y-3 rounded-lg border p-4"><h2 id="archive-title">Arkivér QR-kode</h2><p>Koden {pendingArchive.name} vil ikke længere sende kunder videre. Trykte koder bliver berørt.</p><div className="flex flex-wrap gap-2"><button type="button" className={buttonClass} disabled={busy || uncertain} onClick={() => updateStatus(pendingArchive, 'archived')}>Bekræft arkivering</button><button type="button" className={buttonClass} disabled={busy || uncertain} onClick={() => { setPendingArchive(null); setError(''); retry.current = null; }}>Fortryd</button></div></div>}

@@ -44,3 +44,10 @@ replay, matching export bytes, explicit removal, unchanged slug and audit histor
 Browser component tests cover file selection, save-draft propagation, patterns,
 corner choices, download/preview and mobile sizing. These are isolated software
 checks, not actual production writes or physical phone/print acceptance.
+
+Editing and exporting remain separate permissions. Create/edit users can upload,
+remove and save designs without export permission; their image preview uses the
+existing view-authorized `preview` command. Download/print controls and server
+export commands still require export permission. Catalogue byte accounting
+serializes each candidate once and stops at the first row exceeding its budget,
+without repeatedly serializing the whole accumulated array.
