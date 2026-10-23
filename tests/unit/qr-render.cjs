@@ -108,3 +108,18 @@ test('invalid and oversized payloads fail while valid Unicode remains exact', as
   const payload = 'Hej 👋 ÆØÅ æøå';
   assert.equal(await decode((await renderQr(payload)).png), payload);
 });
+
+test('six module patterns and all finder styles preserve the permanent payload in PNG and SVG with a saved logo', async () => {
+  const payload='https://orderfly.dk/q/b31e5762cbadc412ca470823a28a87d5';
+  const logo=await sharp({create:{width:300,height:180,channels:4,background:'#164e3b'}}).png().toBuffer();
+  for(const moduleShape of ['square','dots','rounded','horizontal','vertical','diamond']) {
+    const result=await renderQr(payload,{width:512,errorCorrectionLevel:'H',moduleShape,cornerShapes:['square','rounded','extra-rounded'],cornerColor:'#164e3b',logoBase64:logo.toString('base64')});
+    assert.equal(await decode(result.png),payload,moduleShape);
+    assert.equal(await decode(await sharp(Buffer.from(result.svg)).png().toBuffer()),payload,moduleShape+' SVG');
+    assert.ok(result.svg.includes('<image'));
+  }
+});
+test('style inputs reject invalid pattern, finder, color and logo bytes instead of serving unreadable assets',async()=>{
+  for(const options of [{moduleShape:'script'},{cornerShape:'circle'},{cornerShapes:['square']},{cornerShapes:['square','rounded','bad']},{cornerColor:'#ffffff'},{cornerColor:'url(https://example.com)'},{logoBase64:'PHN2Zy8+'}])
+    await assert.rejects(renderQr('https://example.com',options));
+});

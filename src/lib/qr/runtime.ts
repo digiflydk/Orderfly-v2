@@ -39,7 +39,7 @@ export async function loadQrWorkspace() {
  const allTime:Record<string,QrLifetime|null>={};
  const analyticsCodeKeys=new Set<string>();
  let truncated=false;
- for(const grant of grants){
+ grantsLoop: for(const grant of grants){
   const brand=await db.collection('brands').doc(grant.brandId).get();
   if(!brand.exists)continue;
   const all=grant.locationIds===null?(await db.collection('locations').where('brandId','==',grant.brandId).limit(501).get()).docs
@@ -59,6 +59,10 @@ export async function loadQrWorkspace() {
      const saved=(row as unknown as {lifetime?:unknown}).lifetime;
      try{allTime[`${row.brandId}/${row.id}`]=saved==null?null:readQrLifetime(saved);}catch{allTime[`${row.brandId}/${row.id}`]=null;}
     }
+   }
+   if(Buffer.byteLength(JSON.stringify(codes),'utf8')>4_000_000){
+    while(codes.length && Buffer.byteLength(JSON.stringify(codes),'utf8')>4_000_000) codes.pop();
+    truncated=true; break grantsLoop;
    }
    if(codes.length>2000){codes.splice(2000);truncated=true;break;}
   }

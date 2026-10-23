@@ -1,11 +1,11 @@
 import { z } from 'zod';
 import { applyUtm, buildStaticPayload, normalizeDestination, type QrStaticInput, type UtmTags } from './payload';
-import { renderQr } from './render';
+import { renderQr, normalizeQrLogo } from './render';
 import { qrPrintHtml } from './print';
 import { createQrStore, QrStoreError, type QrDatabase, type QrRecord, type QrScope } from './store';
 
 const id=z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
-const style=z.object({width:z.number().int().min(128).max(4096),margin:z.number().int().min(4).max(32),dark:z.string().regex(/^#[a-f0-9]{6}$/i),light:z.string().regex(/^#[a-f0-9]{6}$/i),errorCorrectionLevel:z.enum(['L','M','Q','H'])}).strict();
+const style=z.object({width:z.number().int().min(128).max(4096),margin:z.number().int().min(4).max(32),dark:z.string().regex(/^#[a-f0-9]{6}$/i),light:z.string().regex(/^#[a-f0-9]{6}$/i),errorCorrectionLevel:z.enum(['L','M','Q','H']),logoBase64:z.string().max(2796204).optional(),moduleShape:z.enum(['square','dots','rounded','horizontal','vertical','diamond']).optional(),cornerShape:z.enum(['square','rounded','extra-rounded']).optional(),cornerShapes:z.tuple([z.enum(['square','rounded','extra-rounded']),z.enum(['square','rounded','extra-rounded']),z.enum(['square','rounded','extra-rounded'])]).optional(),cornerColor:z.string().regex(/^#[a-f0-9]{6}$/i).optional()}).strict();
 const utm=z.object({source:z.string().max(200),medium:z.string().max(200),campaign:z.string().max(200),content:z.string().max(200),term:z.string().max(200)}).strict();
 export const qrDraftSchema=z.object({name:z.string().max(160),brandId:id,locationId:id.nullable(),kind:z.enum(['dynamic','static']),destination:z.string().max(2000),staticType:z.enum(['url','text','wifi','vcard','email','phone','sms']),fields:z.record(z.string().max(2000)),campaign:z.string().max(160),tags:z.array(z.string().max(50)).max(20),utm,expiresAt:z.number().int().positive().nullable().optional(),style:style.optional()}).strict();
 export type QrAdminDraft=z.infer<typeof qrDraftSchema>;
@@ -73,6 +73,7 @@ export function createQrAdminService(deps:QrAdminDependencies) {
     const current=await store.get(scope,c.context.id);
     await scoped('edit',current.brandId,current.locationId);
    }
+   if(draft.style?.logoBase64) draft.style={...draft.style,logoBase64:await normalizeQrLogo(draft.style.logoBase64),errorCorrectionLevel:'H'};
    // Validate styles against the fixed-length permanent link before persisting.
    await renderQr(`https://orderfly.dk/q/${'0'.repeat(32)}`,draft.style);
    const input={name:draft.name,destination:formDestination(draft.destination,draft.utm),locationId:draft.locationId,campaign:draft.campaign,tags:draft.tags,expiresAt:draft.expiresAt,design:draft.style};

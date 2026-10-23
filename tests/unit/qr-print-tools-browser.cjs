@@ -15,7 +15,7 @@ before(async () => {
     if(options.has('blocked'))window.open=()=>null;
     window.__unmount=()=>root.unmount();window.__draft=${JSON.stringify(draft)};
     const render=async(draft,context,options)=>{const response=await fetch('/render',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({draft,context,options})});if(!response.ok)throw Error('failed');return response.json()};
-    const root=ReactDOM.createRoot(document.getElementById('root'));const draw=()=>root.render(React.createElement(module.exports.QrPrintTools,{draft:window.__draft,context:options.has('unsaved')?{}:{id:'q1',revision:'r1'},render}));window.__changeScope=()=>{window.__draft={...window.__draft,brandId:'b2'};draw()};draw();`;
+    const root=ReactDOM.createRoot(document.getElementById('root'));const draw=()=>root.render(React.createElement(module.exports.QrPrintTools,{draft:window.__draft,context:options.has('unsaved')?{}:{id:'q1',revision:'r1'},render,...(options.has('persist')?{onDesignChange:style=>{window.__draft={...window.__draft,style};window.__savedDesign=style;draw();}}:{})}));window.__changeScope=()=>{window.__draft={...window.__draft,brandId:'b2'};draw()};draw();`;
   server = http.createServer((req, res) => {
     if (req.url === '/react.js') { res.setHeader('content-type', 'application/javascript; charset=utf-8'); return res.end(fs.readFileSync(path.join(react, 'umd/react.development.js'))); }
     if (req.url === '/dom.js') { res.setHeader('content-type', 'application/javascript; charset=utf-8'); return res.end(fs.readFileSync(path.join(dom, 'umd/react-dom.development.js'))); }
@@ -71,7 +71,7 @@ test('invalid SVG, spoofed raster and oversized files never reach the renderer',
 test('removal and scope changes discard the ephemeral logo without storage', async () => {
   const { page, calls } = await open();
   try {
-    const upload = async () => { await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({ name: 'logo.jpg', mimeType: 'image/jpeg', buffer: Buffer.from([255,216,255,1,2,3,4,5]) });await page.getByRole('button', { name: 'Fjern logo' }).waitFor(); };
+    const upload = async () => { await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({ name: 'logo.png', mimeType: 'image/png', buffer: png });await page.getByRole('button', { name: 'Fjern logo' }).waitFor(); };
     await upload(); await page.getByRole('button', { name: 'Fjern logo' }).click();
     let download = page.waitForEvent('download'); await page.getByRole('button', { name: 'PNG med valgt logo' }).click();await download;
     assert.equal('logoBase64' in calls[0].options, false);assert.equal(calls[0].draft.style.errorCorrectionLevel, 'M');
@@ -146,4 +146,26 @@ test('a late design preview from a previous scope is discarded', async () => {
     await page.getByRole('button',{name:'Vis designpreview',exact:true}).waitFor();
     assert.equal(await page.getByRole('img',{name:'QR-preview med valgt design og logo',exact:true}).count(),0);
   }finally{await page.close();}
+});
+
+for(const width of [390,1440])test(`saved design controls propagate logo, module and individual corner choices at ${width}px`,async()=>{
+  const {page,calls}=await open({width,query:'persist'});
+  try {
+    await page.getByLabel('Logo, PNG eller JPEG, højst 2 MB').setInputFiles({name:'logo.png',mimeType:'image/png',buffer:png});
+    await page.getByText('Valgt logo: Gemt logo',{exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.__savedDesign.logoBase64),png.toString('base64'));
+    await page.getByRole('button',{name:'Prikker',exact:true}).click();
+    await page.getByLabel('Tilpas hvert hjørne',{exact:true}).check();
+    await page.getByRole('button',{name:'Ekstra afrundede øverst højre',exact:true}).click();
+    await page.getByLabel('Brug QR-kodens farve til hjørner',{exact:true}).uncheck();
+    assert.deepEqual(await page.evaluate(()=>({shape:window.__savedDesign.moduleShape,corners:window.__savedDesign.cornerShapes,color:window.__savedDesign.cornerColor})),{shape:'dots',corners:['square','extra-rounded','square'],color:draft.style.dark});
+    await page.getByRole('button',{name:'Vis designpreview',exact:true}).click();
+    await page.getByRole('img',{name:'QR-preview med valgt design og logo'}).waitFor();
+    assert.equal(calls.at(-1).draft.style.moduleShape,'dots');assert.equal(calls.at(-1).draft.style.errorCorrectionLevel,'H');
+    await page.getByRole('button',{name:'Fjern logo',exact:true}).click();
+    assert.equal(await page.evaluate(()=>window.__savedDesign.logoBase64),undefined);
+    assert.equal(await page.getByRole('img',{name:'QR-preview med valgt design og logo'}).count(),0);
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);
+    assert.ok(await page.getByText(/højst 2048 × 2048 pixels/).count());
+  } finally {await page.close();}
 });
