@@ -338,6 +338,7 @@ test('static print works with dynamic runtime off and export-only permission', a
   try {
     await page.getByRole('button', { name: 'Generér statisk QR-kode', exact: true }).click();
     await page.getByRole('combobox', { name: 'Indholdstype', exact: true }).selectOption('text'); await page.getByLabel('Tekst', { exact: true }).fill('hej');
+    await page.getByText('Ved statiske koder bruges logo og design kun til eksport og gemmes ikke.', {exact:false}).waitFor();
     const opened = page.waitForEvent('popup'); await page.getByRole('button', { name: 'Åbn print / Gem som PDF', exact: true }).click(); popup = await opened;
     await popup.getByRole('heading', { name: 'Statisk print', exact: true }).waitFor(); assert.equal(await popup.evaluate(() => window.opener), null);
     assert.equal(calls.length, 1); assert.equal(calls[0].body.format, 'print'); assert.equal(calls[0].body.draft.kind, 'static'); assert.deepEqual(calls[0].body.context, {});

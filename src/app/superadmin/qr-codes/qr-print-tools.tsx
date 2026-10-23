@@ -127,7 +127,7 @@ export function QrPrintTools({ draft, context, render, onDesignChange, onUploadB
     <style>{PRINT_DESIGN_CSS}</style>
     <h3 className="font-semibold">Logo og print</h3>
     <div className="qr-print-columns"><div className="qr-print-controls">
-    <p className="text-sm">Logo og design gemmes med knappen Gem QR-kode. Med logo bruges højeste fejlkorrektion, H.</p>
+    <p className="text-sm">{draft.kind === 'dynamic' ? 'Logo og design gemmes med knappen Gem QR-kode.' : 'Ved statiske koder bruges logo og design kun til eksport og gemmes ikke.'} Med logo bruges højeste fejlkorrektion, H.</p>
     <label className="qr-upload block">Logo, PNG eller JPEG, højst 2 MB<input ref={input} type="file" accept="image/png,image/jpeg" disabled={busy} onChange={event => { void chooseLogo(event.target.files?.[0]); }} className="block w-full text-sm" /></label>
     {logo && <div className="flex flex-wrap items-center gap-2"><img src={`data:image/${isPng(Uint8Array.from(atob(logo.base64.slice(0, 12)), c => c.charCodeAt(0))) ? 'png' : 'jpeg'};base64,${logo.base64}`} alt="Valgt logo" width={56} height={56} className="qr-logo-swatch" /><p className="break-all text-sm">Valgt logo: {logo.name}</p><button type="button" className={buttonClass} disabled={busy} onClick={() => { generation.current++; setLogo(null); setPreview(''); if (input.current) input.current.value = ''; }}>Fjern logo</button></div>}
     <p className="text-sm">PNG eller JPEG · højst 2 MB · højst 2048 × 2048 pixels. Anbefalet: kvadratisk logo på mindst 256 × 256 pixels med luft omkring motivet. Logoet tilpasses automatisk til 15 % af QR-mønstrets bredde, bevarer proportionerne og gemmes som en lille PNG. Ved 512 pixels eksport er logofeltet typisk ca. 60 pixels bredt.</p>
