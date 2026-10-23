@@ -19,6 +19,9 @@ test('#549 supervised pilot preserves ordinary unpaid combo acceptance without p
       model: 'mc-print3', paperWidthMm: 80, qualificationId: 'q'.repeat(43), routingRevision: 1,
       issuedAt: now, expiresAt: now + 3600000, stoppedAt: null, actorId: 'firebase:supervisor',
       trust: 'supervised_order_test', physicalPaperCheckedByOperator: true, unattendedAuthorized: false });
+    const eligible = await f.db.runTransaction(transaction => f.load('src/lib/printing/intent-target-policy.ts')
+      .preparePrintIntentTargetPolicy({ db: f.db, transaction }, { brandId: 'b', locationId: 'l', orderId: 'order' }));
+    assert.equal(eligible.enabled, true, 'the test window actually enables ordinary products before adding a combo');
     f.records.get('orders/order').productItems.push({ id: 'menu', itemType: 'combo', name: 'Menu', quantity: 1,
       comboSelections: [{ groupName: 'Pizza', products: [{ id: 'p', name: 'Pizza' }] }] });
     await f.accept();

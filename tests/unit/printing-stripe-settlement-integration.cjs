@@ -104,6 +104,9 @@ test('#549 supervised print pilot never blocks a paid combo purchase or prints a
         issuedAt: now, expiresAt: now + 3600000, stoppedAt: null, actorId: 'firebase:supervisor',
         trust: 'supervised_order_test', physicalPaperCheckedByOperator: true, unattendedAuthorized: false });
     }
+    const eligible = await f.db.runTransaction(transaction => f.load('src/lib/printing/intent-target-policy.ts')
+      .preparePrintIntentTargetPolicy({ db: f.db, transaction }, { brandId: 'b', locationId: 'l', orderId: f.orderId }));
+    assert.equal(eligible.enabled, true, 'the test window actually enables ordinary products before adding a combo');
     // A mixed order must not become a partial product-only kitchen ticket.
     f.order().productItems.push({ ...f.order().productItems[0], itemType: 'combo',
       comboSelections: [{ groupName: 'Pizza', products: [{ id: 'choice', name: 'Pizza' }] }] });
