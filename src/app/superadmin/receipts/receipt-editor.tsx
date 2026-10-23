@@ -107,6 +107,10 @@ export function ReceiptEditor({ brands, initialBrandId, testModel, testPaperWidt
     <header><h1 className="text-2xl font-semibold">Kvitteringer</h1>
       <p className="mt-2 text-sm text-muted-foreground">Tilpas kvitteringens onlinevisning pr. brand. Forhåndsvisningen opdateres med det samme; ændringer gemmes først, når du trykker Gem. Indstillingerne ændrer endnu ikke fysiske kundeudskrifter.</p>
     </header>
+    <nav aria-label="Bontype" className="flex flex-wrap gap-3">
+      <a aria-current="page" className={`${buttonClass} bg-primary text-primary-foreground`} href={`/superadmin/receipts?brandId=${encodeURIComponent(brandId)}`}>Kundekvittering</a>
+      <a className={buttonClass} href={`/superadmin/receipts?type=kitchen&brandId=${encodeURIComponent(brandId)}`}>Køkkenbon</a>
+    </nav>
     {!brands.length ? <p>Der er ingen brands tilgængelige.</p> : <>
       <label className="block max-w-md text-sm font-medium">Brand<select aria-label="Brand" className={inputClass} value={brandId} disabled={saving} onChange={event => {
         if (!discardAllowed()) return;

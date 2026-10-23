@@ -392,6 +392,8 @@ export type OrderDetail = OrderSummary & {
   customerDetails: {
     id: string;
     address: string;
+    /** Checkout phone snapshot; older orders may not contain it. */
+    phone?: string;
     deliveryInstructions?: string;
   };
   deliveryTime?: string;

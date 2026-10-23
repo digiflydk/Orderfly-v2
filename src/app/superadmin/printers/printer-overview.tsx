@@ -169,6 +169,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
       <p className="text-sm font-semibold text-primary">Superadmin · Printerpilot</p>
       <h1 className="mt-1 text-3xl font-semibold tracking-tight">Printere</h1>
       <a href="/superadmin/receipts#testbon" className="mr-4 mt-2 inline-block text-sm text-primary underline">Kvitteringer og testbon</a>
+      <a href="/superadmin/receipts?type=kitchen" className="mt-2 inline-block text-sm text-primary underline">Køkkenbon</a>
       <a href="/superadmin/printers/routing" className="mt-2 inline-block text-sm text-primary underline">Routingregler</a>
       <p className="mt-2 text-sm text-muted-foreground">Administrer printeropsætning på tværs af brands og lokationer.</p>
     </header>
@@ -240,7 +241,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
                   <TableCell>{activity?.printHistory === 'never' ? 'Aldrig printet'
                     : <ActivityTime value={activity?.lastConfirmedPrintAt} />}</TableCell><TableCell>{totalPrinters ?? 'Ikke registreret'}</TableCell>
                   <TableCell className="max-w-[220px] break-words font-medium">{c.name}</TableCell>
-                  <TableCell className="text-muted-foreground"><span className="whitespace-nowrap">Star {c.model === 'mc-print2' ? 'mC-Print2' : 'mC-Print3'}</span><br />{c.transport === 'cloudprnt-http' ? 'CloudPRNT HTTP' : 'CloudPRNT MQTT'}<br />{c.paperWidthMm} mm<br /><a className="text-primary underline" href={`/superadmin/receipts?brandId=${encodeURIComponent(c.brandId)}&model=${c.model}&paperWidthMm=${c.paperWidthMm}#testbon`}>Vis testbon</a></TableCell>
+                  <TableCell className="text-muted-foreground"><span className="whitespace-nowrap">Star {c.model === 'mc-print2' ? 'mC-Print2' : 'mC-Print3'}</span><br />{c.transport === 'cloudprnt-http' ? 'CloudPRNT HTTP' : 'CloudPRNT MQTT'}<br />{c.paperWidthMm} mm<br /><a className="text-primary underline" href={`/superadmin/receipts?brandId=${encodeURIComponent(c.brandId)}&model=${c.model}&paperWidthMm=${c.paperWidthMm}#testbon`}>Vis testbon</a><br /><a className="text-primary underline" href={`/superadmin/receipts?type=kitchen&brandId=${encodeURIComponent(c.brandId)}`}>Vis køkkenbon</a></TableCell>
                   <TableCell><div className="flex flex-wrap gap-2 min-w-[180px]">
                     <Button aria-label={`Aktivér ${c.name}`} size="sm" variant="outline" disabled={!canEdit || !!editor || !!credential || !!feedback?.requiresRefresh || c.state === 'active'} onClick={() => openEditor({ configuration: c, revision }, 'resume')}>Aktivér</Button>
                     <Button aria-label={`Rediger ${c.name}`} title={!canEdit ? 'Ingen redigeringsadgang på denne lokation' : undefined} size="sm" variant="outline" disabled={!canEdit || !!editor || !!credential || !!feedback?.requiresRefresh || c.state !== 'disabled'} onClick={() => openEditor({ configuration: c, revision })}>Edit</Button>

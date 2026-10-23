@@ -306,6 +306,7 @@ export function OrdersClientPage({
 
                       <TableCell className="text-right">
                         <Button asChild variant="outline" size="sm" className="mr-2"><Link href={`/superadmin/sales/orders/${encodeURIComponent(order.id)}/receipt`}>Vis kvittering</Link></Button>
+                    <Button variant="outline" asChild><Link href={`/superadmin/sales/orders/${encodeURIComponent(order.id)}/kitchen-receipt`}>Vis køkkenbon</Link></Button>
                         <Button
                           asChild
                           variant="outline"
