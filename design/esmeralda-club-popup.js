@@ -43,14 +43,34 @@
   }
   function measureHero() {
     var hero = document.getElementById('pizza-club');
-    if (!hero || !stats() || measured.has('hero')) return;
+    if (!hero || !stats() || measured.has('hero') || !visible(hero)) return;
     var r = hero.getBoundingClientRect();
     var seen = Math.max(0, Math.min(r.bottom, innerHeight) - Math.max(r.top, 0));
+    var seenWidth = Math.max(0, Math.min(r.right, innerWidth) - Math.max(r.left, 0));
+    if (seenWidth < Math.min(r.width, innerWidth) / 2) return;
     if (seen < Math.min(r.height, innerHeight) / 2) return;
     if (event('view_promotion', 'hero')) measured.add('hero');
   }
   function start() {
     if (!document.querySelector('[data-club-view="hero"]')) return;
+    // Keep the approved native Club markup, links and consent behavior in the
+    // existing rotation. CMS slides retain their order (including brunch).
+    var hero = document.getElementById('pizza-club');
+    var section = document.querySelector('.section_home-hero');
+    var container = section && section.querySelector('.swiper-container');
+    var slides = container && container.querySelector('.swiper-wrapper');
+    var presentation = hero && hero.closest('.es-club-presentation');
+    if (hero && slides && presentation) {
+      hero.classList.add('swiper-slide');
+      slides.insertBefore(hero, slides.firstElementChild);
+      section.insertAdjacentElement('afterend', presentation);
+      // The normal site initializer is deferred; also support a loaded instance.
+      if (container.swiper) {
+        container.swiper.update();
+        container.swiper.slideTo(0, 0);
+      }
+      container.addEventListener('transitionend', measureHero);
+    }
     dialog = document.createElement('dialog');
     dialog.className = 'es-club-popup';
     dialog.setAttribute('aria-labelledby', 'es-club-popup-title');
