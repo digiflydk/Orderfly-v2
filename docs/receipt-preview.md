@@ -48,3 +48,51 @@ to inspect an order preview.
 The CI receipt suite is `node --test tests/unit/receipt-*.cjs`, including real
 Playwright editor and fixed-testbon component tests. Failed browser installation
 is an environment blocker, never a reason to skip the browser gate.
+
+## Kitchen ticket (issue #537)
+
+System → Kvitteringer has separate **Kundekvittering** and **Køkkenbon**
+views. `/superadmin/receipts?type=kitchen&brandId=…` edits the kitchen layout;
+printer rows link to it. Sales list/detail actions open **Vis køkkenbon** at
+`/superadmin/sales/orders/[orderId]/kitchen-receipt` using the same native order
+access checks as the customer receipt. Switching type uses native navigation so
+unsaved-change protection remains effective.
+
+The kitchen ticket has no prices, fiscal totals or payment identifiers. It uses
+recorded order lines, toppings and combo selections, not immutable invoice lines
+(which intentionally omit production selections). Quantities, fulfillment type,
+Copenhagen fulfillment time, status, notes and modifiers cannot be hidden. A
+canceled order carries an explicit do-not-prepare banner. Missing time/quantity
+is marked unknown rather than invented. Combo children show total component
+quantities across all ordered menus, labeled **Menuindhold i alt**. Separate order
+lines with different customizations are never merged. Strings remain React text.
+
+Current category headings are resolved through a bounded, read-only native-scope
+transaction. Product and category must belong to the authorized brand/location;
+missing, inactive or foreign catalog rows do not remove saved food lines. Their
+headings fall back to Varer (or Menuer for explicit combos). Optional catalog
+lookup failures after successful scope authorization also use that fallback;
+authorization failures (including a failed retry) still reject. Category labels are
+current presentation metadata, not historical invoice facts. No channel or
+station is guessed from analytics, product names or printer configuration.
+
+New checkout orders snapshot the already validated customer phone in
+`customerDetails.phone`. Kitchen preview reads only that saved field, only shows
+it when enabled, and does not consult mutable customer profiles. Older orders
+without the snapshot show no phone. The explicit guest receipt projection remains
+unchanged and does not expose this new field. Only recorded delivery instructions
+are shown as notes; no inferred allergens or cooking instructions are generated.
+
+Both 58 and 80 mm layouts support normal/large text, category grouping and optional
+brand/location/customer/phone. The example contains fictional data. Real CSS and
+Chromium tests verify widths and wrapping on a 375px viewport, including long
+unbroken item names/notes. `receipt-kitchen-*.cjs` covers auth/CAS isolation, category
+scope, actual checkout phone snapshots/guest exclusion, route denial and editor
+save/conflict/stale responses. All run in the existing `receipt-*.cjs` CI gate.
+Local browser tests may select an installed Chromium via `CART_CHROMIUM_PATH`;
+CI uses the pinned Playwright installation and does not skip any assertions.
+
+This adds online kitchen layout and preview, not physical print dispatch. Existing
+fixed synthetic testbon output, Wolt printer configuration and output activation
+flags remain unchanged. Physical fit and normal-order kitchen printing must be
+qualified separately before claiming end-to-end printing is ready.

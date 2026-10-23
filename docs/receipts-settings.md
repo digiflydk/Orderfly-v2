@@ -13,3 +13,19 @@ The order preview uses `readReceiptSettingsForOrder(brandId, locationId)`, which
 The strict settings schema allows 58/80 mm presentation width, bounded plain text, and display switches. Financial rows and totals are not configurable. The physical synthetic printer test payload, credentials, dispatch, printer configuration and activation remain independent of these settings. Online rendering is a preview and does not prove physical printer operation. Invalid existing records fail closed rather than being silently replaced with defaults.
 
 Run `node --test tests/unit/receipt-settings*.cjs` and `npm run typecheck` for backend validation. Tests use isolated in-memory transactions and make no production writes.
+
+## Separate kitchen settings
+
+`GET /api/superadmin/receipts/kitchen?brandId=…` and `PUT` on the same path
+use the same auth-first, native scope, lifecycle, CSRF, size bound, strict request,
+CAS and atomic audit guarantees. Storage is independently versioned at
+`kitchenReceiptSettings/{brandId}` with `audit/{revision}` and action
+`kitchen-receipt.settings.update`. Existing blanket client deny covers both.
+No customer-receipt record is migrated or overwritten. Missing kitchen records
+return defaults without writing; corrupt records fail closed.
+
+The schema allows `paperWidthMm` (58/80), `heading` (80-character bound),
+`textSize` (normal/large), `groupByCategory`, `showBrandName`, `showLocationName`,
+`showCustomer` and `showPhone`. Default text is large; phone is off by default.
+Core preparation details cannot be disabled. `readKitchenSettingsForOrder` keeps
+the historical native orders:view contract and does not grant edit access.

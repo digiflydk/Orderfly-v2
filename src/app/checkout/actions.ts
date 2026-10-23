@@ -705,6 +705,9 @@ export async function createStripeCheckoutSessionAction(
         locationName: location.name,
         customerDetails: {
             id: customerId,
+            // Retain the validated checkout contact for this order's kitchen ticket.
+            // Do not resolve a mutable customer profile when rendering old orders.
+            phone: customerInfo.phone,
             address: deliveryType === 'delivery' ? `${customerInfo.street}, ${customerInfo.zipCode} ${customerInfo.city}` : 'For Pickup',
         },
         ...(paymentMethod === 'online' ? { psp: { provider: 'stripe' } } : {}),

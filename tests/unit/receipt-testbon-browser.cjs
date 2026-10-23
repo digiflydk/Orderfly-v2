@@ -21,7 +21,7 @@ test('testbon browser: loading, profile changes, stale responses and explicit er
     res.setHeader('content-type', 'text/html; charset=utf-8'); res.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>');
   });
   await new Promise(r => server.listen(0, '127.0.0.1', r));
-  browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
+  browser = await chromium.launch({ headless: true, executablePath: process.env.CART_CHROMIUM_PATH, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const page = await browser.newPage({ viewport: { width: 375, height: 812 } });
   const calls = [], errors = []; let mode = 'delay', pending;
   page.on('pageerror', error => errors.push(error.message));
