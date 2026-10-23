@@ -32,7 +32,9 @@ test('immutable invoice is authoritative even when current order lines and total
     lines: [{ description: 'Original item', quantity: 1, unitAmount: 80, totalAmount: 80 }], subtotal: 80,
     itemDiscount: 5, orderDiscount: 10, deliveryFee: 20, bagFee: 2, adminFee: 3, vatAmount: 18, totalAmount: 90, paymentMethod: 'Cash', paymentReference: 'private-invoice-payment',
   };
-  const result = projectReceipt(input);
+  const result = projectReceipt(input, { name: 'New owner', registrationNumber: '9999', address: 'New address', logoUrl: 'https://example.com/new.png' });
+  assert.equal(result.seller.address, 'Original address'); assert.equal(result.seller.registrationNumber, '1234');
+  assert.equal(result.logoUrl, 'https://example.com/new.png');
   assert.equal(result.total, 90); assert.equal(result.subtotal, 80); assert.equal(result.discount, 15);
   assert.equal(result.lines[0].name, 'Original item'); assert.equal(result.brandName, 'Original brand');
   assert.equal(result.customerName, 'Original customer'); assert.equal(result.seller.name, 'Legal seller');
@@ -91,4 +93,11 @@ test('receipt route reads settings only for the authorized order brand/location 
   const serialized = JSON.stringify(result);
   assert.ok(serialized.includes('order-a')); assert.ok(!serialized.includes('private-psp'));
   assert.ok(!serialized.includes('Rediger kvitteringslayout'));
+});
+
+test('orders without invoice use brand seller fields and logo', () => {
+ const brand = { name: 'Restaurant ApS', registrationNumber: '12345678', address: 'Street 1, 1234 Town, DK', logoUrl: 'https://example.com/logo.png' };
+ const result = projectReceipt(order(), brand);
+ assert.deepEqual(result.seller, { name: brand.name, registrationNumber: brand.registrationNumber, address: brand.address });
+ assert.equal(result.logoUrl, brand.logoUrl);
 });
