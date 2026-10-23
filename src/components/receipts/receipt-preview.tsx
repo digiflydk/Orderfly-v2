@@ -12,11 +12,12 @@ export function ReceiptPreview({ settings, order }: { settings: ReceiptSettings;
   const row = (label: string, value: number, strong = false) => <div className={`flex justify-between gap-3 ${strong ? 'text-base font-bold' : ''}`}><span>{label}</span><span className="shrink-0">{amount(value)}</span></div>;
   return <article aria-label="Forhåndsvisning af kvittering" data-paper-width={settings.paperWidthMm} className="mx-auto max-w-full space-y-4 break-words border bg-white p-4 font-mono text-xs text-black shadow-sm" style={{ width: `${settings.paperWidthMm}mm`, overflowWrap: 'anywhere' }}>
     <header className="space-y-1 text-center">
+      {order.logoUrl && <img src={order.logoUrl} alt="Virksomhedens logo" referrerPolicy="no-referrer" className="mx-auto max-h-20 max-w-full object-contain" />}
       <h2 className="text-base font-bold">{settings.heading}</h2>
       {settings.showBrandName && <p className="font-bold">{order.brandName}</p>}
       {settings.showLocationName && <p>{order.locationName}</p>}
-      {order.seller && <><p>{order.seller.name}</p><p>CVR: {order.seller.registrationNumber || 'Ikke angivet'}</p><p>{order.seller.address}</p></>}
-      {settings.address && <p className="whitespace-pre-wrap">{settings.address}</p>}
+      {order.seller && <><p>{order.seller.name || 'Virksomhedsnavn ikke angivet'}</p><p>CVR: {order.seller.registrationNumber || 'Ikke angivet'}</p><p>{order.seller.address || 'Adresse ikke angivet'}</p></>}
+      {!order.seller && settings.address && <p className="whitespace-pre-wrap">{settings.address}</p>}
       {settings.phone && <p>{settings.phone}</p>}{settings.website && <p>{settings.website}</p>}
     </header>
     <section className="space-y-1 border-y border-dashed border-black py-3">

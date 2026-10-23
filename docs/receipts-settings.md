@@ -29,3 +29,9 @@ The schema allows `paperWidthMm` (58/80), `heading` (80-character bound),
 `showCustomer` and `showPhone`. Default text is large; phone is off by default.
 Core preparation details cannot be disabled. `readKitchenSettingsForOrder` keeps
 the historical native orders:view contract and does not grant edit access.
+
+
+### Automatic customer receipt company details (#542)
+Customer preview reads `brands/{brandId}` within the existing freshly authorized receipt-settings transaction. Only companyName (fallback name), companyRegNo, street/zipCode/city/country and a valid HTTPS logoUrl are projected. Editor GET and successful PUT return this read-only `brandIdentity`, never persisting it in settings/audit. The selected-brand editor uses it with fictional order lines; brand switches and stale responses use the existing generation guards. Company details are edited at their brand source, not duplicated in receipt address settings. Existing legacy address values remain stored for compatibility but do not override or duplicate authoritative company addresses.
+
+Actual orders without an invoice use this authorized company identity. Issued invoices retain their immutable seller name/CVR/address; the current brand logo is presentational. Missing company name/address/CVR are explicitly marked; missing or non-HTTPS logos are omitted. No physical output, fiscal snapshot, production data or access policy is changed. Verification: receipt-settings projection/scope tests, receipt-preview invoice preservation and actual Chromium editor brand-switch/save/recovery regression.

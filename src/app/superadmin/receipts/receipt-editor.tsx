@@ -1,11 +1,12 @@
 'use client';
 
+import { receiptBrandIdentitySchema, type ReceiptBrandIdentity } from '@/lib/receipts/brand-identity';
 import { useEffect, useRef, useState } from 'react';
 import { DEFAULT_RECEIPT_SETTINGS, receiptSettingsSchema, type ReceiptSettings } from '@/lib/receipts/settings';
 import { ReceiptPreview, SAMPLE_RECEIPT } from '@/components/receipts/receipt-preview';
 import { TestBonPreview } from '@/components/receipts/testbon-preview';
 
-type Snapshot = { brandId: string; revision: number; settings: ReceiptSettings };
+type Snapshot = { brandId: string; revision: number; settings: ReceiptSettings; brandIdentity?: ReceiptBrandIdentity };
 const inputClass = 'mt-1 w-full rounded-md border border-input bg-background px-3 py-2';
 const buttonClass = 'rounded-md border px-4 py-2 text-sm font-medium disabled:opacity-50';
 const toggles = [
@@ -20,7 +21,7 @@ function snapshot(value: unknown, brandId: string): Snapshot {
   if (!data || data.brandId !== brandId || !Number.isSafeInteger(data.revision) || (data.revision as number) < 0 || !parsed.success) {
     throw new Error('Ugyldigt svar. Genindlæs indstillingerne.');
   }
-  return { brandId, revision: data.revision as number, settings: parsed.data };
+  return { brandId, revision: data.revision as number, settings: parsed.data, brandIdentity: data.brandIdentity === undefined ? undefined : receiptBrandIdentitySchema.parse(data.brandIdentity) };
 }
 
 export function ReceiptEditor({ brands, initialBrandId, testModel, testPaperWidthMm }: {
@@ -126,7 +127,7 @@ export function ReceiptEditor({ brands, initialBrandId, testModel, testPaperWidt
           <fieldset className="mt-4 space-y-4" disabled={saving || blocked}>
             <label className="block text-sm font-medium">Papirbredde<select aria-label="Papirbredde" className={inputClass} value={draft.paperWidthMm} onChange={event => edit('paperWidthMm', Number(event.target.value) as 58 | 80)}><option value={58}>58 mm</option><option value={80}>80 mm</option></select></label>
             <label className="block text-sm font-medium">Overskrift<input aria-label="Overskrift" className={inputClass} maxLength={80} value={draft.heading} onChange={event => edit('heading', event.target.value)} /></label>
-            <label className="block text-sm font-medium">Adresse<textarea aria-label="Adresse" className={inputClass} maxLength={160} value={draft.address} onChange={event => edit('address', event.target.value)} /></label>
+            <p className="text-sm text-muted-foreground">Virksomhedsnavn, adresse, CVR og logo hentes automatisk fra brandets virksomhedsoplysninger.</p>
             <label className="block text-sm font-medium">Telefon<input aria-label="Telefon" className={inputClass} maxLength={40} value={draft.phone} onChange={event => edit('phone', event.target.value)} /></label>
             <label className="block text-sm font-medium">Hjemmeside<input aria-label="Hjemmeside" className={inputClass} maxLength={120} value={draft.website} onChange={event => edit('website', event.target.value)} /></label>
             <label className="block text-sm font-medium">Bundtekst<textarea aria-label="Bundtekst" className={inputClass} maxLength={240} value={draft.footer} onChange={event => edit('footer', event.target.value)} /></label>
@@ -138,8 +139,8 @@ export function ReceiptEditor({ brands, initialBrandId, testModel, testPaperWidt
         </section>
         <section className="min-w-0 space-y-3 rounded-lg border bg-muted/30 p-4" aria-labelledby="receipt-sample">
           <h2 id="receipt-sample" className="text-lg font-semibold">Forhåndsvisning af kundekvittering</h2>
-          <p className="text-sm text-muted-foreground">Eksempel med fiktive ordredata. Den fysiske udskrift skal fortsat kontrolleres på printeren.</p>
-          <ReceiptPreview settings={draft} order={{ ...SAMPLE_RECEIPT, brandName: brands.find(brand => brand.id === brandId)?.name ?? SAMPLE_RECEIPT.brandName }} />
+          <p className="text-sm text-muted-foreground">Eksempel med brandets virksomhedsoplysninger og fiktive ordredata. Den fysiske udskrift skal fortsat kontrolleres på printeren.</p>
+          <ReceiptPreview settings={draft} order={{ ...SAMPLE_RECEIPT, seller: saved.brandIdentity, logoUrl: saved.brandIdentity?.logoUrl, brandName: brands.find(brand => brand.id === brandId)?.name ?? SAMPLE_RECEIPT.brandName }} />
         </section>
       </div>}
     </>}

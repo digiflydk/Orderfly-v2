@@ -3,7 +3,7 @@ import { AuthorityError } from '@/lib/access/authority';
 import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getOrigin } from '@/lib/url';
 import { ReceiptSettingsError, readReceiptSettings, writeReceiptSettings, receiptBrandIdSchema,
-  receiptSettingsCommandSchema, receiptSettingsRecordSchema } from './settings-server';
+  receiptSettingsCommandSchema, receiptSettingsResponseSchema } from './settings-server';
 
 const reply = (body: unknown, status = 200) => Response.json(body, { status, headers: { 'Cache-Control': 'no-store', Vary: 'Cookie' } });
 const invalid = () => reply({ error: 'invalid_request' }, 400);
@@ -24,7 +24,7 @@ export async function getReceiptSettings(request: Request): Promise<Response> {
     const url = new URL(request.url), ids = url.searchParams.getAll('brandId');
     if (request.method !== 'GET' || url.username || url.password || ids.length !== 1 || [...url.searchParams.keys()].some(key => key !== 'brandId')) return invalid();
     const brandId = receiptBrandIdSchema.safeParse(ids[0]); if (!brandId.success) return invalid();
-    const result = receiptSettingsRecordSchema.parse(await readReceiptSettings(brandId.data));
+    const result = receiptSettingsResponseSchema.parse(await readReceiptSettings(brandId.data));
     if (result.brandId !== brandId.data) throw Error('invalid_result');
     return reply(result);
   } catch (error) { return failure(error); }
@@ -46,7 +46,7 @@ export async function putReceiptSettings(request: Request): Promise<Response> {
     let body: unknown;
     try { body = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))); } catch { return invalid(); }
     const command = receiptSettingsCommandSchema.safeParse(body); if (!command.success) return invalid();
-    const result = receiptSettingsRecordSchema.parse(await writeReceiptSettings(command.data));
+    const result = receiptSettingsResponseSchema.parse(await writeReceiptSettings(command.data));
     if (result.brandId !== command.data.brandId || result.revision !== command.data.expectedRevision + 1) throw Error('invalid_result');
     return reply(result);
   } catch (error) { return failure(error); }

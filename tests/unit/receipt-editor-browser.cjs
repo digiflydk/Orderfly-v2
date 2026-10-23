@@ -39,6 +39,8 @@ test('receipt editor: explicit scoped saves, conflict recovery, unknown outcomes
   const page = await browser.newPage({ viewport: { width: 375, height: 812 } }), writes = [], errors = [];
   page.on('pageerror', e => errors.push(e.message));
   const settings = { paperWidthMm: 80, heading: 'Kvittering', footer: 'Tak for din bestilling', address: '', phone: '', website: '', showBrandName: true, showLocationName: true, showCustomer: false, showContact: false, showModifiers: true, showNotes: true };
+  const identity = brandId => ({ name: 'Company ' + brandId, registrationNumber: brandId === 'a' ? '12345678' : '87654321', address: 'Street ' + brandId, logoUrl: 'https://example.com/' + brandId + '.png' });
+  await page.route('https://example.com/*.png', route => route.fulfill({ contentType: 'image/png', body: Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+/l9sAAAAASUVORK5CYII=', 'base64') }));
   let revision = 0, stored = { ...settings }, mode = 'ok', delayed, delayA = false;
   await page.route('**/api/superadmin/receipts**', async route => {
     const req = route.request();
@@ -46,13 +48,13 @@ test('receipt editor: explicit scoped saves, conflict recovery, unknown outcomes
     if (req.method() === 'GET') {
       const brandId = new URL(req.url()).searchParams.get('brandId');
       if (brandId === 'a' && delayA) { delayed = route; return; }
-      return route.fulfill({ json: { brandId, revision, settings: brandId === 'a' ? stored : { ...settings, heading: 'Brand B bon' } } });
+      return route.fulfill({ json: { brandId, revision, brandIdentity: identity(brandId), settings: brandId === 'a' ? stored : { ...settings, heading: 'Brand B bon' } } });
     }
     const body = req.postDataJSON(); writes.push(body);
     if (mode === 'conflict') { revision++; stored = { ...stored, heading: 'Ny serverversion' }; return route.fulfill({ status: 409, json: { error: 'revision_conflict' } }); }
     if (mode === 'unknown') return route.abort('failed');
     stored = body.settings; revision++;
-    return route.fulfill({ json: { brandId: body.brandId, revision, settings: stored } });
+    return route.fulfill({ json: { brandId: body.brandId, revision, settings: stored, brandIdentity: identity(body.brandId) } });
   });
   await page.goto('http://127.0.0.1:' + server.address().port);
   const save = page.getByRole('button', { name: 'Gem kvittering', exact: true });
@@ -62,6 +64,11 @@ test('receipt editor: explicit scoped saves, conflict recovery, unknown outcomes
   await page.getByLabel('Papirbredde', { exact: true }).selectOption('58');
   await page.getByLabel('Kundens navn', { exact: true }).check();
   const preview = page.getByRole('article', { name: 'Forhåndsvisning af kvittering' });
+  await expect(preview).toContainText('Company a');
+  await expect(preview).toContainText('Street a');
+  await expect(preview).toContainText('CVR: 12345678');
+  await expect(preview.getByRole('img')).toHaveAttribute('src', 'https://example.com/a.png');
+  await expect(page.getByLabel('Adresse', { exact: true })).toHaveCount(0);
   await expect(preview).toContainText('Eksempelkunde');
   await page.getByLabel('Kundens navn', { exact: true }).uncheck();
   await expect(preview).not.toContainText('Eksempelkunde');
@@ -83,12 +90,17 @@ test('receipt editor: explicit scoped saves, conflict recovery, unknown outcomes
   await expect(page.getByRole('alert')).toBeVisible(); await expect(save).toBeDisabled(); assert.equal(writes.length, 3);
   page.once('dialog', dialog => dialog.accept()); await page.getByLabel('Brand', { exact: true }).selectOption('b');
   await expect(page.getByLabel('Overskrift', { exact: true })).toHaveValue('Brand B bon');
+  await expect(preview).toContainText('Company b');
+  await expect(preview).not.toContainText('Company a');
+  await expect(preview.getByRole('img')).toHaveAttribute('src', 'https://example.com/b.png');
   delayA = true; await page.getByLabel('Brand', { exact: true }).selectOption('a');
   await expect.poll(() => !!delayed).toBe(true);
   await page.getByLabel('Brand', { exact: true }).selectOption('b');
   await expect(page.getByLabel('Overskrift', { exact: true })).toHaveValue('Brand B bon');
   await delayed.fulfill({ json: { brandId: 'a', revision: 99, settings: { ...settings, heading: 'Forkert brand' } } }).catch(() => {});
   await expect(page.getByLabel('Overskrift', { exact: true })).toHaveValue('Brand B bon');
+  await expect(preview).toContainText('Company b');
+  await expect(preview.getByRole('img')).toHaveAttribute('src', 'https://example.com/b.png');
   assert.equal(await page.evaluate(() => localStorage.length + sessionStorage.length), 0);
   assert.deepEqual(errors, []);
 });

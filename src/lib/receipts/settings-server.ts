@@ -1,4 +1,5 @@
 import 'server-only';
+import { projectReceiptBrand, receiptBrandIdentitySchema, type ReceiptBrandIdentity } from './brand-identity';
 import { z } from 'zod';
 import { FieldValue } from 'firebase-admin/firestore';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -13,6 +14,8 @@ export const receiptSettingsRecordSchema = z.object({ brandId: receiptBrandIdSch
   revision: z.number().int().nonnegative().safe(), settings: receiptSettingsSchema }).strict();
 export const receiptSettingsCommandSchema = z.object({ brandId: receiptBrandIdSchema,
   expectedRevision: z.number().int().nonnegative().safe().max(Number.MAX_SAFE_INTEGER - 1), settings: receiptSettingsSchema }).strict();
+export const receiptSettingsResponseSchema = receiptSettingsRecordSchema.extend({ brandIdentity: receiptBrandIdentitySchema.optional() });
+type ReceiptSettingsResponse = ReceiptSettingsRecord & { brandIdentity: ReceiptBrandIdentity };
 const storedSchema = receiptSettingsRecordSchema.extend({ schemaVersion: z.literal(1), revision: z.number().int().positive().safe() }).strict();
 export class ReceiptSettingsError extends Error {
   constructor(readonly code: 'invalid_request' | 'record_conflict' | 'settings_unavailable', readonly status: number) { super(code); }
@@ -47,29 +50,31 @@ async function safely<T>(run: () => Promise<T>): Promise<T> {
     throw new ReceiptSettingsError('settings_unavailable', 503);
   }
 }
-export async function readReceiptSettings(brandIdInput: unknown): Promise<ReceiptSettingsRecord> {
+export async function readReceiptSettings(brandIdInput: unknown): Promise<ReceiptSettingsResponse> {
   const session = await requirePlatformSuperuser();
   const parsed = receiptBrandIdSchema.safeParse(brandIdInput); if (!parsed.success) return invalid();
   return safely(async () => {
     const db = getAdminDb();
     return db.runTransaction(async tx => {
       await scope(tx, session.identity, parsed.data, true);
-      return savedRecord(await tx.get(db.collection('receiptSettings').doc(parsed.data)), parsed.data);
+      const brandIdentity = projectReceiptBrand((await tx.get(db.collection('brands').doc(parsed.data))).data() ?? {});
+      return { ...savedRecord(await tx.get(db.collection('receiptSettings').doc(parsed.data)), parsed.data), brandIdentity };
     });
   });
 }
-export async function readReceiptSettingsForOrder(brandId: string, locationId?: string | null): Promise<ReceiptSettingsRecord> {
+export async function readReceiptSettingsForOrder(brandId: string, locationId?: string | null): Promise<ReceiptSettingsResponse> {
   const identity = await verifiedOrderflyIdentity();
   if (!receiptBrandIdSchema.safeParse(brandId).success || (locationId != null && !receiptBrandIdSchema.safeParse(locationId).success)) return invalid();
   return safely(async () => {
     const db = getAdminDb();
     return db.runTransaction(async tx => {
       await scope(tx, identity, brandId, false, locationId);
-      return savedRecord(await tx.get(db.collection('receiptSettings').doc(brandId)), brandId);
+      const brandIdentity = projectReceiptBrand((await tx.get(db.collection('brands').doc(brandId))).data() ?? {});
+      return { ...savedRecord(await tx.get(db.collection('receiptSettings').doc(brandId)), brandId), brandIdentity };
     });
   });
 }
-export async function writeReceiptSettings(input: unknown): Promise<ReceiptSettingsRecord> {
+export async function writeReceiptSettings(input: unknown): Promise<ReceiptSettingsResponse> {
   const session = await requirePlatformSuperuser();
   const parsed = receiptSettingsCommandSchema.safeParse(input); if (!parsed.success) return invalid();
   const command = parsed.data;
@@ -77,6 +82,7 @@ export async function writeReceiptSettings(input: unknown): Promise<ReceiptSetti
     const db = getAdminDb(), ref = db.collection('receiptSettings').doc(command.brandId);
     return db.runTransaction(async tx => {
       await scope(tx, session.identity, command.brandId, true);
+      const brandIdentity = projectReceiptBrand((await tx.get(db.collection('brands').doc(command.brandId))).data() ?? {});
       const previous = savedRecord(await tx.get(ref), command.brandId), revision = command.expectedRevision + 1;
       const auditRef = ref.collection('audit').doc(String(revision)), audit = await tx.get(auditRef);
       if (previous.revision !== command.expectedRevision || audit.exists) throw new ReceiptSettingsError('record_conflict', 409);
@@ -85,7 +91,7 @@ export async function writeReceiptSettings(input: unknown): Promise<ReceiptSetti
         brandId: command.brandId, previousRevision: previous.revision, revision, settings: command.settings, createdAt: FieldValue.serverTimestamp() });
       if (previous.revision === 0) tx.create(ref, { schemaVersion: 1, ...result });
       else tx.set(ref, { schemaVersion: 1, ...result });
-      return result;
+      return { ...result, brandIdentity };
     });
   });
 }

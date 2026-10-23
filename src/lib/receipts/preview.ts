@@ -1,9 +1,11 @@
+import type { ReceiptBrandIdentity } from './brand-identity';
 import type { OrderDetail } from '@/types';
 import { ORDER_STATUS_LABELS } from '@/lib/orders/presentation';
 
 export type ReceiptPreviewData = {
   reference: string; createdAt: string; paidAt?: string; invoiceNumber?: string;
   currency: string; brandName: string; locationName: string;
+  logoUrl?: string;
   seller?: { name: string; registrationNumber: string; address: string };
   customerName: string; customerContact: string; notes: string;
   paymentStatus: string; status: string; paymentMethod: string; deliveryType: string;
@@ -19,7 +21,7 @@ function date(value: Date | string | undefined): string | undefined {
 }
 
 /** Allowlist only display data; never serialize the raw order/PSP/analytics objects. */
-export function projectReceipt(order: OrderDetail): ReceiptPreviewData {
+export function projectReceipt(order: OrderDetail, brandIdentity?: ReceiptBrandIdentity): ReceiptPreviewData {
   const invoice = order.invoice;
   const details = order.paymentDetails;
   return {
@@ -28,7 +30,8 @@ export function projectReceipt(order: OrderDetail): ReceiptPreviewData {
     currency: invoice?.currency || 'DKK',
     brandName: invoice?.seller.tradingName ?? order.brandName,
     locationName: invoice?.fulfillmentLocation.name ?? order.locationName,
-    seller: invoice ? { name: invoice.seller.legalName, registrationNumber: invoice.seller.registrationNumber, address: invoice.seller.address } : undefined,
+    logoUrl: brandIdentity?.logoUrl,
+    seller: invoice ? { name: invoice.seller.legalName, registrationNumber: invoice.seller.registrationNumber, address: invoice.seller.address } : brandIdentity ? { name: brandIdentity.name, registrationNumber: brandIdentity.registrationNumber, address: brandIdentity.address } : undefined,
     customerName: invoice?.customer.name ?? order.customerName,
     customerContact: invoice?.customer.email ?? order.customerContact,
     notes: order.customerDetails?.deliveryInstructions ?? '',
