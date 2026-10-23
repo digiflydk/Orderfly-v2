@@ -44,10 +44,12 @@ function assetBlob(asset: QrPrintAsset, format: 'png' | 'svg' | 'print'): Blob {
 export function QrPrintTools({ draft, context, render, onDesignChange, onUploadBusy, needsSave = false, canExport = true }: QrPrintToolsProps) {
   const [localLogo, setLocalLogo] = useState<{ base64: string; name: string } | null>(null);
   const logo = onDesignChange ? (draft.style?.logoBase64 ? { base64: draft.style.logoBase64, name: localLogo?.base64 === draft.style.logoBase64 ? localLogo.name : 'Gemt logo' } : null) : localLogo;
+  const [localLogoSize, setLocalLogoSize] = useState(25);
+  const logoSizePercent = onDesignChange ? (draft.style?.logoSizePercent ?? (draft.style?.logoBase64 ? 15 : 25)) : localLogoSize;
   const latestStyle = useRef(draft.style); latestStyle.current = draft.style;
   const setLogo = (value: {base64:string;name:string}|null) => {
     setLocalLogo(value);
-    if(onDesignChange) { const next={...(latestStyle.current||DEFAULT_STYLE),errorCorrectionLevel:'H' as const}; delete next.logoBase64; if(value) next.logoBase64=value.base64; onDesignChange(next); }
+    if(onDesignChange) { const next={...(latestStyle.current||DEFAULT_STYLE),errorCorrectionLevel:'H' as const}; delete next.logoBase64; if(value) { next.logoBase64=value.base64; next.logoSizePercent=latestStyle.current?.logoSizePercent ?? 25; } onDesignChange(next); }
   };
   const [preview, setPreview] = useState('');
   const [uploading, setUploading] = useState(false), [uploadError, setUploadError] = useState('');
@@ -58,7 +60,7 @@ export function QrPrintTools({ draft, context, render, onDesignChange, onUploadB
   const pendingWindow = useRef<Window | null>(null);
   const scope = JSON.stringify([context.id, context.revision, draft.brandId, draft.locationId, draft.kind, draft.staticType]);
   useEffect(() => {
-    uploadGeneration.current++; setUploading(false); setUploadError(''); generation.current++; running.current = false; setBusy(false); setLocalLogo(null); setPreview(''); setError(''); setNotice('');
+    uploadGeneration.current++; setUploading(false); setUploadError(''); generation.current++; running.current = false; setBusy(false); setLocalLogo(null); setLocalLogoSize(25); setPreview(''); setError(''); setNotice('');
     if (input.current) input.current.value = '';
     return () => {
       uploadGeneration.current++; generation.current++; running.current = false;
@@ -106,7 +108,7 @@ export function QrPrintTools({ draft, context, render, onDesignChange, onUploadB
     const at = generation.current;
     running.current = true; setBusy(true); setError(''); setNotice('');
     try {
-      const value = logo ? { ...draft, style: { ...(draft.style || DEFAULT_STYLE), errorCorrectionLevel: 'H' as const } } : draft;
+      const value = logo ? { ...draft, style: { ...(draft.style || DEFAULT_STYLE), errorCorrectionLevel: 'H' as const, logoSizePercent } } : draft;
       const asset = await render(value, { ...context }, { format: format === 'preview' ? (canExport ? 'png' : 'preview') : format, ...(logo && !onDesignChange ? { logoBase64: logo.base64 } : {}) });
       if (at !== generation.current) { popup?.close(); return; }
       const blob = assetBlob(asset, format === 'preview' ? 'png' : format);
@@ -142,7 +144,8 @@ export function QrPrintTools({ draft, context, render, onDesignChange, onUploadB
       {!uploading && !uploadError && logo && <p role="status" className="mt-2 text-sm">Logo er klar. Tryk Preview QR for at se det i koden.</p>}
     </div>
     {logo && <div className="flex flex-wrap items-center gap-2"><img src={`data:image/${isPng(Uint8Array.from(atob(logo.base64.slice(0, 12)), c => c.charCodeAt(0))) ? 'png' : 'jpeg'};base64,${logo.base64}`} alt="Valgt logo" width={56} height={56} className="qr-logo-swatch" /><p className="break-all text-sm">Valgt logo: {logo.name}</p><button type="button" className={buttonClass} disabled={busy} onClick={() => { generation.current++; setLogo(null); setPreview(''); if (input.current) input.current.value = ''; }}>Fjern logo</button></div>}
-    <p className="text-sm">PNG eller JPEG · højst 2 MB · højst 2048 × 2048 pixels. Anbefalet: kvadratisk logo på mindst 256 × 256 pixels med luft omkring motivet. Logoet tilpasses automatisk til 15 % af QR-mønstrets bredde, bevarer proportionerne og gemmes som en lille PNG. Ved 512 pixels eksport er logofeltet typisk ca. 60 pixels bredt.</p>
+    {logo && <label className="text-sm">Logostørrelse<select aria-label="Logostørrelse" className="ml-3 rounded-md border p-2" disabled={busy} value={logoSizePercent} onChange={e => { const size=Number(e.target.value); generation.current++; setPreview(''); setError(''); setNotice(''); if(onDesignChange) onDesignChange({...draft.style!,logoSizePercent:size}); else setLocalLogoSize(size); }}>{Array.from({length:16},(_,i)=>i+15).map(size=><option key={size} value={size}>{size} %{size===25?' (standard)':''}</option>)}</select></label>}
+    <p className="text-sm">PNG eller JPEG · højst 2 MB · højst 2048 × 2048 pixels. Anbefalet: kvadratisk logo på mindst 256 × 256 pixels med luft omkring motivet. Logoet bevarer proportionerne og gemmes som en lille PNG. Størrelsen angiver logofeltets bredde inklusive lys baggrund i forhold til QR-mønstret. Større logoer skal bestå scanningstesten; test også det færdige tryk med en telefon.</p>
     {onDesignChange && <QrShapeControls style={draft.style || DEFAULT_STYLE} change={onDesignChange} />}
     <>{canExport && <><h4 className="qr-export-label">DOWNLOAD OG PRINT</h4>
     <div className="flex flex-wrap gap-2"><button type="button" className={buttonClass} disabled={busy || needsSavedCode || needsSave} onClick={() => { void produce('png'); }}>PNG med valgt logo</button><button type="button" className={buttonClass} disabled={busy || needsSavedCode || needsSave} onClick={() => { void produce('svg'); }}>SVG med valgt logo</button><button type="button" className={buttonClass} disabled={busy || needsSavedCode || needsSave} onClick={() => { void produce('print'); }}>Åbn print / Gem som PDF</button></div>

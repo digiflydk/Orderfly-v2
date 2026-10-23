@@ -188,10 +188,10 @@ test('native save/reopen persists normalized logo and all styles, exports same s
   const db=new Database();db.rows.set('brands/brandA',{status:'active'});
   const execute=createQrAdminService({db,actorId:scope.actorId,dynamicEnabled:true,authorize:async()=>scope,list:async()=>{}});
   const logo=await sharp({create:{width:512,height:256,channels:4,background:'#123322'}}).png().toBuffer();
-  const draft={name:'Brand logo',brandId:'brandA',locationId:null,kind:'dynamic',destination:'https://example.com/menu',staticType:'url',fields:{},campaign:'',tags:[],utm:{source:'',medium:'',campaign:'',term:'',content:''},style:{width:512,margin:4,dark:'#000000',light:'#ffffff',errorCorrectionLevel:'M',logoBase64:logo.toString('base64'),moduleShape:'dots',cornerShapes:['square','rounded','extra-rounded'],cornerColor:'#123322'}};
+  const draft={name:'Brand logo',brandId:'brandA',locationId:null,kind:'dynamic',destination:'https://example.com/menu',staticType:'url',fields:{},campaign:'',tags:[],utm:{source:'',medium:'',campaign:'',term:'',content:''},style:{width:512,margin:4,dark:'#000000',light:'#ffffff',errorCorrectionLevel:'M',logoSizePercent:25,logoBase64:logo.toString('base64'),moduleShape:'dots',cornerShapes:['square','rounded','extra-rounded'],cornerColor:'#123322'}};
   const created=await execute({action:'save',draft,context:{requestId:req(400)}});
   const stored=db.rows.get(`brands/brandA/qrCodes/${created.id}`);
-  assert.equal(stored.design.errorCorrectionLevel,'H');assert.equal(created.style.logoBase64,stored.design.logoBase64);
+  assert.equal(stored.design.logoSizePercent,25);assert.equal(created.style.logoSizePercent,25);assert.equal(stored.design.errorCorrectionLevel,'H');assert.equal(created.style.logoBase64,stored.design.logoBase64);
   assert.equal((await sharp(Buffer.from(stored.design.logoBase64,'base64')).metadata()).width,256);
   assert.deepEqual(stored.design.cornerShapes,draft.style.cornerShapes);
   const replay=await execute({action:'save',draft,context:{requestId:req(400)}});assert.equal(replay.id,created.id);

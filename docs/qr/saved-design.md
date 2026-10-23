@@ -14,9 +14,9 @@ CSRF checks, revision checks and the same idempotency receipt.
 - Recommended square source of at least 256 × 256 pixels with space around the mark.
 - Server re-encodes to PNG, at most 256 × 256, maximum 96 KB binary (128 KB base64).
   Highly complex images exceeding that normalized bound must be simplified.
-- Preserve proportions; central logo field is 15% of QR pattern width including
-  a small background pad. At 512 pixel export the field is approximately 60 pixels,
-  depending on QR version and quiet zone. This is a bound, not a minimum readable
+- Preserve proportions; central logo field defaults to 25% of QR pattern width including
+  a small background pad, adjustable from 15% to 30%. Legacy designs without an
+  explicit size retain 15%. This is a bound, not a minimum readable
   print size. The four-module quiet zone and finder patterns stay unobstructed.
 - Logo forces error correction H. Actual final image must decode to the expected
   payload before either PNG or SVG is returned. No raw source upload is persisted.
@@ -76,3 +76,6 @@ New drafts explicitly start with black modules (`#000000`) on white (`#ffffff`);
 existing saved color choices remain intact. Tests cover the actual file-chooser
 button, CMYK JPEG acceptance, preview payload, adjacent errors and style refresh
 while decoding, plus black defaults in a complete workspace preview.
+
+## Logo sizing
+New uploads default to a 25% centred square logo field, adjustable from 15–30% of the QR pattern width, including the light backing. `logoSizePercent` persists with the design and is validated by the admin schema, store and renderer. Missing size on legacy designs retains 15% to preserve existing artwork. PNG/SVG/print/preview share the same geometry and actual decode guard with H correction. Size changes invalidate preview and require saving before export; printed output still needs physical phone testing.

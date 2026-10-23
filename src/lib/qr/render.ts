@@ -10,6 +10,7 @@ export type QrRenderOptions = {
   light?: string;
   logo?: Buffer;
   logoBase64?: string;
+  logoSizePercent?: number;
   moduleShape?: 'square' | 'dots' | 'rounded' | 'horizontal' | 'vertical' | 'diamond';
   cornerShape?: 'square' | 'rounded' | 'extra-rounded';
   cornerShapes?: ['square' | 'rounded' | 'extra-rounded', 'square' | 'rounded' | 'extra-rounded', 'square' | 'rounded' | 'extra-rounded'];
@@ -50,7 +51,7 @@ export async function renderQr(payload: string, options: QrRenderOptions = {}): 
     throw new QrRenderError('invalid_payload');
   }
   if (!options || typeof options !== 'object' || Array.isArray(options)
-      || Object.keys(options).some(key => !['width', 'margin', 'errorCorrectionLevel', 'dark', 'light', 'logo', 'logoBase64', 'moduleShape', 'cornerShape', 'cornerShapes', 'cornerColor'].includes(key))) {
+      || Object.keys(options).some(key => !['width', 'margin', 'errorCorrectionLevel', 'dark', 'light', 'logo', 'logoBase64', 'logoSizePercent', 'moduleShape', 'cornerShape', 'cornerShapes', 'cornerColor'].includes(key))) {
     throw new QrRenderError('invalid_style');
   }
   const style: Required<Pick<QrRenderOptions, 'width' | 'margin' | 'errorCorrectionLevel' | 'dark' | 'light'>> & Omit<QrRenderOptions, 'logo' | 'logoBase64'> = {
@@ -59,6 +60,7 @@ export async function renderQr(payload: string, options: QrRenderOptions = {}): 
     errorCorrectionLevel: options.errorCorrectionLevel ?? 'H',
     dark: options.dark ?? '#000000',
     light: options.light ?? '#ffffff',
+    ...(options.logoSizePercent !== undefined ? { logoSizePercent: options.logoSizePercent } : {}),
     ...(options.moduleShape ? { moduleShape: options.moduleShape } : {}),
     ...(options.cornerShape ? { cornerShape: options.cornerShape } : {}),
     ...(options.cornerShapes ? { cornerShapes: options.cornerShapes } : {}),
@@ -71,6 +73,7 @@ export async function renderQr(payload: string, options: QrRenderOptions = {}): 
       || !/^#[0-9a-fA-F]{6}$/.test(style.dark) || !/^#[0-9a-fA-F]{6}$/.test(style.light)) {
     throw new QrRenderError('invalid_style');
   }
+  if (style.logoSizePercent !== undefined && (!Number.isInteger(style.logoSizePercent) || style.logoSizePercent < 15 || style.logoSizePercent > 30)) throw new QrRenderError('invalid_style');
   if (style.moduleShape && !['square','dots','rounded','horizontal','vertical','diamond'].includes(style.moduleShape)
       || style.cornerShape && !['square','rounded','extra-rounded'].includes(style.cornerShape)
       || style.cornerShapes && (!Array.isArray(style.cornerShapes) || style.cornerShapes.length !== 3 || style.cornerShapes.some(v => !['square','rounded','extra-rounded'].includes(v)))
@@ -142,7 +145,7 @@ export async function renderQr(payload: string, options: QrRenderOptions = {}): 
         || logo.subarray(0, 3).equals(Buffer.from([255, 216, 255])))) {
     throw new QrRenderError('invalid_logo');
   }
-  const coverSize = Math.floor(moduleCount / (moduleCount + 2 * style.margin) * style.width * 0.15);
+  const coverSize = Math.floor(moduleCount / (moduleCount + 2 * style.margin) * style.width * (style.logoSizePercent ?? 15) / 100);
   const logoSize = Math.max(1, coverSize - 4);
   let raster: Buffer;
   try {
