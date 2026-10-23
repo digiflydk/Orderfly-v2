@@ -31,10 +31,15 @@ export async function readKitchenCategoriesForOrder(order: OrderDetail): Promise
   if (!validId(order.brandId) || (order.locationId != null && order.locationId !== '' && !validId(order.locationId))) {
     throw new AuthorityError('invalid_identifier', 400);
   }
+  let scopeVerified = false;
   try {
     const db = getAdminDb();
     return await db.runTransaction(async tx => {
+      // Each attempt must establish fresh authority. A retry may see revocation
+      // or a scope read failure after a previous attempt authorized successfully.
+      scopeVerified = false;
       await authorizeTransaction(tx, identity, { brandId: order.brandId, locationId: order.locationId }, 'orderfly.orders:view', 'location');
+      scopeVerified = true;
       if (!validId(order.locationId) || !Array.isArray(order.productItems) || order.productItems.length > MAX_LINES) return {};
       // Checkout already stores canonical product IDs. Do not guess by stripping
       // '-offer', or by looking up a product with the same display name.
@@ -59,6 +64,10 @@ export async function readKitchenCategoriesForOrder(order: OrderDetail): Promise
     }, { readOnly: true });
   } catch (error) {
     if (error instanceof AuthorityError) throw error;
+    // Category headings are optional enrichment. Keep the authorized saved
+    // order usable if catalog reads or transaction completion are unavailable.
+    // Unknown authorization/scope failures must still fail closed.
+    if (scopeVerified) return {};
     throw new Error('kitchen_categories_unavailable');
   }
 }

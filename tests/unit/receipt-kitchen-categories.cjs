@@ -15,14 +15,20 @@ function fixture(options = {}) {
   const reads = []; let dbCalls = 0;
   const db = {
     collection(name) { return { doc(id) { return { path: `${name}/${id}`, id }; } }; },
-    async runTransaction(run, options) {
-      assert.deepEqual(options, { readOnly: true });
-      const snapshot = new Map(structuredClone([...records]));
-      return run({ async get(ref) {
-        reads.push(ref.path);
-        if (options.fail) throw Error('PRIVATE database');
-        return { id: ref.id, exists: snapshot.has(ref.path), data: () => snapshot.get(ref.path) };
-      } });
+    async runTransaction(run, txOptions) {
+      assert.deepEqual(txOptions, { readOnly: true });
+      for (let attempt = 0; ; attempt++) {
+        const snapshot = new Map(structuredClone([...records]));
+        const result = await run({ async get(ref) {
+          reads.push(ref.path);
+          const error = options.readError?.(ref.path, attempt);
+          if (error) throw error;
+          return { id: ref.id, exists: snapshot.has(ref.path), data: () => snapshot.get(ref.path) };
+        } });
+        if (attempt === 0 && options.retry) { options.retry(records); continue; }
+        if (options.completionError) throw options.completionError;
+        return result;
+      }
     },
   };
   const service = loadTs('src/lib/receipts/kitchen-categories-server.ts', {
@@ -87,4 +93,34 @@ test('historical brand lifecycle does not change order permission; unknown error
   const f = fixture(); f.records.set('brands/brand', { status: 'suspended' });
   assert.deepEqual(await f.read(order()), { pizza: 'Pizza' });
   await assert.rejects(fixture({ fail: true }).read(order()), error => error.message === 'kitchen_categories_unavailable');
+});
+
+test('optional product/category and transaction-completion failures fall back only after scope verification', async () => {
+  for (const path of ['products/pizza', 'categories/pizza-cat']) {
+    const f = fixture({ readError: current => current === path ? Error('PRIVATE catalog unavailable') : undefined });
+    assert.deepEqual(await f.read(order()), {});
+    assert.deepEqual(f.reads.slice(0, 3), ['platformAdminControl/access-v1', 'brands/brand', 'locations/location']);
+  }
+  assert.deepEqual(await fixture({ completionError: Error('PRIVATE transaction completion') }).read(order()), {});
+});
+test('unknown policy/native-scope failures and explicit authority errors are never hidden by enrichment fallback', async () => {
+  for (const path of ['platformAdminControl/access-v1', 'brands/brand', 'locations/location']) {
+    const f = fixture({ readError: current => current === path ? Error('PRIVATE scope unavailable') : undefined });
+    await assert.rejects(f.read(order()), error => error.message === 'kitchen_categories_unavailable');
+    assert.ok(f.reads.every(read => !read.startsWith('products/') && !read.startsWith('categories/')));
+  }
+  for (const path of ['products/pizza', 'categories/pizza-cat']) {
+    const f = fixture({ readError: current => current === path ? new authority.AuthorityError('forbidden') : undefined });
+    await assert.rejects(f.read(order()), error => error instanceof authority.AuthorityError && error.status === 403);
+  }
+});
+test('transaction retry resets successful scope verification before revoked or unavailable authority', async () => {
+  const revoked = fixture({ retry: rows => rows.get('platformAdminControl/access-v1').principals[0].active = false });
+  await assert.rejects(revoked.read(order()), /forbidden/);
+  assert.equal(revoked.reads.filter(path => path === 'products/pizza').length, 1);
+  for (const path of ['platformAdminControl/access-v1', 'brands/brand', 'locations/location']) {
+    const f = fixture({ retry: () => {}, readError: (current, attempt) => attempt === 1 && current === path ? Error('PRIVATE retry scope') : undefined });
+    await assert.rejects(f.read(order()), error => error.message === 'kitchen_categories_unavailable');
+    assert.equal(f.reads.filter(read => read === 'products/pizza').length, 1);
+  }
 });

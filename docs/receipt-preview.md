@@ -70,7 +70,9 @@ lines with different customizations are never merged. Strings remain React text.
 Current category headings are resolved through a bounded, read-only native-scope
 transaction. Product and category must belong to the authorized brand/location;
 missing, inactive or foreign catalog rows do not remove saved food lines. Their
-headings fall back to Varer (or Menuer for explicit combos). Category labels are
+headings fall back to Varer (or Menuer for explicit combos). Optional catalog
+lookup failures after successful scope authorization also use that fallback;
+authorization failures (including a failed retry) still reject. Category labels are
 current presentation metadata, not historical invoice facts. No channel or
 station is guessed from analytics, product names or printer configuration.
 
