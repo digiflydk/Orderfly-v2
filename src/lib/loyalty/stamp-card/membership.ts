@@ -18,6 +18,7 @@ import {
 } from './model';
 import { profileFromCustomer } from './profile-rules';
 import { stageClubQrConversion } from './qr-attribution';
+import { stageSignupNotification } from './signup-notifications';
 import { QR_TOUCH_RECEIPT_PATTERN } from '@/lib/qr/touch-contract';
 import { loadTextContext, renderedHash, renderedTextId, renderForProgram, type TextContext } from './program-texts';
 
@@ -209,12 +210,14 @@ export async function signup(db: Firestore, brand: ProgramBrand, input: z.infer<
       customer: customer.data, discountId: trusted.clubDiscountId, now });
     const qrConversion = await stageClubQrConversion(db, tx, { brandId: brand.brandId, memberId, now,
       attribution: trusted.source === 'checkout' ? undefined : input.qrAttribution });
+    const signupNotification = await stageSignupNotification(db, tx, { brandId: brand.brandId, memberId, programName: s.name, joinedAt: now });
     recordIp(); recordEmail();
     customer.create?.(input.name, now);
     tx.create(db.collection(COLLECTIONS.members).doc(memberId), member);
     welcome.apply();
     discount.apply();
     qrConversion.apply();
+    signupNotification.apply();
     if (!shownKnown) tx.create(shownRef, { brandId: brand.brandId, textVersion: program.texts.version, hash: texts.hash, texts: texts.texts, createdAt: now });
     tx.create(identityRef, { brandId: brand.brandId, memberId, createdAt: now });
     consent.apply();
