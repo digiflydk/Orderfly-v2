@@ -102,7 +102,7 @@ export function QrPrintTools({ draft, context, render, onDesignChange, onUploadB
     running.current = true; setBusy(true); setError(''); setNotice('');
     try {
       const value = logo ? { ...draft, style: { ...(draft.style || DEFAULT_STYLE), errorCorrectionLevel: 'H' as const } } : draft;
-      const asset = await render(value, { ...context }, { format: format === 'preview' ? 'png' : format, ...(logo ? { logoBase64: logo.base64 } : {}) });
+      const asset = await render(value, { ...context }, { format: format === 'preview' ? 'png' : format, ...(logo && !onDesignChange ? { logoBase64: logo.base64 } : {}) });
       if (at !== generation.current) { popup?.close(); return; }
       const blob = assetBlob(asset, format === 'preview' ? 'png' : format);
       if (format === 'preview') {

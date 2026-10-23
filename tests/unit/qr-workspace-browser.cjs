@@ -327,7 +327,7 @@ test('logo/design upload works before save and survives save/reopen; exports req
     assert.equal(await page.getByRole('button',{name:'Prikker',exact:true}).getAttribute('aria-pressed'),'true');
     const download=page.waitForEvent('download');await page.getByRole('button',{name:'PNG med valgt logo',exact:true}).click();
     assert.equal((await download).suggestedFilename(),'logo-qr.png');
-    assert.equal(calls.length,3);assert.equal(calls[2].body.logoBase64,png);assert.equal(calls[2].body.draft.style.moduleShape,'dots');
+    assert.equal(calls.length,3);assert.equal(calls[2].body.logoBase64,undefined);assert.equal(calls[2].body.draft.style.logoBase64,png);assert.equal(calls[2].body.draft.style.moduleShape,'dots');
     assert.deepEqual(calls[2].body.context,{id:'qr1',revision:'2'});
   }finally{await page.close();}
 });

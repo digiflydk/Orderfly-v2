@@ -161,7 +161,7 @@ for(const width of [390,1440])test(`saved design controls propagate logo, module
     assert.deepEqual(await page.evaluate(()=>({shape:window.__savedDesign.moduleShape,corners:window.__savedDesign.cornerShapes,color:window.__savedDesign.cornerColor})),{shape:'dots',corners:['square','extra-rounded','square'],color:draft.style.dark});
     await page.getByRole('button',{name:'Vis designpreview',exact:true}).click();
     await page.getByRole('img',{name:'QR-preview med valgt design og logo'}).waitFor();
-    assert.equal(calls.at(-1).draft.style.moduleShape,'dots');assert.equal(calls.at(-1).draft.style.errorCorrectionLevel,'H');
+    assert.equal(calls.at(-1).options.logoBase64,undefined);assert.equal(calls.at(-1).draft.style.logoBase64,png.toString('base64'));assert.equal(calls.at(-1).draft.style.moduleShape,'dots');assert.equal(calls.at(-1).draft.style.errorCorrectionLevel,'H');
     await page.getByRole('button',{name:'Fjern logo',exact:true}).click();
     assert.equal(await page.evaluate(()=>window.__savedDesign.logoBase64),undefined);
     assert.equal(await page.getByRole('img',{name:'QR-preview med valgt design og logo'}).count(),0);
