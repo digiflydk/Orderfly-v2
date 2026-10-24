@@ -40,7 +40,7 @@ export function PrinterPilotControls({ scope, model, paperWidthMm, active, permi
   const [pilotState, setPilotState] = useState<PilotState | null>(null), [statusMessage, setStatusMessage] = useState('');
   const [uncertain, setUncertain] = useState(false);
   const unresolvedRequest = useRef<string | null>(null);
-  const pending = useRef(false), lifetime = useRef(0), request = useRef<AbortController | null>(null);
+  const pending = useRef<false | 'read' | 'print'>(false), lifetime = useRef(0), request = useRef<AbortController | null>(null);
   const lost = useRef(onSessionLost); lost.current = onSessionLost;
   useEffect(() => {
     const generation = ++lifetime.current;
@@ -55,7 +55,7 @@ export function PrinterPilotControls({ scope, model, paperWidthMm, active, permi
   async function refreshStatus() {
     if (!permitted || pending.current) return;
     const generation = lifetime.current, controller = new AbortController(); request.current = controller;
-    pending.current = true;
+    pending.current = 'read';
     const current = () => lifetime.current === generation && !controller.signal.aborted;
     try {
       const query = new URLSearchParams(Object.entries(scope).map(([key, value]) => [key, String(value)]));
@@ -81,10 +81,12 @@ export function PrinterPilotControls({ scope, model, paperWidthMm, active, permi
     finally { if (current()) { pending.current = false; request.current = null; } }
   }
   async function print(retry = false) {
-    if (!permitted || !active || pending.current
+    if (!permitted || !active || pending.current === 'print'
       || (retry ? !unresolvedRequest.current : uncertain || !['none', 'confirmed', 'expired'].includes(pilotState || ''))) return;
+    // An explicit click takes priority over read-only background polling.
+    if (pending.current === 'read') request.current?.abort();
     const generation = lifetime.current, controller = new AbortController(); request.current = controller;
-    pending.current = true; setBusy(true); setMessage('Sender testbon…'); setUncertain(true);
+    pending.current = 'print'; setBusy(true); setMessage('Sender testbon…'); setUncertain(true);
     const current = () => lifetime.current === generation && !controller.signal.aborted;
     try {
       const bytes = crypto.getRandomValues(new Uint8Array(32));
