@@ -6,6 +6,7 @@ const mocks={'server-only':{},'@/lib/firebase-admin':{getAdminDb:()=>{throw Erro
 const admin=loadTs('src/lib/loyalty/discount-card/admin.ts',mocks);
 const checkout=loadTs('src/lib/loyalty/discount-card/checkout.ts',mocks);
 const invites=loadTs('src/lib/loyalty/discount-card/invitations.ts',mocks);
+const portal=loadTs('src/lib/loyalty/discount-card/portal.ts',mocks);
 const {principalKey}=loadTs('src/lib/access/authority.ts',mocks);
 const {hashKey,COLLECTIONS}=loadTs('src/lib/loyalty/stamp-card/model.ts',mocks);
 const {discountCardAssignmentId}=loadTs('src/lib/loyalty/discount-card/model.ts',mocks);
@@ -37,7 +38,7 @@ function fixture(){
  for(const id of ['loc','loc2'])db.rows.set('locations/'+id,{name:id,brandId:'brand',isActive:true});
  db.rows.set('locations/foreign',{name:'Foreign',brandId:'other',isActive:true});
  db.rows.set('customers/customer',{brandId:'brand',status:'active',fullName:'Member',email:'member@example.com',normalizedEmail:'member@example.com'});
- db.rows.set('loyaltyMembers/member',{brandId:'brand',companyId:'company',customerId:'customer',status:'active',sessionEpoch:0});
+ db.rows.set('loyaltyMembers/member',{brandId:'brand',companyId:'company',customerId:'customer',normalizedEmail:'member@example.com',status:'active',sessionEpoch:0});
  db.rows.set('loyaltySessions/'+hashKey('session',TOKEN),{brandId:'brand',memberId:'member',epoch:0,expiresAt:NOW+60000,revokedAt:null});
  db.rows.set('loyaltyCards/old',{brandId:'brand',memberId:'member',stamps:5,status:'active'});
  db.rows.set('loyaltyRewards/old',{brandId:'brand',memberId:'member',status:'available'});
@@ -165,5 +166,32 @@ test('invite terms, brand, expiry and configuration binding fail closed before c
   if(scenario==='changed-group')await admin.saveDiscountCardGroup(db,owner,group({version:1,percentage:25}),NOW+1);
   if(scenario==='feature-disabled')await admin.saveDiscountCardFeature(db,owner,feature({version:1,enabled:false}),NOW+1);
   const before=businessState(db);await assert.rejects(invites.acceptDiscountInvitation(db,target,request,context));assert.deepEqual(businessState(db),before,scenario);
+ }
+});
+
+test('admin-selected brand location remains visible and usable without duplicate company location inventory',async()=>{
+ const db=await setup();db.rows.get('platformAdminControl/access-v1').companies[0].locationIds=[];
+ const session={memberId:'member',sessionId:hashKey('session',TOKEN),member:db.rows.get('loyaltyMembers/member')};
+ const view=await portal.memberDiscountCard(db,brand,session,NOW),quote=await checkout.readDiscountCardCheckout(db,query());
+ assert.ok(view);assert.equal(view.status,'active');assert.deepEqual(view.locations,{all:false,names:['loc']});
+ assert.ok(quote);assert.equal(view.percentage,quote.percentage);
+});
+
+test('inactive customer and ambiguous company ownership fail closed across portal and checkout',async()=>{
+ for(const mutate of [db=>db.rows.get('customers/customer').status='inactive',db=>db.rows.get('customers/customer').status='deleted',db=>db.rows.get('platformAdminControl/access-v1').companies[1].orderflyBrandIds.push('brand')]){
+  const db=await setup(),session={memberId:'member',sessionId:hashKey('session',TOKEN),member:db.rows.get('loyaltyMembers/member')};mutate(db);
+  assert.equal(await portal.memberDiscountCard(db,brand,session,NOW),null);
+  assert.equal(await checkout.readDiscountCardCheckout(db,query()),null);
+ }
+});
+
+test('deleted brand is unavailable to administration, public capability, portal and checkout',async()=>{
+ for(const patch of [{status:'deleted'},{deletedAt:NOW}]){
+  const db=await setup(),session={memberId:'member',sessionId:hashKey('session',TOKEN),member:db.rows.get('loyaltyMembers/member')};
+  Object.assign(db.rows.get('brands/brand'),patch);
+  await assert.rejects(admin.readDiscountCardAdmin(db,owner,'brand'));
+  assert.equal(await checkout.discountCardCheckoutEnabled(db,'brand','loc'),false);
+  assert.equal(await portal.memberDiscountCard(db,brand,session,NOW),null);
+  assert.equal(await checkout.readDiscountCardCheckout(db,query()),null);
  }
 });
