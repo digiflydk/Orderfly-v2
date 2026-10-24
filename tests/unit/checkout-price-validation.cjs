@@ -43,6 +43,10 @@ test('actual checkout action rejects tampering before side effects, allows valid
  const mocks=Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],{}]));
  let identityCalls=0;let writes=0;
  Object.assign(mocks,{
+  // External request cookies are absent; execute the real card calculation so
+  // this pricing fixture still traverses the production no-entitlement path.
+  'next/headers':{cookies:async()=>({get:()=>undefined})},
+  '@/lib/loyalty/discount-card/checkout':loadTs('src/lib/loyalty/discount-card/checkout.ts',{'server-only':{}}),
   '@/lib/checkout-price-validation':pricing,'@/lib/promotion-rules':rules,'@/lib/automatic-discounts':automatic,
   '@/lib/customer-identity':loadTs('src/lib/customer-identity.ts'),
   '@/lib/synthetic-product':loadTs('src/lib/synthetic-product.ts'),
