@@ -27,14 +27,16 @@ function chunk(type: string, data: Buffer): Buffer {
 }
 
 /** Pure CPU-only PNG encoder. No printer emulation commands, I/O, font fallback or dispatch. */
-export function encodeKitchenPng(snapshot: unknown, profile: unknown) {
+export function encodeKitchenPng(snapshot: unknown, profile: unknown, version: 1 | 2 = 2) {
   const parsed = profileSchema.safeParse(profile);
-  if (!parsed.success) throw new KitchenPngError('invalid_profile');
+  if (!parsed.success || ![1, 2].includes(version)) throw new KitchenPngError('invalid_profile');
   const { model, paperWidthMm } = parsed.data;
-  const preview = renderKitchenReceipt(snapshot, { paperWidthMm });
+  const scale = version === 1 ? 2 : 4, cell = 6 * scale, rowHeight = 12 * scale;
+  const width = paperWidthMm === 58 ? 384 : 576;
+  const preview = renderKitchenReceipt(snapshot, { paperWidthMm, columns: width / cell });
   const lines = preview.text.slice(0, -1).split('\n');
-  // Fixed font: 5x10 glyph, 2x scaling, 12-dot cell and 24-dot row.
-  const width = paperWidthMm === 58 ? 384 : 576, height = lines.length * 24 + 8;
+  // V2 doubles glyphs and wraps before rasterization; v1 remains byte-stable for saved jobs.
+  const height = lines.length * rowHeight + 8;
   if (height > KITCHEN_PNG_LIMITS.heightDots) throw new KitchenPngError('image_too_large');
   // Validate the entire text before allocating image memory, never partially encode a job.
   const glyphs = lines.map(line => Array.from(line, character => {
@@ -48,8 +50,8 @@ export function encodeKitchenPng(snapshot: unknown, profile: unknown) {
   glyphs.forEach((line, lineIndex) => line.forEach((glyph, column) => {
     glyph.forEach((row, gy) => {
       for (let gx = 0; gx < 5; gx++) if (row & (1 << (4 - gx))) {
-        for (let dy = 0; dy < 2; dy++) for (let dx = 0; dx < 2; dx++) {
-          const x = column * 12 + gx * 2 + dx, y = 4 + lineIndex * 24 + gy * 2 + dy;
+        for (let dy = 0; dy < scale; dy++) for (let dx = 0; dx < scale; dx++) {
+          const x = column * cell + gx * scale + dx, y = 4 + lineIndex * rowHeight + gy * scale + dy;
           pixels[y * stride + 1 + (x >>> 3)] &= ~(1 << (7 - (x & 7)));
         }
       }

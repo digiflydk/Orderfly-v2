@@ -12,7 +12,8 @@ const bindingSchema = z.object({
 const maxBase64 = 4 * Math.ceil(KITCHEN_PNG_LIMITS.payloadBytes / 3);
 const envelopeSchema = z.object({
   schemaVersion: z.literal(1), purpose: z.literal('synthetic-testbon'),
-  contentVersion: z.literal('orderfly-testbon-v1'), encoderVersion: z.literal('orderfly-kitchen-png-v1'),
+  contentVersion: z.enum(['orderfly-testbon-v1', 'orderfly-testbon-v2']),
+  encoderVersion: z.enum(['orderfly-kitchen-png-v1', 'orderfly-kitchen-png-v2']),
   binding: bindingSchema, contentType: z.literal('image/png'),
   raster: z.object({ widthDots: z.union([z.literal(384), z.literal(576)]),
     heightDots: z.number().int().positive().max(KITCHEN_PNG_LIMITS.heightDots),
@@ -69,17 +70,18 @@ function binding(input: unknown): z.output<typeof bindingSchema> {
 }
 
 /** Fixed synthetic text only. A caller cannot supply orders, customer data or commands. */
-export function createSyntheticTestBonContent(input: unknown): SyntheticTestBonContent {
+export function createSyntheticTestBonContent(input: unknown, version: 1 | 2 = 2): SyntheticTestBonContent {
   const target = binding(input);
   const encoded = encodeKitchenPng({
     orderReference: 'ORDERFLY TEST', fulfillmentLabel: 'TESTBON - IKKE EN ORDRE',
     fulfillmentTime: 'Syntetisk test',
     items: [{ quantity: 1, name: 'Dansk test: ÆØÅ æøå', modifiers: ['58/80 mm papir'], kitchenNote: 'Ingen madproduktion' }],
     kitchenNote: 'Kontroller udskrift manuelt',
-  }, { model: target.model, paperWidthMm: target.paperWidthMm });
+  }, { model: target.model, paperWidthMm: target.paperWidthMm }, version);
   const envelope = {
     schemaVersion: 1 as const, purpose: 'synthetic-testbon' as const,
-    contentVersion: 'orderfly-testbon-v1' as const, encoderVersion: 'orderfly-kitchen-png-v1' as const,
+    contentVersion: version === 1 ? 'orderfly-testbon-v1' as const : 'orderfly-testbon-v2' as const,
+    encoderVersion: version === 1 ? 'orderfly-kitchen-png-v1' as const : 'orderfly-kitchen-png-v2' as const,
     binding: Object.freeze(target), contentType: encoded.contentType,
     raster: Object.freeze({ widthDots: encoded.raster.widthDots as 384 | 576, heightDots: encoded.raster.heightDots,
       font: encoded.raster.font, physicalFitVerified: false as const }),
@@ -104,8 +106,8 @@ export function readSyntheticTestBonContent(input: unknown, expectedBinding: unk
     || createHash('sha256').update(bytes).digest('hex') !== content.sha256) return fail('invalid_content');
   // A recomputed caller digest is not proof of origin. Require this version's exact
   // synthetic bytes/profile too, excluding arbitrary PNG/private text substitution.
-  const canonical = createSyntheticTestBonContent(target);
-  if (content.sha256 !== canonical.sha256 || content.payloadBase64 !== canonical.payloadBase64
+  const canonical = createSyntheticTestBonContent(target, content.contentVersion === 'orderfly-testbon-v1' ? 1 : 2);
+  if (content.encoderVersion !== canonical.encoderVersion || content.sha256 !== canonical.sha256 || content.payloadBase64 !== canonical.payloadBase64
     || JSON.stringify(content.raster) !== JSON.stringify(canonical.raster)) return fail('invalid_content');
   return Object.freeze({ contentType: content.contentType, payload: bytes, binding: Object.freeze(target),
     sha256: content.sha256, contentVersion: content.contentVersion, raster: Object.freeze(content.raster),

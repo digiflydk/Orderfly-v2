@@ -15,7 +15,7 @@ test('synthetic 58/80mm Danish testbon has exact PNG digest/dimensions and no ou
   for(const [model,paperWidthMm] of [['mc-print2',58],['mc-print3',58],['mc-print3',80]]) {
     const expected=target({model,paperWidthMm}), a=create(expected), b=create(expected), result=read(a,expected);
     assert.deepEqual(a,b);assert.equal(a.schemaVersion,1);assert.equal(a.purpose,'synthetic-testbon');
-    assert.equal(a.contentVersion,'orderfly-testbon-v1');assert.equal(a.encoderVersion,'orderfly-kitchen-png-v1');
+    assert.equal(a.contentVersion,'orderfly-testbon-v2');assert.equal(a.encoderVersion,'orderfly-kitchen-png-v2');
     assert.equal(a.sha256,createHash('sha256').update(result.payload).digest('hex'));
     assert.equal(a.byteLength,result.payload.length);assert.equal(result.contentType,'image/png');
     const info=await sharp(result.payload).metadata();
@@ -61,7 +61,7 @@ test('malformed bindings, secret/customer fields, unsafe integers and unsupporte
 
 test('strict content fields, version, length, media/profile and unsupported metadata mutations reject',()=>{
   const content=create(target());
-  for(const patch of [{schemaVersion:2},{purpose:'order'},{contentVersion:'orderfly-testbon-v2'},
+  for(const patch of [{schemaVersion:2},{purpose:'order'},{contentVersion:'orderfly-testbon-v3'},
     {encoderVersion:'other'},{contentType:'text/plain'},{byteLength:content.byteLength+1},
     {sha256:'0'.repeat(64)},{sha256:'A'.repeat(64)},{payloadBase64:'!!!!'},
     {raster:{...content.raster,widthDots:576}},{raster:{...content.raster,heightDots:1}},
@@ -133,4 +133,11 @@ test('throwing reflection traps and revoked proxies produce only fixed binding/c
   // Proxies that do not throw remain plain data and preserve the normal success path.
   assert.deepEqual(read(new Proxy(clone(content),{}),new Proxy(target(),{})).payload,
     read(content,target()).payload);
+});
+
+ test('legacy synthetic content stays readable and version substitution cannot change saved bytes',()=>{for(const paperWidthMm of [58,80]){const b=target({paperWidthMm});const old=create(b,1),current=create(b);assert.notEqual(old.sha256,current.sha256);assert.deepEqual(read(old,b).payload,Buffer.from(old.payloadBase64,'base64'));rejected(()=>read({...old,contentVersion:current.contentVersion,encoderVersion:current.encoderVersion},b));rejected(()=>read({...current,encoderVersion:old.encoderVersion},b));}});
+
+test('legacy v1 synthetic hashes remain identical to the released physical template',()=>{
+ const hashes={58:'f2d34abf428597979572bd9ef9244f63a71aa9086c31e248b61e822420a00e64',80:'95db7436ea66759d0a85a5850de11fb5158f0b2d8a3dbc41ae2bc4cee4e9502b'};
+ for(const paperWidthMm of [58,80])assert.equal(create(target({paperWidthMm}),1).sha256,hashes[paperWidthMm]);
 });
