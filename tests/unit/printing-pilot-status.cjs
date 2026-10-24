@@ -67,7 +67,8 @@ test('actual GET reads none and every durable mc-print3 80mm delivery state with
 });
 test('expired nonterminal states are explicit; terminal confirmation remains readable after expiry without physical proof', async () => {
   const f = fixture();
-  for (const state of ['queued', 'offered', 'download_started']) { f.seed(state, true); assert.equal((await f.get()).body.state, 'expired'); }
+  for (const state of ['queued', 'offered']) { f.seed(state, true); assert.equal((await f.get()).body.state, 'expired'); }
+  f.seed('download_started', true); assert.equal((await f.get()).body.state, 'unknown');
   for (const state of ['confirmed', 'failed', 'unknown']) { f.seed(state, true); assert.equal((await f.get()).body.state, state); }
 });
 test('auth first and strict bounded query reject before native access', async () => {

@@ -108,7 +108,7 @@ async function fixture() {
   const http = (method = 'POST', suffix = '', body = { statusCode: '200%20OK' }, headers = {}) => route[method](
     new Request(`https://orderfly.test/api/cloudprnt/b1/l1/p1${suffix}`, { method,
       headers: { authorization: command.authorization, ...(method === 'POST' ? { 'content-type': 'application/json' } : {}), ...headers },
-      ...(method === 'POST' ? { body: JSON.stringify(body) } : {}) }), { params: Promise.resolve(scope) });
+      ...(method === 'POST' ? { body: JSON.stringify(body) } : method === 'DELETE' ? { body: '', headers: { authorization: command.authorization, 'content-length': '0', ...headers } } : {}) }), { params: Promise.resolve(scope) });
   return { rows, window, db, job, draft, command, poll, download, confirm, replay, commits, reads, api, content, http, results, enqueueOther,
     failCommit(value = true) { failCommit = value; }, retry(fn) { retry = fn; } };
 }
