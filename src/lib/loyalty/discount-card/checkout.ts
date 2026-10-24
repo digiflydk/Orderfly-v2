@@ -86,6 +86,6 @@ export function discountCardCheckoutSnapshot(entitlement: DiscountCardEntitlemen
 export async function assertDiscountCardCheckoutCurrent(db: Firestore,input: DiscountCardCheckoutInput,expected: AppliedDiscountCard,transaction?: Transaction) {
   const current = await readDiscountCardCheckout(db,input,transaction);
   if (!current || Object.keys(current).some(key => current[key as keyof DiscountCardEntitlement] !== expected[key as keyof DiscountCardEntitlement])) {
-    throw new Error('Dit rabatkort er ændret eller ikke længere gyldigt. Opdatér kassen.');
+    throw Object.assign(new Error('Dit rabatkort er ændret eller ikke længere gyldigt. Opdatér kassen.'), { code: 'discount_card_changed' });
   }
 }

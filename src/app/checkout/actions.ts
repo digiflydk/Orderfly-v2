@@ -768,7 +768,16 @@ export async function createStripeCheckoutSessionAction(
               throw error;
             }
           })();
-          if (discountCard) await assertDiscountCardCheckoutCurrent(context.db,{...discountCardInput,now:Date.now()},discountCard,context.transaction);
+          if (discountCard) {
+            try {
+              await assertDiscountCardCheckoutCurrent(context.db,{...discountCardInput,now:Date.now()},discountCard,context.transaction);
+            } catch (error) {
+              // Only proven ineligibility is definitive; native read/commit
+              // uncertainty keeps the existing conservative reconciliation path.
+              if ((error as { code?: string })?.code === 'discount_card_changed') preparationRejected = true;
+              throw error;
+            }
+          }
           acceptance.apply();
           printPlan?.apply();
           fulfillmentAt = acceptance.fulfillmentAt;

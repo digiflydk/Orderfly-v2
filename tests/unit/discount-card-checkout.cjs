@@ -78,3 +78,32 @@ test('member email removed from canonical customer revokes entitlement even with
  const db=memoryDb(new Map(seed()));db.rows.get('customers/c').email='new@example.test';db.rows.get('customers/c').normalizedEmail='new@example.test';
  assert.equal(await api.readDiscountCardCheckout(db,{...input,email:undefined}),null);
 });
+for(const paymentMethod of ['pay_at_pickup','online'])test('revocation after hold releases rejected '+paymentMethod+' order and allows fresh checkout',async()=>{
+ let rows;
+ const options={loyaltyToken:token,realReservations:true,expectedCartDiscount:25,paymentOverrides:{cartDiscountTotal:25,discountTotal:25},locationOverrides:{paymentMethods:{online:true,payAtPickup:true}},customerOverrides:{paymentMethod}};
+ const f=await checkout({...options,seed:seed(),beforeCustomerTransaction:value=>{rows=value;},beforeStripe:()=>{rows.get('discountCardAssignments/'+aid).status='blocked';}});
+ assert.equal(f.result.success,false);assert.equal(f.result.retryable,true);
+ const order=f.records.get('orders/ORD-TEST');assert.equal(order.status,'Canceled');assert.equal(order.paymentStatus,'Failed');assert.equal(order.discountReservation,'released');
+ assert.equal(f.events.includes('release'),true);assert.equal(f.events.includes('stripe'),false);
+ const capacity=[...f.records].filter(([path])=>path.startsWith('checkout_customer_capacity/'));assert.equal(capacity.length,1);assert.equal(capacity[0][1].held,0);
+ f.records.get('discountCardAssignments/'+aid).status='active';
+ const next=await checkout({...options,seed:[...f.records],orderId:'ORD-RETRY'});
+ assert.equal(next.result.success,true,next.result.error);assert.equal(next.records.get('orders/ORD-RETRY').discountReservation,'held');
+});
+test('lost pickup acceptance response retains card order and hold until reconciliation',async()=>{
+ const f=await checkout({seed:seed(),loyaltyToken:token,realReservations:true,fault:'pickup-response',expectedCartDiscount:25,paymentOverrides:{cartDiscountTotal:25,discountTotal:25},locationOverrides:{paymentMethods:{online:true,payAtPickup:true}},customerOverrides:{paymentMethod:'pay_at_pickup'}});
+ assert.equal(f.result.success,false);assert.equal(f.result.retryable,false);assert.equal(f.events.includes('release'),false);
+ assert.equal(f.records.get('orders/ORD-TEST').status,'Received');assert.equal(f.records.get('orders/ORD-TEST').discountReservation,'held');
+});
+test('uncertain Stripe session creation retains card reservation and forbids blind retry',async()=>{
+ const f=await checkout({seed:seed(),loyaltyToken:token,realReservations:true,stripeError:Object.assign(new Error('response lost'),{type:'StripeConnectionError'}),expectedCartDiscount:25,paymentOverrides:{cartDiscountTotal:25,discountTotal:25}});
+ assert.equal(f.result.success,false);assert.equal(f.result.retryable,false);assert.equal(f.events.includes('release'),false);
+ assert.equal(f.records.get('orders/ORD-TEST').status,'Pending');assert.equal(f.records.get('orders/ORD-TEST').discountReservation,'held');
+});
+test('native entitlement read errors retain identity and are never classified as proven revocation',async()=>{
+ const db=memoryDb(new Map(seed())),card=await api.readDiscountCardCheckout(db,input),snapshot=api.discountCardCheckoutSnapshot(card,10000,0);
+ const unavailable=new Error('native read unavailable');
+ await assert.rejects(api.assertDiscountCardCheckoutCurrent(db,input,snapshot,{get:async()=>{throw unavailable;}}),error=>error===unavailable&&error.code===undefined);
+ db.rows.get('discountCardGroups/g').version++;
+ await assert.rejects(api.assertDiscountCardCheckoutCurrent(db,input,snapshot),error=>error.code==='discount_card_changed');
+});
