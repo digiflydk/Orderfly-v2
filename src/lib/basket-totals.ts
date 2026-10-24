@@ -2,8 +2,10 @@ import type { CartItem, Brand, Location, Discount, StandardDiscount } from '@/ty
 import { bestAutomaticDiscount } from './automatic-discounts';
 import { isLockedItem } from './cart-utils';
 import { newsletterAllowsStacking } from './promotion-rules';
+import { discountCardAmountOre } from './loyalty/discount-card/rules';
 import { money, sumMoney, lineMoney, percentageMoney } from './money';
-export function basketTotals({cartItems, appliedDiscount, standardDiscounts, deliveryType, location, brand, includeBagFee}: {
+export function basketTotals({cartItems, appliedDiscount, standardDiscounts, deliveryType, location, brand, includeBagFee, discountCard}: {
+  discountCard?: {name:string;percentage:number} | null;
   cartItems: CartItem[]; appliedDiscount: Discount | null; standardDiscounts: StandardDiscount[];
   deliveryType: 'pickup' | 'delivery' | null; location: Location | null; brand: Brand | null; includeBagFee: boolean;
 }) {
@@ -33,6 +35,11 @@ export function basketTotals({cartItems, appliedDiscount, standardDiscounts, del
             calculatedVoucher = { name: appliedDiscount.code, amount: voucherAmount };
         }
     }
+
+    const cardAmount = discountCard && Number.isFinite(discountCard.percentage) && discountCard.percentage > 0 && discountCard.percentage <= 100
+      ? discountCardAmountOre(Math.round(discountableSubtotal * 100),discountCard.percentage) / 100 : 0;
+    const discountCardWins = cardAmount > Math.max(calculatedVoucher?.amount || 0,bestAutoDiscount?.amount || 0);
+    if (discountCardWins) calculatedVoucher = {name:`Rabatkort: ${discountCard!.name}`,amount:cardAmount};
 
     const finalCartDiscount = (calculatedVoucher && (!bestAutoDiscount || calculatedVoucher.amount > bestAutoDiscount.amount))
         ? null
@@ -78,6 +85,7 @@ export function basketTotals({cartItems, appliedDiscount, standardDiscounts, del
     return {
       subtotal: currentSubtotal, itemCount: currentItemCount, itemDiscount: currentItemDiscount,
       automaticCartDiscount: finalCartDiscount, voucherDiscount: finalVoucherDiscount,
+      discountCardApplied: discountCardWins,
       deliveryFee: currentDeliveryFee, freeDeliveryDiscountApplied: isFreeDelivery,
       bagFee: currentBagFee, adminFee: currentAdminFee,
       cartTotal: Math.max(0, calculatedCartTotal), checkoutTotal: Math.max(0, calculatedCheckoutTotal),

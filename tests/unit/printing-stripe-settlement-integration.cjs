@@ -491,3 +491,33 @@ test('#349 write transaction and SDK retry inspect fresh terminal order before m
   assert.deepEqual([...retried.records].filter(([path]) => !path.startsWith('orderNotificationJobs/') && path !== policyPath), retryBefore.filter(([path]) => !path.startsWith('orderNotificationJobs/') && path !== policyPath));
   assert.equal([...retried.records].filter(([path, row]) => path.startsWith('orderNotificationJobs/') && row.kind === 'orderConfirmation').length, 1);
 });
+
+function freeCardSnapshot(order) {
+  const amountOre=Math.round(order.paymentDetails.subtotal*100);
+  order.discountCard={brandId:'b',locationId:'l',customerId:order.customerDetails.id,memberId:'member',assignmentId:'assignment',groupId:'family',groupName:'Family',percentage:100,
+    featureVersion:1,groupVersion:1,assignmentVersion:1,eligibleSubtotalOre:amountOre,amountOre,purchaseStampsEligible:false};
+  order.totalAmount=0;
+  Object.assign(order.paymentDetails,{itemDiscountTotal:0,cartDiscountTotal:amountOre/100,discountTotal:amountOre/100,deliveryFee:0,bagFee:0,adminFee:0});
+}
+test('100% personal card: independently verified completed zero-cost Stripe session settles and prints once',async()=>{
+ const f=await fixture();freeCardSnapshot(f.order());Object.assign(f.session,{payment_status:'no_payment_required',amount_total:0});
+ assert.equal(await f.settle(),true);assert.equal(f.order().paymentStatus,'Paid');assert.equal(f.order().totalAmount,0);assert.equal(f.jobs().length,2);
+ const before=structuredClone([...f.records]);assert.equal(await f.settle(),false);assert.deepEqual([...f.records],before);
+});
+for(const [label,change] of [
+ ['setup-mode',f=>f.session.mode='setup'],['incomplete',f=>f.session.status='open'],['nonzero-provider',f=>f.session.amount_total=1],
+ ['no-card',f=>delete f.order().discountCard],['wrong-card-brand',f=>f.order().discountCard.brandId='foreign'],
+ ['residual-fee',f=>f.order().paymentDetails.deliveryFee=1],['partial-discount',f=>f.order().discountCard.percentage=99],
+ ['wrong-owner',f=>f.order().discountCard.customerId='other'],
+])test('zero-cost card refuses '+label,async()=>{
+ const f=await fixture();freeCardSnapshot(f.order());Object.assign(f.session,{payment_status:'no_payment_required',amount_total:0});change(f);
+ try {assert.equal(await f.settle(),false);}catch(error){assert.match(error.message,/unverified|mismatch/);}
+ assert.equal(f.order().paymentStatus,'Pending');assert.equal(f.jobs().length,0);
+});
+
+test('decimal card rounding to full subtotal settles zero-cost order',async()=>{
+ const f=await fixture();freeCardSnapshot(f.order());
+ f.order().paymentDetails.subtotal=10;freeCardSnapshot(f.order());f.order().discountCard.percentage=99.99;
+ Object.assign(f.session,{payment_status:'no_payment_required',amount_total:0});
+ assert.equal(await f.settle(),true);assert.equal(f.order().paymentStatus,'Paid');
+});

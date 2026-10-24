@@ -1,4 +1,5 @@
 import 'server-only';
+import { isCompletedFreeCardSession, isZeroTotalDiscountCardOrder } from '@/lib/loyalty/discount-card/zero-total';
 import Stripe from 'stripe';
 import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
@@ -13,7 +14,7 @@ const scope = z.object({ orderId: id, brandId: id, locationId: id });
 const persistedOrder = z.object({
   brandId: id, locationId: id, status: z.enum(['Pending', 'Received', 'In Progress', 'Ready']),
   paymentStatus: z.enum(['Pending', 'Paid']), paymentMethod: z.literal('Stripe'),
-  deliveryType: z.enum(['Pickup', 'Delivery']), totalAmount: z.number().finite().positive(),
+  deliveryType: z.enum(['Pickup', 'Delivery']), totalAmount: z.number().finite().nonnegative(),
   // Legacy orders may omit this field; any recorded or malformed refund fails closed.
   refundedAmountOre: z.literal(0).optional(),
   refundedAmount: z.literal(0).optional(),
@@ -22,7 +23,7 @@ const persistedOrder = z.object({
 });
 const PROOF_TTL_MS = 300_000;
 type Origin = z.infer<typeof scope> & {
-  sessionId: string; amountMinor: number; verifiedAt: number; lastObservedAt: number; invalidated: boolean;
+  sessionId: string; amountMinor: number; freeCard: boolean; verifiedAt: number; lastObservedAt: number; invalidated: boolean;
 };
 /** Opaque, nonserializable process-local evidence. Never persist or send to a browser. */
 export type StripePrintPaymentProof = Readonly<{ readonly stripePrintPaymentProof: unique symbol }>;
@@ -62,14 +63,14 @@ export async function verifyStripePrintPayment(input: unknown): Promise<StripePr
     const session = await stripe.checkout.sessions.retrieve(parsed.data);
     const native = scope.safeParse(session.metadata);
     if (session.id !== parsed.data || session.mode !== 'payment' || session.status !== 'complete'
-      || session.payment_status !== 'paid' || session.currency?.toLowerCase() !== 'dkk'
-      || !Number.isSafeInteger(session.amount_total) || session.amount_total! <= 0 || !native.success) {
+      || session.currency?.toLowerCase() !== 'dkk'
+      || !((session.payment_status === 'paid' && Number.isSafeInteger(session.amount_total) && session.amount_total! > 0) || isCompletedFreeCardSession(session)) || !native.success) {
       throw new PrintTransitionProofError('payment_unverified');
     }
     const proof = Object.freeze({}) as StripePrintPaymentProof;
     const verifiedAt = now();
     origins.set(proof, { ...native.data, sessionId: session.id, amountMinor: session.amount_total!,
-      verifiedAt, lastObservedAt: verifiedAt, invalidated: false });
+      freeCard: isCompletedFreeCardSession(session), verifiedAt, lastObservedAt: verifiedAt, invalidated: false });
     return proof;
   } catch (error) {
     if (error instanceof PrintTransitionProofError) throw error;
@@ -97,7 +98,8 @@ export async function prepareStripePrintTransition(context: NativeTransactionCon
     || location.data()?.brandId !== origin.brandId || !current.success
     || current.data.brandId !== origin.brandId || current.data.locationId !== origin.locationId
     || current.data.psp.checkoutSessionId !== origin.sessionId
-    || Math.round(current.data.totalAmount * 100) !== origin.amountMinor) {
+    || Math.round(current.data.totalAmount * 100) !== origin.amountMinor
+    || (origin.freeCard && !isZeroTotalDiscountCardOrder(order.data()))) {
     throw new PrintTransitionProofError('transition_unverified');
   }
   // A Paid/Pending combination is inconsistent and must never invent acceptance.

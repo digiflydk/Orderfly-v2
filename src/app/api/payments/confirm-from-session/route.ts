@@ -5,6 +5,7 @@ import { doc, getDoc } from '@/lib/server/firestore-compat';
 import { getActiveStripeSecretKey } from '@/lib/server/payment-settings';
 import { settlePaidCheckoutSession } from '@/lib/server/settle-checkout';
 import { z } from 'zod';
+import { isCompletedFreeCardSession, isZeroTotalDiscountCardOrder } from '@/lib/loyalty/discount-card/zero-total';
 
 const input = z.object({
   orderId: z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/),
@@ -30,7 +31,7 @@ export async function POST(req: NextRequest) {
     if (!snap.exists() || order?.psp?.checkoutSessionId !== sessionId ||
         order.brandId !== session.metadata.brandId || order.locationId !== session.metadata.locationId) return reply({ ok: false, error: 'payment_scope_mismatch' }, 403);
     // A complete checkout may still be awaiting an asynchronous payment.
-    if (session.payment_status !== 'paid') return reply({ ok: true, status: 'Pending', orderId });
+    if (session.payment_status !== 'paid' && !(isCompletedFreeCardSession(session) && isZeroTotalDiscountCardOrder(order))) return reply({ ok: true, status: 'Pending', orderId });
     await settlePaidCheckoutSession(session);
     return reply({ ok: true, status: 'Paid', orderId });
   } catch {

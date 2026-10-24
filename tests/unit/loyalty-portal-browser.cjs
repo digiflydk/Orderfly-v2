@@ -85,8 +85,8 @@ before(async () => {
 after(async () => { await browser?.close(); await new Promise(resolve => server?.close(resolve)); if (dir) fs.rmSync(dir, { recursive: true, force: true }); });
 
 // Answers the phase 1 API; `answers[path]` is a list of [status, body] or 'abort', used in order.
-async function open(view, { width = 390, hash = '', answers = {}, clock, init, device = {} } = {}) {
-  const page = await browser.newPage({ viewport: { width, height: 900 }, ...device });
+async function open(view, { width = 390, hash = '', answers = {}, clock, init, device = {}, context } = {}) {
+  const page = context ? await context.newPage() : await browser.newPage({ viewport: { width, height: 900 }, ...device });
   // Optional local copies of the unchanged published assets for offline visual QA.
   // This never replaces application/API responses or alters the production asset URLs.
   if (process.env.CLUB_REFERENCE_ASSET_DIR) await page.route('https://cdn.prod.website-files.com/**', route => {
@@ -617,4 +617,19 @@ for (const width of [390,1440]) for (const view of ['login','terms']) test(`sign
     assert.equal(style.border,'1px'); assert.equal(style.maxWidth,'760px');
     assert.ok(await noOverflow(page));
   } finally {await page.close();}
+});
+
+for(const target of ['/amager/checkout','/esmeralda/esmeralda/checkout','/esmeralda/feedback/checkout'])test('checkout login mail returns in new tab: '+target, async()=>{
+ const context=await browser.newContext();const {page,calls}=await open('login?returnTo='+encodeURIComponent(target),{context});let mail;
+ try{
+  await page.getByLabel('E-mail',{exact:true}).fill('anna@example.com');await page.getByRole('button',{name:'Send login-link'}).click();await page.getByRole('heading',{name:'Tjek din e-mail'}).waitFor();
+  assert.equal(calls[0].name,'login-link');
+  const stored=await page.evaluate(()=>JSON.parse(localStorage.getItem('club-checkout-return:esmeralda')));assert.equal(stored.path,target);assert.deepEqual(Object.keys(stored).sort(),['expiresAt','path']);
+  mail=await page.context().newPage();let verified=false;
+  await mail.route('**/api/loyalty/esmeralda/verify',async route=>{assert.equal(mail.url(),origin+'/login');assert.deepEqual(route.request().postDataJSON(),{token:TOKEN});verified=true;await route.fulfill({status:200,contentType:'application/json',body:'{"ok":true}'});});
+  await mail.goto(origin+'/login#token='+TOKEN);await mail.waitForURL(origin+target);assert.equal(verified,true);assert.equal(await mail.evaluate(()=>localStorage.getItem('club-checkout-return:esmeralda')),null);
+ }finally{await context.close();}
+});
+for(const target of ['https://evil.test/checkout','//evil.test/checkout','/other/amager/checkout'])test('login rejects unsafe return '+target,async()=>{
+ const {page}=await open('login?returnTo='+encodeURIComponent(target),{hash:'#token='+TOKEN});try{await page.waitForURL(origin+'/club');}finally{await page.close();}
 });

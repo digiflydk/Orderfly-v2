@@ -1,5 +1,22 @@
 # Stempelkort (Esmeralda Club)
 
+## Personlige rabatkort (#566)
+
+Rabatkort er en separat fordel i den eksisterende Club. Første version administreres
+kun af platformens superadmin under **Loyalitet → Rabatkort**. Funktionen er som
+standard slået fra og aktiveres pr. brand for udvalgte eller alle brandets lokationer.
+En kunde får en administratortildelt gruppe med fast procent ved kvalificerende
+Orderfly-køb. Eksisterende stempler og belønninger bevares; rabatten er ikke den
+eksisterende engangsrabat ved Club-tilmelding.
+
+- [Datakontrakt og adgangskontrol](discount-card-contract.md)
+- [Superadmin og invitation](discount-card-admin.md)
+- [Kundekort og QR](discount-card-portal.md)
+- [Acceptkriterier og releasebevis](discount-card-qa.md)
+
+GitHub #566 og delopgaverne er autoritative for aktuel release-/acceptstatus.
+Denne dokumentation er ikke i sig selv bevis for deployment eller aktivering.
+
 ## Esmeraldas hjemmesidedesign på club-siderne (#386)
 
 Esmeraldas eksisterende kundeportal tilpasses direkte i Orderfly. Den flyttes ikke til Webflow, så login, host-only sessionscookie og versioneret samtykke fortsat bruger de eksisterende sider og API'er.

@@ -25,7 +25,9 @@ import { newsletterEligible, newsletterAllowsStacking, cartLineEligible, assigne
 import { reserveDiscount, releaseDiscount } from '@/lib/discount-reservations';
 import { reconcileStaleDiscountHolds } from '@/lib/server/stale-discount-holds';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { headers } from 'next/headers';
+import { headers, cookies } from 'next/headers';
+import { SESSION_COOKIE } from '@/lib/loyalty/stamp-card/portal-http';
+import { discountCardCheckoutEnabled, readDiscountCardCheckout, discountCardCheckoutSnapshot, assertDiscountCardCheckoutCurrent } from '@/lib/loyalty/discount-card/checkout';
 import Stripe from 'stripe';
 import { db } from '@/lib/server/firestore-compat';
 import { collection, doc, setDoc, getDoc, runTransaction, updateDoc, where, getDocs, documentId, query, limit, serverTimestamp } from '@/lib/server/firestore-compat';
@@ -430,6 +432,19 @@ export async function createAndSaveOrder(
 }
 
 
+export async function getDiscountCardCheckoutEnabledAction(brandId:string,locationId:string):Promise<boolean> {
+  return discountCardCheckoutEnabled(getAdminDb(),brandId,locationId);
+}
+
+/** Personal repeated benefit. Public email lookup alone cannot reveal or grant it. */
+export async function getDiscountCardCheckoutOfferAction(brandId: string, brandSlug: string, locationId: string, email: string): Promise<{name:string;percentage:number}|null> {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!token || !email || !zEmailValid(email)) return null;
+  const card = await readDiscountCardCheckout(getAdminDb(),{brandId,brandSlug,locationId,token,email,now:Date.now()});
+  return card ? {name:card.groupName,percentage:card.percentage} : null;
+}
+function zEmailValid(email:string) { return typeof email === 'string' && email.length <= 254 && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim()); }
+
 export async function createStripeCheckoutSessionAction(
     cartItems: MinimalCartItem[],
     customerInfo: CustomerInfo,
@@ -567,6 +582,9 @@ export async function createStripeCheckoutSessionAction(
     const eligibleSubtotal = sumMoney(eligibleLines);
 
     const automaticCartDiscount = bestAutomaticDiscount(activeStandardDiscounts, eligibleSubtotal, quantityLines);
+    const discountCardToken = (await cookies()).get(SESSION_COOKIE)?.value;
+    const discountCardInput = {brandId,brandSlug,locationId,token:discountCardToken,customerId:resolvedCustomer.customerRef.id,email:customerInfo.email,now:Date.now()};
+    const discountCardEntitlement = discountCardToken ? await readDiscountCardCheckout(getAdminDb(),discountCardInput) : null;
 
     let selectedDiscount: Discount | null = null;
     let selectedDiscountAmount = 0;
@@ -604,11 +622,12 @@ export async function createStripeCheckoutSessionAction(
       clubPreflight = await validateClubCheckoutSignup(clubSignupInput());
       if (!clubPreflight.eligible) throw new Error('Club-tilmeldingen er ændret. Genindlæs siden.');
     }
-    const manualDiscountWins = selectedDiscountAmount > (automaticCartDiscount?.amount || 0);
-    const cartDiscountTotal = manualDiscountWins
+    const discountCard = discountCardCheckoutSnapshot(discountCardEntitlement,ore(eligibleSubtotal),ore(Math.max(selectedDiscountAmount,automaticCartDiscount?.amount || 0)));
+    const manualDiscountWins = !discountCard && selectedDiscountAmount > (automaticCartDiscount?.amount || 0);
+    const cartDiscountTotal = discountCard ? discountCard.amountOre / 100 : manualDiscountWins
       ? selectedDiscountAmount
       : (automaticCartDiscount?.amount || 0);
-    const cartDiscountName = manualDiscountWins
+    const cartDiscountName = discountCard ? `Rabatkort: ${discountCard.groupName}` : manualDiscountWins
       ? (selectedDiscount?.applicationType === 'newsletter_signup' ? 'Newsletter signup' : selectedDiscount?.applicationType === 'club_signup' ? 'Club signup' : selectedDiscount?.code)
       : automaticCartDiscount?.name;
     const appliedDiscountIdForOrder = manualDiscountWins ? selectedDiscount?.id || null : null;
@@ -651,6 +670,7 @@ export async function createStripeCheckoutSessionAction(
     stage = 'customer';
     const customerId = await createOrUpdateCustomer(customerInfo, brand.id, location.id, totalAmount, selectedDiscount?.applicationType === 'newsletter_signup' ? selectedDiscount.id : undefined);
 
+    if (discountCard && customerId !== discountCard.customerId) throw new Error('Kundeidentiteten er ændret. Opdatér kassen.');
     if (customerInfo.subscribeToClub) {
       stage = 'club_signup';
       const enrolled = await prepareClubCheckoutSignup({...clubSignupInput(),now:Date.now(),discountId:selectedDiscount?.applicationType === 'club_signup' ? selectedDiscount.id : undefined});
@@ -690,6 +710,7 @@ export async function createStripeCheckoutSessionAction(
         totalAmount,
         paymentDetails: serverPaymentDetails,
         appliedDiscountId: appliedDiscountIdForOrder,
+        ...(discountCard ? {discountCard} : {}),
         cancelTokenHash: createHash('sha256').update(cancelToken).digest('hex'),
         receiptTokenHash: createHash('sha256').update(receiptToken).digest('hex'),
         ...(customerInfo.analyticsConsent && customerInfo.analyticsSessionId ? {analytics: {
@@ -714,8 +735,9 @@ export async function createStripeCheckoutSessionAction(
     });
     // Six-digit order references can collide. Never overwrite another order or
     // reuse its Stripe idempotency key; a collision must fail before payment.
-    await runTransaction(db, async transaction => {
+    await runTransaction(db, async (transaction, context) => {
       const existing = await transaction.get(orderRef);
+      if (discountCard) await assertDiscountCardCheckoutCurrent(context.db,{...discountCardInput,now:Date.now()},discountCard,context.transaction);
       if (existing.exists()) throw new Error('Ordrenummeret er allerede i brug. Prøv igen.');
       transaction.set(orderRef, orderData);
     });
@@ -746,6 +768,16 @@ export async function createStripeCheckoutSessionAction(
               throw error;
             }
           })();
+          if (discountCard) {
+            try {
+              await assertDiscountCardCheckoutCurrent(context.db,{...discountCardInput,now:Date.now()},discountCard,context.transaction);
+            } catch (error) {
+              // Only proven ineligibility is definitive; native read/commit
+              // uncertainty keeps the existing conservative reconciliation path.
+              if ((error as { code?: string })?.code === 'discount_card_changed') preparationRejected = true;
+              throw error;
+            }
+          }
           acceptance.apply();
           printPlan?.apply();
           fulfillmentAt = acceptance.fulfillmentAt;
@@ -829,6 +861,7 @@ export async function createStripeCheckoutSessionAction(
     // Optional reads/customer creation may take time. Recheck immediately before payment.
     fulfillmentAt = resolveFulfillmentTime(location, deliveryType, deliveryTime);
     await updateDoc(orderRef, { fulfillmentAt, deliveryTime: displayFulfillmentTime(fulfillmentAt) });
+    if (discountCard) await assertDiscountCardCheckoutCurrent(getAdminDb(),{...discountCardInput,now:Date.now()},discountCard);
     stage = 'stripe_session';
     sessionRequestStarted = true;
     let session: Stripe.Checkout.Session;

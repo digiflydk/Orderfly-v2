@@ -60,6 +60,8 @@ before(async () => {
   `);
   const checkoutActions = fixture('checkout-actions', `
     import {call} from ${JSON.stringify(transport)};
+    export const getDiscountCardCheckoutEnabledAction=(...args)=>call('card-enabled',args);
+    export const getDiscountCardCheckoutOfferAction=(...args)=>call('card-offer',args);
     export const newsletterSyncAvailableAction=async()=>false;
     export const getCheckoutSignupAction=async()=>({mode:'newsletter'});
     export const getNewsletterSignupDiscountAction=async()=>null;
@@ -128,6 +130,8 @@ before(async () => {
         } else {
           const { action, args } = JSON.parse(raw);
           const actions = loadTs('src/app/merchant/orders/actions.ts', { ...f.mocks, '@/lib/server/settle-checkout': f.settlement, '@/lib/server/pickup-orders': f.cancellation });
+          if (action === 'card-enabled') result = await f.actions.getDiscountCardCheckoutEnabledAction(...args);
+          if (action === 'card-offer') result = await f.actions.getDiscountCardCheckoutOfferAction(...args);
           if (action === 'discount') result = await f.actions.validateDiscountAction(...args);
           if (action === 'pay') result = await actions.registerPickupPayment(...args);
           if (action === 'cancel') result = await actions.cancelPickupOrder(...args);

@@ -144,6 +144,7 @@ export function SuperAdminSidebarClient({
       items: [
         { href: '/superadmin/loyalty', label: 'Oversigt', icon: BarChart3 },
         { href: '/superadmin/loyalty/stamp-card', label: 'Stempelkort', icon: Stamp },
+        { href: '/superadmin/loyalty/discount-card', label: 'Rabatkort', icon: Percent },
         { href: '/superadmin/loyalty/score', label: 'Kundescore', icon: Trophy },
         { href: '/merchant/stamp-card', label: 'Kassevisning', icon: ScanLine },
       ],
