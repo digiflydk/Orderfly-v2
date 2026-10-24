@@ -9,7 +9,7 @@ const record = (id, patch = {}) => ({ schemaVersion: 1, configuration: configura
   deletedAt: null, createdAt: { seconds: 1 }, updatedAt: { seconds: 2 }, ...patch });
 
 function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, anonymous = false,
-  forbidden = false, failDatabase = false, identityStatus, authorityStatus, totalOverride, activity = {},
+  forbidden = false, failDatabase = false, identityStatus, authorityStatus, totalOverride, activity = {}, connection = {}, deviceCredentials = {},
   afterTransactionList } = {}) {
   const calls = [];
   let transactionListObserved = false;
@@ -24,9 +24,9 @@ function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, an
         return {
           doc(id) { return {
             async get(view) { calls.push(['detail', id]); if (failDatabase) throw Error('PRIVATE_SENTINEL'); return snapshot(id, (view?.rows ?? rows)[id]); },
-            collection(name) { assert.equal(name, 'statusMetadata'); return { doc(key) {
+            collection(name) { assert.ok(['statusMetadata','connection','deviceCredentials'].includes(name)); return { doc(key) {
               assert.equal(key, 'current'); return { async get(view) {
-                calls.push(['activity', id]); return snapshot(key, (view?.activity ?? activity)[id]);
+                calls.push([name === 'statusMetadata' ? 'activity' : name, id]); return snapshot(key, name === 'statusMetadata' ? (view?.activity ?? activity)[id] : (view?.[name] ?? (name === 'connection' ? connection : deviceCredentials))[id]);
               } };
             } }; },
           }; },
@@ -60,7 +60,7 @@ function fixture({ rows = {}, locations = { location: { brandId: 'brand' } }, an
   }, async runTransaction(callback, options) {
     calls.push(['transaction', options]);
     assert.deepEqual(options, { readOnly: true });
-    const view = structuredClone({ rows, locations, activity });
+    const view = structuredClone({ rows, locations, activity, connection, deviceCredentials });
     return callback({
       async get(target) { calls.push(['transactionGet']); return target.get(view); },
       async getAll(...targets) { calls.push(['transactionGetAll', targets.length]); return Promise.all(targets.map(target => target.get(view))); },
@@ -251,7 +251,9 @@ test('overview uses one read-only snapshot when a resume commits between page an
   } });
  const result = await f.read('brandId=brand&locationId=location&overview=true');
  assert.equal(result.status, 200);
+ assert.equal(typeof result.body.items[0].connection.checkedAt, 'number');
  assert.deepEqual(result.body.items[0], { configuration: configuration('p1'), revision: 1,
+  connection: { connected: false, lastSeenAt: null, endpoint: null, checkedAt: result.body.items[0].connection.checkedAt },
   activity: { activatedAt: null, lastConfirmedPrintAt: null, printHistory: 'never' } });
  assert.deepEqual(f.calls.filter(call => call[0] === 'transaction'), [['transaction', { readOnly: true }]]);
  assert.ok(f.calls.some(call => call[0] === 'transactionGetAll' && call[1] === 1));
@@ -266,4 +268,14 @@ test('corrupt/foreign activity fails closed; denied native location never reads 
  const denied = fixture({ rows: { p1: record('p1') }, locations: { location: { brandId: 'foreign' } } });
  assert.equal((await denied.read('brandId=brand&locationId=location&overview=true')).status, 403);
  assert.equal(denied.calls.some(c => c[0] === 'activity'), false);
+});
+
+test('overview projects contact with current credential, never serializes its digest or foreign identity',async()=>{
+ const scope={brandId:'brand',locationId:'location',printerId:'p1'},now=Date.now();
+ const connection={p1:{schemaVersion:1,...scope,printerRevision:1,credentialRevision:2,lastSeenAt:now,endpoint:'test'}};
+ const deviceCredentials={p1:{schemaVersion:1,...scope,printerRevision:1,credentialRevision:2,secretDigest:'a'.repeat(64),issuedAt:now-1,revokedAt:null}};
+ const f=fixture({rows:{p1:record('p1')},connection,deviceCredentials});const read=()=>f.read('brandId=brand&locationId=location&overview=true');
+ let result=await read();assert.equal(result.body.items[0].connection.connected,true);assert.doesNotMatch(JSON.stringify(result.body),/Digest|credentialRevision/);
+ deviceCredentials.p1.revokedAt=now;result=await read();assert.equal(result.body.items[0].connection.connected,false);assert.equal(result.body.items[0].connection.lastSeenAt,now);
+ connection.p1.brandId='foreign';result=await read();assert.equal(result.body.items[0].connection.lastSeenAt,null);
 });

@@ -271,7 +271,7 @@ test('HTTP busy/progress, malformed requests and auth rejection cannot offer or 
   assert.equal((await f.http()).status, 401);
 }));
 
-test('authenticated polls without an active scoped window stay no-job without writes', enabled(async () => {
+test('authenticated polls without an active scoped window record contact but never modify print state', enabled(async () => {
   for (const mutate of [
     f => f.rows.delete(path('orderTestWindows')),
     f => { f.window.stoppedAt = Date.now(); },
@@ -283,8 +283,8 @@ test('authenticated polls without an active scoped window stay no-job without wr
     assert.equal(response.status, 200);
     assert.deepEqual(await response.json(), { jobReady: false });
     assert.equal(response.headers.get('cache-control'), 'no-store');
-    assert.deepEqual([...f.rows], before);
-    assert.equal(f.commits.flat().length, 0);
+    assert.deepEqual([...f.rows].filter(([key])=>key!==path('connection')), before);
+    assert.ok(f.commits.flat().every(write=>write === path('connection')));
     const query = '?mac=00%3A11%3A22%3A33%3A44%3A55&token=' + 'A'.repeat(43);
     assert.equal((await f.http('GET', query)).status, 409);
     assert.equal((await f.http('DELETE', query + '&code=200%20OK')).status, 409);
@@ -298,7 +298,7 @@ test('poll fallback does not hide database failures', enabled(async () => {
   f.db.runTransaction = async () => { throw Error('PRIVATE_DATABASE_FAILURE'); };
   const response = await f.http();
   assert.equal(response.status, 503);
-  assert.deepEqual(await response.json(), { error: 'ordinary_print_unavailable' });
+  assert.deepEqual(await response.json(), { error: 'poll_unavailable' });
 }));
 
 test('missing or disabled output gate stays no-job and never consumes an order', enabled(async () => {

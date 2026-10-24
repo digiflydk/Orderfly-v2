@@ -4,7 +4,7 @@ Issue #507 exposes the reviewed #489 identity-only adapter at:
 
 `POST https://orderfly.dk/api/cloudprnt/{brandId}/{locationId}/{printerId}`
 
-The route runs on Node and is dynamic. The three path identifiers are nonsecret native selectors. They do not authenticate a device or grant access. The existing adapter revalidates current brand/location ownership, printer revision and private device credentials in one read-only native transaction on every poll and SDK retry. Scope is never taken from poll JSON or query parameters. Provisioned Basic credentials belong in the Authorization header, never the URL or GitHub.
+The route runs on Node and is dynamic. The three path identifiers are nonsecret native selectors. They do not authenticate a device or grant access. The existing adapter revalidates current brand/location ownership, printer revision and private device credentials in one native transaction on every poll and SDK retry; authenticated contact metadata is now recorded as described in [simple setup](printing-simple-setup.md). Scope is never taken from poll JSON or query parameters. Provisioned Basic credentials belong in the Authorization header, never the URL or GitHub.
 
 Successful authentication returns exactly `{"jobReady":false}` after transaction completion. Responses are not cached and vary by Authorization. The existing HTTPS, content-type, streamed 8192-byte body, strict UTF-8, header and parser bounds remain in effect. Invalid route/context inputs receive a fixed private error. The route makes no configuration, queue, result, capability, credential or usage writes.
 
@@ -18,7 +18,7 @@ This endpoint provides a deployable connectivity boundary. It does not dispatch,
 
 ## Verification
 
-Run `npm run typecheck` and `node --test tests/unit/printing-cloudprnt-poll-route.cjs tests/unit/printing-cloudprnt-poll-http.cjs`. The route regression invokes actual exported POST, adapter, native verifier and credential crypto, replacing only Admin I/O. It covers successful read-only completion, scope/revocation/retry denial, malformed request/context and private provider errors. These are isolated software checks, not device connectivity or physical output proof. Independent review, CI, root serial release and applicable read-only live verification remain separate gates.
+Run `npm run typecheck` and `node --test tests/unit/printing-cloudprnt-poll-route.cjs tests/unit/printing-cloudprnt-poll-http.cjs`. The route regression invokes actual exported POST, adapter, native verifier and credential crypto, replacing only Admin I/O. It covers successful authenticated contact completion, scope/revocation/retry denial, malformed request/context and private provider errors. These are isolated software checks, not device connectivity or physical output proof. Independent review, CI, root serial release and applicable read-only live verification remain separate gates.
 
 ## Remaining first-testprint prerequisites
 

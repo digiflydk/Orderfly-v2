@@ -102,7 +102,7 @@ test('HEAD explicitly rejects rather than consuming GET, and busy/error/progress
   for (const body of [{ statusCode: '220%20Busy' }, { statusCode: '500%20Error' },
     { statusCode: '200%20OK', printingInProgress: true }, { statusCode: '200%20OK', jobToken: 'old' }]) {
     const f = fixture(); await json(f, await f.run(f.request('POST', '', JSON.stringify(body))), 200, { jobReady: false });
-    assert.equal(f.reads.includes(`${root}/deviceCredentials/current`), true); assert.deepEqual(f.writes, []);
+    assert.equal(f.reads.includes(`${root}/deviceCredentials/current`), true); assert.deepEqual(f.writes, [`${root}/connection/current`]); assert.equal(f.job().state, 'queued');
   }
   const f = fixture(); await json(f, await f.run(f.request('HEAD')), 405, {});
   assert.equal(f.admin, 0); assert.equal(f.job().state, 'queued');
@@ -116,17 +116,17 @@ test('strict bounded request/query/body failures reject before native I/O', enab
     f => f.request('GET', query('a'.repeat(43)) + '&type=text%2Fplain'), f => f.request('GET', '?mac=%GG'),
     f => f.request('DELETE', query('a'.repeat(43)) + '&code=OK&extra=true'),
     f => f.request('DELETE', query('a'.repeat(43)) + '&code=OK', '{}')];
-  for (const make of cases) { const f = fixture(); await json(f, await f.run(make(f)), 400, { error: 'invalid_pilot_request' }); assert.equal(f.admin, 0); }
-  const f = fixture(); await json(f, await f.run(undefined, { ...scope, extra: true }), 400, { error: 'invalid_pilot_request' }); assert.equal(f.admin, 0);
+  for (const make of cases) { const f = fixture(); await json(f, await f.run(make(f)), 400, { error: make(f).method === 'POST' ? 'invalid_poll_request' : 'invalid_pilot_request' }); assert.equal(f.admin, 0); }
+  const f = fixture(); await json(f, await f.run(undefined, { ...scope, extra: true }), 400, { error: 'invalid_poll_request' }); assert.equal(f.admin, 0);
 }));
 
-test('invalid/revoked native credentials get fixed 401, gates remain503 without I/O', enabled(async () => {
+test('invalid/revoked native credentials get fixed 401, output gate off still records authenticated contact without dispatch', enabled(async () => {
   const f = fixture(); f.rows.set(`${root}/deviceCredentials/current`, { ...f.draft.record, revokedAt: Date.now() });
   const denied = await f.run(); await json(f, denied, 401, { error: 'device_unverified' }); assert.match(denied.headers.get('www-authenticate'), /^Basic /);
   assert.deepEqual(f.writes, []);
   const g = fixture(); await json(g, await g.run(g.request('POST', '', undefined, { authorization: '' })), 401, { error: 'device_unverified' }); assert.equal(g.admin, 0);
   const h = fixture(); delete process.env.ORDERFLY_PRINTER_PILOT_OUTPUT_ENABLED;
-  await json(h, await h.run(), 503, { error: 'pilot_unavailable' }); assert.equal(h.admin, 0);
+  await json(h, await h.run(), 200, { jobReady: false }); assert.deepEqual(h.writes, [`${root}/connection/current`]); assert.equal(h.job().state, 'queued');
 }));
 
 test('DELETE derives failed/unknown from strict Star status, never accepts a caller success flag', enabled(async () => {

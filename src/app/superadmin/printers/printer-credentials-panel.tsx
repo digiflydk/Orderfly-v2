@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef, useSyncExternalStore } from 'react';
 import { Button } from '@/components/ui/button';
 import { createCredentialController, credentialOperationAllowed, type CredentialScope, type CredentialOperation } from './printer-credentials-client';
+import { PrinterConnectionSecret } from './printer-connection-secret';
 import { PrinterPilotControls } from './pilot-controls';
 import { PrinterPilotAddress } from './printer-pilot-address';
 
@@ -37,19 +38,17 @@ export function PrinterCredentialsPanel({ scope, printerName, permitted, onSessi
         <Button variant="outline" onClick={controller.cancel}>Annuller</Button></div>
     </div>}
     {view.phase === 'secret' && view.secret && <div className="space-y-3">
-      <p>Gem koden i printerens opsætning nu. Den kan ikke vises igen, når du skjuler den eller lukker panelet.</p>
-      <p>Brugernavn: <code>orderfly</code></p>
-      <p>Adgangskode: <code className="break-all select-all" aria-label="Engangsvist adgangskode">{view.secret}</code></p>
-      <Button onClick={controller.dismissSecret}>Skjul koden</Button>
+      <PrinterConnectionSecret secret={view.secret} />
+      <Button onClick={controller.dismissSecret}>Færdig med adgangskoden</Button>
     </div>}
     {view.phase === 'ready' && view.metadata && permitted && <div className="flex flex-wrap gap-3">
       {(['issue', 'rotate', 'revoke'] as const).filter(op => credentialOperationAllowed(view.metadata!, op)).map(op =>
         <Button key={op} variant={op === 'revoke' ? 'outline' : 'default'} onClick={() => controller.select(op)}>{labels[op]}</Button>)}
     </div>}
-    {view.phase === 'ready' && view.metadata?.state === 'current' && permitted && pilotProfile?.transport === 'cloudprnt-http' && <PrinterPilotControls
+    {view.phase === 'ready' && view.metadata?.state === 'current' && permitted && pilotProfile?.transport === 'cloudprnt-http' && <details><summary className="cursor-pointer font-medium">Testprint</summary><PrinterPilotControls
       key={JSON.stringify([scope.brandId, scope.locationId, scope.printerId, scope.printerRevision, view.metadata.credentialRevision])}
       scope={{ ...scope, credentialRevision: view.metadata.credentialRevision }} model={pilotProfile.model} paperWidthMm={pilotProfile.paperWidthMm}
-      active={pilotProfile.state === 'active'} permitted={permitted} onSessionLost={onSessionLost} />}
+      active={pilotProfile.state === 'active'} permitted={permitted} onSessionLost={onSessionLost} /></details>}
     <div className="flex flex-wrap gap-3">
       {permitted && !busy && view.phase !== 'confirm' && view.phase !== 'secret' && <Button variant="outline" onClick={() => void controller.refresh()}>Indlæs status</Button>}
       <Button variant="outline" disabled={view.phase === 'writing'} onClick={close}>Luk</Button>

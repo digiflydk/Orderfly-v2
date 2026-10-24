@@ -1,5 +1,12 @@
 # Orderfly printing
 
+## Simple connections and actual contact status (#555)
+
+The primary printer UI now uses a single creation form, automatic one-time credentials,
+Test/Live URLs and authenticated connection status. See [simple setup](printing-simple-setup.md)
+for the current operator flow, API, privacy and contact-write behavior. Historical
+foundation sections below describe earlier deliveries; output qualifications still apply.
+
 ## Current delivery: domain foundations (#291)
 
 `src/lib/printing/domain.ts` defines scoped printers, print jobs, stable job identity
