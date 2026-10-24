@@ -1,0 +1,15 @@
+# Superadmin discount cards
+
+Related #566, #569 and #570. `/superadmin/loyalty/discount-card` is a separate entry under Loyalitet. Phase 1 is platform-superuser only: both the server page and every action check current platform authority; services independently enforce policy and native brand/location ownership. A direct URL or a forged browser request never grants brand administrators access.
+
+The page selects an authorized brand and shows three areas: feature/location activation, percentage groups, and personal assignments/invitations. New brands start disabled. “All locations” explicitly includes future locations of the same brand. Selected scope requires at least one location. Different brands have independent settings.
+
+Groups can be created, renamed, edited or deactivated. Personal assignments select an existing brand customer and group, optional start/expiry and blocked status. Cards without an existing active member remain pending until invitation activation. Existing stamps and rewards are not deleted. Dates use the operator device's local timezone, stated in the form, and are transmitted as epoch milliseconds.
+
+A separate name/email/group invitation supports people who are not customers yet. It does not subscribe the recipient to marketing or expose invitation tokens in the administration response. “Send invitation” explicitly enqueues the existing assignment; saving an assignment alone does not send email. Success means queued, never proven inbox delivery. Mail uses the central platform owned by #572.
+
+Every editable record carries its loaded version. Stale writes show a reload instruction instead of silently replacing another editor's changes. All controls are disabled while an operation is pending. Errors and success use alert/status live regions. Server errors expose bounded codes rather than raw messages or credentials.
+
+Customer lists and assignment lists disclose truncation. Exact email search allows access to customers outside the initial list. Mutation refreshes retain the current email query. The backend validates and normalizes that query. Unknown/foreign brands are never used as fallback to another brand when explicitly requested.
+
+Verification: `node --test tests/unit/discount-card-admin-actions.cjs` executes actual transpiled server action adapters with mocked auth/database services, including every non-superuser rejection before database access, verified actor forwarding and stale-write handling. `node --test tests/unit/discount-card-admin-browser.cjs` bundles the actual React component and CSS, exercises feature scope/CAS, percentage validation, assignment blocking and new-person invitation at390/1440px, and checks conflict/forbidden/session/network failures. Browser server actions are fixtures, not production acceptance. Use `CART_CHROMIUM_PATH` if an existing compatible browser is installed outside Playwright's default location. Full typecheck and integrated backend/invitation tests remain required. No production settings, customers, invitations or emails are created by these tests.
