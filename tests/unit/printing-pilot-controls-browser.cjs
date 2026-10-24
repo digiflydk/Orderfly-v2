@@ -29,15 +29,18 @@ test('browser: one-click test needs no fields or uploads, follows status and nev
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const page = await browser.newPage({ viewport: { width: 375, height: 812 } }), commands = [], errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  let unknown = false, pilotState = 'none', statusReads = 0;
+  let unknown = false, pilotState = 'none', statusReads = 0, holdStatus = false;
+  const heldReads = [];
   await page.route('**/api/superadmin/printers/pilot*', async route => {
     if (route.request().method() === 'GET') {
       statusReads++;
+      if (holdStatus) { heldReads.push(route); return; }
       const params = Object.fromEntries(new URL(route.request().url()).searchParams);
       assert.deepEqual(params, Object.fromEntries(Object.entries(scope).map(([k, v]) => [k, String(v)])));
       return route.fulfill({ status: 200, json: { ...scope, state: pilotState, createdAt: Date.now() - 10000,
         expiresAt: Date.now() + 500000, confirmedAt: pilotState === 'confirmed' ? Date.now() - 100 : null, physicalCompatibilityVerified: false } });
     }
+    holdStatus = false;
     const command = route.request().postDataJSON(); commands.push(command);
     assert.equal(command.operation, 'print');
     assert.match(command.requestId,/^[A-Za-z0-9_-]{43}$/);
@@ -53,7 +56,10 @@ test('browser: one-click test needs no fields or uploads, follows status and nev
   assert.equal(await page.locator('input').count(),0);
   await page.evaluate(()=>window.changeActive(false));await expect(print).toBeDisabled();
   await page.evaluate(()=>window.changeActive(true));await expect(print).toBeEnabled();
+  // A slow status poll must not silently swallow the operator's one click.
+  holdStatus=true;await refresh.click();await expect.poll(()=>heldReads.length).toBe(1);
   await print.click();await expect(page.getByText('Testbonen venter på printeren.',{exact:true})).toBeVisible();
+  for(const route of heldReads) await route.abort().catch(()=>{});
   assert.equal(commands.length,1);assert.deepEqual(Object.keys(commands[0]).sort(),[...Object.keys(scope),'operation','requestId'].sort());
   await expect(print).toBeDisabled();
   pilotState='download_started';await refresh.click();
