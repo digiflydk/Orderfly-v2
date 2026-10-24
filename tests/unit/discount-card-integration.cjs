@@ -7,7 +7,7 @@ const admin=loadTs('src/lib/loyalty/discount-card/admin.ts',mocks);
 const checkout=loadTs('src/lib/loyalty/discount-card/checkout.ts',mocks);
 const invites=loadTs('src/lib/loyalty/discount-card/invitations.ts',mocks);
 const {principalKey}=loadTs('src/lib/access/authority.ts',mocks);
-const {hashKey}=loadTs('src/lib/loyalty/stamp-card/model.ts',mocks);
+const {hashKey,COLLECTIONS}=loadTs('src/lib/loyalty/stamp-card/model.ts',mocks);
 const {discountCardAssignmentId}=loadTs('src/lib/loyalty/discount-card/model.ts',mocks);
 const NOW=Date.parse('2026-10-24T12:00:00Z'),TOKEN='a'.repeat(64);
 const actor=name=>({identity:{provider:'firebase',subject:name},name});
@@ -17,6 +17,9 @@ const assignment=(overrides={})=>({brandId:'brand',customerId:'customer',memberI
 const feature=(overrides={})=>({brandId:'brand',version:0,enabled:true,locationScope:{mode:'selected',locationIds:['loc']},...overrides});
 const group=(overrides={})=>({brandId:'brand',id:'friends',version:0,name:'Friends',percentage:20,active:true,...overrides});
 const state=db=>structuredClone([...db.rows]);
+// Rejected public attempts must consume rate budget without mutating business state.
+const businessState=db=>structuredClone([...db.rows].filter(([path])=>!path.startsWith(COLLECTIONS.rateLimits+'/')));
+const rateCount=db=>[...db.rows].filter(([path])=>path.startsWith(COLLECTIONS.rateLimits+'/')).reduce((sum,[,row])=>sum+row.count,0);
 const brand={brandId:'brand',companyId:'company',slug:'club',name:'Club'};
 const ctx={now:NOW,ip:'203.0.113.77'};
 process.env.ORDERFLY_LOYALTY_NOTIFICATION_BRANDS=JSON.stringify({brand:{organizationId:'11111111-1111-4111-8111-111111111111',senderProfile:'orderfly'}});
@@ -148,8 +151,9 @@ test('actual invitation acceptance issues a session that unlocks checkout withou
  assert.equal(db.rows.get('customers/'+entitlement.customerId).marketingConsent,false);
  assert.equal(db.rows.get('loyaltyMembers/'+entitlement.memberId).consent.status,'withdrawn');
  assert.equal(db.rows.get(invites.INVITATIONS.outbox+'/'+result.invitationId).invitationUrl,null);
- const before=state(db);await assert.rejects(invites.acceptDiscountInvitation(db,brand,{token,termsAccepted:true,termsVersion:invites.DISCOUNT_CARD_TERMS_VERSION},ctx));
- assert.deepEqual(state(db),before,'replay does not create a second session or customer');
+ const before=businessState(db),budget=rateCount(db);await assert.rejects(invites.acceptDiscountInvitation(db,brand,{token,termsAccepted:true,termsVersion:invites.DISCOUNT_CARD_TERMS_VERSION},ctx));
+ assert.deepEqual(businessState(db),before,'replay does not create a second session or customer');
+ assert.equal(rateCount(db),budget+1,'rejected replay still consumes rate budget');
 });
 
 test('invite terms, brand, expiry and configuration binding fail closed before customer creation',async()=>{
@@ -160,6 +164,6 @@ test('invite terms, brand, expiry and configuration binding fail closed before c
   if(scenario==='expired')context={...ctx,now:NOW+invites.INVITATION_LIFETIME};
   if(scenario==='changed-group')await admin.saveDiscountCardGroup(db,owner,group({version:1,percentage:25}),NOW+1);
   if(scenario==='feature-disabled')await admin.saveDiscountCardFeature(db,owner,feature({version:1,enabled:false}),NOW+1);
-  const before=state(db);await assert.rejects(invites.acceptDiscountInvitation(db,target,request,context));assert.deepEqual(state(db),before,scenario);
+  const before=businessState(db);await assert.rejects(invites.acceptDiscountInvitation(db,target,request,context));assert.deepEqual(businessState(db),before,scenario);
  }
 });
