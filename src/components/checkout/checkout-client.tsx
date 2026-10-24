@@ -24,7 +24,7 @@ import { useForm, FormProvider } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useEffect, useState, useMemo, useCallback, useRef } from "react";
-import { getNewsletterSignupDiscountAction, getCheckoutSignupAction, newsletterSyncAvailableAction, validateDiscountAction } from "@/app/checkout/actions";
+import { getDiscountCardCheckoutEnabledAction, getDiscountCardCheckoutOfferAction, getNewsletterSignupDiscountAction, getCheckoutSignupAction, newsletterSyncAvailableAction, validateDiscountAction } from "@/app/checkout/actions";
 import type { NewsletterDiscountOffer, CheckoutSignupConfig } from "@/app/checkout/actions";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, X, Tag, Truck, Store, Clock, ShoppingCart, AlertTriangle, ArrowLeft } from "lucide-react";
@@ -32,6 +32,7 @@ import { Badge } from "../ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useParams } from "next/navigation";
+import { brandSlugFromHost, brandSubdomainUrl, storefrontPath as brandStorefrontPath } from '@/lib/brand-subdomain';
 import { useStorefrontPath } from "@/hooks/use-storefront-path";
 import {
   AlertDialog,
@@ -165,21 +166,14 @@ function BagFeeRow() {
   );
 }
 
-function OrderSummaryContent() {
-  const {
-    cartItems,
-    subtotal,
-    checkoutTotal,
-    itemDiscount,
-    cartDiscount,
-    voucherDiscount,
-    freeDeliveryDiscountApplied,
-    deliveryFee,
-    brand,
-    adminFee,
-    vatAmount,
-    deliveryType
-  } = useCart();
+function OrderSummaryContent({discountCardOffer}:{discountCardOffer:{name:string;percentage:number}|null}) {
+  const cart = useCart();
+  const {cartItems,brand,deliveryType} = cart;
+  const {subtotal,checkoutTotal,itemDiscount,automaticCartDiscount:cartDiscount,voucherDiscount,
+    freeDeliveryDiscountApplied,deliveryFee,adminFee,vatAmount} = basketTotals({
+      cartItems,brand,deliveryType,location:cart.location,appliedDiscount:cart.appliedDiscount,
+      standardDiscounts:cart.standardDiscounts,includeBagFee:cart.includeBagFee,discountCard:discountCardOffer,
+    });
 
   return (
     <div className="space-y-4">
@@ -275,7 +269,7 @@ function OrderSummaryContent() {
           <div className="flex justify-between text-green-600">
             <div className="flex items-center gap-1">
               <Tag className="h-4 w-4" />
-              <span>Code: {voucherDiscount.name}</span>
+              <span>{voucherDiscount.name.startsWith('Rabatkort:') ? voucherDiscount.name : `Code: ${voucherDiscount.name}`}</span>
             </div>
             <span>- {formatPrice(voucherDiscount.amount)}</span>
           </div>
@@ -323,8 +317,6 @@ function CheckoutForm({ location }: { location: Location }) {
   const { trackEvent, measurementKey, attribution: analyticsAttribution } = useAnalytics();
   const {
     cartItems,
-    subtotal,
-    checkoutTotal,
     brand,
     applyDiscount,
     removeDiscount,
@@ -332,23 +324,19 @@ function CheckoutForm({ location }: { location: Location }) {
     standardDiscounts,
     includeBagFee,
     deliveryType,
-    deliveryFee,
-    freeDeliveryDiscountApplied,
-    itemCount,
-    bagFee,
-    adminFee,
-    vatAmount,
     selectedTime,
-    itemDiscount,
-    cartDiscount,
-    voucherDiscount,
     saveCartForCheckout,
     setSelectedTime
   } = useCart();
 
   const { toast } = useToast();
   const params = useParams();
-  const menuPath = useStorefrontPath(params.brandSlug as string)(params.locationSlug as string);
+  const storefrontPath = useStorefrontPath(params.brandSlug as string);
+  const menuPath = storefrontPath(params.locationSlug as string);
+  const cardHost = React.useSyncExternalStore(() => () => {}, () => window.location.hostname, () => null);
+  const cardNeedsCanonicalHost = !!cardHost && !['localhost','127.0.0.1'].includes(cardHost) && brandSlugFromHost(cardHost) !== params.brandSlug;
+  const canonicalCardOrderUrl = `${brandSubdomainUrl(params.brandSlug as string)}${brandStorefrontPath(params.brandSlug as string,true,params.locationSlug as string)}`;
+  const cardLoginPath = `${storefrontPath('club','login')}?returnTo=${encodeURIComponent(storefrontPath(params.locationSlug as string,'checkout'))}`;
   const [isProcessing, setIsProcessing] = useState(false);
   const [isValidatingDiscount, setIsValidatingDiscount] = useState(false);
   const enabledPaymentMethods = useMemo(() => availableCheckoutMethods(location, deliveryType || 'pickup'), [location, deliveryType]);
@@ -370,6 +358,19 @@ function CheckoutForm({ location }: { location: Location }) {
   const signupConfigRef = useRef<CheckoutSignupConfig>({mode:'none'});
   const [newsletterOffer, setNewsletterOffer] = useState<NewsletterDiscountOffer | null>(null);
   const [newsletterSyncAvailable, setNewsletterSyncAvailable] = useState<boolean | null>(null);
+  const [discountCardEnabled,setDiscountCardEnabled] = useState(false);
+  const [discountCardOffer, setDiscountCardOffer] = useState<{name:string;percentage:number}|null>(null);
+  const {subtotal,checkoutTotal,deliveryFee,freeDeliveryDiscountApplied,itemCount,bagFee,adminFee,vatAmount,itemDiscount,
+    automaticCartDiscount:cartDiscount,voucherDiscount,discountCardApplied} = useMemo(() => basketTotals({
+      cartItems,appliedDiscount,standardDiscounts,deliveryType,location,brand,includeBagFee,discountCard:discountCardOffer,
+    }),[cartItems,appliedDiscount,standardDiscounts,deliveryType,location,brand,includeBagFee,discountCardOffer]);
+
+  useEffect(() => {
+    let current = true; setDiscountCardEnabled(false);
+    if (brand?.id && location?.id) void getDiscountCardCheckoutEnabledAction(brand.id,location.id)
+      .then(enabled=>{if(current)setDiscountCardEnabled(enabled);}).catch(()=>{if(current)setDiscountCardEnabled(false);});
+    return ()=>{current=false;};
+  },[brand?.id,location?.id]);
 
   useEffect(() => {
     let current = true;
@@ -442,6 +443,16 @@ function CheckoutForm({ location }: { location: Location }) {
     return () => { current = false; window.removeEventListener('focus', refresh); };
   }, [brand?.id, form]);
   const newsletterEmail = form.watch('email');
+  useEffect(() => {
+    let current = true;
+    setDiscountCardOffer(null);
+    if (!brand?.id || !location?.id || !newsletterEmail) return;
+    const refresh = () => { void getDiscountCardCheckoutOfferAction(brand.id,brand.slug,location.id,newsletterEmail)
+      .then(offer => { if (current) setDiscountCardOffer(offer); })
+      .catch(() => { if (current) setDiscountCardOffer(null); }); };
+    refresh(); window.addEventListener('focus',refresh);
+    return () => { current = false; window.removeEventListener('focus',refresh); };
+  },[brand?.id,brand?.slug,location?.id,newsletterEmail]);
   useEffect(()=>{consentAttempt.current=null;},[newsletterSelected,newsletterEmail]);
   const newsletterStacking = newsletterAllowsStacking(newsletterOffer);
   const newsletterBase = newsletterStacking ? sumMoney([subtotal, -itemDiscount])
@@ -459,14 +470,16 @@ function CheckoutForm({ location }: { location: Location }) {
   }, [newsletterOffer, brand, location, deliveryType]);
   // Preview with the same minimum, rounding and best-price rules as the basket.
   // Selecting a discount ID alone does not mean it saves the customer money.
-  const newsletterPreview = useMemo(() => newsletterDiscount ? basketTotals({
-    cartItems, appliedDiscount: newsletterDiscount, standardDiscounts,
-    deliveryType, location, brand, includeBagFee,
-  }).voucherDiscount : null, [newsletterDiscount, cartItems, standardDiscounts, deliveryType, location, brand, includeBagFee]);
+  const newsletterPreview = useMemo(() => {
+    if (!newsletterDiscount) return null;
+    const preview = basketTotals({cartItems,appliedDiscount:newsletterDiscount,standardDiscounts,
+      deliveryType,location,brand,includeBagFee,discountCard:discountCardOffer});
+    return preview.discountCardApplied ? null : preview.voucherDiscount;
+  }, [newsletterDiscount, cartItems, standardDiscounts, deliveryType, location, brand, includeBagFee,discountCardOffer]);
   const newsletterBenefitAvailable = !!newsletterPreview &&
-    (!appliedDiscount || isSignupDiscount(appliedDiscount));
+    (!appliedDiscount || isSignupDiscount(appliedDiscount)) && !discountCardApplied;
   const newsletterSavingApplied = newsletterBenefitAvailable && newsletterSelected && !!voucherDiscount?.amount &&
-    isSignupDiscount(appliedDiscount) && appliedDiscount?.id === newsletterOffer?.id;
+    !discountCardApplied && isSignupDiscount(appliedDiscount) && appliedDiscount?.id === newsletterOffer?.id;
   const newsletterMinimumNotMet = !!newsletterOffer && newsletterBase < (newsletterOffer.minOrderValue || 0);
   const newsletterOfferLabel = newsletterOffer && (newsletterOffer.discountType === 'percentage'
     ? `${newsletterOffer.discountValue}%` : formatPrice(newsletterOffer.discountValue));
@@ -1001,6 +1014,17 @@ function CheckoutForm({ location }: { location: Location }) {
                       </FormItem>
                     )}
                   />}
+                  {discountCardEnabled && !discountCardOffer && cardNeedsCanonicalHost && <p className="text-sm">
+                    Rabatkort bruges på brandets egen bestillingsside. Din kurv bliver på denne side og overføres ikke. Start en ny bestilling på brandets side for at bruge kortet.{' '}
+                    <a className="underline" href={canonicalCardOrderUrl} target="_blank" rel="noopener noreferrer">Åbn brandets bestillingsside</a>
+                  </p>}
+                  {discountCardEnabled && !discountCardOffer && !cardNeedsCanonicalHost && <p className="text-sm">
+                    Har du et personligt rabatkort? <Link className="underline" href={cardLoginPath}>Log ind i Club</Link> og brug kortets e-mail i kassen.
+                  </p>}
+                  {discountCardOffer && <div role="status" className="rounded-xl border p-4" data-discount-card-offer>
+                    <p className="font-semibold">{discountCardOffer.name} · {discountCardOffer.percentage}% rabat</p>
+                    <p>{discountCardApplied ? 'Dit personlige rabatkort er anvendt på varer uden andet tilbud.' : 'Du får den bedste tilgængelige rabat. Rabatkortet lægges ikke oven i andre tilbud.'}</p>
+                  </div>}
                   {clubSignupShown && signupConfig.clubProgram && <div className="commerce-newsletter flex flex-col gap-4 rounded-xl border p-5" data-club-signup-offer={newsletterBenefitAvailable && newsletterOffer?.applicationType === 'club_signup'}>
                     <h3 className="text-base font-semibold">Bliv medlem af {signupConfig.clubProgram.name}{newsletterBenefitAvailable && newsletterOffer?.applicationType === 'club_signup' ? ` og få ${newsletterOfferLabel}` : ''}</h3>
                     {!!signupConfig.clubProgram.welcomeStamps && <p>Du får {signupConfig.clubProgram.welcomeStamps} {signupConfig.clubProgram.welcomeStamps === 1 ? 'velkomststempel' : 'velkomststempler'} ved tilmelding.</p>}
@@ -1082,7 +1106,7 @@ function CheckoutForm({ location }: { location: Location }) {
                       </div>
                     </AccordionTrigger>
                     <AccordionContent>
-                      <OrderSummaryContent />
+                      <OrderSummaryContent discountCardOffer={discountCardOffer} />
                     </AccordionContent>
                   </AccordionItem>
                 </Accordion>
@@ -1099,7 +1123,7 @@ function CheckoutForm({ location }: { location: Location }) {
                   </CardHeader>
                   <CardContent className="flex-1 overflow-y-auto pr-4">
                     <fieldset className="min-w-0" disabled={isFormLocked}>
-                      <OrderSummaryContent />
+                      <OrderSummaryContent discountCardOffer={discountCardOffer} />
                     </fieldset>
                   </CardContent>
                 </Card>

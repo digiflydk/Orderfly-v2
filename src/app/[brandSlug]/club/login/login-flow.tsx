@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { checkoutReturnKey, CHECKOUT_RETURN_TTL, safeCheckoutReturn, readCheckoutReturn } from './checkout-return';
 import { CheckEmail } from '../check-email';
 import { portalErrorText, portalRequest } from '../portal-api';
 
@@ -19,12 +20,18 @@ export function LoginFlow({ slug, base, programName, signedIn }: { slug: string;
   const [state, setState] = useState<State>({ step: 'starting' });
   const [email, setEmail] = useState(''), [error, setError] = useState<string | null>(null), [busy, setBusy] = useState(false);
   const token = useRef<string | null>(null), started = useRef(false);
+  const [checkoutReturn, setCheckoutReturn] = useState<string | null>(null);
   const heading = useRef<HTMLHeadingElement>(null);
 
   const verify = useCallback(async () => {
     setState({ step: 'verifying' });
     const answer = await portalRequest(slug, 'verify', { token: token.current });
-    if (answer.ok) { token.current = null; window.location.replace(base); return; }
+    if (answer.ok) {
+      token.current = null;
+      let target: string | null = null;
+      try { target = readCheckoutReturn(window.localStorage, slug, base, Date.now()); window.localStorage.removeItem(checkoutReturnKey(slug)); } catch {}
+      window.location.replace(target || base); return;
+    }
     if (answer.error === 'link_expired' || answer.error === 'link_invalid') {
       token.current = null;
       setState({ step: answer.error === 'link_expired' ? 'expired' : 'invalid' });
@@ -37,8 +44,15 @@ export function LoginFlow({ slug, base, programName, signedIn }: { slug: string;
     if (started.current) return;
     started.current = true;
     const hash = window.location.hash;
+    if (hash) window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
+    const requested = new URLSearchParams(window.location.search).get('returnTo');
+    const safe = safeCheckoutReturn(requested, slug, base);
+    try {
+      if (safe) window.localStorage.setItem(checkoutReturnKey(slug), JSON.stringify({ path: safe, expiresAt: Date.now() + CHECKOUT_RETURN_TTL }));
+      else if (requested !== null) window.localStorage.removeItem(checkoutReturnKey(slug));
+      setCheckoutReturn(readCheckoutReturn(window.localStorage, slug, base, Date.now()));
+    } catch {}
     if (!hash) { setState({ step: 'form' }); return; }
-    window.history.replaceState(window.history.state, '', window.location.pathname + window.location.search);
     const match = /^#token=([a-f0-9]{64})$/.exec(hash);
     if (!match) { setState({ step: 'invalid' }); return; }
     token.current = match[1];
@@ -62,7 +76,7 @@ export function LoginFlow({ slug, base, programName, signedIn }: { slug: string;
   if (state.step === 'starting' || state.step === 'verifying') {
     return <p role="status" className="text-center">{state.step === 'verifying' ? 'Logger ind…' : 'Øjeblik…'}</p>;
   }
-  if (state.step === 'sent') return <CheckEmail email={state.email} onRetry={() => setState({ step: 'form' })} />;
+  if (state.step === 'sent') return <><CheckEmail email={state.email} onRetry={() => setState({ step: 'form' })} />{checkoutReturn && <p className="text-center">Åbn login-linket i samme browser for at vende tilbage til din kurv.</p>}</>;
   if (state.step === 'expired' || state.step === 'invalid') {
     return (
       <section aria-labelledby="club-link" className="flex flex-col gap-4 text-center">
@@ -90,7 +104,7 @@ export function LoginFlow({ slug, base, programName, signedIn }: { slug: string;
         <h1 id="club-login" ref={heading} tabIndex={-1} className="text-3xl outline-none">Log ind på {programName}</h1>
         <p>Skriv din e-mail, så sender vi dig et login-link.</p>
       </div>
-      {signedIn && <p className="rounded-md border p-3 text-center">Du er allerede logget ind. <a href={base} className="underline underline-offset-4">Gå til dit stempelkort</a></p>}
+      {signedIn && <p className="rounded-md border p-3 text-center">Du er allerede logget ind. <a href={checkoutReturn || base} className="underline underline-offset-4">{checkoutReturn ? 'Tilbage til kassen' : 'Gå til dit stempelkort'}</a></p>}
       <div className="flex flex-col gap-2">
         <Label htmlFor="club-login-email" className="text-base">E-mail</Label>
         <Input id="club-login-email" name="email" type="email" inputMode="email" autoComplete="email" required maxLength={254} value={email}

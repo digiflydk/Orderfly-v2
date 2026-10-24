@@ -1,3 +1,4 @@
+import { isCompletedFreeCardSession, isZeroTotalDiscountCardOrder } from '@/lib/loyalty/discount-card/zero-total';
 import 'server-only';
 import type Stripe from 'stripe';
 import type { Transaction } from 'firebase-admin/firestore';
@@ -57,7 +58,7 @@ export function readPickupSettlementPrintCapability(context: NativeTransactionCo
 // Only call with a signed webhook or a session retrieved server-to-server from Stripe.
 export async function settlePaidCheckoutSession(session: Stripe.Checkout.Session) {
   if (!session.metadata?.orderId || !session.metadata.brandId || !session.metadata.locationId) throw new Error('Missing payment scope');
-  if (session.payment_status !== 'paid') return false;
+  if (session.payment_status !== 'paid' && !isCompletedFreeCardSession(session)) return false;
   return settleOrder({ kind: 'stripe', session });
 }
 
@@ -152,6 +153,7 @@ async function settleOrder(proof: PaymentProof) {
     } else {
       if (order.paymentMethod === 'PayAtPickup' || order.brandId !== metadata.brandId || order.locationId !== metadata.locationId || (order.psp?.checkoutSessionId && order.psp.checkoutSessionId !== session!.id)) throw new Error('Payment scope mismatch');
       if (session!.currency?.toLowerCase() !== 'dkk' || session!.amount_total !== Math.round(Number(order.totalAmount) * 100)) throw new Error('Payment amount mismatch');
+      if (session!.payment_status === 'no_payment_required' && (!isCompletedFreeCardSession(session!) || !isZeroTotalDiscountCardOrder(order))) throw new Error('Free card order mismatch');
     }
     if (order.status === 'Canceled' && order.paymentStatus !== 'Paid') throw new Error('Canceled order cannot be fulfilled');
     const confirmationRef = db.collection('orderNotificationJobs').doc(createHash('sha256').update(JSON.stringify(['order-confirmation', order.brandId, metadata.orderId])).digest('hex'));

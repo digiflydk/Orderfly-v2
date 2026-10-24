@@ -55,6 +55,8 @@ before(async()=>{
  `);
  const actions=fixture('actions',`
  import {scenario} from ${JSON.stringify(settings)};
+ export const getDiscountCardCheckoutEnabledAction=async()=>scenario.startsWith('ui-card');
+ export const getDiscountCardCheckoutOfferAction=async(brand,slug,location,email)=>scenario.startsWith('ui-card')&&email==='test@example.test'?{name:'Familie',percentage:25}:null;
  export const newsletterSyncAvailableAction=async()=>true;
  export const getCheckoutSignupAction=async()=>scenario.startsWith('ui-club')&&!scenario.includes('personal-newsletter')?{mode:'club',clubProgram:{active:true,name:'Fixture Club',consentText:'Ja tak, send mig nyhedsbrevet fra Fixture Club.',consentHelp:'Medlemskab kræver nyhedsbrevet.',termsAccept:'Jeg accepterer Club-vilkårene.',consentVersion:'club-consent-1',termsVersion:'club-terms-1',campaignVersion:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',welcomeStamps:1,termsUrl:'/brand/club/vilkaar'}}:{mode:'newsletter'};
  export const getNewsletterSignupDiscountAction=async(brand,location,subtotal,method,email)=>scenario.startsWith('ui-club')?{id:'club',applicationType:'club_signup',discountType:'percentage',discountValue:15,minOrderValue:0,allowStacking:false,requiresSignup:!scenario.includes('personal')}:scenario.startsWith('ui-newsletter')&&email!=='existing@example.test'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:scenario.includes('minimum')?150:0,allowStacking:scenario.includes('stacking-on')}:null;
@@ -457,4 +459,43 @@ test('existing personal Club right can be used beside newsletter signup without 
  const use=card.getByRole('checkbox');assert.equal(await use.isChecked(),false);await use.check();
  await card.getByText(/Club-rabat: 15,00.*trukket fra/).waitFor();await pay(page);await page.waitForURL('**/stripe?*');
  const args=requests.get(scenario)[0];assert.equal(args[1].subscribeToClub,false);assert.equal(args[1].subscribeToNewsletter,false);assert.equal(args[6],'club');
+});
+
+for (const device of ['desktop','mobile']) test(`personal discount card ${device}: quote, summary and submitted total agree`,async t=>{
+ const scenario='ui-card-'+device,page=await setup(t,scenario);
+ await page.locator('[data-discount-card-offer]').waitFor();
+ assert.match(await page.locator('[data-discount-card-offer]').innerText(),/25%/);
+ assert.match(await page.getByRole('button',{name:/Gå til betaling/}).first().innerText(),/75,00/);
+ const summary=page.getByText('I alt',{exact:true}).first().locator('..');
+ assert.match(await summary.innerText(),/75,00/);
+ await pay(page);await page.waitForURL('**/stripe?*');
+ assert.equal(requests.get(scenario)[0][5].cartDiscountTotal,25);
+ assert.equal(requests.get(scenario)[0][6],null);
+});
+test('personal discount card has same-origin login entry and clears benefit when contact changes',async t=>{
+ const page=await setup(t,'ui-card-contact');await page.locator('[data-discount-card-offer]').waitFor();
+ await page.getByPlaceholder('john@example.com').fill('other@example.test');
+ const link=page.getByRole('link',{name:'Log ind i Club',exact:true});await link.waitFor();
+ const href=await link.getAttribute('href');assert.ok(href.startsWith('/'));assert.ok(!href.startsWith('//'));assert.match(href,/club\/login\?returnTo=/);
+ assert.equal(await page.locator('[data-discount-card-offer]').count(),0);
+ assert.match(await page.getByRole('button',{name:/Gå til betaling/}).first().innerText(),/100,00/);
+});
+for(const host of ['orderfly.dk','brand.orderfly.dk'])test('personal card login respects browser origin '+host,async t=>{
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();
+ await page.route('http://'+host+'/**',async route=>{
+  const url=new URL(route.request().url());const response=await route.fetch({url:origin+url.pathname+url.search});await route.fulfill({response});
+ });
+ await page.goto('http://'+host+'/?case=ui-card-origin');
+ await page.getByPlaceholder('john@example.com').fill('other@example.test');
+ if(host==='orderfly.dk'){
+  const link=page.getByRole('link',{name:'Åbn brandets bestillingsside',exact:true});await link.waitFor();
+  assert.equal(await link.getAttribute('href'),'https://brand.orderfly.dk/location');assert.equal(await link.getAttribute('target'),'_blank');
+  assert.match(await page.locator('body').innerText(),/Din kurv bliver på denne side og overføres ikke/);
+  assert.equal(await page.getByRole('link',{name:'Log ind i Club',exact:true}).count(),0);
+ }else{
+  const link=page.getByRole('link',{name:'Log ind i Club',exact:true});await link.waitFor();
+  assert.equal(await link.getAttribute('href'),'/club/login?returnTo=%2Flocation%2Fcheckout');
+  assert.equal(await page.getByRole('link',{name:'Åbn brandets bestillingsside',exact:true}).count(),0);
+ }
+ assert.match(await page.getByRole('button',{name:/Gå til betaling/}).first().innerText(),/100,00/);
 });
