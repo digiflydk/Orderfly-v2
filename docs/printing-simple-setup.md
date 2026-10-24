@@ -81,7 +81,9 @@ credential, poll route and supervised synthetic/ordinary regressions; and actual
 React/Playwright overview, credential, activation, pilot and order-test controls.
 Browser tests exercise desktop/mobile setup, reveal/copy, both HTTPS addresses,
 unknown outcomes, pending submit, permission loss and connection expiry. Existing
-advanced workflow tests still run through the explicit advanced navigation.
+advanced workflow tests still run through the explicit advanced navigation. The
+real isolated Firebase/browser smoke also checks the new primary cards before
+entering Advanced administration for its existing edit/cancel and tenant tests.
 
 PM issue #555 → feature PR → CI/Playwright → independent Codex review → PO acceptance
 or AGENTS automatic merge gates → merge → deployed `/api/health` release verification
