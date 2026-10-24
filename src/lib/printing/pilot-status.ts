@@ -74,7 +74,8 @@ export async function readPrinterPilotStatus(input: unknown) {
         printerId: c.printerId, printerRevision: c.printerRevision, model: j.model, paperWidthMm: j.paperWidthMm });
       if (content.sha256 !== q.contentDigest) return fail('qualification_conflict');
       const terminal = ['confirmed', 'failed', 'unknown'].includes(j.state);
-      return pilotStatusResultSchema.parse({ ...result, state: !terminal && now >= j.expiresAt ? 'expired' : j.state,
+      return pilotStatusResultSchema.parse({ ...result, state: !terminal && now >= j.expiresAt
+        ? (j.state === 'download_started' ? 'unknown' : 'expired') : j.state,
         createdAt: j.createdAt, expiresAt: j.expiresAt, confirmedAt: j.confirmedAt });
     }, { readOnly: true });
   } catch (error) {
