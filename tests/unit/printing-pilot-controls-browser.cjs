@@ -29,7 +29,8 @@ test('browser: one-click test needs no fields or uploads, follows status and nev
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const page = await browser.newPage({ viewport: { width: 375, height: 812 } }), commands = [], errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  let unknown = false, pilotState = 'none', statusReads = 0, holdStatus = false;
+  let unknown = false, pilotState = 'none', statusReads = 0, holdStatus = false, expired = false;
+  const oldCreatedAt=Date.now()-700000;
   const heldReads = [];
   await page.route('**/api/superadmin/printers/pilot*', async route => {
     if (route.request().method() === 'GET') {
@@ -37,8 +38,8 @@ test('browser: one-click test needs no fields or uploads, follows status and nev
       if (holdStatus) { heldReads.push(route); return; }
       const params = Object.fromEntries(new URL(route.request().url()).searchParams);
       assert.deepEqual(params, Object.fromEntries(Object.entries(scope).map(([k, v]) => [k, String(v)])));
-      return route.fulfill({ status: 200, json: { ...scope, state: pilotState, createdAt: Date.now() - 10000,
-        expiresAt: Date.now() + 500000, confirmedAt: pilotState === 'confirmed' ? Date.now() - 100 : null, physicalCompatibilityVerified: false } });
+      return route.fulfill({ status: 200, json: { ...scope, state: pilotState, createdAt: expired ? oldCreatedAt : Date.now() - 10000,
+        expiresAt: expired ? oldCreatedAt+600000 : Date.now() + 500000, confirmedAt: pilotState === 'confirmed' ? Date.now() - 100 : null, physicalCompatibilityVerified: false } });
     }
     holdStatus = false;
     const command = route.request().postDataJSON(); commands.push(command);
@@ -76,6 +77,16 @@ test('browser: one-click test needs no fields or uploads, follows status and nev
   const failedId=commands[1].requestId;unknown=false;await retry.click();
   await expect(page.getByText('Testbonen venter på printeren.',{exact:true})).toBeVisible();
   assert.equal(commands.length,3);assert.equal(commands[2].requestId,failedId);await expect(retry).toHaveCount(0);
+  pilotState='unknown';await refresh.click();
+  const recovery=page.getByRole('button',{name:'Print en ny testbon',exact:true});
+  await expect(recovery).toHaveCount(0);
+  expired=true;await refresh.click();await expect(recovery).toBeEnabled();
+  assert.equal(commands.length,3);await expect(print).toBeDisabled();
+  unknown=true;await recovery.click();await expect(retry).toBeEnabled();
+  assert.equal(commands[3].replaceExpiredCreatedAt,oldCreatedAt);
+  unknown=false;await retry.click();await expect(retry).toHaveCount(0);
+  assert.deepEqual(commands[4],commands[3]);
+  await expect(recovery).toHaveCount(0);await expect(print).toBeDisabled();
   await page.evaluate(()=>window.changePermission(false));await expect(print).toBeDisabled();await expect(refresh).toBeDisabled();
-  assert.equal(commands.length,3);assert.deepEqual(errors,[]);
+  assert.equal(commands.length,5);assert.deepEqual(errors,[]);
 });

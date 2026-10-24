@@ -39,13 +39,15 @@ export function PrinterPilotControls({ scope, model, paperWidthMm, active, permi
   const [busy, setBusy] = useState(false), [message, setMessage] = useState('');
   const [pilotState, setPilotState] = useState<PilotState | null>(null), [statusMessage, setStatusMessage] = useState('');
   const [uncertain, setUncertain] = useState(false);
+  const [expiredUnknownCreatedAt, setExpiredUnknownCreatedAt] = useState<number | null>(null);
+  const replacementRequest = useRef<number | null>(null);
   const unresolvedRequest = useRef<string | null>(null);
   const pending = useRef<false | 'read' | 'print'>(false), lifetime = useRef(0), request = useRef<AbortController | null>(null);
   const lost = useRef(onSessionLost); lost.current = onSessionLost;
   useEffect(() => {
     const generation = ++lifetime.current;
     setBusy(false); setPilotState(null); setStatusMessage(''); setMessage(''); setUncertain(false);
-    pending.current = false; unresolvedRequest.current = null;
+    pending.current = false; unresolvedRequest.current = null; replacementRequest.current = null; setExpiredUnknownCreatedAt(null);
     void refreshStatus();
     const timer = setInterval(() => { void refreshStatus(); }, 5000);
     return () => { clearInterval(timer); if (lifetime.current === generation) lifetime.current++; request.current?.abort(); pending.current = false; };
@@ -76,13 +78,15 @@ export function PrinterPilotControls({ scope, model, paperWidthMm, active, permi
           || !Number.isSafeInteger(result[key]) || (result[key] as number) <= 0))) throw Error('invalid_response');
       const state = result.state as PilotState;
       setPilotState(state); setStatusMessage(statusLabels[state]);
+      setExpiredUnknownCreatedAt(state === 'unknown' && typeof result.createdAt === 'number'
+        && typeof result.expiresAt === 'number' && result.expiresAt <= Date.now() ? result.createdAt : null);
 
     } catch { if (current()) setStatusMessage('Status kunne ikke bekræftes. Kontrollér printeren, før du forsøger igen.'); }
     finally { if (current()) { pending.current = false; request.current = null; } }
   }
-  async function print(retry = false) {
+  async function print(retry = false, replace = false) {
     if (!permitted || !active || pending.current === 'print'
-      || (retry ? !unresolvedRequest.current : uncertain || !['none', 'confirmed', 'expired'].includes(pilotState || ''))) return;
+      || (retry ? !unresolvedRequest.current : uncertain || (replace ? expiredUnknownCreatedAt === null : !['none', 'confirmed', 'expired'].includes(pilotState || '')))) return;
     // An explicit click takes priority over read-only background polling.
     if (pending.current === 'read') request.current?.abort();
     const generation = lifetime.current, controller = new AbortController(); request.current = controller;
@@ -92,8 +96,10 @@ export function PrinterPilotControls({ scope, model, paperWidthMm, active, permi
       const bytes = crypto.getRandomValues(new Uint8Array(32));
       const requestId = unresolvedRequest.current ?? btoa(String.fromCharCode(...bytes)).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
       unresolvedRequest.current = requestId;
+      if (!retry) replacementRequest.current = replace ? expiredUnknownCreatedAt : null;
       const response = await fetch('/api/superadmin/printers/pilot', { method: 'POST', credentials: 'same-origin', cache: 'no-store',
-        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operation: 'print', ...scope, requestId }), signal: controller.signal });
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ operation: 'print', ...scope, requestId,
+          ...(replacementRequest.current !== null ? { replaceExpiredCreatedAt: replacementRequest.current } : {}) }), signal: controller.signal });
       if (!current()) return;
       if (response.status === 401) { setMessage('Din session er udløbet. Log ind igen.'); lost.current(); return; }
       if (response.status !== 201) {
@@ -118,6 +124,10 @@ export function PrinterPilotControls({ scope, model, paperWidthMm, active, permi
     <p className="text-sm">Udskriv en dummy-køkkenbon på {model === 'mc-print2' ? 'Star mC-Print2' : 'Star mC-Print3'} · {paperWidthMm} mm. Printeren skal have papir og bruge Test URL.</p>
     {!active && <p role="status">Printeren er deaktiveret.</p>}
     <Button disabled={!permitted || !active || busy || uncertain || !['none', 'confirmed', 'expired'].includes(pilotState || '')} onClick={() => void print()}>Print testbon</Button>
+    {expiredUnknownCreatedAt !== null && <div className="space-y-2">
+      <p className="text-sm">Den gamle test er udløbet. Du kan starte én ny dummybon. Den gamle udskrift forbliver uafklaret i historikken.</p>
+      <Button disabled={!permitted || !active || busy || uncertain} onClick={() => void print(false, true)}>Print en ny testbon</Button>
+    </div>}
     {uncertain && <Button variant="outline" disabled={!permitted || !active || busy} onClick={() => void print(true)}>Prøv samme testbon igen</Button>}
     <Button variant="outline" disabled={!permitted || busy} onClick={() => void refreshStatus()}>Opdater testbonens status</Button>
     {message && <p role="status">{message}</p>}

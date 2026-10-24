@@ -71,3 +71,19 @@ The initial physical PNG uses the existing basic kitchen raster layout, includin
 ## Verification and outstanding acceptance
 
 Run `npm run typecheck` and the relevant printing native/HTTP/outbox/settlement tests. Browser coverage includes pilot recovery/status, both nonsecret URLs and the supervised-window control. CI and independent code review are release gates. Physical acceptance remains open until real setup, synthetic paper inspection and a controlled purchase succeed on the installed device.
+
+## Expired ambiguous dummy test recovery (#591)
+
+An expired `download_started` or `unknown` dummy job can be explicitly replaced
+with one new synthetic test using **Print en ny testbon**. The UI sends the
+observed old creation time; the server rechecks that exact current job, its expiry,
+current scope/revisions, credentials and recent Test URL contact in a transaction.
+A stale tab cannot replace a newer job. The prior job and result are unchanged,
+and `pilotRecoveryAudit` links the previous session to the new request with actor
+and server time. Request retries reuse the same job even after a lost response.
+Status polling never invokes recovery. This action does not claim acknowledgement,
+qualify paper, release orders, replay an existing job or alter purchase windows.
+The new dummy still needs a genuine device acknowledgement before purchase-test
+controls appear. Owner-authorized acceptance is one new dummy on Esm-02, then
+paper inspection and the existing routing/window activation; no historical orders
+are printed as part of recovery.
