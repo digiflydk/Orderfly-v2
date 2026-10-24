@@ -3,6 +3,8 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { CLOUDPRNT_MAX_POLL_BYTES, cloudPrntPollResponse, parseCloudPrntPoll } from './cloudprnt-http';
 import { CloudPrntHttpAuthenticationError, verifyCloudPrntHttpDevice } from './cloudprnt-http-auth';
 
+import { recordPrinterContact } from './connection-status';
+
 class InvalidPollRequest extends Error {}
 const invalid = (): never => { throw new InvalidPollRequest(); };
 const validId = (value: unknown): value is string => typeof value === 'string'
@@ -48,10 +50,10 @@ async function pollBody(request: Request, expectedLength: number | null) {
 }
 
 /** Internal adapter only. Trusted route code supplies native scope, never poll JSON/query.
- * Every poll is identity-only and read-only, even when output flags are enabled elsewhere.
- * No route, queue access, client action, dispatch, result or usage write is installed here.
+ * Identity-only by default. HTTP routes opt into authenticated contact metadata.
+ * This adapter never reads/writes queues or authorizes dispatch or print results.
  */
-export async function handleCloudPrntPollHttp(request: Request, scope: unknown): Promise<Response> {
+export async function handleCloudPrntPollHttp(request: Request, scope: unknown, contactEndpoint?: 'test' | 'live'): Promise<Response> {
   let nativeStarted = false;
   try {
     const command = nativeScope(scope);
@@ -74,8 +76,9 @@ export async function handleCloudPrntPollHttp(request: Request, scope: unknown):
     const db = getAdminDb();
     // Native SDK may call this callback again. Never capture an earlier identity result.
     await db.runTransaction(async transaction => {
-      await verifyCloudPrntHttpDevice({ db, transaction }, { ...command, authorization });
-    }, { readOnly: true });
+      const identity = await verifyCloudPrntHttpDevice({ db, transaction }, { ...command, authorization });
+      if (contactEndpoint) await recordPrinterContact(transaction, db, identity, contactEndpoint);
+    }, contactEndpoint ? undefined : { readOnly: true });
     return response(200, cloudPrntPollResponse(poll));
   } catch (error) {
     if (error instanceof CloudPrntHttpAuthenticationError) {

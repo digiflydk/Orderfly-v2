@@ -5,6 +5,7 @@ import { requireOrderflyAccess, verifiedOrderflyIdentity } from '@/lib/access/or
 import { AuthorityError } from '@/lib/access/authority';
 import { validatePrinterConfiguration } from './configuration';
 import { storedPrinterSchema } from './storage';
+import { projectPrinterConnection } from './connection-status';
 import { projectPrinterActivity } from './activity-metadata';
 
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
@@ -84,7 +85,12 @@ export async function readPrinterConfigurations(input: unknown) {
       const activityRefs = visibleItems.map(item => printers.doc(item!.configuration.id)
         .collection('statusMetadata').doc('current'));
       const activitySnapshots = activityRefs.length ? await transaction.getAll(...activityRefs) : [];
+      const connectionRefs = visibleItems.flatMap(item => [printers.doc(item!.configuration.id).collection('connection').doc('current'),
+        printers.doc(item!.configuration.id).collection('deviceCredentials').doc('current')]);
+      const connections = connectionRefs.length ? await transaction.getAll(...connectionRefs) : [];
       return { items: visibleItems.map((item, index) => ({ ...item!,
+        connection: projectPrinterConnection(connections[index * 2]?.data(), connections[index * 2 + 1]?.data(),
+          { ...scope, printerId: item!.configuration.id }, item!.revision),
         activity: projectPrinterActivity(activitySnapshots[index]?.exists ? activitySnapshots[index].data() : undefined,
           { ...scope, printerId: item!.configuration.id }, item!.revision) })),
       nextCursor: snapshot.docs.length > limit ? snapshot.docs[limit - 1].id : null, totalPrinters };

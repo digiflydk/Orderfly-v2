@@ -5,6 +5,7 @@ export type PrintScope = { brandId: string; locationId: string };
 export type PrinterConfiguration = PrintScope & {
   id: string;
   name: string;
+  description?: string;
   manufacturer: 'star';
   model: 'mc-print2' | 'mc-print3';
   transport: 'cloudprnt-http' | 'cloudprnt-mqtt';

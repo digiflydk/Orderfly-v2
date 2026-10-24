@@ -13,6 +13,7 @@ const identifier = /^[A-Za-z0-9_-]{1,128}$/;
 export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, onCancel, onSessionLost, permitted, onPendingChange, onFeedback }: Props) {
   const [printerId, setPrinterId] = useState(item?.configuration.id || '');
   const [name, setName] = useState(item?.configuration.name || '');
+  const [description, setDescription] = useState(item?.configuration.description || '');
   const [model, setModel] = useState<PrinterConfiguration['model']>(item?.configuration.model || 'mc-print2');
   const [transport, setTransport] = useState<PrinterConfiguration['transport']>(item?.configuration.transport || 'cloudprnt-http');
   const [paperWidthMm, setPaperWidth] = useState<58 | 80>(item?.configuration.paperWidthMm || 58);
@@ -36,7 +37,7 @@ export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, o
       || (model === 'mc-print2' && (transport !== 'cloudprnt-http' || paperWidthMm !== 58))) {
       setMessage('Kontrollér printer-ID, navn, model, transport og papirbredde.'); return;
     }
-    const configuration: PrinterConfiguration = { id: printerId, brandId, locationId, name: name.trim(), manufacturer: 'star', model, transport, state: 'disabled', paperWidthMm };
+    const configuration: PrinterConfiguration = { id: printerId, brandId, locationId, name: name.trim(), description: description.trim(), manufacturer: 'star', model, transport, state: 'disabled', paperWidthMm };
     const controller = new AbortController(); request.current = controller; onPendingChange(true); setPending(true); setMessage('');
     try {
       const response = await fetch('/api/merchant/printers', { method: item ? 'PATCH' : 'POST', credentials: 'same-origin', cache: 'no-store',
@@ -82,6 +83,7 @@ export function PrinterConfigurationForm({ brandId, locationId, item, onSaved, o
     <fieldset disabled={pending || !permitted} className="grid gap-4 sm:grid-cols-2 min-w-0">
       <label className="grid gap-1.5 text-sm font-medium">Printer-ID<Input required maxLength={128} value={printerId} disabled={!!item} onChange={event => setPrinterId(event.target.value)} autoComplete="off" /></label>
       <label className="grid gap-1.5 text-sm font-medium">Printernavn<Input required maxLength={80} value={name} onChange={event => setName(event.target.value)} autoComplete="off" /></label>
+      <label className="grid gap-1.5 text-sm font-medium">Beskrivelse<Input maxLength={160} value={description} onChange={event => setDescription(event.target.value)} /></label>
       <AdminSelectField className="w-full max-w-full" label="Printermodel" value={model} onChange={event => {
         const next = event.target.value as PrinterConfiguration['model']; setModel(next);
         if (next === 'mc-print2') { setTransport('cloudprnt-http'); setPaperWidth(58); }

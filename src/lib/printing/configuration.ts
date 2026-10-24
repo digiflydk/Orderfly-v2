@@ -13,6 +13,7 @@ export const printerConfigurationSchema = z.object({
   brandId: identifier,
   locationId: identifier,
   name: z.string().max(160).regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]*$/u).trim().min(1).max(80),
+  description: z.string().max(160).regex(/^[^\p{Cc}\p{Cf}\p{Cs}\p{Zl}\p{Zp}]*$/u).trim().optional(),
   manufacturer: z.literal('star'),
   model: modelSchema,
   transport: z.enum(['cloudprnt-http', 'cloudprnt-mqtt']),

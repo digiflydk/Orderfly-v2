@@ -20,13 +20,13 @@ export function PrinterPilotAddress({ scope, showUsername = true }: {
     catch { if (mounted.current) setMessage('Markér og kopiér printeradressen fra feltet.'); }
   }
   return <div className="space-y-2">
-    {showUsername && <p className="text-sm">Brugernavn i printeren: <code>orderfly</code>. Adgangskoden indtastes separat fra Printeradgang.</p>}
-    {url ? <><label className="block text-sm">CloudPRNT-pilotadresse<input aria-label="CloudPRNT-pilotadresse" readOnly value={url} className="block border rounded w-full px-2 py-1" onFocus={event => event.target.select()} /></label>
-      <Button variant="outline" onClick={() => void copy(url)}>Kopiér printeradresse</Button>
-      <p className="text-sm">Brug pilotadressen til den første testbon. Efter testbonen og papir-kontrollen kan du åbne et testvindue for køb og skifte til ordre-adressen.</p>
-      <label className="block text-sm">CloudPRNT-ordre-adresse<input aria-label="CloudPRNT-ordre-adresse" readOnly value={orderUrl} className="block border rounded w-full px-2 py-1" onFocus={event => event.target.select()} /></label>
-      <Button variant="outline" onClick={() => void copy(orderUrl)}>Kopiér ordre-adresse</Button>
-      <p className="text-xs text-muted-foreground">Ordre-adressen giver kun udskrifter, når et godkendt testvindue er åbent og serverens udskriftsindstilling er aktiveret.</p></>
+    {showUsername && <p className="text-sm">Brugernavn: <code>orderfly</code></p>}
+    {url ? <><label className="block text-sm">Test URL<input aria-label="CloudPRNT-pilotadresse" readOnly value={url} className="block border rounded w-full px-2 py-1" onFocus={event => event.target.select()} /></label>
+      <Button variant="outline" onClick={() => void copy(url)}>Kopiér Test URL</Button>
+      <p className="text-sm">Start med Test URL til forbindelsen og den første testbon.</p>
+      <label className="block text-sm">Live URL<input aria-label="CloudPRNT-ordre-adresse" readOnly value={orderUrl} className="block border rounded w-full px-2 py-1" onFocus={event => event.target.select()} /></label>
+      <Button variant="outline" onClick={() => void copy(orderUrl)}>Kopiér Live URL</Button>
+      <p className="text-xs text-muted-foreground">Live URL er klar til opsætning. Ordreprint kræver et aktivt testvindue efter en godkendt testbon.</p></>
       : <p className="text-sm">Åbn administrationen via HTTPS for at få den sikre printeradresse.</p>}
     {message && <p role="status">{message}</p>}
   </div>;

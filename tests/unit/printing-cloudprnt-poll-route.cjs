@@ -18,15 +18,16 @@ function fixture() {
   ]);
   const reads = [], writes = [], options = []; let adminCalls = 0, retry, fail, finish;
   const collection = path => ({ doc: id => ({ id, path: `${path}/${id}`, collection: name => collection(`${path}/${id}/${name}`) }) });
+  let staged = [];
   const transaction = {
     get: async ref => { reads.push(ref.path); if (fail) throw fail;
       return { id: ref.id, exists: rows.has(ref.path), data: () => rows.get(ref.path) }; },
-    create: () => writes.push('create'), set: () => writes.push('set'), update: () => writes.push('update'), delete: () => writes.push('delete'),
+    create: ref => staged.push(ref.path), set: ref => staged.push(ref.path), update: ref => staged.push(ref.path), delete: ref => staged.push(ref.path),
   };
   const db = { collection, runTransaction: async (callback, opts) => {
-    options.push(opts); await callback(transaction);
-    if (retry) { retry(); await callback(transaction); }
-    if (finish) await finish();
+    options.push(opts); staged = []; await callback(transaction);
+    if (retry) { retry(); staged = []; await callback(transaction); }
+    if (finish) await finish(); writes.push(...staged);
   } };
   // Actual exported Next route -> real HTTP adapter -> Basic/native verifier ->
   // real credential crypto. Only native Admin I/O is isolated.
@@ -42,31 +43,31 @@ function fixture() {
 async function check(f, response, status, expected) {
   assert.equal(response.status, status); const body = await response.json();
   assert.deepEqual(body, expected); assert.equal(response.headers.get('cache-control'), 'no-store');
-  assert.equal(response.headers.get('vary'), 'Authorization'); assert.deepEqual(f.writes, []);
+  assert.equal(response.headers.get('vary'), 'Authorization'); assert.ok(f.writes.every(path => path === 'locations/l1/printers/p1/connection/current'));
   for (const secret of [f.authorization, f.draft.secret, f.draft.record.secretDigest, 'PRIVATE_SENTINEL']) {
     assert.equal(JSON.stringify(body).includes(secret), false);
   }
 }
 
-test('real exported POST authenticates native route scope and returns only no-job after read-only completion', async () => {
+test('real exported POST authenticates native route scope and returns only no-job after authenticated contact commit', async () => {
   const f = fixture(); assert.deepEqual(Object.keys(f.route).sort(), ['DELETE', 'GET', 'HEAD', 'POST', 'dynamic', 'runtime']);
   assert.equal(f.route.runtime, 'nodejs'); assert.equal(f.route.dynamic, 'force-dynamic');
   let release; const pending = new Promise(resolve => { release = resolve; }); f.finish(() => pending);
   let finished = false; const response = f.run().then(value => { finished = true; return value; });
   await new Promise(resolve => setImmediate(resolve)); assert.equal(finished, false);
   release(); await check(f, await response, 200, { jobReady: false });
-  assert.deepEqual(f.options, [{ readOnly: true }]);
-  assert.deepEqual(f.reads, ['brands/b1', 'locations/l1', 'locations/l1/printers/p1', f.credentialPath]);
+  assert.deepEqual(f.options, [undefined]); assert.deepEqual(f.writes, ['locations/l1/printers/p1/connection/current']);
+  assert.deepEqual(f.reads, ['brands/b1', 'locations/l1', 'locations/l1/printers/p1', f.credentialPath, 'locations/l1/printers/p1/connection/current']);
 });
 
 test('path scope remains a selector and foreign or revoked native identity never receives a job', async () => {
   for (const params of [{ ...scope, brandId: 'foreign' }, { ...scope, locationId: 'foreign' }, { ...scope, printerId: 'foreign' }]) {
-    const f = fixture(); await check(f, await f.run(undefined, params), 401, { error: 'device_unverified' });
+    const f = fixture(); await check(f, await f.run(undefined, params), 401, { error: 'device_unverified' }); assert.deepEqual(f.writes, []);
   }
   const f = fixture(); f.rows.set(f.credentialPath, { ...f.draft.record, state: 'revoked' });
   await check(f, await f.run(), 401, { error: 'device_unverified' });
   const g = fixture(); g.retry(() => g.rows.set('locations/l1', { brandId: 'foreign' }));
-  await check(g, await g.run(), 401, { error: 'device_unverified' });
+  await check(g, await g.run(), 401, { error: 'device_unverified' }); assert.deepEqual(g.writes, []);
 });
 
 test('route preserves adapter request bounds and ignores no supplied alternate query/body identity', async () => {

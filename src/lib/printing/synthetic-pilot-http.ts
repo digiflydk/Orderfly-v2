@@ -56,11 +56,11 @@ const token = (value: unknown): value is string => typeof value === 'string' && 
 /** Controlled synthetic pilot only. No generic order queue, implicit activation or
  * secret extraction: lifecycle freshly verifies bounded Authorization natively.
  */
-export async function handleSyntheticPilotHttp(request: Request, params: Promise<unknown>): Promise<Response> {
+export async function handleSyntheticPilotHttp(request: Request, params: Promise<unknown>, admitted = false): Promise<Response> {
   let release: (() => void) | null = null, nativeStarted = false;
   try {
     if (!['POST', 'GET', 'DELETE'].includes(request.method)) return reply(405, {}, { Allow: 'POST, GET, DELETE' });
-    release = admitCloudPrntPoll(request.headers.get('authorization'));
+    release = admitted ? () => {} : admitCloudPrntPoll(request.headers.get('authorization'));
     if (!release) return reply(429, { error: 'pilot_rate_limited' }, { 'Retry-After': '5' });
     const scope = nativeScope(await params), url = new URL(request.url);
     if (url.protocol !== 'https:' || url.username || url.password || url.hash) return invalid();

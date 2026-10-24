@@ -56,11 +56,11 @@ const token = (value: unknown): value is string => typeof value === 'string' && 
 
 /** Supervised real-order test window. Ordinary production output stays disabled;
  * every operation checks the current scoped window and device credentials. */
-export async function handleOrdinaryPrintHttp(request: Request, params: Promise<unknown>): Promise<Response> {
+export async function handleOrdinaryPrintHttp(request: Request, params: Promise<unknown>, admitted = false): Promise<Response> {
   let release: (() => void) | null = null, nativeStarted = false;
   try {
     if (!['POST', 'GET', 'DELETE'].includes(request.method)) return reply(405, {}, { Allow: 'POST, GET, DELETE' });
-    release = admitCloudPrntPoll(request.headers.get('authorization'));
+    release = admitted ? () => {} : admitCloudPrntPoll(request.headers.get('authorization'));
     if (!release) return reply(429, { error: 'order_print_rate_limited' }, { 'Retry-After': '5' });
     const scope = nativeScope(await params), url = new URL(request.url);
     if (url.protocol !== 'https:' || url.username || url.password || url.hash) return invalid();

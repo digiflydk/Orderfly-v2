@@ -212,7 +212,7 @@ test('browser: actual credential panel confirms once, clears secret on row/permi
   await page.getByRole('button', { name: 'Opret printeradgang', exact: true }).click(); assert.equal(writes, 0);
   await expect(page.getByText('Opret en ny adgangskode til denne printer?')).toBeVisible();
   await page.getByRole('button', { name: 'Opret printeradgang', exact: true }).click();
-  await expect(page.getByLabel('Engangsvist adgangskode')).toHaveText(secret); assert.equal(writes, 1);
+  await expect(page.getByLabel('Engangsvist adgangskode')).toHaveValue(secret); assert.equal(writes, 1);
   assert.equal(await page.evaluate(() => localStorage.length + sessionStorage.length), 0);
   await page.evaluate(() => window.changeScope({ brandId: 'brand', locationId: 'location', printerId: 'other', printerRevision: 3 }));
   await expect(page.getByLabel('Engangsvist adgangskode')).toHaveCount(0);
@@ -228,6 +228,7 @@ test('browser: actual credential panel confirms once, clears secret on row/permi
     model: 'mc-print2', transport: 'cloudprnt-http', state: 'disabled', paperWidthMm: 58 }, revision: scope.printerRevision };
   await page.route('**/api/merchant/printers?*', route => route.fulfill({ json: { items: [row], nextCursor: null, totalPrinters: 1 } }));
   await page.goto('http://127.0.0.1:' + server.address().port + '/overview');
+  await page.getByRole('button', {name:'Avanceret administration',exact:true}).click();
   await expect(page.getByRole('columnheader')).toHaveCount(9);
   await expect(page.getByRole('button', { name: 'Rediger Køkken ÆØÅ', exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: 'Deaktiver Køkken ÆØÅ', exact: true })).toBeVisible();
@@ -236,7 +237,7 @@ test('browser: actual credential panel confirms once, clears secret on row/permi
   await expect(page.getByText('Status: Ikke oprettet')).toBeVisible();
   await page.getByRole('button', { name: 'Opret printeradgang', exact: true }).click();
   await page.getByRole('button', { name: 'Opret printeradgang', exact: true }).click();
-  await expect(page.getByLabel('Engangsvist adgangskode')).toHaveText(secret); assert.equal(writes, 2);
+  await expect(page.getByLabel('Engangsvist adgangskode')).toHaveValue(secret); assert.equal(writes, 2);
   await page.getByRole('combobox', { name: 'Printertype', exact: true }).selectOption('mc-print2');
   await expect(page.getByLabel('Engangsvist adgangskode')).toHaveCount(0);
   await expect(page.getByRole('dialog', { name: 'Printeradgang', exact: true })).toHaveCount(0);

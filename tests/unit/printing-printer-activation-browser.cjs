@@ -96,7 +96,7 @@ test('browser: reviewed activation is explicit, scope-bound and never retries an
   await expect(address).toHaveValue('https://activation.test/api/cloudprnt-pilot/brand/location/p1');
   await page.getByRole('button', { name: 'Erstat adgangskode', exact: true }).click();
   await page.getByRole('button', { name: 'Erstat adgangskode', exact: true }).click();
-  await expect(page.getByLabel('Engangsvist adgangskode')).toHaveText(secret);
+  await expect(page.getByLabel('Engangsvist adgangskode')).toHaveValue(secret);
   await expect(address).toHaveValue('https://activation.test/api/cloudprnt-pilot/brand/location/p1');
   assert.equal((await address.inputValue()).includes(secret), false);
   const orderAddress = page.getByLabel('CloudPRNT-ordre-adresse', { exact: true });

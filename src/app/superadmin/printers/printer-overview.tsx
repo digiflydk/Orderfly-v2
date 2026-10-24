@@ -5,6 +5,7 @@ import { RefreshCw } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from '@/components/ui/table';
 import { AdminSelectField } from '@/components/superadmin/admin-select-field';
+import { PrinterConnectionForm } from './printer-connection-form';
 import { PrinterConfigurationForm } from './printer-configuration-form';
 import { PrinterLifecycleDialog } from './printer-lifecycle-dialog';
 import { PrinterCredentialsPanel } from './printer-credentials-panel';
@@ -14,10 +15,11 @@ import type { PrinterConfiguration } from '@/lib/printing/domain';
 type Brand = { id: string; name: string };
 type Location = { id: string; name: string; brandId: string };
 type Activity = { activatedAt: number | null; lastConfirmedPrintAt: number | null; printHistory: 'unknown' | 'never' | 'confirmed' };
-type Item = { configuration: PrinterConfiguration; revision: number; activity?: Activity };
+type Connection = { connected: boolean; lastSeenAt: number | null; endpoint: 'test' | 'live' | null; checkedAt: number };
+type Item = { connection?: Connection; configuration: PrinterConfiguration; revision: number; activity?: Activity };
 type Page = { items: Item[]; nextCursor: string | null; totalPrinters?: number };
 type Cursor = { locationKey: string; after: string };
-type OverviewItem = Item & { totalPrinters?: number };
+type OverviewItem = Item & { totalPrinters?: number; receivedAt?: number };
 type OverviewPage = { items: OverviewItem[]; nextCursor: Cursor | null };
 type Result = { key: string; page?: OverviewPage; error?: string };
 const locationKey = (row: { brandId: string; id: string }) => JSON.stringify([row.brandId, row.id]);
@@ -49,10 +51,13 @@ function readPage(value: unknown, brandId: string, locationId: string, after: st
     const c = item?.configuration;
     if (!c || !id.test(c.id) || seen.has(c.id) || (model && c.model !== model) || c.brandId !== brandId || c.locationId !== locationId
       || typeof c.name !== 'string' || !c.name.trim() || c.name.length > 80
+      || (c.description !== undefined && (typeof c.description !== 'string' || c.description.length > 160))
       || c.manufacturer !== 'star' || !['mc-print2', 'mc-print3'].includes(c.model)
       || !['cloudprnt-http', 'cloudprnt-mqtt'].includes(c.transport) || !['active', 'paused', 'disabled'].includes(c.state)
       || ![58, 80].includes(c.paperWidthMm) || !Number.isSafeInteger(item.revision) || item.revision < 1
-      || (item.activity !== undefined && !validActivity(item.activity))) throw Error('invalid_response');
+      || (item.activity !== undefined && !validActivity(item.activity))
+      || (item.connection !== undefined && (typeof item.connection.connected !== 'boolean' || !validTimestamp(item.connection.lastSeenAt)
+        || typeof item.connection.checkedAt !== 'number' || !validTimestamp(item.connection.checkedAt) || !['test', 'live', null].includes(item.connection.endpoint)))) throw Error('invalid_response');
     seen.add(c.id);
   }
   if (data.nextCursor && (data.items.length !== 20 || data.items[19].configuration.id !== data.nextCursor)) throw Error('invalid_response');
@@ -61,6 +66,10 @@ function readPage(value: unknown, brandId: string, locationId: string, after: st
 
 type Scope = { id: string; brandId: string };
 export function PrinterOverview({ brands, locations, createLocations = [], editLocations = [], deleteLocations = [] }: { brands: Brand[]; locations: Location[]; createLocations?: Scope[]; editLocations?: Scope[]; deleteLocations?: Scope[] }) {
+  const [advanced, setAdvanced] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [clock, setClock] = useState(Date.now());
+  useEffect(() => { const timer = setInterval(() => setClock(Date.now()), 10_000); return () => clearInterval(timer); }, []);
   const [brandId, setBrandId] = useState('');
   const [locationId, setLocationId] = useState('');
   const [model, setModel] = useState('');
@@ -93,10 +102,10 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   const canCreate = !!createScope && hasGrant(createLocations, createScope);
   const editorAllowed = !!editor && editor.scope === scope && hasGrant(
     editor.action === 'delete' ? deleteLocations : editor.item ? editLocations : createLocations, editor);
-  const closeAndRefresh = () => { setFeedback(null); readsAllowed.current = true; setEditor(null); setCredential(null); setAfter(null); setRefresh(value => value + 1); };
+  const closeAndRefresh = () => { setCreating(false); setFeedback(null); readsAllowed.current = true; setEditor(null); setCredential(null); setAfter(null); setRefresh(value => value + 1); };
   const key = JSON.stringify([scope, after, refresh, model]);
   const current = result?.key === key ? result : null;
-  const loseSession = () => { setFeedback(null); readsAllowed.current = false; readGeneration.current += 1; readController.current?.abort(); sessionEpoch.current += 1; setSessionLost(true); setEditor(null); setCredential(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
+  const loseSession = () => { setCreating(false); setFeedback(null); readsAllowed.current = false; readGeneration.current += 1; readController.current?.abort(); sessionEpoch.current += 1; setSessionLost(true); setEditor(null); setCredential(null); setSavedScope(''); setResult({ key, error: 'Din session er udløbet. Log ind igen.' }); };
   const credentialAllowed = !!credential && credential.key === key && !editor && !feedback?.requiresRefresh
     && hasGrant(editLocations, credential.item.configuration) && !!current?.page?.items.some(row => row.revision === credential.item.revision
       && row.configuration.id === credential.item.configuration.id && row.configuration.brandId === credential.item.configuration.brandId
@@ -122,7 +131,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
   useEffect(() => { if (credential && !credentialAllowed) setCredential(null); }, [credential, credentialAllowed]);
 
   useEffect(() => {
-    if (!readsAllowed.current || editor) return;
+    if (!readsAllowed.current || editor || creating) return;
     const controller = new AbortController(); readController.current = controller;
     const generation = ++readGeneration.current;
     let active = true;
@@ -146,7 +155,7 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
         const page = readPage(await response.json(), target.brandId, target.id, cursor, model);
         if (!isCurrent()) throw Error('obsolete_read');
         const remaining = 20 - items.length;
-        items.push(...page.items.slice(0, remaining).map(item => ({ ...item, totalPrinters: page.totalPrinters })));
+        items.push(...page.items.slice(0, remaining).map(item => ({ ...item, totalPrinters: page.totalPrinters, receivedAt: Date.now() })));
         if (page.items.length > remaining || page.nextCursor) {
           cursor = items[items.length - 1].configuration.id;
           break;
@@ -161,17 +170,50 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
           && /^(Din session|Du har ikke adgang|Printerne kunne)/.test(error.message) ? error.message : 'Printerne kunne ikke indlæses. Prøv igen.' });
       });
     return () => { active = false; controller.abort(); if (readController.current === controller) readController.current = null; };
-  }, [brandId, locationId, after, refresh, key, locations, editor, model]);
+  }, [brandId, locationId, after, refresh, key, locations, editor, model, creating]);
 
-  const stateLabels = { active: 'Active', paused: 'Deactive · På pause', disabled: 'Deactive' };
+  useEffect(() => {
+    if (advanced || editor || creating || credential || sessionLost) return;
+    const timer = setInterval(() => { if (readsAllowed.current) setRefresh(value => value + 1); }, 30_000);
+    return () => clearInterval(timer);
+  }, [advanced, editor, creating, credential, sessionLost]);
+
+  const newLocations = locations.filter(l => hasGrant(createLocations, { brandId: l.brandId, locationId: l.id }) && hasGrant(editLocations, { brandId: l.brandId, locationId: l.id }));
+  if (creating && !sessionLost) return <PrinterConnectionForm brands={brands} locations={newLocations} onClose={closeAndRefresh} onSessionLost={loseSession} />;
+  if (!advanced && !editor) return <div className="space-y-6 min-w-0">
+    <header className="flex flex-wrap items-start justify-between gap-4"><div><p className="text-sm text-muted-foreground">System</p><h1 className="text-3xl font-semibold">Printere</h1><p className="mt-2 text-sm text-muted-foreground">Forbind dine printere, og følg deres status.</p></div>
+      {newLocations.length > 0 && !credential && <Button onClick={() => setCreating(true)}>Opret ny printerforbindelse</Button>}</header>
+    {credential && credentialAllowed ? <PrinterCredentialsPanel scope={{ brandId: credential.item.configuration.brandId, locationId: credential.item.configuration.locationId,
+      printerId: credential.item.configuration.id, printerRevision: credential.item.revision }} printerName={credential.item.configuration.name}
+      pilotProfile={credential.item.configuration} permitted={credentialAllowed} onSessionLost={loseSession} onClose={() => setCredential(null)} /> : <>
+    <div className="flex flex-wrap items-end gap-3"><AdminSelectField label="Brand" value={brandId} onChange={e => { setBrandId(e.target.value); setLocationId(''); setAfter(null); }}><option value="">Alle brands</option>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</AdminSelectField>
+      <AdminSelectField label="Lokation" value={locationId} onChange={e => { setLocationId(e.target.value); setAfter(null); }}><option value="">Alle lokationer</option>{locations.filter(l => !brandId || l.brandId === brandId).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</AdminSelectField>
+      <Button variant="outline" onClick={closeAndRefresh}><RefreshCw className="mr-2 h-4 w-4" />Opdater</Button></div>
+    {!current ? <p role="status">Indlæser printere…</p> : current.error ? <p role="alert">{current.error}</p> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+      {!current.page?.items.length && <p>Ingen printere på denne side.</p>}
+      {current.page?.items.map(item => { const c = item.configuration, cn = item.connection;
+        const connected = cn?.connected && cn.lastSeenAt !== null && (cn.checkedAt - cn.lastSeenAt) + Math.max(0, clock - (item.receivedAt || clock)) <= 90_000;
+        return <article key={JSON.stringify([c.brandId,c.locationId,c.id])} className="min-w-0 rounded-xl border bg-card p-5 space-y-4">
+          <div className="flex flex-wrap justify-between gap-2"><h2 className="font-semibold break-words">{c.name}</h2><span className={connected ? 'text-sm font-medium text-green-700' : 'text-sm text-muted-foreground'}>{connected ? 'Forbundet' : 'Ikke forbundet'}</span></div>
+          <div className="text-sm text-muted-foreground"><p>{brands.find(b => b.id === c.brandId)?.name} · {locations.find(l => l.id === c.locationId && l.brandId === c.brandId)?.name}</p><p>Star {c.model === 'mc-print3' ? 'mC-Print3' : 'mC-Print2'} · {c.paperWidthMm} mm</p>{c.description && <p className="mt-2 break-words">{c.description}</p>}</div>
+          <p className="text-sm">Seneste kontakt: {cn?.lastSeenAt ? <ActivityTime value={cn.lastSeenAt} /> : 'Ingen kontakt registreret'}{cn?.endpoint && <span className="block text-xs text-muted-foreground">{cn.endpoint === 'test' ? 'Test URL' : 'Live URL'}</span>}</p>
+          <Button variant="outline" disabled={!hasGrant(editLocations,c)} onClick={() => setCredential({ key, item })}>Forbindelsesoplysninger</Button>
+        </article>; })}</div>}
+    <div className="flex gap-3">{after && <Button variant="outline" onClick={() => setAfter(null)}>Første side</Button>}{current?.page?.nextCursor && <Button variant="outline" onClick={() => setAfter(current.page!.nextCursor!)}>Næste side</Button>}</div>
+    <p className="text-xs text-muted-foreground">Forbundet betyder godkendt kontakt inden for 90 sekunder. Kontakt gemmes højst hvert 30. sekund. Status opdateres automatisk hvert 30. sekund.</p>
+    </>}
+    {!credential && <div className="flex flex-wrap gap-4 text-sm"><a className="text-primary underline" href="/superadmin/receipts">Bonopsætning</a><a className="text-primary underline" href="/superadmin/printers/routing">Routingregler</a><button className="text-muted-foreground underline" onClick={() => setAdvanced(true)}>Avanceret administration</button></div>}
+  </div>;
+  const stateLabels = { active: 'Aktiveret', paused: 'På pause', disabled: 'Deaktiveret' };
   return <div className="space-y-6 min-w-0">
+    {!editor && !credential && <Button variant="outline" onClick={() => { setAdvanced(false); setModel(''); }}>Tilbage til printere</Button>}
     <header>
-      <p className="text-sm font-semibold text-primary">Superadmin · Printerpilot</p>
+      <p className="text-sm font-semibold text-primary">System · Avanceret printeradministration</p>
       <h1 className="mt-1 text-3xl font-semibold tracking-tight">Printere</h1>
       <a href="/superadmin/receipts#testbon" className="mr-4 mt-2 inline-block text-sm text-primary underline">Kvitteringer og testbon</a>
       <a href="/superadmin/receipts?type=kitchen" className="mt-2 inline-block text-sm text-primary underline">Køkkenbon</a>
       <a href="/superadmin/printers/routing" className="mt-2 inline-block text-sm text-primary underline">Routingregler</a>
-      <p className="mt-2 text-sm text-muted-foreground">Administrer printeropsætning på tværs af brands og lokationer.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Avanceret opsætning, køkontrol og vedligeholdelse. Aktiveret er en indstilling, ikke forbindelsesstatus.</p>
     </header>
     <div className="admin-filter-bar flex flex-wrap items-end gap-3 p-4">
       <AdminSelectField label="Brand" value={brandId} disabled={!!editor} onChange={event => { const nextBrand = event.target.value; setBrandId(nextBrand); if (nextBrand && !locations.some(row => row.id === locationId && row.brandId === nextBrand)) setLocationId(''); setAfter(null); setEditor(null); setSavedScope(''); setFeedback(null); }}>
