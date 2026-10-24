@@ -1,4 +1,5 @@
 import 'server-only';
+import { requireEmptyCloudPrntBody } from './cloudprnt-empty-body';
 import { createHash } from 'node:crypto';
 import { admitCloudPrntPoll } from './cloudprnt-poll-admission';
 import { CloudPrntHttpAuthenticationError } from './cloudprnt-http-auth';
@@ -83,7 +84,7 @@ export async function handleSyntheticPilotHttp(request: Request, params: Promise
       }
       return reply(200, { jobReady: true, mediaTypes: ['image/png'], jobToken: result.jobToken, deleteMethod: 'DELETE' });
     }
-    if (request.body || (request.headers.has('content-length') && request.headers.get('content-length') !== '0')) return invalid();
+    await requireEmptyCloudPrntBody(request);
     if (request.method === 'GET') {
       const query = parseCloudPrntJobQuery(url.search);
       if (!token(query.token) || (query.mediaType !== null && query.mediaType !== 'image/png')) return invalid();

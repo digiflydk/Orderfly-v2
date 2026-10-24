@@ -147,3 +147,41 @@ test('lost download response after committed state cannot resend bytes; repeated
   const g = fixture(); for (let i = 0; i < 10; i++) await json(g, await g.run(), 200);
   const before = g.admin; await json(g, await g.run(), 429, { error: 'pilot_rate_limited' }); assert.equal(g.admin, before);
 }));
+
+
+test('Next Node adapter empty DELETE stream accepts Star acknowledgement without weakening body rejection', enabled(async () => {
+  const { NextRequestAdapter } = require('next/dist/server/web/spec-extension/adapters/next-request');
+  const { Readable } = require('node:stream');
+  const f = fixture(); const offered = await (await f.run()).json();
+  await f.run(f.request('GET', query(offered.jobToken) + '&type=image%2Fpng'));
+  for (const chunks of [['{}'], [' '], [Buffer.from([0])]]) {
+    const req = NextRequestAdapter.fromNodeNextRequest({method:'DELETE', url:url+query(offered.jobToken)+'&code=200+OK',
+      headers:{authorization:f.authorization}, body:Readable.from(chunks)}, new AbortController().signal);
+    assert.equal((await f.run(req)).status, 400); assert.equal(f.job().state,'download_started');
+  }
+  for (const headers of [{}, {'content-length':'0'}]) {
+    const req = NextRequestAdapter.fromNodeNextRequest({method:'DELETE', url:url+query(offered.jobToken)+'&code=200+OK',
+      headers:{authorization:f.authorization,...headers}, body:Readable.from([])}, new AbortController().signal);
+    assert.notEqual(req.body,null);
+    assert.equal((await f.run(req)).status,200); assert.equal(f.job().state,'confirmed');
+  }
+}));
+
+test('empty body check rejects misleading length, payload, excessive empty chunks and unfinished streams', async () => {
+  const { requireEmptyCloudPrntBody } = graph({})('src/lib/printing/cloudprnt-empty-body.ts');
+  const req = (body, headers = {}) => new Request(url, {method:'DELETE', body, headers, duplex:'half'});
+  await requireEmptyCloudPrntBody(req(''));
+  for (const length of ['1','00','-1','invalid']) {
+    await assert.rejects(requireEmptyCloudPrntBody(req('', {'content-length':length})));
+  }
+  await assert.rejects(requireEmptyCloudPrntBody(req('x', {'content-length':'0'})));
+  const used = req(''); await used.text(); await assert.rejects(requireEmptyCloudPrntBody(used));
+  let cancelled = false;
+  await assert.rejects(requireEmptyCloudPrntBody(req(new ReadableStream({
+    pull(c) { c.enqueue(new Uint8Array()); }, cancel() { cancelled = true; }
+  }))));
+  assert.equal(cancelled,true);
+  cancelled = false;
+  await assert.rejects(requireEmptyCloudPrntBody(req(new ReadableStream({cancel(){cancelled=true;}}))));
+  assert.equal(cancelled,true);
+});
