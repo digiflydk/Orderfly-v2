@@ -82,6 +82,7 @@ function loadData({cookie,host,session}){
     '@/lib/firebase-admin':{getAdminDb:()=>({})},
     '@/lib/loyalty/stamp-card/counter':{LoyaltyError},
     '@/lib/loyalty/stamp-card/portal-http':{SESSION_COOKIE:'__Host-orderfly-loyalty'},
+    '@/lib/loyalty/discount-card/portal':{memberDiscountCard:async(db,brand,s)=>{calls.push(['discount',brand.brandId,s.memberId]);return null;}},
     '@/lib/loyalty/stamp-card/membership':{
       resolveBrand:async(db,slug)=>{if(slug!=='esmeralda')throw new LoyaltyError('brand_not_found',404);return{brandId:'b',slug,brandName:'Esmeralda',companyId:'c'};},
       programForPortal:async()=>({active:true,name:'Esmeralda Club'}),
@@ -96,7 +97,8 @@ test('portal pages read the member through the phase 1 session check and fail cl
   const expired=loadData({cookie:'a'.repeat(64)});
   assert.equal(await expired.data.loadMember('esmeralda'),null);assert.deepEqual(expired.calls,[['session','a'.repeat(64)]]);
   const ok=loadData({cookie:'b'.repeat(64),session:{memberId:'m'}});
-  assert.deepEqual(await ok.data.loadMember('esmeralda'),{member:{name:'Anna'},session:{memberId:'m'}});
+  assert.deepEqual(await ok.data.loadMember('esmeralda'),{member:{name:'Anna'},session:{memberId:'m'},discountCard:null});
+  assert.deepEqual(ok.calls,[['session','b'.repeat(64)],['discount','b','m']]);
   await assert.rejects(loadData({}).data.loadPortal('unknown'),/NOT_FOUND/);
   assert.equal(await loadData({}).data.findPortal('unknown'),null);
 });

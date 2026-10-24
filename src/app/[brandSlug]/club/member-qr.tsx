@@ -14,7 +14,7 @@ const LIFETIME = 60_000, RENEW_AFTER = 45_000, SAFETY = 3_000, RETRY = 5_000;
 
 type Code = { svg: string; validUntil: number };
 
-export function MemberQr({ slug, base }: { slug: string; base: string }) {
+export function MemberQr({ slug, base, discountCard = false }: { slug: string; base: string; discountCard?: boolean }) {
   const router = useRouter(), routerRef = useRef(router);
   routerRef.current = router;
   const [code, setCode] = useState<Code | null>(null);
@@ -92,7 +92,7 @@ export function MemberQr({ slug, base }: { slug: string; base: string }) {
           <div role="img" aria-label="QR-kode til kassen" data-qr-valid-until={code.validUntil}
             className="w-full max-w-[320px] rounded-xl bg-white p-2 [&>svg]:block [&>svg]:h-auto [&>svg]:w-full"
             dangerouslySetInnerHTML={{ __html: code.svg }} />
-          <p>Vis koden til medarbejderen ved kassen. Den skifter automatisk.</p>
+          <p>{discountCard ? 'Koden identificerer dit Club-medlemskab og skifter automatisk. Kortrabatten beregnes i Orderfly, når du er logget ind.' : 'Vis koden til medarbejderen ved kassen. Den skifter automatisk.'}</p>
         </>
       ) : failure ? (
         <div role="alert" className="flex w-full max-w-[320px] flex-col items-center justify-center gap-4 rounded-xl border p-6">

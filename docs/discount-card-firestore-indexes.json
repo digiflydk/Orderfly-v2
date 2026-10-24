@@ -1,0 +1,6 @@
+{
+  "indexes": [
+    {"collectionGroup":"customers","queryScope":"COLLECTION","fields":[{"fieldPath":"brandId","order":"ASCENDING"},{"fieldPath":"emailAliases","arrayConfig":"CONTAINS"}]}
+  ],
+  "fieldOverrides": []
+}

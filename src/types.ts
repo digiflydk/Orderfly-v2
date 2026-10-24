@@ -386,6 +386,8 @@ export type PaymentDetails = {
  * @description A detailed view of a single order.
  */
 export type OrderDetail = OrderSummary & {
+  /** Immutable personal-card calculation; absent on ordinary orders. */
+  discountCard?: import('./lib/loyalty/discount-card/checkout').AppliedDiscountCard;
     refundedAmountOre?: number;
   brandLogoUrl?: string | null;
   productItems: MinimalCartItem[];

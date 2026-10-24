@@ -14,7 +14,7 @@ function strictWrite(value,path='root') {
  if(value && typeof value==='object') for(const [key,entry] of Object.entries(value)) strictWrite(entry,`${path}.${key}`);
 }
 const offer={id:'d',brandId:'b',isActive:true,locationIds:['l'],orderTypes:['pickup'],activeDays:[],activeTimeSlots:[],discountType:'percentage',discountValue:10,code:'SAVE10',usedCount:0,usageLimit:0};
-async function checkout({discountReaders,existing=false,kind='none',identityCleaner=false, fault, stripeError, realReservations=false, marketingConfigured=true, city='Hellerup', items, seed=[], locationOverrides={}, deliveryType='pickup', deliveryTime, customerOverrides={}, beforeCustomerTransaction, beforeStripe, brandOverrides={}, paymentOverrides={}, standardDiscounts, expectedCartDiscount, consentCookie, anonymousConsentId, orderId='ORD-TEST', discountOrderTypes=['pickup'], createOnly=false, origin='https://example.test', discountId='d'}={}) {
+async function checkout({discountReaders,existing=false,kind='none',identityCleaner=false, fault, stripeError, realReservations=false, marketingConfigured=true, city='Hellerup', items, seed=[], locationOverrides={}, deliveryType='pickup', deliveryTime, customerOverrides={}, beforeCustomerTransaction, beforeStripe, brandOverrides={}, paymentOverrides={}, standardDiscounts, expectedCartDiscount, consentCookie, loyaltyToken, anonymousConsentId, orderId='ORD-TEST', discountOrderTypes=['pickup'], createOnly=false, origin='https://example.test', discountId='d'}={}) {
  const path='src/app/checkout/actions.ts';
  const mocks=Object.fromEntries([...fs.readFileSync(path,'utf8').matchAll(/from ['"]([^'"]+)['"]/g)].map(m=>[m[1],{}]));
  const events=[];const writes=[];let coupon, persistenceError, sessionParams;let patchCalls=0;
@@ -52,6 +52,9 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
  if(existing) records.set('customers/c',record);
  const snap=snapshot(firestoreRef('customers','c'));
  Object.assign(mocks,{
+  'next/headers': {cookies:async()=>({get:name=>name==='__Host-orderfly-loyalty' && loyaltyToken ? {value:loyaltyToken}:undefined})},
+  '@/lib/loyalty/stamp-card/portal-http':{SESSION_COOKIE:'__Host-orderfly-loyalty'},
+  '@/lib/loyalty/discount-card/checkout':acceptanceGraph('src/lib/loyalty/discount-card/checkout.ts'),
   '@/lib/loyalty/stamp-card/club-signup':{
    getClubSignupDiscountEligibility:async()=>fault!=='club-ineligible',
    validateClubCheckoutSignup:async input=>{events.push('club-preflight');assert.equal(input.newsletterConsent,true);assert.equal(input.termsAccepted,true);return{eligible:fault!=='club-ineligible'};},

@@ -8,6 +8,7 @@ import { clubBase } from '@/lib/loyalty/portal-path';
 import { LoyaltyError } from '@/lib/loyalty/stamp-card/counter';
 import { memberView, programForPortal, readSession, resolveBrand } from '@/lib/loyalty/stamp-card/membership';
 import { SESSION_COOKIE } from '@/lib/loyalty/stamp-card/portal-http';
+import { memberDiscountCard } from '@/lib/loyalty/discount-card/portal';
 
 // Server-side reads for the customer portal. They use the same phase 1 functions
 // as /api/loyalty/{brandSlug}/* and never write; every change goes through those APIs.
@@ -30,7 +31,9 @@ export const loadMember = cache(async (slug: string) => {
   if (!token) return null;
   const db = getAdminDb(), { brand } = await loadPortal(slug), now = Date.now();
   try {
-    return await memberView(db, brand, await readSession(db, brand, token, now), now);
+    const session = await readSession(db, brand, token, now);
+    const [view, discountCard] = await Promise.all([memberView(db, brand, session, now), memberDiscountCard(db, brand, session, now)]);
+    return { ...view, discountCard };
   } catch (error) {
     if (error instanceof LoyaltyError) return null;
     throw error;
