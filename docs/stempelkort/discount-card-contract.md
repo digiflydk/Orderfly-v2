@@ -19,13 +19,13 @@ Types live in `types.ts`; schemas and pure rules in `rules.ts`; collection names
 
 Actor is `{identity: VerifiedIdentity, name: string}` obtained from a verified native session, never client payload. `admin.ts` exports:
 
-- `requireDiscountCardSuperuserBrand(db, tx, identity, brandId)`: fresh transaction policy/brand checks; returns `{companyId, brand}`. Exactly one active company mapping and an existing nonsuspended/noninactive brand are required.
+- `requireDiscountCardSuperuserBrand(db, tx, identity, brandId)`: fresh transaction policy/brand checks; returns `{companyId, brand}`. Exactly one active company mapping and an existing nonsuspended/noninactive/nondeleted brand are required.
 - `readDiscountCardAdmin(db, actor, brandId, customerQuery?)`: feature, groups, assignments, locations, customers, customersTruncated and assignmentsTruncated. Customer search is an exact normalized email (legacy primary email fallback), not a general substring search. Initial customer and assignment lists are capped at 200/500 with explicit flags. Exact-email search fetches matching assignment documents directly, including those beyond the initial 500. More than 500 groups/locations is an explicit catalog error, never silent scope truncation.
 - `saveDiscountCardFeature(db, actor, {brandId,version,enabled,locationScope}, now?)`
 - `saveDiscountCardGroup(db, actor, {brandId,id,version,name,percentage,active}, now?)`
 - `saveDiscountCardAssignment(db, actor, {brandId,customerId,memberId,groupId,version,status,startsAt,expiresAt}, now?)`
 
-Mutations return the saved strict record, recheck policy within the transaction, require expected version, and increment it. Group creation uses a caller-generated opaque ID and expected version 0. Customer must exist under the exact brand and not be inactive. Supplied member must be active and match company/brand/customer. Selected locations must exist, be active and belong to the brand. All reads precede writes. Audit failure rolls back the mutation. New customer creation and token mail/activation belong to the separate invitation contract, not these admin CRUD methods.
+Mutations return the saved strict record, recheck policy within the transaction, require expected version, and increment it. Group creation uses a caller-generated opaque ID and expected version 0. Customer must exist under the exact brand and not be inactive or deleted (including a deletion timestamp). Supplied member must be active and match company/brand/customer. Selected locations must exist, be active and belong to the brand. All reads precede writes. Audit failure rolls back the mutation. New customer creation and token mail/activation belong to the separate invitation contract, not these admin CRUD methods.
 
 ## Eligibility boundary
 

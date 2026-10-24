@@ -14,7 +14,7 @@ export async function requireDiscountCardSuperuserBrand(db:Firestore,tx:Transact
   if(!discountCardIdSchema.safeParse(brandId).success) return reject('invalid_identifier',400);
   const [policyDoc,brandDoc]=await Promise.all([tx.get(db.collection('platformAdminControl').doc('access-v1')),tx.get(db.collection('brands').doc(brandId))]);
   const policy=policySchema.safeParse(policyDoc.data()),brand=brandDoc.data();
-  if(!policy.success||!isSuperuser(policy.data,principalKey(identity))||!brand||brand.status==='suspended'||brand.status==='inactive')return reject('forbidden',403);
+  if(!policy.success||!isSuperuser(policy.data,principalKey(identity))||!brand||['suspended','inactive','deleted'].includes(brand.status)||brand.deletedAt)return reject('forbidden',403);
   const companies=policy.data.companies.filter(c=>c.active&&c.orderflyBrandIds.includes(brandId));
   if(companies.length!==1)return reject('forbidden',403);
   return {companyId:companies[0].id,brand};
@@ -43,7 +43,7 @@ export async function readDiscountCardAdmin(db:Firestore,actor:DiscountCardActor
   const feature=f.exists?checked(discountCardFeatureSchema,f.data(),brandId,companyId):defaultDiscountCardFeature(brandId,companyId);
   const customersById=new Map([...c.docs,...(legacy?.docs??[])].map(d=>[d.id,d]));
   const assignmentDocs = email ? await Promise.all([...customersById.keys()].slice(0,200).map(customerId=>tx.get(db.collection(C.assignments).doc(discountCardAssignmentId(brandId,customerId))))) : a.docs;
-  const customers=await Promise.all([...customersById.values()].slice(0,200).filter(d=>d.data().status!=='inactive').map(async d=>{
+  const customers=await Promise.all([...customersById.values()].slice(0,200).filter(d=>!['inactive','deleted'].includes(d.data().status)&&!d.data().deletedAt).map(async d=>{
    const customer=d.data(),email=String(customer.normalizedEmail||customer.email||'').trim().toLowerCase();
    const identity=email?(await tx.get(db.collection(COLLECTIONS.identities).doc(memberIdentityKey(brandId,email)))).data():null;
    const member=identity&&typeof identity.memberId==='string'?(await tx.get(db.collection(COLLECTIONS.members).doc(identity.memberId))).data():null;
@@ -83,7 +83,7 @@ export async function saveDiscountCardAssignment(db:Firestore,actor:DiscountCard
   const [doc,customerDoc,groupDoc,memberDoc]=await Promise.all([tx.get(ref),tx.get(db.collection('customers').doc(p.customerId)),tx.get(db.collection(C.groups).doc(p.groupId)),p.memberId?tx.get(db.collection(COLLECTIONS.members).doc(p.memberId)):Promise.resolve(null)]);
   const current=doc.exists?checked(discountCardAssignmentSchema,doc.data(),p.brandId,companyId):null;
   if(current&&(current.id!==id||current.customerId!==p.customerId))reject('invalid_record');assertVersion(current,p.version);
-  const customer=customerDoc.data();if(!customer||customer.brandId!==p.brandId||customer.status==='inactive')reject('invalid_customer',400);
+  const customer=customerDoc.data();if(!customer||customer.brandId!==p.brandId||['inactive','deleted'].includes(customer.status)||customer.deletedAt)reject('invalid_customer',400);
   const group=checked(discountCardGroupSchema,groupDoc.data(),p.brandId,companyId);if(group.id!==p.groupId)reject('invalid_group',400);
   const member=memberDoc?.data();if(p.memberId&&(!member||member.brandId!==p.brandId||member.companyId!==companyId||member.customerId!==p.customerId||member.status!=='active'))reject('invalid_member',400);
   if(p.status==='active'&&!p.memberId)reject('member_verification_required',400);
