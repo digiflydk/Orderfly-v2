@@ -188,3 +188,16 @@ test('bounded request rejects getters before invocation/native I/O and fixed err
   await assert.rejects(f.api.pollSyntheticPilotJob({ ...f.request, ready: true, extra: true }), /invalid_pilot_job/);
   const fail = fixture({ failCommit: true }); await assert.rejects(fail.poll(), e => e.code === 'pilot_unavailable' && !String(e).includes('PRIVATE'));
 }));
+
+test('direct admin request delivers the same one-shot PNG without pretending to be hardware attestation', enabled(async () => {
+  const f=fixture(), old=f.rows.get(`${root}/pilotQualifications/${sessionId}`);
+  f.rows.set(`${root}/pilotQualifications/${sessionId}`, { schemaVersion:2,...binding,sessionId,jobId:sessionId,
+    actorId:old.actorId,state:'consumed',trust:'admin_test_request',issuedAt:f.now,consumedAt:f.now,expiresAt:f.now+600000,
+    contentDigest:old.contentDigest,physicalCompatibilityVerified:false });
+  assert.deepEqual(await f.poll(false),{jobReady:false});
+  const offer=await f.poll();assert.equal(offer.jobReady,true);
+  assert.equal((await f.download(offer.jobToken)).contentType,'image/png');
+  await assert.rejects(f.download(offer.jobToken),/pilot_already_downloaded/);
+  assert.equal((await f.result(offer.jobToken)).outcome,'confirmed');
+  assert.deepEqual(await f.poll(),{jobReady:false});
+}));

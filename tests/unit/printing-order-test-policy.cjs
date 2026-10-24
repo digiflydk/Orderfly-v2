@@ -112,3 +112,20 @@ test('transaction retries reauthorize and failed audit/commit leaves neither win
   const f = fixture(); f.options.retry = r => r.get(credentialPath).revokedAt = now;
   await assert.rejects(f.start(), /order_test_conflict/); assert.equal(f.records.has(windowPath), false);
 }));
+
+test('confirmed one-click test plus real paper confirmation qualifies purchase test without invented firmware capture',()=>enabled(async()=>{
+  function direct(f){
+    const j=f.records.get(`${path}/pilotJobs/${qid}`);j.expiresAt=j.createdAt+600000;
+    const q={schemaVersion:2,...scope,sessionId:qid,jobId:qid,actorId,state:'consumed',trust:'admin_test_request',
+      issuedAt:j.createdAt,consumedAt:j.createdAt,expiresAt:j.expiresAt,contentDigest:j.content.sha256,physicalCompatibilityVerified:false};
+    f.records.set(`${path}/pilotQualifications/${qid}`,q);
+    f.records.set(`${path}/pilotQualificationAudit/${qid}-consume`,{...q,action:'printer.testPrint.request',model:'mc-print3',paperWidthMm:80});
+  }
+  const f=fixture();direct(f);assert.equal((await f.start()).state,'active');
+  for(const mutate of [r=>r.get(`${path}/pilotQualificationAudit/${qid}-consume`).action='invalid',
+    r=>r.get(`${path}/pilotQualificationAudit/${qid}-consume`).contentDigest='0'.repeat(64),
+    r=>r.get(`${path}/pilotJobs/${qid}`).state='download_started']){
+    const g=fixture();direct(g);mutate(g.records);await assert.rejects(g.start());assert.equal(g.records.has(windowPath),false);
+  }
+  const g=fixture();direct(g);await assert.rejects(g.api.controlOrderTestWindow({...scope,operation:'start',physicalPaperChecked:false,deviceUnchanged:true,supervisingPurchases:true}));
+}));

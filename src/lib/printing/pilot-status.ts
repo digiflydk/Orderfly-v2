@@ -9,8 +9,7 @@ import { storedPrinterSchema } from './storage';
 import { validatePrinterConfiguration } from './configuration';
 import { credentialSchema } from './device-credentials-service';
 import { PilotQualificationError } from './pilot-qualification';
-import { consumedPilotQualificationSchema } from './pilot-qualification-consumption';
-import { syntheticPilotJobSchema } from './synthetic-pilot-job';
+import { syntheticPilotJobSchema, testPrintSessionSchema } from './synthetic-pilot-job';
 import { readSyntheticTestBonContent } from './job-content';
 
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
@@ -63,7 +62,7 @@ export async function readPrinterPilotStatus(input: unknown) {
       if (!ptr.success) return fail('qualification_conflict');
       const [saved, session] = await Promise.all([tx.get(printerRef.collection('pilotJobs').doc(ptr.data.sessionId)),
         tx.get(printerRef.collection('pilotQualifications').doc(ptr.data.sessionId))]);
-      const job = syntheticPilotJobSchema.safeParse(saved.data()), qualification = consumedPilotQualificationSchema.safeParse(session.data());
+      const job = syntheticPilotJobSchema.safeParse(saved.data()), qualification = testPrintSessionSchema.safeParse(session.data());
       if (!saved.exists || !session.exists || !job.success || !qualification.success) return fail('qualification_conflict');
       const j = job.data, q = qualification.data;
       if (saved.id !== j.jobId || session.id !== j.sessionId || ptr.data.sessionId !== j.sessionId
