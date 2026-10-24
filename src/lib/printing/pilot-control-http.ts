@@ -1,5 +1,7 @@
 import 'server-only';
 import { z } from 'zod';
+import { directTestCommandSchema, directTestResultSchema } from './direct-test-schema';
+import { requestDirectTestPrint } from './direct-test-print';
 import { AuthorityError } from '@/lib/access/authority';
 import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
 import { getOrigin } from '@/lib/url';
@@ -13,7 +15,7 @@ const token = z.string().regex(/^[A-Za-z0-9_-]{43}$/);
 const binding = { brandId: id, locationId: id, printerId: id, printerRevision: revision, credentialRevision: revision };
 const flags = { outputAuthorized: z.literal(false), dispatchAuthorized: z.literal(false),
   activationAuthorized: z.literal(false), physicalCompatibilityVerified: z.literal(false) };
-const commands = z.union([z.object({ operation: z.literal('issue'), ...binding }).strict(),
+const commands = z.union([directTestCommandSchema.extend({ operation: z.literal('print') }).strict(), z.object({ operation: z.literal('issue'), ...binding }).strict(),
   z.object({ operation: z.literal('attest'), attestation: pilotOperatorAttestationSchema }).strict()]);
 const issuedResult = z.object({ ...binding, sessionId: token, expiresAt: z.number().int().positive().safe(), nonce: token, ...flags }).strict();
 const consumedResult = z.object({ ...binding, sessionId: token, jobId: token, contentDigest: z.string().regex(/^[a-f0-9]{64}$/),
@@ -86,6 +88,12 @@ export async function postPrinterPilotControl(request: Request): Promise<Respons
     try { command = commands.parse(JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks)))); }
     catch { return reply({ error: 'invalid_qualification' }, 400); }
     const keys = Object.keys(binding);
+    if (command.operation === 'print') {
+      const { operation: _operation, ...input } = command;
+      const result = directTestResultSchema.parse(project(await requestDirectTestPrint(input), Object.keys(directTestResultSchema.shape)));
+      if (keys.some(key => result[key as keyof typeof binding] !== input[key as keyof typeof binding])) throw Error('invalid_result');
+      return reply(result, 201);
+    }
     if (command.operation === 'issue') {
       const { operation: _operation, ...scope } = command;
       const result = issuedResult.parse(project(await issuePilotQualificationSession(scope), Object.keys(issuedResult.shape)));

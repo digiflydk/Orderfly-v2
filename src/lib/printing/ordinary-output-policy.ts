@@ -10,7 +10,7 @@ import { isSuperuser, policySchema } from '@/lib/access/policy';
 import { storedPrinterSchema } from './storage';
 import { credentialSchema } from './device-credentials-service';
 import { syntheticPilotJobSchema } from './synthetic-pilot-job';
-import { consumedPilotQualificationSchema } from './pilot-qualification-consumption';
+import { testPrintSessionSchema } from './synthetic-pilot-job';
 import { readSyntheticTestBonContent } from './job-content';
 import { prepareSavedPrinterRouting } from './saved-routing';
 import { orderTestBinding as binding, orderTestScopeSchema, orderTestWindowSchema, ORDER_TEST_WINDOW_MS } from './order-test-schema';
@@ -123,18 +123,20 @@ export async function controlOrderTestWindow(input: unknown) {
       const qid = ptr.data.sessionId;
       const [job, qualification, audit] = await Promise.all([tx.get(ref.collection('pilotJobs').doc(qid)),
         tx.get(ref.collection('pilotQualifications').doc(qid)), tx.get(ref.collection('pilotQualificationAudit').doc(`${qid}-consume`))]);
-      const j = syntheticPilotJobSchema.safeParse(job.data()), q = consumedPilotQualificationSchema.safeParse(qualification.data());
+      const j = syntheticPilotJobSchema.safeParse(job.data()), q = testPrintSessionSchema.safeParse(qualification.data());
       const capture = audit.data();
       if (!j.success || !q.success || !matches(j.data, a) || !matches(q.data, a)
         || j.data.sessionId !== qid || q.data.sessionId !== qid || j.data.state !== 'confirmed' || j.data.confirmedAt === null
         || j.data.confirmedAt > now || now - j.data.confirmedAt >= ORDER_TEST_WINDOW_MS
         || j.data.createdAt !== q.data.consumedAt || j.data.expiresAt !== q.data.expiresAt
         || p.data.configuration.model !== j.data.model || p.data.configuration.paperWidthMm !== j.data.paperWidthMm
-        || !capture || !matches(capture, a) || capture.sessionId !== qid || capture.trust !== 'supervised_operator'
-        || capture.method !== 'stario_firmware_query' || capture.contentDigest !== q.data.contentDigest
-        || capture.model !== j.data.model || !/^\d{1,3}\.\d{1,3}(?:\.\d{1,3})?$/.test(capture.firmware)) return fail('order_test_conflict');
-      const [major, minor] = capture.firmware.split('.').map(Number);
-      if (!(major > 3 || major === 3 && minor >= 2)) return fail('order_test_conflict');
+        || !capture || !matches(capture, a) || capture.sessionId !== qid || capture.trust !== q.data.trust
+        || capture.contentDigest !== q.data.contentDigest || capture.model !== j.data.model) return fail('order_test_conflict');
+      if (q.data.trust === 'supervised_operator') {
+        if (capture.method !== 'stario_firmware_query' || !/^\d{1,3}\.\d{1,3}(?:\.\d{1,3})?$/.test(capture.firmware)) return fail('order_test_conflict');
+        const [major, minor] = capture.firmware.split('.').map(Number);
+        if (!(major > 3 || major === 3 && minor >= 2)) return fail('order_test_conflict');
+      } else if (capture.action !== 'printer.testPrint.request' || capture.physicalCompatibilityVerified !== false) return fail('order_test_conflict');
       const content = readSyntheticTestBonContent(j.data.content, { brandId: a.brandId, locationId: a.locationId,
         printerId: a.printerId, printerRevision: a.printerRevision,
         model: j.data.model, paperWidthMm: j.data.paperWidthMm });

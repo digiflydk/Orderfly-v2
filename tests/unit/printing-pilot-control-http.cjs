@@ -90,3 +90,20 @@ test('unexpected service result, foreign scope, accessor and secret leakage fail
   const f = fixture({ result: { ...binding, sessionId, jobId: 'd'.repeat(43), contentDigest: 'c'.repeat(64), trust: 'supervised_operator', ...flags } });
   assert.equal((await f.request({ operation: 'attest', attestation: attestation() })).status, 503);
 });
+
+test('one-click POST accepts only scoped request ID and enforces CSRF/auth and projected response',async()=>{
+  const events=[];
+  const api=loadTs('src/lib/printing/pilot-control-http.ts',{'server-only':{},
+    '@/lib/access/orderfly-session':{requirePlatformSuperuser:async()=>events.push('auth')},
+    '@/lib/url':{getOrigin:async()=>'https://orderfly.dk'},
+    './direct-test-print':{requestDirectTestPrint:async input=>{events.push(input);return {...binding,jobId:sessionId,physicalCompatibilityVerified:false};}}
+  });
+  const command={...binding,operation:'print',requestId:sessionId};
+  const send=(body,origin='https://orderfly.dk')=>api.postPrinterPilotControl(new Request('https://orderfly.dk/api/superadmin/printers/pilot',{
+    method:'POST',headers:{origin,'content-type':'application/json'},body:JSON.stringify(body)}));
+  assert.equal((await send(command)).status,201);assert.deepEqual(events[1],{...binding,requestId:sessionId});
+  assert.equal((await send({...command,firmware:'5.4'})).status,400);
+  assert.equal((await send({...command,requestId:'bad'})).status,400);
+  assert.equal((await send(command,'https://other.invalid')).status,403);
+  assert.equal(events.filter(x=>typeof x==='object').length,1);
+});

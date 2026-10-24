@@ -5,6 +5,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { verifyCloudPrntHttpDevice, CloudPrntHttpAuthenticationError } from './cloudprnt-http-auth';
 import { credentialSchema } from './device-credentials-service';
 import { createSyntheticTestBonContent, readSyntheticTestBonContent, PrintJobContentError } from './job-content';
+import { directTestSessionSchema } from './direct-test-schema';
 import { pilotQualificationSessionSchema } from './pilot-qualification';
 
 const id = z.string().min(1).max(128).regex(/^[A-Za-z0-9_-]+$/);
@@ -37,10 +38,11 @@ export const syntheticPilotJobSchema = z.object({ schemaVersion: z.literal(1), p
               ? row.confirmedAt !== null && row.confirmedAt >= row.downloadStartedAt && row.confirmedAt < row.expiresAt
               : row.confirmedAt === null)))));
 
-const consumedSession = pilotQualificationSessionSchema.innerType().extend({ state: z.literal('consumed'),
+const legacyConsumedSession = pilotQualificationSessionSchema.innerType().extend({ state: z.literal('consumed'),
   jobId: token, contentDigest: digest, consumedAt: instant }).strict()
   .refine(row => row.jobId === row.sessionId && row.expiresAt - row.issuedAt === 600_000
     && row.consumedAt >= row.issuedAt && row.consumedAt < row.expiresAt);
+export const testPrintSessionSchema = z.union([legacyConsumedSession, directTestSessionSchema]);
 const pointerSchema = z.object({ schemaVersion: z.literal(1), sessionId: token }).strict();
 type Job = z.infer<typeof syntheticPilotJobSchema>;
 export class SyntheticPilotJobError extends Error {
@@ -112,7 +114,7 @@ async function operate(input: unknown, operation: 'poll' | 'download' | 'result'
       const jobRef = printer.collection('pilotJobs').doc(p.data.sessionId);
       const [saved, session, credential] = await Promise.all([tx.get(jobRef),
         tx.get(printer.collection('pilotQualifications').doc(p.data.sessionId)), tx.get(printer.collection('deviceCredentials').doc('current'))]);
-      const job = syntheticPilotJobSchema.safeParse(saved.data()), qualification = consumedSession.safeParse(session.data());
+      const job = syntheticPilotJobSchema.safeParse(saved.data()), qualification = testPrintSessionSchema.safeParse(session.data());
       const currentCredential = credentialSchema.safeParse(credential.data()), now = Date.now();
       if (!saved.exists || !session.exists || !job.success || !qualification.success || !instant.safeParse(now).success) return invalid();
       const j = job.data, q = qualification.data;

@@ -8,7 +8,7 @@ acceptance work. Runtime flags are enabled by activation #560; see [activation a
 
 ## Preparation and scope
 
-The supervisor first completes the separate synthetic pilot, checks its physical
+The supervisor first clicks **Print testbon** on the connected printer, checks its physical
 paper and confirms that the same device, firmware and media remain installed.
 The order-test control binds a limited window to the exact printer/credential
 revisions and qualification. Saved routing must include the selected printer.

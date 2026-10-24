@@ -7,8 +7,8 @@ This release connects original kitchen print intents to CloudPRNT HTTP during an
 With the deployment-wide order-test flag enabled, authenticated ordinary POST polls without an eligible scoped window (including missing, stopped or expired windows) return `200 { jobReady: false }` without consuming jobs or writing delivery state. Device authentication still runs first. GET/DELETE continue to reject inactive windows; database failures remain unavailable errors.
 
 1. Register and activate the printer, then provision its current device credentials using the existing protected controls. Configure the physical printer with the displayed **CloudPRNT-pilotadresse** and a polling interval of at least five seconds.
-2. Run the existing supervised synthetic qualification, including actual installed firmware >=3.2 and the installed paper profile. Print the synthetic testbon.
-3. Use **Opdater testbonens status**. Printer acknowledgement is displayed independently of human paper inspection. An offered/downloaded/unknown job cannot be silently retried or replaced.
+2. On a connected printer using Test URL, open connection details and click **Print testbon**. The saved model and paper width determine a fixed dummy kitchen PNG. No name, model-label entry, firmware field, file or attestation is required for a test print. Status refreshes automatically every five seconds.
+3. Use **Opdater testbonens status**. Printer acknowledgement is displayed independently of human paper inspection. Active work is reused across clicks/tabs. An expired job that was never downloaded can be replaced; a downloaded or uncertain job cannot be silently retried. A confirmed job can be explicitly printed again after a 30-second cooldown.
 4. Save exactly one include-all kitchen routing rule for this printer through the existing routing editor, without delivery-type filters. The first printed purchase must contain ordinary products, not combo/menu lines. Combo orders retain normal checkout without a partial printed ticket during this supervised test. Existing unrelated original-intent policies are not overwritten by the start operation.
 5. After the synthetic job is confirmed, **Test køb med automatisk køkkenprint** offers status and three explicit confirmations: inspect width/Danish characters/cut, confirm unchanged device/firmware/paper, and remain present supervising the purchases. Start within one hour of the synthetic acknowledgement. One test window is allowed per printer record, without automatic reset or renewal.
 6. Change the physical printer URL to the displayed **CloudPRNT-ordreadresse**, retaining its current protected credentials. Never put credentials in the URL, a public issue, screenshot or log.
@@ -24,7 +24,7 @@ This changes runtime configuration, not printer qualifications, routing or
 window records. No hardware facts are prefilled as verified.
 
 Activation is deployment-wide, but job delivery still requires an authenticated,
-qualified printer and the appropriate scoped state. Intent generation still
+active printer and the appropriate scoped state. Intent generation still
 requires an enabled location policy; a missing policy produces no targets.
 Existing eligible queued synthetic work can be offered once the flag is active.
 The order endpoint remains no-job until its scoped window is eligible; enabling

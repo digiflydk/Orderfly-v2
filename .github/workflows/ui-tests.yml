@@ -123,7 +123,7 @@ jobs:
         run: node --test tests/unit/printing-pilot-qualification.cjs
 
       - name: Supervised pilot HTTP control regression
-        run: node --test tests/unit/printing-pilot-control-http.cjs tests/unit/printing-pilot-qualification-consumption.cjs tests/unit/printing-synthetic-pilot-job.cjs tests/unit/printing-synthetic-pilot-http.cjs
+        run: node --test tests/unit/printing-direct-test.cjs tests/unit/printing-pilot-control-http.cjs tests/unit/printing-pilot-qualification-consumption.cjs tests/unit/printing-synthetic-pilot-job.cjs tests/unit/printing-synthetic-pilot-http.cjs
 
       - name: CloudPRNT Basic native identity regression
         run: node --test tests/unit/printing-cloudprnt-http-auth.cjs
