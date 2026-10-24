@@ -3,19 +3,21 @@ import type { PortalMember } from './data';
 import { HomeScreenHint } from './home-screen-hint';
 import { MemberBenefits, type MemberCampaigns } from './club-benefits';
 import { MemberQr } from './member-qr';
+import { DiscountCard } from './discount-card';
 import { danishDate, firstName, nextRewardText, stampWord } from './texts';
 
 // Mit stempelkort (spec §4.3). Everything shown comes from GET me; the QR code
 // is fetched in the browser so it is always fresh.
 export function MemberCard({ member, slug, base }: { member: PortalMember; slug: string; base: string }) {
-  const { card, rewards, program } = member;
+  const { card, rewards, program, discountCard } = member;
   const campaigns = (member as PortalMember & { campaigns?: MemberCampaigns }).campaigns;
   const filled = Math.min(card.stamps, card.stampsRequired);
   // Even rows: 8 stamps as 2 × 4, at most 5 per row on a phone.
   const columns = card.stampsRequired <= 5 ? card.stampsRequired : card.stampsRequired <= 10 ? Math.ceil(card.stampsRequired / 2) : 5;
   return (
     <div className="club-member-card flex flex-col gap-6">
-      <section className="club-stamp-card flex flex-col items-center gap-4 text-center" aria-labelledby="club-card">
+      {discountCard && <DiscountCard card={discountCard} base={base} />}
+      {(!discountCard || discountCard.showStampCard) && <section className="club-stamp-card flex flex-col items-center gap-4 text-center" aria-labelledby="club-card">
         <div>
           <h1 id="club-card" className="text-3xl">{program.name}</h1>
           <p>Hej {firstName(member.member.name)}</p>
@@ -33,9 +35,9 @@ export function MemberCard({ member, slug, base }: { member: PortalMember; slug:
         <p className="club-stamp-count text-xl font-semibold">{card.stamps} af {card.stampsRequired} {stampWord(card.stampsRequired)}</p>
         <p>{nextRewardText(card.stamps, card.stampsRequired, card.rewardDescription)}</p>
         {slug === 'esmeralda' && <progress className="club-stamp-progress" aria-label="Fremdrift på dit stempelkort" value={filled} max={card.stampsRequired} />}
-      </section>
+      </section>}
 
-      <MemberQr slug={slug} base={base} />
+      <MemberQr slug={slug} base={base} discountCard={!!discountCard} />
 
       {rewards.length > 0 && (
         <section aria-labelledby="club-rewards" className="club-member-rewards flex flex-col gap-3">
