@@ -14,7 +14,7 @@ export function DiscountCard({ card, base }: { card: PortalDiscountCard; base: s
     <p className="text-lg font-semibold break-words">{card.groupName}</p>
     <p className="text-4xl font-semibold">{card.percentage.toLocaleString('da-DK')} % rabat</p>
     <p role="status">{statusText[card.status]}</p>
-    <p>{card.locations.all ? 'Gælder alle brandets lokationer.' : `Gælder hos: ${card.locations.names.join(', ')}.`}</p>
+    <p>{card.locations.all ? 'Gælder alle brandets lokationer.' : card.locations.names.length ? `Gælder hos: ${card.locations.names.join(', ')}.` : 'Ingen aktive lokationer er tilgængelige lige nu.'}</p>
     {card.startsAt !== null && <p>Gyldig fra {danishDate(card.startsAt)}.</p>}
     <p>{card.expiresAt !== null ? `Gyldig til ${danishDate(card.expiresAt)}.` : 'Gælder, indtil kortet bliver deaktiveret.'}</p>
     <p className="text-sm">Rabatten beregnes i Orderfly, når du er logget ind. Den gælder varer til normalpris og kan ikke kombineres med andre tilbud. Levering og gebyrer er ikke omfattet.</p>

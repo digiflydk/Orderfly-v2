@@ -59,6 +59,7 @@ for(const width of [390,1440])test(`personal card and old stamps remain visible 
  assert.equal(await card.getByRole('link',{name:'Bestil med dit rabatkort'}).getAttribute('href'),'/');
  await page.getByRole('img',{name:'2 af 8 stempler'}).waitFor();
  assert.ok(await noOverflow(page));
+ if(process.env.DISCOUNT_CARD_SCREENSHOTS){fs.mkdirSync(process.env.DISCOUNT_CARD_SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.DISCOUNT_CARD_SCREENSHOTS,'portal-'+width+'.png'),fullPage:true});}
  }finally{await page.close();}
 });
 test('all inactive states hide buy action and discount-only members do not get an empty stamp grid',async()=>{

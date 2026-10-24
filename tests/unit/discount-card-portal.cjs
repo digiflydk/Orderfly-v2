@@ -38,6 +38,10 @@ test('session, ownership and company boundaries fail closed without private proj
   db=>db.rows.get('discountCardAssignments/'+id).id='different',db=>db.rows.get('discountCardGroups/group').brandId='other',
   db=>db.rows.get('discountCardFeatures/brand').companyId='other',db=>db.rows.get('platformAdminControl/access-v1').companies[0].active=false,
   db=>db.rows.get('brands/brand').status='suspended',db=>db.rows.get('discountCardGroups/group').percentage=101,
+  db=>db.rows.get('brands/brand').status='inactive',db=>db.rows.get('brands/brand').status='deleted',
+  db=>db.rows.get('customers/customer').status='inactive',db=>db.rows.get('customers/customer').status='deleted',
+  db=>db.rows.get('customers/customer').deletedAt=NOW,
+  db=>db.rows.get('platformAdminControl/access-v1').companies.push({id:'other',active:true,orderflyBrandIds:['brand'],locationIds:[],opsflyOrganizationId:null}),
  ];
  for(const mutate of cases){const f=setup();mutate(f.db);assert.equal(await view(f),null,mutate.toString());}
 });
@@ -45,7 +49,10 @@ test('selected locations use authorized names without IDs, invalid foreign locat
  const f=setup();f.db.rows.get('discountCardFeatures/brand').locationScope={mode:'selected',locationIds:['loc']};
  assert.deepEqual((await view(f)).locations,{all:false,names:['Amager']});
  f.db.rows.get('locations/loc').brandId='other';assert.equal(await view(f),null);
- f.db.rows.get('locations/loc').brandId='brand';f.db.rows.get('platformAdminControl/access-v1').companies[0].locationIds=[];assert.equal(await view(f),null);
+ f.db.rows.get('locations/loc').brandId='brand';f.db.rows.get('platformAdminControl/access-v1').companies[0].locationIds=[];
+ assert.deepEqual((await view(f)).locations,{all:false,names:['Amager']});
+ f.db.rows.get('locations/loc').isActive=false;
+ assert.equal((await view(f)).status,'inactive');assert.deepEqual((await view(f)).locations.names,[]);
 });
 test('precise blocked pending expired upcoming and inactive states never claim active benefit',async()=>{
  for(const [state,mutate] of [
