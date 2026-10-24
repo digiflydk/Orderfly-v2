@@ -480,3 +480,22 @@ test('personal discount card has same-origin login entry and clears benefit when
  assert.equal(await page.locator('[data-discount-card-offer]').count(),0);
  assert.match(await page.getByRole('button',{name:/Gå til betaling/}).first().innerText(),/100,00/);
 });
+for(const host of ['orderfly.dk','brand.orderfly.dk'])test('personal card login respects browser origin '+host,async t=>{
+ const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();
+ await page.route('http://'+host+'/**',async route=>{
+  const url=new URL(route.request().url());const response=await route.fetch({url:origin+url.pathname+url.search});await route.fulfill({response});
+ });
+ await page.goto('http://'+host+'/?case=ui-card-origin');
+ await page.getByPlaceholder('john@example.com').fill('other@example.test');
+ if(host==='orderfly.dk'){
+  const link=page.getByRole('link',{name:'Åbn brandets bestillingsside',exact:true});await link.waitFor();
+  assert.equal(await link.getAttribute('href'),'https://brand.orderfly.dk/location');assert.equal(await link.getAttribute('target'),'_blank');
+  assert.match(await page.locator('body').innerText(),/Din kurv bliver på denne side og overføres ikke/);
+  assert.equal(await page.getByRole('link',{name:'Log ind i Club',exact:true}).count(),0);
+ }else{
+  const link=page.getByRole('link',{name:'Log ind i Club',exact:true});await link.waitFor();
+  assert.equal(await link.getAttribute('href'),'/club/login?returnTo=%2Flocation%2Fcheckout');
+  assert.equal(await page.getByRole('link',{name:'Åbn brandets bestillingsside',exact:true}).count(),0);
+ }
+ assert.match(await page.getByRole('button',{name:/Gå til betaling/}).first().innerText(),/100,00/);
+});

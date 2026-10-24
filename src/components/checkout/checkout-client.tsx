@@ -32,6 +32,7 @@ import { Badge } from "../ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Accordion, AccordionContent, AccordionItem, AccordionTrigger } from "@/components/ui/accordion";
 import { useParams } from "next/navigation";
+import { brandSlugFromHost, brandSubdomainUrl, storefrontPath as brandStorefrontPath } from '@/lib/brand-subdomain';
 import { useStorefrontPath } from "@/hooks/use-storefront-path";
 import {
   AlertDialog,
@@ -332,6 +333,9 @@ function CheckoutForm({ location }: { location: Location }) {
   const params = useParams();
   const storefrontPath = useStorefrontPath(params.brandSlug as string);
   const menuPath = storefrontPath(params.locationSlug as string);
+  const cardHost = React.useSyncExternalStore(() => () => {}, () => window.location.hostname, () => null);
+  const cardNeedsCanonicalHost = !!cardHost && !['localhost','127.0.0.1'].includes(cardHost) && brandSlugFromHost(cardHost) !== params.brandSlug;
+  const canonicalCardOrderUrl = `${brandSubdomainUrl(params.brandSlug as string)}${brandStorefrontPath(params.brandSlug as string,true,params.locationSlug as string)}`;
   const cardLoginPath = `${storefrontPath('club','login')}?returnTo=${encodeURIComponent(storefrontPath(params.locationSlug as string,'checkout'))}`;
   const [isProcessing, setIsProcessing] = useState(false);
   const [isValidatingDiscount, setIsValidatingDiscount] = useState(false);
@@ -1010,7 +1014,11 @@ function CheckoutForm({ location }: { location: Location }) {
                       </FormItem>
                     )}
                   />}
-                  {discountCardEnabled && !discountCardOffer && <p className="text-sm">
+                  {discountCardEnabled && !discountCardOffer && cardNeedsCanonicalHost && <p className="text-sm">
+                    Rabatkort bruges på brandets egen bestillingsside. Din kurv bliver på denne side og overføres ikke. Start en ny bestilling på brandets side for at bruge kortet.{' '}
+                    <a className="underline" href={canonicalCardOrderUrl} target="_blank" rel="noopener noreferrer">Åbn brandets bestillingsside</a>
+                  </p>}
+                  {discountCardEnabled && !discountCardOffer && !cardNeedsCanonicalHost && <p className="text-sm">
                     Har du et personligt rabatkort? <Link className="underline" href={cardLoginPath}>Log ind i Club</Link> og brug kortets e-mail i kassen.
                   </p>}
                   {discountCardOffer && <div role="status" className="rounded-xl border p-4" data-discount-card-offer>

@@ -10,7 +10,7 @@ A legitimate card can reduce the total to zero, including decimal percentages wh
 
 ## Customer login boundary
 
-The supported normal order-entry flow uses `orderEntryUrl`, which sends apex-domain visitors to the canonical brand subdomain. Club mail login uses that same brand host, where the secure host-only cookie reaches checkout. The checkout offers a Club login link and requires the card email in contact details. Cookies are never shared across brands or forwarded. Direct apex deep-link checkout and safe return navigation require the coordinated portal integration; no arbitrary return URL is accepted. Custom-domain login support is not introduced by this change.
+The supported normal order-entry flow uses `orderEntryUrl`, which sends apex-domain visitors to the canonical brand subdomain. Club mail login uses that same brand host, where the secure host-only cookie reaches checkout. The checkout offers a Club login link and requires the card email in contact details. Cookies are never shared across brands or forwarded. Same-origin login remembers a validated relative checkout return route for 30 minutes, including when the mail opens in another tab. For exceptional direct apex/custom-host checkout, the UI explicitly explains that the existing cart stays on the current page and is not transferred; its link opens the canonical brand/location ordering page in a new tab to start a new order. The original cart remains intact. No arbitrary return URL is accepted. Custom-domain login support is not introduced by this change.
 
 ## Verification
 
