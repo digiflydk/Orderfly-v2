@@ -4,7 +4,7 @@ The ordinary `/api/cloudprnt/{brand}/{location}/{printer}` endpoint can deliver
 original kitchen jobs during an explicitly opened supervised order-test window.
 This is not unattended production capability and does not close #485's hardware
 source requirement. Physical setup and successful paper inspection remain live
-acceptance work. No flag or production record is changed by deployment.
+acceptance work. Runtime flags are enabled by activation #560; see [activation and rollback](printing-supervised-order-test.md#server-configuration-and-effects). Deployment does not create qualification, routing or test-window records.
 
 ## Preparation and scope
 

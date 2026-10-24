@@ -17,7 +17,37 @@ With the deployment-wide order-test flag enabled, authenticated ordinary POST po
 
 ## Server configuration and effects
 
-Required runtime flags, all explicit: `ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED=true`, `ORDERFLY_PRINTER_PILOT_OUTPUT_ENABLED=true` for synthetic output, `ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED=true` for supervised real-order delivery, and `ORDERFLY_PRINT_INTENTS_ENABLED=true` for the existing settlement/acceptance producers. This implementation does not change hosting flags or production records. No hardware facts are prefilled as verified.
+Required runtime flags, all explicit: `ORDERFLY_PRINTER_CONFIG_WRITES_ENABLED=true`, `ORDERFLY_PRINTER_PILOT_OUTPUT_ENABLED=true` for synthetic output, `ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED=true` for supervised real-order delivery, and `ORDERFLY_PRINT_INTENTS_ENABLED=true` for the existing settlement/acceptance producers. Activation #560 sets these three output/intent flags to `true` in
+`apphosting.yaml`, following explicit PO authorization on 2026-10-24 to test
+physical printing and purchases. Configuration writes were already enabled.
+This changes runtime configuration, not printer qualifications, routing or
+window records. No hardware facts are prefilled as verified.
+
+Activation is deployment-wide, but job delivery still requires an authenticated,
+qualified printer and the appropriate scoped state. Intent generation still
+requires an enabled location policy; a missing policy produces no targets.
+Existing eligible queued synthetic work can be offered once the flag is active.
+The order endpoint remains no-job until its scoped window is eligible; enabling
+flags alone does not start or extend the one-time 60-minute test period.
+
+The owner's Esm-02 screenshot records authenticated Test URL contact at 14:32
+Europe/Copenhagen on 2026-10-24; firmware 5.4 was shown separately. No physical
+print or paper inspection has been confirmed. Paper, synthetic acknowledgement,
+operator inspection, saved include-all routing and a started window remain
+necessary before testing an ordinary-product purchase on Live URL.
+
+For a printer-specific stop use **Stop ordretest**. For deployment-wide rollback,
+set `ORDERFLY_PRINTER_PILOT_OUTPUT_ENABLED`,
+`ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED` and
+`ORDERFLY_PRINT_INTENTS_ENABLED` back to `false` and deploy through the normal
+reviewed workflow. Disabling output does not erase delivery history or justify
+retrying an uncertain physical print. Credential/configuration and authenticated
+contact remain available independently of output.
+
+Release acceptance for #560 is CI and independent review, successful Firebase
+rollout of the flag configuration, exact live release verification, and a
+read-only check of printer/test status. Physical test and purchase acceptance
+remain separate until observed; deployment must not be reported as paper success.
 
 The start service requires authenticated platform-superuser access and a fresh location edit grant inside the write transaction. It checks native brand/location, active HTTP printer, current credential/config revisions, consumed synthetic qualification, canonical content digest, confirmed synthetic job and the recorded supervised firmware query. A browser checkbox alone cannot create a window. Its trust is explicitly `supervised_order_test`, with `unattendedAuthorized:false`; the operator's paper observation is recorded as an operator statement, not manufacturer attestation.
 
