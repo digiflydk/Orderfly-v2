@@ -37,9 +37,9 @@ export async function saveDiscountCardGroupAction(input: Parameters<typeof saveD
   try {
     const session = await requirePlatformSuperuser(), db = getAdminDb(), actor = { identity: session.identity, name: session.name };
     customerQuery = customerQuerySchema.parse(customerQuery);
-    await saveDiscountCardGroup(db, actor, input, Date.now());
+    const saved = await saveDiscountCardGroup(db, actor, input, Date.now());
     revalidatePath('/superadmin/loyalty/discount-card');
-    return { ok: true as const, data: await readDiscountCardAdmin(db, actor, input.brandId, customerQuery) };
+    return { ok: true as const, savedVersion: saved.version, data: await readDiscountCardAdmin(db, actor, input.brandId, customerQuery) };
   } catch (error) { return failure(error); }
 }
 
@@ -47,9 +47,9 @@ export async function saveDiscountCardAssignmentAction(input: Parameters<typeof 
   try {
     const session = await requirePlatformSuperuser(), db = getAdminDb(), actor = { identity: session.identity, name: session.name };
     customerQuery = customerQuerySchema.parse(customerQuery);
-    await saveDiscountCardAssignment(db, actor, input, Date.now());
+    const saved = await saveDiscountCardAssignment(db, actor, input, Date.now());
     revalidatePath('/superadmin/loyalty/discount-card');
-    return { ok: true as const, data: await readDiscountCardAdmin(db, actor, input.brandId, customerQuery) };
+    return { ok: true as const, savedVersion: saved.version, data: await readDiscountCardAdmin(db, actor, input.brandId, customerQuery) };
   } catch (error) { return failure(error); }
 }
 

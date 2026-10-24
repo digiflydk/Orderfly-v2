@@ -11,9 +11,9 @@ before(async()=>{
  async function result(kind,value){window.__calls=(window.__calls||[]).concat([{kind,value}]);await new Promise(r=>setTimeout(r,60));
  const error=new URLSearchParams(location.search).get('error');if(error==='network')throw Error('transport');if(error)return {ok:false,error};
  const d=window.__data;if(kind==='feature')d.feature={...d.feature,...value,version:value.version+1};
- if(kind==='group'){const row={...value,companyId:'company',version:value.version+1,updatedAt:0};d.groups=d.groups.filter(g=>g.id!==value.id).concat(row);}
- if(kind==='assignment'){const row={...value,id:'card',companyId:'company',version:value.version+1,updatedAt:0};d.assignments=d.assignments.filter(g=>g.customerId!==value.customerId).concat(row);}
- return {ok:true,data:structuredClone(d)};}
+ if(kind==='group'){if((d.groups.find(g=>g.id===value.id)?.version||0)!==value.version)return {ok:false,error:'record_changed'};const row={...value,companyId:'company',version:value.version+1,updatedAt:0};d.groups=d.groups.filter(g=>g.id!==value.id).concat(row);}
+ if(kind==='assignment'){if((d.assignments.find(g=>g.customerId===value.customerId)?.version||0)!==value.version)return {ok:false,error:'record_changed'};const row={...value,id:'card',companyId:'company',version:value.version+1,updatedAt:0};d.assignments=d.assignments.filter(g=>g.customerId!==value.customerId).concat(row);}
+ return {ok:true,data:structuredClone(d),savedVersion:value.version+1};}
  export const saveDiscountCardFeatureAction=v=>result('feature',v);
  export const saveDiscountCardGroupAction=v=>result('group',v);
  export const saveDiscountCardAssignmentAction=v=>result('assignment',v);
@@ -66,4 +66,26 @@ for(const width of [390,1440])test(`feature scope, groups, member card and invit
 });
 for(const error of ['record_changed','forbidden','unauthorized','network'])test(`failed action ${error} never claims success`,async()=>{
  const page=await browser.newPage();try{await page.goto(origin+'?error='+error);await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();await page.getByRole('alert').waitFor();assert.equal(await page.getByRole('status').count(),0);}finally{await page.close();}
+});
+
+test('unrelated refresh cannot advance dirty group editor version',async()=>{
+ const page=await browser.newPage();try{
+  await page.goto(origin);await page.getByRole('button',{name:'Rediger gruppe Venner',exact:true}).click();await page.getByLabel('Rabat i procent',{exact:true}).fill('25');
+  await page.evaluate(()=>{window.__data.groups[0].version=2;window.__data.groups[0].percentage=30;});
+  await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();await page.getByRole('status').waitFor();
+  await page.getByRole('button',{name:'Gem gruppe',exact:true}).click();
+  await page.waitForFunction(()=>window.__calls.at(-1)?.kind==='group');
+  assert.equal(await page.evaluate(()=>window.__calls.at(-1).value.version),1);
+  await page.getByRole('alert').filter({hasText:'ændret af en anden'}).waitFor();assert.equal(await page.evaluate(()=>window.__data.groups[0].percentage),30);
+ }finally{await page.close();}
+});
+test('unrelated refresh cannot advance dirty assignment editor version',async()=>{
+ const page=await browser.newPage();try{
+  await page.goto(origin);await page.getByLabel('Kunde',{exact:true}).selectOption('person');await page.getByLabel('Kortets gruppe',{exact:true}).selectOption('friends');await page.getByRole('button',{name:'Gem kort',exact:true}).click();await page.getByRole('status').waitFor();
+  await page.evaluate(()=>{window.__data.assignments[0].version=2;window.__data.assignments[0].status='blocked';});
+  await page.getByRole('button',{name:'Gem indstillinger',exact:true}).click();await page.getByRole('status').waitFor();
+  await page.getByRole('button',{name:'Gem kort',exact:true}).click();await page.waitForFunction(()=>window.__calls.at(-1)?.kind==='assignment');
+  assert.equal(await page.evaluate(()=>window.__calls.at(-1).value.version),1);
+  await page.getByRole('alert').filter({hasText:'ændret af en anden'}).waitFor();assert.equal(await page.evaluate(()=>window.__data.assignments[0].status),'blocked');
+ }finally{await page.close();}
 });

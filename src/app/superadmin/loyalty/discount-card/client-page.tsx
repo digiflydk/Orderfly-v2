@@ -26,12 +26,11 @@ const statusLabel = { active: 'Aktivt', blocked: 'Spærret', pending: 'Afventer 
 export function DiscountCardAdmin({ brandId, brandName, initial }: { brandId: string; brandName: string; initial: DiscountCardAdminData }) {
   const [data, setData] = useState(initial), [feature, setFeature] = useState(initial.feature);
   const [pending, start] = useTransition(), [error, setError] = useState(''), [message, setMessage] = useState('');
-  const [groupId, setGroupId] = useState(''), [groupName, setGroupName] = useState(''), [percentage, setPercentage] = useState(''), [groupActive, setGroupActive] = useState(true);
-  const [customerId, setCustomerId] = useState(''), [cardGroup, setCardGroup] = useState(''), [blocked, setBlocked] = useState(false);
+  const [groupId, setGroupId] = useState(''), [groupVersion, setGroupVersion] = useState(0), [groupName, setGroupName] = useState(''), [percentage, setPercentage] = useState(''), [groupActive, setGroupActive] = useState(true);
+  const [customerId, setCustomerId] = useState(''), [assignmentVersion, setAssignmentVersion] = useState(0), [cardGroup, setCardGroup] = useState(''), [blocked, setBlocked] = useState(false);
   const [startsAt, setStartsAt] = useState(''), [expiresAt, setExpiresAt] = useState(''), [search, setSearch] = useState(''), [searchQuery, setSearchQuery] = useState('');
   const [inviteName, setInviteName] = useState(''), [inviteEmail, setInviteEmail] = useState(''), [inviteGroup, setInviteGroup] = useState('');
   const customer = data.customers.find(row => row.id === customerId), assignment = data.assignments.find(row => row.customerId === customerId);
-  const group = data.groups.find(row => row.id === groupId);
   function operation(fn: () => Promise<{ ok: true; data: DiscountCardAdminData } | { ok: false; error: string }>, success: string) {
     setError(''); setMessage('');
     start(async () => {
@@ -43,11 +42,11 @@ export function DiscountCardAdmin({ brandId, brandName, initial }: { brandId: st
     });
   }
   function editGroup(row?: DiscountCardGroup) {
-    setGroupId(row?.id || ''); setGroupName(row?.name || ''); setPercentage(row ? String(row.percentage) : ''); setGroupActive(row?.active ?? true); setMessage(''); setError('');
+    setGroupId(row?.id || ''); setGroupVersion(row?.version ?? 0); setGroupName(row?.name || ''); setPercentage(row ? String(row.percentage) : ''); setGroupActive(row?.active ?? true); setMessage(''); setError('');
   }
   function selectCustomer(id: string) {
     const card = data.assignments.find(row => row.customerId === id);
-    setCustomerId(id); setCardGroup(card?.groupId || ''); setBlocked(card?.status === 'blocked'); setStartsAt(localDate(card?.startsAt ?? null)); setExpiresAt(localDate(card?.expiresAt ?? null)); setMessage(''); setError('');
+    setCustomerId(id); setAssignmentVersion(card?.version ?? 0); setCardGroup(card?.groupId || ''); setBlocked(card?.status === 'blocked'); setStartsAt(localDate(card?.startsAt ?? null)); setExpiresAt(localDate(card?.expiresAt ?? null)); setMessage(''); setError('');
   }
   function editCard(card: DiscountCardAssignment) {
     if (!data.customers.some(row => row.id === card.customerId)) { setError('Find kunden via e-mailfeltet før du redigerer kortet.'); return; }
@@ -75,7 +74,7 @@ export function DiscountCardAdmin({ brandId, brandName, initial }: { brandId: st
         event.preventDefault(); const rate = Number(percentage);
         if (!groupName.trim() || groupName.trim().length > 80 || !Number.isFinite(rate) || rate <= 0 || rate > 100) { setError('Angiv et gruppenavn og en rabat større end 0 og højst 100 %.'); setMessage(''); return; }
         const id = groupId || crypto.randomUUID();
-        operation(async () => { const result = await saveDiscountCardGroupAction({ brandId, id, version: group?.version || 0, name: groupName.trim(), percentage: rate, active: groupActive }, searchQuery); if (result.ok) setGroupId(id); return result; }, 'Rabatgruppen er gemt.');
+        operation(async () => { const result = await saveDiscountCardGroupAction({ brandId, id, version: groupVersion, name: groupName.trim(), percentage: rate, active: groupActive }, searchQuery); if (result.ok) { setGroupId(id); setGroupVersion(result.savedVersion); } return result; }, 'Rabatgruppen er gemt.');
       }}>
         <h3 className="font-medium">{groupId ? 'Rediger rabatgruppe' : 'Ny rabatgruppe'}</h3>
         <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="dc-group-name">Gruppenavn</Label><Input id="dc-group-name" maxLength={80} value={groupName} disabled={pending} onChange={event => setGroupName(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="dc-percentage">Rabat i procent</Label><Input id="dc-percentage" type="number" min="0.01" max="100" step="0.01" value={percentage} disabled={pending} onChange={event => setPercentage(event.target.value)} /></div></div>
@@ -100,7 +99,7 @@ export function DiscountCardAdmin({ brandId, brandName, initial }: { brandId: st
       <form className="space-y-4" onSubmit={event => {
         event.preventDefault(); const start = timestamp(startsAt), end = timestamp(expiresAt);
         if (!customer || !cardGroup || (start !== null && !Number.isFinite(start)) || (end !== null && !Number.isFinite(end)) || (start !== null && end !== null && end <= start)) { setError('Vælg kunde og gruppe. Sluttidspunktet skal ligge efter starttidspunktet.'); setMessage(''); return; }
-        operation(() => saveDiscountCardAssignmentAction({ brandId, customerId, memberId: customer.memberId, groupId: cardGroup, version: assignment?.version || 0, status: blocked ? 'blocked' : customer.memberId ? 'active' : 'pending', startsAt: start, expiresAt: end }, searchQuery), 'Kortet er gemt.');
+        operation(async () => { const result = await saveDiscountCardAssignmentAction({ brandId, customerId, memberId: customer.memberId, groupId: cardGroup, version: assignmentVersion, status: blocked ? 'blocked' : customer.memberId ? 'active' : 'pending', startsAt: start, expiresAt: end }, searchQuery); if (result.ok) setAssignmentVersion(result.savedVersion); return result; }, 'Kortet er gemt.');
       }}>
         <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="dc-customer">Kunde</Label><select id="dc-customer" className={selectClass} disabled={pending} value={customerId} onChange={event => selectCustomer(event.target.value)}><option value="">Vælg kunde</option>{data.customers.map(row => <option key={row.id} value={row.id}>{row.name || row.email} · {row.email}</option>)}</select></div><div className="space-y-2"><Label htmlFor="dc-card-group">Kortets gruppe</Label><select id="dc-card-group" className={selectClass} disabled={pending} value={cardGroup} onChange={event => setCardGroup(event.target.value)}><option value="">Vælg gruppe</option>{data.groups.map(row => <option key={row.id} value={row.id}>{row.name} · {row.percentage} %{!row.active ? ' (inaktiv)' : ''}</option>)}</select></div></div>
         <div className="grid gap-4 sm:grid-cols-2"><div className="space-y-2"><Label htmlFor="dc-start">Gælder fra (valgfrit)</Label><Input id="dc-start" type="datetime-local" value={startsAt} disabled={pending} onChange={event => setStartsAt(event.target.value)} /></div><div className="space-y-2"><Label htmlFor="dc-end">Udløber (valgfrit)</Label><Input id="dc-end" type="datetime-local" value={expiresAt} disabled={pending} onChange={event => setExpiresAt(event.target.value)} /></div></div>
