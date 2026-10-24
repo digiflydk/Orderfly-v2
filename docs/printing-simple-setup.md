@@ -89,3 +89,22 @@ PM issue #555 → feature PR → CI/Playwright → independent Codex review → 
 or AGENTS automatic merge gates → merge → deployed `/api/health` release verification
 and read-only live UI verification → Done. Software test success is not physical
 printer/firmware/first-print evidence. No production printer write is an unattended test.
+
+
+## Firmware polling timestamp compatibility (#557)
+
+On 2026-10-24 around 13:45–13:47 Europe/Copenhagen, App Hosting runtime logs
+showed Esm-02 (mC-Print3 firmware 5.4, verified from the owner's device screen)
+polling the test endpoint every five seconds with `?t=<unix seconds>` and
+receiving HTTP 400. The configured URL had no query. All-query rejection ran
+before authentication/contact recording. This proves server reachability,
+not credential validity or a successful physical print.
+
+POST now permits a single bounded numeric `t` cache-buster in contact, test
+and order handlers. Authentication, scope, rate limits and output gates remain
+required. An authenticated paper-error poll still records connection and
+returns no job. No output flag is enabled by this fix. Regression coverage
+includes malformed/duplicate/extra queries, revoked credentials, contact with
+output disabled, and both enabled job lifecycles. Release verification must
+observe actual device POST success and recent contact after deployment;
+software tests alone do not establish a connected printer.

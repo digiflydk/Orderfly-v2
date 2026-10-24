@@ -1,6 +1,6 @@
 import 'server-only';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { CLOUDPRNT_MAX_POLL_BYTES, cloudPrntPollResponse, parseCloudPrntPoll } from './cloudprnt-http';
+import { CLOUDPRNT_MAX_POLL_BYTES, validCloudPrntPollQuery, cloudPrntPollResponse, parseCloudPrntPoll } from './cloudprnt-http';
 import { CloudPrntHttpAuthenticationError, verifyCloudPrntHttpDevice } from './cloudprnt-http-auth';
 
 import { recordPrinterContact } from './connection-status';
@@ -59,7 +59,7 @@ export async function handleCloudPrntPollHttp(request: Request, scope: unknown, 
     const command = nativeScope(scope);
     if (request.method !== 'POST') return response(405, { error: 'invalid_poll_request' });
     const url = new URL(request.url);
-    if (url.protocol !== 'https:' || url.username || url.password || url.search || url.hash) return invalid();
+    if (url.protocol !== 'https:' || url.username || url.password || !validCloudPrntPollQuery(url.search) || url.hash) return invalid();
     const authorization = request.headers.get('authorization');
     if (!authorization || authorization.length > 256 || !/^Basic +[A-Za-z0-9+/]{70}==$/i.test(authorization)) {
       return response(401, { error: 'device_unverified' });

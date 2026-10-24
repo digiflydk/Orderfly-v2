@@ -2,7 +2,7 @@ import 'server-only';
 import { createHash } from 'node:crypto';
 import { admitCloudPrntPoll } from './cloudprnt-poll-admission';
 import { CloudPrntHttpAuthenticationError } from './cloudprnt-http-auth';
-import { CLOUDPRNT_MAX_POLL_BYTES, parseCloudPrntPoll, parseCloudPrntJobQuery,
+import { CLOUDPRNT_MAX_POLL_BYTES, validCloudPrntPollQuery, parseCloudPrntPoll, parseCloudPrntJobQuery,
   parseCloudPrntConfirmation } from './cloudprnt-http';
 import { SyntheticPilotJobError, pollSyntheticPilotJob, downloadSyntheticPilotJob,
   recordSyntheticPilotResult } from './synthetic-pilot-job';
@@ -70,7 +70,7 @@ export async function handleSyntheticPilotHttp(request: Request, params: Promise
     }
     const command = { ...scope, authorization };
     if (request.method === 'POST') {
-      if (url.search) return invalid();
+      if (!validCloudPrntPollQuery(url.search)) return invalid();
       const parsed = await poll(request);
       const ready = parsed.status.kind === 'online' && parsed.printingInProgress !== true && parsed.jobToken === null;
       nativeStarted = true;

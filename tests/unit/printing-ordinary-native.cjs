@@ -242,7 +242,7 @@ test('literal removals are rendered without an addition prefix', () => {
 
 test('actual exported HTTP route and live scoped policy negotiate one PNG and strict result', enabled(async () => {
   const f = await fixture();
-  const offered = await f.http(); assert.equal(offered.status, 200);
+  const offered = await f.http('POST', '?t=1792842465'); assert.equal(offered.status, 200);
   const body = await offered.json(); assert.equal(body.jobReady, true); assert.equal(body.deleteMethod, 'DELETE');
   const query = `?mac=00%3A11%3A22%3A33%3A44%3A55&token=${body.jobToken}`;
   const bytes = await f.http('GET', `${query}&type=image%2Fpng`);

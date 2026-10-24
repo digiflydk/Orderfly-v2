@@ -154,3 +154,24 @@ test('equivalent Basic casing and spacing share one credential bucket', () => {
   time = 2000; admit(variants[3])();
   for (const header of variants) assert.equal(admit(header), null);
 });
+
+
+test('firmware timestamp accepts authenticated paper-error contact without enabling output', async () => {
+  for (const suffix of ['?t=1792842465', '?t=1792842465000']) {
+    const f = fixture();
+    await check(f, await f.run(f.request({ statusCode: '500%20Paper%20empty' }, suffix)), 200, { jobReady: false });
+    assert.deepEqual(f.writes, ['locations/l1/printers/p1/connection/current']);
+  }
+  const f = fixture(); f.rows.set(f.credentialPath, { ...f.draft.record, state: 'revoked' });
+  await check(f, await f.run(f.request(undefined, '?t=1792842465')), 401, { error: 'device_unverified' });
+  assert.deepEqual(f.writes, []);
+});
+
+test('timestamp exception rejects extra, duplicate, encoded and malformed parameters before native I/O', async () => {
+  for (const suffix of ['?t=', '?t=-1', '?t=1.5', '?t=abc', '?t=12345678901234',
+    '?t=1&t=2', '?t=1&brandId=foreign', '?brandId=foreign&t=1', '?T=1', '?%74=1', '?t=%31', '?t=1&']) {
+    const f = fixture();
+    await check(f, await f.run(f.request(undefined, suffix)), 400, { error: 'invalid_poll_request' });
+    assert.equal(f.adminCalls, 0); assert.deepEqual(f.writes, []);
+  }
+});

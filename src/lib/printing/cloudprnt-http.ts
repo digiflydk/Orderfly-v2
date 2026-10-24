@@ -3,6 +3,10 @@ import { z } from 'zod';
 /** Pure protocol subset only: no authentication, queue selection, persistence or I/O. */
 export const CLOUDPRNT_MAX_POLL_BYTES = 8192;
 export const CLOUDPRNT_MAX_QUERY_BYTES = 2048;
+/** Firmware may append a cache-busting timestamp. It grants no identity or job authority. */
+export function validCloudPrntPollQuery(query: string): boolean {
+  return query === '' || /^\?t=[0-9]{1,13}$/.test(query);
+}
 const token = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 const mac = z.string().regex(/^(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}$/).transform(s => s.toLowerCase());
 const text = z.string().min(1).max(128).regex(/^[\x20-\x7e]+$/);

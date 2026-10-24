@@ -81,7 +81,7 @@ async function json(f, response, status, expected) {
 }
 
 test('actual route -> native lifecycle -> auth/crypto delivers immutable PNG once then commits strict DELETE result', enabled(async () => {
-  const f = fixture(); const offered = await json(f, await f.run(), 200);
+  const f = fixture(); const offered = await json(f, await f.run(f.request('POST', '?t=1792842465')), 200);
   assert.equal(offered.jobReady, true); assert.deepEqual(offered.mediaTypes, ['image/png']); assert.equal(offered.deleteMethod, 'DELETE');
   assert.equal(f.job().state, 'offered');
   const download = await f.run(f.request('GET', query(offered.jobToken) + '&type=image%2Fpng'));
@@ -126,7 +126,7 @@ test('invalid/revoked native credentials get fixed 401, output gate off still re
   assert.deepEqual(f.writes, []);
   const g = fixture(); await json(g, await g.run(g.request('POST', '', undefined, { authorization: '' })), 401, { error: 'device_unverified' }); assert.equal(g.admin, 0);
   const h = fixture(); delete process.env.ORDERFLY_PRINTER_PILOT_OUTPUT_ENABLED;
-  await json(h, await h.run(), 200, { jobReady: false }); assert.deepEqual(h.writes, [`${root}/connection/current`]); assert.equal(h.job().state, 'queued');
+  await json(h, await h.run(h.request('POST', '?t=1792842465')), 200, { jobReady: false }); assert.deepEqual(h.writes, [`${root}/connection/current`]); assert.equal(h.job().state, 'queued');
 }));
 
 test('DELETE derives failed/unknown from strict Star status, never accepts a caller success flag', enabled(async () => {
