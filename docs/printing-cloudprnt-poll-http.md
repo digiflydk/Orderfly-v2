@@ -19,7 +19,12 @@ printer/credential records. Poll JSON and URL query cannot select the native
 scope, provide revisions or grant permission. A claimed MAC, UID, status,
 progress or job token is never promoted into native identity or capability.
 
-The adapter accepts HTTPS POST without query, fragment or URL credentials.
+The adapter accepts HTTPS POST without fragment or URL credentials. The query
+must be empty or exactly one `t` parameter containing 1–13 ASCII digits
+(`?t=1792842465`). This firmware cache-buster is ignored; it never selects
+identity, jobs or the server clock. Extra, duplicate, encoded or malformed
+parameters are rejected. The same rule applies to synthetic and order POST
+handlers; GET/DELETE job queries are unchanged (issue #557).
 Missing, combined, oversized or malformed Basic envelopes return a fixed 401
 challenge before body consumption. Full canonical Base64, username, secret
 and native digest verification remain in the existing authentication modules.
