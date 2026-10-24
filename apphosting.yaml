@@ -9,6 +9,19 @@ env:
     value: "true"
     availability:
       - RUNTIME
+  # #560: PO-authorized supervised tests; per-printer qualification/window still required.
+  - variable: ORDERFLY_PRINTER_PILOT_OUTPUT_ENABLED
+    value: "true"
+    availability:
+      - RUNTIME
+  - variable: ORDERFLY_PRINTER_ORDER_TEST_OUTPUT_ENABLED
+    value: "true"
+    availability:
+      - RUNTIME
+  - variable: ORDERFLY_PRINT_INTENTS_ENABLED
+    value: "true"
+    availability:
+      - RUNTIME
   # Brand-bound internal recipient and central-mail organization. No secrets.
   - variable: ORDERFLY_FEEDBACK_ADMIN_NOTIFICATIONS
     value: '{"oeypKaMyYcQjIwaa1PtV":{"organizationId":"aaa94d25-3ca6-4ebf-a673-164608db6c55","email":"ok@esmeraldapizza.dk"}}'
