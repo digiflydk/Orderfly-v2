@@ -40,7 +40,7 @@ test('session, ownership and company boundaries fail closed without private proj
   db=>db.rows.get('brands/brand').status='suspended',db=>db.rows.get('discountCardGroups/group').percentage=101,
   db=>db.rows.get('brands/brand').status='inactive',db=>db.rows.get('brands/brand').status='deleted',
   db=>db.rows.get('customers/customer').status='inactive',db=>db.rows.get('customers/customer').status='deleted',
-  db=>db.rows.get('customers/customer').deletedAt=NOW,
+  db=>db.rows.get('customers/customer').deletedAt=NOW,db=>db.rows.get('brands/brand').deletedAt=NOW,
   db=>db.rows.get('platformAdminControl/access-v1').companies.push({id:'other',active:true,orderflyBrandIds:['brand'],locationIds:[],opsflyOrganizationId:null}),
  ];
  for(const mutate of cases){const f=setup();mutate(f.db);assert.equal(await view(f),null,mutate.toString());}

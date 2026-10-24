@@ -32,7 +32,7 @@ export async function memberDiscountCard(db: Firestore, brand: ProgramBrand, ses
       || currentSession.memberId !== session.memberId || currentSession.brandId !== brand.brandId
       || currentSession.revokedAt || !(currentSession.expiresAt > now) || currentSession.epoch !== member.sessionEpoch
       || !discountCardIdSchema.safeParse(member.customerId).success || !policy.success || !feature.success
-      || !brandSnap.exists || ['suspended', 'inactive', 'deleted'].includes(brandSnap.data()?.status)) return null;
+      || !brandSnap.exists || brandSnap.data()?.deletedAt || ['suspended', 'inactive', 'deleted'].includes(brandSnap.data()?.status)) return null;
     const companies = policy.data.companies.filter(c => c.active && c.orderflyBrandIds.includes(brand.brandId));
     if (companies.length !== 1) return null;
     const company = companies[0];
