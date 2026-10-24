@@ -41,7 +41,7 @@ test('browser: one-click test needs no fields or uploads, follows status and nev
     const command = route.request().postDataJSON(); commands.push(command);
     assert.equal(command.operation, 'print');
     assert.match(command.requestId,/^[A-Za-z0-9_-]{43}$/);
-    pilotState = 'queued';
+    if (!unknown) pilotState = 'queued';
     return route.fulfill({ status: unknown ? 503 : 201, json: unknown ? { error: 'qualification_unavailable' }
       : { ...scope, jobId: sessionId, physicalCompatibilityVerified: false } });
   });
@@ -65,6 +65,11 @@ test('browser: one-click test needs no fields or uploads, follows status and nev
   unknown=true;pilotState='none';await refresh.click();await print.click();
   await expect(page.getByText('Testprint er ikke tilgængeligt.',{exact:false})).toBeVisible();
   await expect(print).toBeDisabled();assert.equal(commands.length,2);
+  await refresh.click();await expect(page.getByText('Ingen testbon er klargjort.',{exact:true})).toBeVisible();
+  const retry=page.getByRole('button',{name:'Prøv samme testbon igen'});await expect(retry).toBeEnabled();
+  const failedId=commands[1].requestId;unknown=false;await retry.click();
+  await expect(page.getByText('Testbonen venter på printeren.',{exact:true})).toBeVisible();
+  assert.equal(commands.length,3);assert.equal(commands[2].requestId,failedId);await expect(retry).toHaveCount(0);
   await page.evaluate(()=>window.changePermission(false));await expect(print).toBeDisabled();await expect(refresh).toBeDisabled();
-  assert.equal(commands.length,2);assert.deepEqual(errors,[]);
+  assert.equal(commands.length,3);assert.deepEqual(errors,[]);
 });
