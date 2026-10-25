@@ -6,7 +6,7 @@ let dir, server, browser, origin;
 before(async () => {
   const root=process.cwd();dir=fs.mkdtempSync(path.join(os.tmpdir(),'location-terminal-login-'));
   const entry=path.join(dir,'entry.js'), loader=path.join(dir,'loader.js');
-  fs.writeFileSync(entry,`import React from 'react';import{createRoot}from'react-dom/client';import{LocationTerminalLogin}from ${JSON.stringify(path.join(root,'src/components/superadmin/location-terminal-login.tsx'))};function App(){const[id,setId]=React.useState('loc-a');return React.createElement('div',null,React.createElement('button',{onClick:()=>setId('loc-b')},'Switch scope'),React.createElement(LocationTerminalLogin,{locationId:id,locationName:'Fixture restaurant'}));}createRoot(document.getElementById('root')).render(React.createElement(App));`);
+  fs.writeFileSync(entry,`import React from 'react';import{createRoot}from'react-dom/client';import{LocationTerminalLogin}from ${JSON.stringify(path.join(root,'src/components/superadmin/location-terminal-login.tsx'))};function App(){const[id,setId]=React.useState('loc-a');return React.createElement('div',null,React.createElement('button',{onClick:()=>setId('loc-b')},'Switch scope'),React.createElement(LocationTerminalLogin,{locationId:id,locationName:'Fixture restaurant',brandSlug:new URLSearchParams(location.search).get('brand')||undefined}));}createRoot(document.getElementById('root')).render(React.createElement(App));`);
   fs.writeFileSync(loader,`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=source=>ts.transpileModule(source,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
   const webpack=require('next/dist/compiled/webpack/webpack');webpack.init();
   await new Promise((resolve,reject)=>webpack.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:{'@':path.join(root,'src')},extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]}]}}).run((error,stats)=>error?reject(error):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
@@ -57,4 +57,13 @@ test('read-only and revoked sessions expose no write controls or password after 
 test('changing location during a pending write clears secrets and ignores the stale response',async t=>{
   const f=await fixture(t,{configured:true,enabled:true,username:'location.a',revision:4,canEdit:true});await f.open();await f.page.getByLabel('Ny adgangskode').fill('scope-fixture-secret');f.state.holdPut=true;await f.page.getByRole('button',{name:'Gem terminal-login',exact:true}).click();await expect.poll(()=>!!f.state.heldPut).toBe(true);
   f.state.value={configured:true,enabled:false,username:'location.b',revision:8,canEdit:true};await f.page.getByRole('button',{name:'Switch scope',exact:true}).click();await expect(f.page.getByLabel('Brugernavn til terminal')).toHaveValue('location.b');await expect(f.page.getByLabel('Ny adgangskode')).toHaveValue('');await f.state.heldPut.fulfill({json:{configured:true,enabled:true,username:'old.response',revision:5,canEdit:true}}).catch(()=>{});await expect(f.page.getByLabel('Brugernavn til terminal')).toHaveValue('location.b');await expect(f.page.getByRole('button',{name:'Gem terminal-login',exact:true})).toBeEnabled();assert.deepEqual(f.errors,[]);
+});
+
+test('Merchant app link uses a valid brand subdomain and safe fallback for missing or invalid slugs',async t=>{
+ const f=await fixture(t);
+ for(const [slug,expected] of [['esmeralda','https://esmeralda.orderfly.dk/mapp'],['other-brand','https://other-brand.orderfly.dk/mapp'],['','/mapp'],['evil.example','/mapp'],['https://evil.example','/mapp'],['superadmin','/mapp']]) {
+  await f.page.goto(origin+'/?brand='+encodeURIComponent(slug));
+  const link=f.page.getByRole('link',{name:'Åbn Merchant app',exact:true});await expect(link).toHaveAttribute('href',expected);await expect(link).toHaveAttribute('rel','noopener noreferrer');
+ }
+ assert.equal(f.calls.filter(c=>c.method==='PUT').length,0);assert.deepEqual(f.errors,[]);
 });

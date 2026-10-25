@@ -11,7 +11,7 @@ before(async()=>{
  const write=(name,body)=>{const file=path.join(dir,name);fs.writeFileSync(file,body);return file;};
  const navigation=write('navigation.js',`const router={replace:url=>location.assign(url),refresh:()=>window.dispatchEvent(new Event('focus'))};export const useRouter=()=>router;`);
  const actions=write('actions.js',`export async function registerPickupPayment(){throw Error('Dedicated portal must not use merchant action');}`);
- const entry=write('entry.js',`import React from'react';import{createRoot}from'react-dom/client';import{TerminalLogin}from${JSON.stringify(path.join(root,'src/app/terminal/login/terminal-login'))};import{TerminalPortal}from${JSON.stringify(path.join(root,'src/app/terminal/orders/terminal-portal'))};createRoot(document.getElementById('root')).render(React.createElement(location.pathname==='/terminal/login'?TerminalLogin:TerminalPortal));`);
+ const entry=write('entry.js',`import React from'react';import{createRoot}from'react-dom/client';import{TerminalLogin}from${JSON.stringify(path.join(root,'src/app/terminal/login/terminal-login'))};import{TerminalPortal}from${JSON.stringify(path.join(root,'src/app/terminal/orders/terminal-portal'))};const mapp=location.pathname==='/mapp'||location.pathname.startsWith('/mapp/');const login=location.pathname.endsWith('/login');createRoot(document.getElementById('root')).render(React.createElement(login?TerminalLogin:TerminalPortal,mapp?(login?{ordersHref:'/mapp'}:{loginHref:'/mapp/login'}):{}));`);
  const loader=write('loader.js',`const ts=require(${JSON.stringify(require.resolve('typescript'))});module.exports=s=>ts.transpileModule(s,{compilerOptions:{module:ts.ModuleKind.ESNext,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022}}).outputText;`);
  await new Promise((resolve,reject)=>webpackModule.webpack({mode:'development',devtool:false,entry,output:{path:dir,filename:'bundle.js'},resolve:{alias:{'next/navigation':navigation,[path.join(root,'src/app/merchant/orders/actions.ts')]:actions,'@/app/merchant/orders/actions':actions,'@':path.join(root,'src')},extensions:['.tsx','.ts','.js'],modules:[path.join(root,'node_modules'),'node_modules']},module:{rules:[{test:/\.tsx?$/,exclude:/node_modules/,use:[loader]}]}}).run((error,stats)=>error?reject(error):stats.hasErrors()?reject(Error(stats.toString({all:false,errors:true}))):resolve()));
  execFileSync(path.join(root,'node_modules/.bin/tailwindcss'),['-c',path.join(root,'tailwind.config.ts'),'-i',path.join(root,'src/app/globals.css'),'-o',path.join(dir,'styles.css'),'--minify'],{stdio:'pipe'});
@@ -90,4 +90,20 @@ test('logout wins over an already pending session renewal response',async t=>{
  await page.getByRole('button',{name:'Log ud',exact:true}).click();await expect(page.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();
  state.holdRenewal=false;state.heldRenewal();assert.equal(state.valid.size,0);
  await page.goto(origin+'/terminal/orders');await expect(page.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();await expect(page.getByText('Syntetisk kunde',{exact:true})).toHaveCount(0);
+});
+
+// Same production components, real host-only HTTPS cookie, and explicit new route contract.
+test('Merchant app keeps login, persistence, renewal, revocation and logout on /mapp',async t=>{
+ state=newState();const first=await context(t),page=await first.newPage();
+ await page.goto(origin+'/mapp');await expect(page).toHaveURL(origin+'/mapp/login');
+ await page.getByLabel('Brugernavn',{exact:true}).fill('amager');await page.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await page.getByRole('button',{name:'Log ind',exact:true}).click();
+ await expect(page).toHaveURL(origin+'/mapp');await expect(page.getByRole('button',{name:'Åbn ordre ORD-PORTAL'})).toBeVisible();
+ assert.equal(await page.locator('a[href^="/merchant"],a[href^="/superadmin"],a[href^="/admin-login"]').count(),0);assert.equal(state.merchantCalls,0);assert.equal(state.badScope,false);
+ const stored=await first.storageState(),saved=stored.cookies.find(x=>x.name===cookie);assert.ok(saved);assert.equal(saved.httpOnly,true);assert.equal(saved.secure,true);assert.equal(saved.domain,'127.0.0.1');saved.expires=Date.now()/1000+180*86400;
+ const second=await context(t,stored),next=await second.newPage(),logins=state.loginCalls;await next.goto(origin+'/mapp');await expect(next.getByRole('button',{name:'Åbn ordre ORD-PORTAL'})).toBeVisible();await expect(next).toHaveURL(origin+'/mapp');assert.equal(state.loginCalls,logins);
+ await expect.poll(async()=>((await second.cookies()).find(x=>x.name===cookie)?.expires||0)).toBeGreaterThan(Date.now()/1000+399*86400);
+ state.valid.clear();await next.evaluate(()=>window.dispatchEvent(new Event('focus')));await expect(next).toHaveURL(origin+'/mapp/login');await expect(next.getByText('Syntetisk kunde',{exact:true})).toHaveCount(0);
+ await next.getByLabel('Brugernavn',{exact:true}).fill('amager');await next.getByLabel('Adgangskode',{exact:true}).fill('fixture-password');await next.getByRole('button',{name:'Log ind',exact:true}).click();await expect(next).toHaveURL(origin+'/mapp');await expect(next.getByRole('button',{name:'Log ud',exact:true})).toBeVisible();
+ await next.getByRole('button',{name:'Log ud',exact:true}).click();await expect(next).toHaveURL(origin+'/mapp/login');await expect(next.getByRole('heading',{name:'Log ind på ordreterminalen'})).toBeVisible();assert.equal((await second.cookies()).filter(x=>x.name===cookie).length,0);assert.equal(state.valid.size,0);
+ await next.goto(origin+'/mapp');await expect(next).toHaveURL(origin+'/mapp/login');assert.equal(state.merchantCalls,0);
 });

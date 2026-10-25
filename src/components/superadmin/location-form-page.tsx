@@ -1330,7 +1330,7 @@ export function LocationFormPage({
         </div>
       </form>
     </Form>
-    {location?.id && <LocationTerminalLogin key={location.id} locationId={location.id} locationName={location.name} />}
+    {location?.id && <LocationTerminalLogin key={location.id} locationId={location.id} locationName={location.name} brandSlug={brands.find(brand => brand.id === location.brandId)?.slug} />}
     </>
   );
 }
