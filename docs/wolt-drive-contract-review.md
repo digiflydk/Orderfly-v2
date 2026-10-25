@@ -47,3 +47,7 @@ Read-only review of the shared coordinator's local `src/lib/delivery/provider-co
 - Binding resolution needs enforceable active/environment/scope guarantees before credential access.
 
 The shared owner must publish the corrected TypeScript commit before adapters import it. No shared files were changed by this reviewer.
+
+## Accepted implementation interface
+
+Re-reviewed the published TypeScript contract at `04f9a512247ae03be0b855ef36ab753e57203c10`, blob `d2da8a2ec58375463aaa8b39957b5d95b6c3cab2`. It includes nullable occurrence/status, distinct dispatch time, pickup estimate provenance, operator cancellation reason and the active scoped environment binding envelope. Those review findings are resolved at the interface level. Wolt adapters may consume that version; shared storage behavior and full integration acceptance remain pending. The earlier sections preserve the review findings and their rationale, not outstanding schema requests.
