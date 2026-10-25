@@ -31,12 +31,22 @@ export function TerminalClient() {
   }, [scopeResolved, boardFeed.data?.selectedBrandId, boardFeed.data?.selectedLocationId]);
   const otherFeed = useTerminalFeed(query, view !== 'board' && scopeResolved);
   const feed = view === 'board' ? boardFeed : otherFeed;
-  const connectionError = feed.error || boardFeed.error;
+  const latestDenial = Math.max(boardFeed.deniedRevision, otherFeed.deniedRevision);
+  const authorizationPending = boardFeed.authorizedRevision <= latestDenial || feed.authorizedRevision <= latestDenial;
+  const denialMessage = boardFeed.deniedRevision >= otherFeed.deniedRevision ? boardFeed.denialMessage : otherFeed.denialMessage;
+  const connectionError = authorizationPending && latestDenial > 0 ? denialMessage : feed.error || boardFeed.error;
+  // A rejection invalidates selection as well as visibility. Restoring access
+  // must not reopen a customer detail the operator selected before rejection.
+  useEffect(() => { if (latestDenial > 0) setSelected(null); }, [latestDenial]);
+  useEffect(() => {
+    if (view !== 'board' && latestDenial > 0 && boardFeed.authorizedRevision > latestDenial && otherFeed.authorizedRevision <= latestDenial) {
+      otherFeed.refresh();
+    }
+  }, [view, latestDenial, boardFeed.authorizedRevision, otherFeed.authorizedRevision, otherFeed.refresh]);
   const disconnected = feed.offline || boardFeed.offline;
   const outdated = feed.stale || boardFeed.stale;
   const refresh = () => { feed.refresh(); if (view !== 'board') boardFeed.refresh(); };
-  const backgroundDenied = boardFeed.error.includes('adgang') || boardFeed.error.includes('Log ind');
-  const data = backgroundDenied ? null : feed.data;
+  const data = authorizationPending ? null : feed.data;
   const order = selected && data?.orders.find(row => row.id === selected.id);
   const selectedScope = data?.selectedBrandId && data.selectedLocationId ? `${data.selectedBrandId}/${data.selectedLocationId}` : '';
   const status = disconnected ? 'Offline' : outdated || connectionError ? 'Forbindelsen skal kontrolleres' : feed.loading ? 'Opdaterer…' : 'Forbundet';

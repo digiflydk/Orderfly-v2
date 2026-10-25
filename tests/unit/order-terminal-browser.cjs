@@ -72,6 +72,7 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
     if (url.pathname === '/api/merchant/orders/reprint') return route.fulfill({ status: 403, json: { error: 'forbidden' } });
     if (url.pathname !== '/api/merchant/orders') throw Error('Unexpected fixture endpoint ' + url.pathname);
     calls.push({ kind: 'read', query: Object.fromEntries(url.searchParams) });
+    if (state.historyReadStatus && url.searchParams.get('view') === 'history') return route.fulfill({status:state.historyReadStatus,json:{error:'terminal_unavailable'}});
     if (state.boardReadStatus && url.searchParams.get('view') === 'board') return route.fulfill({status:state.boardReadStatus,json:{error:'forbidden'}});
     if (state.readStatus !== 200) return route.fulfill({ status: state.readStatus, json: { error: state.readStatus === 401 ? 'unauthorized' : 'terminal_unavailable', message: 'Ordrene kunne ikke hentes.' } });
     if (state.initialRevoked && url.searchParams.get('brandId') === 'brand-a') return route.fulfill({status:403,json:{error:'forbidden'}});
@@ -79,8 +80,11 @@ async function fixture(t, width = 1024, height = 768, extra = {}) {
     let rows = state.orders.filter(o => o.locationId === locationId);
     rows = rows.filter(o => view === 'history' ? ['Completed','Delivered','Canceled'].includes(o.status) : view === 'preorders' ? o.fulfillmentAt > '2026-10-25T23:00:00.000Z' : !['Completed','Delivered','Canceled'].includes(o.status) && o.fulfillmentAt < '2026-10-25T23:00:00.000Z');
     const hasMore = state.emptyPage && !url.searchParams.has('cursor');
-    return route.fulfill({ json: { orders: hasMore ? [] : rows, locations, selectedBrandId: scope.brandId, selectedLocationId: scope.locationId, canEdit: state.canEdit, serverTime: now, hasMore, nextCursor: hasMore ? 'fixture-next' : null } });
+    const result = { orders: hasMore ? [] : rows, locations, selectedBrandId: scope.brandId, selectedLocationId: scope.locationId, canEdit: state.canEdit, serverTime: now, hasMore, nextCursor: hasMore ? 'fixture-next' : null };
+    if (state.holdHistory && view === 'history') { state.heldHistory = {route,result}; return; }
+    return route.fulfill({ json: result });
   });
+  if (state.fakeClock) await page.clock.install({time:new Date(now)});
   await page.goto(origin); await expect(page.getByRole('button', { name: 'Opdater', exact: true })).toBeVisible();
   return { page, state, calls, errors };
 }
@@ -239,4 +243,61 @@ test('native fullscreen includes the actual Radix order dialog and its controls'
   await page.evaluate(()=>document.exitFullscreen());
   await expect.poll(()=>page.evaluate(()=>document.fullscreenElement===null)).toBe(true);
   await expect(dialog).toBeVisible(); assert.deepEqual(errors,[]);
+});
+test('background denial remains latched across transient failures until authorization succeeds', async t => {
+  const { page, state, calls } = await fixture(t,1024,768,{fakeClock:true});
+  await expect(page.getByRole('button',{name:'Opdater',exact:true})).toBeEnabled();
+  await page.getByRole('button',{name:'Historik',exact:true}).click();
+  await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();
+  await page.getByRole('button',{name:'Vis ordre ORD-HISTORY',exact:true}).click();
+  await expect(page.getByRole('dialog')).toContainText('Syntetisk kunde');
+  const historyReads=calls.filter(c=>c.kind==='read'&&c.query.view==='history').length;
+  state.boardReadStatus=403;
+  await page.clock.fastForward(15001);
+  await expect(page.getByRole('alert').first()).toContainText('adgang');
+  await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  state.boardReadStatus=503;
+  const transient = page.waitForResponse(response => response.url().includes('/api/merchant/orders?') && response.status() === 503);
+  await page.clock.fastForward(15001);
+  await (await transient).finished();
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  await expect(page.getByRole('alert').first()).toContainText('adgang');
+  await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
+  assert.equal(calls.filter(c=>c.kind==='read'&&c.query.view==='history').length,historyReads,'transient board failure must not reveal cached history');
+  // Only a new successful authorization/read can recover the terminal.
+  state.boardReadStatus=0;
+  await page.getByRole('button',{name:'Opdater',exact:true}).click();
+  await expect(page.getByRole('alert')).toHaveCount(0);
+  await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+  assert.ok(calls.filter(c=>c.kind==='read'&&c.query.view==='history').length>historyReads,'recovery must re-read history');
+});
+test('a history read started before denial cannot authorize cached data after board recovery', async t => {
+  const {page,state,calls}=await fixture(t,1024,768,{fakeClock:true});
+  await expect(page.getByRole('button',{name:'Opdater',exact:true})).toBeEnabled();
+  await page.getByRole('button',{name:'Historik',exact:true}).click();
+  await expect(page.getByText('ORD-HISTORY',{exact:true}).first()).toBeVisible();
+  state.holdHistory=true; state.boardReadStatus=403;
+  await page.getByRole('button',{name:'Opdater',exact:true}).click();
+  await expect.poll(()=>!!state.heldHistory).toBe(true);
+  await expect(page.getByRole('alert').first()).toContainText('adgang');
+  await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
+  await page.evaluate(()=>{
+    window.__piiReturned=false;
+    new MutationObserver(()=>{if(document.body.textContent.includes('ORD-HISTORY'))window.__piiReturned=true;}).observe(document.body,{childList:true,subtree:true,characterData:true});
+  });
+  state.boardReadStatus=0;
+  const boardSuccess=page.waitForResponse(response=>new URL(response.url()).searchParams.get('view')==='board'&&response.status()===200);
+  await page.evaluate(()=>window.dispatchEvent(new Event('focus'))); await (await boardSuccess).finished();
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  state.holdHistory=false; state.historyReadStatus=503;
+  const historyFailure=page.waitForResponse(response=>new URL(response.url()).searchParams.get('view')==='history'&&response.status()===503);
+  await state.heldHistory.route.fulfill({json:state.heldHistory.result});
+  await (await historyFailure).finished();
+  await page.evaluate(()=>new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve))));
+  await expect(page.getByText('ORD-HISTORY',{exact:true})).toHaveCount(0);
+  assert.equal(await page.evaluate(()=>window.__piiReturned),false,'old in-flight success must never restore historical PII');
+  assert.ok(calls.filter(c=>c.kind==='read'&&c.query.view==='history').length>=3,'history requires a new post-denial read');
 });

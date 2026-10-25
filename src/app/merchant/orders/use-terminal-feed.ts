@@ -4,11 +4,18 @@ import type { TerminalQuery, TerminalReadResult } from '@/lib/orders/terminal-ty
 
 const POLL_MS = 15_000;
 const TIMEOUT_MS = 12_000;
+// Shared by this page's feed instances; unlike message text this records the
+// ordering of authorization evidence across foreground and background reads.
+let authorizationRevision = 0;
+let latestAuthorizationDenial = 0;
 export function useTerminalFeed(query: TerminalQuery, enabled = true) {
   const key = new URLSearchParams(Object.entries(query).filter(([, value]) => value !== undefined && value !== '') as [string, string][]).toString();
   const [data, setData] = useState<TerminalReadResult | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [deniedRevision, setDeniedRevision] = useState(0);
+  const [authorizedRevision, setAuthorizedRevision] = useState(0);
+  const [denialMessage, setDenialMessage] = useState('');
   const [lastUpdated, setLastUpdated] = useState<number | null>(null);
   const [offline, setOffline] = useState(false);
   const [newOrders, setNewOrders] = useState(0);
@@ -53,6 +60,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true) {
     const current = ++generation.current;
     active.current?.abort(); active.current = null;
     seen.current = null; nextCursor.current = null;
+    setAuthorizedRevision(0);
     setData(null); setLastUpdated(null); setNewOrders(0); setError('');
     if (!enabled) { setLoading(false); run.current = async () => {}; return; }
     let pendingRefresh = false;
@@ -66,6 +74,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true) {
       if (active.current) { if (!append) pendingRefresh = true; return; }
       if (!navigator.onLine) { setOffline(true); setLoading(false); schedule(); return; }
       const controller = new AbortController(); active.current = controller;
+      const startedAfterDenial = latestAuthorizationDenial;
       let timeout: ReturnType<typeof setTimeout> | undefined;
       setLoading(true);
       try {
@@ -83,7 +92,12 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true) {
           timeout = setTimeout(() => controller.abort(), TIMEOUT_MS);
           const response = await fetch(`/api/merchant/orders?${params}`, { cache: 'no-store', credentials: 'same-origin', signal: controller.signal });
           if (disposed || generation.current !== current) return;
-          if (response.status === 401 || response.status === 403) { setData(null); nextCursor.current = null; setLastUpdated(null); }
+          if (response.status === 401 || response.status === 403) {
+            latestAuthorizationDenial = ++authorizationRevision;
+            setDeniedRevision(latestAuthorizationDenial); setAuthorizedRevision(0);
+            setDenialMessage(response.status === 401 ? 'Din session er udløbet. Log ind igen.' : 'Du har ikke adgang til disse ordrer.');
+            setData(null); nextCursor.current = null; setLastUpdated(null);
+          }
           if (!response.ok) throw new Error(response.status === 401 ? 'Din session er udløbet. Log ind igen.' : response.status === 403 ? 'Du har ikke adgang til disse ordrer.' : 'Ordrerne kunne ikke opdateres. Prøv igen.');
           result = await response.json() as TerminalReadResult;
           clearTimeout(timeout);
@@ -97,6 +111,9 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true) {
           }
         } while (board && cursor && !disposed);
         if (disposed || generation.current !== current) return;
+        // A response started before another feed rejected access is not fresh
+        // authorization evidence merely because it happened to finish later.
+        if (startedAfterDenial !== latestAuthorizationDenial) { pendingRefresh = true; return; }
         if (board) {
           const received = [...collected.values()].filter(order => order.status === 'Received');
           if (seen.current) {
@@ -108,6 +125,7 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true) {
         }
         nextCursor.current = result.nextCursor;
         setData(previous => append && !board && previous ? { ...result, orders: [...new Map([...previous.orders, ...result.orders].map(order => [order.id, order])).values()] } : { ...result, orders: [...collected.values()] });
+        setAuthorizedRevision(++authorizationRevision);
         setLastUpdated(Date.now()); setOffline(false); setError('');
       } catch (failure) {
         if (disposed || generation.current !== current) return;
@@ -139,5 +157,5 @@ export function useTerminalFeed(query: TerminalQuery, enabled = true) {
   }, [key, beep, enabled]);
   const stale = lastUpdated !== null && (Date.now() - lastUpdated > 45_000 || offline || !!error);
   void tick;
-  return { data, loading, error, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound };
+  return { data, loading, error, deniedRevision, authorizedRevision, denialMessage, lastUpdated, offline, stale, newOrders, sound, soundError, refresh, loadMore, clearNewOrders, toggleSound };
 }
