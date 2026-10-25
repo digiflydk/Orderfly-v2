@@ -40,6 +40,7 @@ export function canNavigate(href: string, access?: NavigationAccess | null): boo
   if (!access) return false;
   if (href === '/merchant/receipts' || href.startsWith('/merchant/receipts/')) return false;
   if (href === '/superadmin/receipts' || href.startsWith('/superadmin/receipts/')) return access.superuser;
+  if (href === '/superadmin/print-log' || href.startsWith('/superadmin/print-log/')) return access.superuser;
   if (href === '/merchant/printers' || href.startsWith('/merchant/printers/')) return false;
   if (href === '/superadmin/printers' || href.startsWith('/superadmin/printers/')) return access.superuser;
   if (href === '/merchant/redeem') return access.superuser || access.permissions.includes('orderfly.games:view');
