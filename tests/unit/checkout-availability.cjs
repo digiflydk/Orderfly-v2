@@ -73,10 +73,12 @@ test('email effect coalesces typing, rejects incomplete email and ignores stale 
   const source=fs.readFileSync('src/components/checkout/checkout-client.tsx','utf8');
   const start=source.indexOf('    let cancelled = false;',source.indexOf('const newsletterEmail'));
   const end=source.indexOf('\n  }, [',start);
-  const effect = new Function('newsletterEmail','brand','location','deliveryType','subtotal','setNewsletterOffer','getNewsletterSignupDiscountAction','setTimeout','clearTimeout','z','cartItems','isLockedItem','lineMoney','sumMoney','itemDiscount',source.slice(start,end));
+  const effect = new Function('newsletterEmail','brand','location','deliveryType','subtotal','setNewsletterOffer','getNewsletterSignupDiscountAction','setTimeout','clearTimeout','z','cartItems','isLockedItem','lineMoney','sumMoney','itemDiscount','signupConfig',source.slice(start,end));
   const timers=new Map(); let id=0,calls=0,offer,resolve;
-  const run=email=>effect(email,{id:'b'},{id:'l'},'pickup',100,v=>offer=v,()=>{calls++;return new Promise(r=>resolve=r);},(fn,delay)=>{assert.equal(delay,500);timers.set(++id,fn);return id;},key=>timers.delete(key),require('zod').z,[],()=>false,()=>0,values=>values.reduce((sum,value)=>sum+value,0),0);
+  const run=(email,signupConfig={mode:'newsletter'})=>effect(email,{id:'b'},{id:'l'},'pickup',100,v=>offer=v,()=>{calls++;return new Promise(r=>resolve=r);},(fn,delay)=>{assert.equal(delay,500);timers.set(++id,fn);return id;},key=>timers.delete(key),require('zod').z,[],()=>false,()=>0,values=>values.reduce((sum,value)=>sum+value,0),0,signupConfig);
   assert.equal(run('a@'),undefined); assert.equal(timers.size,0);
+  assert.equal(run('card@example.com',{mode:'none',clubSignupSuppressed:true}),undefined);
+  assert.equal(timers.size,0);assert.equal(calls,0);assert.equal(offer,null);
   let cleanup;
   for(const email of ['a@e.co','a@ex.co','a@example.com']) {cleanup?.();cleanup=run(email);}
   assert.equal(calls,0);assert.equal(timers.size,1);
