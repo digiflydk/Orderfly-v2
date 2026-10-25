@@ -107,3 +107,35 @@ test('native entitlement read errors retain identity and are never classified as
  db.rows.get('discountCardGroups/g').version++;
  await assert.rejects(api.assertDiscountCardCheckoutCurrent(db,input,snapshot),error=>error.code==='discount_card_changed');
 });
+
+test('#596 signup config hides Club for authenticated usable card before contact email input',async()=>{
+ const f=await checkout({createOnly:true,seed:[...seed(),['loyaltyCampaigns/b',{brandId:'b',settings:{checkoutMode:'club'}}]],loyaltyToken:token});
+ assert.deepEqual(await f.actions.getCheckoutSignupAction('b','l'),{mode:'none',clubSignupSuppressed:true});
+});
+for(const [label,change] of [
+ ['default-off',rows=>rows.delete('discountCardFeatures/b')],
+ ['disabled',rows=>rows.get('discountCardFeatures/b').enabled=false],
+ ['expired',rows=>rows.get('discountCardAssignments/'+aid).expiresAt=now-1],
+ ['blocked',rows=>rows.get('discountCardAssignments/'+aid).status='blocked'],
+ ['wrong-location',rows=>rows.get('discountCardFeatures/b').locationScope={mode:'selected',locationIds:['other']}],
+ ['revoked-session',rows=>rows.get('loyaltySessions/'+hashKey('session',token)).revokedAt=now],
+])test('#596 configured Club signup remains for '+label+' card',async()=>{
+ const rows=new Map(seed());change(rows);
+ const f=await checkout({createOnly:true,seed:[...rows,['loyaltyCampaigns/b',{brandId:'b',settings:{checkoutMode:'club'}}]],loyaltyToken:token});
+ const config=await f.actions.getCheckoutSignupAction('b','l');assert.equal(config.mode,'club');assert.equal(config.clubProgram.name,'Fixture Club');assert.equal(config.clubSignupSuppressed,undefined);
+});
+test('#596 email without session does not suppress configured Club signup',async()=>{
+ const f=await checkout({createOnly:true,seed:[...seed(),['loyaltyCampaigns/b',{brandId:'b',settings:{checkoutMode:'club'}}]]});
+ assert.equal((await f.actions.getCheckoutSignupAction('b','l')).mode,'club');
+});
+test('#596 stale Club opt-in from active cardholder rejected before signup, consent, order or payment',async()=>{
+ const f=await checkout({kind:'club',seed:seed(),loyaltyToken:token,expectedCartDiscount:25,paymentOverrides:{cartDiscountTotal:25,discountTotal:25}});
+ assert.equal(f.result.success,false);assert.match(f.result.error,/aktivt rabatkort/);assert.deepEqual(f.writes,[]);
+ for(const event of ['club-preflight','club-signup','newsletter-consent','reserve','stripe'])assert.equal(f.events.includes(event),false);
+});
+
+test('#596 typed alternative identity cannot bypass session-bound Club suppression',async()=>{
+ const f=await checkout({kind:'club',seed:seed(),loyaltyToken:token,customerOverrides:{email:'other@example.test',phone:'87654321'},paymentOverrides:{cartDiscountTotal:10,discountTotal:10}});
+ assert.equal(f.result.success,false);assert.match(f.result.error,/aktivt rabatkort/);assert.deepEqual(f.writes,[]);
+ for(const event of ['club-preflight','club-signup','newsletter-consent','reserve','stripe'])assert.equal(f.events.includes(event),false);
+});

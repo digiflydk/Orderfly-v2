@@ -423,25 +423,27 @@ function CheckoutForm({ location }: { location: Location }) {
   const newsletterOptIn = form.watch('subscribeToNewsletter');
   const clubTermsAccepted = form.watch('clubTermsAccepted');
   const useClubDiscount = form.watch('useClubDiscount');
-  const personalClubOffer = newsletterOffer?.applicationType === 'club_signup' && newsletterOffer.requiresSignup === false;
+  const personalClubOffer = !signupConfig.clubSignupSuppressed && newsletterOffer?.applicationType === 'club_signup' && newsletterOffer.requiresSignup === false;
   const clubSignupShown = signupConfig.mode === 'club' && !!signupConfig.clubProgram && !personalClubOffer;
   const newsletterSelected = personalClubOffer ? useClubDiscount : clubSignupShown ? newsletterOptIn && clubTermsAccepted : signupConfig.mode === 'newsletter' && newsletterOptIn;
   useEffect(() => {
     let current = true;
-    if (!brand?.id) { setSignupConfig({mode:'none'}); return; }
-    const refresh = () => { void getCheckoutSignupAction(brand.id).then(config => {
-      if (!current) return;
+    let requestVersion = 0;
+    setSignupConfig({mode:'none'});
+    if (!brand?.id || !location?.id) return;
+    const refresh = () => { const request = ++requestVersion; void getCheckoutSignupAction(brand.id,location.id).then(config => {
+      if (!current || request !== requestVersion) return;
       const previous = signupConfigRef.current;
-        if (previous.mode !== config.mode || previous.clubProgram?.consentVersion !== config.clubProgram?.consentVersion || previous.clubProgram?.termsVersion !== config.clubProgram?.termsVersion || previous.clubProgram?.campaignVersion !== config.clubProgram?.campaignVersion) {
+        if (previous.clubSignupSuppressed !== config.clubSignupSuppressed || previous.mode !== config.mode || previous.clubProgram?.consentVersion !== config.clubProgram?.consentVersion || previous.clubProgram?.termsVersion !== config.clubProgram?.termsVersion || previous.clubProgram?.campaignVersion !== config.clubProgram?.campaignVersion) {
           form.setValue('subscribeToNewsletter', false); form.setValue('clubTermsAccepted', false); form.setValue('useClubDiscount', false);
           setNewsletterOffer(null);
         }
         signupConfigRef.current = config;
         setSignupConfig(config);
-    }).catch(() => { if (current) setSignupConfig({mode:'none'}); }); };
+    }).catch(() => { if (current && request === requestVersion) setSignupConfig({mode:'none'}); }); };
     refresh(); window.addEventListener('focus', refresh);
     return () => { current = false; window.removeEventListener('focus', refresh); };
-  }, [brand?.id, form]);
+  }, [brand?.id, location?.id, form]);
   const newsletterEmail = form.watch('email');
   useEffect(() => {
     let current = true;
@@ -487,7 +489,7 @@ function CheckoutForm({ location }: { location: Location }) {
   useEffect(() => {
     let cancelled = false;
     setNewsletterOffer(null);
-    if (!brand || !location || !deliveryType || !z.string().email().safeParse(newsletterEmail.trim()).success) {
+    if (signupConfig.clubSignupSuppressed || !brand || !location || !deliveryType || !z.string().email().safeParse(newsletterEmail.trim()).success) {
       setNewsletterOffer(null);
       return;
     }
@@ -509,7 +511,7 @@ function CheckoutForm({ location }: { location: Location }) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [brand, location, subtotal, deliveryType, newsletterEmail, standardDiscounts, cartItems, itemDiscount, signupConfig.mode, signupConfig.clubProgram?.consentVersion, signupConfig.clubProgram?.termsVersion, signupConfig.clubProgram?.campaignVersion]);
+  }, [brand, location, subtotal, deliveryType, newsletterEmail, standardDiscounts, cartItems, itemDiscount, signupConfig.clubSignupSuppressed, signupConfig.mode, signupConfig.clubProgram?.consentVersion, signupConfig.clubProgram?.termsVersion, signupConfig.clubProgram?.campaignVersion]);
 
   useEffect(() => {
     if (
@@ -654,11 +656,13 @@ function CheckoutForm({ location }: { location: Location }) {
       }
       // The server receives an explicit consent boolean and stable retry identity.
       const currentAnalyticsSession = statisticsAllowed() ? Cookies.get(`orderfly_session_id_${brand.id}`) : undefined;
+      // Hidden Club fields must never survive a previous opt-in or refetch.
+      const {clubTermsAccepted: _clubTerms, useClubDiscount: _clubDiscount, ...contactValues} = formValues;
       const customerInfo: CustomerInfo = {
-        ...formValues,
+        ...contactValues,
         paymentMethod: paymentMethod || 'online',
         subscribeToNewsletter: newsletterConsent,
-        ...(joiningClub && signupConfig.clubProgram ? {subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:signupConfig.clubProgram.consentVersion,clubTermsVersion:signupConfig.clubProgram.termsVersion,clubCampaignVersion:signupConfig.clubProgram.campaignVersion} : {subscribeToClub:false}),
+        ...(joiningClub && signupConfig.clubProgram ? {subscribeToClub:true,clubTermsAccepted:true,clubConsentVersion:signupConfig.clubProgram.consentVersion,clubTermsVersion:signupConfig.clubProgram.termsVersion,clubCampaignVersion:signupConfig.clubProgram.campaignVersion} : signupConfig.clubSignupSuppressed ? {} : {subscribeToClub:false}),
         ...(newsletterConsent && !joiningClub && consentAttempt.current ? {newsletterConsentId:consentAttempt.current.id,newsletterConsentVersion:NEWSLETTER_CONSENT_VERSION}:{}),
         ...(statisticsAllowed() && currentAnalyticsSession ? {analyticsSessionId: currentAnalyticsSession, analyticsConsent: true, analyticsDevice: window.innerWidth < 768 ? 'mobile' as const : 'desktop' as const, ...(analyticsAttribution ? { analyticsAttribution } : {})} : {})
       };

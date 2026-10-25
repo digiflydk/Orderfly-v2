@@ -60,6 +60,7 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
    validateClubCheckoutSignup:async input=>{events.push('club-preflight');assert.equal(input.newsletterConsent,true);assert.equal(input.termsAccepted,true);return{eligible:fault!=='club-ineligible'};},
    prepareClubCheckoutSignup:async input=>{events.push('club-signup');if(fault==='club-signup')throw Error('Club signup unavailable');const row=[...records].find(([key,data])=>key.startsWith('customers/')&&data.brandId===input.brandId&&customerIdentity.customerHasEmail(data,input.email));assert.ok(row,'canonical checkout customer exists before Club signup');if(input.discountId)records.set(row[0],{...row[1],pendingClubDiscountId:input.discountId});return{customerId:row[1].id};},
   },
+  '@/lib/loyalty/stamp-card/membership':{resolveBrand:async()=>({brandId:'b'}),programForPortal:async()=>({active:true,name:'Fixture Club',consentText:'Consent',consentHelp:'Help',termsAccept:'Terms',consentVersion:'v1',termsVersion:'v1'})},
   '@/lib/marketing/config':{marketingConfig:brandId=>marketingConfigured && brandId==='b'?{brandId:'b'}:null},
   'node:crypto':require('node:crypto'),
   '@/lib/firebase-admin':{getAdminDb:()=>marketingDb},
