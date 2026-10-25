@@ -714,7 +714,7 @@ for(const width of [375,1440]) test(`simple enrollment creates once, reveals/cop
  await page.route('**/api/merchant/printers?*',route=>route.fulfill({json:{items:[],nextCursor:null}}));
  await page.route('**/api/superadmin/printers/connections',async route=>{const c=route.request().postDataJSON();commands.push(c);await route.fulfill({status:201,json:{item:{configuration:{...c,id:'prn_test',state:'active',transport:'cloudprnt-http'},revision:1},username:'orderfly',secret:'a'.repeat(43)}})});
  await page.route('https://setup.test/**',async route=>{const url=new URL(route.request().url());if(url.pathname.startsWith('/api/'))return route.fallback();const res=await fetch(origin+url.pathname+url.search);await route.fulfill({status:200,headers:{'content-type':res.headers.get('content-type')},body:Buffer.from(await res.arrayBuffer())})});
- await page.goto('https://setup.test/?writes');await expect(page.getByRole('table')).toHaveCount(0);await beginConnection(page);
+ await page.goto('https://setup.test/?writes');await expect(page.getByRole('table', { name: 'Printere', exact: true })).toBeVisible();await beginConnection(page);
  await expect(page.getByLabel('Printer-ID',{exact:true})).toHaveCount(0);await expect(page.getByLabel('Printermærke')).toHaveValue('star');
  await page.getByRole('button',{name:'Opret',exact:true}).click();await expect(page.getByRole('heading',{name:'Køkken ny er oprettet'})).toBeVisible();
  assert.equal(commands.length,1);assert.deepEqual(commands[0],{brandId:'a',locationId:'la',name:'Køkken ny',description:'Pizzastation',manufacturer:'star',model:'mc-print3',paperWidthMm:80});
@@ -736,6 +736,54 @@ test('simple enrollment locks pending and unknown outcomes, hides secrets after 
 test('simple overview shows authenticated contact independent of activation, and expires stale status',async t=>{
  const context=await browser.newContext();t.after(()=>context.close());const page=await context.newPage();const now=Date.now();
  await page.route('**/api/merchant/printers?*',r=>r.fulfill({json:{items:[{...item('online'),connection:{connected:true,lastSeenAt:now-85000,checkedAt:now,endpoint:'test'}},{...item('never','a','la',{state:'active'}),connection:{connected:false,lastSeenAt:null,checkedAt:now,endpoint:null}}],nextCursor:null}}));
- await page.clock.install({time:now});await page.goto(origin);await choose(page);await expect(page.getByText('Forbundet',{exact:true})).toHaveCount(1);await expect(page.getByText('Ikke forbundet',{exact:true})).toHaveCount(1);await expect(page.getByText('Seneste kontakt: Ingen kontakt registreret')).toBeVisible();
+ await page.clock.install({time:now});await page.goto(origin);await choose(page);await expect(page.getByText('Forbundet',{exact:true})).toHaveCount(1);await expect(page.getByText('Ikke forbundet',{exact:true})).toHaveCount(1);await expect(page.getByRole('row').filter({hasText:'Køkken never'}).getByRole('cell',{name:'Ingen kontakt registreret',exact:true})).toBeVisible();
  await page.clock.fastForward(20000);await expect(page.getByText('Forbundet',{exact:true})).toHaveCount(0);await expect(page.getByText('Ikke forbundet',{exact:true})).toHaveCount(2);
 });
+
+for (const [name, width, height] of [['desktop', 1440, 900], ['mobile', 375, 812]]) {
+  test(`default printer table preserves status, filters and separate action links at ${name} width`, async t => {
+    const context = await browser.newContext({ viewport: { width, height } }); t.after(() => context.close());
+    const page = await context.newPage(), requests = [], errors = [];
+    page.on('pageerror', error => errors.push(error.message));
+    await page.route('**/api/merchant/printers?*', async route => {
+      const request = route.request(), url = new URL(request.url()), brandId = url.searchParams.get('brandId'), locationId = url.searchParams.get('locationId');
+      requests.push({ method: request.method(), brandId, locationId });
+      const connected = { connected:true,lastSeenAt:Date.now(),checkedAt:Date.now(),endpoint:'live' };
+      const rows = brandId === 'a' ? [
+        { ...item('active','a','la',{state:'active',name:'Køkken aktiv'}), connection:connected },
+        item('disabled','a','la',{state:'disabled',name:'Køkken slukket'}),
+      ] : [item('readonly','b','lb',{name:'Andet brand'})];
+      await route.fulfill({json:{items:rows,nextCursor:null,totalPrinters:rows.length}});
+    });
+    await page.goto(origin + '/shell?writes');
+    const table=page.getByRole('table',{name:'Printere',exact:true});
+    await expect(table).toBeVisible();
+    await expect(page.getByRole('columnheader')).toHaveText(['Printer','Brand','Lokation','Model','Status','Seneste kontakt','Handlinger']);
+    await expect(page.getByText('Køkken aktiv',{exact:true})).toBeVisible();
+    const active=page.getByRole('row').filter({hasText:'Køkken aktiv'}), disabled=page.getByRole('row').filter({hasText:'Køkken slukket'}), readonly=page.getByRole('row').filter({hasText:'Andet brand'});
+    await expect(active.getByText('Forbundet',{exact:true})).toBeVisible();
+    await expect(active.getByText('Aktiveret',{exact:true})).toBeVisible();
+    await expect(active.getByText('Live URL',{exact:true})).toBeVisible();
+    for(const action of ['Edit','Deactivate','Delete']) {
+      await expect(active.getByRole('link',{name:`${action} Køkken aktiv`,exact:true})).toHaveAttribute('href',`/superadmin/printers/a/la/active/${action.toLowerCase()}`);
+      await expect(readonly.getByRole('button',{name:`${action} Andet brand`,exact:true})).toBeDisabled();
+      await expect(readonly.getByRole('link',{name:`${action} Andet brand`,exact:true})).toHaveCount(0);
+    }
+    await expect(disabled.getByRole('button',{name:'Deactivate Køkken slukket',exact:true})).toBeDisabled();
+    await expect(disabled.getByRole('link',{name:'Edit Køkken slukket',exact:true})).toHaveAttribute('href','/superadmin/printers/a/la/disabled/edit');
+    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth+1),false);
+    await page.screenshot({path:`/tmp/printer-table-${name}.png`,fullPage:true});
+    await page.getByRole('combobox').nth(0).selectOption('a');
+    await expect(page.getByText('Andet brand',{exact:true})).toHaveCount(0);
+    await expect(page.getByText('Køkken aktiv',{exact:true})).toBeVisible();
+    const count=requests.length; await page.getByRole('button',{name:'Opdater',exact:true}).click();
+    await expect.poll(()=>requests.length).toBeGreaterThan(count);
+    await expect(active.getByRole('link',{name:'Edit Køkken aktiv',exact:true})).toBeVisible();
+    await page.evaluate(()=>window.setPrinterWriteScopes([]));
+    await expect(active.getByRole('link',{name:'Edit Køkken aktiv',exact:true})).toHaveCount(0);
+    await expect(active.getByRole('button',{name:'Edit Køkken aktiv',exact:true})).toBeDisabled();
+    await expect(active.getByRole('button',{name:'Forbindelsesoplysninger',exact:true})).toBeDisabled();
+    assert.ok(requests.every(request=>request.method==='GET'));
+    assert.deepEqual(errors,[]);
+  });
+}
