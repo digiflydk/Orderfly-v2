@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { orderflySession } from '@/lib/access/orderfly-session';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
+import { getOrderTerminalActor, authorizeOrderTerminalTransaction } from '@/lib/terminal-auth/access';
 import { AuthorityError } from '@/lib/access/authority';
 import { storedPrinterSchema } from './storage';
 import { credentialSchema } from './device-credential-schema';
@@ -12,12 +13,14 @@ import { ManualPrintError } from './manual-print-schema';
 const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
 export const merchantPrinterListSchema = z.object({ orderId: id, brandId: id, locationId: id, after: id.optional() }).strict();
 /** Order permission grants only a minimal printer picker, never printer administration. */
-export async function listMerchantReprintPrinters(input: unknown) {
+export async function listMerchantReprintPrinters(input: unknown, terminal = false) {
   const parsed = merchantPrinterListSchema.safeParse(input);
   if (!parsed.success) throw new ManualPrintError('manual_print_invalid');
-  const s = parsed.data, session = await orderflySession(), db = getAdminDb();
+  const s = parsed.data, actor = terminal ? await getOrderTerminalActor('terminal') : null;
+  const session = actor ? null : await orderflySession(), db = getAdminDb();
   return db.runTransaction(async tx => {
-    await authorizeTransaction(tx, session.identity, s, 'orderfly.orders:edit', 'location');
+    if (actor) await authorizeOrderTerminalTransaction(tx, actor, s);
+    else await authorizeTransaction(tx, session!.identity, s, 'orderfly.orders:edit', 'location');
     const [order, brand, location] = await Promise.all([
       tx.get(db.collection('orders').doc(s.orderId)), tx.get(db.collection('brands').doc(s.brandId)), tx.get(db.collection('locations').doc(s.locationId)),
     ]);

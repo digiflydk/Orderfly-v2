@@ -4,6 +4,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { requirePlatformSuperuser, orderflySession } from '@/lib/access/orderfly-session';
 import { AuthorityError, principalKey, type VerifiedIdentity } from '@/lib/access/authority';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
+import { getOrderTerminalActor, authorizeOrderTerminalTransaction, type OrderTerminalActor } from '@/lib/terminal-auth/access';
 import { isSuperuser, policySchema } from '@/lib/access/policy';
 import { storedPrinterSchema } from './storage';
 import { credentialSchema } from './device-credential-schema';
@@ -24,13 +25,16 @@ function nativeScope(snapshot: FirebaseFirestore.DocumentSnapshot, expected: str
     && ['deleted', 'isDeleted', 'isTestData'].every(key => value[key] === undefined || value[key] === false)
     && (value.deletedAt === undefined || value.deletedAt === null) && (value.isActive === undefined || value.isActive === true);
 }
-async function scope(tx: FirebaseFirestore.Transaction, identity: VerifiedIdentity, a: ManualPrintCommand, merchant = false) {
-  const db = getAdminDb(), actorId = principalKey(identity);
+async function scope(tx: FirebaseFirestore.Transaction, identity: VerifiedIdentity | null, a: ManualPrintCommand, merchant = false, terminalActor: OrderTerminalActor | null = null) {
+  const db = getAdminDb(), actorId = terminalActor?.actorId ?? principalKey(identity!);
   if (!merchant) {
     const access = policySchema.safeParse((await tx.get(db.collection('platformAdminControl').doc('access-v1'))).data());
     if (!access.success || !isSuperuser(access.data, actorId)) throw new AuthorityError('forbidden');
   }
-  await authorizeTransaction(tx, identity, a, 'orderfly.orders:edit', 'location');
+  if (terminalActor) {
+    if (!merchant || terminalActor.kind !== 'terminal') throw new AuthorityError('forbidden');
+    await authorizeOrderTerminalTransaction(tx, terminalActor, a);
+  } else await authorizeTransaction(tx, identity!, a, 'orderfly.orders:edit', 'location');
   const printerRef = db.collection('locations').doc(a.locationId).collection('printers').doc(a.printerId);
   const [brand, location, order, printer, credential, saved] = await Promise.all([
     tx.get(db.collection('brands').doc(a.brandId)), tx.get(db.collection('locations').doc(a.locationId)),
@@ -60,24 +64,26 @@ async function scope(tx: FirebaseFirestore.Transaction, identity: VerifiedIdenti
   return { printerRef, actorId, prior, credentialRevision: c.data.credentialRevision,
     orderFingerprint: sha256(JSON.stringify([order.updateTime?.toMillis() ?? null, o])), configurationFingerprint: sha256(JSON.stringify(p.data.configuration)) };
 }
-async function read(input: unknown, merchant: boolean) {
-  const session = await (merchant ? orderflySession() : requirePlatformSuperuser()), parsed = manualPrintCommandSchema.safeParse(input);
+async function read(input: unknown, merchant: boolean, terminal = false) {
+  const terminalActor = terminal ? await getOrderTerminalActor('terminal') : null;
+  const session = terminalActor ? null : await (merchant ? orderflySession() : requirePlatformSuperuser()), parsed = manualPrintCommandSchema.safeParse(input);
   if (!parsed.success) throw new ManualPrintError('manual_print_invalid');
   const db = getAdminDb();
   return db.runTransaction(async tx => {
-    const found = await scope(tx, session.identity, parsed.data, merchant);
+    const found = await scope(tx, session?.identity ?? null, parsed.data, merchant, terminalActor);
     if (!found.prior) return conflict();
     return projectManualPrint(found.prior);
   });
 }
 /** Explicit new copy, never an original replay. Rendering is outside the retrying
  * Firestore transaction; native order/printer/credential authority is checked again. */
-async function request(input: unknown, merchant: boolean) {
-  const session = await (merchant ? orderflySession() : requirePlatformSuperuser()), parsed = manualPrintCommandSchema.safeParse(input);
+async function request(input: unknown, merchant: boolean, terminal = false) {
+  const terminalActor = terminal ? await getOrderTerminalActor('terminal') : null;
+  const session = terminalActor ? null : await (merchant ? orderflySession() : requirePlatformSuperuser()), parsed = manualPrintCommandSchema.safeParse(input);
   if (!parsed.success) throw new ManualPrintError('manual_print_invalid');
   gates();
   const a = parsed.data, db = getAdminDb();
-  const before = await db.runTransaction(tx => scope(tx, session.identity, a, merchant));
+  const before = await db.runTransaction(tx => scope(tx, session?.identity ?? null, a, merchant, terminalActor));
   if (before.prior) return projectManualPrint(before.prior);
   const content = await prepareReceiptPrintContent({ orderId: a.orderId, brandId: a.brandId,
     locationId: a.locationId, printerId: a.printerId, kind: a.kind });
@@ -86,7 +92,7 @@ async function request(input: unknown, merchant: boolean) {
     || content.sha256 !== sha256(content.payload)) throw new ManualPrintError('manual_print_unavailable');
   return db.runTransaction(async tx => {
     gates();
-    const current = await scope(tx, session.identity, a, merchant);
+    const current = await scope(tx, session?.identity ?? null, a, merchant, terminalActor);
     if (current.prior) return projectManualPrint(current.prior);
     if (current.orderFingerprint !== before.orderFingerprint || current.configurationFingerprint !== before.configurationFingerprint
       || current.credentialRevision !== before.credentialRevision) return conflict();
@@ -120,3 +126,7 @@ export const readManualPrint = (input: unknown) => read(input, false);
 export const requestManualPrint = (input: unknown) => request(input, false);
 export const readMerchantPrint = (input: unknown) => read(input, true);
 export const requestMerchantPrint = (input: unknown) => request(input, true);
+
+// Dedicated portal entries cannot fall back to an administrative cookie.
+export const readTerminalPrint = (input: unknown) => read(input, true, true);
+export const requestTerminalPrint = (input: unknown) => request(input, true, true);

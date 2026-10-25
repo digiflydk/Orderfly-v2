@@ -6,6 +6,7 @@ import { verifiedOrderflyIdentity } from '@/lib/access/orderfly-session';
 import { AuthorityError, principalKey } from '@/lib/access/authority';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { queueOrderFeedback } from '@/lib/feedback/mail-queue';
+import { getOrderTerminalActor, authorizeOrderTerminalTransaction, type OrderTerminalAuthSource } from '@/lib/terminal-auth/access';
 import type { OrderStatus } from '@/types';
 
 const identifier = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
@@ -22,10 +23,11 @@ export class TerminalStatusError extends Error {
 const hash = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
 
 /** Only fulfillment progress. Payment and cancellation remain separate workflows. */
-export async function progressTerminalOrder(input: unknown): Promise<{success: true; changed: boolean; orderId: string; status: OrderStatus}> {
+export async function progressTerminalOrder(input: unknown, source: OrderTerminalAuthSource = 'admin'): Promise<{success: true; changed: boolean; orderId: string; status: OrderStatus}> {
   const parsed = terminalStatusCommandSchema.safeParse(input);
   if (!parsed.success) throw new TerminalStatusError('terminal_status_invalid', 400);
-  const command = parsed.data, identity = await verifiedOrderflyIdentity(), actorId = principalKey(identity), db = getAdminDb();
+  const command = parsed.data, actor = source === 'terminal' ? await getOrderTerminalActor('terminal') : null;
+  const identity = actor ? null : await verifiedOrderflyIdentity(), actorId = actor?.actorId ?? principalKey(identity!), db = getAdminDb();
   const orderRef = db.collection('orders').doc(command.orderId);
   // One request ID is bound to one actor and payload, including the order/scope.
   // Store the immutable command in the audit record so retries cannot repeat it.
@@ -34,7 +36,8 @@ export async function progressTerminalOrder(input: unknown): Promise<{success: t
   const result = await db.runTransaction(async tx => {
     const order = (await tx.get(orderRef)).data();
     if (!order || order.brandId !== command.brandId || order.locationId !== command.locationId) throw new AuthorityError('forbidden');
-    await authorizeTransaction(tx, identity, order, 'orderfly.orders:edit', 'location');
+    if (actor) await authorizeOrderTerminalTransaction(tx, actor, { brandId: order.brandId, locationId: order.locationId });
+    else await authorizeTransaction(tx, identity!, order, 'orderfly.orders:edit', 'location');
     const previous = (await tx.get(auditRef)).data();
     if (previous) {
       if (previous.action !== 'terminal_order_progressed' || previous.fingerprint !== fingerprint || previous.actorId !== actorId) throw new TerminalStatusError('terminal_status_conflict');
