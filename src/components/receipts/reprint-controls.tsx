@@ -38,9 +38,9 @@ async function json(response: Response, limit: number): Promise<any> {
 
 /** Explicit physical reprints only. A retry retains the same request identity;
  * status polling cannot create jobs and an ambiguous write never resets it. */
-export function ReprintControls({ merchant = false, ...props }: Scope & { merchant?: boolean }) {
-  const endpoint = merchant ? '/api/merchant/orders/reprint' : adminEndpoint;
-  const scopeKey = JSON.stringify(props);
+export function ReprintControls({ merchant = false, apiEndpoint, onAccessDenied, ...props }: Scope & { merchant?: boolean; apiEndpoint?: string; onAccessDenied?: () => void }) {
+  const endpoint = apiEndpoint ?? (merchant ? '/api/merchant/orders/reprint' : adminEndpoint);
+  const scopeKey = JSON.stringify([endpoint, props]);
   const [printers, setPrinters] = useState<Printer[]>([]), [selected, setSelected] = useState('');
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
   const [listError, setListError] = useState(''), [message, setMessage] = useState('');
@@ -86,12 +86,12 @@ export function ReprintControls({ merchant = false, ...props }: Scope & { mercha
     load().catch(error => {
       if (!isCurrent()) return;
       const code = error instanceof Error ? error.message : '';
-      if (code === '401' || code === '403') setSessionLost(true);
+      if (code === '401' || code === '403') { setSessionLost(true); onAccessDenied?.(); }
       setListError(code === '401' ? 'Din session er udløbet. Log ind igen.' : code === '403' ? 'Du har ikke adgang til printerne på denne lokation.'
         : 'Printerne kunne ikke indlæses. Prøv igen.');
     }).finally(() => { if (isCurrent()) setLoading(false); });
     return () => { generation.current++; controller.abort(); activeRequest.current?.abort(); };
-  }, [scopeKey, refresh, merchant]); // All order/scope changes invalidate pending UI responses.
+  }, [scopeKey, refresh, merchant, endpoint, onAccessDenied]); // All order/scope changes invalidate pending UI responses.
 
   async function perform(method: 'GET' | 'POST', target: Command) {
     if (pending.current || sessionLost) return;
@@ -111,7 +111,7 @@ export function ReprintControls({ merchant = false, ...props }: Scope & { mercha
     } catch (error) {
       if (!isCurrent()) return;
       const code = error instanceof Error ? error.message : '';
-      if (code === '401' || code === '403') setSessionLost(true);
+      if (code === '401' || code === '403') { setSessionLost(true); onAccessDenied?.(); }
       // A transport failure can happen after enqueue. Keep the ID for safe recovery.
       if (method === 'POST') setRetry(!['400', '401', '403'].includes(code));
       setMessage(code === '401' ? 'Din session er udløbet. Log ind igen.' : code === '403' ? 'Du har ikke adgang til at genprinte denne ordre.'

@@ -4,6 +4,7 @@ import { FieldPath } from 'firebase-admin/firestore';
 import { z } from 'zod';
 import { getAdminDb } from '@/lib/firebase-admin';
 import { orderflyReadGrants, requireOrderflyAccess } from '@/lib/access/orderfly-session';
+import { getOrderTerminalActor, authorizeOrderTerminalTransaction, type OrderTerminalAuthSource } from '@/lib/terminal-auth/access';
 import { AuthorityError } from '@/lib/access/authority';
 import { analyticsCalendarDay } from '@/lib/analytics/date-range';
 import type { OrderStatus } from '@/types';
@@ -87,10 +88,12 @@ function matches(order: TerminalOrder, q: z.infer<typeof querySchema>, today: st
 }
 
 /** Each request revalidates grants. Cursor selects a position, never authority. */
-export async function readTerminalOrders(input: TerminalQuery = {}, now = new Date()): Promise<TerminalReadResult> {
+export async function readTerminalOrders(input: TerminalQuery = {}, now = new Date(), source: OrderTerminalAuthSource = 'admin'): Promise<TerminalReadResult> {
   const parsed = querySchema.safeParse(input);
   if (!parsed.success || !Number.isFinite(now.getTime())) return invalid();
-  const q = parsed.data, db = getAdminDb(), grants = await orderflyReadGrants('orderfly.orders:view');
+  const q = parsed.data, db = getAdminDb();
+  const actor = source === 'terminal' ? await getOrderTerminalActor('terminal') : null;
+  const grants = actor?.kind === 'terminal' ? [{ brandId: actor.session.brandId, locationIds: [actor.session.locationId] }] : await orderflyReadGrants('orderfly.orders:view');
   if (grants.length > MAX_LOCATIONS) throw new TerminalReadError('terminal_scope_too_large', 409);
   const locations: TerminalLocation[] = [];
   for (const grant of grants) {
@@ -116,10 +119,15 @@ export async function readTerminalOrders(input: TerminalQuery = {}, now = new Da
   const empty: TerminalReadResult = { orders: [], locations, selectedBrandId: selected?.brandId ?? null,
     selectedLocationId: selected?.locationId ?? null, canEdit: false, serverTime: now.toISOString(), nextCursor: null, hasMore: false };
   if (!selected) return empty;
-  await requireOrderflyAccess(selected.brandId, [selected.locationId], 'orderfly.orders:view');
   let canEdit = false;
-  try { await requireOrderflyAccess(selected.brandId, [selected.locationId], 'orderfly.orders:edit'); canEdit = true; }
-  catch (error) { if (!(error instanceof AuthorityError && error.status === 403)) throw error; }
+  if (actor) {
+    await db.runTransaction(tx => authorizeOrderTerminalTransaction(tx, actor, { brandId: selected.brandId, locationId: selected.locationId }), { readOnly: true });
+    canEdit = true;
+  } else {
+    await requireOrderflyAccess(selected.brandId, [selected.locationId], 'orderfly.orders:view');
+    try { await requireOrderflyAccess(selected.brandId, [selected.locationId], 'orderfly.orders:edit'); canEdit = true; }
+    catch (error) { if (!(error instanceof AuthorityError && error.status === 403)) throw error; }
+  }
   const statuses = q.view === 'history' ? ALL : ACTIVE;
   const scope = createHash('sha256').update(JSON.stringify([selected.brandId, selected.locationId, q.view, q.search || '', q.dateFrom || '', q.dateTo || ''])).digest('hex');
   let after: Record<string, string | null> = {};

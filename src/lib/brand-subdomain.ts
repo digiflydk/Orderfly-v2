@@ -11,7 +11,7 @@ export const BRAND_SLUG_MAX = 40;
 // slug must never shadow on the apex domain (/{slug}) or as a subdomain.
 export const RESERVED_BRAND_SLUGS = new Set([
   'www', 'api', 'admin', 'app', 'staging', 'mail', 'support',
-  'superadmin', 'superadmin-safe', 'merchant', 'admin-login', 'feedback', 'feedback-admin',
+  'superadmin', 'superadmin-safe', 'merchant', 'terminal', 'admin-login', 'feedback', 'feedback-admin',
   'games', 'tracking', 'checkout', 'verify', 'brand-safe', 'brand-site', 'm3', 'm3pizza', 'env-debug',
   // The stamp card portal path (/club on a brand subdomain) must never read as a brand.
   'club',
@@ -79,7 +79,7 @@ export function brandSlugFromHost(hostHeader: string | null | undefined): string
 }
 
 // App-wide paths keep their own routes on a brand subdomain.
-const PASSTHROUGH = ['/_next', '/api', '/feedback', '/games', '/tracking', '/admin-login', '/superadmin', '/merchant', '/verify'];
+const PASSTHROUGH = ['/_next', '/api', '/feedback', '/games', '/tracking', '/admin-login', '/superadmin', '/merchant', '/terminal', '/verify'];
 const PASSTHROUGH_FILES = new Set(['/favicon.ico', '/icon.png', '/robots.txt', '/sitemap.xml', '/openapi.json']);
 
 /**

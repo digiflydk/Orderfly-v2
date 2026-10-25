@@ -9,8 +9,8 @@ import { registerPickupPayment } from './actions';
 import { terminalTime } from './terminal-board';
 
 type Command = { orderId: string; brandId: string; locationId: string; expectedStatus: OrderStatus; status: OrderStatus; requestId: string };
-export function TerminalDetail({ order, canEdit, disabled = false, onClose, onChanged, reprint }: {
-  order: TerminalOrder; canEdit: boolean; disabled?: boolean; onClose: () => void; onChanged: () => void; reprint?: ReactNode;
+export function TerminalDetail({ order, canEdit, disabled = false, onClose, onChanged, reprint, statusEndpoint = '/api/merchant/orders/status', paymentEndpoint }: {
+  order: TerminalOrder; canEdit: boolean; disabled?: boolean; onClose: () => void; onChanged: () => void; reprint?: ReactNode; statusEndpoint?: string; paymentEndpoint?: string;
 }) {
   const [busy, setBusy] = useState(false), lock = useRef(false), command = useRef<Command | null>(null);
   const [message, setMessage] = useState(''), [failure, setFailure] = useState(false);
@@ -24,7 +24,7 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
     command.current ??= { orderId: order.id, brandId: order.brandId, locationId: order.locationId, expectedStatus: order.status, status: next, requestId: crypto.randomUUID() };
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15_000);
     try {
-      const response = await fetch('/api/merchant/orders/status', { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(command.current), signal: controller.signal });
+      const response = await fetch(statusEndpoint, { method: 'POST', headers: { 'Content-Type': 'application/json' }, credentials: 'same-origin', body: JSON.stringify(command.current), signal: controller.signal });
       const result = await response.json();
       if (!response.ok || !result.success) {
         if (response.status < 500) command.current = null;
@@ -35,13 +35,22 @@ export function TerminalDetail({ order, canEdit, disabled = false, onClose, onCh
     } catch { setFailure(true); setMessage('Resultatet er ikke bekræftet. Prøv samme handling igen, eller opdater overblikket.'); }
     finally { clearTimeout(timeout); lock.current = false; setBusy(false); }
   }
+  async function terminalPayment(): Promise<{ success: boolean; message: string }> {
+    const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 15_000);
+    try {
+      const response = await fetch(paymentEndpoint!, { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ orderId: order.id, method: paymentMethod }), signal: controller.signal });
+      const result = await response.json();
+      if (response.status >= 500) throw new Error('uncertain_payment');
+      return { success: response.ok && result.success === true, message: typeof result.message === 'string' ? result.message : 'Betalingen kunne ikke registreres. Opdater og prøv igen.' };
+    } finally { clearTimeout(timeout); }
+  }
   async function collectPayment() {
     if (lock.current || disabled || !canEdit || uncertainPayment) return;
     lock.current = true; setBusy(true); setMessage('');
     try {
-      const result = await registerPickupPayment(order.id, paymentMethod);
+      const result = paymentEndpoint ? await terminalPayment() : await registerPickupPayment(order.id, paymentMethod);
       setFailure(!result.success); setMessage(result.message);
-      if (result.success) { setPaymentConfirm(false); onChanged(); }
+      if (result.success) { setPaymentConfirm(false); onChanged(); } else if (paymentEndpoint) onChanged();
     } catch { setUncertainPayment(true); setFailure(true); setMessage('Betalingen kunne ikke bekræftes. Opdater ordren og kontrollér betalingsstatus før du fortsætter.'); onChanged(); }
     finally { lock.current = false; setBusy(false); }
   }

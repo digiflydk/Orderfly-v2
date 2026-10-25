@@ -1,18 +1,19 @@
 import 'server-only';
 import { orderflySession } from '@/lib/access/orderfly-session';
+import { getOrderTerminalActor } from '@/lib/terminal-auth/access';
 import { AuthorityError } from '@/lib/access/authority';
 import { getOrigin } from '@/lib/url';
 import { manualPrintCommandSchema, ManualPrintError } from './manual-print-schema';
-import { readMerchantPrint, requestMerchantPrint } from './manual-print-request';
+import { readMerchantPrint, requestMerchantPrint, readTerminalPrint, requestTerminalPrint } from './manual-print-request';
 
 import { listMerchantReprintPrinters, merchantPrinterListSchema } from './merchant-reprint';
 
 const reply = (body: unknown, status = 200) => Response.json(body, {
   status, headers: { 'Cache-Control': 'no-store', Vary: 'Cookie' },
 });
-export async function handleMerchantReprint(request: Request) {
+export async function handleMerchantReprint(request: Request, terminal = false) {
   try {
-    await orderflySession();
+    if (terminal) await getOrderTerminalActor('terminal'); else await orderflySession();
     const url = new URL(request.url);
     if (request.method === 'GET') {
       const keys = [...url.searchParams.keys()];
@@ -20,7 +21,7 @@ export async function handleMerchantReprint(request: Request) {
       if (!url.searchParams.has('requestId')) {
         const list = merchantPrinterListSchema.safeParse(Object.fromEntries(url.searchParams));
         if (!list.success) return reply({ error: 'manual_print_invalid' }, 400);
-        return reply(await listMerchantReprintPrinters(list.data));
+        return reply(await listMerchantReprintPrinters(list.data, terminal));
       }
       const expected = ['orderId', 'brandId', 'locationId', 'printerId', 'printerRevision', 'kind', 'requestId'];
       if (keys.length !== expected.length || new Set(keys).size !== keys.length || keys.some(key => !expected.includes(key))) return reply({ error: 'manual_print_invalid' }, 400);
@@ -28,7 +29,7 @@ export async function handleMerchantReprint(request: Request) {
       if (!/^[1-9][0-9]{0,15}$/.test(raw.printerRevision || '')) return reply({ error: 'manual_print_invalid' }, 400);
       const parsed = manualPrintCommandSchema.safeParse({ ...raw, printerRevision: Number(raw.printerRevision) });
       if (!parsed.success) return reply({ error: 'manual_print_invalid' }, 400);
-      return reply(await readMerchantPrint(parsed.data));
+      return reply(await (terminal ? readTerminalPrint : readMerchantPrint)(parsed.data));
     }
     if (request.method !== 'POST') return reply({ error: 'manual_print_invalid' }, 405);
     if (request.headers.get('origin') !== await getOrigin() || request.headers.get('sec-fetch-site') === 'cross-site') return reply({ error: 'forbidden' }, 403);
@@ -50,7 +51,7 @@ export async function handleMerchantReprint(request: Request) {
     catch { return reply({ error: 'manual_print_invalid' }, 400); }
     const parsed = manualPrintCommandSchema.safeParse(command);
     if (!parsed.success) return reply({ error: 'manual_print_invalid' }, 400);
-    return reply(await requestMerchantPrint(parsed.data));
+    return reply(await (terminal ? requestTerminalPrint : requestMerchantPrint)(parsed.data));
   } catch (error) {
     if (error instanceof AuthorityError) return reply({ error: error.status === 401 ? 'unauthorized' : error.status === 503 ? 'manual_print_unavailable' : 'forbidden' }, error.status === 401 ? 401 : error.status === 503 ? 503 : 403);
     if (error instanceof ManualPrintError) return reply({ error: error.code }, error.code === 'manual_print_invalid' ? 400 : error.code === 'manual_print_conflict' ? 409 : 503);
