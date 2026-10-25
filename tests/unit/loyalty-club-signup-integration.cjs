@@ -61,7 +61,8 @@ test('actual checkout signup creates one membership, explicit consent, welcome s
  assert.equal(rows(db,'loyaltyCards').length,1);assert.equal(rows(db,'loyaltyCards')[0].stamps,1);
  assert.equal(rows(db,'loyaltyBonusGrants').length,2);assert.equal(rows(db,'loyaltySignupDiscountClaims').length,2);
  assert.equal(rows(db,'loyaltyEvents').filter(e=>e.channel==='bonus_welcome'&&e.type==='stamp_added').length,1);
- assert.equal(rows(db,'loyaltyMailOutbox').length,1);
+ assert.equal(rows(db,'loyaltyMailOutbox').length,0);
+ assert.equal(rows(db,'loyaltyLoginTokens').length,0);
  assert.equal(await discount.getClubSignupDiscountEligibility(await input(db)),true,'pending unused entitlement remains redeemable');
  db.rows.get('customers/'+result.customerId).discountUsage={d1:1};
  assert.equal(await discount.getClubSignupDiscountEligibility(await input(db)),false,'consumed entitlement cannot be quoted again');
@@ -79,7 +80,9 @@ test('concurrent checkout retries and a second standalone entry never double the
  const db=fixture(),i=await input(db);
  const results=await Promise.all([checkout.prepareClubCheckoutSignup(i),checkout.prepareClubCheckoutSignup(i),checkout.prepareClubCheckoutSignup(i)]);
  assert.equal(new Set(results.map(r=>r.customerId)).size,1);assert.equal(rows(db,'loyaltyMembers').length,1);
- await signup(db);
+ assert.equal(rows(db,'loyaltyMailOutbox').length,0);assert.equal(rows(db,'loyaltyLoginTokens').length,0);
+ const portalSignup=await signup(db);assert.ok(portalSignup.mailJob);
+ assert.equal(rows(db,'loyaltyMailOutbox').length,1);
  assert.equal(rows(db,'loyaltyBonusGrants').length,2);assert.equal(rows(db,'loyaltySignupDiscountClaims').length,2);
  assert.equal(rows(db,'loyaltyCards').reduce((sum,row)=>sum+row.stamps,0),1);assert.equal(rows(db,'marketingConsents').length,1);
 });
@@ -315,4 +318,23 @@ test('existing withdrawn checkout member cannot resubscribe with false or stale 
   await rejects(checkout.prepareClubCheckoutSignup({...request,...changes}),changes.newsletterConsent===false||changes.termsAccepted===false?'invalid_request':'program_changed');
   assert.deepEqual(snapshot(db),before);
  }
+});
+
+
+// #597: login mail is explicit portal intent, never a checkout side effect.
+test('checkout opt-in/retries stage no login tokens or mail; explicit portal login and signup still do',async()=>{
+ const db=fixture(),i=await input(db);
+ await checkout.prepareClubCheckoutSignup(i);
+ await checkout.prepareClubCheckoutSignup({...i,now:NOW+1});
+ assert.equal(rows(db,'loyaltyMailOutbox').length,0);assert.equal(rows(db,'loyaltyLoginTokens').length,0);
+ const mail=loadTs('src/lib/loyalty/stamp-card/mail.ts',mocks);
+ assert.deepEqual(await mail.runLoyaltyMailOutbox(db,NOW+2),{});
+ const brand=await m.resolveBrand(db,'esmeralda');
+ const login=await m.requestLoginLink(db,brand,{email:i.email},{ip:'203.0.113.13',now:NOW+3});
+ assert.ok(login.mailJob);assert.equal(rows(db,'loyaltyMailOutbox').length,1);assert.equal(rows(db,'loyaltyLoginTokens').length,1);
+ const before=snapshotCollection(db,'loyaltyMailOutbox');
+ await checkout.prepareClubCheckoutSignup({...i,now:NOW+4});
+ assert.deepEqual(snapshotCollection(db,'loyaltyMailOutbox'),before,'checkout must not cancel explicitly requested mail');
+ const fresh=fixture(),joined=await signup(fresh);assert.ok(joined.mailJob);
+ assert.equal(rows(fresh,'loyaltyMailOutbox').length,1);assert.equal(rows(fresh,'loyaltyLoginTokens').length,1);
 });

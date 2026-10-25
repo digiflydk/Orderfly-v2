@@ -6,7 +6,6 @@ import { signup, signupSchema, resolveBrand, programForPortal } from './membersh
 import { COLLECTIONS, memberIdentityKey, type MemberDoc } from './model';
 import { LoyaltyError } from './counter';
 import { loadCampaign } from './campaigns';
-import { deliverLoyaltyMail } from './mail';
 import { getClubSignupDiscountEligibility } from './club-discount';
 export { getClubSignupDiscountEligibility } from './club-discount';
 
@@ -37,12 +36,11 @@ export async function prepareClubCheckoutSignup(input:CheckoutSignup):Promise<{c
   const brand=await resolveBrand(input.db,input.brandSlug),now=input.now??Date.now();
   const requestHeaders=await headers();
   const ip=(requestHeaders.get('x-forwarded-for')||'').split(',')[0].trim().slice(0,64)||'unknown';
-  const {mailJob}=await signup(input.db,brand,{name:input.name,email:input.email,newsletterConsent:true,termsAccepted:true,
+  await signup(input.db,brand,{name:input.name,email:input.email,newsletterConsent:true,termsAccepted:true,
     consentVersion:input.consentVersion,termsVersion:input.termsVersion,campaignVersion:input.campaignVersion},{ip,now},{clubDiscountId:input.discountId,source:'checkout'});
   const identity=(await input.db.collection(COLLECTIONS.identities).doc(memberIdentityKey(input.brandId,normalizeEmail(input.email))).get()).data();
   const member=identity ? (await input.db.collection(COLLECTIONS.members).doc(String(identity.memberId)).get()).data() as MemberDoc|undefined : undefined;
   if(!member || member.brandId!==input.brandId || member.status!=='active') throw new LoyaltyError('customer_conflict',409);
   if(input.discountId && !await getClubSignupDiscountEligibility({...input,discountId:input.discountId,now})) throw new LoyaltyError('discount_unavailable',409);
-  if(mailJob) await deliverLoyaltyMail(input.db,mailJob,now).catch(()=>null);
   return {customerId:member.customerId};
 }
