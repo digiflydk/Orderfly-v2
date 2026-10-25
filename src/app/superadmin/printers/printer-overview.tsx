@@ -189,16 +189,37 @@ export function PrinterOverview({ brands, locations, createLocations = [], editL
     <div className="flex flex-wrap items-end gap-3"><AdminSelectField label="Brand" value={brandId} onChange={e => { setBrandId(e.target.value); setLocationId(''); setAfter(null); }}><option value="">Alle brands</option>{brands.map(b => <option key={b.id} value={b.id}>{b.name}</option>)}</AdminSelectField>
       <AdminSelectField label="Lokation" value={locationId} onChange={e => { setLocationId(e.target.value); setAfter(null); }}><option value="">Alle lokationer</option>{locations.filter(l => !brandId || l.brandId === brandId).map(l => <option key={l.id} value={l.id}>{l.name}</option>)}</AdminSelectField>
       <Button variant="outline" onClick={closeAndRefresh}><RefreshCw className="mr-2 h-4 w-4" />Opdater</Button></div>
-    {!current ? <p role="status">Indlæser printere…</p> : current.error ? <p role="alert">{current.error}</p> : <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
-      {!current.page?.items.length && <p>Ingen printere på denne side.</p>}
-      {current.page?.items.map(item => { const c = item.configuration, cn = item.connection;
-        const connected = cn?.connected && cn.lastSeenAt !== null && (cn.checkedAt - cn.lastSeenAt) + Math.max(0, clock - (item.receivedAt || clock)) <= 90_000;
-        return <article key={JSON.stringify([c.brandId,c.locationId,c.id])} className="min-w-0 rounded-xl border bg-card p-5 space-y-4">
-          <div className="flex flex-wrap justify-between gap-2"><h2 className="font-semibold break-words">{c.name}</h2><span className={connected ? 'text-sm font-medium text-green-700' : 'text-sm text-muted-foreground'}>{connected ? 'Forbundet' : 'Ikke forbundet'}</span></div>
-          <div className="text-sm text-muted-foreground"><p>{brands.find(b => b.id === c.brandId)?.name} · {locations.find(l => l.id === c.locationId && l.brandId === c.brandId)?.name}</p><p>Star {c.model === 'mc-print3' ? 'mC-Print3' : 'mC-Print2'} · {c.paperWidthMm} mm</p>{c.description && <p className="mt-2 break-words">{c.description}</p>}</div>
-          <p className="text-sm">Seneste kontakt: {cn?.lastSeenAt ? <ActivityTime value={cn.lastSeenAt} /> : 'Ingen kontakt registreret'}{cn?.endpoint && <span className="block text-xs text-muted-foreground">{cn.endpoint === 'test' ? 'Test URL' : 'Live URL'}</span>}</p>
-          <Button variant="outline" disabled={!hasGrant(editLocations,c)} onClick={() => setCredential({ key, item })}>Forbindelsesoplysninger</Button>
-        </article>; })}</div>}
+    <div className="min-w-0 overflow-x-auto rounded-lg border">
+      <Table aria-label="Printere" className="min-w-[1050px]">
+        <TableHeader><TableRow>{['Printer', 'Brand', 'Lokation', 'Model', 'Status', 'Seneste kontakt', 'Handlinger'].map(label => <TableHead key={label} scope="col">{label}</TableHead>)}</TableRow></TableHeader>
+        <TableBody>
+          {!current ? <TableRow><TableCell colSpan={7}><p role="status">Indlæser printere…</p></TableCell></TableRow>
+            : current.error ? <TableRow><TableCell colSpan={7}><p role="alert">{current.error}</p></TableCell></TableRow>
+            : !current.page?.items.length ? <TableRow><TableCell colSpan={7}>Ingen printere på denne side.</TableCell></TableRow>
+            : current.page.items.map(item => { const c = item.configuration, cn = item.connection;
+              const connected = cn?.connected && cn.lastSeenAt !== null && (cn.checkedAt - cn.lastSeenAt) + Math.max(0, clock - (item.receivedAt || clock)) <= 90_000;
+              const canEdit = hasGrant(editLocations, c), canDelete = hasGrant(deleteLocations, c);
+              const actionPath = `/superadmin/printers/${encodeURIComponent(c.brandId)}/${encodeURIComponent(c.locationId)}/${encodeURIComponent(c.id)}`;
+              const actions = [{ name: 'Edit', path: 'edit', allowed: canEdit, reason: 'Ingen redigeringsadgang på denne lokation' },
+                { name: 'Deactivate', path: 'deactivate', allowed: canEdit && c.state !== 'disabled', reason: !canEdit ? 'Ingen redigeringsadgang på denne lokation' : 'Printeren er allerede deaktiveret' },
+                { name: 'Delete', path: 'delete', allowed: canDelete, reason: 'Ingen sletteadgang på denne lokation' }];
+              return <TableRow key={JSON.stringify([c.brandId,c.locationId,c.id])}>
+                <TableCell className="max-w-[240px] break-words"><span className="font-semibold">{c.name}</span>{c.description && <p className="mt-1 text-xs text-muted-foreground">{c.description}</p>}</TableCell>
+                <TableCell>{brands.find(b => b.id === c.brandId)?.name}</TableCell>
+                <TableCell>{locations.find(l => l.id === c.locationId && l.brandId === c.brandId)?.name}</TableCell>
+                <TableCell className="text-sm text-muted-foreground"><span className="whitespace-nowrap">Star {c.model === 'mc-print3' ? 'mC-Print3' : 'mC-Print2'}</span><br />{c.paperWidthMm} mm<br /><span className="whitespace-nowrap">{c.transport === 'cloudprnt-http' ? 'CloudPRNT HTTP' : 'CloudPRNT MQTT'}</span></TableCell>
+                <TableCell><span className={connected ? 'block whitespace-nowrap text-sm font-medium text-green-700' : 'block whitespace-nowrap text-sm text-muted-foreground'}>{connected ? 'Forbundet' : 'Ikke forbundet'}</span><span className="text-xs text-muted-foreground">{{ active: 'Aktiveret', paused: 'På pause', disabled: 'Deaktiveret' }[c.state]}</span></TableCell>
+                <TableCell className="text-sm">{cn?.lastSeenAt ? <ActivityTime value={cn.lastSeenAt} /> : 'Ingen kontakt registreret'}{cn?.endpoint && <span className="block text-xs text-muted-foreground">{cn.endpoint === 'test' ? 'Test URL' : 'Live URL'}</span>}</TableCell>
+                <TableCell><div className="flex min-w-[245px] flex-wrap gap-2">
+                  {actions.map(action => action.allowed ? <Button key={action.path} size="sm" variant="outline" asChild><a aria-label={`${action.name} ${c.name}`} href={`${actionPath}/${action.path}`}>{action.name}</a></Button>
+                    : <Button key={action.path} size="sm" variant="outline" aria-label={`${action.name} ${c.name}`} title={action.reason} disabled>{action.name}</Button>)}
+                  <Button size="sm" variant="outline" disabled={!canEdit} onClick={() => setCredential({ key, item })}>Forbindelsesoplysninger</Button>
+                </div></TableCell>
+              </TableRow>;
+            })}
+        </TableBody>
+      </Table>
+    </div>
     <div className="flex gap-3">{after && <Button variant="outline" onClick={() => setAfter(null)}>Første side</Button>}{current?.page?.nextCursor && <Button variant="outline" onClick={() => setAfter(current.page!.nextCursor!)}>Næste side</Button>}</div>
     <p className="text-xs text-muted-foreground">Forbundet betyder godkendt kontakt inden for 90 sekunder. Kontakt gemmes højst hvert 30. sekund. Status opdateres automatisk hvert 30. sekund.</p>
     </>}

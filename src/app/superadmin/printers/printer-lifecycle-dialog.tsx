@@ -5,8 +5,8 @@ import { Button } from '@/components/ui/button';
 import type { PrinterConfiguration } from '@/lib/printing/domain';
 
 type Item = { configuration: PrinterConfiguration; revision: number };
-export function PrinterLifecycleDialog({ item, action, permitted, onPendingChange, onCancel, onSessionLost, onFeedback, onSaved }: {
-  item: Item; action: 'deactivate' | 'delete'; permitted: boolean; onPendingChange: (pending: boolean) => void;
+export function PrinterLifecycleDialog({ item, action, permitted, onPendingChange, onCancel, onSessionLost, onFeedback, onSaved, presentation = 'dialog' }: {
+  item: Item; action: 'deactivate' | 'delete'; presentation?: 'dialog' | 'page'; permitted: boolean; onPendingChange: (pending: boolean) => void;
   onCancel: () => void; onSessionLost: () => void; onFeedback: (message: string, refresh: boolean) => void; onSaved: () => void;
 }) {
   const [pending, setPending] = useState(false), [message, setMessage] = useState(''), [refreshRequired, setRefreshRequired] = useState(false);
@@ -48,7 +48,7 @@ export function PrinterLifecycleDialog({ item, action, permitted, onPendingChang
       if (mounted.current) { setPending(false); onPendingChange(false); }
     }
   }
-  return <section role="dialog" aria-modal="false" aria-label={label} className="rounded-lg border bg-card p-4 space-y-4 min-w-0">
+  return <section role={presentation === 'dialog' ? 'dialog' : undefined} aria-modal={presentation === 'dialog' ? false : undefined} aria-label={label} className="rounded-lg border bg-card p-4 space-y-4 min-w-0">
     <h2 className="text-lg font-semibold">{label}: {item.configuration.name}</h2>
     <p className="text-sm text-muted-foreground">{deleted ? 'Printeren fjernes fra oversigten. Historik og tidligere printjobs bevares.' : 'Printeren deaktiveres. Historik og eksisterende printjobs bevares.'}</p>
     {message && <p role="alert">{message}</p>}

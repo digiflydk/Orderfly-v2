@@ -2,7 +2,14 @@
 
 ## Operator flow
 
-Superadmin → System → Printere opens a responsive overview with connection cards.
+Superadmin → System → Printere opens a responsive printer table (#615). Each row shows the printer, brand,
+location, model, configuration/connection status and latest contact. **Edit**,
+**Deactivate** and **Delete** open dedicated scoped pages under
+`/superadmin/printers/{brandId}/{locationId}/{printerId}/{action}`. Navigation
+never writes configuration or sends print jobs. Changes require an explicit
+form submit and retain existing permissions, revision checks and audit behavior.
+Editing an active printer requires deactivation first; deletion preserves history
+through the existing soft-delete operation. Connection information remains available.
 Choose **Opret ny printerforbindelse**, then brand, location, printer name, optional
 description, printer manufacturer, model and receipt width. Star Micronics
 mC-Print2 (58 mm) and mC-Print3 (58/80 mm) are the supported choices. Click **Opret**.
@@ -11,8 +18,9 @@ HTTP CloudPRNT and a random technical ID are selected by the server.
 One transaction creates the new printer in active configuration state, a verified
 empty queue, activation metadata, a private credential digest and both audits.
 This fresh-identity path does not resume an existing printer or bypass its queue
-review. It rejects surviving private records at the generated ID. Existing printer
-activation, editing, pause/deactivation and deletion remain in **Avanceret administration**.
+review. It rejects surviving private records at the generated ID. Existing printer activation and queue maintenance remain in
+**Avanceret administration**; editing, deactivation and deletion are also directly
+accessible from the main table.
 No existing printer is migrated or rekeyed by deployment.
 
 The success view supplies username `orderfly`, a masked password with **Vis/Skjul
@@ -25,9 +33,9 @@ loss or closing discards the in-memory secret. A pending submit cannot be repeat
 an ambiguous response requires checking the overview before any new attempt.
 
 Use Test URL first. Live URL is available for configuration but **does not mean
-permanent automatic printing is enabled**. The existing synthetic qualification,
-physical paper check, routing and supervised 60-minute purchase window remain
-required. Test controls are grouped under **Testprint**. Output flags are unchanged.
+permanent automatic printing is enabled**. Permanent automatic printing is enabled separately under brand **Print
+indstillinger**; see [automatic printing](printing-automatic-print.md). The legacy
+supervised test flow remains available when no explicit brand setting exists. Test controls are grouped under **Testprint**. Output flags are unchanged.
 See [supervised purchase guide](printing-supervised-order-test.md).
 
 ## Connection status
@@ -76,13 +84,14 @@ flag changes or production data migrations in this delivery.
 
 ## Validation and release
 
-Run `npm run typecheck`; connection setup/service/HTTP/status tests; scoped reads,
+Run `node --test tests/unit/printing-action-*.cjs tests/unit/printing-ui-browser.cjs`,
+`npm run typecheck` and `npm run build`; connection setup/service/HTTP/status tests; scoped reads,
 credential, poll route and supervised synthetic/ordinary regressions; and actual
 React/Playwright overview, credential, activation, pilot and order-test controls.
 Browser tests exercise desktop/mobile setup, reveal/copy, both HTTPS addresses,
 unknown outcomes, pending submit, permission loss and connection expiry. Existing
 advanced workflow tests still run through the explicit advanced navigation. The
-real isolated Firebase/browser smoke also checks the new primary cards before
+real isolated Firebase/browser smoke also checks the primary table before
 entering Advanced administration for its existing edit/cancel and tenant tests.
 
 PM issue #555 → feature PR → CI/Playwright → independent Codex review → PO acceptance
