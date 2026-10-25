@@ -32,7 +32,7 @@ test('browser: supervised order window needs observed paper, writes once, recove
     const params = command || Object.fromEntries(new URL(req.url()).searchParams);
     calls.push({ method: req.method(), command, params });
     if (delay) { held = route; return; }
-    if (command?.operation === 'start') state = 'active';
+    if (command?.operation === 'startIndependent') state = 'active';
     if (command?.operation === 'stop') state = 'stopped';
     const bound = { brandId: params.brandId, locationId: params.locationId, printerId: params.printerId,
       printerRevision: Number(params.printerRevision), credentialRevision: Number(params.credentialRevision) };
@@ -44,17 +44,13 @@ test('browser: supervised order window needs observed paper, writes once, recove
   const read = page.getByRole('button', { name: 'Hent ordreteststatus', exact: true });
   const start = page.getByRole('button', { name: 'Start 60 minutters ordretest', exact: true });
   const stop = page.getByRole('button', { name: 'Stop ordretest', exact: true });
-  async function observe() {
-    await page.getByLabel('Jeg har set testbonnen', { exact: false }).check();
-    await page.getByLabel('Det er samme printer', { exact: false }).check();
-    await page.getByLabel('Jeg er ved printeren', { exact: false }).check();
-  }
+  async function observe() { assert.equal(await page.locator('input[type=checkbox]').count(),0); }
   await page.goto(url); assert.equal(calls.length, 0); await expect(start).toHaveCount(0);
-  await read.click(); await expect(start).toBeDisabled();
+  await read.click(); await expect(start).toBeEnabled();
   await observe(); await expect(start).toBeEnabled(); await start.dblclick();
   await expect(stop).toBeVisible();
-  assert.equal(calls.filter(c => c.command?.operation === 'start').length, 1);
-  assert.deepEqual(calls.find(c => c.command)?.command, { ...scope, operation: 'start', physicalPaperChecked: true, deviceUnchanged: true, supervisingPurchases: true });
+  assert.equal(calls.filter(c => c.command?.operation === 'startIndependent').length, 1);
+  assert.deepEqual(calls.find(c => c.command)?.command, { ...scope, operation: 'startIndependent' });
   await stop.click(); await expect(page.getByRole('status')).toContainText('Ordretest stoppet'); await expect(start).toHaveCount(0);
   assert.equal(calls.filter(c => c.command?.operation === 'stop').length, 1);
   assert.equal(await page.evaluate(() => localStorage.length + sessionStorage.length), 0);
@@ -69,7 +65,7 @@ test('browser: supervised order window needs observed paper, writes once, recove
   const changed = { ...scope, printerId: 'p2', printerRevision: 3 };
   await page.evaluate(value => window.changeScope(value), changed); await expect(read).toBeEnabled();
   await expect(stop).toHaveCount(0); await held.abort().catch(() => {}); held = null;
-  delay = false; state = 'not_started'; await read.click(); await expect(start).toBeDisabled();
+  delay = false; state = 'not_started'; await read.click(); await expect(start).toBeEnabled();
   assert.equal(calls.at(-1).params.printerId, 'p2'); await observe(); await expect(start).toBeEnabled();
   await page.evaluate(() => window.changePermission(false)); await expect(read).toBeDisabled(); await expect(start).toHaveCount(0);
   assert.deepEqual(errors, []);

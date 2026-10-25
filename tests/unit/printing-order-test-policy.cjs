@@ -129,3 +129,14 @@ test('confirmed one-click test plus real paper confirmation qualifies purchase t
   }
   const g=fixture();direct(g);await assert.rejects(g.api.controlOrderTestWindow({...scope,operation:'start',physicalPaperChecked:false,deviceUnchanged:true,supervisingPurchases:true}));
 }));
+
+test('independent activation requires no synthetic job and records no paper attestation',()=>enabled(async()=>{
+ for(const state of ['absent','unknown','failed']){
+  const f=fixture();
+  for(const key of [...f.records.keys()])if(key.includes('/pilot'))f.records.delete(key);
+  if(state!=='absent')f.records.set(`${path}/pilotJobs/${qid}`,{state});
+  const result=await f.api.controlOrderTestWindow({...scope,operation:'startIndependent'});
+  assert.equal(result.state,'active');assert.equal(f.records.get(windowPath).physicalPaperCheckedByOperator,false);
+  assert.equal((await f.targets()).targets.length,1);await f.stop();assert.equal((await f.targets()).targets.length,0);
+ }
+}));

@@ -37,7 +37,7 @@ export async function handleOrderTestControl(request: Request) {
     let command;
     try { command = JSON.parse(new TextDecoder('utf-8', { fatal: true }).decode(Buffer.concat(chunks))); }
     catch { return reply({ error: 'invalid_order_test' }, 400); }
-    if (!command || !['start', 'stop'].includes(command.operation)) return reply({ error: 'invalid_order_test' }, 400);
+    if (!command || !['start', 'startIndependent', 'stop'].includes(command.operation)) return reply({ error: 'invalid_order_test' }, 400);
     return reply(await controlOrderTestWindow(command));
   } catch (e) {
     if (e instanceof AuthorityError) return reply({ error: e.status === 401 ? 'unauthorized' : 'forbidden' }, e.status === 401 ? 401 : 403);
