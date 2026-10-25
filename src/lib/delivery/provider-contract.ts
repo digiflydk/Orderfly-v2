@@ -25,6 +25,7 @@ export const providerCapabilitiesSchema = z.object({
 }).strict();
 const error = z.object({ code: text(80), messageKey: text(120), retry: z.enum(['never', 'read_only', 'after_reconciliation']), nativeCode: text(100).nullable() }).strict();
 const tracking = z.string().url().max(2048).refine(v => { const u = new URL(v); return u.protocol === 'https:' && !u.username && !u.password; }, 'HTTPS tracking URL required').nullable();
+export const pickupEstimateProvenanceSchema=z.object({source:text(100),reliability:z.enum(['preliminary','verified_update']),observedAt:instant}).strict();
 export const deliveryQuoteRequestSchema = z.object({
   version: z.literal(1), scope: deliveryScopeSchema, checkoutRef: deliveryIdSchema, providerId: deliveryIdSchema,
   pickup: deliveryAddressSchema, dropoff: deliveryAddressSchema, pickupContact: contact, dropoffContact: contact,
@@ -36,7 +37,7 @@ export const deliveryQuoteRequestSchema = z.object({
 export const deliveryQuoteResultSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('available'), providerId: deliveryIdSchema, quoteRef: nativeReference, cost: deliveryMoneySchema,
     surcharges: z.array(z.object({ code:text(80), amount:deliveryMoneySchema }).strict()).max(20), expiresAt: instant.nullable(),
-    pickupInterval: deliveryIntervalSchema.nullable(), deliveryInterval: deliveryIntervalSchema.nullable(), distance: routeDistanceSchema.nullable(), capabilities: providerCapabilitiesSchema }).strict(),
+    pickupEstimateProvenance:pickupEstimateProvenanceSchema.nullable(), pickupInterval: deliveryIntervalSchema.nullable(), deliveryInterval: deliveryIntervalSchema.nullable(), distance: routeDistanceSchema.nullable(), capabilities: providerCapabilitiesSchema }).strict(),
   z.object({ kind:z.literal('unavailable'), reason:z.enum(['outside_area','closed','unsupported_schedule','unsupported_requirements','capacity','invalid_address']) }).strict(),
   z.object({ kind:z.literal('error'), error }).strict(),
 ]);
@@ -50,7 +51,7 @@ export const deliveryCreateRequestSchema = z.object({
   return desired.kind === 'asap' ? v.deliveryInterval === null : v.deliveryInterval !== null && Date.parse(v.deliveryInterval.earliest) === Date.parse(desired.interval.earliest) && Date.parse(v.deliveryInterval.latest) === Date.parse(desired.interval.latest);
 }, 'Requested delivery interval mismatch');
 const accepted = z.object({ kind:z.literal('accepted'), providerDeliveryId:nativeReference, nativeReference:nativeReference,
-  trackingUrl:tracking, pickupInterval:deliveryIntervalSchema.nullable(), deliveryInterval:deliveryIntervalSchema.nullable(), cost:deliveryMoneySchema.nullable() }).strict();
+  trackingUrl:tracking, pickupEstimateProvenance:pickupEstimateProvenanceSchema.nullable(), pickupInterval:deliveryIntervalSchema.nullable(), deliveryInterval:deliveryIntervalSchema.nullable(), cost:deliveryMoneySchema.nullable() }).strict();
 export const deliveryCreateResultSchema = z.discriminatedUnion('kind', [accepted,
   z.object({kind:z.literal('rejected'),error}).strict(),
   z.object({kind:z.literal('unknown'),attemptRef:deliveryIdSchema,error}).strict(),
@@ -67,9 +68,9 @@ export const deliveryCancelResultSchema = z.discriminatedUnion('kind', [
 ]);
 export const verifiedDeliveryEventSchema = z.object({
   version:z.literal(1), scope:deliveryScopeSchema, providerId:deliveryIdSchema, eventRef:nativeReference,
-  providerDeliveryId:nativeReference, occurredAt:instant, receivedAt:instant, sequence:integer.nullable(),
-  status:z.enum(['booked','courier_assigned','courier_to_pickup','picked_up','delivered','cancelled','failed']), nativeStatus:text(100),
-  pickupInterval:deliveryIntervalSchema.nullable(), deliveryInterval:deliveryIntervalSchema.nullable(), nativeErrorCode:text(100).nullable(),
+  providerDeliveryId:nativeReference, occurredAt:instant.nullable(), dispatchedAt:instant.nullable(), receivedAt:instant, sequence:integer.nullable(),
+  status:z.enum(['booked','courier_assigned','courier_to_pickup','picked_up','delivered','cancelled','failed']).nullable(), nativeStatus:text(100),
+  pickupEstimateProvenance:pickupEstimateProvenanceSchema.nullable(), pickupInterval:deliveryIntervalSchema.nullable(), deliveryInterval:deliveryIntervalSchema.nullable(), nativeErrorCode:text(100).nullable(),
 }).strict();
 export type DeliveryScope = z.infer<typeof deliveryScopeSchema>;
 export type DeliveryMoney = z.infer<typeof deliveryMoneySchema>;
@@ -85,7 +86,7 @@ export type VerifiedDeliveryEvent = z.infer<typeof verifiedDeliveryEventSchema>;
 export const managedDeliveryBindingSchema = z.object({version:z.literal(1), providerId:deliveryIdSchema, quoteRef:nativeReference, requestDigest:z.string().regex(/^[a-f0-9]{64}$/)}).strict();
 export type ManagedDeliveryBinding = z.infer<typeof managedDeliveryBindingSchema>;
 export const deliveryReconcileRequestSchema = z.object({scope:deliveryScopeSchema, attemptRef:deliveryIdSchema, providerDeliveryId:nativeReference.nullable()}).strict();
-export const deliveryCancelRequestSchema = z.object({scope:deliveryScopeSchema, providerDeliveryId:nativeReference, attemptRef:deliveryIdSchema, acceptedFee:deliveryMoneySchema.nullable(), feeQuoteRef:nativeReference.nullable(), feeQuoteRevision:integer.nullable()}).strict().refine(v => v.acceptedFee === null ? v.feeQuoteRef === null && v.feeQuoteRevision === null : v.feeQuoteRef !== null && v.feeQuoteRevision !== null, 'Accepted fee requires quote identity and revision');
+export const deliveryCancelRequestSchema = z.object({scope:deliveryScopeSchema, providerDeliveryId:nativeReference, attemptRef:deliveryIdSchema, operatorReason:text(500), acceptedFee:deliveryMoneySchema.nullable(), feeQuoteRef:nativeReference.nullable(), feeQuoteRevision:integer.nullable()}).strict().refine(v => v.acceptedFee === null ? v.feeQuoteRef === null && v.feeQuoteRevision === null : v.feeQuoteRef !== null && v.feeQuoteRevision !== null, 'Accepted fee requires quote identity and revision');
 export type DeliveryReconcileRequest = z.infer<typeof deliveryReconcileRequestSchema>;
 export type DeliveryCancelRequest = z.infer<typeof deliveryCancelRequestSchema>;
 export interface DeliveryProvider {
@@ -97,8 +98,10 @@ export interface DeliveryProvider {
   cancel(request: DeliveryCancelRequest): Promise<DeliveryCancelResult>;
 }
 // Shared persistence contracts are server-only implementations, not public mutation APIs.
+export const authorizedDeliveryBindingSchema=z.object({scope:deliveryScopeSchema,providerId:deliveryIdSchema,environment:z.enum(['sandbox','production']),active:z.literal(true),revision:integer,merchantRef:nativeReference,venueRef:nativeReference,secretRef:nativeReference}).strict();
+export type AuthorizedDeliveryBinding=z.infer<typeof authorizedDeliveryBindingSchema>;
 export interface DeliveryBindingStore {
-  resolveBinding(scope:DeliveryScope, providerId:string):Promise<{revision:number; merchantRef:string; venueRef:string; secretRef:string}|null>;
+  resolveBinding(scope:DeliveryScope, providerId:string):Promise<AuthorizedDeliveryBinding|null>;
 }
 export interface DeliveryAttemptStore {
   claimAttempt(request:DeliveryCreateRequest):Promise<{revision:number; attemptRef:string; state:'pending'|'submitting'|'unknown'|'accepted'|'rejected'; existing:boolean}>;

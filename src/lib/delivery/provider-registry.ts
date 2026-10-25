@@ -24,7 +24,7 @@ export function deliveryReadinessProblems(entry: ProviderRegistration, environme
   if (!evidence.compensationVerified) problems.push('compensation_unverified');
   if (!evidence.providerAcceptanceVerified) problems.push('provider_acceptance_unverified');
   if (evidence.reconciliation === 'unavailable') problems.push('reconciliation_unavailable');
-  if (evidence.reconciliation === 'provider_lookup' && !entry.adapter.capabilities.readByProviderId && !entry.adapter.capabilities.lookupByInternalReference) problems.push('reconciliation_capability_missing');
+  if (evidence.reconciliation === 'provider_lookup' && !entry.adapter.capabilities.lookupByInternalReference) problems.push('reconciliation_capability_missing');
   return problems;
 }
 export function createDeliveryProviderRegistry(registrations: readonly ProviderRegistration[]) {

@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { quoteContentDigest } from './digest';
 import { deliveryIdSchema, deliveryQuoteRequestSchema, deliveryQuoteResultSchema, routeDistanceSchema } from '../provider-contract';
 import { deliveryPricingRulesSchema } from '../settings/pricing-schema';
 import { calculateDeliveryPrice } from '../pricing/calculate';
@@ -9,7 +10,7 @@ export const storedDeliveryQuoteSchema=z.object({
   version:z.literal(1),quoteRef:deliveryIdSchema,providerQuoteRef:z.string().min(1).max(300),
   binding:z.object({brandId:deliveryIdSchema,locationId:deliveryIdSchema,checkoutReference:deliveryIdSchema,providerId:deliveryIdSchema,
     normalizedAddress:z.string().trim().min(1).max(1000),cartDigest:digest,fulfillmentAt:z.string().datetime({offset:true}),brandRevision:integer,locationRevision:integer}).strict(),
-  fingerprint:digest,createdAtMs:integer,expiresAtMs:integer,
+  fingerprint:digest,contentDigest:digest,createdAtMs:integer,expiresAtMs:integer,
   fulfillment:deliveryQuoteRequestSchema,
   providerQuote:deliveryQuoteResultSchema.options[0],
   economics:z.object({rules:deliveryPricingRulesSchema,route:routeDistanceSchema.refine(v=>v.method==='route'),itemSubtotalAfterDiscountMinor:integer,
@@ -19,6 +20,8 @@ export const storedDeliveryQuoteSchema=z.object({
   if(v.expiresAtMs<=v.createdAtMs||v.expiresAtMs-v.createdAtMs>300000)fail('Invalid quote lifetime');
   if(v.providerQuote.expiresAt!==null&&v.expiresAtMs>Date.parse(v.providerQuote.expiresAt))fail('Quote exceeds provider expiry');
   if(v.binding.brandId!==v.fulfillment.scope.brandId||v.binding.locationId!==v.fulfillment.scope.locationId||v.binding.checkoutReference!==v.fulfillment.checkoutRef||v.binding.providerId!==v.fulfillment.providerId||v.binding.providerId!==v.providerQuote.providerId||v.providerQuoteRef!==v.providerQuote.quoteRef)fail('Quote scope/reference mismatch');
+  if(Date.parse(v.binding.fulfillmentAt)!==Date.parse(v.fulfillment.readyAt))fail('Binding fulfillment time mismatch');
+  if(v.contentDigest!==quoteContentDigest(v))fail('Quote content digest mismatch');
   const cost=v.economics.providerQuoteCost;
   if(cost.amountMinor!==v.providerQuote.cost.amountMinor||cost.currency!==v.providerQuote.cost.currency||cost.taxBasis!==v.providerQuote.cost.taxBasis)fail('Provider cost mismatch');
   if(v.economics.route.method!=='route')return;

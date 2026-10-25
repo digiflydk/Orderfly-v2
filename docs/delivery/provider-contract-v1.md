@@ -87,3 +87,13 @@ Per adapter: valid/invalid scope, unavailable quote, expiry, changed quote price
 `src/lib/delivery/provider-contract.ts` supplies strict bounded Zod transport schemas, inferred types and provider/storage interface declarations. These do not authorize calls or implement persistence. `tests/unit/delivery-provider-contract.cjs` verifies malformed/unsafe data and outcome distinctions.
 
 Coordinator decision after initial discovery: retain automatic capture, use a durable paid-delivery outbox, hold operational acceptance/print until booking success, compensate definitive failure and reconcile unknown outcomes. The orchestration/payment integration must prove these gates before activation; existing settlement cannot simply run unchanged and also claim these guarantees.
+
+## Wolt review corrections and immutable quote binding
+
+Occurrence time may be unknown: event `occurredAt` and separate `dispatchedAt` are nullable, while server `receivedAt` is required. Dispatch time is not evidence of occurrence order. Event `status` may be null for ETA-only events; retain/update estimates without inventing a fulfillment transition. Quote/create/event include nullable `pickupEstimateProvenance` with source, observation time and `preliminary` or `verified_update` reliability. Kitchen/print consumers may not treat a preliminary estimate as confirmed readiness.
+
+Cancellation requires a bounded `operatorReason`. An accepted cancellation fee binds fee quote reference/revision; all three are null if no supported preview was accepted. Scoped binding resolution returns a validated envelope with exact scope, provider, environment, active=true and revision; secret references are private. The server implementation must independently authorize the scope before resolving secrets.
+
+Stored quote `fingerprint` retains current-checkout binding semantics. A separate `contentDigest` binds the entire immutable envelope (excluding only the digest itself) using sorted-key canonical JSON, including full fulfillment request, provider response, revisions, timing and economic snapshot. This is an integrity digest, not an authorization signature. Trusted server create-only persistence verifies both hashes, current scope/settings and expiry. Adapters consume the stored fulfillment payload, never process-local memory from a preceding quote call. Binding fulfillmentAt equals request readyAt; duplicated create timing must agree with fulfillment timing.
+
+Automatic unknown-create recovery requires lookup by internal reference; lookup by provider ID alone is insufficient when create response was lost. Manual reconciliation remains explicit and prevents blind retries.
