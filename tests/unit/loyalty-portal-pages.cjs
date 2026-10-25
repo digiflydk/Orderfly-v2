@@ -82,6 +82,7 @@ function loadData({cookie,host,session}){
     '@/lib/firebase-admin':{getAdminDb:()=>({})},
     '@/lib/loyalty/stamp-card/counter':{LoyaltyError},
     '@/lib/loyalty/stamp-card/portal-http':{SESSION_COOKIE:'__Host-orderfly-loyalty'},
+    '@/lib/loyalty/stamp-card/order-history':{memberOrderHistory:async(db,brand,s)=>{calls.push(['orders',brand.brandId,s.memberId]);return [{id:'own'}];}},
     '@/lib/loyalty/discount-card/portal':{memberDiscountCard:async(db,brand,s)=>{calls.push(['discount',brand.brandId,s.memberId]);return null;}},
     '@/lib/loyalty/stamp-card/membership':{
       resolveBrand:async(db,slug)=>{if(slug!=='esmeralda')throw new LoyaltyError('brand_not_found',404);return{brandId:'b',slug,brandName:'Esmeralda',companyId:'c'};},
@@ -177,4 +178,10 @@ test('logos are fetched only from public image hosts, without redirects, and cut
   assert.equal(await home.logoBuffer('https://res.cloudinary.com/logo.png',stream([png],3_000_000)),null);
   // Redirects and network errors give no logo.
   assert.equal(await home.logoBuffer('https://res.cloudinary.com/logo.png',async()=>{throw new TypeError('redirect');}),null);
+});
+
+test('online history authenticates separately and only queries verified session identity',async()=>{
+ assert.deepEqual(await loadData({}).data.loadOrderHistory('esmeralda'),[]);
+ const expired=loadData({cookie:'a'.repeat(64)});assert.deepEqual(await expired.data.loadOrderHistory('esmeralda'),[]);assert.deepEqual(expired.calls,[['session','a'.repeat(64)]]);
+ const ok=loadData({cookie:'b'.repeat(64),session:{memberId:'owner'}});assert.deepEqual(await ok.data.loadOrderHistory('esmeralda'),[{id:'own'}]);assert.deepEqual(ok.calls,[['session','b'.repeat(64)],['orders','b','owner']]);
 });
