@@ -12,7 +12,7 @@ export type RoutingAdapter = {
 export type RouteEvidence = RouteDistance & {
   pickupReference: string; dropoffReference: string; durationSeconds: number;
 };
-export type RoutingResult = { ok: true; route: RouteEvidence } | { ok: false; reason:
+export type RoutingResult = { ok: true; route: RouteEvidence; pickup: VerifiedAddress; dropoff: VerifiedAddress } | { ok: false; reason:
   'routing_unconfigured' | 'invalid_address' | 'ambiguous_address' | 'routing_unavailable' | 'no_route' | 'invalid_route' };
 const text = (s: unknown) => typeof s === 'string' && s.trim().length > 0 && s.length <= 200;
 function validAddress(a: DeliveryAddress): boolean {
@@ -47,7 +47,7 @@ export async function resolveDeliveryRoute(input: { pickup: DeliveryAddress; dro
     if (![result.meters,result.durationSeconds].every(n=>Number.isSafeInteger(n)&&n>=0)) return {ok:false,reason:'invalid_route'};
     const date = dependencies.now();
     if (!Number.isFinite(date.getTime())) return {ok:false,reason:'invalid_route'};
-    return {ok:true,route:{meters:result.meters,durationSeconds:result.durationSeconds,method:'route',source:adapter.source,
+    return {ok:true,pickup:structuredClone(pickup.address),dropoff:structuredClone(dropoff.address),route:{meters:result.meters,durationSeconds:result.durationSeconds,method:'route',source:adapter.source,
       profile:input.profile,calculatedAt:date.toISOString(),pickupReference:pickup.address.reference,dropoffReference:dropoff.address.reference}};
   } catch { return {ok:false,reason:'routing_unavailable'}; }
 }

@@ -52,3 +52,11 @@ A pass in one class cannot stand in for another. Record blockers by class and na
 ## Release record
 
 For each candidate record main SHA, candidate SHA, test commands/results, independent review findings/resolutions, browser evidence, skipped/unavailable classes and reason. Re-run relevant checks after changes, not merely on an older commit. Coordinator owns serial merges and deployment, verifies actual release SHA and read-only live behavior, and retains rollback instructions. No current candidate has passed these gates yet.
+
+## Independent review checkpoint, 2026-10-25
+
+Reviewed implementation slices independently from their authors. Confirmed corrections include strict route calendar/timezone validation, immutable create fulfillment payload, cancellation fee identity, quote content integrity, internal-reference reconciliation readiness, safe handling of delivery events after refund, nullable ETA-only event provenance, and stale UI save-receipt rejection.
+
+Executed independently: pricing arithmetic/boundaries/overflow, settings native scope/CAS/audit, quote service and immutable store, booking/event transaction mocks, query scope/pagination, and actual Chromium administration UI. All reported passes apply to the respective reviewed commits, not an as-yet-unverified release commit. The coordinator must run the final combined candidate's internal tests/typecheck/build and record its exact SHA.
+
+The reviewed release boundary is **preparatory Levering administration and inactive delivery foundations**. This is not a complete delivery module: live routing, Wolt sandbox/production acceptance, actual checkout-payment-dispatch integration, compensation worker and launch activation remain separate gates. No real courier, charge, print output or production mutation was performed by QA.

@@ -1,10 +1,10 @@
 import { z } from 'zod';
-const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+const id = z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 const time = z.number().int().nonnegative().safe();
 const status = z.enum(['booked', 'courier_assigned', 'courier_to_pickup', 'picked_up', 'delivered', 'cancelled', 'failed']);
-const binding = { brandId: id, locationId: id, orderId: id, provider: id, providerDeliveryId: z.string().min(1).max(256) };
+const binding = { brandId: id, locationId: id, orderId: id, provider: id, providerDeliveryId: z.string().min(1).max(300) };
 const snapshotSchema = z.object({ ...binding, status, occurredAt: time, sequence: time.nullable(), nativeStatus: z.string().min(1).max(128) }).strict();
-const eventSchema = snapshotSchema.extend({ eventId: z.string().min(1).max(256), receivedAt: time }).strict();
+const eventSchema = snapshotSchema.extend({ eventId: z.string().min(1).max(300), receivedAt: time }).strict();
 export type DeliveryEventSnapshot = z.infer<typeof snapshotSchema>;
 export type DeliveryEventDecision = { action: 'apply' | 'ignore' | 'reconcile'; reason: string; snapshot: DeliveryEventSnapshot };
 const allowed: Record<DeliveryEventSnapshot['status'], readonly DeliveryEventSnapshot['status'][]> = {

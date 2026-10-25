@@ -24,7 +24,8 @@ function paths(brandId: string, locationId: string | null) {
   const brand = getAdminDb().collection('deliverySettings').doc(brandId);
   return { brand, local: locationId ? brand.collection('locations').doc(locationId) : null };
 }
-async function saved(tx: FirebaseFirestore.Transaction, brandId: string, locationId: string | null) {
+/** Internal transaction loader; caller must authorize the exact native scope in the same transaction. */
+export async function loadDeliverySettingsInTransaction(tx: FirebaseFirestore.Transaction, brandId: string, locationId: string | null) {
   const refs = paths(brandId, locationId), brandSnapshot = await tx.get(refs.brand);
   const brand = brandSnapshot.exists ? brandRecord.safeParse(brandSnapshot.data()) : null;
   if (brand && (!brand.success || brand.data.brandId !== brandId)) return unavailable();
@@ -42,7 +43,7 @@ export async function readDeliverySettings(input: unknown): Promise<DeliverySett
   const scope = parsed.data;
   return safe(() => getAdminDb().runTransaction(async tx => {
     await authorizeTransaction(tx, identity, scope, 'orderfly.catalog:view', scope.locationId ? 'location' : 'company');
-    const { result } = await saved(tx, scope.brandId, scope.locationId);
+    const { result } = await loadDeliverySettingsInTransaction(tx, scope.brandId, scope.locationId);
     try { await authorizeTransaction(tx, identity, scope, 'orderfly.catalog:edit', scope.locationId ? 'location' : 'company'); result.editable = true; }
     catch (error) { if (!(error instanceof AuthorityError && error.status === 403)) throw error; }
     return result;
@@ -54,7 +55,7 @@ export async function writeDeliverySettings(input: unknown): Promise<DeliverySet
   const command = parsed.data;
   return safe(() => getAdminDb().runTransaction(async tx => {
     await authorizeTransaction(tx, identity, command, 'orderfly.catalog:edit', command.scope === 'brand' ? 'company' : 'location');
-    const { refs, result } = await saved(tx, command.brandId, command.locationId);
+    const { refs, result } = await loadDeliverySettingsInTransaction(tx, command.brandId, command.locationId);
     if (result.revision !== command.expectedRevision || command.scope === 'location' && result.brandRevision !== command.expectedBrandRevision) throw new DeliverySettingsError('record_conflict', 409);
     const revision = result.revision + 1, ref = refs.local ?? refs.brand, auditRef = ref.collection('audit').doc(String(revision));
     if ((await tx.get(auditRef)).exists) throw new DeliverySettingsError('record_conflict', 409);

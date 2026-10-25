@@ -1,7 +1,7 @@
 const {test}=require('node:test');const assert=require('node:assert/strict');const {loadTs}=require('../helpers/load-ts.cjs');const {createHash}=require('node:crypto');
 const reference=createHash('sha256').update(JSON.stringify(['delivery-original-v1','a','a1','o1'])).digest('hex');
 const scope={brandId:'a',locationId:'a1',orderId:'o1'}, instant='2026-10-25T20:00:00.000Z';
-const event=(extra={})=>({version:1,scope:{brandId:'a',locationId:'a1'},providerId:'test',eventRef:'e1',providerDeliveryId:'p1',occurredAt:instant,receivedAt:instant,sequence:1,status:'picked_up',nativeStatus:'collected',pickupInterval:null,deliveryInterval:null,nativeErrorCode:null,...extra});
+const event=(extra={})=>({version:1,scope:{brandId:'a',locationId:'a1'},providerId:'test',eventRef:'e1',providerDeliveryId:'p1',occurredAt:instant,receivedAt:instant,sequence:1,status:'picked_up',nativeStatus:'collected',pickupInterval:null,pickupEstimateProvenance:null,dispatchedAt:null,deliveryInterval:null,nativeErrorCode:null,...extra});
 function fixture(options={}){
  const rows=new Map([['orders/o1',{brandId:'a',locationId:'a1',paymentStatus:'Paid',deliveryType:'Delivery',managedDelivery:{version:1,providerId:'test',quoteRef:'q1',requestDigest:'a'.repeat(64)}}],['orders/o1/deliveryAttempts/original',{schemaVersion:1,scope,provider:'test',intentId:reference,reference,requestDigest:'a'.repeat(64),revision:2,state:'booked',providerDeliveryId:'p1',createdAt:100,updatedAt:120}]]);let lock=Promise.resolve(),reads=0;
  const ref=path=>({path,collection:name=>({doc:id=>ref(`${path}/${name}/${id}`)})});
@@ -30,4 +30,15 @@ test('financial compensation never blocks verified provider delivery updates',as
  const f=fixture();f.rows.get('orders/o1').paymentStatus='Refunded';
  const result=await f.ingestDeliveryProviderEvent(async()=>({orderId:'o1',event:event({status:'cancelled'})}));
  assert.equal(result.applied,true);assert.equal(f.rows.get('orders/o1').paymentStatus,'Refunded');
+});
+
+test('ETA-only messages retain original provenance without inventing status or occurrence',async()=>{
+ const f=fixture(),eta=event({status:null,occurredAt:null,dispatchedAt:instant,pickupInterval:{earliest:instant,latest:instant},pickupEstimateProvenance:{source:'test',reliability:'verified_update',observedAt:instant}});
+ const result=await f.ingestDeliveryProviderEvent(async()=>({orderId:'o1',event:eta}));
+ assert.equal(result.applied,false);assert.equal(result.reconcile,false);assert.equal(f.rows.has('orders/o1/deliveryState/current'),false);
+ const inbox=[...f.rows.entries()].find(([key])=>key.includes('/deliveryEvents/'))[1];assert.equal(inbox.event.status,null);assert.equal(inbox.event.occurredAt,null);assert.equal(inbox.event.dispatchedAt,instant);assert.equal(inbox.event.pickupEstimateProvenance.reliability,'verified_update');
+});
+test('status without occurrence is retained for reconciliation, never uses dispatch time',async()=>{
+ const f=fixture(),result=await f.ingestDeliveryProviderEvent(async()=>({orderId:'o1',event:event({occurredAt:null,dispatchedAt:instant})}));
+ assert.equal(result.reconcile,true);assert.equal(result.applied,false);assert.equal(f.rows.has('orders/o1/deliveryState/current'),false);
 });

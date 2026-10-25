@@ -32,8 +32,12 @@ export async function ingestDeliveryProviderEvent(verifyAndResolve: () => Promis
     const current: DeliveryEventSnapshot = stateSnap.exists ? stateSnap.data() as DeliveryEventSnapshot : {
       ...scope, provider: event.providerId, providerDeliveryId: event.providerDeliveryId, status: 'booked', occurredAt: 0, sequence: null, nativeStatus: 'booking_accepted',
     };
-    const decision = planVerifiedDeliveryEvent(current, { ...scope, provider: event.providerId, providerDeliveryId: event.providerDeliveryId,
-      eventId: event.eventRef, receivedAt: Date.parse(event.receivedAt), occurredAt: Date.parse(event.occurredAt), sequence: event.sequence, status: event.status, nativeStatus: event.nativeStatus });
+    // ETA-only messages retain their complete estimates/provenance in the inbox.
+    // A transport dispatch timestamp must never become a status occurrence time.
+    const decision = event.status === null ? { action: 'ignore' as const, reason: 'eta_only_retained', snapshot: current }
+      : event.occurredAt === null ? { action: 'reconcile' as const, reason: 'missing_occurrence', snapshot: current }
+      : planVerifiedDeliveryEvent(current, { ...scope, provider: event.providerId, providerDeliveryId: event.providerDeliveryId,
+        eventId: event.eventRef, receivedAt: Date.parse(event.receivedAt), occurredAt: Date.parse(event.occurredAt), sequence: event.sequence, status: event.status, nativeStatus: event.nativeStatus });
     tx.create(inboxRef, { version: 1, fingerprint, event, decision: decision.action, reason: decision.reason, reconcile: decision.action === 'reconcile', recordedAt: Date.now() });
     if (decision.action === 'apply') tx.set(stateRef, decision.snapshot);
     return { duplicate: false, applied: decision.action === 'apply', reconcile: decision.action === 'reconcile' };

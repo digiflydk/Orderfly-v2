@@ -51,6 +51,9 @@ test('provider registry rejects test providers in production and never falls bac
  assert.throws(()=>registry.requireReady('unknown','test',evidence));
  assert.throws(()=>registry.requireReady('fixture','test',{...evidence,routingVerified:false}));
  assert.throws(()=>createDeliveryProviderRegistry([{adapter,mode:'test'},{adapter,mode:'test'}]));
+ const byIdOnly=createDeliveryProviderRegistry([{adapter:{...adapter,capabilities:{...caps,lookupByInternalReference:false}},mode:'test'}]);
+ assert.throws(()=>byIdOnly.requireReady('fixture','test',evidence));
+ assert.equal(byIdOnly.requireReady('fixture','test',{...evidence,reconciliation:'manual'}).providerId,'fixture');
 });
 test('stored quotes reject changed economics, foreign payload and excessive expiry',()=>{
  const calc=loadTs('src/lib/delivery/pricing/calculate.ts');

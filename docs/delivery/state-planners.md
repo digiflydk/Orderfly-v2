@@ -19,3 +19,15 @@ A future retry after a terminal rejected original is a deliberately new business
 Persistence tests: `tests/unit/delivery-booking-server.cjs` and `tests/unit/delivery-event-server.cjs` use an isolated atomic datastore fixture for concurrency, transaction retries, commit rollback, authorization revocation, foreign scope, altered digest, event authentication order, duplicates and conflicting terminal events. These are not live Firestore or Wolt acceptance evidence.
 
 Provider events do not require the current payment status to remain Paid: compensation and delivery states are independent. Events arriving before the accepted attempt is persisted are rejected by this internal service; the adapter must retain/retry or quarantine them durably. No event-loss guarantee is claimed without that adapter inbox integration.
+
+## Deterministic test provider
+
+`providers/test/index.ts` implements the shared provider interface in memory with explicitly supplied synthetic cost and clock. It simulates quote unavailable/expiry, definitive rejection, accepted-create lost response plus reconciliation, stable successful-create identity, mismatched payload rejection and scoped cancellation. It has no real dispatch or tracking link. Constructor refuses production runtime; registry must also register it as test-only. Its state is deliberately not durable and does not prove native provider behavior or worker recovery. Tests: `tests/unit/delivery-test-provider.cjs`.
+
+## Wolt nullable event provenance
+
+ETA-only normalized events (`status: null`) retain all intervals and pickup estimate provenance in the durable inbox without changing fulfillment status. Their action is `ignore` with `eta_only_retained`; this means no status projection, not dropped data. A real status with unknown occurrence time is retained with `missing_occurrence` and requests reconciliation. Transport `dispatchedAt` remains a separate native field and never substitutes for occurrence time. A future estimate projection must compare provider ordering/provenance and must not promote preliminary pickup estimates to verified kitchen/print timing.
+
+## Bounded operational reads
+
+GET `/api/delivery/orders` requires brandId/locationId plus optional cursor, or orderId with optional eventCursor. Native `orderfly.orders:view` authorization and location ownership precede order reads. List scans at most 26 scoped native order records in document-ID order and returns at most 25 managed-delivery rows; filtered empty pages can still have continuation. It does not claim a global count or chronological ordering. Detail checks ownership before nested attempt/state/event reads and returns at most 25 inbox rows per page. Continuations bind the exact scope and detail mode. Economics and tracking URLs are deliberately omitted/null until authorized validated projection exists. Dates/statuses are nullable; no default delivery progress is fabricated. Tests: `tests/unit/delivery-queries.cjs`.

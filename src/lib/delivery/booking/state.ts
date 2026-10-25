@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+const id = z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 const timestamp = z.number().int().nonnegative().safe();
 const scopeSchema = z.object({ brandId: id, locationId: id, orderId: id }).strict();
 export const bookingIntentSchema = z.object({
@@ -8,7 +8,7 @@ export const bookingIntentSchema = z.object({
   reference: id, requestDigest: z.string().regex(/^[a-f0-9]{64}$/),
   revision: z.number().int().nonnegative().safe(),
   state: z.enum(['pending', 'submitting', 'unknown', 'booked', 'rejected']),
-  providerDeliveryId: z.string().min(1).max(256).nullable(),
+  providerDeliveryId: z.string().min(1).max(300).nullable(),
   createdAt: timestamp, updatedAt: timestamp,
 }).strict().superRefine((value, ctx) => {
   if (value.updatedAt < value.createdAt || (value.state === 'booked') !== (value.providerDeliveryId !== null)) {
@@ -22,7 +22,7 @@ const commandSchema = z.object({
   outcome: z.discriminatedUnion('kind', [
     z.object({ kind: z.literal('submit') }).strict(),
     z.object({ kind: z.literal('unknown') }).strict(),
-    z.object({ kind: z.literal('accepted'), providerDeliveryId: z.string().min(1).max(256) }).strict(),
+    z.object({ kind: z.literal('accepted'), providerDeliveryId: z.string().min(1).max(300) }).strict(),
     // Caller must only use this after definitive no-booking evidence, not timeout/not-found.
     z.object({ kind: z.literal('rejected') }).strict(),
   ]),

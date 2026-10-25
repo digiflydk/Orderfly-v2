@@ -7,7 +7,7 @@ import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { managedDeliveryBindingSchema } from '../provider-contract';
 import { bookingIntentSchema, transitionBookingIntent, type BookingIntent } from './state';
 
-const id = z.string().regex(/^[A-Za-z0-9_-]{1,128}$/);
+const id = z.string().regex(/^[A-Za-z0-9_-]{1,200}$/);
 const scopeSchema = z.object({ brandId: id, locationId: id, orderId: id }).strict();
 const managedSchema = managedDeliveryBindingSchema;
 const digest = (value: unknown) => createHash('sha256').update(JSON.stringify(value)).digest('hex');
