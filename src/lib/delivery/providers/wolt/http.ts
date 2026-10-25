@@ -28,11 +28,12 @@ export function createWoltHttpClient(context: { baseUrl: string; merchantKey: st
   const fetchImpl = options.fetchImpl ?? fetch;
   const sleep = options.sleep ?? (ms => new Promise(resolve => setTimeout(resolve, ms)));
   return { async request(input) {
+    const { method, path, operation } = input;
     // Forbid absolute URLs, query/fragment and path traversal so credentials never leave the fixed host.
-    if (!/^\/[a-zA-Z0-9_/-]+$/.test(input.path) || input.path.includes('//') || input.path.includes('..')) return { ok: false, error: { code: 'invalid_request', retryClass: 'never', outcome: 'rejected' } };
-    const write = input.method !== 'GET' && !(input.operation === 'quote' && /^\/v1\/venues\/[A-Za-z0-9_-]+\/shipment-promises$/.test(input.path));
+    if (!/^\/[a-zA-Z0-9_/-]+$/.test(path) || path.includes('//') || path.includes('..')) return { ok: false, error: { code: 'invalid_request', retryClass: 'never', outcome: 'rejected' } };
+    const write = method !== 'GET' && !(operation === 'quote' && /^\/v1\/venues\/[A-Za-z0-9_-]+\/shipment-promises$/.test(path));
     // Only known read/quote endpoints qualify for retries. Caller labels alone cannot make a write safe.
-    const safe = (input.operation === 'read' && input.method === 'GET') || (input.operation === 'quote' && input.method === 'POST' && /^\/v1\/venues\/[A-Za-z0-9_-]+\/shipment-promises$/.test(input.path));
+    const safe = (operation === 'read' && method === 'GET') || (operation === 'quote' && method === 'POST' && /^\/v1\/venues\/[A-Za-z0-9_-]+\/shipment-promises$/.test(path));
     let body: string | undefined;
     try { body = input.body === undefined ? undefined : JSON.stringify(input.body); } catch { return { ok: false, error: { code: 'invalid_request', retryClass: 'never', outcome: 'rejected' } }; }
     if (body && Buffer.byteLength(body) > 256_000) return { ok: false, error: { code: 'invalid_request', retryClass: 'never', outcome: 'rejected' } };
@@ -41,7 +42,7 @@ export function createWoltHttpClient(context: { baseUrl: string; merchantKey: st
       const timer = setTimeout(() => controller.abort(), timeoutMs);
       let result: WoltHttpResult;
       try {
-        const response = await fetchImpl(baseUrl + input.path, { method: input.method, headers: { Authorization: `Bearer ${merchantKey}`, 'Content-Type': 'application/json', Accept: 'application/json' }, body, signal: controller.signal, redirect: 'error', cache: 'no-store' });
+        const response = await fetchImpl(baseUrl + path, { method: method, headers: { Authorization: `Bearer ${merchantKey}`, 'Content-Type': 'application/json', Accept: 'application/json' }, body, signal: controller.signal, redirect: 'error', cache: 'no-store' });
         const reader = response.body?.getReader();
         let raw = ''; let size = 0;
         if (reader) {

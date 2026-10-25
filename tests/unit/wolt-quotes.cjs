@@ -62,3 +62,8 @@ test('strict calendar and bounded instants reject silent normalization',()=>{
  for(const v of ['2026-02-30T12:00:00Z','2026-02-29T12:00:00Z','2026-01-01T24:00:00Z','2026-01-01T12:00:00+14:30','9999-01-01T12:00:00Z'])assert.throws(()=>schedule.woltInstant(v));
  assert.equal(schedule.woltInstant('2028-02-29T12:00:00Z'),Date.parse('2028-02-29T12:00:00Z'));
 });
+test('request method path and operation cannot change during retries',async()=>{
+ const request={method:'POST',operation:'quote',path:'/v1/venues/a/shipment-promises',body:{}};let calls=0;
+ const c=createWoltHttpClient(ctx,{maxReadRetries:1,sleep:async()=>{request.method='DELETE';request.operation='cancel';request.path='/v1/venues/a/deliveries'},fetchImpl:async(url,opts)=>{calls++;assert.equal(new URL(url).pathname,'/v1/venues/a/shipment-promises');assert.equal(opts.method,'POST');return new Response('{}',{status:500})}});
+ await c.request(request);assert.equal(calls,2);
+});
