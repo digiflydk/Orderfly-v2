@@ -337,3 +337,12 @@ Medlemskort, QR, belønninger, historik og profil følger nu også restaurantens
 Browserregressioner bruger de faktiske komponenter og syntetiske svar: medlemskort/historik/profil ved 320/390/820/1440 px, ti stempler på smal skærm, tom historik, aktiv navigation, QR-kontrast, brand-isolation samt de eksisterende QR-, samtykke- og fejlforløb. Dette er isolerede browsertests, ikke produktionsdata- eller fysisk hardwareaccept.
 
 Live acceptance efter verificeret deployet release: log ind med autoriseret eksisterende medlemskonto, gennemgå Kort, Historik og Profil read-only, kontroller korrekt data og navigation samt QR-område uden at offentliggøre kode/token eller medlemsoplysninger. Undlad samtykkeændring, sletning og tildeling/indløsning af stempler. Engangs-loginlinks og QR-payloads må aldrig gemmes i GitHub eller screenshots. Autentificeret live acceptance skal dokumenteres særskilt før #453 lukkes.
+
+
+## Loginmail ved hjemmesidekøb (#597)
+
+Et hjemmesidekøb sender ikke en separat loginmail til kundeportalen. Det gælder også første Club-tilmelding og gentagen tilmelding i checkout: medlemskab, samtykke og eventuelle tilmeldingsbelønninger oprettes fortsat, men der oprettes hverken login-token eller loginmail-job. Ordre-, betalings- og kvitteringsmails følger deres eksisterende flows. Kunden kan selv bede om et loginlink fra Club-portalen; portalens tilmelding og login sender fortsat mail.
+
+Årsagen var checkout → `prepareClubCheckoutSignup` → `signup` med `source: checkout`, hvor både nye og eksisterende medlemmer fik oprettet et loginlink og et mailjob. Rettelsen ligger i medlemskabstransaktionen før oprettelsen af token/outbox. Checkout kalder heller ikke maillevering. Dermed kan checkout-retries og mail-workerens heartbeat ikke skabe eller sende et nyt checkout-loginlink. Eksisterende eksplicit bestilte portal-mails berøres ikke. Der ændres ikke historiske produktionsjobs som del af deployment.
+
+Regression: `loyalty-club-signup-integration.cjs` dækker nye og eksisterende medlemmer, samtidige retries, tom login-outbox og bevaret eksplicit portal-login/tilmelding. `club-checkout.cjs` dækker almindeligt køb for nye og eksisterende kunder. `loyalty-membership.cjs` og `loyalty-portal-routes.cjs` bevarer login-token-, mailleverings-, udløbs- og retry-kontrakterne. Tests bruger syntetiske data uden rigtig mail.

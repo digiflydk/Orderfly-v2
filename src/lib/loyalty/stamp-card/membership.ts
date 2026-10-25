@@ -194,7 +194,9 @@ export async function signup(db: Firestore, brand: ProgramBrand, input: z.infer<
           loyaltyEvent(member,String(identity.memberId),now,'consent_given',{channel:'email',reason:consentVersion}));
         } else { recordIp(); recordEmail(); }
       } else { recordIp(); recordEmail(); }
-      return stageLoginLink(tx, db, brand, s.name, String(identity.memberId), member, now);
+      // Checkout enrols/refreshes consent; it is not a request to log in.
+      // Suppress at creation so neither immediate delivery nor worker retries can mail it.
+      return trusted.source === 'checkout' ? null : stageLoginLink(tx, db, brand, s.name, String(identity.memberId), member, now);
     }
     const customer = await resolveCustomer(tx, db, brand.brandId, email);
     const memberId = db.collection(COLLECTIONS.members).doc().id;
@@ -225,7 +227,7 @@ export async function signup(db: Firestore, brand: ProgramBrand, input: z.infer<
       { reason: termsVersion, result: { textVersion: program.texts.version, textHash: texts.hash } }));
     tx.create(db.collection(COLLECTIONS.events).doc(hashKey('consent-given', memberId, consent.id)),
       loyaltyEvent(member, memberId, now, 'consent_given', { channel: 'email', reason: consentVersion }));
-    return stageLoginLink(tx, db, brand, s.name, memberId, member, now);
+    return trusted.source === 'checkout' ? null : stageLoginLink(tx, db, brand, s.name, memberId, member, now);
   }).catch(error => {
     // An identity conflict needs an administrator; the customer still gets the neutral answer.
     if (trusted.source !== 'checkout' && error instanceof LoyaltyError && error.code === 'customer_conflict') { console.error('[loyalty] customer identity conflict', brand.brandId); return null; }
