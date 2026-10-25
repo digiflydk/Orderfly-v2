@@ -1,0 +1,11 @@
+# Brand order terminal board (#622 / #623)
+
+`TerminalClient` uses the scoped terminal GET endpoint, with a separate location context and board/history/preorders tabs. Touch controls are at least44px. Board columns show received/preparing/ready and order products, modifiers, notes, fulfillment time and payment state. Details use an accessible dialog. History and reprint are composed from their dedicated lane components.
+
+Order progression submits exact prior status and one UUID per intended transition. A lost response keeps the UUID for retry; no optimistic completed/paid UI is shown. Server truth is reloaded. Existing pickup payment settlement is exposed through a payment-only confirmation; it is never implied by marking collected. Completion is disabled for unpaid orders. Server authorization remains authoritative.
+
+The board polls at15s with a12s per-request timeout and no overlapping requests. Every poll serially traverses all active pages before replacing the previous complete snapshot or calculating new-order alerts; intermediate rows are visibly partial. This prevents random document IDs from hiding newer orders beyond the first page. A repeated cursor is rejected. Focus/visibility/online events refresh it. Scope/filter changes abort and discard stale responses. History/preorders refresh on entry and explicit refresh. A separate board subscription remains active on these tabs, so new-order alerts continue; no additional board request is made on the board tab itself. Paging is bounded and clearly says that counts are loaded counts when more data exists. An offline/error/stale snapshot disables progression and remains visibly stale, never a success. Page refresh can reset paging to the first page.
+
+Alerts begin only after the initial successful complete board scan. Seen IDs suppress repeat alerts; scope changes reset the baseline. Optional sound requires an explicit gesture to resume AudioContext. Suspended or unsupported audio has a visible message. Browser/iPad background execution is not guaranteed; staff should keep the terminal open. No push-notification or paid service added.
+
+Local browser fixtures are synthetic and do not prove physical iPad Safari audio/resume, actual customer transactions or paper output. Those remain distinct release acceptance evidence under #617.

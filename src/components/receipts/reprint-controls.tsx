@@ -8,7 +8,7 @@ type Printer = { id: string; name: string; revision: number; connected: boolean;
 type Command = Scope & { printerId: string; printerRevision: number; requestId: string };
 type PrintState = 'queued' | 'offered' | 'download_started' | 'confirmed' | 'failed' | 'unknown' | 'expired';
 type Result = Command & { state: PrintState };
-const endpoint = '/api/superadmin/printers/reprint';
+const adminEndpoint = '/api/superadmin/printers/reprint';
 const states: Record<PrintState, string> = {
   queued: 'Genprint er lagt i kø. Afventer printeren.',
   offered: 'Printeren er ved at hente bonen.',
@@ -38,7 +38,8 @@ async function json(response: Response, limit: number): Promise<any> {
 
 /** Explicit physical reprints only. A retry retains the same request identity;
  * status polling cannot create jobs and an ambiguous write never resets it. */
-export function ReprintControls(props: Scope) {
+export function ReprintControls({ merchant = false, ...props }: Scope & { merchant?: boolean }) {
+  const endpoint = merchant ? '/api/merchant/orders/reprint' : adminEndpoint;
   const scopeKey = JSON.stringify(props);
   const [printers, setPrinters] = useState<Printer[]>([]), [selected, setSelected] = useState('');
   const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false);
@@ -58,8 +59,8 @@ export function ReprintControls(props: Scope) {
       const found: Printer[] = []; let after: string | null = null;
       // Bounded native pages; fail visibly rather than silently hiding printers.
       for (let page = 0; page < 4; page++) {
-        const query = new URLSearchParams({ brandId: props.brandId, locationId: props.locationId, overview: 'true', limit: '50', ...(after ? { after } : {}) });
-        const response = await fetch('/api/merchant/printers?' + query, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
+        const query = new URLSearchParams({ brandId: props.brandId, locationId: props.locationId, ...(merchant ? { orderId: props.orderId } : { overview: 'true', limit: '50' }), ...(after ? { after } : {}) });
+        const response = await fetch((merchant ? endpoint : '/api/merchant/printers') + '?' + query, { credentials: 'same-origin', cache: 'no-store', signal: controller.signal });
         if (!response.ok) throw Error(String(response.status));
         const data = await json(response, 131072);
         if (!Array.isArray(data.items) || data.items.length > 50 || !(data.nextCursor === null || typeof data.nextCursor === 'string' && identifier.test(data.nextCursor))) throw Error('invalid_response');
@@ -90,7 +91,7 @@ export function ReprintControls(props: Scope) {
         : 'Printerne kunne ikke indlæses. Prøv igen.');
     }).finally(() => { if (isCurrent()) setLoading(false); });
     return () => { generation.current++; controller.abort(); activeRequest.current?.abort(); };
-  }, [scopeKey, refresh]); // All order/scope changes invalidate pending UI responses.
+  }, [scopeKey, refresh, merchant]); // All order/scope changes invalidate pending UI responses.
 
   async function perform(method: 'GET' | 'POST', target: Command) {
     if (pending.current || sessionLost) return;
@@ -124,6 +125,7 @@ export function ReprintControls(props: Scope) {
     if (retry && command) { void perform('POST', command); return; }
     if (command && !canRequestNewCopy(result?.state)) return;
     const printer = printers.find(p => p.id === selected); if (!printer) return;
+    if (merchant && !window.confirm(`Udskriv en ekstra ${props.kind === 'kitchen' ? 'køkkenbon' : 'kundekvittering'} for ${props.orderId} på ${printer.name}?`)) return;
     const next = { ...props, printerId: printer.id, printerRevision: printer.revision, requestId: crypto.randomUUID() };
     setCommand(next); setResult(null); setRetry(false);
     void perform('POST', next);
@@ -155,7 +157,7 @@ export function ReprintControls(props: Scope) {
     {printer && (!printer.connected || printer.endpoint !== 'live') && <p className="text-sm">{printer.endpoint === 'test'
       ? 'Printeren bruger Test URL. Skift til Live URL for at modtage genprint.'
       : !printer.connected ? 'Printeren er ikke registreret som forbundet. Kontrollér forbindelsen.' : 'Der er endnu ikke registreret kontakt via Live URL.'}</p>}
-    {!loading && !printers.length && !listError && <p className="text-sm">Opret eller aktivér en printer på denne lokation under System → Printere.</p>}
+    {!loading && !printers.length && !listError && <p className="text-sm">{merchant ? 'Ingen printer er klar til genprint på denne lokation. Kontakt din administrator.' : 'Opret eller aktivér en printer på denne lokation under System → Printere.'}</p>}
     {result && <p role="status">{states[result.state]}</p>}
     {(listError || message) && <p role="alert">{listError || message}</p>}
   </section>;

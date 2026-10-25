@@ -1,7 +1,7 @@
 import 'server-only';
 import { createHash } from 'node:crypto';
 import { getAdminDb } from '@/lib/firebase-admin';
-import { requirePlatformSuperuser } from '@/lib/access/orderfly-session';
+import { requirePlatformSuperuser, orderflySession } from '@/lib/access/orderfly-session';
 import { AuthorityError, principalKey, type VerifiedIdentity } from '@/lib/access/authority';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import { isSuperuser, policySchema } from '@/lib/access/policy';
@@ -24,10 +24,12 @@ function nativeScope(snapshot: FirebaseFirestore.DocumentSnapshot, expected: str
     && ['deleted', 'isDeleted', 'isTestData'].every(key => value[key] === undefined || value[key] === false)
     && (value.deletedAt === undefined || value.deletedAt === null) && (value.isActive === undefined || value.isActive === true);
 }
-async function scope(tx: FirebaseFirestore.Transaction, identity: VerifiedIdentity, a: ManualPrintCommand) {
+async function scope(tx: FirebaseFirestore.Transaction, identity: VerifiedIdentity, a: ManualPrintCommand, merchant = false) {
   const db = getAdminDb(), actorId = principalKey(identity);
-  const access = policySchema.safeParse((await tx.get(db.collection('platformAdminControl').doc('access-v1'))).data());
-  if (!access.success || !isSuperuser(access.data, actorId)) throw new AuthorityError('forbidden');
+  if (!merchant) {
+    const access = policySchema.safeParse((await tx.get(db.collection('platformAdminControl').doc('access-v1'))).data());
+    if (!access.success || !isSuperuser(access.data, actorId)) throw new AuthorityError('forbidden');
+  }
   await authorizeTransaction(tx, identity, a, 'orderfly.orders:edit', 'location');
   const printerRef = db.collection('locations').doc(a.locationId).collection('printers').doc(a.printerId);
   const [brand, location, order, printer, credential, saved] = await Promise.all([
@@ -45,6 +47,10 @@ async function scope(tx: FirebaseFirestore.Transaction, identity: VerifiedIdenti
     || p.data.configuration.state !== 'active' || p.data.configuration.transport !== 'cloudprnt-http'
     || !c.success || c.data.brandId !== a.brandId || c.data.locationId !== a.locationId || c.data.printerId !== a.printerId
     || c.data.printerRevision !== a.printerRevision || c.data.revokedAt !== null || c.data.issuedAt > Date.now()) return conflict();
+  // Merchant copies require an actual accepted order, never an unpaid online attempt.
+  if (merchant && !saved.exists && o.paymentStatus !== 'Paid' && !(o.paymentMethod === 'PayAtPickup' && o.paymentStatus === 'Pending'
+    && o.deliveryType === 'Pickup' && !o.psp && o.discountReservation === 'held'
+    && ['Received', 'In Progress', 'Ready'].includes(o.status))) return conflict();
   let prior: ManualPrintJob | null = null;
   if (saved.exists) {
     const parsed = storedManualPrintJobSchema.safeParse(saved.data());
@@ -54,24 +60,24 @@ async function scope(tx: FirebaseFirestore.Transaction, identity: VerifiedIdenti
   return { printerRef, actorId, prior, credentialRevision: c.data.credentialRevision,
     orderFingerprint: sha256(JSON.stringify([order.updateTime?.toMillis() ?? null, o])), configurationFingerprint: sha256(JSON.stringify(p.data.configuration)) };
 }
-export async function readManualPrint(input: unknown) {
-  const session = await requirePlatformSuperuser(), parsed = manualPrintCommandSchema.safeParse(input);
+async function read(input: unknown, merchant: boolean) {
+  const session = await (merchant ? orderflySession() : requirePlatformSuperuser()), parsed = manualPrintCommandSchema.safeParse(input);
   if (!parsed.success) throw new ManualPrintError('manual_print_invalid');
   const db = getAdminDb();
   return db.runTransaction(async tx => {
-    const found = await scope(tx, session.identity, parsed.data);
+    const found = await scope(tx, session.identity, parsed.data, merchant);
     if (!found.prior) return conflict();
     return projectManualPrint(found.prior);
   });
 }
 /** Explicit new copy, never an original replay. Rendering is outside the retrying
  * Firestore transaction; native order/printer/credential authority is checked again. */
-export async function requestManualPrint(input: unknown) {
-  const session = await requirePlatformSuperuser(), parsed = manualPrintCommandSchema.safeParse(input);
+async function request(input: unknown, merchant: boolean) {
+  const session = await (merchant ? orderflySession() : requirePlatformSuperuser()), parsed = manualPrintCommandSchema.safeParse(input);
   if (!parsed.success) throw new ManualPrintError('manual_print_invalid');
   gates();
   const a = parsed.data, db = getAdminDb();
-  const before = await db.runTransaction(tx => scope(tx, session.identity, a));
+  const before = await db.runTransaction(tx => scope(tx, session.identity, a, merchant));
   if (before.prior) return projectManualPrint(before.prior);
   const content = await prepareReceiptPrintContent({ orderId: a.orderId, brandId: a.brandId,
     locationId: a.locationId, printerId: a.printerId, kind: a.kind });
@@ -80,7 +86,7 @@ export async function requestManualPrint(input: unknown) {
     || content.sha256 !== sha256(content.payload)) throw new ManualPrintError('manual_print_unavailable');
   return db.runTransaction(async tx => {
     gates();
-    const current = await scope(tx, session.identity, a);
+    const current = await scope(tx, session.identity, a, merchant);
     if (current.prior) return projectManualPrint(current.prior);
     if (current.orderFingerprint !== before.orderFingerprint || current.configurationFingerprint !== before.configurationFingerprint
       || current.credentialRevision !== before.credentialRevision) return conflict();
@@ -108,3 +114,9 @@ export async function requestManualPrint(input: unknown) {
     return projectManualPrint(job, now);
   });
 }
+
+// Public entry points always establish their own session and fresh transaction authority.
+export const readManualPrint = (input: unknown) => read(input, false);
+export const requestManualPrint = (input: unknown) => request(input, false);
+export const readMerchantPrint = (input: unknown) => read(input, true);
+export const requestMerchantPrint = (input: unknown) => request(input, true);
