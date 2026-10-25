@@ -59,7 +59,7 @@ async function fixture(options = {}) {
   const session = { id: 'cs_test_atomic_349_reference', mode: 'payment', status: 'complete', payment_status: 'paid', currency: 'dkk',
     amount_total: Math.round(f.order().totalAmount * 100), metadata: { orderId: f.orderId, brandId: 'b', locationId: 'l' } };
   class Provider { checkout = { sessions: { retrieve: async id => { requests.push(id); if (options.providerFailure) throw Error('private provider detail'); return { ...structuredClone(session), ...options.providerPatch }; } } }; }
-  const load = moduleGraph({ ...f.mocks, stripe: { default: Provider },
+  const load = moduleGraph({ ...f.mocks, 'next/headers': { cookies: async () => ({ get: () => undefined }) }, stripe: { default: Provider },
     '@/lib/server/payment-settings': { getActiveStripeSecretKey: async () => 'fixture-provider-key' },
     'firebase-admin/firestore': { FieldValue: { serverTimestamp: () => 'fixture-server-time' } },
   });
@@ -335,7 +335,13 @@ test('#349 Paid replay refuses missing/corrupt manifest, changed targets/rules/c
 
 test('#349 valid provider origin/serialized objects cannot mint the private financial plan capability', async () => {
   const f = await fixture(), origin = await f.origins.verifyStripePrintPayment(f.session.id), before = structuredClone([...f.records]);
-  assert.deepEqual(Object.keys(f.settlement).sort(), ['readStripeSettlementPrintCapability', 'readPickupSettlementPrintCapability', 'settlePaidCheckoutSession', 'settlePaidPickupOrder'].sort());
+  assert.deepEqual(Object.keys(f.settlement).sort(), ['readStripeSettlementPrintCapability', 'readPickupSettlementPrintCapability', 'settlePaidCheckoutSession', 'settlePaidPickupOrder', 'settleTerminalPickupOrder'].sort());
+  // The new guarded terminal entry point accepts no caller authority. Even a
+  // valid provider proof or forged session passed as an extra argument cannot
+  // replace the required dedicated cookie, despite this fixture's admin identity.
+  for (const forged of [origin, { kind: 'terminal', actorId: f.actorId, brandId: 'b', locationId: 'l' }]) {
+    await assert.rejects(f.settlement.settleTerminalPickupOrder(f.orderId, 'cash', forged), error => error.status === 401);
+  }
   for (const fake of [{}, origin, JSON.parse(JSON.stringify(origin)), null]) {
     await assert.rejects(f.db.runTransaction(transaction => f.outbox.prepareStripeSettlementPrintIntents({ db: f.db, transaction }, fake, { intents: [] })), /Unverified settlement print capability/);
   }
