@@ -4,6 +4,7 @@ import { getAdminDb } from '@/lib/firebase-admin';
 import { orderflySession } from '@/lib/access/orderfly-session';
 import { principalKey } from '@/lib/access/authority';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
+import { getOrderTerminalActor, authorizeOrderTerminalTransaction, type OrderTerminalAuthSource } from '@/lib/terminal-auth/access';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
 import type { RestaurantPaymentForm } from '@/lib/merchant-payment-methods';
 import type { KitchenOrder } from './domain';
@@ -36,7 +37,7 @@ const orderSchema = z.object({
 const brandSchema = z.object({ id: id.optional(), ...liveMarkers });
 const locationSchema = z.object({ id: id.optional(), brandId: id, ...liveMarkers });
 const TTL_MS = 300_000;
-type Origin = { orderId: string; method: RestaurantPaymentForm; actorKey: string;
+type Origin = { source: OrderTerminalAuthSource; orderId: string; method: RestaurantPaymentForm; actorKey: string;
   issuedAt: number; lastObservedAt: number; invalidated: boolean };
 /** Runtime provenance only. No payment was written or committed by issuing this handle. */
 export type PickupPrintPaymentProof = Readonly<{ readonly pickupPrintPaymentProof: unique symbol }>;
@@ -63,28 +64,37 @@ function assertCurrent(origin: Origin): void {
   }
   origin.lastObservedAt = time;
 }
-async function currentActor() {
+async function currentActor(source: OrderTerminalAuthSource = 'admin') {
   try {
+    if (source === 'terminal') {
+      const terminalActor = await getOrderTerminalActor('terminal');
+      return { identity: null, key: terminalActor.actorId, terminalActor };
+    }
     const actor = await orderflySession();
     const key = principalKey(actor.identity);
     if (actor.actorId !== key) throw new Error('actor mismatch');
-    return { identity: actor.identity, key };
+    return { identity: actor.identity, key, terminalActor: null };
   } catch { throw new PickupPrintProofError('pickup_unverified'); }
 }
 
 /** Reads the trusted server session. A supplied identity/session/grant is never accepted.
  * This captures the staff's settlement request, not evidence of a payment collection.
  */
-export async function verifyPickupPrintPayment(input: unknown): Promise<PickupPrintPaymentProof> {
+async function verifyPickupPayment(input: unknown, source: OrderTerminalAuthSource): Promise<PickupPrintPaymentProof> {
   if (!boundedTextFields(input, { orderId: 128, method: 4 })) throw new PickupPrintProofError('invalid_pickup_reference');
   const parsed = request.safeParse(input);
   if (!parsed.success) throw new PickupPrintProofError('invalid_pickup_reference');
-  const actor = await currentActor();
+  const actor = await currentActor(source);
   const time = serverTime();
   const handle = Object.freeze({}) as PickupPrintPaymentProof;
-  origins.set(handle, { ...parsed.data, actorKey: actor.key, issuedAt: time, lastObservedAt: time, invalidated: false });
+  origins.set(handle, { source, ...parsed.data, actorKey: actor.key, issuedAt: time, lastObservedAt: time, invalidated: false });
   return handle;
 }
+
+// Explicit entry points resolve their own server session. No caller capability or
+// identity can mint a proof and existing staff entry always uses admin authority.
+export const verifyPickupPrintPayment = (input: unknown) => verifyPickupPayment(input, 'admin');
+export const verifyTerminalPickupPrintPayment = (input: unknown) => verifyPickupPayment(input, 'terminal');
 
 /** Rechecks the current server actor and native grants inside EACH attempt.
  * No mutation, outbox insertion or dispatch. A fresh context per retry is required.
@@ -94,7 +104,7 @@ export async function preparePickupPrintTransition(context: NativeTransactionCon
   if (!origin) throw new PickupPrintProofError('pickup_unverified');
   assertCurrent(origin);
   if (!context || context.db !== getAdminDb() || !context.transaction) throw new PickupPrintProofError('transition_unverified');
-  const actor = await currentActor();
+  const actor = await currentActor(origin.source);
   if (actor.key !== origin.actorKey) throw new PickupPrintProofError('pickup_unverified');
   assertCurrent(origin);
   const { db, transaction } = context;
@@ -110,7 +120,10 @@ export async function preparePickupPrintTransition(context: NativeTransactionCon
   if (order.paymentStatus === 'Pending' ? order.discountReservation !== 'held' || order.paymentCollection != null
     : !['consumed', 'none'].includes(order.discountReservation || '') || !order.paymentCollection || order.paymentCollection.method !== origin.method) throw new PickupPrintProofError('transition_unverified');
   // Current stored policy/native scope are transaction reads, not captured session permissions.
-  try { await authorizeTransaction(transaction, actor.identity, order, 'orderfly.orders:edit', 'location'); }
+  try {
+    if (actor.terminalActor) await authorizeOrderTerminalTransaction(transaction, actor.terminalActor, order);
+    else await authorizeTransaction(transaction, actor.identity!, order, 'orderfly.orders:edit', 'location');
+  }
   catch { throw new PickupPrintProofError('pickup_unverified'); }
   const [brandSnapshot, locationSnapshot] = await Promise.all([
     transaction.get(db.collection('brands').doc(order.brandId)),

@@ -11,6 +11,7 @@ import { buildOrderInvoice, invoiceCounterId } from '@/lib/order-invoice';
 import { paidOrderMarketingEnabled } from '@/lib/marketing/config';
 import { scratchCardDraftSchema } from '@/lib/games/scratch-card';
 import { orderflySession } from '@/lib/access/orderfly-session';
+import { getOrderTerminalActor, authorizeOrderTerminalTransaction, type OrderTerminalActor } from '@/lib/terminal-auth/access';
 import { principalKey } from '@/lib/access/authority';
 import { authorizeTransaction } from '@/lib/access/scoped-data';
 import type { RestaurantPaymentForm } from '@/lib/merchant-payment-methods';
@@ -24,7 +25,7 @@ import { projectNativePrintCatalog } from '@/lib/printing/catalog-line-projectio
 import { prepareSavedPrinterRouting } from '@/lib/printing/saved-routing';
 import { previewPrinterRouting } from '@/lib/printing/routing-preview';
 import { prepareStripeSettlementPrintIntents, preparePickupSettlementPrintIntents } from '@/lib/printing/outbox';
-import { verifyPickupPrintPayment, preparePickupPrintTransition, pickupPrintTransitionProjection,
+import { verifyPickupPrintPayment, verifyTerminalPickupPrintPayment, preparePickupPrintTransition, pickupPrintTransitionProjection,
   type PickupPrintTransition } from '@/lib/printing/pickup-transition-proof';
 
 /** Minted only by the private ACTUAL financial plan, never by an origin/DTO caller. */
@@ -71,12 +72,19 @@ export async function settlePaidPickupOrder(orderId: string, method: RestaurantP
   return settleOrder({ kind: 'pickup', orderId, method, actor });
 }
 
+// Dedicated location portal entry. Never grants a generic staff/admin identity.
+export async function settleTerminalPickupOrder(orderId: string, method: RestaurantPaymentForm) {
+  if (!/^[A-Za-z0-9_-]{1,128}$/.test(orderId) || !['cash', 'card'].includes(method)) throw new Error('Ugyldig betalingsregistrering.');
+  const terminalActor = await getOrderTerminalActor('terminal');
+  return settleOrder({ kind: 'pickup', orderId, method, actor: null, terminalActor });
+}
+
 const isTerminalPaidReplay = (order: { paymentStatus?: unknown; status?: unknown } | undefined) =>
   order?.paymentStatus === 'Paid' && typeof order.status === 'string'
   && ['Completed', 'Delivered', 'Error', 'Canceled'].includes(order.status);
 
 type PaymentProof = { kind: 'stripe'; session: Stripe.Checkout.Session }
-  | { kind: 'pickup'; orderId: string; method: RestaurantPaymentForm; actor: Awaited<ReturnType<typeof orderflySession>> };
+  | { kind: 'pickup'; orderId: string; method: RestaurantPaymentForm; actor: Awaited<ReturnType<typeof orderflySession>> | null; terminalActor?: OrderTerminalActor };
 async function settleOrder(proof: PaymentProof) {
   const session = proof.kind === 'stripe' ? proof.session : null;
   const metadata: { orderId: string; brandId: string; locationId: string } = session
@@ -94,7 +102,7 @@ async function settleOrder(proof: PaymentProof) {
   const printIntentsEnabled = process.env.ORDERFLY_PRINT_INTENTS_ENABLED === 'true';
   let stripePrintProof: StripePrintPaymentProof | undefined;
   const pickupPrintProof = printIntentsEnabled && proof.kind === 'pickup'
-    ? await verifyPickupPrintPayment({ orderId: proof.orderId, method: proof.method }) : undefined;
+    ? await (proof.terminalActor ? verifyTerminalPickupPrintPayment : verifyPickupPrintPayment)({ orderId: proof.orderId, method: proof.method }) : undefined;
   if (printIntentsEnabled && session) {
     const needsPrintProof = await db.runTransaction(async transaction => {
       // Terminal Paid repair has no print dependency, including stale policy or targets.
@@ -147,7 +155,8 @@ async function settleOrder(proof: PaymentProof) {
     const order = orderSnap.data()!;
     analytics = order.analytics;
     if (proof.kind === 'pickup') {
-      await authorizeTransaction(transaction, proof.actor.identity, order, 'orderfly.orders:edit', 'location');
+      if (proof.terminalActor) await authorizeOrderTerminalTransaction(transaction, proof.terminalActor, { brandId: order.brandId, locationId: order.locationId });
+      else await authorizeTransaction(transaction, proof.actor!.identity, order, 'orderfly.orders:edit', 'location');
       if (order.paymentMethod !== 'PayAtPickup' || order.deliveryType !== 'Pickup' || order.psp) throw new Error('Kun afhentningsordrer med betaling i restaurant kan registreres her.');
       metadata.brandId = order.brandId; metadata.locationId = order.locationId;
       if (order.paymentStatus !== 'Paid' && (order.paymentStatus !== 'Pending' || order.status === 'Pending' || order.discountReservation !== 'held')) throw new Error('Ordren er ikke en godkendt ubetalt afhentningsordre.');
@@ -207,7 +216,7 @@ async function settleOrder(proof: PaymentProof) {
     if (location.brandId !== order.brandId) throw new Error('Invoice location scope mismatch');
     const sequence = Number(counterSnap.data()?.lastNumber || 0) + 1;
     const paymentCollection = proof.kind === 'pickup' ? {
-      receivedAt: issuedAt, employeeId: proof.actor.actorId, employeeName: proof.actor.name, method: proof.method,
+      receivedAt: issuedAt, employeeId: (proof.terminalActor?.actorId ?? proof.actor!.actorId), employeeName: (proof.terminalActor?.name ?? proof.actor!.name), method: proof.method,
     } : undefined;
     const invoice = buildOrderInvoice({ order: { ...order, id: orderSnap.id, ...(paymentCollection ? { paymentCollection } : {}) } as OrderDetail, brand, location, sequence, issuedAt, paymentReference: piId || undefined });
     if (customerSnap.exists && customerSnap.data()?.brandId !== order.brandId) throw new Error('Customer scope mismatch');
@@ -267,7 +276,7 @@ async function settleOrder(proof: PaymentProof) {
     }));
     if (proof.kind === 'pickup') addWrite(() => transaction.create(db.collection('auditLogs').doc(createHash('sha256').update(JSON.stringify(['pickup-payment', order.brandId, metadata.orderId])).digest('hex')), {
       action: 'pickup_payment_received', brandId: order.brandId, locationId: order.locationId, orderId: metadata.orderId,
-      actorId: proof.actor.actorId, actorName: proof.actor.name, method: proof.method, totalAmount: order.totalAmount, createdAt: serverTimestamp(),
+      actorId: (proof.terminalActor?.actorId ?? proof.actor!.actorId), actorName: (proof.terminalActor?.name ?? proof.actor!.name), method: proof.method, totalAmount: order.totalAmount, createdAt: serverTimestamp(),
     }));
     addWrite(() => transaction.set(counterRef, { brandId: order.brandId, year, lastNumber: sequence, updatedAt: serverTimestamp() }, { merge: true }));
     ensureConfirmation();
@@ -280,10 +289,16 @@ async function settleOrder(proof: PaymentProof) {
     // Terminal Paid repair must survive malformed policy and never backfill intent.
     const currentOrder = printIntentsEnabled ? (await transaction.get(orderRef)).data() : undefined;
     if (printIntentsEnabled && proof.kind === 'pickup') {
-      const currentActor = await orderflySession();
-      if (currentActor.actorId !== proof.actor.actorId || principalKey(currentActor.identity) !== proof.actor.actorId) throw new Error('Staff payment actor changed');
       if (!currentOrder) throw new Error('Order not found');
-      await authorizeTransaction(transaction, currentActor.identity, currentOrder, 'orderfly.orders:edit', 'location');
+      if (proof.terminalActor) {
+        const currentActor = await getOrderTerminalActor('terminal');
+        if (currentActor.actorId !== proof.terminalActor.actorId) throw new Error('Terminal payment actor changed');
+        await authorizeOrderTerminalTransaction(transaction, currentActor, { brandId: currentOrder.brandId, locationId: currentOrder.locationId });
+      } else {
+        const currentActor = await orderflySession();
+        if (currentActor.actorId !== proof.actor!.actorId || principalKey(currentActor.identity) !== proof.actor!.actorId) throw new Error('Staff payment actor changed');
+        await authorizeTransaction(transaction, currentActor.identity, currentOrder, 'orderfly.orders:edit', 'location');
+      }
       metadata.brandId = currentOrder.brandId; metadata.locationId = currentOrder.locationId;
     }
     let policy = printIntentsEnabled && !isTerminalPaidReplay(currentOrder)

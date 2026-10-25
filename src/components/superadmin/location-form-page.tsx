@@ -42,6 +42,7 @@ import {
 import { Separator } from '../ui/separator';
 import { Switch } from '../ui/switch';
 import { useAdminFormRecovery } from './use-admin-form-recovery';
+import { LocationTerminalLogin } from './location-terminal-login';
 
 const openingHoursSchema = z.object({
   isOpen: z.boolean().default(false),
@@ -390,6 +391,7 @@ export function LocationFormPage({
     : 'Fill in the details for the new location.';
 
   return (
+    <>
     <Form {...(form as any)}>
       <form
         onSubmit={form.handleSubmit(onSubmit as any)}
@@ -1328,5 +1330,7 @@ export function LocationFormPage({
         </div>
       </form>
     </Form>
+    {location?.id && <LocationTerminalLogin key={location.id} locationId={location.id} locationName={location.name} />}
+    </>
   );
 }
