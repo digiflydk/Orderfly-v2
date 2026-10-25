@@ -70,3 +70,14 @@ test('transaction rejects a concurrently introduced phone-only customer identity
   assert.deepEqual(f.records.get('customers/owner'),owner);
  }
 });
+
+
+test('ordinary website orders for new and existing customers never invoke Club/login acquisition',async()=>{
+ for(const existing of [false,true]){
+  const f=await checkout({existing,kind:'none'});
+  assert.equal(f.result.success,true,f.result.error);
+  const order=f.records.get('orders/ORD-TEST');assert.ok(order);assert.ok(f.records.get('customers/'+order.customerDetails.id));
+  assert.equal(f.events.includes('club-signup'),false);assert.equal(f.events.includes('club-preflight'),false);assert.equal(f.events.includes('stripe'),true);
+  assert.equal([...f.records.keys()].some(key=>/^loyalty(?:MailOutbox|LoginTokens|Members)\//.test(key)),false);
+ }
+});
