@@ -31,6 +31,11 @@ function LayoutWithLoader({ children }: { children: React.ReactNode }) {
 }
 
 export function SuperAdminLayoutClient({ children, brandingSettings, centralAdmin, access, merchantPortal = false }: Props) {
+  const pathname = usePathname();
+  // Authorization remains in the merchant layout, page and every data operation.
+  if (merchantPortal && pathname === '/merchant/orders') {
+    return <main className="admin-shell min-h-screen bg-background text-foreground"><LayoutWithLoader>{children}</LayoutWithLoader></main>;
+  }
   return (
     <S.SidebarProvider className="admin-shell">
       <SuperAdminSidebarClient access={access} centralAdmin={centralAdmin} merchantPortal={merchantPortal}
