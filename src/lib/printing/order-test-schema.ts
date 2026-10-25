@@ -10,7 +10,7 @@ export const orderTestWindowSchema = z.object({ schemaVersion: z.literal(1), ...
   routingRevision: revision,
   model: z.enum(['mc-print2', 'mc-print3']), paperWidthMm: z.union([z.literal(58), z.literal(80)]),
   issuedAt: time, expiresAt: time, stoppedAt: time.nullable(),
-  physicalPaperCheckedByOperator: z.literal(true), unattendedAuthorized: z.literal(false),
+  physicalPaperCheckedByOperator: z.boolean(), unattendedAuthorized: z.literal(false),
 }).strict().refine(r => r.expiresAt - r.issuedAt === ORDER_TEST_WINDOW_MS
   && (r.stoppedAt === null || r.stoppedAt >= r.issuedAt)
   && (r.model !== 'mc-print2' || r.paperWidthMm === 58));

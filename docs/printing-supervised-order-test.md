@@ -87,3 +87,15 @@ The new dummy still needs a genuine device acknowledgement before purchase-test
 controls appear. Owner-authorized acceptance is one new dummy on Esm-02, then
 paper inspection and the existing routing/window activation; no historical orders
 are printed as part of recovery.
+
+## Independent activation (owner instruction, 25 October 2026, #591)
+
+The UI now exposes purchase-print controls regardless of synthetic status and
+uses `startIndependent`. This authenticated, scoped operation does not read or
+require a synthetic qualification, job or acknowledgement. It creates a fresh
+random activation identity and records `physicalPaperCheckedByOperator:false`;
+it never fabricates a printer or paper observation. Legacy `start` commands keep
+their original validation. Both paths retain current credentials, active native
+scope, include-all routing, transactional audit, stop, expiry and duplicate guards.
+The existing one-time 60-minute window remains. Live URL is still required for
+purchases. This release does not replay historical orders or renew spent windows.
