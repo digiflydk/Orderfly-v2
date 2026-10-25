@@ -106,7 +106,7 @@ export function ReceiptEditor({ brands, initialBrandId, testModel, testPaperWidt
 
   return <div className="space-y-6 p-4 md:p-6">
     <header><h1 className="text-2xl font-semibold">Kvitteringer</h1>
-      <p className="mt-2 text-sm text-muted-foreground">Tilpas kvitteringens onlinevisning pr. brand. Forhåndsvisningen opdateres med det samme; ændringer gemmes først, når du trykker Gem. Indstillingerne ændrer endnu ikke fysiske kundeudskrifter.</p>
+      <p className="mt-2 text-sm text-muted-foreground">Tilpas kvitteringens layout pr. brand. Forhåndsvisningen opdateres med det samme; ændringer gemmes først, når du trykker Gem. Det gemte layout bruges ved nye kundeudskrifter og genprint.</p>
     </header>
     <nav aria-label="Bontype" className="flex flex-wrap gap-3">
       <a aria-current="page" className={`${buttonClass} bg-primary text-primary-foreground`} href={`/superadmin/receipts?brandId=${encodeURIComponent(brandId)}`}>Kundekvittering</a>

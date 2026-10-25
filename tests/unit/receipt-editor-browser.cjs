@@ -75,7 +75,7 @@ test('receipt editor: explicit scoped saves, conflict recovery, unknown outcomes
   await expect(preview).toContainText('EKSEMPEL-1042');
   await expect(preview).toContainText('208,00');
   await page.getByLabel('Kundens navn', { exact: true }).check();
-  await expect(page.getByRole('region', { name: 'Forhåndsvisning af kundekvittering' }).getByText('Velkommen', { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Forhåndsvisning af kundekvittering' }).locator('svg').getByText('Velkommen', { exact: true })).toBeVisible();
   assert.equal(writes.length, 0);
   await save.click(); await expect(page.getByText('Kvitteringsindstillingerne er gemt.', { exact: true })).toBeVisible();
   assert.equal(writes.length, 1); assert.equal(writes[0].brandId, 'a'); assert.equal(writes[0].expectedRevision, 0);

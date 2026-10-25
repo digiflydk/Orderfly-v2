@@ -18,6 +18,7 @@ test('kitchen layout: real Tailwind styles preserve 58/80mm mobile content and l
   // Compile the project's actual config and global CSS, rather than recreating its layout in a test.
   const css = (await require('postcss')([require('tailwindcss')(path.join(root, 'tailwind.config.ts'))]).process(fs.readFileSync(path.join(root, 'src/app/globals.css'), 'utf8'), { from: path.join(root, 'src/app/globals.css') })).css;
   server = http.createServer((req, res) => {
+    if (req.url.startsWith('/fonts/orderfly/')) { const font = path.basename(req.url); if (!['DejaVuSansMono.ttf', 'DejaVuSansMono-Bold.ttf'].includes(font)) { res.statusCode = 404; return res.end(); } res.setHeader('content-type', 'font/ttf'); return res.end(fs.readFileSync(path.join(root, 'public/fonts/orderfly', font))); }
     if (req.url === '/bundle.js') { res.setHeader('content-type', 'application/javascript'); return res.end(fs.readFileSync(path.join(dir, 'bundle.js'))); }
     if (req.url === '/style.css') { res.setHeader('content-type', 'text/css'); return res.end(css); }
     res.setHeader('content-type', 'text/html; charset=utf-8'); res.end('<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"></head><body><main style="padding:16px"><div id="root"></div></main><script src="/bundle.js"></script></body></html>');
@@ -35,15 +36,21 @@ test('kitchen layout: real Tailwind styles preserve 58/80mm mobile content and l
     await expect(ticket).toContainText('Menuindhold i alt');
     await expect(ticket).toContainText('2 × Kyllingburger');
     await expect(ticket).toContainText('Uden løg');
+    await page.evaluate(() => document.fonts.ready);
+    assert.equal(await page.evaluate(() => document.fonts.check('30px "Orderfly Receipt"')), true);
+    const clippedText = await ticket.evaluate(element => { const svg = element.querySelector('svg'); return Array.from(svg.querySelectorAll('text')).filter(text => { const box = text.getBBox(); return box.x < -1 || box.x + box.width > svg.viewBox.baseVal.width + 1; }).map(text => text.textContent); });
+    assert.deepEqual(clippedText, []);
     const measurements = await ticket.evaluate(element => ({
       width: element.getBoundingClientRect().width, overflow: element.scrollWidth > element.clientWidth,
-      fontSize: getComputedStyle(element).fontSize,
-      categoryColor: getComputedStyle(element.querySelector('h3')).backgroundColor,
+      fontSizes: Array.from(element.querySelectorAll('svg text')).map(text => Number(text.getAttribute('font-size'))),
+      blackHeaders: element.querySelectorAll('svg rect[fill="#000"]').length,
+      svgWidth: element.querySelector('svg').getBoundingClientRect().width,
       bodyOverflow: document.documentElement.scrollWidth > window.innerWidth,
     }));
     assert.ok(Math.abs(measurements.width - width * 96 / 25.4) < 1, JSON.stringify(measurements));
     assert.equal(measurements.overflow, false); assert.equal(measurements.bodyOverflow, false);
-    assert.equal(measurements.fontSize, '18px'); assert.equal(measurements.categoryColor, 'rgb(0, 0, 0)');
+    assert.ok(measurements.fontSizes.length > 0); assert.ok(Math.min(...measurements.fontSizes) >= 30); assert.equal(measurements.blackHeaders, 2);
+    assert.ok(Math.abs(measurements.svgWidth - (width === 80 ? 576 : 384) / 203 * 96) < 1);
     if (process.env.KITCHEN_QA_SCREENSHOT_DIR) {
       fs.mkdirSync(process.env.KITCHEN_QA_SCREENSHOT_DIR, { recursive: true });
       await ticket.screenshot({ path: path.join(process.env.KITCHEN_QA_SCREENSHOT_DIR, `kitchen-${width}mm.png`) });
@@ -51,7 +58,7 @@ test('kitchen layout: real Tailwind styles preserve 58/80mm mobile content and l
     await page.evaluate(width => window.renderTicket(width, true), width);
     await expect(ticket).toContainText('LANGTORDRENUMMER012345678901234567890123456789');
     await expect(ticket).toContainText('megetlangtordudenmellemrum'.repeat(8));
-    const overflow = await ticket.evaluate(element => Array.from(element.querySelectorAll('*')).filter(node => node.scrollWidth > node.clientWidth + 1).map(node => node.tagName));
+    const overflow = await ticket.evaluate(element => Array.from(element.querySelectorAll('.orderfly-receipt-svg')).filter(node => node.scrollWidth > node.clientWidth + 1).map(node => node.tagName));
     assert.deepEqual(overflow, []);
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
   }

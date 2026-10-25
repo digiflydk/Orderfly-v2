@@ -64,7 +64,7 @@ test('kitchen receipt editor: explicit scoped saves, conflict recovery, unknown 
   await expect(preview).toContainText('Ekstra ost');
   await expect(preview).toContainText('Pak de to menuer i hver sin pose.');
   await page.getByLabel('Kundens navn', { exact: true }).check();
-  await expect(page.getByRole('region', { name: 'Forhåndsvisning af køkkenbon' }).getByText('Velkommen', { exact: true })).toBeVisible();
+  await expect(page.getByRole('region', { name: 'Forhåndsvisning af køkkenbon' }).locator('svg').getByText('Velkommen', { exact: true })).toBeVisible();
   assert.equal(writes.length, 0);
   await save.click(); await expect(page.getByText('Køkkenbonens indstillinger er gemt.', { exact: true })).toBeVisible();
   assert.equal(writes.length, 1); assert.equal(writes[0].brandId, 'a'); assert.equal(writes[0].expectedRevision, 0);

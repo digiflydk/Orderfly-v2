@@ -68,7 +68,7 @@ quantities across all ordered menus, labeled **Menuindhold i alt**. Separate ord
 lines with different customizations are never merged. Strings remain React text.
 
 Current category headings are resolved through a bounded, read-only native-scope
-transaction. Product and category must belong to the authorized brand/location;
+transaction. Products must belong to the authorized brand; categories must explicitly include the authorized native location (a missing/stale category `brandId` is not ownership authority);
 missing, inactive or foreign catalog rows do not remove saved food lines. Their
 headings fall back to Varer (or Menuer for explicit combos). Optional catalog
 lookup failures after successful scope authorization also use that fallback;

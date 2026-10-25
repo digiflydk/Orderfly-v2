@@ -70,16 +70,19 @@ test('invalid quantities are visibly unknown instead of inventing or silently om
   assert.equal(result.lines[1].groups[0].products[1].quantity, null);
 });
 
-function loadComponent() {
+function loadComponent(filename = 'src/components/receipts/kitchen-receipt-preview.tsx') {
   const fs = require('node:fs'), ts = require('typescript');
-  const source = fs.readFileSync('src/components/receipts/kitchen-receipt-preview.tsx', 'utf8');
+  const source = fs.readFileSync(filename, 'utf8');
   const code = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, jsx: ts.JsxEmit.ReactJSX } }).outputText;
   const module = { exports: {} };
   new Function('require', 'module', 'exports', code)(name => {
     if (name === '@/lib/receipts/kitchen-preview') return { SAMPLE_KITCHEN_RECEIPT };
+    if (name === '@/lib/receipts/print-layout') return loadTs('src/lib/receipts/print-layout.ts');
+    if (name === '@/lib/receipts/preview') return loadTs('src/lib/receipts/preview.ts');
+    if (name === './receipt-svg-preview') return loadComponent('src/components/receipts/receipt-svg-preview.tsx');
     return require(name);
   }, module, module.exports);
-  return module.exports.KitchenReceiptPreview;
+  return filename.endsWith('kitchen-receipt-preview.tsx') ? module.exports.KitchenReceiptPreview : module.exports;
 }
 const KitchenReceiptPreview = loadComponent();
 const { renderToStaticMarkup } = require('react-dom/server');
@@ -133,4 +136,16 @@ test('saved phone respects its independent visibility setting and missing phone 
   projected.customerPhone = '';
   html = renderToStaticMarkup(React.createElement(KitchenReceiptPreview, { settings: { ...defaults, showPhone: true }, order: projected }));
   assert.doesNotMatch(html, /Telefon:/);
+});
+
+
+test('oversized kitchen and customer previews show explicit alerts instead of throwing or rendering partial receipts', () => {
+  const tooLongKitchen = { ...SAMPLE_KITCHEN_RECEIPT, lines: Array(100).fill(SAMPLE_KITCHEN_RECEIPT.lines[0]) };
+  const kitchen = renderToStaticMarkup(React.createElement(KitchenReceiptPreview, { settings: defaults, order: tooLongKitchen }));
+  assert.match(kitchen, /role="alert"/); assert.match(kitchen, /Bonnen kan ikke vises/); assert.doesNotMatch(kitchen, /<svg/);
+  const { ReceiptPreview } = loadComponent('src/components/receipts/receipt-preview.tsx');
+  const { SAMPLE_RECEIPT } = loadTs('src/lib/receipts/preview.ts');
+  const { DEFAULT_RECEIPT_SETTINGS } = loadTs('src/lib/receipts/settings.ts');
+  const customer = renderToStaticMarkup(React.createElement(ReceiptPreview, { settings: DEFAULT_RECEIPT_SETTINGS, order: { ...SAMPLE_RECEIPT, lines: Array(100).fill(SAMPLE_RECEIPT.lines[0]) } }));
+  assert.match(customer, /role="alert"/); assert.match(customer, /Bonnen kan ikke vises/); assert.doesNotMatch(customer, /<svg/);
 });

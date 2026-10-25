@@ -66,7 +66,7 @@ async function fixture() {
       }
     }); serial = run.catch(() => {}); return run;
   } };
-  const mocks = { react: require('next/dist/compiled/react'), 'server-only': {}, '@/lib/firebase-admin': { getAdminDb: () => db },
+  const mocks = { sharp: { default: require('sharp') }, react: require('next/dist/compiled/react'), 'server-only': {}, '@/lib/firebase-admin': { getAdminDb: () => db },
     'firebase-admin/firestore': { FieldValue: { serverTimestamp: () => 1 } },
     '@/lib/access/orderfly-session': { requirePlatformSuperuser() { throw Error('unused admin surface'); } },
     '@/lib/access/scoped-data': { authorizeTransaction() { throw Error('unused admin surface'); } },

@@ -22,6 +22,7 @@ function loadPage(mocks) {
     if (name in mocks) return mocks[name];
     if (name === '@/lib/receipts/kitchen-categories-server') return { readKitchenCategoriesForOrder: async () => { throw Error('unexpected_category_read'); } };
     if (name === 'react/jsx-runtime') return { jsx, jsxs: jsx };
+    if (name === '@/components/receipts/reprint-controls') return { ReprintControls: 'reprint-controls' };
     if (name === '@/lib/receipts/kitchen-preview') return { projectKitchenReceipt };
     if (name === '@/components/receipts/kitchen-receipt-preview') return { KitchenReceiptPreview: 'receipt' };
     if (name === '@/components/ui/button') return { Button: 'button' };

@@ -87,6 +87,10 @@ export async function pollOrdinaryPrint(input: unknown) {
   return db.runTransaction(async transaction => {
     const context = { db, transaction }, { identity, policy, printer } = await authorized(context, c);
     if (!ready) return { jobReady: false as const };
+    // Explicit manual receipts share this physical transport. Reading the
+    // manual pointer in this transaction conflicts with concurrent enqueue.
+    const manual = await transaction.get(printer.collection('manualState').doc('current'));
+    if (manual.exists) return { jobReady: false as const };
     const pointerRef = printer.collection('ordinaryState').doc('current');
     const pointer = await transaction.get(pointerRef);
     if (pointer.exists) {
