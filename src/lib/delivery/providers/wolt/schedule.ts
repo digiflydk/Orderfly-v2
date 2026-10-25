@@ -2,8 +2,8 @@ import 'server-only';
 
 /** Accept explicit offset instants only; caller converts local Copenhagen wall time with DST disambiguation. */
 export function woltInstant(value: string): number {
-  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,3})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) throw new Error('Invalid Wolt instant');
-  const parts = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,3})?(Z|([+-])(\d{2}):(\d{2}))$/)!;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/.test(value)) throw new Error('Invalid Wolt instant');
+  const parts = value.match(/^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|([+-])(\d{2}):(\d{2}))$/)!;
   const [,year,month,day,hour,minute,second,zone,,offsetHour,offsetMinute] = parts;
   const y = Number(year), m = Number(month), d = Number(day);
   const leap = y % 4 === 0 && (y % 100 !== 0 || y % 400 === 0);

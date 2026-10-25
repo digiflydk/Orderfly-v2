@@ -67,3 +67,8 @@ test('request method path and operation cannot change during retries',async()=>{
  const c=createWoltHttpClient(ctx,{maxReadRetries:1,sleep:async()=>{request.method='DELETE';request.operation='cancel';request.path='/v1/venues/a/deliveries'},fetchImpl:async(url,opts)=>{calls++;assert.equal(new URL(url).pathname,'/v1/venues/a/shipment-promises');assert.equal(opts.method,'POST');return new Response('{}',{status:500})}});
  await c.request(request);assert.equal(calls,2);
 });
+test('Wolt native microsecond timestamps parse without dropping calendar validation',async()=>{
+ assert.equal(schedule.woltInstant('2026-10-25T10:00:00.874850+00:00'),Date.parse('2026-10-25T10:00:00.874Z'));
+ const p=promise();p.created_at='2026-10-25T10:00:00.874850+00:00';p.valid_until='2026-10-25T10:01:00.874850+00:00';p.delivery_distance_meters=1200;
+ const r=await requestWoltQuote(client(p),input,now);assert.equal(r.status,'available');assert.equal(r.distance,null);assert.throws(()=>schedule.woltInstant('2026-02-30T12:00:00.874850+00:00'));
+});
