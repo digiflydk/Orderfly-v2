@@ -6,7 +6,7 @@ import { TerminalClient } from '@/app/merchant/orders/terminal-client';
 type Session = { authenticated: true; brandId: string; brandName: string; locationId: string; locationName: string };
 const validSession = (value: unknown): value is Session => !!value && typeof value === 'object' && (value as Session).authenticated === true && ['brandId', 'locationId', 'brandName', 'locationName'].every(key => typeof (value as Record<string, unknown>)[key] === 'string' && (value as Record<string, string>)[key].length > 0);
 
-export function TerminalPortal() {
+export function TerminalPortal({ loginHref = '/terminal/login' }: { loginHref?: string }) {
   const router = useRouter();
   const [session, setSession] = useState<Session | null>(null), [message, setMessage] = useState('');
   const [checking, setChecking] = useState(true), [unavailable, setUnavailable] = useState(false);
@@ -19,7 +19,7 @@ export function TerminalPortal() {
     try {
       const response = await fetch('/api/terminal/auth/session', { method: 'POST', credentials: 'same-origin', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: controller.signal });
       if (current !== generation.current) return;
-      if (response.status === 401 || response.status === 403) { setSession(null); setUnavailable(true); router.replace('/terminal/login'); return; }
+      if (response.status === 401 || response.status === 403) { setSession(null); setUnavailable(true); router.replace(loginHref); return; }
       if (!response.ok) throw new Error('unavailable');
       const value = await response.json();
       if (current !== generation.current) return;
@@ -31,7 +31,7 @@ export function TerminalPortal() {
       clearTimeout(timeout); if (request.current === controller) request.current = null;
       if (current === generation.current) setChecking(false);
     }
-  }, [router]);
+  }, [router, loginHref]);
   useEffect(() => {
     void checkSession();
     const wake = () => { if (document.visibilityState === 'visible') void checkSession(); };
@@ -48,12 +48,12 @@ export function TerminalPortal() {
       const response = await fetch('/api/terminal/auth/logout', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{}', signal: controller.signal });
       const result = await response.json();
       if (!response.ok || result.success !== true) throw new Error('logout_unconfirmed');
-      setSession(null); router.replace('/terminal/login');
+      setSession(null); router.replace(loginHref);
     } catch { setLogoutFailed(true); setMessage('Log ud kunne ikke bekræftes. Ordrevisningen er skjult. Prøv Log ud igen, før du forlader denne iPad.'); }
     finally { clearTimeout(timeout); loggingOut.current = false; }
-  }, [router]);
+  }, [router, loginHref]);
   if (leaving) return <section className="mx-auto max-w-lg space-y-4 py-16"><h1 className="text-2xl font-bold">Log ud</h1>{logoutFailed ? <><p role="alert">{message}</p><button className="min-h-12 rounded-xl bg-slate-900 px-5 text-white" onClick={() => void logout()}>Prøv Log ud igen</button></> : <p role="status">Logger ud…</p>}</section>;
   if (checking) return <p role="status" className="p-8 text-center">Åbner ordreterminalen…</p>;
   if (unavailable || !session) return <section className="mx-auto max-w-lg space-y-4 py-16"><h1 className="text-2xl font-bold">Forbindelsen skal kontrolleres</h1><p role="alert">{message || 'Terminaladgangen kunne ikke bekræftes.'}</p><button className="min-h-12 rounded-xl bg-slate-900 px-5 text-white" onClick={() => void checkSession()}>Prøv igen</button>{session && <button className="ml-3 min-h-12 rounded-xl border px-5" onClick={() => void logout()}>Log ud</button>}</section>;
-  return <TerminalClient key={`${session.brandId}/${session.locationId}`} fixedScope={{ brandId: session.brandId, locationId: session.locationId }} apiBase="/api/terminal/orders" loginHref="/terminal/login" onLogout={() => void logout()} onAccessDenied={checkSession} />;
+  return <TerminalClient key={`${session.brandId}/${session.locationId}`} fixedScope={{ brandId: session.brandId, locationId: session.locationId }} apiBase="/api/terminal/orders" loginHref={loginHref} onLogout={() => void logout()} onAccessDenied={checkSession} />;
 }

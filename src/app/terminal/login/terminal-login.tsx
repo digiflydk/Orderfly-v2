@@ -2,7 +2,7 @@
 import { useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
 
-export function TerminalLogin() {
+export function TerminalLogin({ ordersHref = '/terminal/orders' }: { ordersHref?: string }) {
   const router = useRouter();
   const [username, setUsername] = useState(''), [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false), [error, setError] = useState('');
@@ -15,7 +15,7 @@ export function TerminalLogin() {
       const response = await fetch('/api/terminal/auth/login', { method: 'POST', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ username: username.trim(), password }), signal: controller.signal });
       const result = await response.json();
       setPassword('');
-      if (response.ok && result.authenticated === true) { router.replace('/terminal/orders'); return; }
+      if (response.ok && result.authenticated === true) { router.replace(ordersHref); return; }
       setError(response.status === 429 ? 'For mange loginforsøg. Vent lidt, og prøv igen.' : response.status >= 500 ? 'Login er ikke tilgængeligt lige nu. Prøv igen.' : 'Login kunne ikke bekræftes. Kontrollér brugernavn og adgangskode.');
     } catch { setPassword(''); setError('Forbindelsen blev afbrudt. Kontrollér netværket, og prøv igen.'); }
     finally { clearTimeout(timeout); pending.current = false; setBusy(false); }
