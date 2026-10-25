@@ -95,3 +95,49 @@ test('payment HTTP rejects caller authority/amount and unsafe requests, sanitize
   assert.equal(calls, 0);
   const response = await route.POST(request({ orderId: 'order', method: 'cash' })); assert.equal(response.status, 503); assert.doesNotMatch(await response.text(), /PRIVATE/); assert.equal(response.headers.get('cache-control'), 'no-store');
 });
+
+test('legacy merchant reprint ignores Next route context and fixes admin authority', async () => {
+  const calls = [];
+  const route = moduleGraph({ '@/lib/printing/merchant-reprint-http': { handleMerchantReprint: async (...args) => { calls.push(args); return Response.json({}); } } })('src/app/api/merchant/orders/reprint/route.ts');
+  const request = new Request('https://orderfly.dk/api/merchant/orders/reprint');
+  const context = { params: Promise.resolve({}) };
+  await route.GET(request, context); await route.POST(request, context);
+  assert.deepEqual(calls, [[request, false], [request, false]]);
+});
+
+test('terminal cash/card settlement preserves canonical accepted originals and immutable invoice exactly once', async () => {
+  for (const method of ['cash', 'card']) await withPrint(true, async () => {
+    const f = await fixture(); f.state.admin = false;
+    f.records.get('brands/b').status = 'active'; f.order().status = 'Pending';
+    f.records.set('categories/pizza', { isActive: true, locationIds: ['l'] });
+    for (const id of ['pizza', 'packing']) f.records.set('locations/l/printers/' + id, {
+      schemaVersion: 1, configuration: { id, brandId: 'b', locationId: 'l', name: id, manufacturer: 'star', model: 'mc-print3', transport: 'cloudprnt-http', paperWidthMm: 80, state: 'paused' }, revision: 1, deletedAt: null,
+    });
+    f.records.set('locations/l/printIntentPolicies/original', { schemaVersion: 1, id: 'original', brandId: 'b', locationId: 'l', revision: 1, enabled: true, deletedAt: null,
+      targets: ['pizza', 'packing'].map(printerId => ({ printerId, printerRevision: 1, kinds: ['kitchen'] })) });
+    f.records.set('locations/l/printerRouting/original', { schemaVersion: 1, id: 'original', brandId: 'b', locationId: 'l', revision: 1, deletedAt: null,
+      rules: ['pizza', 'packing'].map(printerId => ({ id: 'rule-' + printerId, brandId: 'b', locationId: 'l', printerId, match: { type: 'category', id: 'pizza' }, effect: 'include' })) });
+    // Native acceptance and original-output producers mint their real opaque proofs.
+    // No canonical manifest or financial capability is seeded or mocked.
+    await f.db.runTransaction(async transaction => {
+      const context = { db: f.db, transaction };
+      const acceptance = await f.load('src/lib/server/accept-pickup-checkout.ts').preparePickupCheckoutAcceptance(context, { orderId: f.orderId, brandId: 'b', locationId: 'l', selection: 'asap' });
+      const originals = await f.load('src/lib/printing/unpaid-acceptance-originals.ts').prepareUnpaidAcceptanceOriginals(context, acceptance.capability);
+      acceptance.apply(); originals.apply();
+    });
+    assert.equal(f.order().status, 'Received');
+    const printRows = () => [...f.records].filter(([path]) => /\/printers\/.*\/(jobs|queue)\/|\/printIntents\//.test(path));
+    const originals = structuredClone(printRows());
+    assert.equal(originals.filter(([path]) => path.includes('/jobs/')).length, 2);
+    assert.equal(await f.settlement.settleTerminalPickupOrder(f.orderId, method), true);
+    assert.equal(f.order().paymentStatus, 'Paid');
+    assert.equal(f.order().paymentCollection.method, method);
+    assert.equal(f.order().paymentCollection.employeeId, f.terminal.actorId);
+    assert.ok(f.order().invoice.number);
+    assert.deepEqual(printRows(), originals, 'accepted originals remain immutable during collection');
+    const settled = structuredClone([...f.records]);
+    assert.equal(await f.settlement.settleTerminalPickupOrder(f.orderId, method), false);
+    assert.deepEqual([...f.records], settled, 'replay preserves invoice, audit, queue and original outputs');
+    assert.ok(f.state.authorizations >= 2);
+  });
+});
