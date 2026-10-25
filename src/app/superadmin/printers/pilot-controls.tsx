@@ -132,6 +132,6 @@ export function PrinterPilotControls({ scope, model, paperWidthMm, active, permi
     <Button variant="outline" disabled={!permitted || busy} onClick={() => void refreshStatus()}>Opdater testbonens status</Button>
     {message && <p role="status">{message}</p>}
     {statusMessage && <p role="status">{statusMessage}</p>}
-    {pilotState === 'confirmed' && <PrinterOrderTestControls scope={scope} permitted={permitted} active={active} />}
+    {<PrinterOrderTestControls scope={scope} permitted={permitted} active={active} />}
   </section>;
 }

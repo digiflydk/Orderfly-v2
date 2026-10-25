@@ -7,15 +7,14 @@ type Scope = CredentialScope & { credentialRevision: number };
 type Status = { state: 'not_started' | 'active' | 'stopped' | 'expired' | 'stale'; expiresAt: number | null; enabled: boolean };
 export function PrinterOrderTestControls({ scope, permitted, active }: { scope: Scope; permitted: boolean; active: boolean }) {
   const [status, setStatus] = useState<Status | null>(null), [busy, setBusy] = useState(false), [message, setMessage] = useState('');
-  const [paper, setPaper] = useState(false), [unchanged, setUnchanged] = useState(false), [supervising, setSupervising] = useState(false);
   const generation = useRef(0), pending = useRef(false);
   const request = useRef<AbortController | null>(null);
   const scopeKey = JSON.stringify(scope);
-  useEffect(() => { generation.current++; pending.current = false; setBusy(false); setMessage(''); setStatus(null); setPaper(false); setUnchanged(false); setSupervising(false);
+  useEffect(() => { generation.current++; pending.current = false; setBusy(false); setMessage(''); setStatus(null);
     return () => { generation.current++; request.current?.abort(); }; }, [scopeKey, permitted, active]);
   async function perform(operation: 'read' | 'start' | 'stop') {
     if (pending.current || !permitted) return;
-    if (operation === 'start' && (!active || status?.state !== 'not_started' || !status.enabled || !paper || !unchanged || !supervising)) return;
+    if (operation === 'start' && (!active || status?.state !== 'not_started' || !status.enabled)) return;
     if (operation === 'stop' && status?.state !== 'active') return;
     const version = generation.current; pending.current = true; setBusy(true); setMessage('');
     const controller = new AbortController(); request.current = controller;
@@ -25,9 +24,7 @@ export function PrinterOrderTestControls({ scope, permitted, active }: { scope: 
         method: operation === 'read' ? 'GET' : 'POST', credentials: 'same-origin', cache: 'no-store',
         signal: controller.signal,
         ...(operation !== 'read' ? { headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ...scope, operation, ...(operation === 'start' ? {
-            physicalPaperChecked: paper, deviceUnchanged: unchanged, supervisingPurchases: supervising,
-          } : {}) }) } : {}),
+          body: JSON.stringify({ ...scope, operation: operation === 'start' ? 'startIndependent' : operation }) } : {}),
       });
       if (generation.current !== version) return;
       if (!response.ok) throw Error(String(response.status));
@@ -48,27 +45,24 @@ export function PrinterOrderTestControls({ scope, permitted, active }: { scope: 
       if (generation.current === version) {
         setStatus(null);
         setMessage(e instanceof Error && e.message === '503' ? 'Ordretesten er ikke tilgængelig. Kontrollér serveropsætningen.'
-          : e instanceof Error && e.message === '409' ? 'Kan ikke starte: kontrollér printeradgang, en nylig testbon og gemte køkkenregler. Et testvindue kan kun startes én gang.'
+          : e instanceof Error && e.message === '409' ? 'Kan ikke starte: kontrollér printeradgang, gemte køkkenregler. Et testvindue kan kun startes én gang.'
           : 'Resultatet er ukendt. Hent status før du fortsætter.');
       }
     } finally { if (generation.current === version) { pending.current = false; setBusy(false); } }
   }
   return <section className="space-y-3 rounded border p-3" aria-label="Test køb med automatisk print">
     <h4 className="font-medium">Test køb med automatisk køkkenprint</h4>
-    <p className="text-sm">Åbn ét testvindue på 60 minutter senest en time efter testbonnen. Gem først én køkkenregel: alle produkter til denne printer. Brug enkelte produkter i første testkøb. Menuer og kombinationer kan købes, men udskrives ikke i denne test.</p>
+    <p className="text-sm">Aktivér automatisk køkkenprint i 60 minutter. Testbon er valgfri og kræves ikke. Gem først én køkkenregel: alle produkter til denne printer. Brug enkelte produkter i første testkøb. Menuer og kombinationer kan købes, men udskrives ikke i denne test.</p>
     <Button type="button" variant="outline" disabled={busy || !permitted} onClick={() => void perform('read')}>Hent ordreteststatus</Button>
     {status && <p role="status">{({ not_started: 'Ikke startet', active: 'Ordretest aktiv', stopped: 'Ordretest stoppet', expired: 'Ordretest udløbet', stale: 'Printeropsætningen er ændret' })[status.state]}
       {status.expiresAt && ` · Slutter ${new Date(status.expiresAt).toLocaleTimeString('da-DK')}`}</p>}
     {status?.state === 'not_started' && <>
-      <label className="block text-sm"><input type="checkbox" checked={paper} onChange={e => setPaper(e.target.checked)} /> Jeg har set testbonnen og kontrolleret bredde, danske tegn og papirskæring.</label>
-      <label className="block text-sm"><input type="checkbox" checked={unchanged} onChange={e => setUnchanged(e.target.checked)} /> Det er samme printer, firmware og papir som ved testbonnen.</label>
-      <label className="block text-sm"><input type="checkbox" checked={supervising} onChange={e => setSupervising(e.target.checked)} /> Jeg er ved printeren og overvåger køb og udskrifter i testperioden.</label>
-      <Button type="button" disabled={busy || !active || !permitted || !status.enabled || !paper || !unchanged || !supervising}
+      <Button type="button" disabled={busy || !active || !permitted || !status.enabled}
         onClick={() => void perform('start')}>Start 60 minutters ordretest</Button>
       {!status.enabled && <p className="text-sm">Ordretest skal aktiveres i serveropsætningen før start.</p>}
     </>}
     {status?.state === 'active' && <Button type="button" variant="destructive" disabled={busy || !permitted} onClick={() => void perform('stop')}>Stop ordretest</Button>}
-    <p className="text-sm">Printeren skal bruge ordre-adressen under Printeradgang efter testbonnen. Hvis et print mangler eller status er ukendt, kontrollér papiret før genprint.</p>
+    <p className="text-sm">Printeren skal bruge ordre-adressen under Printeradgang til køb. Hvis et print mangler eller status er ukendt, kontrollér papiret før genprint.</p>
     {message && <p role="alert">{message}</p>}
   </section>;
 }

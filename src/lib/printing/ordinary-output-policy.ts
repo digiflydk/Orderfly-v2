@@ -1,5 +1,6 @@
 import 'server-only';
 import { z } from 'zod';
+import { randomBytes } from 'node:crypto';
 import { getAdminDb } from '@/lib/firebase-admin';
 import type { NativeTransactionContext } from '@/lib/server/firestore-compat';
 import type { NativePrinterDeviceIdentitySnapshot } from './device-auth-native';
@@ -65,6 +66,7 @@ export async function requireOrdinaryOutputPolicy(context: NativeTransactionCont
 }
 
 const commandSchema = z.union([
+  orderTestScopeSchema.extend({ operation: z.literal('startIndependent') }).strict(),
   orderTestScopeSchema.extend({ operation: z.literal('start'), physicalPaperChecked: z.literal(true),
     deviceUnchanged: z.literal(true), supervisingPurchases: z.literal(true) }).strict(),
   orderTestScopeSchema.extend({ operation: z.literal('stop') }).strict(),
@@ -75,7 +77,7 @@ export async function controlOrderTestWindow(input: unknown) {
   const parsed = commandSchema.safeParse(input);
   if (!parsed.success) return fail('invalid_order_test');
   const a = parsed.data, db = getAdminDb(), actorId = principalKey(session.identity);
-  if (a.operation === 'start') {
+  if (a.operation === 'start' || a.operation === 'startIndependent') {
     gates();
     if (process.env.ORDERFLY_PRINT_INTENTS_ENABLED !== 'true') return fail('order_test_unavailable');
   }
@@ -118,9 +120,11 @@ export async function controlOrderTestWindow(input: unknown) {
       }
       if (window.exists || p.data.configuration.state !== 'active' || p.data.configuration.transport !== 'cloudprnt-http'
         || p.data.configuration.manufacturer !== 'star') return fail('order_test_conflict');
+      let qid = randomBytes(32).toString('base64url');
+      if (a.operation === 'start') {
       const ptr = z.object({ schemaVersion: z.literal(1), sessionId: token }).strict().safeParse(pointer.data());
       if (!ptr.success) return fail('order_test_conflict');
-      const qid = ptr.data.sessionId;
+      qid = ptr.data.sessionId;
       const [job, qualification, audit] = await Promise.all([tx.get(ref.collection('pilotJobs').doc(qid)),
         tx.get(ref.collection('pilotQualifications').doc(qid)), tx.get(ref.collection('pilotQualificationAudit').doc(`${qid}-consume`))]);
       const j = syntheticPilotJobSchema.safeParse(job.data()), q = testPrintSessionSchema.safeParse(qualification.data());
@@ -141,6 +145,7 @@ export async function controlOrderTestWindow(input: unknown) {
         printerId: a.printerId, printerRevision: a.printerRevision,
         model: j.data.model, paperWidthMm: j.data.paperWidthMm });
       if (content.sha256 !== q.data.contentDigest) return fail('order_test_conflict');
+      }
       const intentRef = loc.collection('printIntentPolicies').doc('original');
       const existingIntent = await tx.get(intentRef);
       // A test must never overwrite an existing production routing policy.
@@ -150,9 +155,9 @@ export async function controlOrderTestWindow(input: unknown) {
         || routing.rules[0].effect !== 'include' || routing.rules[0].match.type !== 'all' || routing.rules[0].deliveryTypes) return fail('order_test_conflict');
       const record = orderTestWindowSchema.parse({ schemaVersion: 1, ...scope, qualificationId: qid,
         routingRevision: routing.revision,
-        trust: 'supervised_order_test', actorId, model: j.data.model, paperWidthMm: j.data.paperWidthMm,
+        trust: 'supervised_order_test', actorId, model: p.data.configuration.model, paperWidthMm: p.data.configuration.paperWidthMm,
         issuedAt: now, expiresAt: now + ORDER_TEST_WINDOW_MS, stoppedAt: null,
-        physicalPaperCheckedByOperator: true, unattendedAuthorized: false });
+        physicalPaperCheckedByOperator: a.operation === 'start', unattendedAuthorized: false });
       tx.create(windowRef, record);
       tx.create(intentRef, { schemaVersion: 1, id: 'original', brandId: a.brandId, locationId: a.locationId,
         revision: 1, deletedAt: null, enabled: true, supervisedOrderTest: true,
