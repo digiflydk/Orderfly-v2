@@ -73,6 +73,37 @@ test('#12 middleware rewrites brand subdomains and keeps the apex and www behavi
   assert.equal(mw.resolveProductionRedirect(new URL('https://esmeralda.orderfly.dk/'), 'esmeralda.orderfly.dk', 'https'), null);
 });
 
+test('#658 Merchant app and its same-origin APIs bypass storefront routing', () => {
+  const { run } = middlewareFor();
+  for (const host of ['esmeralda.orderfly.dk', 'other-brand.orderfly.dk', 'orderfly.dk']) {
+    for (const path of ['/mapp', '/mapp/login', '/api/terminal/auth/session', '/api/terminal/orders']) {
+      assert.deepEqual(run(`https://${host}${path}`), { kind: 'next' }, `${host}${path}`);
+    }
+  }
+  assert.deepEqual(run('https://backend.internal/mapp', { 'x-forwarded-host': 'esmeralda.orderfly.dk' }), { kind: 'next' });
+  assert.deepEqual(run('http://esmeralda.orderfly.dk/mapp'), { kind: 'redirect', url: 'https://esmeralda.orderfly.dk/mapp', status: 308 });
+  // Prefixes are not aliases: an ordinary mapp-* location still belongs to this storefront.
+  assert.deepEqual(run('https://esmeralda.orderfly.dk/mapp-amager'), { kind: 'rewrite', path: '/esmeralda/mapp-amager' });
+  assert.deepEqual(run('https://esmeralda.orderfly.dk/mapplication'), { kind: 'rewrite', path: '/esmeralda/mapplication' });
+});
+
+test('#658 mapp is reserved as a brand but legacy location links retain their explicit brand prefix', async () => {
+  assert.match(lib.brandSlugError('mapp'), /reserveret/);
+  assert.equal(lib.brandSlugFromHost('mapp.orderfly.dk'), null);
+  const f = fixture();
+  const result = await f.brands.createOrUpdateBrand(null, formData({ ...brand, slug: 'mapp', ownerName: 'QA Owner', ownerEmail: 'qa@example.test' }));
+  assert.equal(result.error, true);
+  assert.match(result.message, /reserveret/);
+  assert.equal(f.writes.length, 0);
+  const { run } = middlewareFor();
+  for (const suffix of [[], ['checkout'], ['checkout', 'confirmation']]) {
+    const explicit = ['/esmeralda/mapp', ...suffix].join('/');
+    assert.equal(lib.storefrontPath('esmeralda', true, 'mapp', ...suffix), explicit);
+    assert.deepEqual(run(`https://esmeralda.orderfly.dk${explicit}`), { kind: 'next' });
+  }
+  assert.equal(lib.orderEntryUrl('orderfly.dk', 'esmeralda', 'mapp'), 'https://esmeralda.orderfly.dk/esmeralda/mapp');
+});
+
 test('/m3pizza/order on orderfly.dk continues on esmeralda.orderfly.dk; local hosts stay relative', () => {
   const { run } = middlewareFor();
   assert.deepEqual(run('https://orderfly.dk/m3pizza/order?deliveryMethod=delivery'), { kind: 'redirect', url: 'https://esmeralda.orderfly.dk/amager?deliveryMethod=delivery', status: 308 });
