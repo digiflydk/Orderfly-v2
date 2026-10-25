@@ -195,6 +195,7 @@ export function SuperAdminSidebarClient({
       title: 'System',
       items: [
         { href: '/superadmin/printers', label: 'Printere', icon: Printer },
+        { href: '/superadmin/print-log', label: 'Print log', icon: ScrollText },
         { href: '/superadmin/receipts', label: 'Kvitteringer', icon: ScrollText },
         { href: '/superadmin/settings/cookie-texts', label: 'Cookies', icon: Cookie },
         { href: '/superadmin/settings/stamp-card-texts', label: 'Stempelkort-tekster', icon: ScrollText },
