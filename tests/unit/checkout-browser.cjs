@@ -8,6 +8,7 @@ const path=require('node:path');
 const http=require('node:http');
 const {chromium}=require('@playwright/test');
 const {loadTs}=require('../helpers/load-ts.cjs');
+const {CUSTOMER_IDENTITY_CHECKOUT_MESSAGE}=loadTs('src/lib/checkout-public-error.ts');
 const webpackModule=require('next/dist/compiled/webpack/webpack');
 webpackModule.init();
 let dir,server,browser,origin;
@@ -133,6 +134,7 @@ before(async()=>{
    if(key==='double-click')await new Promise(resolve=>setTimeout(resolve,250));
    res.setHeader('Content-Type','application/json');
    if(key==='retry'&&calls.length===1)return res.end(JSON.stringify({success:false,error:'Payment temporarily unavailable. Please try again.',retryable:true}));
+   if(key==='identity-message')return res.end(JSON.stringify({success:false,error:CUSTOMER_IDENTITY_CHECKOUT_MESSAGE,retryable:true}));
    if(key==='uncertain')return res.end(JSON.stringify({success:false,error:'Please contact the restaurant. Reference: ORD-TEST.',retryable:false}));
    return res.end(JSON.stringify({success:true,url:origin+'/stripe?case='+key,orderId:'ORD-TEST'}));
   }
@@ -192,6 +194,13 @@ test('discount transport failure unlocks checkout',async t=>{
 test('confirmed server rejection shows a persistent error and supports retry',async t=>{
  const page=await setup(t,'retry');await pay(page);await page.getByText('Payment temporarily unavailable. Please try again.').first().waitFor();
  await pay(page);await page.waitForURL('**/stripe?*');assert.equal(requests.get('retry').length,2);
+});
+test('customer identity conflict is shown as an actionable Danish checkout error',async t=>{
+ const page=await setup(t,'identity-message');await pay(page);
+ await page.getByText(CUSTOMER_IDENTITY_CHECKOUT_MESSAGE).first().waitFor();
+ assert.equal((requests.get('identity-message')||[]).length,1);
+ assert.equal(await page.getByRole('button',{name:/Gå til betaling/}).first().isDisabled(),false);
+ assert.equal((await page.locator('body').innerText()).includes('Customer identity scope conflict'),false);
 });
 for(const scenario of ['uncertain','transport-failure'])test(`${scenario}: never silently starts another payment`,async t=>{
  const page=await setup(t,scenario);await pay(page);await page.getByText(/contact the restaurant|Kontakt restauranten/).first().waitFor();

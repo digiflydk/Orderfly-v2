@@ -56,6 +56,7 @@ test('actual checkout action rejects tampering before side effects, allows valid
   '@/lib/fulfillment-time':loadTs('src/lib/fulfillment-time.ts'),
   stripe:{default:class Stripe {}},'@/lib/firebase':{db:{}},
   '@/lib/checkout-customer-identity':{findCheckoutCustomer:async()=>{if(++identityCalls===2)throw Error('AFTER_PRICE_VALIDATION');return {ref:{id:'c'},exists:()=>true,data:()=>({brandId:'b',email:'test@example.test',normalizedEmail:'test@example.test'})};}},
+  '@/lib/checkout-public-error':loadTs('src/lib/checkout-public-error.ts'),
   '@/lib/server/payment-settings':{getActiveStripeSecretKey:async()=> 'test-placeholder'},
   '@/lib/url':{getOrigin:async()=> 'https://example.test'},'@/lib/brand-subdomain':loadTs('src/lib/brand-subdomain.ts'),
   '@/app/superadmin/brands/actions':{getBrandById:async()=>({id:'b',slug:'brand'})},

@@ -18,6 +18,7 @@ import { optionalCheckoutValue } from '@/lib/optional-checkout';
 import { isDefinitiveStripeRejection } from '@/lib/stripe-checkout-failure';
 import { validateCheckoutPrices } from '@/lib/checkout-price-validation';
 import { findCheckoutCustomer } from '@/lib/checkout-customer-identity';
+import { checkoutCustomerIdentityMessage } from '@/lib/checkout-public-error';
 import { customerHasEmail, customerHasPhone, mergeCustomerIdentity } from '@/lib/customer-identity';
 import { normalizePhone } from '@/lib/integrations/esmeralda-customer-contract';
 import { omitUndefinedFields } from '@/lib/firestore-optional-fields';
@@ -250,6 +251,10 @@ async function createOrUpdateCustomer(customerInfo: CustomerInfo, brandId: strin
         });
     } catch (e: any) {
         console.error('checkout_customer_failed', { code: e?.code || 'unknown' });
+        // Preserve known identity safeguards so the outer checkout boundary can
+        // show its privacy-safe, actionable message. Unknown storage details
+        // stay wrapped and are never returned directly to the customer.
+        if (checkoutCustomerIdentityMessage(e)) throw e;
         throw new Error(`Could not create or update customer profile: ${e.message}`);
     }
 }
@@ -909,8 +914,11 @@ export async function createStripeCheckoutSessionAction(
     }
     // Correlate stages without logging customer details, secrets or session URLs.
     console.error('checkout_failed', { stage, orderId: reservedOrderId, code: e?.code || e?.type || 'unknown', retryable });
+    const identityMessage = checkoutCustomerIdentityMessage(e);
     const errorMessage = !retryable
       ? `Betalingsstatus kunne ikke bekræftes. Kontakt restauranten, før du prøver igen.${reservedOrderId ? ` Reference: ${reservedOrderId}.` : ''}`
+      : identityMessage
+      ? identityMessage
       : stage === 'newsletter_consent' ? 'Tilmeldingen kunne ikke gemmes. Prøv igen, eller fjern afkrydsningen for nyhedsbrev og fortsæt uden tilmelding.'
       : ['validation', 'reservation'].includes(stage) && e instanceof Error
         ? e.message
@@ -940,12 +948,21 @@ export async function validateDiscountAction(
     let customer: Customer | null = null;
     let customerId: string | undefined;
     if (customerEmail?.trim()) {
-        const resolved = await resolveCheckoutCustomerRef({
-            name: '',
-            email: customerEmail,
-            phone: '',
-            subscribeToNewsletter: false,
-        }, brandId);
+        let resolved;
+        try {
+            resolved = await resolveCheckoutCustomerRef({
+                name: '',
+                email: customerEmail,
+                phone: '',
+                subscribeToNewsletter: false,
+            }, brandId);
+        } catch (error) {
+            return {
+                success: false,
+                message: checkoutCustomerIdentityMessage(error)
+                    || 'Kundeoplysningerne kunne ikke kontrolleres. Prøv igen.',
+            };
+        }
         customerId = resolved.customerRef.id;
         customer = resolved.customerDoc.exists() ? resolved.customerDoc.data() as Customer : null;
     }
