@@ -26,7 +26,7 @@ test('receipt reprint browser: scoped device selection, explicit writes, idempot
   browser = await chromium.launch({ headless: true, args: ['--no-sandbox', '--disable-dev-shm-usage'] });
   const page = await browser.newPage({ viewport: { width: 375, height: 812 } }), calls = [], errors = [];
   page.on('pageerror', e => errors.push(e.message));
-  let listStatus = 200, foreignList = false, twoPrinters = false, noPrinters = false, lostWrite = false, state = 'queued', held, delay = false, foreignResult = false;
+  let listStatus = 200, foreignList = false, twoPrinters = false, noPrinters = false, lostWrite = false, conflictWrite = false, state = 'queued', held, delay = false, foreignResult = false;
   await page.route('**/api/merchant/printers?*', async route => {
     const params = Object.fromEntries(new URL(route.request().url()).searchParams);
     const row = id => ({ configuration: { id, name: id === 'p1' ? 'Køkken' : 'Disk', brandId: foreignList ? 'foreign' : params.brandId,
@@ -40,6 +40,7 @@ test('receipt reprint browser: scoped device selection, explicit writes, idempot
     calls.push({ method: req.method(), command });
     if (delay) { held = route; return; }
     if (lostWrite && req.method() === 'POST') return route.abort('failed');
+    if (conflictWrite && req.method() === 'POST') return route.fulfill({ status: 409, json: { error: 'manual_print_conflict' } });
     return route.fulfill({ status: 200, json: { ...command, ...(foreignResult ? { orderId: 'OTHER' } : {}), state, jobId: command.requestId, createdAt: Date.now(), expiresAt: Date.now() + 300000 } });
   });
   const url = 'http://127.0.0.1:' + server.address().port;
@@ -92,6 +93,19 @@ test('receipt reprint browser: scoped device selection, explicit writes, idempot
   await held.abort().catch(() => {}); held = null; delay = false;
   foreignResult = true; await print.click(); await expect(page.getByRole('alert')).toContainText('Resultatet er ukendt');
   await expect(page.getByRole('status')).toHaveCount(0); foreignResult = false;
+
+  conflictWrite = true; await page.evaluate(value => window.changeScope({ ...value, orderId: 'ORD-CONFLICT' }), scope);
+  await expect(print).toBeEnabled(); await print.click();
+  await expect(page.getByRole('alert')).toContainText('Printeren kan være optaget');
+  const occupiedCommand = calls.at(-1).command;
+  const writesWhileOccupied = calls.filter(c => c.method === 'POST').length;
+  const retrySame = page.getByRole('button', { name: 'Prøv samme genprint igen', exact: true });
+  await expect(retrySame).toBeEnabled();
+  assert.equal(calls.filter(c => c.method === 'POST').length, writesWhileOccupied, '409 never auto-retries a write');
+  conflictWrite = false; state = 'queued'; await retrySame.click();
+  await expect(page.getByRole('status')).toContainText('lagt i kø');
+  assert.deepEqual(calls.at(-1).command, occupiedCommand, 'explicit retry after occupancy clears retains exact identity');
+  assert.equal(calls.filter(c => c.method === 'POST').length, writesWhileOccupied + 1);
 
   listStatus = 403; await page.evaluate(value => window.changeScope({ ...value, orderId: 'ORD-4' }), scope);
   await expect(page.getByRole('alert')).toContainText('ikke adgang'); await expect(print).toBeDisabled();

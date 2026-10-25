@@ -112,9 +112,9 @@ export function ReprintControls(props: Scope) {
       const code = error instanceof Error ? error.message : '';
       if (code === '401' || code === '403') setSessionLost(true);
       // A transport failure can happen after enqueue. Keep the ID for safe recovery.
-      if (method === 'POST') setRetry(!['400', '401', '403', '409'].includes(code));
+      if (method === 'POST') setRetry(!['400', '401', '403'].includes(code));
       setMessage(code === '401' ? 'Din session er udløbet. Log ind igen.' : code === '403' ? 'Du har ikke adgang til at genprinte denne ordre.'
-        : code === '409' ? 'Genprint kunne ikke fortsætte. Kontrollér printerens status og opsætning.'
+        : code === '409' ? 'Genprint kunne ikke fortsætte. Printeren kan være optaget. Kontrollér printerens status og opsætning, og prøv samme genprint igen.'
         : code === '400' ? 'Genprint blev afvist. Genindlæs siden og kontrollér printervalget.'
         : 'Resultatet er ukendt. Opdater printstatus. Et nyt forsøg bruger samme genprint og opretter ikke en ekstra kopi.');
     } finally { if (isCurrent()) { pending.current = false; setBusy(false); } }

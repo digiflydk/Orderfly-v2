@@ -59,7 +59,7 @@ before(async()=>{
  export const getDiscountCardCheckoutEnabledAction=async()=>scenario.startsWith('ui-card');
  export const getDiscountCardCheckoutOfferAction=async(brand,slug,location,email)=>scenario.startsWith('ui-card')&&email==='test@example.test'?{name:'Familie',percentage:25}:null;
  export const newsletterSyncAvailableAction=async()=>true;
- export const getCheckoutSignupAction=async()=>scenario.startsWith('ui-club')&&!scenario.includes('personal-newsletter')?{mode:'club',clubProgram:{active:true,name:'Fixture Club',consentText:'Ja tak, send mig nyhedsbrevet fra Fixture Club.',consentHelp:'Medlemskab kræver nyhedsbrevet.',termsAccept:'Jeg accepterer Club-vilkårene.',consentVersion:'club-consent-1',termsVersion:'club-terms-1',campaignVersion:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',welcomeStamps:1,termsUrl:'/brand/club/vilkaar'}}:{mode:'newsletter'};
+ export const getCheckoutSignupAction=async()=>scenario.startsWith('ui-club-card')&&( !scenario.includes('refresh') || window.fixtureActiveCard)?{mode:'none',clubSignupSuppressed:true}:scenario.startsWith('ui-club')&&!scenario.includes('personal-newsletter')?{mode:'club',clubProgram:{active:true,name:'Fixture Club',consentText:'Ja tak, send mig nyhedsbrevet fra Fixture Club.',consentHelp:'Medlemskab kræver nyhedsbrevet.',termsAccept:'Jeg accepterer Club-vilkårene.',consentVersion:'club-consent-1',termsVersion:'club-terms-1',campaignVersion:'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',welcomeStamps:1,termsUrl:'/brand/club/vilkaar'}}:{mode:'newsletter'};
  export const getNewsletterSignupDiscountAction=async(brand,location,subtotal,method,email)=>scenario.startsWith('ui-club')?{id:'club',applicationType:'club_signup',discountType:'percentage',discountValue:15,minOrderValue:0,allowStacking:false,requiresSignup:!scenario.includes('personal')}:scenario.startsWith('ui-newsletter')&&email!=='existing@example.test'?{id:'n',applicationType:'newsletter_signup',discountType:'percentage',discountValue:10,minOrderValue:scenario.includes('minimum')?150:0,allowStacking:scenario.includes('stacking-on')}:null;
  export async function validateDiscountAction(){throw Error('discount network failed');}
  export async function createStripeCheckoutSessionAction(...args){
@@ -507,4 +507,20 @@ for(const host of ['orderfly.dk','brand.orderfly.dk'])test('personal card login 
   assert.equal(await page.getByRole('link',{name:'Åbn brandets bestillingsside',exact:true}).count(),0);
  }
  assert.match(await page.getByRole('button',{name:/Gå til betaling/}).first().innerText(),/100,00/);
+});
+for(const width of [390,1280])test('#596 active card hides Club completely and omits consent payload '+width,async t=>{
+ const scenario='ui-club-card-'+width,page=await setup(t,scenario);await page.setViewportSize({width,height:900});
+ assert.equal(await page.locator('[data-club-signup-offer]').count(),0);assert.equal(await page.locator('[data-club-personal-offer]').count(),0);
+ await page.getByRole('button',{name:/Gå til betaling/}).first().click();await page.waitForURL('**/stripe?*');
+ const customer=requests.get(scenario)[0][1];
+ for(const key of ['subscribeToClub','clubTermsAccepted','clubConsentVersion','clubTermsVersion','clubCampaignVersion','useClubDiscount'])assert.equal(Object.hasOwn(customer,key),false,key);
+ assert.equal(customer.subscribeToNewsletter,false);
+});
+test('#596 refreshed card clears previous Club opt-in and prevents stale consent submission',async t=>{
+ const scenario='ui-club-card-refresh',page=await setup(t,scenario),box=page.locator('[data-club-signup-offer]');await box.waitFor();
+ await box.getByRole('checkbox').nth(0).check();await box.getByRole('checkbox').nth(1).check();
+ await page.evaluate(()=>{window.fixtureActiveCard=true;window.dispatchEvent(new Event('focus'));});await box.waitFor({state:'hidden'});
+ await page.getByRole('button',{name:/Gå til betaling/}).first().click();await page.waitForURL('**/stripe?*');
+ const customer=requests.get(scenario)[0][1];assert.equal(customer.subscribeToNewsletter,false);
+ for(const key of ['subscribeToClub','clubTermsAccepted','clubConsentVersion','clubTermsVersion','clubCampaignVersion'])assert.equal(Object.hasOwn(customer,key),false,key);
 });
