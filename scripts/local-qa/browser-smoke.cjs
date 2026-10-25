@@ -59,8 +59,13 @@ async function runBrowserSmoke({ admin, merchant, ids }) {
     await login(page, admin, 'admin', diagnostic);
     stage = 'admin-overview';
     await page.goto(BASE + '/superadmin/printers');
-    await page.getByRole('heading', { name: 'QA0 Disabled ÆØÅ', exact: true }).waitFor();
-    assert.equal(await page.getByRole('table', { name: 'Printere', exact: true }).count(), 0);
+    const overview = page.getByRole('table', { name: 'Printere', exact: true });
+    const overviewRow = overview.getByRole('row').filter({ hasText: 'QA0 Disabled ÆØÅ' });
+    await overviewRow.getByRole('cell', { name: 'QA0 Disabled ÆØÅ', exact: true }).waitFor();
+    assert.deepEqual(await overview.getByRole('columnheader').allTextContents(), ['Printer', 'Brand', 'Lokation', 'Model', 'Status', 'Seneste kontakt', 'Handlinger']);
+    const actionPath = `/superadmin/printers/${ids.brand}/${ids.location}/${ids.printer}`;
+    for (const action of ['Edit', 'Delete']) assert.equal(await overviewRow.getByRole('link', { name: `${action} QA0 Disabled ÆØÅ`, exact: true }).getAttribute('href'), `${actionPath}/${action.toLowerCase()}`);
+    assert.equal(await overviewRow.getByRole('button', { name: 'Deactivate QA0 Disabled ÆØÅ', exact: true }).isDisabled(), true);
     assert.ok(await page.getByText('Ikke forbundet', { exact: true }).count() > 0);
     stage = 'admin-table';
     await page.getByRole('button', { name: 'Avanceret administration', exact: true }).click();
