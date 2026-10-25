@@ -37,3 +37,13 @@ The overview says order edits are unavailable, whereas the June 2026 changelog i
 ## Remaining acceptance
 
 Shared owner records the two additions and exact contract revision. Adapter conformance and sandbox tests verify actual behavior. Current-head independent implementation review, internal checks, deployed SHA, browser integration and any physical pilot remain distinct gates. No credentials appear in this document.
+
+## TypeScript implementation follow-up
+
+Read-only review of the shared coordinator's local `src/lib/delivery/provider-contract.ts` identified additional required corrections, recorded in #657 comment 6404446786:
+
+- ETA-only events need nullable status or a discriminator; they must not fabricate fulfillment transitions.
+- Cancellation requests need a bounded operator reason, currently absent.
+- Binding resolution needs enforceable active/environment/scope guarantees before credential access.
+
+The shared owner must publish the corrected TypeScript commit before adapters import it. No shared files were changed by this reviewer.
