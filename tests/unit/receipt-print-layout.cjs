@@ -50,3 +50,17 @@ test('customer document contains seller/CVR/address and exact fiscal totals; rem
   const logo = renderCustomerReceiptSvg(DEFAULT_RECEIPT_SETTINGS, order, { logoDataUri: 'data:image/png;base64,iVBORw0KGgo=' });
   assert.equal(logo.height, result.height); assert.deepEqual(logo.logoBox, result.logoBox); assert.match(logo.svg, /<image/);
 });
+
+
+test('kitchen check-off boxes belong to modifiers and menu contents, once per item even when wrapped', () => {
+  const longModifier = 'Dressing og svampe pakket separat ' + 'ekstralangt tilvalg '.repeat(8);
+  const order = { ...SAMPLE_KITCHEN_RECEIPT, lines: [{ ...SAMPLE_KITCHEN_RECEIPT.lines[0], modifiers: ['Faxe Kondi 0,33 l', longModifier] }] };
+  for (const paperWidthMm of [58, 80]) {
+    const { svg, text } = renderKitchenReceiptSvg({ ...DEFAULT_KITCHEN_SETTINGS, paperWidthMm }, order);
+    const boxes = [...svg.matchAll(/<rect data-paper-checkbox="true"[^>]*>/g)];
+    assert.equal(boxes.length, 5, 'two modifiers and three menu products; no headings/main-product box');
+    assert.ok(text.includes(longModifier), 'logical item is preserved intact in accessible text');
+    const customer = renderCustomerReceiptSvg({ ...DEFAULT_RECEIPT_SETTINGS, paperWidthMm }, SAMPLE_RECEIPT);
+    assert.doesNotMatch(customer.svg, /data-paper-checkbox/, 'customer receipt has no kitchen checklist');
+  }
+});

@@ -44,18 +44,21 @@ class Layout {
   constructor(width: number) { this.width = width === 80 ? 576 : width === 58 ? 384 : fail(); }
   gap(size = 18) { this.y += size; this.bound(); }
   private bound() { if (this.y > RECEIPT_LAYOUT_LIMITS.heightDots || this.lineCount > RECEIPT_LAYOUT_LIMITS.lines) fail(); }
-  line(value: string, options: { size?: number; bold?: boolean; center?: boolean; indent?: number; inverse?: boolean; width?: number } = {}) {
+  line(value: string, options: { size?: number; bold?: boolean; center?: boolean; indent?: number; inverse?: boolean; width?: number; checkbox?: boolean } = {}) {
     const text = validText(value), size = options.size ?? 34, indent = options.indent ?? 0;
+    const checkboxSize = 24, checkboxSpace = options.checkbox ? checkboxSize + 12 : 0;
     if (size < RECEIPT_LAYOUT_LIMITS.minFontDots || size > 64) fail();
     this.textUnits += text.length; if (this.textUnits > RECEIPT_LAYOUT_LIMITS.textCodeUnits) fail();
     this.text.push(text);
-    const available = options.width ?? this.width - 2 * this.margin - indent;
+    const available = (options.width ?? this.width - 2 * this.margin - indent) - checkboxSpace;
     // DejaVu Sans Mono advance is 0.6021 em; conservative 0.61 prevents edge clipping.
     const columns = Math.floor(available / (size * 0.61)); if (columns < 1) fail();
     const rows = wrap(text, columns), lineHeight = Math.ceil(size * 1.3);
+    // One physical check-off box per item; continuation rows keep the text indent.
+    if (options.checkbox) this.parts.push(`<rect data-paper-checkbox="true" x="${this.margin + indent}" y="${this.y + lineHeight - Math.ceil(size * 0.24) - checkboxSize}" width="${checkboxSize}" height="${checkboxSize}" fill="none" stroke="#000" stroke-width="2"/>`);
     for (const row of rows) {
       this.lineCount++; this.y += lineHeight; this.bound();
-      this.parts.push(`<text x="${options.center ? this.width / 2 : this.margin + indent}" y="${this.y - Math.ceil(size * 0.24)}" font-size="${size}" font-weight="${options.bold ? 700 : 400}" text-anchor="${options.center ? 'middle' : 'start'}" fill="${options.inverse ? '#fff' : '#000'}">${xml(row)}</text>`);
+      this.parts.push(`<text x="${options.center ? this.width / 2 : this.margin + indent + checkboxSpace}" y="${this.y - Math.ceil(size * 0.24)}" font-size="${size}" font-weight="${options.bold ? 700 : 400}" text-anchor="${options.center ? 'middle' : 'start'}" fill="${options.inverse ? '#fff' : '#000'}">${xml(row)}</text>`);
     }
   }
   rule(dashed = false) {
@@ -115,12 +118,12 @@ export function renderKitchenReceiptSvg(settings: KitchenSettings, order: Kitche
       if (line.modifiers.length > 100 || line.groups.length > 100) return fail();
       doc.line(`${count(line.quantity)} × ${line.name}`, { bold: true, size: body });
       if (line.quantity === null) doc.line('Antal mangler. Kontrollér ordren.', { bold: true, size: 30 });
-      for (const modifier of line.modifiers) doc.line(modifier, { bold: true, indent: 16, size: body });
+      for (const modifier of line.modifiers) doc.line(modifier, { bold: true, indent: 16, size: body, checkbox: true });
       if (line.groups.length) { doc.gap(8); doc.line('Menuindhold i alt', { bold: true, size: 30, indent: 16 }); }
       for (const group of line.groups) {
         if (group.products.length > 100) return fail();
         if (group.name) doc.line(group.name, { bold: true, size: 30, indent: 16 });
-        for (const product of group.products) doc.line(`${count(product.quantity)} × ${product.name}`, { size: body, indent: 16 });
+        for (const product of group.products) doc.line(`${count(product.quantity)} × ${product.name}`, { size: body, indent: 16, checkbox: true });
       }
       doc.rule(true);
     }

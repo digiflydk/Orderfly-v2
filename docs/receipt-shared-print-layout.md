@@ -7,6 +7,14 @@ The kitchen document preserves prominent order reference, fulfillment/time,
 boxed comments, category bars, literal additions/removals, and menu components.
 Customer receipts retain fiscal amounts, seller identity and the selected fields.
 
+Kitchen modifiers and individual menu components have a 24-dot (approximately
+3 mm) empty outlined square for staff to tick on paper. Each logical item gets
+one square, even when its text wraps across several lines. Continuation lines
+align with the item's text, reserving space for the square without shrinking the
+font. Main products, category/group headings and customer receipts do not gain
+checkboxes. The squares are part of the shared SVG, so previews and new physical
+prints show the same marks; they are not interactive controls or saved status.
+
 Coordinates are printer dots at 203 dpi: 80 mm profiles use 576 dots, 58 mm use
 384 dots. Every text style is at least 30 dots (10.64 pt at 203 dpi), including
 labels, totals and menu group names. Larger order identifiers and product lines
