@@ -8,6 +8,7 @@ import { clubBase } from '@/lib/loyalty/portal-path';
 import { LoyaltyError } from '@/lib/loyalty/stamp-card/counter';
 import { memberView, programForPortal, readSession, resolveBrand } from '@/lib/loyalty/stamp-card/membership';
 import { SESSION_COOKIE } from '@/lib/loyalty/stamp-card/portal-http';
+import { memberOrderHistory } from '@/lib/loyalty/stamp-card/order-history';
 import { memberDiscountCard } from '@/lib/loyalty/discount-card/portal';
 
 // Server-side reads for the customer portal. They use the same phase 1 functions
@@ -36,6 +37,20 @@ export const loadMember = cache(async (slug: string) => {
     return { ...view, discountCard };
   } catch (error) {
     if (error instanceof LoyaltyError) return null;
+    throw error;
+  }
+});
+
+// Order history is authenticated independently and loaded only on its own page.
+export const loadOrderHistory = cache(async (slug: string) => {
+  const token = (await cookies()).get(SESSION_COOKIE)?.value;
+  if (!token) return [];
+  const db = getAdminDb(), { brand } = await loadPortal(slug), now = Date.now();
+  try {
+    const session = await readSession(db, brand, token, now);
+    return await memberOrderHistory(db, brand, session, now);
+  } catch (error) {
+    if (error instanceof LoyaltyError) return [];
     throw error;
   }
 });

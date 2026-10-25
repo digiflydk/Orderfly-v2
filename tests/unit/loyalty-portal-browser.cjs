@@ -46,7 +46,7 @@ before(async () => {
     const node = view === 'signup' ? React.createElement(SignupForm, { slug: 'esmeralda', base: '/club', program: ${JSON.stringify(program)} })
       : view === 'login' ? React.createElement(LoginFlow, { slug: 'esmeralda', base: '/club', programName: 'Esmeralda Club', signedIn: false })
       : view === 'card' ? React.createElement(MemberCard, { slug, base: '/club', member: window.__member || ${JSON.stringify(null)} })
-      : view === 'history' ? React.createElement(HistoryView, { history: window.__member?.history || [] })
+      : view === 'history' ? React.createElement(HistoryView, { history: window.__member?.history || [], orders: window.__member?.orders || [] })
       : view === 'profile' ? React.createElement(ProfileSettings, { slug: 'esmeralda', base: '/club', programName: 'Esmeralda Club', member: { name: 'Anna Hansen', email: 'anna@example.com' },
           newsletter: { subscribed: new URLSearchParams(location.search).get('subscribed') !== 'no', consentVersion: 'consent-2', consentText: 'Ja tak til nyhedsbrevet på e-mail.' } })
       : view === 'nav' ? React.createElement(ClubNav, { base: '/club', programName: 'Esmeralda Club' })
@@ -632,4 +632,17 @@ for(const target of ['/amager/checkout','/esmeralda/esmeralda/checkout','/esmera
 });
 for(const target of ['https://evil.test/checkout','//evil.test/checkout','/other/amager/checkout'])test('login rejects unsafe return '+target,async()=>{
  const {page}=await open('login?returnTo='+encodeURIComponent(target),{hash:'#token='+TOKEN});try{await page.waitForURL(origin+'/club');}finally{await page.close();}
+});
+
+for(const width of [390,1440])test(`online purchase history and retained stamp events render safely at ${width}px`,async()=>{
+ const {page}=await open('history?path=%2Fclub%2Fhistorik',{width,init:{fn:()=>{window.__member={history:[{type:'stamp_added',quantity:1,channel:'takeaway',createdAt:1792915200000}],orders:[
+  {id:'123456',orderedAt:1792915200000,locationName:'Amager',status:'Completed',totalAmount:100,refundedAmount:25,netAmount:75},
+  {id:'123457',orderedAt:1792915200000,locationName:'<script>window.stolen=true</script>',status:'Delivered',totalAmount:100,refundedAmount:100,netAmount:0},
+  {id:'123458',orderedAt:1792915200000,locationName:'Amager',status:'Received',totalAmount:0,refundedAmount:0,netAmount:0}]};}}});
+ try{
+  const orders=page.getByRole('list',{name:'Onlinekøb',exact:true});await orders.waitFor();assert.equal(await orders.getByRole('listitem').count(),3);
+  await orders.getByText('Ordre 123456',{exact:true}).waitFor();assert.match(await orders.innerText(),/75,00.*kr/);assert.match(await orders.innerText(),/refunderet 25,00/);assert.match(await orders.innerText(),/refunderet 100,00/);
+  await page.getByText('Stempel',{exact:true}).waitFor();assert.equal(await page.evaluate(()=>window.stolen),undefined);assert.ok(await noOverflow(page));
+  if(process.env.PORTAL_HISTORY_SCREENSHOTS){fs.mkdirSync(process.env.PORTAL_HISTORY_SCREENSHOTS,{recursive:true});await page.screenshot({path:path.join(process.env.PORTAL_HISTORY_SCREENSHOTS,'history-'+width+'.png'),fullPage:true});}
+ }finally{await page.close();}
 });
