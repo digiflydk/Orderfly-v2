@@ -81,12 +81,15 @@ async function checkout({discountReaders,existing=false,kind='none',identityClea
   '@/lib/customer-identity':customerIdentity,
   '@/lib/integrations/esmeralda-customer-contract':loadTs('src/lib/integrations/esmeralda-customer-contract.ts'),
   '@/lib/checkout-customer-identity':{findCheckoutCustomer:async(brandId,email,phone)=>{
+   if(fault==='identity-conflict')throw Error('Customer identity scope conflict.');
+   if(fault==='identity-unknown')throw Error('PRIVATE_CUSTOMER_LOOKUP_FAILURE');
    const matches=[...records].filter(([key,data])=>key.startsWith('customers/')&&data.brandId===brandId&&(
     customerIdentity.customerHasEmail(data,email)||customerIdentity.customerHasPhone(data,phone)
    )).map(([key,data])=>({...data,id:data.id||key.slice('customers/'.length)}));
    const selected=customerIdentity.selectCustomerByIdentity(matches,email,phone);
    return selected?snapshot(firestoreRef('customers',selected.id)):existing?snap:null;
   }},
+  '@/lib/checkout-public-error':load('src/lib/checkout-public-error.ts'),
   '@/lib/discount-reservations':{reserveDiscount:async()=>{events.push('reserve');if(fault==='reserve')throw Error('Discount capacity reached');},releaseDiscount:async()=>{events.push('release');if(fault==='release')throw Error('cleanup offline');}},
   '@/lib/order-id':{generateOrderId:()=> orderId},'@/lib/firebase':{db:{}},
   '@/lib/url':{getOrigin:async()=> origin},'@/lib/brand-subdomain':loadTs('src/lib/brand-subdomain.ts'),

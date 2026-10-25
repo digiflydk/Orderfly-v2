@@ -46,6 +46,12 @@ changed by this PR.
 - Required fields and delivery address failures appear persistently beside the
   payment button. Discount validation has an eight-second read-only fallback and
   always releases its processing lock.
+- If e-mail and phone resolve to different customer profiles, checkout keeps the
+  existing tenant and identity safeguards but replaces internal conflict details
+  with one privacy-preserving Danish explanation. It asks the customer to check
+  both fields and, for a personal discount card, use the card's e-mail address.
+  Discount-code lookup uses the same message; unrelated lookup failures remain
+  generic and never expose internal error text.
 - Analytics, session storage and optional cookie-consent lookup cannot block
   payment. Customer persistence remains mandatory. No consent is inferred when
   optional linkage fails.

@@ -117,6 +117,7 @@ test('newsletter offer checks actual customer and keeps canceled retry eligible'
   mocks['@/lib/promotion-rules'] = load('src/lib/promotion-rules.ts');
   mocks['@/lib/customer-identity'] = require('../helpers/load-ts.cjs').loadTs('src/lib/customer-identity.ts');
   mocks['@/lib/checkout-customer-identity'] = {findCheckoutCustomer:async()=>({ref:{id:'c'},exists:()=>true,data:()=>customer})};
+  mocks['@/lib/checkout-public-error'] = loadTs('src/lib/checkout-public-error.ts');
   mocks['firebase/firestore'] = {doc:()=>({}),getDoc:async()=>({exists:()=>false}),collection:()=>null,where:()=>null,query:()=>null,getDocs:async()=>({docs:[{id:'d',data:()=>discount}]})};
   const api = load('src/app/checkout/actions.ts',mocks);
   const offer = () => api.getNewsletterSignupDiscountAction('b','l',100,'pickup','a@example.com');
