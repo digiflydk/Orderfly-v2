@@ -264,7 +264,11 @@ test('#71 existing product upgrades to one combo and cancelling preserves the pr
  await page.getByRole('dialog').getByRole('button',{name:/Tilføj til kurv/}).click();
  await page.getByRole('button',{name:/Se kurv/}).click();await page.getByRole('dialog').getByRole('button',{name:'Rediger Fixture Pizza',exact:true}).click();
  await page.getByRole('dialog').getByRole('button',{name:'Vælg menu',exact:true}).click();
+ // Escape is intended for the replacement combo dialog, not the preceding product dialog.
+ await expect(page.getByRole('dialog').getByRole('heading',{name:'Pizza og drik',exact:true})).toBeVisible();
+ await expect(page.getByRole('dialog').getByRole('radio',{name:'Fixture Soda',exact:true})).toBeVisible();
  await page.keyboard.press('Escape');
+ await expect(page.getByRole('dialog').getByRole('heading',{name:'Fixture Pizza',exact:true})).toBeVisible();
  assert.equal((await page.evaluate(()=>JSON.parse(localStorage.getItem('orderfly.cart.v1')))).choices[0].id,'p');
  await page.getByRole('dialog').getByRole('button',{name:'Vælg menu',exact:true}).click();
  await page.getByRole('dialog').getByRole('radio',{name:'Fixture Soda',exact:true}).click();
