@@ -1,6 +1,7 @@
 'use client';
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { brandSlugError, brandSubdomainUrl } from '@/lib/brand-subdomain';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -22,7 +23,8 @@ function failureMessage(status: number) {
   return 'Ændringen kunne ikke bekræftes. Hent den aktuelle status, før du forsøger igen.';
 }
 /** Deliberately outside LocationFormPage's form/recovery provider. Secrets exist only in this component's memory. */
-export function LocationTerminalLogin({ locationId, locationName }: { locationId: string; locationName: string }) {
+export function LocationTerminalLogin({ locationId, locationName, brandSlug }: { locationId: string; locationName: string; brandSlug?: string }) {
+  const merchantAppHref = brandSlug && !brandSlugError(brandSlug) ? `${brandSubdomainUrl(brandSlug)}/mapp` : '/mapp';
   const endpoint = `/api/superadmin/locations/${encodeURIComponent(locationId)}/terminal-login`;
   const [saved, setSaved] = useState<LoginSettings | null>(null);
   const [username, setUsername] = useState(''), [password, setPassword] = useState('');
@@ -90,7 +92,7 @@ export function LocationTerminalLogin({ locationId, locationName }: { locationId
   }
   const blocked = busy || loading || mustRefresh || !saved?.canEdit;
   return <Card className="mt-6" aria-label="Terminal-login"><CardHeader><CardTitle>Terminal-login</CardTitle><CardDescription>Separat login til ordreterminalen for {locationName}. Indstillingerne gemmes særskilt fra restaurantens øvrige oplysninger.</CardDescription></CardHeader><CardContent className="space-y-5">
-    <div className="flex flex-wrap items-center justify-between gap-3"><p className="font-medium">Status: <span>{loading ? 'Henter…' : !saved ? 'Ikke tilgængelig' : !saved.configured ? 'Ikke konfigureret' : saved.enabled ? 'Aktivt' : 'Deaktiveret'}</span></p><a href="/terminal/login" target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium underline">Åbn terminal-login</a></div>
+    <div className="flex flex-wrap items-center justify-between gap-3"><p className="font-medium">Status: <span>{loading ? 'Henter…' : !saved ? 'Ikke tilgængelig' : !saved.configured ? 'Ikke konfigureret' : saved.enabled ? 'Aktivt' : 'Deaktiveret'}</span></p><a href={merchantAppHref} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-11 items-center text-sm font-medium underline">Åbn Merchant app</a></div>
     <p className="text-sm text-muted-foreground">Login giver kun adgang til denne restaurants ordrer. Terminalen forbliver logget ind, indtil der logges ud, eller adgangen ændres eller deaktiveres. Browserens lagring skal være tilgængelig.</p>
     {error && <div role="alert" className="space-y-3 rounded-lg border border-red-200 bg-red-50 p-3 text-red-900"><p>{error}</p><Button type="button" variant="outline" onClick={() => void load()} disabled={busy || loading}>Hent aktuel status</Button>{error.includes('Log ind') && <a className="ml-3 underline" href={`/admin-login?next=${encodeURIComponent(`/superadmin/locations/edit/${locationId}`)}`}>Log ind igen</a>}</div>}
     {notice && <p role="status" className="rounded-lg border border-emerald-200 bg-emerald-50 p-3 text-emerald-900">{notice}</p>}
